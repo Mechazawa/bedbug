@@ -182,7 +182,14 @@ public final class AddonEntities {
         "minecraft:pushable_by_entity", "minecraft:pushable_by_block", "minecraft:rideable",
         "minecraft:teleport", "minecraft:trade_resupply", "minecraft:behavior.trade_with_player",
         "minecraft:behavior.trade_interest", "minecraft:behavior.pickup_items",
-        "minecraft:shareables", "minecraft:inventory", "minecraft:equipment");
+        "minecraft:shareables", "minecraft:inventory", "minecraft:equipment",
+        "minecraft:home", "minecraft:dweller", "minecraft:target_nearby_sensor",
+        "minecraft:color", "minecraft:color2", "minecraft:breedable", "minecraft:offspring",
+        "minecraft:leashable_to", "minecraft:spawn_egg_interaction",
+        "minecraft:behavior.breed", "minecraft:behavior.follow_parent", "minecraft:behavior.sleep",
+        "minecraft:behavior.drink_milk", "minecraft:behavior.drink_potion",
+        "minecraft:behavior.share_items", "minecraft:dimension_bound", "minecraft:hide",
+        "minecraft:behavior.play");
 
     /**
      * The trade table an entity names, read while the pack it came from is still in hand.

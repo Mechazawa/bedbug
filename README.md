@@ -35,8 +35,9 @@ server decides what happens; the client draws it.
 - Models, animations, animation controllers and render controllers, drawn through a full Molang
   evaluator, with each pass drawn the way its `.material` asks: alpha tested or blended, culled or
   not, plain or glowing.
-- Entities a behaviour pack declares, with their properties, events, component groups, filters and
-  the sensors that fire them: environment, entity, timer, scheduler, damage, interact and
+- Entities a behaviour pack declares, with their properties, events, component groups, filters,
+  breeding, riding, leashing, home ranges, navigation and item pickup, and the sensors that fire
+  their events: environment, entity, timer, scheduler, damage, interact and
   hurt-on-condition. Their properties reach every client, so a model looks the same in multiplayer
   as it does alone.
 - Items, including edible and wearable ones, spawn eggs, and a creative tab per add-on.
@@ -68,15 +69,11 @@ for that this mod does not implement yet, which answers "will my pack work" with
 
 ## What does not work
 
-**Twenty entity components with no Java counterpart.** A villager's day (`behavior.sleep`,
-`behavior.play`, `behavior.take_flower`, `dweller`, `home`), breeding (`behavior.breed`,
-`behavior.follow_parent`, `breedable`, `offspring`), and the Bedrock-only ones (`balloonable`,
-`color`, `dimension_bound`, `hide`, `leashable_to`, `managed_wandering_trader`,
-`spawn_egg_interaction`, `target_nearby_sensor`, `behavior.celebrate_survive`,
-`behavior.drink_milk`, `behavior.drink_potion`, `behavior.share_items`). Java's own versions of
-these are written into the vanilla mobs that use them rather than exposed as parts a mob can be
-built from. Each is counted and named by `/mcaddon entities`, so a pack that relies on one is told
-rather than left wondering.
+**Four entity components with no Java counterpart.** `balloonable` describes an item Java does not
+have. `managed_wandering_trader` describes how Bedrock runs its own trader. `behavior.take_flower`
+and `behavior.celebrate_survive` are two moments Java writes into its villager's own brain, with no
+general form a pack's entity could be given. Each is counted and named by `/mcaddon entities`, so a
+pack relying on one is told rather than left wondering.
 
 **Stencil-masked material passes.** A material's alpha testing, blending, culling and emissiveness
 all become the render type the pass is drawn with. What cannot follow is the stencil buffer itself:

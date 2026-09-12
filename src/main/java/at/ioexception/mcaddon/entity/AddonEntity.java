@@ -131,12 +131,31 @@ public class AddonEntity extends PathfinderMob implements Merchant {
             setPersistenceRequired();
         }
 
+        // `color` and `color2` name a dye, which is the number a pack's own render controller reads
+        // back as `q.color`. Java has no colour of its own for an arbitrary mob, so it is kept as
+        // the property the pack asks about.
+        for (String named : new String[] {"minecraft:color", "minecraft:color2"}) {
+            if (!has(named)) continue;
+
+            ServerHooks.state().setProperty(getUUID(),
+                named.substring("minecraft:".length()), number(definition, named, "value", 0));
+        }
+        if (has("minecraft:is_hidden_when_invisible")) setInvisible(isInvisible());
+
         // Bedrock names the kind of pathfinding; Java asks whether the navigator may take each route.
         net.minecraft.world.entity.ai.navigation.PathNavigation navigation = getNavigation();
         if (navigation instanceof net.minecraft.world.entity.ai.navigation.GroundPathNavigation ground) {
             ground.setCanOpenDoors(has("minecraft:annotation.open_door"));
             ground.setCanFloat(has("minecraft:navigation.swim") || has("minecraft:navigation.generic"));
         }
+        // `home` and `dweller` both say the entity belongs somewhere and should stay near it.
+        if (has("minecraft:home") || has("minecraft:dweller")) {
+            int radius = (int) number(definition,
+                has("minecraft:home") ? "minecraft:home" : "minecraft:dweller",
+                "restriction_radius", 16);
+            Platform.setHome(this, blockPosition(), Math.max(1, radius));
+        }
+
         if (has("minecraft:preferred_path")) {
             // The enum naming a kind of ground was renamed in 1.21.
             //? if >=1.21 {
@@ -274,6 +293,148 @@ public class AddonEntity extends PathfinderMob implements Merchant {
                 at.get(1).getAsDouble() / 16, at.get(2).getAsDouble() / 16);
     }
 
+    /**
+     * Using this entity's own spawn egg on it, which Bedrock takes as asking for another.
+     *
+     * A pack states the behaviour in `minecraft:spawn_egg_interaction`; what it means is the egg
+     * spawns a young one beside the entity rather than a full grown one somewhere else.
+     */
+    private boolean bredBySpawnEgg(Player player, InteractionHand hand) {
+        if (!has("minecraft:spawn_egg_interaction")) return false;
+        if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return false;
+
+        net.minecraft.world.item.ItemStack held = player.getItemInHand(hand);
+        String egg = BuiltInRegistries.ITEM.getKey(held.getItem()).getPath();
+        if (!egg.endsWith("_spawn_egg")) return false;
+
+        net.minecraft.world.entity.Entity child = Platform.createMob(getType(), level);
+        if (child == null) return false;
+
+        if (!player.getAbilities().instabuild) held.shrink(1);
+        Platform.placeAt(child, getX(), getY(), getZ(), getYRot(), 0f);
+        if (child instanceof AddonEntity young) young.setYoung();
+        level.addFreshEntity(child);
+        return true;
+    }
+
+    /**
+     * Being handed one of the foods a pack said puts this entity in the mood.
+     *
+     * Bedrock states breeding as a component naming the items and the offspring; Java writes the
+     * same behaviour into `Animal`, which a pack's entity is not one of, so the part of it a pack
+     * describes is carried out here.
+     */
+    private boolean fed(Player player, InteractionHand hand) {
+        com.google.gson.JsonObject breedable = definition.components().get("minecraft:breedable");
+        if (breedable == null || !breedsWith(breedable, player.getItemInHand(hand))) return false;
+
+        if (!player.getAbilities().instabuild) player.getItemInHand(hand).shrink(1);
+        inLoveUntil = tickCount + 600;
+        for (int i = 0; i < 7; i++) {
+            level().addParticle(net.minecraft.core.particles.ParticleTypes.HEART,
+                getRandomX(1), getRandomY() + 0.5, getRandomZ(1), 0, 0, 0);
+        }
+        return true;
+    }
+
+    /** Whether one of the items the pack named as breeding food is what was offered. */
+    private static boolean breedsWith(com.google.gson.JsonObject breedable,
+        net.minecraft.world.item.ItemStack offered) {
+        com.google.gson.JsonArray items = breedable.getAsJsonArray("breed_items");
+        if (items == null || offered.isEmpty()) return false;
+
+        String id = BuiltInRegistries.ITEM.getKey(offered.getItem()).toString();
+        for (com.google.gson.JsonElement item : items) {
+            if (!item.isJsonPrimitive()) continue;
+
+            String named = item.getAsString();
+            if (named.equals(id) || ("minecraft:" + named).equals(id)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Finds another of its kind in the mood, and leaves a child where the two of them met.
+     *
+     * Bedrock names what is born in `minecraft:offspring` and otherwise means another of the same
+     * kind, which is what Java does for an animal that has no other answer.
+     */
+    private void breed() {
+        if (inLoveUntil <= tickCount || !(level() instanceof net.minecraft.server.level.ServerLevel level)) {
+            return;
+        }
+
+        for (AddonEntity other : level.getEntitiesOfClass(AddonEntity.class,
+            getBoundingBox().inflate(8), mate -> mate != this && mate.getType() == getType()
+                && mate.inLoveUntil > mate.tickCount)) {
+            inLoveUntil = 0;
+            other.inLoveUntil = 0;
+
+            net.minecraft.world.entity.EntityType<?> born = offspring();
+            net.minecraft.world.entity.Entity child = born == null ? null
+                : Platform.createMob(born, level);
+            if (child == null) return;
+
+            Platform.placeAt(child, getX(), getY(), getZ(), getYRot(), 0f);
+            if (child instanceof AddonEntity young) young.setYoung();
+            level.addFreshEntity(child);
+            return;
+        }
+    }
+
+    /** What a pack says is born, or another of the same kind when it says nothing. */
+    private net.minecraft.world.entity.EntityType<?> offspring() {
+        com.google.gson.JsonObject component = definition.components().get("minecraft:offspring");
+        String named = component == null ? null
+            : at.ioexception.mcaddon.util.Json.text(component, "identifier", null);
+        return named == null ? getType() : AddonEntities.typeOf(named);
+    }
+
+    /**
+     * Lying down at night, which is what `minecraft:behavior.sleep` describes.
+     *
+     * Java writes sleeping into the villager alone, tied to a bed it has claimed. A pack's entity
+     * has no bed, so what carries across is the part a player sees: it stops where it is until the
+     * sun is up again.
+     */
+    private void rest() {
+        if (!definition.behaviours().contains("minecraft:behavior.sleep")) return;
+        if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
+
+        long time = Platform.dayTime(level) % 24000L;
+        boolean night = time >= 13000L && time < 23000L;
+        setPose(night ? net.minecraft.world.entity.Pose.SLEEPING : net.minecraft.world.entity.Pose.STANDING);
+        if (night) {
+            getNavigation().stop();
+            setDeltaMovement(0, getDeltaMovement().y, 0);
+        }
+    }
+
+    /**
+     * Drinking away what is hurting it, which both drinking behaviours amount to.
+     *
+     * Bedrock's milk clears every effect and its potion drinking picks one to apply; what a pack
+     * uses either for is an entity that does not stay poisoned, so the harmful ones are cleared.
+     */
+    private void drink() {
+        boolean drinks = definition.behaviours().contains("minecraft:behavior.drink_milk")
+            || definition.behaviours().contains("minecraft:behavior.drink_potion");
+        if (!drinks || getActiveEffects().isEmpty()) return;
+
+        getActiveEffects().stream()
+            .filter(effect -> !Platform.beneficial(effect))
+            .toList()
+            .forEach(effect -> removeEffect(effect.getEffect()));
+    }
+
+    /** How long this entity stays willing to breed, counted in its own ticks. */
+    private int inLoveUntil;
+
+    /** Marks a newly born one as a baby, which a pack's render controller reads as `q.is_baby`. */
+    private void setYoung() {
+        ServerHooks.state().setProperty(getUUID(), "is_baby", true);
+    }
+
     /** Bedrock says an entity is angry; Java asks the entity, so the flag is kept here. */
     public boolean isAngry() {
         return has("minecraft:angry");
@@ -285,6 +446,48 @@ public class AddonEntity extends PathfinderMob implements Merchant {
      * A pack saying so is describing what Java already allows for a mob, so the component only has
      * to be honoured when it says the opposite.
      */
+    /**
+     * Whether a portal will take this entity anywhere.
+     *
+     * `minecraft:dimension_bound` says it belongs where it is, which Java expresses by refusing the
+     * portal rather than by binding the entity to a dimension. The question was renamed in 1.21.
+     */
+    //? if >=1.21 {
+    @Override
+    public boolean canUsePortal(boolean allowPassengers) {
+        return !bound() && super.canUsePortal(allowPassengers);
+    }
+    //?} else {
+    /*@Override
+    public boolean canChangeDimensions() {
+        return !bound() && super.canChangeDimensions();
+    }
+    *///?}
+
+    private boolean bound() {
+        return definition != null && definition.components().containsKey("minecraft:dimension_bound");
+    }
+
+    /**
+     * What a lead may tie this entity to.
+     *
+     * Bedrock lists the kinds in `minecraft:leashable_to`; Java asks nothing, so a pack naming a
+     * list is honoured by refusing anything outside it.
+     */
+    public boolean canBeLeashedTo(net.minecraft.world.entity.Entity holder) {
+        com.google.gson.JsonObject component = definition == null
+            ? null : definition.components().get("minecraft:leashable_to");
+        com.google.gson.JsonArray kinds = component == null
+            ? null : component.getAsJsonArray("leash_entity_type_filters");
+        if (kinds == null) return true;
+
+        String id = BuiltInRegistries.ENTITY_TYPE.getKey(holder.getType()).toString();
+        for (com.google.gson.JsonElement kind : kinds) {
+            if (kind.isJsonPrimitive() && kind.getAsString().equals(id)) return true;
+        }
+        return false;
+    }
+
     // A mob could always be leashed before 1.21.2, where the question moved onto the entity.
     //? if >=1.21.2 {
     @Override
@@ -316,9 +519,11 @@ public class AddonEntity extends PathfinderMob implements Merchant {
                      "minecraft:behavior.move_towards_restriction" ->
                     goalSelector.addGoal(priority, new MoveTowardsRestrictionGoal(this, 0.6));
                 case "minecraft:behavior.mount_pathing", "minecraft:behavior.follow_owner",
-                     "minecraft:behavior.stroll_towards_village" ->
+                     "minecraft:behavior.play", "minecraft:behavior.stroll_towards_village" ->
                     goalSelector.addGoal(priority, new WaterAvoidingRandomStrollGoal(this, 0.6));
 
+                // Hiding and playing are both a Bedrock villager moving somewhere for a reason Java
+                // writes into its own villager. What carries across is the moving.
                 case "minecraft:behavior.avoid_mob_type", "minecraft:behavior.hide",
                      "minecraft:behavior.avoid_block" ->
                     goalSelector.addGoal(priority,
@@ -362,6 +567,9 @@ public class AddonEntity extends PathfinderMob implements Merchant {
             resupply();
             teleportAbout();
             pickUpNearby();
+            breed();
+            rest();
+            drink();
         }
     }
 
@@ -403,6 +611,8 @@ public class AddonEntity extends PathfinderMob implements Merchant {
      */
     @Override
     public InteractionResult mobInteract(Player player, InteractionHand hand) {
+        if (!isClientSide() && bredBySpawnEgg(player, hand)) return InteractionResult.SUCCESS;
+        if (!isClientSide() && fed(player, hand)) return InteractionResult.SUCCESS;
         if (!isClientSide() && interact(player)) return InteractionResult.SUCCESS;
 
         if (AddonEntities.tradesOf(getType()) == null || isClientSide()) {

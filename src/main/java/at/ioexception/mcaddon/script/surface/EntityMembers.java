@@ -383,4 +383,21 @@ public final class EntityMembers extends Surface {
             return names;
         }
     }
+
+    /**
+     * One component of the pack's own definition for this entity, as the pack wrote it.
+     *
+     * A script asks about its own pack's data as often as it asks about the world: what kind of
+     * container an entity carries, how far it follows, what it breeds with. All of that is in the
+     * behaviour pack rather than in anything Java holds, so it is answered from there.
+     */
+    @HostAccess.Export
+    public String packComponent(String id, String component) {
+        Entity found = entity(id);
+        if (found == null) return null;
+
+        ServerEntityDefinition definition = AddonEntities.definitionOf(found.getType());
+        JsonObject body = definition == null ? null : definition.components().get(component);
+        return body == null ? null : body.toString();
+    }
 }

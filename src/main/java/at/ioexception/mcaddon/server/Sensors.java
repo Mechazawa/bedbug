@@ -188,7 +188,34 @@ public final class Sensors {
      * The big entities in a real pack carry dozens of these, so the range test comes before the
      * filter tree and the search is one box query per subsensor rather than one per candidate.
      */
+    /**
+     * Fires the events a pack asked for when its target comes within reach, or leaves it.
+     *
+     * Bedrock measures both distances from the entity's own target rather than from anything nearby,
+     * so an entity with nothing to hunt raises neither.
+     */
+    private static void target(AddonEntity entity, ServerEntityDefinition definition, AddonState state) {
+        JsonObject sensor = definition.components().get("minecraft:target_nearby_sensor");
+        if (sensor == null || entity.getTarget() == null) return;
+
+        double distance = entity.distanceTo(entity.getTarget());
+        double inside = sensor.has("inside_range") ? sensor.get("inside_range").getAsDouble() : 1;
+        double outside = sensor.has("outside_range") ? sensor.get("outside_range").getAsDouble() : 5;
+
+        String near = Json.text(sensor, "on_inside_range", null);
+        String far = Json.text(sensor, "on_outside_range", null);
+        if (near != null && distance <= inside) {
+            EntityEvents.trigger(entity, near, entity.getTarget(), state);
+        } else if (far != null && distance >= outside) {
+            EntityEvents.trigger(entity, far, entity.getTarget(), state);
+        }
+    }
+
     private static void nearby(AddonEntity entity, ServerEntityDefinition definition, AddonState state) {
+        // `target_nearby_sensor` is the same question asked about whatever the entity is hunting,
+        // and Bedrock writes it as a component of its own rather than as one more subsensor.
+        target(entity, definition, state);
+
         JsonObject sensor = definition.components().get("minecraft:entity_sensor");
         if (sensor == null) return;
 

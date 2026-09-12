@@ -682,6 +682,30 @@ public final class Platform {
         *///?}
     }
 
+    /**
+     * Ties a mob to a place it will not wander far from.
+     *
+     * This is what Bedrock's `minecraft:home` and `minecraft:dweller` describe, and Java has had it
+     * all along under a name that changed in 26.
+     */
+    public static void setHome(net.minecraft.world.entity.Mob mob, net.minecraft.core.BlockPos at,
+        int radius) {
+        //? if >=26 {
+        mob.setHomeTo(at, radius);
+        //?} else {
+        /*mob.restrictTo(at, radius);
+        *///?}
+    }
+
+    /** Whether an effect is one an entity would want. What the instance carries became a holder in 1.21. */
+    public static boolean beneficial(net.minecraft.world.effect.MobEffectInstance active) {
+        //? if >=1.21 {
+        return active.getEffect().value().isBeneficial();
+        //?} else {
+        /*return active.getEffect().isBeneficial();
+        *///?}
+    }
+
     /** Opens a screen, or closes whatever is open when given null. Renamed in 26. */
     public static void setScreen(net.minecraft.client.gui.screens.Screen screen) {
         //? if >=26 {

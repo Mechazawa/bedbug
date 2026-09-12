@@ -2149,7 +2149,13 @@ function componentFor(entity, name) {
         case "minecraft:inventory":
             return {
                 typeId: name, entity,
-                containerType: "inventory",
+                get containerType() {
+                    // The pack says what kind of container its entity carries; Java has one kind of
+                    // inventory, so the name comes back from the pack rather than from the game.
+                    const declared = bridge.entityMembers.packComponent(entity.id, "minecraft:inventory");
+                    return declared === null
+                        ? "inventory" : (JSON.parse(declared).container_type ?? "inventory");
+                },
                 additionalSlotsPerStrength: 0,
                 canBeSiphonedFrom: false,
                 private: false,
