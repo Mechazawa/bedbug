@@ -6,6 +6,7 @@ import at.ioexception.mcaddon.bedrock.entity.EntityAnimator;
 import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.registry.AddonParticles;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.util.Mth;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -69,7 +70,8 @@ public final class AddonEffects {
     private static void spawn(Entity entity, EntityAnimator animator, String particleId, String locator) {
         if (particleId == null || entity.level() == null) return;
 
-        ParticleOptions options = BedrockParticles.vanilla(particleId);
+        ParticleOptions options = AddonParticles.typeOf(particleId);
+        if (options == null) options = BedrockParticles.vanilla(particleId);
         if (options == null) {
             AddonEntities.unsupported("particle " + particleId);
             return;

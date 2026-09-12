@@ -635,6 +635,25 @@ public final class Platform {
         return cull ? RenderTypes.entityCutoutCull(texture) : RenderTypes.entityCutout(texture);
     }
 
+    /**
+     * Tells the client how to make one kind of particle.
+     *
+     * Fabric renamed both the registry and the sprite set it hands over in 26, and the sprite set is
+     * the game's own interface in both, so only the name of the registry differs here.
+     */
+    public static void registerParticle(net.minecraft.core.particles.SimpleParticleType type,
+        java.util.function.Function<net.minecraft.client.particle.SpriteSet,
+            net.minecraft.client.particle.ParticleProvider<net.minecraft.core.particles.SimpleParticleType>>
+            provider) {
+        //? if >=26 {
+        net.fabricmc.fabric.api.client.particle.v1.ParticleProviderRegistry.getInstance()
+            .register(type, provider::apply);
+        //?} else {
+        /*net.fabricmc.fabric.api.client.particle.v1.ParticleFactoryRegistry.getInstance()
+            .register(type, provider::apply);
+        *///?}
+    }
+
     /** Opens a screen, or closes whatever is open when given null. Renamed in 26. */
     public static void setScreen(net.minecraft.client.gui.screens.Screen screen) {
         //? if >=26 {

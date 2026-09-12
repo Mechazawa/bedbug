@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.client;
 
 import at.ioexception.mcaddon.client.render.AddonClientAssets;
 import at.ioexception.mcaddon.client.render.AddonEntityRenderer;
+import at.ioexception.mcaddon.client.render.AddonParticleProvider;
 import at.ioexception.mcaddon.client.render.Animators;
 import at.ioexception.mcaddon.client.render.EntityProperties;
 import at.ioexception.mcaddon.client.screen.AddonFormScreen;
@@ -26,6 +27,10 @@ public final class McAddonClient implements ClientModInitializer {
         for (EntityType<?> type : AddonEntities.all().keySet()) {
             EntityRendererRegistry.register(cast(type), AddonEntityRenderer::new);
         }
+
+        at.ioexception.mcaddon.registry.AddonParticles.all().keySet().forEach(identifier ->
+            Platform.registerParticle(at.ioexception.mcaddon.registry.AddonParticles.typeOf(identifier),
+                sprites -> new AddonParticleProvider(identifier, sprites)));
 
         Channels.receiveProperties(EntityProperties::accept);
         Channels.receivePacks(McAddonClient::reportMissingPacks);
