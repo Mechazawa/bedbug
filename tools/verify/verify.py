@@ -87,6 +87,12 @@ EXPECTED_WITH_ADDON = (
     ("a pack was read", r"\(Bedrock Add-ons\) (?:resources|behaviour) "),
 )
 
+# A pack shipping a script, and the line saying its script engine came up. A module a pack imports is
+# linked before any of it runs, so one missing name switches the whole engine off; reading the
+# startup line back is what tells that apart from a pack that ships no script at all.
+SHIPS_SCRIPT = re.compile(r"\(Bedrock Add-ons\) .*modules \[[^]]*script")
+SCRIPTS_RUNNING = re.compile(r"Running scripts from \d+ of \d+ behaviour pack")
+
 # The mod's line saying how much of an add-on reached the client, and the count it opens with.
 CLIENT_DEFINITIONS = re.compile(r"(\d+) add-on entities have a client definition")
 
@@ -514,6 +520,20 @@ def kill(process: subprocess.Popen, started_before: set[int], launch: Launch) ->
             continue
 
 
+def scripts_ran(lines: list[str], verdict: Verdict) -> None:
+    """A pack that ships a script has to have had it run, not merely loaded without complaint."""
+    text = "\n".join(lines)
+    if not SHIPS_SCRIPT.search(text):
+        return
+
+    if SCRIPTS_RUNNING.search(text):
+        verdict.notes.append("the script engine came up for the packs that ship one")
+        return
+
+    verdict.fail("a pack ships a script and the engine never came up",
+                 "no 'Running scripts from' line, so every pack script is off")
+
+
 def scan(lines: list[str], verdict: Verdict, expected: tuple[tuple[str, str], ...]) -> None:
     """Files every log line under the first failure it matches, benign ones aside."""
     for number, line in enumerate(lines, start=1):
@@ -589,6 +609,7 @@ def check_server(root: Path, version: str, timeout: float, summons: int, verbose
     lines, log, outcome = play(root, version, SERVER, SERVER.ready, script, timeout, 0.0, verbose)
 
     verdict.notes.append(f"server {outcome}, {len(lines)} lines in {log.relative_to(root)}")
+    scripts_ran(lines, verdict)
     scan(lines, verdict, (("server reached done", r"Done \("),)
          + (EXPECTED_WITH_ADDON if addons else ()))
     gradle_failed(lines, outcome, verdict)
