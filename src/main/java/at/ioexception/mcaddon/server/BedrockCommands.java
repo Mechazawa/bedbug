@@ -3,6 +3,7 @@ package at.ioexception.mcaddon.server;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonParticles;
 import at.ioexception.mcaddon.script.ScriptHost;
+import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -138,8 +139,8 @@ public final class BedrockCommands {
     /** A test the name picks out, by its full `class:name` or by its name alone. */
     private static Predicate<JsonObject> named(String wanted) {
         String asked = wanted.trim();
-        return test -> asked.equalsIgnoreCase(text(test, "name"))
-            || asked.equalsIgnoreCase(text(test, "testName"));
+        return test -> asked.equalsIgnoreCase(Json.text(test, "name", ""))
+            || asked.equalsIgnoreCase(Json.text(test, "testName", ""));
     }
 
     private static Predicate<JsonObject> tagged(String wanted) {
@@ -167,7 +168,7 @@ public final class BedrockCommands {
             JsonObject test = tests.get(i).getAsJsonObject();
             if (!wanted.test(test)) continue;
 
-            String placement = scripts.bridge().gametests.begin(source, text(test, "structureName"),
+            String placement = scripts.bridge().gametests.begin(source, Json.text(test, "structureName", ""),
                 test.get("padding").getAsInt());
             scripts.startGameTest(i, placement);
             started++;
@@ -201,12 +202,8 @@ public final class BedrockCommands {
         if (scripts == null) return builder.buildFuture();
 
         JsonParser.parseString(scripts.gameTests()).getAsJsonArray()
-            .forEach(test -> builder.suggest(text(test.getAsJsonObject(), "name")));
+            .forEach(test -> builder.suggest(Json.text(test.getAsJsonObject(), "name", "")));
         return builder.buildFuture();
-    }
-
-    private static String text(JsonObject test, String key) {
-        return test.has(key) && !test.get(key).isJsonNull() ? test.get(key).getAsString() : "";
     }
 
     /**

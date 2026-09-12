@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.function.UnaryOperator;
 
 /**
  * A Bedrock `.mcstructure`, and the world it builds.
@@ -35,21 +36,59 @@ public final class McStructure {
     private static final int KEEP = -1;
 
     /**
-     * The Bedrock state names that carry a Java property under another spelling.
+     * One Bedrock state, as the Java properties it may name and how its value is read.
      *
-     * Bedrock suffixes a flag with `_bit`, which is stripped before this table is consulted, so only
-     * the names that differ by more than that are here.
+     * A name on its own is not enough for the states that count a direction rather than spelling it:
+     * `facing_direction` is a number and Java wants a word, so a rule carries both halves. The
+     * properties are tried in order, because one Bedrock state can land on either of two Java ones
+     * depending on the block, as an upside-down stair and an upside-down slab do.
      */
-    private static final Map<String, String> STATE_ALIASES = Map.of(
-        "pillar_axis", "axis",
-        "toggle", "powered",
-        "button_pressed", "powered",
-        "growth", "age",
-        "liquid_depth", "level",
-        "torch_facing_direction", "facing",
-        "minecraft:cardinal_direction", "facing",
-        "minecraft:vertical_half", "half",
-        "minecraft:block_face", "facing");
+    private record StateRule(List<String> properties, UnaryOperator<String> value) {
+        static StateRule named(String... properties) {
+            return new StateRule(List.of(properties), UnaryOperator.identity());
+        }
+
+        static StateRule counted(String property, String... words) {
+            return new StateRule(List.of(property), given -> {
+                int index = given.matches("-?\\d+") ? Integer.parseInt(given) : -1;
+                return index >= 0 && index < words.length ? words[index] : given;
+            });
+        }
+    }
+
+    /** The order Bedrock counts a direction in, which is the order Java reads a 3D data value in. */
+    private static final String[] SIDES = {"down", "up", "north", "south", "west", "east"};
+
+    /** The order Bedrock counts the four horizontal directions in, for stairs and for repeaters. */
+    private static final String[] AROUND = {"south", "west", "north", "east"};
+
+    /**
+     * The Bedrock states this knows to be spelled or counted differently from the Java one.
+     *
+     * Bedrock suffixes a flag with `_bit`, which is stripped before a name is looked for, so only
+     * what differs by more than that is here. A state with no entry and no Java property of its own
+     * name is reported rather than guessed at.
+     */
+    private static final Map<String, StateRule> STATE_RULES = Map.ofEntries(
+        Map.entry("pillar_axis", StateRule.named("axis")),
+        Map.entry("toggle", StateRule.named("powered")),
+        Map.entry("button_pressed", StateRule.named("powered")),
+        Map.entry("growth", StateRule.named("age")),
+        Map.entry("liquid_depth", StateRule.named("level")),
+        Map.entry("minecraft:cardinal_direction", StateRule.named("facing")),
+        Map.entry("minecraft:vertical_half", StateRule.named("half", "type")),
+        Map.entry("minecraft:block_face", StateRule.named("facing", "face")),
+        Map.entry("ground_sign_direction", StateRule.named("rotation")),
+        Map.entry("hanging_sign_direction", StateRule.named("rotation")),
+        Map.entry("facing_direction", StateRule.counted("facing", SIDES)),
+        Map.entry("weirdo_direction", StateRule.counted("facing", AROUND)),
+        Map.entry("direction", StateRule.counted("facing", AROUND)),
+        // Java splits a torch into a standing block and a wall block, so only the four that name a
+        // wall carry across; `top` and `unknown` name the other block and are reported instead.
+        Map.entry("torch_facing_direction", StateRule.named("facing")),
+        // Stairs carry it as `half`, slabs as `type`, and Java spells both ends the same way.
+        Map.entry("upside_down", new StateRule(List.of("half", "type"),
+            given -> "1".equals(given) || "true".equals(given) ? "top" : "bottom")));
 
     private final int width;
     private final int height;
@@ -58,14 +97,20 @@ public final class McStructure {
     private final int[] blocks;
     private final int[] liquids;
 
+    /** Positions whose block carries saved contents, and entities saved with the structure. */
+    private final int carried;
+    private final int living;
+
     private McStructure(int width, int height, int depth, List<Palette> palette,
-        int[] blocks, int[] liquids) {
+        int[] blocks, int[] liquids, int carried, int living) {
         this.width = width;
         this.height = height;
         this.depth = depth;
         this.palette = palette;
         this.blocks = blocks;
         this.liquids = liquids;
+        this.carried = carried;
+        this.living = living;
     }
 
     /** Null when the bytes are not a structure this can read, which a caller reports as a miss. */
@@ -91,7 +136,14 @@ public final class McStructure {
         List<Palette> palette = new ArrayList<>();
         for (Object entry : entries) palette.add(Palette.of(entry));
 
-        return new McStructure(width, height, depth, palette, layer(layers, 0), layer(layers, 1));
+        // What a chest, a sign or a spawner holds, and the entities saved inside the structure. Both
+        // are counted rather than read, so a structure that places empty says why.
+        int carried = sizeOf(member(member(member(structure, "palette"), "default"),
+            "block_position_data"));
+        int living = sizeOf(member(structure, "entities"));
+
+        return new McStructure(width, height, depth, palette, layer(layers, 0), layer(layers, 1),
+            carried, living);
     }
 
     public int width() {
@@ -113,30 +165,51 @@ public final class McStructure {
      * writes one, so a redstone contraption the pack built does not fire while it is half there.
      */
     public void place(ServerLevel level, BlockPos origin, Consumer<String> report) {
+        if (carried > 0) report.accept("Structure block contents");
+        if (living > 0) report.accept("Structure entities");
+
+        BlockState[] resolved = resolvedPalette(report);
+        BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
                 for (int z = 0; z < depth; z++) {
                     int cell = (x * height + y) * depth + z;
-                    BlockState state = stateAt(cell, report);
+                    BlockState state = stateAt(resolved, cell);
                     if (state == null) continue;
-                    level.setBlock(origin.offset(x, y, z), waterlogged(state, cell, report), Block.UPDATE_CLIENTS);
+                    at.set(origin.getX() + x, origin.getY() + y, origin.getZ() + z);
+                    level.setBlock(at, waterlogged(resolved, state, cell), Block.UPDATE_CLIENTS);
                 }
             }
         }
     }
 
-    /** Null where the cell says to leave the world alone, which the caller skips. */
-    private BlockState stateAt(int cell, Consumer<String> report) {
-        int index = cell < blocks.length ? blocks[cell] : KEEP;
-        if (index == KEEP) return null;
-        return resolve(index, report);
+    /**
+     * The palette as states, worked out once for the whole placement.
+     *
+     * Resolving per position would parse the same name and re-apply the same properties for every
+     * cell that uses it, and would say the same thing about an unknown block as many times as the
+     * structure places it.
+     */
+    BlockState[] resolvedPalette(Consumer<String> report) {
+        BlockState[] resolved = new BlockState[palette.size()];
+        for (int index = 0; index < resolved.length; index++) {
+            resolved[index] = resolve(index, report);
+        }
+        return resolved;
     }
 
-    private BlockState waterlogged(BlockState state, int cell, Consumer<String> report) {
+    /** Null where the cell says to leave the world alone, which the caller skips. */
+    private BlockState stateAt(BlockState[] resolved, int cell) {
+        int index = cell < blocks.length ? blocks[cell] : KEEP;
+        if (index == KEEP) return null;
+        return index >= 0 && index < resolved.length ? resolved[index] : Blocks.AIR.defaultBlockState();
+    }
+
+    private BlockState waterlogged(BlockState[] resolved, BlockState state, int cell) {
         int index = cell < liquids.length ? liquids[cell] : KEEP;
         if (index == KEEP || !state.hasProperty(BlockStateProperties.WATERLOGGED)) return state;
 
-        BlockState liquid = resolve(index, report);
+        BlockState liquid = index >= 0 && index < resolved.length ? resolved[index] : null;
         return liquid != null && !liquid.getFluidState().isEmpty()
             ? state.setValue(BlockStateProperties.WATERLOGGED, true) : state;
     }
@@ -162,12 +235,18 @@ public final class McStructure {
 
     private static BlockState applied(BlockState state, String block, String name, Object value,
         Consumer<String> report) {
-        Property<?> property = propertyNamed(state, name);
+        String bare = name.toLowerCase(Locale.ROOT);
+        String stripped = bare.endsWith("_bit") ? bare.substring(0, bare.length() - 4) : bare;
+        StateRule rule = STATE_RULES.getOrDefault(bare, STATE_RULES.get(stripped));
+
+        Property<?> property = propertyNamed(state, rule, bare, stripped);
         if (property == null) {
             report.accept("Structure block state " + block + "[" + name + "]");
             return state;
         }
-        return set(state, property, text(value, property), block, report);
+
+        String written = text(value, property);
+        return set(state, property, rule == null ? written : rule.value().apply(written), block, report);
     }
 
     private static <T extends Comparable<T>> BlockState set(BlockState state, Property<T> property,
@@ -188,14 +267,15 @@ public final class McStructure {
         return String.valueOf(value);
     }
 
-    private static Property<?> propertyNamed(BlockState state, String name) {
-        String bare = name.toLowerCase(Locale.ROOT);
-        String stripped = bare.endsWith("_bit") ? bare.substring(0, bare.length() - 4) : bare;
-        for (String candidate : List.of(bare, stripped, STATE_ALIASES.getOrDefault(stripped, stripped))) {
-            Property<?> property = state.getBlock().getStateDefinition().getProperty(candidate);
-            if (property != null) return property;
-        }
-        return null;
+    /** The property a state names, under its own spelling first and then the ones its rule offers. */
+    private static Property<?> propertyNamed(BlockState state, StateRule rule, String bare, String stripped) {
+        List<String> candidates = new ArrayList<>(List.of(bare, stripped));
+        if (rule != null) candidates.addAll(rule.properties());
+
+        return candidates.stream().distinct()
+            .map(candidate -> state.getBlock().getStateDefinition().getProperty(candidate))
+            .filter(java.util.Objects::nonNull)
+            .findFirst().orElse(null);
     }
 
     /** One block the structure names, under Bedrock's spelling of it. */
@@ -228,6 +308,12 @@ public final class McStructure {
 
     private static List<?> listOf(Object node) {
         return node instanceof List<?> list ? list : List.of();
+    }
+
+    /** How many things a node holds, whether the format wrote them as a list or keyed by position. */
+    private static int sizeOf(Object node) {
+        if (node instanceof List<?> list) return list.size();
+        return node instanceof Map<?, ?> map ? map.size() : 0;
     }
 
     private static int number(Object value) {

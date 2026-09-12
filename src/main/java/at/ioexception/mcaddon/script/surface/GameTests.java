@@ -37,6 +37,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -57,7 +58,21 @@ public final class GameTests extends Surface {
     /** Headroom cleared above a run, so what it spawns has somewhere to stand. */
     private static final int HEADROOM = 4;
 
+    /** The side a fence reports on, against the state it carries for it. */
+    private static final Map<Direction, BooleanProperty> CONNECTIONS = Map.of(
+        Direction.NORTH, BlockStateProperties.NORTH,
+        Direction.EAST, BlockStateProperties.EAST,
+        Direction.SOUTH, BlockStateProperties.SOUTH,
+        Direction.WEST, BlockStateProperties.WEST);
+
     private final Map<Integer, Run> runs = new LinkedHashMap<>();
+
+    /** Every structure name a test has asked for, against what the packs turned out to hold. */
+    private final Map<String, McStructure> structures = new HashMap<>();
+
+    /** How many live runs each chunk is being kept loaded for. */
+    private final Map<ChunkPos, Integer> holders = new HashMap<>();
+
     private int nextRun = 1;
     private int nextOffset;
 
@@ -82,7 +97,7 @@ public final class GameTests extends Surface {
         BlockPos origin = BlockPos.containing(source.getPosition()).offset(nextOffset + 2, 0, 2);
         nextOffset += width + Math.max(padding, 1) + 1;
 
-        List<Long> held = hold(level, origin, width, depth);
+        List<ChunkPos> held = hold(level, origin, width, depth);
         clear(level, origin, width, height + HEADROOM, depth);
         if (structure == null) {
             if (structureName != null && !structureName.isBlank()) {
@@ -115,15 +130,20 @@ public final class GameTests extends Surface {
             ServerLevel level = level(run.dimension());
             if (level == null) return;
             clear(level, run.origin(), run.width(), run.height(), run.depth());
-            run.held().forEach(chunk -> level.setChunkForced(
-                ChunkPos.getX(chunk), ChunkPos.getZ(chunk), false));
+            release(level, run);
         });
         runs.clear();
         nextOffset = 0;
         return cleared;
     }
 
-    /** The verdict a test reached, shown to whoever started it. */
+    /**
+     * The verdict a test reached, shown to whoever started it.
+     *
+     * A test that has answered needs no more ticks, so the chunks it was holding are let go here
+     * rather than at `clearall`. The area itself stays standing until then, which is what a person
+     * who wants to look at what a test built is asking for.
+     */
     @HostAccess.Export
     public void report(int runId, boolean passed, String name, String message) {
         Run run = runs.get(runId);
@@ -134,6 +154,19 @@ public final class GameTests extends Surface {
         } else {
             run.source().sendFailure(Component.literal(name + " failed: " + message));
         }
+        release(level(run.dimension()), run);
+    }
+
+    /** Lets go of the chunks a run was keeping loaded, once and not again. */
+    private void release(ServerLevel level, Run run) {
+        if (level == null) return;
+        run.held().forEach(chunk -> {
+            if (holders.merge(chunk, -1, Integer::sum) <= 0) {
+                holders.remove(chunk);
+                Platform.releaseChunk(level, chunk);
+            }
+        });
+        run.held().clear();
     }
 
     /** `Test.print`, which Bedrock shows to whoever is watching the test. */
@@ -170,12 +203,20 @@ public final class GameTests extends Surface {
         ServerLevel level = level(dimension);
         if (level == null) return new String[0];
 
-        String wanted = typeId == null ? null : namespaced(typeId);
-        List<String> found = new ArrayList<>();
-        for (Entity entity : level.getEntitiesOfClass(Entity.class, box(fromX, fromY, fromZ, toX, toY, toZ))) {
-            if (wanted == null || wanted.equals(typeOf(entity))) found.add(entity.getStringUUID());
-        }
-        return found.toArray(new String[0]);
+        EntityType<?> wanted = entityType(typeId);
+        if (typeId != null && wanted == null) return new String[0];
+
+        return level.getEntitiesOfClass(Entity.class, new AABB(fromX, fromY, fromZ, toX, toY, toZ)).stream()
+            .filter(entity -> wanted == null || entity.getType() == wanted)
+            .map(Entity::getStringUUID)
+            .toArray(String[]::new);
+    }
+
+    /** The type a pack named, or null for a name this game has none for, which matches nothing. */
+    private static EntityType<?> entityType(String typeId) {
+        if (typeId == null) return null;
+        Identifier parsed = Identifier.tryParse(namespaced(typeId));
+        return parsed == null ? null : BuiltInRegistries.ENTITY_TYPE.getOptional(parsed).orElse(null);
     }
 
     /**
@@ -190,31 +231,32 @@ public final class GameTests extends Surface {
         ServerLevel level = level(dimension);
         if (level == null) return "[]";
 
-        String wanted = itemId == null ? null : namespaced(itemId);
-        JsonArray found = new JsonArray();
-        for (ItemEntity dropped
-            : level.getEntitiesOfClass(ItemEntity.class, box(fromX, fromY, fromZ, toX, toY, toZ))) {
-            Item item = dropped.getItem().getItem();
-            if (wanted != null && !wanted.equals(BuiltInRegistries.ITEM.getKey(item).toString())) continue;
+        Identifier named = itemId == null ? null : Identifier.tryParse(namespaced(itemId));
+        Item wanted = named == null ? null : BuiltInRegistries.ITEM.getOptional(named).orElse(null);
+        if (itemId != null && wanted == null) return "[]";
 
-            JsonObject stack = new JsonObject();
-            stack.addProperty("id", dropped.getStringUUID());
-            stack.addProperty("amount", dropped.getItem().getCount());
-            found.add(stack);
-        }
+        JsonArray found = new JsonArray();
+        level.getEntitiesOfClass(ItemEntity.class, new AABB(fromX, fromY, fromZ, toX, toY, toZ)).stream()
+            .filter(dropped -> wanted == null || dropped.getItem().getItem() == wanted)
+            .forEach(dropped -> {
+                JsonObject stack = new JsonObject();
+                stack.addProperty("id", dropped.getStringUUID());
+                stack.addProperty("amount", dropped.getItem().getCount());
+                found.add(stack);
+            });
         return found.toString();
     }
 
     /** Removes everything in a box without dropping anything, which is `Test.killAllEntities`. */
     @HostAccess.Export
-    public int killEntitiesIn(String dimension, double fromX, double fromY, double fromZ,
+    public void killEntitiesIn(String dimension, double fromX, double fromY, double fromZ,
         double toX, double toY, double toZ) {
         ServerLevel level = level(dimension);
-        if (level == null) return 0;
+        if (level == null) return;
 
-        List<Entity> doomed = level.getEntitiesOfClass(Entity.class, box(fromX, fromY, fromZ, toX, toY, toZ));
-        doomed.stream().filter(entity -> !(entity instanceof ServerPlayer)).forEach(Entity::discard);
-        return doomed.size();
+        level.getEntitiesOfClass(Entity.class, new AABB(fromX, fromY, fromZ, toX, toY, toZ)).stream()
+            .filter(entity -> !(entity instanceof ServerPlayer))
+            .forEach(Entity::discard);
     }
 
     /** Whether a point is inside an entity, which Bedrock calls touching it. */
@@ -225,21 +267,38 @@ public final class GameTests extends Surface {
     }
 
     /**
-     * Presses a button and lets it pop back out on its own.
+     * Presses a button, through the block so that everything watching one hears about it.
      *
-     * Written as the state change with a neighbour update rather than through the block class,
-     * because the block's own press method takes a different argument list on each version and this
-     * is what it does with them.
+     * A pack may subscribe to a button being pushed, and it is the block's own press that says so.
+     * Setting the powered state instead would light the button and tell nobody.
      */
     @HostAccess.Export
-    public boolean pressButton(String dimension, int x, int y, int z) {
-        return powered(dimension, x, y, z, "Test.pressButton", true, 30);
+    public void pressButton(String dimension, int x, int y, int z) {
+        ServerLevel level = level(dimension);
+        if (level == null) return;
+
+        BlockPos at = new BlockPos(x, y, z);
+        BlockState state = level.getBlockState(at);
+        if (state.getBlock() instanceof net.minecraft.world.level.block.ButtonBlock button) {
+            Platform.pressButton(button, state, level, at, null);
+        } else {
+            unsupported("Test.pressButton on " + BuiltInRegistries.BLOCK.getKey(state.getBlock()));
+        }
     }
 
-    /** A lever, which flips instead of popping back out and so is never rescheduled. */
+    /** A lever, which flips and stays flipped rather than popping back out. */
     @HostAccess.Export
-    public boolean pullLever(String dimension, int x, int y, int z) {
-        return powered(dimension, x, y, z, "Test.pullLever", null, 0);
+    public void pullLever(String dimension, int x, int y, int z) {
+        ServerLevel level = level(dimension);
+        if (level == null) return;
+
+        BlockPos at = new BlockPos(x, y, z);
+        BlockState state = level.getBlockState(at);
+        if (state.getBlock() instanceof net.minecraft.world.level.block.LeverBlock lever) {
+            Platform.pullLever(lever, state, level, at, null);
+        } else {
+            unsupported("Test.pullLever on " + BuiltInRegistries.BLOCK.getKey(state.getBlock()));
+        }
     }
 
     @HostAccess.Export
@@ -256,9 +315,9 @@ public final class GameTests extends Surface {
      * from potion, which it keeps as water.
      */
     @HostAccess.Export
-    public boolean setFluidContainer(String dimension, int x, int y, int z, String type) {
+    public void setFluidContainer(String dimension, int x, int y, int z, String type) {
         ServerLevel level = level(dimension);
-        if (level == null) return false;
+        if (level == null) return;
 
         BlockState filled = switch (type == null ? "" : type.toLowerCase(Locale.ROOT)) {
             case "lava" -> Blocks.LAVA_CAULDRON.defaultBlockState();
@@ -270,29 +329,27 @@ public final class GameTests extends Surface {
         };
         if (filled == null) {
             unsupported("Test.setFluidContainer " + type);
-            return false;
+            return;
         }
         if ("potion".equalsIgnoreCase(type)) unsupported("Test.setFluidContainer Potion");
 
         level.setBlockAndUpdate(new BlockPos(x, y, z), filled);
-        return true;
     }
 
     /** The message a block sends itself, which is how a piston or a chest is told to move. */
     @HostAccess.Export
-    public boolean triggerBlockEvent(String dimension, int x, int y, int z, int event, int parameter) {
+    public void triggerBlockEvent(String dimension, int x, int y, int z, int event, int parameter) {
         ServerLevel level = level(dimension);
-        if (level == null) return false;
+        if (level == null) return;
 
         BlockPos position = new BlockPos(x, y, z);
         level.blockEvent(position, level.getBlockState(position).getBlock(), event, parameter);
-        return true;
     }
 
     @HostAccess.Export
-    public boolean destroyBlock(String dimension, int x, int y, int z, boolean drop) {
+    public void destroyBlock(String dimension, int x, int y, int z, boolean drop) {
         ServerLevel level = level(dimension);
-        return level != null && level.destroyBlock(new BlockPos(x, y, z), drop);
+        if (level != null) level.destroyBlock(new BlockPos(x, y, z), drop);
     }
 
     /** The `north`, `east`, `south` and `west` states a fence carries, as JSON. */
@@ -303,51 +360,28 @@ public final class GameTests extends Surface {
 
         BlockState state = level.getBlockState(new BlockPos(x, y, z));
         JsonObject sides = new JsonObject();
-        for (Direction side : Direction.Plane.HORIZONTAL) {
-            BooleanProperty property = connection(side);
-            sides.addProperty(side.getName(),
-                property != null && state.hasProperty(property) && state.getValue(property));
-        }
+        CONNECTIONS.forEach((side, property) ->
+            sides.addProperty(side.getName(), state.hasProperty(property) && state.getValue(property)));
         return sides.toString();
     }
 
-    private static BooleanProperty connection(Direction side) {
-        return switch (side) {
-            case NORTH -> BlockStateProperties.NORTH;
-            case EAST -> BlockStateProperties.EAST;
-            case SOUTH -> BlockStateProperties.SOUTH;
-            case WEST -> BlockStateProperties.WEST;
-            default -> null;
-        };
-    }
-
     /**
-     * Switches a block's powered state and tells its neighbours.
+     * The structure a test named, read from whichever pack ships it.
      *
-     * A null choice flips what is there, which is a lever, and a delay above zero schedules the
-     * block's own tick, which is how a button pops back out.
+     * Finding one walks every loaded pack's directory and parsing one reads the whole file, and a
+     * suite started at once asks for the same few structures over and over. Packs do not change
+     * while the game runs, so the answer is kept, a name nothing ships included.
      */
-    private boolean powered(String dimension, int x, int y, int z, String member, Boolean choice, int delay) {
-        ServerLevel level = level(dimension);
-        if (level == null) return false;
-
-        BlockPos position = new BlockPos(x, y, z);
-        BlockState state = level.getBlockState(position);
-        if (!state.hasProperty(BlockStateProperties.POWERED)) {
-            unsupported(member + " on " + BuiltInRegistries.BLOCK.getKey(state.getBlock()));
-            return false;
-        }
-
-        boolean wanted = choice != null ? choice : !state.getValue(BlockStateProperties.POWERED);
-        level.setBlock(position, state.setValue(BlockStateProperties.POWERED, wanted), Block.UPDATE_ALL);
-        if (delay > 0) level.scheduleTick(position, state.getBlock(), delay);
-        return true;
-    }
-
-    /** The structure a test named, read from whichever pack ships it. */
     private McStructure structure(String name) {
         if (name == null || name.isBlank()) return null;
+        if (structures.containsKey(name)) return structures.get(name);
 
+        McStructure found = search(name);
+        structures.put(name, found);
+        return found;
+    }
+
+    private McStructure search(String name) {
         String wanted = name.replace(':', '/').toLowerCase(Locale.ROOT);
         for (BedrockPack pack : McAddon.packs().packs()) {
             for (Path file : pack.list("structures", ".mcstructure")) {
@@ -371,22 +405,25 @@ public final class GameTests extends Surface {
     }
 
     /**
-     * Keeps the chunks a run covers loaded, and says which of them this run is the one holding.
+     * Keeps the chunks a run covers loaded, and says which ones the run now owes a release for.
      *
      * A test runs on a server that may have nobody near it, and a chunk nobody is near stops being
      * loaded within a few ticks. Every block a test reads back then comes up missing, so a test that
-     * waits for one waits forever. A chunk somebody else already forced is left out of the answer,
-     * because letting it go at the end of the run is not this run's to do.
+     * waits for one waits forever. Two runs whose areas land in the same chunk both name it, and the
+     * count decides when the game is told, because the ticket itself is one thing however many times
+     * it is asked for.
      */
-    private static List<Long> hold(ServerLevel level, BlockPos origin, int width, int depth) {
-        List<Long> held = new ArrayList<>();
+    private List<ChunkPos> hold(ServerLevel level, BlockPos origin, int width, int depth) {
+        List<ChunkPos> held = new ArrayList<>();
         int fromX = SectionPos.blockToSectionCoord(origin.getX());
         int fromZ = SectionPos.blockToSectionCoord(origin.getZ());
         int toX = SectionPos.blockToSectionCoord(origin.getX() + width);
         int toZ = SectionPos.blockToSectionCoord(origin.getZ() + depth);
         for (int x = fromX; x <= toX; x++) {
             for (int z = fromZ; z <= toZ; z++) {
-                if (level.setChunkForced(x, z, true)) held.add(ChunkPos.pack(x, z));
+                ChunkPos chunk = new ChunkPos(x, z);
+                if (holders.merge(chunk, 1, Integer::sum) == 1) Platform.holdChunk(level, chunk);
+                held.add(chunk);
             }
         }
         return held;
@@ -412,20 +449,8 @@ public final class GameTests extends Surface {
         }
     }
 
-    private static AABB box(double fromX, double fromY, double fromZ, double toX, double toY, double toZ) {
-        return new AABB(fromX, fromY, fromZ, toX, toY, toZ);
-    }
-
-    private static String typeOf(Entity entity) {
-        return BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString();
-    }
-
-    private static String namespaced(String id) {
-        return id.indexOf(':') < 0 ? "minecraft:" + id : id;
-    }
-
     /** One area a test was given, so `clearall` can hand it back along with the chunks it holds. */
     private record Run(CommandSourceStack source, String dimension, BlockPos origin,
-        int width, int height, int depth, List<Long> held) {
+        int width, int height, int depth, List<ChunkPos> held) {
     }
 }

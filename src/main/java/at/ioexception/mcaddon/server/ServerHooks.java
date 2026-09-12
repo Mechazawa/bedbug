@@ -205,6 +205,9 @@ public final class ServerHooks {
     private static void stop() {
         if (scripts != null) {
             scripts.raiseSystemBeforeEvent("shutdown", Map.of());
+            // A test area started and never cleared is holding its chunks, and a chunk held by a
+            // server that is going away is held by nobody.
+            scripts.bridge().gametests.clearAll();
             scripts.stop();
             scripts = null;
         }

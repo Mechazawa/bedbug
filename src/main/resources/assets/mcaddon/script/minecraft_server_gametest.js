@@ -12,10 +12,10 @@ import { Player, world } from "@minecraft/server";
 
 const bridge = globalThis.__mcaddon_bridge__;
 
-// A Java array reaches the guest as a host object with no JavaScript methods on it, so every list
-// the bridge returns is copied into a real array before anything here calls `map` or `includes`.
-function list(hostArray) {
-    return hostArray === null || hostArray === undefined ? [] : Array.from(hostArray);
+// The helpers `@minecraft/server` shares: `list`, `unsupported`, `blockPosition` and `typeIdOf`. That
+// module installs them on the global as it is evaluated, so each call reads them off it again.
+function runtime() {
+    return globalThis.__mcaddon_runtime__;
 }
 
 /** Bedrock's own ceiling on how long one test may take before it counts as failed. */
@@ -58,21 +58,8 @@ export class GameTestError extends Error {
     }
 }
 
-function unsupported(member, answer) {
-    bridge.unsupported(member);
-    return answer;
-}
-
 function fail(message, type) {
     throw new GameTestError(message, type);
-}
-
-function blockPosition(location) {
-    return { x: Math.floor(location.x), y: Math.floor(location.y), z: Math.floor(location.z) };
-}
-
-function typeIdOf(value) {
-    return typeof value === "string" ? value : value?.id ?? String(value);
 }
 
 function describe(location) {
@@ -87,16 +74,12 @@ class Registration {
         this.testFunction = testFunction;
         this.awaited = awaited;
         this.structureName = undefined;
-        this.structureLocation = undefined;
         this.maxTicks = DEFAULT_MAX_TICKS;
         this.setupTicks = 0;
         this.padding = 0;
         this.batch = "default";
         this.tags = [];
         this.required = true;
-        this.rotate = false;
-        this.maxAttempts = 1;
-        this.requiredSuccesses = 1;
     }
 
     get name() {
@@ -126,8 +109,7 @@ export class RegistrationBuilder {
     }
 
     maxAttempts(attemptCount) {
-        this.#entry.maxAttempts = attemptCount;
-        if (attemptCount > 1) unsupported("GameTest.maxAttempts");
+        if (attemptCount > 1) runtime().unsupported("GameTest.maxAttempts");
         return this;
     }
 
@@ -147,8 +129,7 @@ export class RegistrationBuilder {
     }
 
     requiredSuccessfulAttempts(attemptCount) {
-        this.#entry.requiredSuccesses = attemptCount;
-        if (attemptCount > 1) unsupported("GameTest.requiredSuccessfulAttempts");
+        if (attemptCount > 1) runtime().unsupported("GameTest.requiredSuccessfulAttempts");
         return this;
     }
 
@@ -158,8 +139,7 @@ export class RegistrationBuilder {
     }
 
     rotateTest(rotate) {
-        this.#entry.rotate = rotate === true;
-        if (rotate === true) unsupported("GameTest.rotateTest");
+        if (rotate === true) runtime().unsupported("GameTest.rotateTest");
         return this;
     }
 
@@ -170,8 +150,7 @@ export class RegistrationBuilder {
 
     /** Kept and reported: a run puts its structure beside whoever asked for it. */
     structureLocation(location) {
-        this.#entry.structureLocation = location;
-        unsupported("GameTest.structureLocation");
+        runtime().unsupported("GameTest.structureLocation");
         return this;
     }
 
@@ -285,8 +264,6 @@ export class GameTestSequence {
                 this.#stopped = true;
                 this.#run.failWith(new GameTestError(step.message, GameTestErrorType.FailConditionsMet));
                 return false;
-            default:
-                return false;
         }
     }
 }
@@ -301,7 +278,7 @@ class TestRun {
         this.dimensionId = placement.dimension;
         this.origin = { x: placement.x, y: placement.y, z: placement.z };
         this.size = { x: placement.width, y: placement.height, z: placement.depth };
-        this.elapsed = -Math.max(0, entry.setupTicks ?? 0);
+        this.elapsed = -Math.max(0, entry.setupTicks);
         this.sequences = [];
         this.delayed = [];
         this.started = false;
@@ -332,7 +309,7 @@ class TestRun {
             sequence.advance(this.elapsed);
         }
 
-        if (!this.#settled && this.elapsed >= (this.entry.maxTicks ?? DEFAULT_MAX_TICKS)) {
+        if (!this.#settled && this.elapsed >= this.entry.maxTicks) {
             this.failWith(new GameTestError("Timed out after " + this.elapsed + " ticks",
                 GameTestErrorType.ExecutionTimeout));
         }
@@ -454,7 +431,7 @@ export class Test {
     }
 
     worldBlockLocation(relativeBlockLocation) {
-        return blockPosition(this.worldLocation(relativeBlockLocation));
+        return runtime().blockPosition(this.worldLocation(relativeBlockLocation));
     }
 
     relativeLocation(worldLocation) {
@@ -466,7 +443,7 @@ export class Test {
     }
 
     relativeBlockLocation(worldBlockLocation) {
-        return blockPosition(this.relativeLocation(worldBlockLocation));
+        return runtime().blockPosition(this.relativeLocation(worldBlockLocation));
     }
 
     getBlock(blockLocation) {
@@ -474,7 +451,8 @@ export class Test {
     }
 
     setBlockType(blockType, blockLocation) {
-        this.getDimension().setBlockType(this.worldBlockLocation(blockLocation), typeIdOf(blockType));
+        const typeId = runtime().typeIdOf(blockType);
+        this.getDimension().setBlockType(this.worldBlockLocation(blockLocation), typeId);
     }
 
     /** The spelling an older pack calls, which places the same block. */
@@ -518,11 +496,12 @@ export class Test {
     }
 
     assertBlockPresent(blockType, blockLocation, isPresent) {
+        const typeId = runtime().typeIdOf(blockType);
         const wanted = this.getDimension().getBlock(this.worldBlockLocation(blockLocation));
         const present = wanted !== undefined
-            && wanted.typeId === (bridge.blocks.canonicalId(typeIdOf(blockType)) ?? typeIdOf(blockType));
-        this.#expect(present, isPresent,
-            typeIdOf(blockType) + " at " + describe(blockLocation), GameTestErrorType.AssertAtPosition);
+            && wanted.typeId === (bridge.blocks.canonicalId(typeId) ?? typeId);
+        this.#expect(present, isPresent, typeId + " at " + describe(blockLocation),
+            GameTestErrorType.AssertAtPosition);
     }
 
     assertBlockState(blockLocation, callback) {
@@ -630,7 +609,8 @@ export class Test {
 
     assertItemEntityPresent(itemType, blockLocation, searchDistance, isPresent) {
         const found = this.#items(itemType, blockLocation, searchDistance ?? 0).length > 0;
-        this.#expect(found, isPresent, typeIdOf(itemType) + " dropped at " + describe(blockLocation),
+        this.#expect(found, isPresent,
+            runtime().typeIdOf(itemType) + " dropped at " + describe(blockLocation),
             GameTestErrorType.AssertAtPosition);
     }
 
@@ -638,7 +618,7 @@ export class Test {
         const found = this.#items(itemType, blockLocation, searchDistance)
             .reduce((total, dropped) => total + dropped.amount, 0);
         if (found !== count) {
-            fail("Found " + found + " " + typeIdOf(itemType) + " at " + describe(blockLocation)
+            fail("Found " + found + " " + runtime().typeIdOf(itemType) + " at " + describe(blockLocation)
                 + ", expected " + count, GameTestErrorType.AssertAtPosition);
         }
     }
@@ -679,10 +659,7 @@ export class Test {
     }
 
     killAllEntities() {
-        const from = this.#run.origin;
-        const to = this.#run.size;
-        bridge.gametests.killEntitiesIn(this.#run.dimensionId, from.x, from.y, from.z,
-            from.x + to.x, from.y + to.y, from.z + to.z);
+        bridge.gametests.killEntitiesIn(this.#run.dimensionId, ...this.#areaBox());
     }
 
     // Flow
@@ -787,39 +764,39 @@ export class Test {
     // watching a test that never moves.
 
     spawnSimulatedPlayer(blockLocation, name, gameMode) {
-        return unsupported("Test.spawnSimulatedPlayer", new SimulatedPlayer(""));
+        return runtime().unsupported("Test.spawnSimulatedPlayer", new SimulatedPlayer(""));
     }
 
     removeSimulatedPlayer(simulatedPlayer) {
-        unsupported("Test.removeSimulatedPlayer");
+        runtime().unsupported("Test.removeSimulatedPlayer");
     }
 
     assertCanReachLocation(mob, blockLocation, canReach) {
-        unsupported("Test.assertCanReachLocation");
+        runtime().unsupported("Test.assertCanReachLocation");
     }
 
     assertEntityHasArmor(entityTypeIdentifier, armorSlot, armorName, armorData, blockLocation, hasArmor) {
-        unsupported("Test.assertEntityHasArmor");
+        runtime().unsupported("Test.assertEntityHasArmor");
     }
 
     getSculkSpreader(blockLocation) {
-        return unsupported("Test.getSculkSpreader", undefined);
+        return runtime().unsupported("Test.getSculkSpreader", undefined);
     }
 
     spreadFromFaceTowardDirection(blockLocation, fromFace, direction) {
-        unsupported("Test.spreadFromFaceTowardDirection");
+        runtime().unsupported("Test.spreadFromFaceTowardDirection");
     }
 
     onPlayerJump(mob, jumpAmount) {
-        unsupported("Test.onPlayerJump");
+        runtime().unsupported("Test.onPlayerJump");
     }
 
     walkTo(mob, blockLocation, speedModifier) {
-        unsupported("Test.walkTo");
+        runtime().unsupported("Test.walkTo");
     }
 
     walkToLocation(mob, location, speedModifier) {
-        unsupported("Test.walkToLocation");
+        runtime().unsupported("Test.walkToLocation");
     }
 
     // Shared shapes
@@ -839,30 +816,41 @@ export class Test {
         return container;
     }
 
-    /** The ids of one type of entity within a radius of a position the pack gave in test space. */
-    #near(entityTypeIdentifier, blockLocation, searchDistance) {
+    /**
+     * The corners of a box around a block position, as the six numbers a bridge call takes.
+     *
+     * The far corner is one past the block, because the bridge reads a box as the span between two
+     * points and a block fills the space between its own position and the next.
+     */
+    #box(blockLocation, searchDistance) {
         const at = this.worldBlockLocation(blockLocation);
         const reach = Math.max(searchDistance ?? 0, 0);
-        return list(bridge.gametests.entitiesIn(this.#run.dimensionId,
-            at.x - reach, at.y - reach, at.z - reach,
-            at.x + reach + 1, at.y + reach + 1, at.z + reach + 1,
-            entityTypeIdentifier ?? null));
+        return [at.x - reach, at.y - reach, at.z - reach,
+            at.x + reach + 1, at.y + reach + 1, at.z + reach + 1];
+    }
+
+    /** The same six numbers for the whole area the test was given. */
+    #areaBox() {
+        const from = this.#run.origin;
+        const to = this.#run.size;
+        return [from.x, from.y, from.z, from.x + to.x, from.y + to.y, from.z + to.z];
+    }
+
+    /** The ids of one type of entity within a radius of a position the pack gave in test space. */
+    #near(entityTypeIdentifier, blockLocation, searchDistance) {
+        return runtime().list(bridge.gametests.entitiesIn(this.#run.dimensionId,
+            ...this.#box(blockLocation, searchDistance), entityTypeIdentifier ?? null));
     }
 
     #inArea(entityTypeIdentifier) {
-        const from = this.#run.origin;
-        const to = this.#run.size;
-        return list(bridge.gametests.entitiesIn(this.#run.dimensionId, from.x, from.y, from.z,
-            from.x + to.x, from.y + to.y, from.z + to.z, entityTypeIdentifier ?? null));
+        return runtime().list(bridge.gametests.entitiesIn(this.#run.dimensionId, ...this.#areaBox(),
+            entityTypeIdentifier ?? null));
     }
 
     /** The dropped stacks of one kind, each as the id and the count the pack asserts against. */
     #items(itemType, blockLocation, searchDistance) {
-        const at = this.worldBlockLocation(blockLocation);
-        const reach = Math.max(searchDistance ?? 0, 0);
         return JSON.parse(bridge.gametests.itemEntitiesIn(this.#run.dimensionId,
-            at.x - reach, at.y - reach, at.z - reach,
-            at.x + reach + 1, at.y + reach + 1, at.z + reach + 1, typeIdOf(itemType)));
+            ...this.#box(blockLocation, searchDistance), runtime().typeIdOf(itemType)));
     }
 }
 
@@ -885,29 +873,7 @@ export class NavigationResult {
     }
 
     getPath() {
-        return unsupported("NavigationResult.getPath", []);
-    }
-}
-
-export class SculkSpreader {
-    get maxCharge() {
-        return unsupported("SculkSpreader.maxCharge", 0);
-    }
-
-    addCursorsWithOffset() {
-        unsupported("SculkSpreader.addCursorsWithOffset");
-    }
-
-    getCursorPosition() {
-        return unsupported("SculkSpreader.getCursorPosition", undefined);
-    }
-
-    getNumberOfCursors() {
-        return unsupported("SculkSpreader.getNumberOfCursors", 0);
-    }
-
-    getTotalCharge() {
-        return unsupported("SculkSpreader.getTotalCharge", 0);
+        return runtime().unsupported("NavigationResult.getPath", []);
     }
 }
 
@@ -920,15 +886,15 @@ export class SculkSpreader {
  */
 export class SimulatedPlayer extends Player {
     get headRotation() {
-        return unsupported("SimulatedPlayer.headRotation", { x: 0, y: 0 });
+        return runtime().unsupported("SimulatedPlayer.headRotation", { x: 0, y: 0 });
     }
 
     get isSprinting() {
-        return unsupported("SimulatedPlayer.isSprinting", false);
+        return runtime().unsupported("SimulatedPlayer.isSprinting", false);
     }
 
     set isSprinting(sprinting) {
-        unsupported("SimulatedPlayer.isSprinting");
+        runtime().unsupported("SimulatedPlayer.isSprinting");
     }
 }
 
@@ -947,14 +913,16 @@ const SIMULATED_PLAYER_MEMBERS = Object.freeze({
 });
 
 for (const [member, answer] of Object.entries(SIMULATED_PLAYER_MEMBERS)) {
-    SimulatedPlayer.prototype[member] = () => unsupported("SimulatedPlayer." + member, answer);
+    SimulatedPlayer.prototype[member] = () => runtime().unsupported("SimulatedPlayer." + member, answer);
 }
 
 for (const member of ["navigateToBlock", "navigateToEntity", "navigateToLocation"]) {
-    SimulatedPlayer.prototype[member] = () => unsupported("SimulatedPlayer." + member, new NavigationResult());
+    SimulatedPlayer.prototype[member] = () =>
+        runtime().unsupported("SimulatedPlayer." + member, new NavigationResult());
 }
 
-SimulatedPlayer.prototype.navigateToLocations = () => unsupported("SimulatedPlayer.navigateToLocations");
+SimulatedPlayer.prototype.navigateToLocations = () =>
+    runtime().unsupported("SimulatedPlayer.navigateToLocations");
 
 /**
  * What Java calls into. Kept off the module exports so a pack cannot reach it through an import.
@@ -968,12 +936,9 @@ globalThis.__mcaddon_gametests__ = {
     list() {
         return JSON.stringify(registered.map(entry => ({
             name: entry.name,
-            className: entry.className,
             testName: entry.testName,
             structureName: entry.structureName ?? "",
-            padding: entry.padding ?? 0,
-            batch: entry.batch,
-            required: entry.required,
+            padding: entry.padding,
             tags: entry.tags,
         })));
     },

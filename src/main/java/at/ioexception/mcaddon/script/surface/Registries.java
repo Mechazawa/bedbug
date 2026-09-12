@@ -186,6 +186,6 @@ public final class Registries extends Surface {
     }
 
     private static Identifier qualified(String id) {
-        return id == null ? null : Identifier.tryParse(id.indexOf(':') < 0 ? "minecraft:" + id : id);
+        return id == null ? null : Identifier.tryParse(namespaced(id));
     }
 }

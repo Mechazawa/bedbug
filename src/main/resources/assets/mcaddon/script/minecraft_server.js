@@ -9,9 +9,9 @@
 
 const bridge = globalThis.__mcaddon_bridge__;
 
-function unsupported(member) {
+function unsupported(member, answer) {
     bridge.unsupported(member);
-    return undefined;
+    return answer;
 }
 
 export class Vector3 {
@@ -3063,8 +3063,14 @@ export const system = new ScriptSystem();
 const customCommands = [];
 const customEnums = new Map();
 
-// What Java calls into. Kept off the module exports so a pack cannot reach it through an import.
+// What Java calls into, and where the other `@minecraft/*` modules read the helpers they share from.
+// Kept off the module exports so a pack cannot reach it through an import.
 globalThis.__mcaddon_runtime__ = {
+    list,
+    unsupported,
+    blockPosition,
+    typeIdOf,
+
     tick(tick) {
         system.pump(tick);
         // Only a pack importing `@minecraft/server-gametest` installs this, so its absence means no

@@ -1160,20 +1160,28 @@ public final class ScriptBridge {
         CommandSourceStack quiet = source.withSuppressedOutput();
 
         // Brigadier raises the same kind of failure for a command it cannot read and one that read
-        // fine and found nothing to do. Only the first is a gap; `forceload query` finding no chunks
-        // is the game answering the question, and reporting it would name a gap that is not there.
+        // fine and then declined. Only the first says this mod is missing something, so the two are
+        // counted apart: a selector matching nothing is the game answering, not a gap.
         com.mojang.brigadier.ParseResults<CommandSourceStack> parsed =
             server.getCommands().getDispatcher().parse(trimmed, quiet);
         if (!parsed.getExceptions().isEmpty() || parsed.getReader().canRead()) {
-            coverage.failedCommand(trimmed, "the command could not be read");
+            coverage.failedCommand(trimmed, unreadable(parsed));
             return 0;
         }
 
         try {
             return server.getCommands().getDispatcher().execute(parsed);
-        } catch (CommandSyntaxException ranAndFoundNothing) {
+        } catch (CommandSyntaxException declined) {
+            coverage.refusedCommand(trimmed, declined.getMessage());
             return 0;
         }
+    }
+
+    /** What Brigadier objected to, or where it stopped reading when it said nothing. */
+    private static String unreadable(com.mojang.brigadier.ParseResults<CommandSourceStack> parsed) {
+        return parsed.getExceptions().values().stream().findFirst()
+            .map(CommandSyntaxException::getMessage)
+            .orElseGet(() -> "unread from position " + parsed.getReader().getCursor());
     }
 
     private ItemStack stack(String itemId, int amount) {

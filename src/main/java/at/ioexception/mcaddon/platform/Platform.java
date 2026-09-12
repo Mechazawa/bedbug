@@ -758,6 +758,72 @@ public final class Platform {
         return raid != null && raid.isVictory();
     }
 
+    /**
+     * The reason a chunk stays loaded while a test runs inside it.
+     *
+     * Deliberately not the one `/forceload` uses: that one is written into the saved world, so a
+     * server that stopped between a test and its cleanup would keep the chunk loaded for good, with
+     * nothing left in the game able to say why. This one is forgotten when the server stops.
+     */
+    //? if >=26 {
+    private static final net.minecraft.server.level.TicketType GAME_TEST =
+        new net.minecraft.server.level.TicketType(net.minecraft.server.level.TicketType.NO_TIMEOUT,
+            net.minecraft.server.level.TicketType.FLAG_LOADING
+                | net.minecraft.server.level.TicketType.FLAG_SIMULATION);
+    //?} else {
+    /*private static final net.minecraft.server.level.TicketType<net.minecraft.world.level.ChunkPos>
+        GAME_TEST = net.minecraft.server.level.TicketType.create("mcaddon_gametest",
+            java.util.Comparator.comparingLong(net.minecraft.world.level.ChunkPos::toLong));
+    *///?}
+
+    /** Chunks a ticket covers around the one it names, matching what a forced chunk gets. */
+    private static final int TEST_RADIUS = 2;
+
+    /** Keeps one chunk loaded and ticking until it is let go of again. */
+    public static void holdChunk(ServerLevel level, net.minecraft.world.level.ChunkPos at) {
+        //? if >=26 {
+        level.getChunkSource().addTicketWithRadius(GAME_TEST, at, TEST_RADIUS);
+        //?} else {
+        /*level.getChunkSource().addRegionTicket(GAME_TEST, at, TEST_RADIUS, at);
+        *///?}
+    }
+
+    /** Lets go of a chunk held for a test, which loads on its own terms again. */
+    public static void releaseChunk(ServerLevel level, net.minecraft.world.level.ChunkPos at) {
+        //? if >=26 {
+        level.getChunkSource().removeTicketWithRadius(GAME_TEST, at, TEST_RADIUS);
+        //?} else {
+        /*level.getChunkSource().removeRegionTicket(GAME_TEST, at, TEST_RADIUS, at);
+        *///?}
+    }
+
+    /**
+     * Pushes a button through the block itself, so everything watching a button hears about it.
+     *
+     * Setting the powered state by hand would light the button and nothing else: the sound, the
+     * neighbour update and the scheduled pop back out all live in here. 1.21 added the pusher.
+     */
+    public static void pressButton(net.minecraft.world.level.block.ButtonBlock button,
+        net.minecraft.world.level.block.state.BlockState state, net.minecraft.world.level.Level level,
+        net.minecraft.core.BlockPos at, net.minecraft.world.entity.player.Player pusher) {
+        //? if >=1.21 {
+        button.press(state, level, at, pusher);
+        //?} else {
+        /*button.press(state, level, at);
+        *///?}
+    }
+
+    /** Flips a lever the same way, which 1.21 also gave a puller and a void return. */
+    public static void pullLever(net.minecraft.world.level.block.LeverBlock lever,
+        net.minecraft.world.level.block.state.BlockState state, net.minecraft.world.level.Level level,
+        net.minecraft.core.BlockPos at, net.minecraft.world.entity.player.Player puller) {
+        //? if >=1.21 {
+        lever.pull(state, level, at, puller);
+        //?} else {
+        /*lever.pull(state, level, at);
+        *///?}
+    }
+
     /** Opens a screen, or closes whatever is open when given null. Renamed in 26. */
     public static void setScreen(net.minecraft.client.gui.screens.Screen screen) {
         //? if >=26 {

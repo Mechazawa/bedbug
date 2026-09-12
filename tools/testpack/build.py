@@ -174,21 +174,23 @@ TEXTURES = (
 
 def pack_files(directory: Path) -> dict[str, bytes]:
     """Everything one pack ships, keyed by its path inside that pack."""
+    if not directory.is_dir():
+        raise SystemExit(f"missing pack sources: {directory}")
     return {str(file.relative_to(directory).as_posix()): file.read_bytes()
             for file in sorted(directory.rglob("*")) if file.is_file()}
 
 
-def build(destination: Path) -> tuple[Path, int]:
-    missing = [name for name, _ in PACK_DIRECTORIES if not (SOURCE / name).is_dir()]
-    if missing:
-        raise SystemExit(f"missing pack sources under {SOURCE}: {', '.join(missing)}")
+def addon_contents() -> dict[str, bytes]:
+    """Both packs, each under the name it takes inside the archive, with the textures painted in."""
+    packed = {f"{inside}/{name}": body
+              for source, inside in PACK_DIRECTORIES
+              for name, body in pack_files(SOURCE / source).items()}
+    return packed | {f"{PACK_DIRECTORIES[1][1]}/{name}": png(size, size, paint)
+                     for name, size, paint in TEXTURES}
 
-    contents: dict[str, bytes] = {}
-    for source, inside in PACK_DIRECTORIES:
-        contents |= {f"{inside}/{name}": body for name, body in pack_files(SOURCE / source).items()}
-    contents |= {f"{PACK_DIRECTORIES[1][1]}/{name}": png(size, size, paint)
-                 for name, size, paint in TEXTURES}
 
+def write_addon(contents: dict[str, bytes], destination: Path) -> None:
+    """Writes one archive. The timestamp and the mode are fixed, so equal contents give equal bytes."""
     destination.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(destination, "w", zipfile.ZIP_DEFLATED) as archive:
         for name in sorted(contents):
@@ -197,24 +199,24 @@ def build(destination: Path) -> tuple[Path, int]:
             entry.external_attr = 0o644 << 16
             archive.writestr(entry, contents[name])
 
-    return destination, len(contents)
 
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("--out", type=Path, default=ROOT / "build" / "testpack" / "test-addon.mcaddon",
+def main(description: str, default_out: Path, contents: dict[str, bytes]) -> int:
+    """The command line every builder here shares: write the archive, then place the copies asked for."""
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument("--out", type=Path, default=default_out,
                         help="where to write the archive")
     parser.add_argument("--version", action="append", default=[],
                         help="also copy it into versions/<version>/run/addons; repeatable")
     arguments = parser.parse_args()
 
-    written, count = build(arguments.out)
-    print(f"{written} ({count} files, {written.stat().st_size} bytes)")
+    written = arguments.out
+    write_addon(contents, written)
+    print(f"{written} ({len(contents)} files, {written.stat().st_size} bytes)")
 
     for version in arguments.version:
-        addons = ROOT / "versions" / version / "run" / "addons"
         if not (ROOT / "versions" / version).is_dir():
             raise SystemExit(f"no such version: {version}")
+        addons = ROOT / "versions" / version / "run" / "addons"
         addons.mkdir(parents=True, exist_ok=True)
         target = addons / written.name
         target.write_bytes(written.read_bytes())
@@ -224,4 +226,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main((__doc__ or "").splitlines()[0],
+                  ROOT / "build" / "testpack" / "test-addon.mcaddon",
+                  addon_contents()))
