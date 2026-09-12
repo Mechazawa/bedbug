@@ -55,9 +55,10 @@ for that this mod does not implement yet, which is the honest answer to "will my
 
 ## What does not work yet
 
-Structures, and the display slots a scoreboard objective can be shown in. Bedrock's physically based
-rendering and its stencil material passes have no Java equivalent at all, and neither does its
-permission ladder, so a command a pack declares is open to everyone who can run commands.
+Saving a structure from the world, and the display slots a scoreboard objective can be shown in.
+Bedrock's physically based rendering and its stencil material passes have no Java equivalent at all,
+and neither does its permission ladder, so a command a pack declares is open to everyone who can run
+commands.
 
 ## Supported versions
 

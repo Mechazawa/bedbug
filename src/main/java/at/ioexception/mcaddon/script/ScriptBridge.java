@@ -765,6 +765,40 @@ public final class ScriptBridge {
         return Platform.scoreboardParticipants(server.getScoreboard());
     }
 
+    /**
+     * Places a saved structure, through the command rather than the template manager.
+     *
+     * `/place template` takes the same arguments on every supported version, where the manager's own
+     * API does not, and a pack placing a structure is rare enough that parsing costs nothing.
+     */
+    @HostAccess.Export
+    public boolean placeStructure(String dimension, String structure, int x, int y, int z,
+        String rotation, String mirror) {
+        ServerLevel level = level(dimension);
+        if (level == null) return false;
+
+        String placed = "place template " + structure + " " + x + " " + y + " " + z
+            + " " + javaRotation(rotation) + " " + javaMirror(mirror);
+        return run(server.createCommandSourceStack().withLevel(level), placed) > 0;
+    }
+
+    private static String javaRotation(String bedrock) {
+        return switch (bedrock == null ? "None" : bedrock) {
+            case "Rotate90" -> "clockwise_90";
+            case "Rotate180" -> "180";
+            case "Rotate270" -> "counterclockwise_90";
+            default -> "none";
+        };
+    }
+
+    private static String javaMirror(String bedrock) {
+        return switch (bedrock == null ? "None" : bedrock) {
+            case "X" -> "front_back";
+            case "Z" -> "left_right";
+            default -> "none";
+        };
+    }
+
     @HostAccess.Export
     public String[] itemTags(String itemId) {
         return new String[0];

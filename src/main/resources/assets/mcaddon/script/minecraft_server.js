@@ -923,11 +923,24 @@ export class World {
 
     get structureManager() {
         return {
-            get() {
-                return unsupported("StructureManager.get");
+            /** A handle rather than a lookup: whether the structure exists shows when it is placed. */
+            get(id) {
+                return { id, size: { x: 0, y: 0, z: 0 } };
             },
-            place() {
-                return unsupported("StructureManager.place");
+
+            place(structure, dimension, location, options) {
+                const id = typeof structure === "string" ? structure : structure?.id;
+                return bridge.placeStructure(dimension.id, id,
+                    Math.floor(location.x), Math.floor(location.y), Math.floor(location.z),
+                    options?.rotation ?? "None", options?.mirror ?? "None");
+            },
+
+            createFromWorld() {
+                return unsupported("StructureManager.createFromWorld");
+            },
+
+            delete() {
+                return unsupported("StructureManager.delete");
             },
         };
     }
