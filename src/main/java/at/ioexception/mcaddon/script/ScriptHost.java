@@ -245,6 +245,27 @@ public final class ScriptHost {
         }
     }
 
+    /**
+     * Raises a `world.beforeEvents.<name>` and answers whether a listener called it off.
+     *
+     * A before event is the one kind a pack can refuse: it sets `cancel` on the event and the game
+     * is expected to honour it. The event object has to be read back after the listeners have run,
+     * which is what separates this from an after event.
+     */
+    public boolean raiseCancellable(String name, Map<String, Object> fields) {
+        return Boolean.TRUE.equals(enter("handling " + name, () -> {
+            Value signal = runtime.invokeMember("worldBefore", name);
+            if (signal.getMember("size").asInt() == 0) return false;
+
+            Value event = context.eval("js", "({ cancel: false })");
+            fields.forEach((key, value) -> event.putMember(key, wrap(value)));
+            signal.invokeMember("emit", event);
+
+            Value cancelled = event.getMember("cancel");
+            return cancelled != null && cancelled.isBoolean() && cancelled.asBoolean();
+        }, false));
+    }
+
     private void raise(String group, String name, Map<String, Object> fields) {
         enter("handling " + name, () -> {
             Value signal = runtime.invokeMember(group, name);
@@ -257,11 +278,20 @@ public final class ScriptHost {
         }, null);
     }
 
-    /** An entity reaches a script as the wrapper the pack may already have stashed state on. */
+    /**
+     * One field of an event, in the shape the guest expects to find it.
+     *
+     * An entity arrives as the wrapper the pack may already have stashed state on, and a map arrives
+     * as a guest object rather than as a host one: only annotated members of a host object are
+     * reachable, so a pack reading a plain field of it would find nothing there.
+     */
     private Object wrap(Object value) {
-        return value instanceof EntityHandle handle
-            ? runtime.invokeMember("entityFor", handle.uuid())
-            : value;
+        if (value instanceof EntityHandle handle) return runtime.invokeMember("entityFor", handle.uuid());
+        if (!(value instanceof Map<?, ?> nested)) return value;
+
+        Value object = context.eval("js", "({})");
+        nested.forEach((key, inner) -> object.putMember(String.valueOf(key), wrap(inner)));
+        return object;
     }
 
     /** Marks a value as an entity id so it arrives in the script as an Entity and not as a string. */
