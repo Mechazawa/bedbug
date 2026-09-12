@@ -19,6 +19,8 @@ import net.minecraft.server.packs.repository.PackCompatibility;
 import net.minecraft.server.packs.repository.PackSource;
 import net.minecraft.world.flag.FeatureFlagSet;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
@@ -235,6 +237,46 @@ public final class Platform {
         return net.fabricmc.fabric.api.creativetab.v1.FabricCreativeModeTab.builder();
         //?} else {
         /*return net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup.builder();
+        *///?}
+    }
+
+    /**
+     * One villager trade.
+     *
+     * What a trade costs became an `ItemCost` in 1.21, which carries the item and the count where a
+     * stack used to.
+     */
+    public static net.minecraft.world.item.trading.MerchantOffer offer(net.minecraft.world.item.ItemStack costA,
+        net.minecraft.world.item.ItemStack costB, net.minecraft.world.item.ItemStack result,
+        int maxUses, int experience) {
+        //? if >=1.21 {
+        return new net.minecraft.world.item.trading.MerchantOffer(
+            new net.minecraft.world.item.trading.ItemCost(costA.getItem(), costA.getCount()),
+            costB.isEmpty() ? java.util.Optional.empty()
+                : java.util.Optional.of(new net.minecraft.world.item.trading.ItemCost(
+                    costB.getItem(), costB.getCount())),
+            result, maxUses, experience, 0.05f);
+        //?} else {
+        /*return new net.minecraft.world.item.trading.MerchantOffer(costA, costB, result, maxUses,
+            experience, 0.05f);
+        *///?}
+    }
+
+    /** A block carries its own registry id from 1.21.2, the same way an item does. */
+    public static Block buildBlock(BlockBehaviour.Properties properties, Identifier id) {
+        //? if >=1.21.2 {
+        return new Block(properties.setId(ResourceKey.create(net.minecraft.core.registries.Registries.BLOCK, id)));
+        //?} else {
+        /*return new Block(properties);
+        *///?}
+    }
+
+    public static Item buildBlockItem(Block block, Item.Properties properties, Identifier id) {
+        //? if >=1.21.2 {
+        return new net.minecraft.world.item.BlockItem(block,
+            properties.setId(ResourceKey.create(net.minecraft.core.registries.Registries.ITEM, id)));
+        //?} else {
+        /*return new net.minecraft.world.item.BlockItem(block, properties);
         *///?}
     }
 

@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.registry;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
+import at.ioexception.mcaddon.bedrock.behaviour.TradeTable;
 import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.entity.AddonEntity;
 import at.ioexception.mcaddon.pack.BedrockPack;
@@ -33,12 +34,18 @@ public final class AddonEntities {
     private static final Map<EntityType<?>, ServerEntityDefinition> DEFINITIONS = new LinkedHashMap<>();
     private static final Map<String, EntityType<?>> BY_IDENTIFIER = new LinkedHashMap<>();
     private static final Map<String, AtomicInteger> UNSUPPORTED = new TreeMap<>();
+    private static final Map<EntityType<?>, TradeTable> TRADES = new LinkedHashMap<>();
 
     private AddonEntities() {
     }
 
     public static ServerEntityDefinition definitionOf(EntityType<?> type) {
         return DEFINITIONS.get(type);
+    }
+
+    /** Null when the entity does not trade. */
+    public static TradeTable tradesOf(EntityType<?> type) {
+        return TRADES.get(type);
     }
 
     public static EntityType<?> typeOf(String identifier) {
@@ -93,8 +100,25 @@ public final class AddonEntities {
 
         DEFINITIONS.put(type, definition);
         BY_IDENTIFIER.put(definition.identifier(), type);
+        readTrades(pack, definition).ifPresent(trades -> TRADES.put(type, trades));
         Registry.register(BuiltInRegistries.ENTITY_TYPE, id, type);
         FabricDefaultAttributeRegistry.register(type, AddonEntity.attributes(definition));
+    }
+
+    /**
+     * The trade table an entity names, read while the pack it came from is still in hand.
+     *
+     * Bedrock has two components for this and they differ only in whether the trades cost emeralds,
+     * which Java's merchant screen does not distinguish.
+     */
+    private static java.util.Optional<TradeTable> readTrades(BedrockPack pack,
+        ServerEntityDefinition definition) {
+        for (String component : List.of("minecraft:trade_table", "minecraft:economy_trade_table")) {
+            com.google.gson.JsonObject body = definition.components().get(component);
+            String table = body == null ? null : at.ioexception.mcaddon.util.Json.text(body, "table", null);
+            if (table != null) return java.util.Optional.of(TradeTable.read(pack, table));
+        }
+        return java.util.Optional.empty();
     }
 
     /** Bedrock identifiers carry characters a resource location rejects, so both halves are cleaned. */

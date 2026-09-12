@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.convert;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.behaviour.BlockDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.ItemDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.LootTableDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.RecipeDefinition;
@@ -43,7 +44,8 @@ public final class PackConverter {
     }
 
     public static ConvertedPack convert(BedrockPack pack, List<ItemDefinition> items,
-        List<RecipeDefinition> recipes, List<LootTableDefinition> loot, Path cache) {
+        List<RecipeDefinition> recipes, List<LootTableDefinition> loot, List<BlockDefinition> blocks,
+        Path cache) {
         String namespace = Names.namespaceOf(pack);
         Path root = cache.resolve("converted").resolve("%s-%s-%d".formatted(
             pack.manifest().uuid(), pack.manifest().version(), Platform.resourcePackFormat()));
@@ -68,6 +70,7 @@ public final class PackConverter {
                 writeItemModels(root, icons, items);
                 writeRecipes(root, recipes);
                 writeLootTables(root, loot, namespace);
+                writeBlockModels(root, icons, blocks);
             }
 
             if (fresh) {
@@ -438,6 +441,70 @@ public final class PackConverter {
             write(root.resolve("data").resolve(namespace).resolve(directory).resolve(name + ".json"), json);
         }
     }
+
+    /**
+     * A block state file, a block model and an item model per block a behaviour pack declares.
+     *
+     * `minecraft:material_instances` names a face, `sides` for the four around it, or `*` for all of
+     * them, and the texture it names is a key resolved the same way an item's icon is.
+     */
+    private static void writeBlockModels(Path root, Map<String, String> textureKeys,
+        List<BlockDefinition> blocks) throws IOException {
+        for (BlockDefinition block : blocks) {
+            Map<String, String> faces = new TreeMap<>();
+            block.faceTextures().forEach((face, key) -> {
+                String texture = textureKeys.get(key);
+                if (texture == null) return;
+                switch (face) {
+                    case "*" -> FACES.forEach(name -> faces.put(name, texture));
+                    case "sides" -> SIDE_FACES.forEach(name -> faces.put(name, texture));
+                    default -> faces.put(face, texture);
+                }
+            });
+            if (faces.isEmpty()) continue;
+
+            int colon = block.identifier().indexOf(':');
+            String namespace = Names.sanitise(colon > 0 ? block.identifier().substring(0, colon) : "minecraft");
+            String name = Names.sanitise(colon > 0
+                ? block.identifier().substring(colon + 1) : block.identifier());
+            Path assets = root.resolve("assets").resolve(namespace);
+
+            JsonObject textures = new JsonObject();
+            boolean uniform = faces.values().stream().distinct().count() == 1;
+            if (uniform) {
+                textures.addProperty("all", faces.values().iterator().next());
+            } else {
+                faces.forEach(textures::addProperty);
+            }
+
+            JsonObject model = new JsonObject();
+            model.addProperty("parent", uniform ? "minecraft:block/cube_all" : "minecraft:block/cube");
+            model.add("textures", textures);
+            write(assets.resolve("models/block").resolve(name + ".json"), model);
+
+            JsonObject variant = new JsonObject();
+            variant.addProperty("model", namespace + ":block/" + name);
+            JsonObject variants = new JsonObject();
+            variants.add("", variant);
+            JsonObject blockstate = new JsonObject();
+            blockstate.add("variants", variants);
+            write(assets.resolve("blockstates").resolve(name + ".json"), blockstate);
+
+            JsonObject item = new JsonObject();
+            item.addProperty("parent", namespace + ":block/" + name);
+            write(assets.resolve("models/item").resolve(name + ".json"), item);
+
+            JsonObject reference = new JsonObject();
+            reference.addProperty("type", "minecraft:model");
+            reference.addProperty("model", namespace + ":block/" + name);
+            JsonObject definition = new JsonObject();
+            definition.add("model", reference);
+            write(assets.resolve("items").resolve(name + ".json"), definition);
+        }
+    }
+
+    private static final List<String> FACES = List.of("up", "down", "north", "south", "east", "west");
+    private static final List<String> SIDE_FACES = List.of("north", "south", "east", "west");
 
     /**
      * Loot tables, filed under the path a behaviour pack's `minecraft:loot` names them by.

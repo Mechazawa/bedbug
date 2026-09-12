@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.resource;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.convert.ConvertedPack;
+import at.ioexception.mcaddon.bedrock.behaviour.BlockDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.ItemDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.LootTableDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.RecipeDefinition;
@@ -47,6 +48,7 @@ public final class AddonPacks {
         Map<String, List<ItemDefinition>> itemsByOrigin = new LinkedHashMap<>();
         Map<String, List<RecipeDefinition>> recipesByOrigin = new LinkedHashMap<>();
         Map<String, List<LootTableDefinition>> lootByOrigin = new LinkedHashMap<>();
+        Map<String, List<BlockDefinition>> blocksByOrigin = new LinkedHashMap<>();
         for (BedrockPack pack : packs.packs()) {
             if (pack.role() != PackRole.BEHAVIOUR) continue;
             itemsByOrigin.computeIfAbsent(pack.origin(), origin -> new ArrayList<>())
@@ -55,6 +57,8 @@ public final class AddonPacks {
                 .addAll(RecipeDefinition.readAll(pack));
             lootByOrigin.computeIfAbsent(pack.origin(), origin -> new ArrayList<>())
                 .addAll(LootTableDefinition.readAll(pack));
+            blocksByOrigin.computeIfAbsent(pack.origin(), origin -> new ArrayList<>())
+                .addAll(BlockDefinition.readAll(pack));
         }
 
         List<ConvertedPack> results = new ArrayList<>();
@@ -64,6 +68,7 @@ public final class AddonPacks {
                 itemsByOrigin.getOrDefault(pack.origin(), List.of()),
                 recipesByOrigin.getOrDefault(pack.origin(), List.of()),
                 lootByOrigin.getOrDefault(pack.origin(), List.of()),
+                blocksByOrigin.getOrDefault(pack.origin(), List.of()),
                 McAddonPaths.cache()));
         }
         converted = List.copyOf(results);

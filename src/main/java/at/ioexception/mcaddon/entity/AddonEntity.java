@@ -1,6 +1,8 @@
 package at.ioexception.mcaddon.entity;
 
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
+import at.ioexception.mcaddon.bedrock.behaviour.TradeTable;
+import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.server.Sensors;
 import at.ioexception.mcaddon.server.ServerHooks;
@@ -13,7 +15,17 @@ import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.PanicGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.trading.Merchant;
+import net.minecraft.world.item.trading.MerchantOffer;
+import net.minecraft.world.item.trading.MerchantOffers;
 import net.minecraft.world.level.Level;
 
 /**
@@ -23,10 +35,13 @@ import net.minecraft.world.level.Level;
  * definition the entity's type was registered from. Bedrock's behaviour components become Java goals
  * where an equivalent exists, and the rest are reported rather than silently dropped.
  */
-public class AddonEntity extends PathfinderMob {
+public class AddonEntity extends PathfinderMob implements Merchant {
     private final ServerEntityDefinition definition;
     private final java.util.Set<String> activeGroups = new java.util.LinkedHashSet<>();
     private int timerDueTick = -1;
+    private Player tradingPlayer;
+    private MerchantOffers offers;
+    private int tradeExperience;
 
     public AddonEntity(EntityType<? extends PathfinderMob> type, Level level) {
         super(type, level);
@@ -99,5 +114,101 @@ public class AddonEntity extends PathfinderMob {
     @Override
     public boolean isBaby() {
         return false;
+    }
+
+    /** A pack's trade table only opens a screen; everything after that is Java's merchant menu. */
+    @Override
+    public InteractionResult mobInteract(Player player, InteractionHand hand) {
+        if (AddonEntities.tradesOf(getType()) == null || isClientSide()) {
+            return super.mobInteract(player, hand);
+        }
+
+        setTradingPlayer(player);
+        openTradingScreen(player, getDisplayName(), 1);
+        return InteractionResult.SUCCESS;
+    }
+
+    @Override
+    public void setTradingPlayer(Player player) {
+        tradingPlayer = player;
+    }
+
+    @Override
+    public Player getTradingPlayer() {
+        return tradingPlayer;
+    }
+
+    /**
+     * Built once per entity, because a Bedrock group picks a random few of the trades it lists and
+     * rebuilding would hand the player a different shop each time they opened it.
+     */
+    @Override
+    public MerchantOffers getOffers() {
+        if (offers == null) {
+            offers = new MerchantOffers();
+            TradeTable trades = AddonEntities.tradesOf(getType());
+            if (trades != null) trades.offers().forEach(offer -> add(offers, offer));
+        }
+        return offers;
+    }
+
+    private static void add(MerchantOffers into, TradeTable.Offer offer) {
+        ItemStack cost = stack(offer.costItem(), offer.costCount());
+        ItemStack result = stack(offer.resultItem(), offer.resultCount());
+        if (cost.isEmpty() || result.isEmpty()) return;
+
+        into.add(Platform.offer(cost, stack(offer.secondCostItem(), offer.secondCostCount()),
+            result, offer.maxUses(), offer.experience()));
+    }
+
+    private static ItemStack stack(String item, int count) {
+        Identifier id = item == null ? null : Identifier.tryParse(item);
+        return id == null ? ItemStack.EMPTY : BuiltInRegistries.ITEM.getOptional(id)
+            .map(found -> new ItemStack(found, Math.max(1, count)))
+            .orElse(ItemStack.EMPTY);
+    }
+
+    @Override
+    public void overrideOffers(MerchantOffers replacement) {
+        offers = replacement;
+    }
+
+    @Override
+    public void notifyTrade(MerchantOffer offer) {
+        offer.increaseUses();
+        tradeExperience += offer.getXp();
+    }
+
+    @Override
+    public void notifyTradeUpdated(ItemStack stack) {
+    }
+
+    @Override
+    public int getVillagerXp() {
+        return tradeExperience;
+    }
+
+    @Override
+    public void overrideXp(int experience) {
+        tradeExperience = experience;
+    }
+
+    @Override
+    public boolean showProgressBar() {
+        return false;
+    }
+
+    @Override
+    public SoundEvent getNotifyTradeSound() {
+        return SoundEvents.VILLAGER_YES;
+    }
+
+    @Override
+    public boolean isClientSide() {
+        return !(level() instanceof net.minecraft.server.level.ServerLevel);
+    }
+
+    public boolean stillValid(Player player) {
+        return tradingPlayer == player && isAlive() && distanceToSqr(player) < 64;
     }
 }
