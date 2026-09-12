@@ -136,17 +136,39 @@ public class AddonParticle extends SingleQuadParticle {
         Billboard billboard = definition.particle().billboard();
         if (billboard != null) {
             quadSize = Math.max(0.001f, billboard.size().x().asFloat(environment));
-            if (billboard.uv() != null && billboard.uv().flipbook() != null) {
-                frame = at * value(billboard.uv().flipbook().framesPerSecond());
-            }
+            advanceFlipbook(billboard, at);
         }
 
-        ParticleTint tint = definition.particle().tint();
-        if (tint instanceof ParticleTint.Solid solid) {
-            setColor(solid.red().asFloat(environment), solid.green().asFloat(environment),
-                solid.blue().asFloat(environment));
-            setAlpha(solid.alpha().asFloat(environment));
+        paint(definition.particle().tint());
+    }
+
+    /**
+     * The colour the texture is multiplied by, read where the pack says to read it.
+     *
+     * A gradient is a list of colours at positions, and the pack's own expression decides where
+     * along it to look, which is usually the particle's age over its lifetime.
+     */
+    private void paint(ParticleTint tint) {
+        ParticleTint.Solid solid = tint instanceof ParticleTint.Gradient gradient
+            ? at(gradient) : tint instanceof ParticleTint.Solid only ? only : null;
+        if (solid == null) return;
+
+        setColor(solid.red().asFloat(environment), solid.green().asFloat(environment),
+            solid.blue().asFloat(environment));
+        setAlpha(solid.alpha().asFloat(environment));
+    }
+
+    /** The stop a gradient's interpolant lands on, which is the nearer of the two it sits between. */
+    private ParticleTint.Solid at(ParticleTint.Gradient gradient) {
+        if (gradient.stops().isEmpty()) return null;
+
+        float where = gradient.interpolant().asFloat(environment);
+        ParticleTint.Gradient.Stop chosen = gradient.stops().get(0);
+        for (ParticleTint.Gradient.Stop stop : gradient.stops()) {
+            if (stop.position() > where) break;
+            chosen = stop;
         }
+        return chosen.colour();
     }
 
     private Vector3f evaluate(Vector3Expression expression) {
@@ -157,9 +179,85 @@ public class AddonParticle extends SingleQuadParticle {
         return expression == null ? 0f : expression.asFloat(environment);
     }
 
-    /** Where in the flipbook this particle is, for a caller working out its corner coordinates. */
-    protected float frame() {
-        return frame;
+    /**
+     * Walks the flipbook to where the particle's age puts it.
+     *
+     * `stretch_to_lifetime` makes the pack's frame rate a starting point rather than the rate used:
+     * the whole animation is fitted to this particle's own lifetime instead.
+     */
+    private void advanceFlipbook(Billboard billboard, float at) {
+        if (billboard.uv() == null || billboard.uv().flipbook() == null) return;
+
+        Billboard.Flipbook flipbook = billboard.uv().flipbook();
+        float last = Math.max(0f, value(flipbook.maxFrame()));
+        frame = flipbook.stretchToLifetime() && maxLifetime > 0f
+            ? last * (at / maxLifetime)
+            : at * value(flipbook.framesPerSecond());
+
+        if (last <= 0f) return;
+        frame = flipbook.loop() ? frame % (last + 1f) : Math.min(frame, last);
+    }
+
+    /**
+     * The patch of the sprite this particle wears, as a fraction of the whole texture.
+     *
+     * A pack writes its coordinates in the pixels of the size it declares, so they are divided by
+     * that size rather than by the image's, which is what lets the same pack ship the texture at any
+     * resolution. A flipbook steps that patch along by whole frames.
+     */
+    private float[] window() {
+        Billboard billboard = definition.particle().billboard();
+        if (billboard == null || billboard.uv() == null) return null;
+
+        Billboard.Uv uv = billboard.uv();
+        float width = uv.textureWidth() <= 0 ? 1f : uv.textureWidth();
+        float height = uv.textureHeight() <= 0 ? 1f : uv.textureHeight();
+
+        float u = uv.uv().x().asFloat(environment);
+        float v = uv.uv().y().asFloat(environment);
+        float across = uv.uvSize().x().asFloat(environment);
+        float down = uv.uvSize().y().asFloat(environment);
+
+        Billboard.Flipbook flipbook = uv.flipbook();
+        if (flipbook != null) {
+            int step = (int) frame;
+            u = flipbook.baseUv().x().asFloat(environment) + step * flipbook.stepUv().x().asFloat(environment);
+            v = flipbook.baseUv().y().asFloat(environment) + step * flipbook.stepUv().y().asFloat(environment);
+            across = flipbook.sizeUv().x().asFloat(environment);
+            down = flipbook.sizeUv().y().asFloat(environment);
+        }
+        if (across <= 0f || down <= 0f) return null;
+
+        return new float[] {u / width, v / height, (u + across) / width, (v + down) / height};
+    }
+
+    /** Where the sprite sits on the atlas, so a window into it lands in the right place. */
+    private float across(float fraction, float low, float high) {
+        return low + (high - low) * Math.clamp(fraction, 0f, 1f);
+    }
+
+    @Override
+    protected float getU0() {
+        float[] window = window();
+        return window == null ? super.getU0() : across(window[0], super.getU0(), super.getU1());
+    }
+
+    @Override
+    protected float getU1() {
+        float[] window = window();
+        return window == null ? super.getU1() : across(window[2], super.getU0(), super.getU1());
+    }
+
+    @Override
+    protected float getV0() {
+        float[] window = window();
+        return window == null ? super.getV0() : across(window[1], super.getV0(), super.getV1());
+    }
+
+    @Override
+    protected float getV1() {
+        float[] window = window();
+        return window == null ? super.getV1() : across(window[3], super.getV0(), super.getV1());
     }
 
     //? if >=26 {

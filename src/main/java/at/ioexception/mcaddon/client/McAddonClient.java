@@ -39,6 +39,9 @@ public final class McAddonClient implements ClientModInitializer {
         Channels.receiveForm((formId, description) -> Platform.setScreen(
             description.isEmpty() ? null : new AddonFormScreen(formId, description)));
 
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK
+            .register(client -> at.ioexception.mcaddon.client.render.AddonEmitters.tick());
+
         ClientEntityEvents.ENTITY_UNLOAD.register((entity, level) -> {
             Animators.forget(entity.getId());
             EntityProperties.forget(entity.getId());
@@ -46,6 +49,7 @@ public final class McAddonClient implements ClientModInitializer {
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             Animators.clear();
             EntityProperties.clear();
+            at.ioexception.mcaddon.client.render.AddonEmitters.clear();
         });
     }
 

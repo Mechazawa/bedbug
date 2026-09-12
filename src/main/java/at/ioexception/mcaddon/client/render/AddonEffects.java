@@ -70,14 +70,19 @@ public final class AddonEffects {
     private static void spawn(Entity entity, EntityAnimator animator, String particleId, String locator) {
         if (particleId == null || entity.level() == null) return;
 
-        ParticleOptions options = AddonParticles.typeOf(particleId);
-        if (options == null) options = BedrockParticles.vanilla(particleId);
+        Vector3f at = anchor(entity, animator, locator);
+        if (AddonParticles.definitionOf(particleId) != null) {
+            AddonEmitters.start(particleId, entity,
+                new net.minecraft.world.phys.Vec3(at.x() - entity.getX(), at.y() - entity.getY(),
+                    at.z() - entity.getZ()));
+            return;
+        }
+
+        ParticleOptions options = BedrockParticles.vanilla(particleId);
         if (options == null) {
             AddonEntities.unsupported("particle " + particleId);
             return;
         }
-
-        Vector3f at = anchor(entity, animator, locator);
         entity.level().addParticle(options, at.x(), at.y(), at.z(), 0, 0, 0);
     }
 
