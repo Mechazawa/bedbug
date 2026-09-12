@@ -869,11 +869,19 @@ const EVENT_SHAPES = {
 };
 
 /** Every event name the mod can raise. An unknown name still gets a signal, so subscribing is safe. */
-function eventGroup() {
+/**
+ * The events of one group, each one a signal a pack can subscribe to.
+ *
+ * Subscribing to a name nothing raises has to be reported. A signal is handed back either way, so
+ * the pack's own code runs on, but an unreported one would look like an implemented event that
+ * simply never happened, which is what made the coverage report say everything was covered.
+ */
+function eventGroup(raised) {
     return new Proxy({}, {
         get(target, name) {
             if (typeof name !== "string") return undefined;
             if (target[name] === undefined) {
+                if (!raised.includes(name)) bridge.unsupported(name + " (event)");
                 target[name] = new EventSignal();
                 target[name].shape = EVENT_SHAPES[name];
             }
@@ -882,9 +890,21 @@ function eventGroup() {
     });
 }
 
+/** Every event name this mod actually raises, by the group it belongs to. */
+const RAISED = {
+    worldAfter: [
+        "dataDrivenEntityTrigger", "entityDie", "entityHurt", "entityLoad", "entityRemove",
+        "entitySpawn", "playerBreakBlock", "playerInteractWithBlock", "playerInteractWithEntity",
+        "playerJoin", "playerSpawn", "worldLoad",
+    ],
+    worldBefore: [],
+    systemAfter: ["scriptEventReceive"],
+    systemBefore: ["startup"],
+};
+
 export class World {
-    #afterEvents = eventGroup();
-    #beforeEvents = eventGroup();
+    #afterEvents = eventGroup(RAISED.worldAfter);
+    #beforeEvents = eventGroup(RAISED.worldBefore);
 
     get afterEvents() {
         return this.#afterEvents;
@@ -1028,7 +1048,7 @@ export class World {
 }
 
 /** A scoreboard objective, which is what a pack reads and writes scores through. */
-class ScoreboardObjective {
+export class ScoreboardObjective {
     constructor(id) {
         this.id = id;
     }
@@ -1136,8 +1156,8 @@ class ScriptSystem {
     #next = 1;
     #runs = new Map();
     #jobs = new Map();
-    #afterEvents = eventGroup();
-    #beforeEvents = eventGroup();
+    #afterEvents = eventGroup(RAISED.systemAfter);
+    #beforeEvents = eventGroup(RAISED.systemBefore);
 
     get currentTick() {
         return bridge.currentTick();
@@ -1323,3 +1343,440 @@ function parameter(declaration) {
     if (typeof declaration === "string") return { name: declaration, type: "String" };
     return { name: declaration?.name ?? "", type: declaration?.type ?? "String" };
 }
+
+/*
+ * The rest of the module's surface, so importing a name never fails on its own.
+ *
+ * A JavaScript module is linked before it runs: `import { DisplaySlotId } from "@minecraft/server"`
+ * on a module that does not export that name is an error that stops the whole of a pack's
+ * script, not just the line that used it. The enums below carry Bedrock's own values, and the
+ * classes stand in so that naming one, or testing a caught error against it, works. A member
+ * called on one of these reports itself through the coverage report rather than throwing.
+ */
+
+export const BlockComponentTypes = Object.freeze({ FluidContainer: 'minecraft:fluid_container', Inventory: 'minecraft:inventory', MapColor: 'minecraft:map_color', Movable: 'minecraft:movable', Piston: 'minecraft:piston', PrecipitationInteractions: 'minecraft:precipitation_interactions', RecordPlayer: 'minecraft:record_player', RedstoneProducer: 'minecraft:redstone_producer', Sign: 'minecraft:sign' });
+export const BlockPistonState = Object.freeze({ Expanded: 'Expanded', Expanding: 'Expanding', Retracted: 'Retracted', Retracting: 'Retracting' });
+export const BlockVolumeIntersection = Object.freeze({ Disjoint: 0, Contains: 1, Intersects: 2 });
+export const BookErrorReason = Object.freeze({ ExceedsMaxPageLength: 'ExceedsMaxPageLength', ExceedsMaxPages: 'ExceedsMaxPages', ExceedsTitleLength: 'ExceedsTitleLength' });
+export const ButtonState = Object.freeze({ Pressed: 'Pressed', Released: 'Released' });
+export const ContainerRulesErrorReason = Object.freeze({ BannedItem: 'BannedItem', NestedStorageItem: 'NestedStorageItem', NotAllowedItem: 'NotAllowedItem', OverWeightLimit: 'OverWeightLimit', ZeroWeightItem: 'ZeroWeightItem' });
+export const ControlScheme = Object.freeze({ CameraRelative: 'CameraRelative', CameraRelativeStrafe: 'CameraRelativeStrafe', LockedPlayerRelativeStrafe: 'LockedPlayerRelativeStrafe', PlayerRelative: 'PlayerRelative', PlayerRelativeStrafe: 'PlayerRelativeStrafe' });
+export const CustomCommandErrorReason = Object.freeze({ AlreadyRegistered: 'AlreadyRegistered', EnumDependencyMissing: 'EnumDependencyMissing', NamespaceMismatch: 'NamespaceMismatch', ParameterLimit: 'ParameterLimit', RegistryInvalid: 'RegistryInvalid', RegistryReadOnly: 'RegistryReadOnly' });
+export const CustomCommandSource = Object.freeze({ Block: 'Block', Entity: 'Entity', NPCDialogue: 'NPCDialogue', Server: 'Server' });
+export const CustomComponentNameErrorReason = Object.freeze({ NoNamespace: 1, DisallowedNamespace: 2 });
+export const Difficulty = Object.freeze({ Easy: 'Easy', Hard: 'Hard', Normal: 'Normal', Peaceful: 'Peaceful' });
+export const DisplaySlotId = Object.freeze({ BelowName: 'BelowName', List: 'List', Sidebar: 'Sidebar' });
+export const DyeColor = Object.freeze({ Black: 'Black', Blue: 'Blue', Brown: 'Brown', Cyan: 'Cyan', Gray: 'Gray', Green: 'Green', LightBlue: 'LightBlue', Lime: 'Lime', Magenta: 'Magenta', Orange: 'Orange', Pink: 'Pink', Purple: 'Purple', Red: 'Red', Silver: 'Silver', White: 'White', Yellow: 'Yellow' });
+export const EasingType = Object.freeze({ InBack: 'InBack', InBounce: 'InBounce', InCirc: 'InCirc', InCubic: 'InCubic', InElastic: 'InElastic', InExpo: 'InExpo', InOutBack: 'InOutBack', InOutBounce: 'InOutBounce', InOutCirc: 'InOutCirc', InOutCubic: 'InOutCubic', InOutElastic: 'InOutElastic', InOutExpo: 'InOutExpo', InOutQuad: 'InOutQuad', InOutQuart: 'InOutQuart', InOutQuint: 'InOutQuint', InOutSine: 'InOutSine', InQuad: 'InQuad', InQuart: 'InQuart', InQuint: 'InQuint', InSine: 'InSine', Linear: 'Linear', OutBack: 'OutBack', OutBounce: 'OutBounce', OutCirc: 'OutCirc', OutCubic: 'OutCubic', OutElastic: 'OutElastic', OutExpo: 'OutExpo', OutQuad: 'OutQuad', OutQuart: 'OutQuart', OutQuint: 'OutQuint', OutSine: 'OutSine', Spring: 'Spring' });
+export const EnchantmentSlot = Object.freeze({ ArmorFeet: 'ArmorFeet', ArmorHead: 'ArmorHead', ArmorLegs: 'ArmorLegs', ArmorTorso: 'ArmorTorso', Axe: 'Axe', Bow: 'Bow', CarrotStick: 'CarrotStick', CosmeticHead: 'CosmeticHead', Crossbow: 'Crossbow', Elytra: 'Elytra', FishingRod: 'FishingRod', Flintsteel: 'Flintsteel', Hoe: 'Hoe', MeleeSpear: 'MeleeSpear', Pickaxe: 'Pickaxe', Shears: 'Shears', Shield: 'Shield', Shovel: 'Shovel', Spear: 'Spear', Sword: 'Sword' });
+export const EntityAttachPoint = Object.freeze({ Body: 'Body', BreathingPoint: 'BreathingPoint', DropAttachPoint: 'DropAttachPoint', ExplosionPoint: 'ExplosionPoint', Eyes: 'Eyes', Feet: 'Feet', Head: 'Head', Mouth: 'Mouth', WeaponAttachPoint: 'WeaponAttachPoint' });
+export const EntityHealCause = Object.freeze({ Heal: 'Heal', Regeneration: 'Regeneration', SelfHeal: 'SelfHeal' });
+export const EntitySwingSource = Object.freeze({ Attack: 'Attack', Build: 'Build', DropItem: 'DropItem', Event: 'Event', Interact: 'Interact', Mine: 'Mine', None: 'None', ThrowItem: 'ThrowItem', UseItem: 'UseItem' });
+export const FluidType = Object.freeze({ Lava: 'Lava', Potion: 'Potion', PowderSnow: 'PowderSnow', Water: 'Water' });
+export const GameRule = Object.freeze({ CommandBlockOutput: 'commandBlockOutput', CommandBlocksEnabled: 'commandBlocksEnabled', DoDayLightCycle: 'doDayLightCycle', DoEntityDrops: 'doEntityDrops', DoFireTick: 'doFireTick', DoImmediateRespawn: 'doImmediateRespawn', DoInsomnia: 'doInsomnia', DoLimitedCrafting: 'doLimitedCrafting', DoMobLoot: 'doMobLoot', DoMobSpawning: 'doMobSpawning', DoTileDrops: 'doTileDrops', DoWeatherCycle: 'doWeatherCycle', DrowningDamage: 'drowningDamage', FallDamage: 'fallDamage', FireDamage: 'fireDamage', FreezeDamage: 'freezeDamage', FunctionCommandLimit: 'functionCommandLimit', KeepInventory: 'keepInventory', MaxCommandChainLength: 'maxCommandChainLength', MobGriefing: 'mobGriefing', NaturalRegeneration: 'naturalRegeneration', PlayersSleepingPercentage: 'playersSleepingPercentage', ProjectilesCanBreakBlocks: 'projectilesCanBreakBlocks', Pvp: 'pvp', RandomTickSpeed: 'randomTickSpeed', RecipesUnlock: 'recipesUnlock', RespawnBlocksExplode: 'respawnBlocksExplode', SendCommandFeedback: 'sendCommandFeedback', ShowBorderEffect: 'showBorderEffect', ShowCoordinates: 'showCoordinates', ShowDaysPlayed: 'showDaysPlayed', ShowDeathMessages: 'showDeathMessages', ShowRecipeMessages: 'showRecipeMessages', ShowTags: 'showTags', SpawnRadius: 'spawnRadius', TntExplodes: 'tntExplodes', TntExplosionDropDecay: 'tntExplosionDropDecay' });
+export const GraphicsMode = Object.freeze({ Deferred: 'Deferred', Fancy: 'Fancy', RayTraced: 'RayTraced', Simple: 'Simple' });
+export const HeldItemOption = Object.freeze({ AnyItem: 'AnyItem', NoItem: 'NoItem' });
+export const HudElement = Object.freeze({ PaperDoll: 0, Armor: 1, ToolTips: 2, TouchControls: 3, Crosshair: 4, Hotbar: 5, Health: 6, ProgressBar: 7, Hunger: 8, AirBubbles: 9, HorseHealth: 10, StatusEffects: 11, ItemText: 12 });
+export const HudVisibility = Object.freeze({ Hide: 0, Reset: 1 });
+export const InputButton = Object.freeze({ Jump: 'Jump', Sneak: 'Sneak' });
+export const InputMode = Object.freeze({ Gamepad: 'Gamepad', KeyboardAndMouse: 'KeyboardAndMouse', MotionController: 'MotionController', Touch: 'Touch' });
+export const InputPermissionCategory = Object.freeze({ Camera: 1, Movement: 2, LateralMovement: 4, Sneak: 5, Jump: 6, Mount: 7, Dismount: 8, MoveForward: 9, MoveBackward: 10, MoveLeft: 11, MoveRight: 12 });
+export const ItemLockMode = Object.freeze({ inventory: 'inventory', none: 'none', slot: 'slot' });
+export const LiquidSettings = Object.freeze({ ApplyWaterlogging: 'ApplyWaterlogging', IgnoreWaterlogging: 'IgnoreWaterlogging' });
+export const LiquidType = Object.freeze({ Water: 'Water' });
+export const MemoryTier = Object.freeze({ SuperLow: 0, Low: 1, Mid: 2, High: 3, SuperHigh: 4 });
+export const MoonPhase = Object.freeze({ FullMoon: 0, WaningGibbous: 1, FirstQuarter: 2, WaningCrescent: 3, NewMoon: 4, WaxingCrescent: 5, LastQuarter: 6, WaxingGibbous: 7 });
+export const MovementType = Object.freeze({ Immovable: 'Immovable', Popped: 'Popped', Push: 'Push', PushPull: 'PushPull' });
+export const NamespaceNameErrorReason = Object.freeze({ DisallowedNamespace: 'DisallowedNamespace', NoNamespace: 'NoNamespace' });
+export const ObjectiveSortOrder = Object.freeze({ Ascending: 0, Descending: 1 });
+export const PaletteColor = Object.freeze({ White: 0, Orange: 1, Magenta: 2, LightBlue: 3, Yellow: 4, Lime: 5, Pink: 6, Gray: 7, Silver: 8, Cyan: 9, Purple: 10, Blue: 11, Brown: 12, Green: 13, Red: 14, Black: 15 });
+export const PlatformType = Object.freeze({ Console: 'Console', Desktop: 'Desktop', Mobile: 'Mobile' });
+export const PlayerInventoryType = Object.freeze({ Hotbar: 'Hotbar', Inventory: 'Inventory' });
+export const PlayerPermissionLevel = Object.freeze({ Visitor: 0, Member: 1, Operator: 2, Custom: 3 });
+export const ScoreboardIdentityType = Object.freeze({ Entity: 'Entity', FakePlayer: 'FakePlayer', Player: 'Player' });
+export const SignSide = Object.freeze({ Back: 'Back', Front: 'Front' });
+export const StickyType = Object.freeze({ None: 'None', Same: 'Same' });
+export const StructureAnimationMode = Object.freeze({ Blocks: 'Blocks', Layers: 'Layers', None: 'None' });
+export const StructureMirrorAxis = Object.freeze({ None: 'None', X: 'X', XZ: 'XZ', Z: 'Z' });
+export const TickingAreaErrorReason = Object.freeze({ IdentifierAlreadyExists: 'IdentifierAlreadyExists', OverChunkLimit: 'OverChunkLimit', SideLengthExceeded: 'SideLengthExceeded', UnknownIdentifier: 'UnknownIdentifier' });
+export const TimeOfDay = Object.freeze({ Day: 1000, Noon: 6000, Sunset: 12000, Night: 13000, Midnight: 18000, Sunrise: 23000 });
+export const TintMethod = Object.freeze({ BirchFoliage: 'BirchFoliage', DefaultFoliage: 'DefaultFoliage', DryFoliage: 'DryFoliage', EvergreenFoliage: 'EvergreenFoliage', Grass: 'Grass', None: 'None', Water: 'Water' });
+export const WeatherType = Object.freeze({ Clear: 'Clear', Rain: 'Rain', Thunder: 'Thunder' });
+
+export const HudElementsCount = 13;
+export const HudVisibilityCount = 2;
+export const MoonPhaseCount = 8;
+export const TicksPerDay = 24000;
+export const TicksPerSecond = 20;
+
+/** Named so a pack can import one to describe a value; the game answers what they describe. */
+export class BiomeType {}
+export class BlockComponent {}
+export class BlockComponentBlockBreakEvent {}
+export class BlockComponentEntityEvent {}
+export class BlockComponentEntityFallOnEvent {}
+export class BlockComponentOnPlaceEvent {}
+export class BlockComponentPlayerBreakEvent {}
+export class BlockComponentPlayerInteractEvent {}
+export class BlockComponentPlayerPlaceBeforeEvent {}
+export class BlockComponentRandomTickEvent {}
+export class BlockComponentRedstoneUpdateEvent {}
+export class BlockComponentRegistry {}
+export class BlockComponentStepOffEvent {}
+export class BlockComponentStepOnEvent {}
+export class BlockComponentTickEvent {}
+export class BlockCustomComponentInstance {}
+export class BlockEvent {}
+export class BlockExplodeAfterEvent {}
+export class BlockExplodeAfterEventSignal {}
+export class BlockFluidContainerComponent {}
+export class BlockInventoryComponent {}
+export class BlockLocationIterator {}
+export class BlockMapColorComponent {}
+export class BlockMovableComponent {}
+export class BlockPistonComponent {}
+export class BlockPrecipitationInteractionsComponent {}
+export class BlockRecordPlayerComponent {}
+export class BlockRedstoneProducerComponent {}
+export class BlockSignComponent {}
+export class BlockStateType {}
+export class BlockStates {}
+export class BlockType {}
+export class BlockTypes {}
+export class BlockVolumeBase {}
+export class ButtonPushAfterEvent {}
+export class ButtonPushAfterEventSignal {}
+export class Camera {}
+export class CatmullRomSpline {}
+export class ClientSystemInfo {}
+export class CommandResult {}
+export class Component {}
+export class CustomCommandOrigin {}
+export class CustomCommandRegistry {}
+export class CustomComponentParameters {}
+export class DamagedByEntityCondition {}
+export class DataDrivenEntityTriggerAfterEvent {}
+export class DataDrivenEntityTriggerAfterEventSignal {}
+export class DimensionType {}
+export class EffectAddAfterEvent {}
+export class EffectAddAfterEventSignal {}
+export class EffectAddBeforeEvent {}
+export class EffectAddBeforeEventSignal {}
+export class EffectTypes {}
+export class EmptyLootItem {}
+export class EnchantInfo {}
+export class EnchantRandomEquipmentFunction {}
+export class EnchantRandomlyFunction {}
+export class EnchantWithLevelsFunction {}
+export class EnchantmentType {}
+export class EnchantmentTypes {}
+export class EntityAddRiderComponent {}
+export class EntityAgeableComponent {}
+export class EntityAttributeComponent {}
+export class EntityBaseMovementComponent {}
+export class EntityBreathableComponent {}
+export class EntityCanClimbComponent {}
+export class EntityCanFlyComponent {}
+export class EntityCanPowerJumpComponent {}
+export class EntityColor2Component {}
+export class EntityColorComponent {}
+export class EntityDefinitionFeedItem {}
+export class EntityDieAfterEvent {}
+export class EntityDieAfterEventSignal {}
+export class EntityExhaustionComponent {}
+export class EntityFireImmuneComponent {}
+export class EntityFloatsInLiquidComponent {}
+export class EntityFlyingSpeedComponent {}
+export class EntityFrictionModifierComponent {}
+export class EntityHasMarkVariantCondition {}
+export class EntityHasVariantCondition {}
+export class EntityHealAfterEvent {}
+export class EntityHealAfterEventSignal {}
+export class EntityHealBeforeEvent {}
+export class EntityHealBeforeEventSignal {}
+export class EntityHealSource {}
+export class EntityHealableComponent {}
+export class EntityHealthChangedAfterEvent {}
+export class EntityHealthChangedAfterEventSignal {}
+export class EntityHitBlockAfterEvent {}
+export class EntityHitBlockAfterEventSignal {}
+export class EntityHitEntityAfterEvent {}
+export class EntityHitEntityAfterEventSignal {}
+export class EntityHungerComponent {}
+export class EntityHurtAfterEvent {}
+export class EntityHurtAfterEventSignal {}
+export class EntityHurtBeforeEvent {}
+export class EntityHurtBeforeEventSignal {}
+export class EntityIsChargedComponent {}
+export class EntityIsChestedComponent {}
+export class EntityIsDyeableComponent {}
+export class EntityIsHiddenWhenInvisibleComponent {}
+export class EntityIsIgnitedComponent {}
+export class EntityIsIllagerCaptainComponent {}
+export class EntityIsSaddledComponent {}
+export class EntityIsShakingComponent {}
+export class EntityIsShearedComponent {}
+export class EntityIsStackableComponent {}
+export class EntityIsStunnedComponent {}
+export class EntityIsTamedComponent {}
+export class EntityItemDropAfterEvent {}
+export class EntityItemDropAfterEventSignal {}
+export class EntityItemPickupAfterEvent {}
+export class EntityItemPickupAfterEventSignal {}
+export class EntityItemPickupBeforeEvent {}
+export class EntityItemPickupBeforeEventSignal {}
+export class EntityKilledCondition {}
+export class EntityLavaMovementComponent {}
+export class EntityLoadAfterEvent {}
+export class EntityLoadAfterEventSignal {}
+export class EntityMovementAmphibiousComponent {}
+export class EntityMovementBasicComponent {}
+export class EntityMovementComponent {}
+export class EntityMovementFlyComponent {}
+export class EntityMovementGenericComponent {}
+export class EntityMovementGlideComponent {}
+export class EntityMovementHoverComponent {}
+export class EntityMovementJumpComponent {}
+export class EntityMovementSkipComponent {}
+export class EntityMovementSwayComponent {}
+export class EntityNavigationClimbComponent {}
+export class EntityNavigationComponent {}
+export class EntityNavigationFloatComponent {}
+export class EntityNavigationFlyComponent {}
+export class EntityNavigationGenericComponent {}
+export class EntityNavigationHoverComponent {}
+export class EntityNavigationWalkComponent {}
+export class EntityOnFireComponent {}
+export class EntityPushThroughComponent {}
+export class EntityRemoveAfterEvent {}
+export class EntityRemoveAfterEventSignal {}
+export class EntityRemoveBeforeEvent {}
+export class EntityRemoveBeforeEventSignal {}
+export class EntitySaturationComponent {}
+export class EntityScaleComponent {}
+export class EntitySpawnAfterEvent {}
+export class EntitySpawnAfterEventSignal {}
+export class EntityStrengthComponent {}
+export class EntityTameMountComponent {}
+export class EntityTameableComponent {}
+export class EntityType {}
+export class EntityTypes {}
+export class EntityUnderwaterMovementComponent {}
+export class EntityWantsJockeyComponent {}
+export class ExplorationMapFunction {}
+export class ExplosionAfterEvent {}
+export class ExplosionAfterEventSignal {}
+export class ExplosionBeforeEvent {}
+export class ExplosionBeforeEventSignal {}
+export class ExplosionDecayFunction {}
+export class FeedItem {}
+export class FeedItemEffect {}
+export class FillContainerFunction {}
+export class FluidContainer {}
+export class GameRuleChangeAfterEvent {}
+export class GameRuleChangeAfterEventSignal {}
+export class GameRules {}
+export class InputInfo {}
+export class IsBabyCondition {}
+export class ItemBookComponent {}
+export class ItemCompleteUseAfterEvent {}
+export class ItemCompleteUseAfterEventSignal {}
+export class ItemCompleteUseEvent {}
+export class ItemComponentBeforeDurabilityDamageEvent {}
+export class ItemComponentCompleteUseEvent {}
+export class ItemComponentConsumeEvent {}
+export class ItemComponentHitEntityEvent {}
+export class ItemComponentMineBlockEvent {}
+export class ItemComponentRegistry {}
+export class ItemComponentUseEvent {}
+export class ItemComponentUseOnEvent {}
+export class ItemCompostableComponent {}
+export class ItemCustomComponentInstance {}
+export class ItemDyeableComponent {}
+export class ItemInventoryComponent {}
+export class ItemPotionComponent {}
+export class ItemReleaseUseAfterEvent {}
+export class ItemReleaseUseAfterEventSignal {}
+export class ItemStartUseAfterEvent {}
+export class ItemStartUseAfterEventSignal {}
+export class ItemStartUseOnAfterEvent {}
+export class ItemStartUseOnAfterEventSignal {}
+export class ItemStopUseAfterEvent {}
+export class ItemStopUseAfterEventSignal {}
+export class ItemStopUseOnAfterEvent {}
+export class ItemStopUseOnAfterEventSignal {}
+export class ItemType {}
+export class ItemTypes {}
+export class ItemUseAfterEvent {}
+export class ItemUseAfterEventSignal {}
+export class ItemUseBeforeEvent {}
+export class ItemUseBeforeEventSignal {}
+export class ItemUseOnEvent {}
+export class KilledByEntityCondition {}
+export class KilledByPlayerCondition {}
+export class KilledByPlayerOrPetsCondition {}
+export class LeverActionAfterEvent {}
+export class LeverActionAfterEventSignal {}
+export class LinearSpline {}
+export class ListBlockVolume {}
+export class LootItem {}
+export class LootItemCondition {}
+export class LootItemFunction {}
+export class LootPool {}
+export class LootPoolEntry {}
+export class LootPoolTiers {}
+export class LootTable {}
+export class LootTableEntry {}
+export class LootTableManager {}
+export class LootTableReference {}
+export class LootingEnchantFunction {}
+export class MatchToolCondition {}
+export class MolangVariableMap {}
+export class PassengerOfEntityCondition {}
+export class PistonActivateAfterEvent {}
+export class PistonActivateAfterEventSignal {}
+export class PlayerBreakBlockAfterEvent {}
+export class PlayerBreakBlockAfterEventSignal {}
+export class PlayerBreakBlockBeforeEvent {}
+export class PlayerBreakBlockBeforeEventSignal {}
+export class PlayerButtonInputAfterEvent {}
+export class PlayerButtonInputAfterEventSignal {}
+export class PlayerCursorInventoryComponent {}
+export class PlayerDimensionChangeAfterEvent {}
+export class PlayerDimensionChangeAfterEventSignal {}
+export class PlayerEmoteAfterEvent {}
+export class PlayerEmoteAfterEventSignal {}
+export class PlayerGameModeChangeAfterEvent {}
+export class PlayerGameModeChangeAfterEventSignal {}
+export class PlayerGameModeChangeBeforeEvent {}
+export class PlayerGameModeChangeBeforeEventSignal {}
+export class PlayerHotbarSelectedSlotChangeAfterEvent {}
+export class PlayerHotbarSelectedSlotChangeAfterEventSignal {}
+export class PlayerInputModeChangeAfterEvent {}
+export class PlayerInputModeChangeAfterEventSignal {}
+export class PlayerInputPermissionCategoryChangeAfterEvent {}
+export class PlayerInputPermissionCategoryChangeAfterEventSignal {}
+export class PlayerInputPermissions {}
+export class PlayerInteractWithBlockAfterEvent {}
+export class PlayerInteractWithBlockAfterEventSignal {}
+export class PlayerInteractWithBlockBeforeEvent {}
+export class PlayerInteractWithBlockBeforeEventSignal {}
+export class PlayerInteractWithEntityAfterEvent {}
+export class PlayerInteractWithEntityAfterEventSignal {}
+export class PlayerInteractWithEntityBeforeEvent {}
+export class PlayerInteractWithEntityBeforeEventSignal {}
+export class PlayerInventoryItemChangeAfterEvent {}
+export class PlayerInventoryItemChangeAfterEventSignal {}
+export class PlayerJoinAfterEvent {}
+export class PlayerJoinAfterEventSignal {}
+export class PlayerLeaveAfterEvent {}
+export class PlayerLeaveAfterEventSignal {}
+export class PlayerLeaveBeforeEvent {}
+export class PlayerLeaveBeforeEventSignal {}
+export class PlayerPlaceBlockAfterEvent {}
+export class PlayerPlaceBlockAfterEventSignal {}
+export class PlayerSpawnAfterEvent {}
+export class PlayerSpawnAfterEventSignal {}
+export class PlayerSwingStartAfterEvent {}
+export class PlayerSwingStartAfterEventSignal {}
+export class PotionDeliveryType {}
+export class PotionEffectType {}
+export class Potions {}
+export class PressurePlatePopAfterEvent {}
+export class PressurePlatePopAfterEventSignal {}
+export class PressurePlatePushAfterEvent {}
+export class PressurePlatePushAfterEventSignal {}
+export class ProjectileHitBlockAfterEvent {}
+export class ProjectileHitBlockAfterEventSignal {}
+export class ProjectileHitEntityAfterEvent {}
+export class ProjectileHitEntityAfterEventSignal {}
+export class RandomAuxValueFunction {}
+export class RandomBlockStateFunction {}
+export class RandomChanceCondition {}
+export class RandomChanceWithLootingCondition {}
+export class RandomDifficultyChanceCondition {}
+export class RandomDyeFunction {}
+export class RandomRegionalDifficultyChanceCondition {}
+export class Scoreboard {}
+export class ScoreboardIdentity {}
+export class ScoreboardScoreInfo {}
+export class ScreenDisplay {}
+export class ScriptEventCommandMessageAfterEvent {}
+export class ScriptEventCommandMessageAfterEventSignal {}
+export class Seat {}
+export class SetArmorTrimFunction {}
+export class SetBannerDetailsFunction {}
+export class SetBookContentsFunction {}
+export class SetDataFromColorIndexFunction {}
+export class SetItemCountFunction {}
+export class SetItemDamageFunction {}
+export class SetItemDataFunction {}
+export class SetItemLoreFunction {}
+export class SetItemNameFunction {}
+export class SetOminousBottleFunction {}
+export class SetPotionFunction {}
+export class SetSpawnEggFunction {}
+export class SetStewEffectFunction {}
+export class ShutdownBeforeEventSignal {}
+export class ShutdownEvent {}
+export class SmeltItemFunction {}
+export class SpecificEnchantFunction {}
+export class StartupBeforeEventSignal {}
+export class StartupEvent {}
+export class Structure {}
+export class StructureManager {}
+export class System {}
+export class SystemAfterEvents {}
+export class SystemBeforeEvents {}
+export class SystemInfo {}
+export class TargetBlockHitAfterEvent {}
+export class TargetBlockHitAfterEventSignal {}
+export class TickingAreaManager {}
+export class Trigger {}
+export class TripWireTripAfterEvent {}
+export class TripWireTripAfterEventSignal {}
+export class WeatherChangeAfterEvent {}
+export class WeatherChangeAfterEventSignal {}
+export class WeatherChangeBeforeEvent {}
+export class WeatherChangeBeforeEventSignal {}
+export class WorldAfterEvents {}
+export class WorldBeforeEvents {}
+export class WorldLoadAfterEvent {}
+export class WorldLoadAfterEventSignal {}
+
+/** A failure a pack catches by name, which is why each of these is a real error. */
+export class BlockCustomComponentAlreadyRegisteredError extends Error {}
+export class BlockCustomComponentReloadNewComponentError extends Error {}
+export class BlockCustomComponentReloadNewEventError extends Error {}
+export class BlockCustomComponentReloadVersionError extends Error {}
+export class BookError extends Error {}
+export class BookPageContentError extends Error {}
+export class CommandError extends Error {}
+export class ContainerRulesError extends Error {}
+export class CustomCommandError extends Error {}
+export class CustomComponentInvalidRegistryError extends Error {}
+export class CustomComponentNameError extends Error {}
+export class EnchantmentLevelOutOfBoundsError extends Error {}
+export class EnchantmentTypeNotCompatibleError extends Error {}
+export class EnchantmentTypeUnknownIdError extends Error {}
+export class EntitySpawnError extends Error {}
+export class InvalidBlockComponentError extends Error {}
+export class InvalidContainerError extends Error {}
+export class InvalidContainerSlotError extends Error {}
+export class InvalidEntityError extends Error {}
+export class InvalidItemStackError extends Error {}
+export class InvalidIteratorError extends Error {}
+export class InvalidPotionDeliveryTypeError extends Error {}
+export class InvalidPotionEffectTypeError extends Error {}
+export class InvalidStructureError extends Error {}
+export class ItemCustomComponentAlreadyRegisteredError extends Error {}
+export class ItemCustomComponentReloadNewComponentError extends Error {}
+export class ItemCustomComponentReloadNewEventError extends Error {}
+export class ItemCustomComponentReloadVersionError extends Error {}
+export class LocationInUnloadedChunkError extends Error {}
+export class LocationOutOfWorldBoundariesError extends Error {}
+export class NamespaceNameError extends Error {}
+export class PlaceJigsawError extends Error {}
+export class RawMessageError extends Error {}
+export class TickingAreaError extends Error {}
+export class UnloadedChunksError extends Error {}
