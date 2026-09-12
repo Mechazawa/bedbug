@@ -26,6 +26,8 @@ public final class ClientEntityParser {
             strings(json, "textures"),
             strings(json, "materials"),
             strings(json, "animations"),
+            strings(json, "sound_effects"),
+            strings(json, "particle_effects"),
             gated(scripts.getAsJsonArray("animate")),
             gated(json.getAsJsonArray("render_controllers")),
             statements(scripts, "initialize"),

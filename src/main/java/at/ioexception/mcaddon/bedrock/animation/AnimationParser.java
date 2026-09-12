@@ -46,7 +46,46 @@ public final class AnimationParser {
             json.has("anim_time_update") ? MolangParser.parse(primitive(json.get("anim_time_update"))) : null,
             json.has("override_previous_animation") && json.get("override_previous_animation").getAsBoolean(),
             Map.copyOf(bones),
-            List.copyOf(timeline));
+            List.copyOf(timeline),
+            readEffects(json.get("sound_effects")),
+            readEffects(json.get("particle_effects")));
+    }
+
+    /**
+     * The sounds or particles an animation fires, each at the moment its key names.
+     *
+     * Bedrock writes a moment as either one effect or a list of them, so both shapes end up as
+     * entries at the same time.
+     */
+    private static List<BedrockAnimation.EffectEntry> readEffects(JsonElement json) {
+        if (json == null || !json.isJsonObject()) return List.of();
+
+        List<BedrockAnimation.EffectEntry> effects = new ArrayList<>();
+        for (Map.Entry<String, JsonElement> moment : json.getAsJsonObject().entrySet()) {
+            float time = Float.parseFloat(moment.getKey());
+            if (moment.getValue().isJsonArray()) {
+                for (JsonElement each : moment.getValue().getAsJsonArray()) {
+                    effects.add(readEffect(time, each));
+                }
+            } else {
+                effects.add(readEffect(time, moment.getValue()));
+            }
+        }
+        effects.sort(Comparator.comparing(BedrockAnimation.EffectEntry::time));
+        return List.copyOf(effects);
+    }
+
+    private static BedrockAnimation.EffectEntry readEffect(float time, JsonElement json) {
+        if (!json.isJsonObject()) {
+            return new BedrockAnimation.EffectEntry(time, json.getAsString(), null, List.of());
+        }
+
+        JsonObject body = json.getAsJsonObject();
+        return new BedrockAnimation.EffectEntry(time,
+            optionalString(body, "effect"),
+            optionalString(body, "locator"),
+            body.has("pre_effect_script")
+                ? readStatements(body.get("pre_effect_script")) : List.of());
     }
 
     private static BedrockAnimation.Loop readLoop(JsonElement json) {

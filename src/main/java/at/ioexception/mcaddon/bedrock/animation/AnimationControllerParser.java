@@ -59,12 +59,23 @@ public final class AnimationControllerParser {
             }
         }
 
+        List<AnimationController.Effect> particles = new ArrayList<>();
+        if (json.has("particle_effects")) {
+            for (JsonElement entry : json.getAsJsonArray("particle_effects")) {
+                JsonObject effect = entry.getAsJsonObject();
+                if (!effect.has("effect")) continue;
+                particles.add(new AnimationController.Effect(effect.get("effect").getAsString(),
+                    effect.has("locator") ? effect.get("locator").getAsString() : null));
+            }
+        }
+
         return new AnimationController.State(
             List.copyOf(animations),
             List.copyOf(transitions),
             readStatements(json, "on_entry"),
             readStatements(json, "on_exit"),
             List.copyOf(sounds),
+            List.copyOf(particles),
             readBlendTransition(json.get("blend_transition")));
     }
 

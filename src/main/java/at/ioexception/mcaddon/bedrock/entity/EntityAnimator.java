@@ -30,6 +30,44 @@ public final class EntityAnimator {
     private final Set<String> direct = new HashSet<>();
 
     private boolean initialised;
+    private Effects listener = Effects.NONE;
+
+    /**
+     * What an entity's animations ask to be heard and seen, with every name already resolved.
+     *
+     * A pack writes short names that only the entity's own definition can turn into a sound event or
+     * a particle identifier, so the resolving happens here and whoever listens gets real ids.
+     */
+    public interface Effects {
+        Effects NONE = new Effects() {
+            @Override
+            public void sound(String soundId) {
+            }
+
+            @Override
+            public void particle(String particleId, String locator) {
+            }
+        };
+
+        void sound(String soundId);
+
+        void particle(String particleId, String locator);
+    }
+
+    public void setEffects(Effects effects) {
+        this.listener = effects == null ? Effects.NONE : effects;
+        player.setEffects(new AnimationPlayer.EffectSink() {
+            @Override
+            public void sound(String effect) {
+                listener.sound(definition.resolveSound(effect));
+            }
+
+            @Override
+            public void particle(String effect, String locator) {
+                listener.particle(definition.resolveParticle(effect), locator);
+            }
+        });
+    }
 
     /** Where one controller currently sits, and how long it has been there. */
     private static final class ControllerState {
@@ -107,6 +145,8 @@ public final class EntityAnimator {
         AnimationController.State state = controller.states().get(current.state);
         if (state == null) return;
 
+        if (current.timeInState == 0f && deltaSeconds > 0f) fireStateEffects(state);
+
         current.timeInState += deltaSeconds;
         environment.setStateTime(current.timeInState);
 
@@ -119,12 +159,21 @@ public final class EntityAnimator {
             current.timeInState = 0f;
             state = controller.states().get(current.state);
             for (MolangExpression statement : state.onEntry()) statement.evaluate(environment);
+            fireStateEffects(state);
             break;
         }
 
         for (AnimationController.Entry entry : state.animations()) {
             if (entry.weight() != null && !entry.weight().evaluate(environment).truthy()) continue;
             collect(entry.animation(), deltaSeconds, wanted);
+        }
+    }
+
+    /** A controller state's own effects, which fire once as the state is entered. */
+    private void fireStateEffects(AnimationController.State state) {
+        for (String effect : state.soundEffects()) listener.sound(definition.resolveSound(effect));
+        for (AnimationController.Effect effect : state.particleEffects()) {
+            listener.particle(definition.resolveParticle(effect.effect()), effect.locator());
         }
     }
 

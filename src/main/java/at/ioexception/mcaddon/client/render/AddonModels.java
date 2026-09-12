@@ -63,6 +63,10 @@ public final class AddonModels {
         return assets;
     }
 
+    public ConvertedPack converted() {
+        return converted;
+    }
+
     public List<Pass> resolve(EntityAnimator animator) {
         ClientEntityDefinition definition = animator.definition();
         MolangEnvironment environment = animator.environment();

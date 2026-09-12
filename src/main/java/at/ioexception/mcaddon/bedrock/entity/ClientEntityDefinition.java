@@ -17,6 +17,8 @@ public record ClientEntityDefinition(
     Map<String, String> textures,
     Map<String, String> materials,
     Map<String, String> animations,
+    Map<String, String> soundEffects,
+    Map<String, String> particleEffects,
     List<Gated> animate,
     List<Gated> renderControllers,
     List<MolangExpression> initialize,
@@ -29,5 +31,13 @@ public record ClientEntityDefinition(
 
     public String resolveAnimation(String shortName) {
         return animations.getOrDefault(shortName, shortName);
+    }
+
+    public String resolveSound(String shortName) {
+        return soundEffects.getOrDefault(shortName, shortName);
+    }
+
+    public String resolveParticle(String shortName) {
+        return particleEffects.getOrDefault(shortName, shortName);
     }
 }

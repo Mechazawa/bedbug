@@ -52,6 +52,37 @@ public final class AnimationPlayer {
     private final Map<String, BonePose> poses = new HashMap<>();
 
     private final Vector3f scratch = new Vector3f();
+    private EffectSink effects = EffectSink.NONE;
+
+    /**
+     * Where an animation's sounds and particles go.
+     *
+     * The player knows when an effect fires but not what a name means or how to show it, so it hands
+     * both on. Nothing listens on a server, where an animation runs only for its variables.
+     */
+    public interface EffectSink {
+        EffectSink NONE = new EffectSink() {
+            @Override
+            public void sound(String effect) {
+            }
+
+            @Override
+            public void particle(String effect, String locator) {
+            }
+        };
+
+        void sound(String effect);
+
+        void particle(String effect, String locator);
+    }
+
+    public void setEffects(EffectSink effects) {
+        this.effects = effects == null ? EffectSink.NONE : effects;
+    }
+
+    public EffectSink effects() {
+        return effects;
+    }
 
     public AnimationPlayer(BedrockAssets assets) {
         this.assets = assets;
@@ -161,7 +192,21 @@ public final class AnimationPlayer {
             if (entry.time() > position || entry.time() <= clip.lastFiredTime) continue;
             for (MolangExpression statement : entry.statements()) statement.evaluate(environment);
         }
+        for (BedrockAnimation.EffectEntry entry : clip.animation.soundEffects()) {
+            if (due(entry, position, clip.lastFiredTime)) effects.sound(entry.effect());
+        }
+        for (BedrockAnimation.EffectEntry entry : clip.animation.particleEffects()) {
+            if (due(entry, position, clip.lastFiredTime)) effects.particle(entry.effect(), entry.locator());
+        }
         clip.lastFiredTime = position;
+    }
+
+    /** Whether an effect's moment falls in the span just played, running its script if it does. */
+    private boolean due(BedrockAnimation.EffectEntry entry, float position, float lastFired) {
+        if (entry.effect() == null || entry.time() > position || entry.time() <= lastFired) return false;
+
+        for (MolangExpression statement : entry.preEffectScript()) statement.evaluate(environment);
+        return true;
     }
 
     private void applyBones(Running clip) {

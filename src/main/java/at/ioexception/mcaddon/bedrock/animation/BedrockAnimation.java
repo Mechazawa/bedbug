@@ -21,7 +21,9 @@ public record BedrockAnimation(
     MolangExpression animTimeUpdate,
     boolean overridePrevious,
     Map<String, BoneAnimation> bones,
-    List<TimelineEntry> timeline
+    List<TimelineEntry> timeline,
+    List<EffectEntry> soundEffects,
+    List<EffectEntry> particleEffects
 ) {
     public enum Loop {
         ONCE,
@@ -32,6 +34,16 @@ public record BedrockAnimation(
 
     /** Statements to run once the animation passes `time`. */
     public record TimelineEntry(float time, List<MolangExpression> statements) {
+    }
+
+    /**
+     * A sound or a particle the animation asks for at a given moment.
+     *
+     * The name is a short one the entity's own `sound_effects` or `particle_effects` map turns into
+     * an id, and `locator` names the bone a particle is born at. A sound has no locator.
+     */
+    public record EffectEntry(float time, String effect, String locator,
+        List<MolangExpression> preEffectScript) {
     }
 
     public boolean hasBones() {

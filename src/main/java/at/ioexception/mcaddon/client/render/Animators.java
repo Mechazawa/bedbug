@@ -40,6 +40,7 @@ public final class Animators {
             EntityAnimator animator = new EntityAnimator(binding.models().assets(), binding.definition());
             AddonQueries queries = new AddonQueries(entity, animator);
             animator.environment().setQueries(queries);
+            animator.setEffects(AddonEffects.of(entity, binding.models().converted().namespace()));
             return new Entry(animator, queries, new float[] {ageInTicks});
         });
 
@@ -63,6 +64,14 @@ public final class Animators {
                 entry.animator().playDirect(animation, stopExpression, blendOut);
             }
         });
+    }
+
+    /** The animator already drawing an entity, without starting one, for an effect to anchor to. */
+    public static EntityAnimator existing(Entity entity) {
+        for (Map.Entry<String, Entry> each : ANIMATORS.entrySet()) {
+            if (each.getKey().startsWith(entity.getId() + "/")) return each.getValue().animator();
+        }
+        return null;
     }
 
     public static void forget(int entityId) {
