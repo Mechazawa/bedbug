@@ -72,7 +72,10 @@ that differs (the entity renderer, the network channels) carries two bodies inst
 
 These are the checks that catch things:
 
-- **`./gradlew build`** runs the game tests on all four versions, and compiles all four, which is what catches a call that exists on only
+- **`./gradlew build`** compiles all four versions and runs every test on each of them: the unit
+  tests for the checked-out form, and the game tests for all four. The game test task builds
+  `tools/testpack` into its own run directory first, so the tests that assert on a loaded add-on have
+  one; with no pack each of those succeeds without asserting., which is what catches a call that exists on only
   one of them.
 - **`./gradlew :26.2:test`** runs the unit tests in `src/test/java/`, for the checked-out version
   only, for the same reason linting is. They cover what is a function of its input rather than of a
