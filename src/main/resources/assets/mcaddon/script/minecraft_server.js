@@ -461,7 +461,7 @@ export class Entity {
     }
 
     playAnimation(animation) {
-        return unsupported("Entity.playAnimation(" + animation + ")");
+        bridge.playAnimation(this.id, animation);
     }
 
     getProperty(name) {

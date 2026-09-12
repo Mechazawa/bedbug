@@ -93,6 +93,10 @@ public final class ServerHooks {
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> state = null);
         CommandRegistrationCallback.EVENT.register(ServerHooks::registerCommands);
         registerInteractions();
+        ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> {
+            damageSensor(entity, source);
+            return true;
+        });
         Channels.receiveFormResponse((formId, answer) -> {
             if (scripts != null) scripts.formResponse(formId, answer);
         });
@@ -126,6 +130,43 @@ public final class ServerHooks {
                 fields.put("target", new ScriptHost.EntityHandle(target.getStringUUID())));
             return net.minecraft.world.InteractionResult.PASS;
         });
+    }
+
+    /**
+     * `minecraft:damage_sensor` is how a pack reacts to its entity being hurt.
+     *
+     * The sensor's own filters run against the damage's source, so a pack can tell a fall from a
+     * player's sword without the damage itself carrying that meaning.
+     */
+    private static void damageSensor(net.minecraft.world.entity.LivingEntity entity,
+        net.minecraft.world.damagesource.DamageSource source) {
+        if (state == null || !(entity instanceof at.ioexception.mcaddon.entity.AddonEntity addon)) return;
+        if (addon.definition() == null) return;
+
+        com.google.gson.JsonObject sensor = addon.definition().components().get("minecraft:damage_sensor");
+        if (sensor == null) return;
+
+        for (com.google.gson.JsonElement element
+            : at.ioexception.mcaddon.util.Json.list(sensor, "triggers")) {
+            if (!element.isJsonObject()) continue;
+            com.google.gson.JsonObject trigger = element.getAsJsonObject();
+
+            String cause = at.ioexception.mcaddon.util.Json.text(trigger, "cause", null);
+            if (cause != null && !cause.equals("any") && !cause.equals(source.getMsgId())) continue;
+
+            com.google.gson.JsonObject onDamage = trigger.getAsJsonObject("on_damage");
+            String event = onDamage == null
+                ? null : at.ioexception.mcaddon.util.Json.text(onDamage, "event", null);
+            if (event == null) continue;
+
+            at.ioexception.mcaddon.bedrock.behaviour.Filter filter =
+                at.ioexception.mcaddon.bedrock.behaviour.Filter.parse(onDamage.get("filters"));
+            if (!filter.matches(new at.ioexception.mcaddon.bedrock.behaviour.Filter.Context(
+                entity, source.getEntity() == null ? entity : source.getEntity(), null, state))) {
+                continue;
+            }
+            EntityEvents.trigger(entity, event, source.getEntity(), state);
+        }
     }
 
     private static String blockFields(net.minecraft.core.BlockPos position) {

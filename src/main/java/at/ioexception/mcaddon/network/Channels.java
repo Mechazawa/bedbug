@@ -29,6 +29,7 @@ public final class Channels {
     private static final Identifier PACKS = McAddon.id("pack_list");
     private static final Identifier FORM = McAddon.id("form");
     private static final Identifier FORM_RESPONSE = McAddon.id("form_response");
+    private static final Identifier ANIMATION = McAddon.id("play_animation");
 
     private Channels() {
     }
@@ -97,9 +98,56 @@ public final class Channels {
     }
     //?}
 
+    //? if >=1.21 {
+    /** A clip the server asked an entity to play, which only the client can actually run. */
+    private record Animation(int entityId, String animation) implements CustomPacketPayload {
+        private static final CustomPacketPayload.Type<Animation> TYPE =
+            new CustomPacketPayload.Type<>(ANIMATION);
+
+        private static final StreamCodec<FriendlyByteBuf, Animation> CODEC = StreamCodec.composite(
+            ByteBufCodecs.VAR_INT, Animation::entityId,
+            ByteBufCodecs.STRING_UTF8, Animation::animation,
+            Animation::new);
+
+        @Override
+        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+    //?}
+
+    public static void sendAnimation(ServerPlayer player, int entityId, String animation) {
+        //? if >=1.21 {
+        ServerPlayNetworking.send(player, new Animation(entityId, animation));
+        //?} else {
+        /*FriendlyByteBuf buffer = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buffer.writeVarInt(entityId);
+        buffer.writeUtf(animation);
+        ServerPlayNetworking.send(player, ANIMATION, buffer);
+        *///?}
+    }
+
+    public static void receiveAnimation(java.util.function.BiConsumer<Integer, String> handler) {
+        //? if >=1.21 {
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+            Animation.TYPE,
+            (payload, context) -> context.client().execute(
+                () -> handler.accept(payload.entityId(), payload.animation())));
+        //?} else {
+        /*net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+            ANIMATION,
+            (client, network, buffer, sender) -> {
+                int entityId = buffer.readVarInt();
+                String animation = buffer.readUtf();
+                client.execute(() -> handler.accept(entityId, animation));
+            });
+        *///?}
+    }
+
     /** Called from the common initialiser, because the payload type has to exist on both sides. */
     public static void register() {
         //? if >=1.21 {
+        PayloadTypeRegistry.clientboundPlay().register(Animation.TYPE, Animation.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Properties.TYPE, Properties.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Packs.TYPE, Packs.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Form.TYPE, Form.CODEC);

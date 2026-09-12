@@ -51,6 +51,18 @@ public final class Animators {
         return entry.animator();
     }
 
+    /**
+     * Starts a clip a script asked for, on whichever animator is already drawing the entity.
+     *
+     * Nothing happens when the entity is not being drawn, which is the same as Bedrock: an animation
+     * is a client effect and a client that cannot see the entity has nothing to run it on.
+     */
+    public static void play(int entityId, String animation) {
+        ANIMATORS.forEach((key, entry) -> {
+            if (key.startsWith(entityId + "/")) entry.animator().playDirect(animation);
+        });
+    }
+
     public static void forget(int entityId) {
         ANIMATORS.keySet().removeIf(key -> key.startsWith(entityId + "/"));
     }

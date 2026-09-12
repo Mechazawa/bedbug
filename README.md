@@ -32,22 +32,30 @@ server decides what happens; the client draws it.
 - Text, with Bedrock's `.lang` rules rather than a properties reader's.
 - Models, animations, animation controllers and render controllers, drawn through a full Molang
   evaluator.
-- Entities a behaviour pack declares, with their properties, their events, their component groups
-  and the sensors that fire them. Their properties reach every client, so a model looks the same in
-  multiplayer as it does alone.
-- Items, spawn eggs and shaped and shapeless recipes.
+- Entities a behaviour pack declares, with their properties, events, component groups, filters and
+  the sensors that fire them: environment, entity, timer, scheduler, damage, interact and
+  hurt-on-condition. Their properties reach every client, so a model looks the same in multiplayer
+  as it does alone.
+- Items, including edible and wearable ones, spawn eggs, and a creative tab per add-on.
+- Blocks, with the states and permutations a pack declares: each combination gets its own model and
+  the permutation conditions are evaluated through the Molang evaluator.
+- Trading, with Bedrock's tiers and groups flattened into Java's merchant screen.
+- Recipes, loot tables, natural spawning, and `.mcfunction` files translated into Java's command
+  dialect with a `tick` function tag.
+- Attachables: what an add-on entity wears or holds, animating on its own clock.
 - Behaviour pack scripts against `@minecraft/server`, sandboxed: a script sees its own pack's files
-  and nothing else on disk.
+  and nothing else on disk. Commands a script registers on startup become real commands, and
+  `@minecraft/server-ui` forms become real screens.
 
 `/mcaddon packs` lists what loaded. `/mcaddon entities` and `/mcaddon scripts` list what a pack asked
 for that this mod does not implement yet, which is the honest answer to "will my pack work".
 
 ## What does not work yet
 
-Blocks, trading, loot tables, spawn rules, attachables, Bedrock's `.mcfunction` dialect, and the
-parts of `@minecraft/server` beyond world, system, entity, dimension and block. Bedrock's physically
-based rendering, its stencil material passes and its server-authored forms have no Java equivalent
-at all.
+Bedrock block geometry (a block gets a cube with the pack's textures, not its custom model), the
+scoreboard and structure parts of `@minecraft/server`, game rules, and attachables on players rather
+than on add-on entities. Bedrock's physically based rendering and its stencil material passes have
+no Java equivalent at all.
 
 ## Supported versions
 

@@ -124,6 +124,7 @@ public final class EntityEvents {
                 EntityPropertySync.broadcast(entity, state);
             }
             case "minecraft:instant_despawn" -> entity.discard();
+            case "minecraft:transformation" -> transform(entity, values, state);
             case "minecraft:health" -> {
                 if (entity instanceof LivingEntity living && values.has("value")) {
                     living.setHealth(values.get("value").getAsFloat());
@@ -133,6 +134,34 @@ public final class EntityEvents {
                 state.setProperty(entity.getUUID(), name.substring("minecraft:".length()), true);
             default -> AddonEntities.unsupported(name);
         }
+    }
+
+    /**
+     * `minecraft:transformation` replaces the entity with another one.
+     *
+     * The new entity takes the old one's place and name; nothing else carries across, which is what
+     * Bedrock does unless the pack asks for its equipment to be kept.
+     */
+    private static void transform(Entity entity, JsonObject values, AddonState state) {
+        String into = at.ioexception.mcaddon.util.Json.text(values, "into", null);
+        if (into == null || !(entity.level() instanceof ServerLevel level)) return;
+
+        net.minecraft.world.entity.EntityType<?> type = AddonEntities.typeOf(into.split("<")[0]);
+        if (type == null) {
+            AddonEntities.unsupported("transformation into " + into);
+            return;
+        }
+
+        Entity replacement = Platform.createMob(type, level);
+        if (replacement == null) return;
+
+        Platform.placeAt(replacement, entity.getX(), entity.getY(), entity.getZ(),
+            entity.getYRot(), entity.getXRot());
+        if (entity.getCustomName() != null) replacement.setCustomName(entity.getCustomName());
+        level.addFreshEntity(replacement);
+
+        state.forget(entity.getUUID());
+        entity.discard();
     }
 
     private static void setProperties(Entity entity, EntityEvent.SetProperties properties, AddonState state) {

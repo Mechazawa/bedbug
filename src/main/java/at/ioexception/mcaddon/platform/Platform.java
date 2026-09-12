@@ -280,6 +280,58 @@ public final class Platform {
         *///?}
     }
 
+    /**
+     * Makes an item edible.
+     *
+     * The saturation field was renamed in 1.21, and from 1.21.2 how long eating takes moved out of
+     * the food properties and into a separate consumable component.
+     */
+    public static Item.Properties food(Item.Properties properties, int nutrition, float saturation,
+        boolean alwaysEdible, float seconds) {
+        //? if >=1.21.2 {
+        net.minecraft.world.food.FoodProperties.Builder food = new net.minecraft.world.food.FoodProperties
+            .Builder().nutrition(nutrition).saturationModifier(saturation);
+        if (alwaysEdible) food = food.alwaysEdible();
+        return properties.food(food.build(), net.minecraft.world.item.component.Consumable.builder()
+            .consumeSeconds(seconds).build());
+        //?} else if >=1.21 {
+        /*net.minecraft.world.food.FoodProperties.Builder food = new net.minecraft.world.food.FoodProperties
+            .Builder().nutrition(nutrition).saturationModifier(saturation);
+        if (alwaysEdible) food = food.alwaysEdible();
+        return properties.food(food.build());
+        *///?} else {
+        /*net.minecraft.world.food.FoodProperties.Builder food = new net.minecraft.world.food.FoodProperties
+            .Builder().nutrition(nutrition).saturationMod(saturation);
+        if (alwaysEdible) food = food.alwaysEat();
+        return properties.food(food.build());
+        *///?}
+    }
+
+    /**
+     * Makes an item wearable in a slot.
+     *
+     * Only from 1.21.2, where a data component says what a stack can be worn as. Before that an item
+     * had to be an armour item with a material, which a pack's arbitrary item is not.
+     */
+    public static Item.Properties wearable(Item.Properties properties,
+        net.minecraft.world.entity.EquipmentSlot slot) {
+        //? if >=1.21.2 {
+        return properties.component(net.minecraft.core.component.DataComponents.EQUIPPABLE,
+            net.minecraft.world.item.equipment.Equippable.builder(slot).build());
+        //?} else {
+        /*return properties;
+        *///?}
+    }
+
+    /** Whether {@link #wearable} does anything on this version. */
+    public static boolean supportsWearable() {
+        //? if >=1.21.2 {
+        return true;
+        //?} else {
+        /*return false;
+        *///?}
+    }
+
     /** A block carries its own registry id from 1.21.2, the same way an item does. */
     public static Block buildBlock(BlockBehaviour.Properties properties, Identifier id) {
         //? if >=1.21.2 {

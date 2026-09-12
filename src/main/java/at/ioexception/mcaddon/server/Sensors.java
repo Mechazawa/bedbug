@@ -32,6 +32,97 @@ public final class Sensors {
         environment(entity, definition, state);
         nearby(entity, definition, state);
         timer(entity, definition, state);
+        scheduler(entity, definition, state);
+        hurtOnCondition(entity, definition, state);
+        spawnEntity(entity, definition, state);
+    }
+
+    /**
+     * `minecraft:spawn_entity` has an entity spawn others of its own accord.
+     *
+     * The wait is in seconds and randomised between its two bounds, which is what keeps a group of
+     * the same entity from all spawning something on the same tick.
+     */
+    private static void spawnEntity(AddonEntity entity, ServerEntityDefinition definition,
+        AddonState state) {
+        JsonObject component = definition.components().get("minecraft:spawn_entity");
+        if (component == null || !(entity.level() instanceof net.minecraft.server.level.ServerLevel level)) {
+            return;
+        }
+
+        for (JsonElement element : Json.list(component, "entities")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject spawn = element.getAsJsonObject();
+
+            String identifier = Json.text(spawn, "spawn_entity", null);
+            if (identifier == null) continue;
+
+            int minimum = spawn.has("min_wait_time") ? spawn.get("min_wait_time").getAsInt() : 300;
+            int maximum = spawn.has("max_wait_time") ? spawn.get("max_wait_time").getAsInt() : 600;
+            // Chance per evaluation rather than a countdown per entity, which needs no state of its
+            // own and averages out to the wait the pack asked for.
+            double expected = Math.max(1, (minimum + maximum) / 2.0) * 20 / INTERVAL_TICKS;
+            if (java.util.concurrent.ThreadLocalRandom.current().nextDouble() > 1 / expected) continue;
+
+            net.minecraft.world.entity.EntityType<?> type =
+                at.ioexception.mcaddon.registry.AddonEntities.typeOf(identifier);
+            if (type == null) continue;
+
+            net.minecraft.world.entity.Entity spawned =
+                at.ioexception.mcaddon.platform.Platform.createMob(type, level);
+            if (spawned == null) continue;
+
+            at.ioexception.mcaddon.platform.Platform.placeAt(spawned,
+                entity.getX(), entity.getY(), entity.getZ(), entity.getYRot(), 0);
+            level.addFreshEntity(spawned);
+
+            String event = Json.text(spawn, "spawn_event", null);
+            if (event != null) EntityEvents.trigger(spawned, event, entity, state);
+        }
+    }
+
+    /**
+     * `minecraft:scheduler` fires its events when their filters hold, which a pack uses for the
+     * things that should happen at a time of day or in certain weather.
+     */
+    private static void scheduler(AddonEntity entity, ServerEntityDefinition definition, AddonState state) {
+        JsonObject scheduler = definition.components().get("minecraft:scheduler");
+        if (scheduler == null) return;
+
+        for (JsonElement element : Json.list(scheduler, "scheduled_events")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject scheduled = element.getAsJsonObject();
+            String event = Json.text(scheduled, "event", null);
+            if (event == null) continue;
+
+            if (Filter.parse(scheduled.get("filters")).matches(
+                new Filter.Context(entity, entity, null, state))) {
+                EntityEvents.trigger(entity, event, null, state);
+            }
+        }
+    }
+
+    /** `minecraft:hurt_on_condition` is how a pack makes its entity take damage from where it is. */
+    private static void hurtOnCondition(AddonEntity entity, ServerEntityDefinition definition,
+        AddonState state) {
+        JsonObject component = definition.components().get("minecraft:hurt_on_condition");
+        if (component == null || !(entity.level() instanceof net.minecraft.server.level.ServerLevel level)) {
+            return;
+        }
+
+        for (JsonElement element : Json.list(component, "damage_conditions")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject condition = element.getAsJsonObject();
+            if (!Filter.parse(condition.get("filters")).matches(
+                new Filter.Context(entity, entity, null, state))) {
+                continue;
+            }
+
+            double perTick = condition.has("damage_per_tick")
+                ? condition.get("damage_per_tick").getAsDouble() : 1;
+            at.ioexception.mcaddon.platform.Platform.hurt(entity, level,
+                level.damageSources().generic(), (float) (perTick * INTERVAL_TICKS));
+        }
     }
 
     /**

@@ -29,6 +29,7 @@ public final class McAddonClient implements ClientModInitializer {
 
         Channels.receiveProperties(EntityProperties::accept);
         Channels.receivePacks(McAddonClient::reportMissingPacks);
+        Channels.receiveAnimation(Animators::play);
         // An empty description is how a pack closes a form it opened.
         Channels.receiveForm((formId, description) -> Platform.setScreen(
             description.isEmpty() ? null : new AddonFormScreen(formId, description)));

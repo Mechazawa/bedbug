@@ -392,6 +392,23 @@ public final class ScriptBridge {
         return entity == null ? new String[0] : state.dynamicPropertyNames(entity.getUUID()).toArray(String[]::new);
     }
 
+    /**
+     * Starts one of the pack's animations on an entity, for everyone watching it.
+     *
+     * Animations run on the client, so this is a message rather than a change to anything the server
+     * holds; a player who was not watching when it started does not see it, which is what Bedrock
+     * does too.
+     */
+    @HostAccess.Export
+    public void playAnimation(String id, String animation) {
+        Entity entity = entity(id);
+        if (entity == null) return;
+
+        for (ServerPlayer player : net.fabricmc.fabric.api.networking.v1.PlayerLookup.tracking(entity)) {
+            Channels.sendAnimation(player, entity.getId(), animation);
+        }
+    }
+
     @HostAccess.Export
     public void triggerEntityEvent(String id, String event) {
         Entity entity = entity(id);

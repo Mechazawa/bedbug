@@ -1,9 +1,11 @@
 package at.ioexception.mcaddon.entity;
 
+import at.ioexception.mcaddon.bedrock.behaviour.Filter;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.TradeTable;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.Sensors;
 import at.ioexception.mcaddon.server.ServerHooks;
 import net.minecraft.world.entity.EntityType;
@@ -111,14 +113,46 @@ public class AddonEntity extends PathfinderMob implements Merchant {
         if ((tickCount + getId()) % Sensors.INTERVAL_TICKS == 0) Sensors.tick(this, ServerHooks.state());
     }
 
+    /** True when one of the pack's interactions applied, which is what consumes the click. */
+    private boolean interact(Player player) {
+        com.google.gson.JsonObject component = definition == null
+            ? null : definition.components().get("minecraft:interact");
+        if (component == null) return false;
+
+        for (com.google.gson.JsonElement element
+            : at.ioexception.mcaddon.util.Json.list(component, "interactions")) {
+            if (!element.isJsonObject()) continue;
+            com.google.gson.JsonObject interaction = element.getAsJsonObject();
+
+            com.google.gson.JsonObject onInteract = interaction.getAsJsonObject("on_interact");
+            String event = onInteract == null
+                ? null : at.ioexception.mcaddon.util.Json.text(onInteract, "event", null);
+            if (event == null) continue;
+
+            Filter filter = Filter.parse(onInteract.get("filters"));
+            if (!filter.matches(new Filter.Context(this, player, null, ServerHooks.state()))) continue;
+
+            EntityEvents.trigger(this, event, player, ServerHooks.state());
+            return true;
+        }
+        return false;
+    }
+
     @Override
     public boolean isBaby() {
         return false;
     }
 
-    /** A pack's trade table only opens a screen; everything after that is Java's merchant menu. */
+    /**
+     * What a right click does: a pack's own interaction first, then its trade table.
+     *
+     * `minecraft:interact` is how a pack makes an entity respond to being used, and each interaction
+     * carries the filters that decide whether it applies and the event it fires.
+     */
     @Override
     public InteractionResult mobInteract(Player player, InteractionHand hand) {
+        if (!isClientSide() && interact(player)) return InteractionResult.SUCCESS;
+
         if (AddonEntities.tradesOf(getType()) == null || isClientSide()) {
             return super.mobInteract(player, hand);
         }

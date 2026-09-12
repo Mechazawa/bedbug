@@ -8,10 +8,13 @@ import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.PackRole;
 import at.ioexception.mcaddon.pack.PackSet;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.util.Json;
+import com.google.gson.JsonObject;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.Item;
 
 import java.util.ArrayList;
@@ -53,11 +56,15 @@ public final class AddonItems {
         Identifier id = identifier(definition.identifier());
         if (id == null || BuiltInRegistries.ITEM.containsKey(id)) return;
 
+        Item.Properties properties = new Item.Properties().stacksTo(definition.maxStackSize());
+        properties = food(definition, properties);
+        properties = wearable(definition, properties);
+
         for (String component : definition.components().keySet()) {
             if (!IMPLEMENTED.contains(component)) AddonEntities.unsupported(component);
         }
 
-        Item item = Platform.buildItem(new Item.Properties().stacksTo(definition.maxStackSize()), id);
+        Item item = Platform.buildItem(properties, id);
         Registry.register(BuiltInRegistries.ITEM, id, item);
         BY_IDENTIFIER.put(definition.identifier(), item);
     }
@@ -85,8 +92,54 @@ public final class AddonItems {
         }
     }
 
+    /**
+     * Eating, with the duration the pack asked for.
+     *
+     * `use_modifiers.use_duration` is in seconds and Bedrock's default is 1.6, the same as a Java
+     * food item's, so a pack that leaves it out behaves the same in both.
+     */
+    private static Item.Properties food(ItemDefinition definition, Item.Properties properties) {
+        JsonObject food = definition.components().get("minecraft:food");
+        if (food == null) return properties;
+
+        JsonObject modifiers = definition.components().get("minecraft:use_modifiers");
+        float seconds = modifiers != null && modifiers.has("use_duration")
+            ? modifiers.get("use_duration").getAsFloat() : 1.6f;
+
+        return Platform.food(properties,
+            food.has("nutrition") ? food.get("nutrition").getAsInt() : 0,
+            food.has("saturation_modifier") ? food.get("saturation_modifier").getAsFloat() : 0.6f,
+            food.has("can_always_eat") && food.get("can_always_eat").getAsBoolean(),
+            // A pack that says a hat takes 9999 seconds to eat means it is never eaten, and Java
+            // cannot express that, so the duration is kept within what a use can actually last.
+            Math.min(seconds, 60f));
+    }
+
+    private static Item.Properties wearable(ItemDefinition definition, Item.Properties properties) {
+        JsonObject wearable = definition.components().get("minecraft:wearable");
+        if (wearable == null) return properties;
+        if (!Platform.supportsWearable()) {
+            AddonEntities.unsupported("minecraft:wearable");
+            return properties;
+        }
+        return Platform.wearable(properties, slot(Json.text(wearable, "slot", "slot.armor.head")));
+    }
+
+    /** Bedrock names a slot `slot.armor.head`; Java names the same slot `HEAD`. */
+    private static EquipmentSlot slot(String bedrock) {
+        return switch (bedrock) {
+            case "slot.armor.chest" -> EquipmentSlot.CHEST;
+            case "slot.armor.legs" -> EquipmentSlot.LEGS;
+            case "slot.armor.feet" -> EquipmentSlot.FEET;
+            case "slot.weapon.offhand" -> EquipmentSlot.OFFHAND;
+            default -> EquipmentSlot.HEAD;
+        };
+    }
+
     private static final List<String> IMPLEMENTED = List.of(
-        "minecraft:icon", "minecraft:display_name", "minecraft:max_stack_size", "minecraft:tags");
+        "minecraft:icon", "minecraft:display_name", "minecraft:max_stack_size", "minecraft:tags",
+        "minecraft:food", "minecraft:wearable", "minecraft:use_modifiers", "minecraft:use_animation",
+        "minecraft:interact_button");
 
     private static Identifier identifier(String bedrock) {
         int colon = bedrock.indexOf(':');
