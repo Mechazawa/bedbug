@@ -322,12 +322,18 @@ public final class PackConverter {
     private record Icons(String namespace) {
         Map<String, String> convert(BedrockPack pack, Map<String, String> texturePaths) {
             Map<String, String> icons = new TreeMap<>();
-            Path file = pack.file("textures/item_texture.json");
-            if (!Files.isRegularFile(file)) return icons;
+            for (String name : List.of("textures/item_texture.json", "textures/terrain_texture.json")) {
+                read(pack.file(name), texturePaths, icons);
+            }
+            return icons;
+        }
+
+        private void read(Path file, Map<String, String> texturePaths, Map<String, String> icons) {
+            if (!Files.isRegularFile(file)) return;
 
             try {
                 JsonObject data = Json.parseObject(file).getAsJsonObject("texture_data");
-                if (data == null) return icons;
+                if (data == null) return;
 
                 for (Map.Entry<String, JsonElement> entry : data.entrySet()) {
                     if (!entry.getValue().isJsonObject()) continue;
@@ -341,7 +347,6 @@ public final class PackConverter {
             } catch (IOException | RuntimeException error) {
                 McAddon.LOGGER.warn("Could not read {}: {}", file.getFileName(), error.toString());
             }
-            return icons;
         }
     }
 
