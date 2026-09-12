@@ -9,12 +9,9 @@ import at.ioexception.mcaddon.script.ScriptHost;
 import at.ioexception.mcaddon.state.AddonState;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
-import at.ioexception.mcaddon.platform.Platform;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
-import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
-import net.fabricmc.fabric.api.event.player.UseBlockCallback;
-import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
+import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -70,16 +67,17 @@ public final class ServerHooks {
             if (entity.tickCount == 0) {
                 at.ioexception.mcaddon.script.ScriptBridge.remember(entity);
                 raiseEntityEvent("entitySpawn", entity);
+                WorldEvents.spawned(entity);
             }
         });
         EntityTrackingEvents.START_TRACKING.register((entity, player) -> {
             if (state != null) EntityPropertySync.sendTo(player, entity, state);
         });
-        ServerEntityEvents.ENTITY_UNLOAD.register((entity, level) -> raiseEntityEvent("entityRemove", entity));
+        ServerEntityEvents.ENTITY_UNLOAD.register((entity, level) -> entityRemoved(entity));
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> {
             Map<String, Object> fields = new LinkedHashMap<>();
             fields.put("deadEntity", new ScriptHost.EntityHandle(entity.getStringUUID()));
-            fields.put("damageSource", source.getMsgId());
+            fields.put("damageSource", DamageSources.describe(source));
             if (scripts != null) scripts.raiseWorldEvent("entityDie", fields);
         });
         // Fabric gained an after-damage event in 1.21; before that a pack learns of damage only
@@ -89,50 +87,73 @@ public final class ServerHooks {
             Map<String, Object> fields = new LinkedHashMap<>();
             fields.put("hurtEntity", new ScriptHost.EntityHandle(entity.getStringUUID()));
             fields.put("damage", (double) taken);
-            fields.put("cause", source.getMsgId());
+            fields.put("damageSource", DamageSources.describe(source));
             if (scripts != null) scripts.raiseWorldEvent("entityHurt", fields);
         });
         //?}
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> state = null);
         CommandRegistrationCallback.EVENT.register(ServerHooks::registerCommands);
-        registerInteractions();
+        WorldEvents.register();
         ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> {
             damageSensor(entity, source);
-            return true;
+            return !hurtRefused(entity, source, amount);
         });
         Channels.receiveFormResponse((formId, answer) -> {
             if (scripts != null) scripts.formResponse(formId, answer);
         });
-        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
-            Channels.sendPacks(handler.player, PackList.of(McAddon.packs()).encode()));
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
+            Channels.sendPacks(handler.player, PackList.of(McAddon.packs()).encode());
+            playerJoined(handler.player);
+        });
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> playerLeft(handler.player));
+        // A respawn is the other way into the world, and the flag is how a pack tells the two apart.
+        ServerPlayerEvents.AFTER_RESPAWN.register((from, to, alive) -> playerSpawned(to, false));
     }
 
-    /**
-     * The player events a pack's script listens for.
-     *
-     * Each one carries the fields Bedrock's event of the same name carries, so a pack's handler
-     * reads what it expects rather than a shape invented here.
-     */
-    private static void registerInteractions() {
-        PlayerBlockBreakEvents.AFTER.register((level, player, position, state, entity) ->
-            raisePlayerEvent("playerBreakBlock", player, fields -> {
-                fields.put("block", blockFields(position));
-                fields.put("brokenBlockPermutation", Platform.idOf(
-                    net.minecraft.core.registries.BuiltInRegistries.BLOCK.getResourceKey(state.getBlock())
-                        .orElse(null)).toString());
-            }));
+    /** A pack may refuse damage outright, which is what Bedrock's before event is for. */
+    private static boolean hurtRefused(net.minecraft.world.entity.LivingEntity entity,
+        net.minecraft.world.damagesource.DamageSource source, float amount) {
+        if (scripts == null) return false;
 
-        UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
-            raisePlayerEvent("playerInteractWithBlock", player, fields ->
-                fields.put("block", blockFields(hit.getBlockPos())));
-            return net.minecraft.world.InteractionResult.PASS;
-        });
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("hurtEntity", new ScriptHost.EntityHandle(entity.getStringUUID()));
+        fields.put("damage", (double) amount);
+        fields.put("damageSource", DamageSources.describe(source));
+        return scripts.raiseCancellable("entityHurt", fields);
+    }
 
-        UseEntityCallback.EVENT.register((player, level, hand, target, hit) -> {
-            raisePlayerEvent("playerInteractWithEntity", player, fields ->
-                fields.put("target", new ScriptHost.EntityHandle(target.getStringUUID())));
-            return net.minecraft.world.InteractionResult.PASS;
-        });
+    private static void playerJoined(ServerPlayer player) {
+        if (scripts == null) return;
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
+        fields.put("playerId", player.getStringUUID());
+        fields.put("playerName", player.getName().getString());
+        scripts.raiseWorldEvent("playerJoin", fields);
+        playerSpawned(player, true);
+    }
+
+    private static void playerSpawned(ServerPlayer player, boolean initial) {
+        if (scripts == null) return;
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
+        fields.put("initialSpawn", initial);
+        scripts.raiseWorldEvent("playerSpawn", fields);
+    }
+
+    /** The after event names a player who is already gone, so it carries names and not a handle. */
+    private static void playerLeft(ServerPlayer player) {
+        if (scripts == null) return;
+
+        Map<String, Object> leaving = new LinkedHashMap<>();
+        leaving.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
+        scripts.raiseCancellable("playerLeave", leaving);
+
+        Map<String, Object> left = new LinkedHashMap<>();
+        left.put("playerId", player.getStringUUID());
+        left.put("playerName", player.getName().getString());
+        scripts.raiseWorldEvent("playerLeave", left);
     }
 
     /**
@@ -172,27 +193,6 @@ public final class ServerHooks {
         }
     }
 
-    private static String blockFields(net.minecraft.core.BlockPos position) {
-        return position.getX() + "," + position.getY() + "," + position.getZ();
-    }
-
-    /**
-     * Raises one of a player's events.
-     *
-     * The interaction callbacks fire on both sides, and only the server one has anything to say to a
-     * pack. The host refuses a call from the client thread anyway; stopping here keeps that out of
-     * the log for something that happens on every click.
-     */
-    private static void raisePlayerEvent(String event, net.minecraft.world.entity.player.Player player,
-        java.util.function.Consumer<Map<String, Object>> extra) {
-        if (scripts == null || !(player instanceof ServerPlayer)) return;
-
-        Map<String, Object> fields = new LinkedHashMap<>();
-        fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
-        extra.accept(fields);
-        scripts.raiseWorldEvent(event, fields);
-    }
-
     private static void start(MinecraftServer server) {
         state = AddonState.load(server.getWorldPath(LevelResource.ROOT).resolve("data/mcaddon-state.json"));
         scripts = ScriptHost.start(server, McAddon.packs().packs(), state);
@@ -207,12 +207,14 @@ public final class ServerHooks {
             scripts.stop();
             scripts = null;
         }
+        WorldEvents.forget();
         if (state != null) state.save();
     }
 
     /** Saving on a schedule as well as on shutdown, so a crash costs at most a minute of pack state. */
     private static void tick(MinecraftServer server) {
         if (scripts != null) scripts.tick(server.getTickCount());
+        WorldEvents.endTick(server);
         if (state != null && server.getTickCount() % 1200 == 0) state.save();
     }
 
@@ -223,15 +225,21 @@ public final class ServerHooks {
         fields.put("entity", new ScriptHost.EntityHandle(entity.getStringUUID()));
         fields.put("cause", event.equals("entitySpawn") ? "Spawned" : "Loaded");
         scripts.raiseWorldEvent(event, fields);
+    }
 
-        if (entity instanceof ServerPlayer player && event.equals("entityLoad")) {
-            Map<String, Object> joined = new LinkedHashMap<>();
-            joined.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
-            joined.put("playerId", player.getStringUUID());
-            joined.put("playerName", player.getName().getString());
-            scripts.raiseWorldEvent("playerJoin", joined);
-            scripts.raiseWorldEvent("playerSpawn", joined);
-        }
+    /** The after event names an entity that no longer exists, so it carries its id and its type. */
+    private static void entityRemoved(Entity entity) {
+        if (scripts == null) return;
+
+        Map<String, Object> leaving = new LinkedHashMap<>();
+        leaving.put("removedEntity", new ScriptHost.EntityHandle(entity.getStringUUID()));
+        scripts.raiseCancellable("entityRemove", leaving);
+
+        Map<String, Object> removed = new LinkedHashMap<>();
+        removed.put("removedEntityId", entity.getStringUUID());
+        removed.put("typeId",
+            net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString());
+        scripts.raiseWorldEvent("entityRemove", removed);
     }
 
     /**

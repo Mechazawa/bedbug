@@ -1,0 +1,459 @@
+package at.ioexception.mcaddon.server;
+
+import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.script.ScriptHost;
+import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
+import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
+import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.fabricmc.fabric.api.event.player.UseEntityCallback;
+import net.fabricmc.fabric.api.event.player.UseItemCallback;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.Vec3;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+
+/**
+ * What a player does, told the way a pack's script asks about it.
+ *
+ * Each event carries the fields Bedrock's event of the same name carries, so a pack's handler finds
+ * what it expects. Where Bedrock has a before event, it is raised first and a listener that sets
+ * `cancel` stops the game from carrying the action out.
+ *
+ * Only the main hand raises anything. Bedrock has no off hand, so a pack that saw both would count
+ * one click twice.
+ */
+public final class WorldEvents {
+    /** What the player held when the break started, which the tool may not survive. */
+    private static final Map<UUID, ItemStack> BREAKING_WITH = new HashMap<>();
+
+    /** Clicks that may have placed a block. The block only exists once the tick has run. */
+    private static final List<Placement> PLACEMENTS = new ArrayList<>();
+
+    private static final Map<UUID, PlayerWatch> WATCHED = new HashMap<>();
+
+    private WorldEvents() {
+    }
+
+    public static void register() {
+        PlayerBlockBreakEvents.BEFORE.register((level, player, position, state, blockEntity) ->
+            !breakRefused(level, player, position));
+        PlayerBlockBreakEvents.AFTER.register((level, player, position, state, blockEntity) ->
+            broke(level, player, position, state));
+        UseBlockCallback.EVENT.register(WorldEvents::usedBlock);
+        UseEntityCallback.EVENT.register(WorldEvents::usedEntity);
+        AttackEntityCallback.EVENT.register(WorldEvents::attacked);
+        // Fabric's use-item callback answers with the stack it leaves behind; from 26 on it answers
+        // with the outcome alone.
+        //? if >=26 {
+        UseItemCallback.EVENT.register((player, level, hand) ->
+            usedItem(player, hand) ? InteractionResult.FAIL : InteractionResult.PASS);
+        //?} else {
+        /*UseItemCallback.EVENT.register((player, level, hand) -> usedItem(player, hand)
+            ? net.minecraft.world.InteractionResultHolder.fail(player.getItemInHand(hand))
+            : net.minecraft.world.InteractionResultHolder.pass(player.getItemInHand(hand)));
+        *///?}
+    }
+
+    /** Run once the tick's work is done, which is when a block a click placed is in the world. */
+    public static void endTick(MinecraftServer server) {
+        confirmPlacements(server);
+        pollPlayers(server);
+    }
+
+    /** An item entity coming into the world with an owner is what somebody threw. */
+    public static void spawned(Entity entity) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null || !(entity instanceof ItemEntity item) || item.getOwner() == null) return;
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("entity", new ScriptHost.EntityHandle(item.getOwner().getStringUUID()));
+        fields.put("item", new ScriptHost.EntityHandle(item.getStringUUID()));
+        scripts.raiseWorldEvent("entityItemDrop", fields);
+    }
+
+    public static void forget() {
+        BREAKING_WITH.clear();
+        PLACEMENTS.clear();
+        WATCHED.clear();
+    }
+
+    private static boolean breakRefused(Level level, Player player, BlockPos position) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null || !(player instanceof ServerPlayer)) return false;
+
+        ItemStack held = player.getMainHandItem();
+        BREAKING_WITH.put(player.getUUID(), held.copy());
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
+        fields.put("block", block(level, position));
+        fields.put("dimension", Platform.idOf(level.dimension()).toString());
+        fields.put("itemStack", item(held));
+        return scripts.raiseCancellable("playerBreakBlock", fields);
+    }
+
+    private static void broke(Level level, Player player, BlockPos position, BlockState state) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null || !(player instanceof ServerPlayer)) return;
+
+        ItemStack before = BREAKING_WITH.remove(player.getUUID());
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
+        fields.put("block", block(level, position));
+        fields.put("dimension", Platform.idOf(level.dimension()).toString());
+        fields.put("brokenBlockPermutation", permutation(state));
+        fields.put("itemStackBeforeBreak", before == null ? null : item(before));
+        fields.put("itemStackAfterBreak", item(player.getMainHandItem()));
+        scripts.raiseWorldEvent("playerBreakBlock", fields);
+    }
+
+    private static InteractionResult usedBlock(Player player, Level level, InteractionHand hand,
+        BlockHitResult hit) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null || !(player instanceof ServerPlayer) || hand != InteractionHand.MAIN_HAND) {
+            return InteractionResult.PASS;
+        }
+
+        ItemStack held = player.getItemInHand(hand);
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
+        fields.put("block", block(level, hit.getBlockPos()));
+        fields.put("dimension", Platform.idOf(level.dimension()).toString());
+        fields.put("blockFace", face(hit.getDirection()));
+        fields.put("faceLocation", faceLocation(hit));
+        fields.put("isFirstEvent", true);
+        fields.put("itemStack", item(held));
+        fields.put("beforeItemStack", item(held));
+        if (scripts.raiseCancellable("playerInteractWithBlock", fields)) return InteractionResult.FAIL;
+        scripts.raiseWorldEvent("playerInteractWithBlock", fields);
+
+        if (!held.isEmpty()) {
+            Map<String, Object> started = new LinkedHashMap<>();
+            started.put("source", new ScriptHost.EntityHandle(player.getStringUUID()));
+            started.put("block", block(level, hit.getBlockPos()));
+            started.put("blockFace", face(hit.getDirection()));
+            started.put("itemStack", item(held));
+            scripts.raiseWorldEvent("itemStartUseOn", started);
+        }
+        rememberPlacement(player, level, hit, held);
+        return InteractionResult.PASS;
+    }
+
+    private static InteractionResult usedEntity(Player player, Level level, InteractionHand hand,
+        Entity target, EntityHitResult hit) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null || !(player instanceof ServerPlayer) || hand != InteractionHand.MAIN_HAND) {
+            return InteractionResult.PASS;
+        }
+
+        ItemStack held = player.getItemInHand(hand);
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
+        fields.put("target", new ScriptHost.EntityHandle(target.getStringUUID()));
+        fields.put("itemStack", item(held));
+        fields.put("beforeItemStack", item(held));
+        if (scripts.raiseCancellable("playerInteractWithEntity", fields)) return InteractionResult.FAIL;
+        scripts.raiseWorldEvent("playerInteractWithEntity", fields);
+        return InteractionResult.PASS;
+    }
+
+    private static InteractionResult attacked(Player player, Level level, InteractionHand hand,
+        Entity target, EntityHitResult hit) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null || !(player instanceof ServerPlayer)) return InteractionResult.PASS;
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("damagingEntity", new ScriptHost.EntityHandle(player.getStringUUID()));
+        fields.put("hitEntity", new ScriptHost.EntityHandle(target.getStringUUID()));
+        scripts.raiseWorldEvent("entityHitEntity", fields);
+        return InteractionResult.PASS;
+    }
+
+    private static boolean usedItem(Player player, InteractionHand hand) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null || !(player instanceof ServerPlayer) || hand != InteractionHand.MAIN_HAND) {
+            return false;
+        }
+
+        ItemStack held = player.getItemInHand(hand);
+        if (held.isEmpty()) return false;
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("source", new ScriptHost.EntityHandle(player.getStringUUID()));
+        fields.put("itemStack", item(held));
+        if (scripts.raiseCancellable("itemUse", fields)) return true;
+
+        scripts.raiseWorldEvent("itemUse", fields);
+        return false;
+    }
+
+    /**
+     * Remembers a click that may place a block.
+     *
+     * Fabric has no placement callback, so a placement is recognised by the block arriving in one of
+     * the two spaces a click can fill. What each space already held is kept alongside, because
+     * holding stone and clicking stone would otherwise read as a placement that never happened.
+     */
+    private static void rememberPlacement(Player player, Level level, BlockHitResult hit, ItemStack held) {
+        if (!(held.getItem() instanceof BlockItem carried) || !(level instanceof ServerLevel server)) return;
+
+        BlockPos clicked = hit.getBlockPos();
+        BlockPos beyond = clicked.relative(hit.getDirection());
+        PLACEMENTS.add(new Placement(player.getUUID(), server.dimension(), clicked, hit.getDirection(),
+            carried.getBlock(), server.getBlockState(clicked).getBlock() == carried.getBlock(),
+            server.getBlockState(beyond).getBlock() == carried.getBlock()));
+    }
+
+    private static void confirmPlacements(MinecraftServer server) {
+        if (PLACEMENTS.isEmpty()) return;
+
+        List<Placement> clicks = List.copyOf(PLACEMENTS);
+        PLACEMENTS.clear();
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null) return;
+
+        for (Placement click : clicks) {
+            ServerLevel level = server.getLevel(click.dimension());
+            ServerPlayer player = server.getPlayerList().getPlayer(click.player());
+            BlockPos at = level == null ? null : placedAt(level, click);
+            if (at == null || player == null) continue;
+
+            Map<String, Object> fields = new LinkedHashMap<>();
+            fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
+            fields.put("block", block(level, at));
+            fields.put("dimension", Platform.idOf(level.dimension()).toString());
+            fields.put("blockFace", face(click.face()));
+            scripts.raiseWorldEvent("playerPlaceBlock", fields);
+        }
+    }
+
+    /** The space beyond the clicked face, or the clicked space itself when what was there gave way. */
+    private static BlockPos placedAt(ServerLevel level, Placement click) {
+        BlockPos beyond = click.clicked().relative(click.face());
+        if (!click.beyondHeld() && level.getBlockState(beyond).getBlock() == click.placing()) return beyond;
+        if (!click.clickedHeld() && level.getBlockState(click.clicked()).getBlock() == click.placing()) {
+            return click.clicked();
+        }
+        return null;
+    }
+
+    private static void pollPlayers(MinecraftServer server) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null) {
+            WATCHED.clear();
+            return;
+        }
+
+        Set<UUID> online = new HashSet<>();
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            online.add(player.getUUID());
+            PlayerWatch watch = WATCHED.get(player.getUUID());
+            if (watch == null) {
+                WATCHED.put(player.getUUID(), new PlayerWatch(player));
+            } else {
+                watch.compare(player, scripts);
+            }
+        }
+        WATCHED.keySet().retainAll(online);
+    }
+
+    /** A block, as the object a pack reads a location and a dimension off. */
+    private static Map<String, Object> block(Level level, BlockPos position) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("dimension", Platform.idOf(level.dimension()).toString());
+        fields.put("x", position.getX());
+        fields.put("y", position.getY());
+        fields.put("z", position.getZ());
+        return fields;
+    }
+
+    /** An item stack, in the shape the script rebuilds one from. An empty hand carries nothing. */
+    private static Map<String, Object> item(ItemStack stack) {
+        if (stack.isEmpty()) return null;
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("typeId", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+        fields.put("amount", stack.getCount());
+        fields.put("damage", stack.getDamageValue());
+        fields.put("maxDurability", stack.getMaxDamage());
+        return fields;
+    }
+
+    private static Map<String, Object> permutation(BlockState state) {
+        Map<String, Object> states = new LinkedHashMap<>();
+        for (Property<?> property : state.getProperties()) {
+            states.put(property.getName(), stateValue(state, property));
+        }
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("typeId", BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString());
+        fields.put("states", states);
+        return fields;
+    }
+
+    private static <T extends Comparable<T>> String stateValue(BlockState state, Property<T> property) {
+        return property.getName(state.getValue(property));
+    }
+
+    private static Map<String, Object> vector(Vec3 at) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("x", at.x);
+        fields.put("y", at.y);
+        fields.put("z", at.z);
+        return fields;
+    }
+
+    /** Bedrock measures a face location from the block's own corner. */
+    private static Map<String, Object> faceLocation(BlockHitResult hit) {
+        BlockPos position = hit.getBlockPos();
+        return vector(hit.getLocation().subtract(position.getX(), position.getY(), position.getZ()));
+    }
+
+    /** Bedrock spells a face with a capital, using the same six names Java does. */
+    private static String face(Direction direction) {
+        String name = direction.getName();
+        return Character.toUpperCase(name.charAt(0)) + name.substring(1);
+    }
+
+    private record Placement(UUID player, ResourceKey<Level> dimension, BlockPos clicked, Direction face,
+        Block placing, boolean clickedHeld, boolean beyondHeld) {
+    }
+
+    /**
+     * What a player looked like at the end of the last tick.
+     *
+     * Fabric offers no callback for a game mode, a dimension, an inventory slot or a chargeable item
+     * changing, so each is found by comparing the player against the tick before.
+     */
+    private static final class PlayerWatch {
+        private final List<ItemStack> inventory = new ArrayList<>();
+        private GameType gameMode;
+        private ResourceKey<Level> dimension;
+        private Vec3 location;
+        private ItemStack using = ItemStack.EMPTY;
+        private int useDuration;
+
+        private PlayerWatch(ServerPlayer player) {
+            gameMode = Platform.gameMode(player);
+            dimension = player.level().dimension();
+            location = player.position();
+            snapshot(player);
+        }
+
+        private void compare(ServerPlayer player, ScriptHost scripts) {
+            gameModeChanged(player, scripts);
+            dimensionChanged(player, scripts);
+            inventoryChanged(player, scripts);
+            itemUseChanged(player, scripts);
+            location = player.position();
+        }
+
+        private void gameModeChanged(ServerPlayer player, ScriptHost scripts) {
+            GameType current = Platform.gameMode(player);
+            if (current == gameMode) return;
+
+            Map<String, Object> fields = new LinkedHashMap<>();
+            fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
+            fields.put("fromGameMode", gameMode.getName());
+            fields.put("toGameMode", current.getName());
+            gameMode = current;
+            scripts.raiseWorldEvent("playerGameModeChange", fields);
+        }
+
+        private void dimensionChanged(ServerPlayer player, ScriptHost scripts) {
+            ResourceKey<Level> current = player.level().dimension();
+            if (current.equals(dimension)) return;
+
+            Map<String, Object> fields = new LinkedHashMap<>();
+            fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
+            fields.put("fromDimension", Platform.idOf(dimension).toString());
+            fields.put("fromLocation", vector(location));
+            fields.put("toDimension", Platform.idOf(current).toString());
+            fields.put("toLocation", vector(player.position()));
+            dimension = current;
+            scripts.raiseWorldEvent("playerDimensionChange", fields);
+        }
+
+        private void inventoryChanged(ServerPlayer player, ScriptHost scripts) {
+            Inventory carried = player.getInventory();
+            for (int i = 0; i < carried.getContainerSize() && i < inventory.size(); i++) {
+                ItemStack now = carried.getItem(i);
+                ItemStack before = inventory.get(i);
+                if (ItemStack.matches(before, now)) continue;
+
+                Map<String, Object> fields = new LinkedHashMap<>();
+                fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
+                fields.put("slot", i);
+                fields.put("itemStack", item(now));
+                fields.put("beforeItemStack", item(before));
+                scripts.raiseWorldEvent("playerInventoryItemChange", fields);
+            }
+            snapshot(player);
+        }
+
+        /**
+         * The four events a chargeable item raises.
+         *
+         * A charge that ran its course leaves no ticks on the clock and one the player let go of
+         * does, which is how the complete and the release events are told apart. Bedrock raises the
+         * stop event for both.
+         */
+        private void itemUseChanged(ServerPlayer player, ScriptHost scripts) {
+            if (player.isUsingItem()) {
+                boolean starting = using.isEmpty();
+                if (starting) using = player.getUseItem().copy();
+                useDuration = player.getUseItemRemainingTicks();
+                if (starting) raiseItemUse("itemStartUse", player, scripts);
+                return;
+            }
+            if (using.isEmpty()) return;
+
+            raiseItemUse(useDuration <= 1 ? "itemCompleteUse" : "itemReleaseUse", player, scripts);
+            raiseItemUse("itemStopUse", player, scripts);
+            using = ItemStack.EMPTY;
+        }
+
+        private void raiseItemUse(String event, ServerPlayer player, ScriptHost scripts) {
+            Map<String, Object> fields = new LinkedHashMap<>();
+            fields.put("source", new ScriptHost.EntityHandle(player.getStringUUID()));
+            fields.put("itemStack", item(using));
+            fields.put("useDuration", useDuration);
+            scripts.raiseWorldEvent(event, fields);
+        }
+
+        private void snapshot(ServerPlayer player) {
+            Inventory carried = player.getInventory();
+            inventory.clear();
+            for (int i = 0; i < carried.getContainerSize(); i++) inventory.add(carried.getItem(i).copy());
+        }
+    }
+}

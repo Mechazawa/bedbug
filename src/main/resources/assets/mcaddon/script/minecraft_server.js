@@ -37,7 +37,7 @@ export const Direction = Object.freeze({
 });
 
 export const GameMode = Object.freeze({
-    Survival: "survival", Creative: "creative", Adventure: "adventure", Spectator: "spectator",
+    Survival: "Survival", Creative: "Creative", Adventure: "Adventure", Spectator: "Spectator",
 });
 
 export const EquipmentSlot = Object.freeze({
@@ -456,14 +456,19 @@ export class Entity {
     }
 
     teleport(location, options) {
-        bridge.teleport(this.id, location.x, location.y, location.z,
-            options?.dimension?.id ?? null,
-            options?.rotation?.x ?? null, options?.rotation?.y ?? null);
+        return bridge.teleport(this.id, location.x, location.y, location.z, JSON.stringify({
+            dimension: options?.dimension?.id,
+            rotation: options?.rotation && { x: options.rotation.x, y: options.rotation.y },
+            facingLocation: options?.facingLocation && {
+                x: options.facingLocation.x, y: options.facingLocation.y, z: options.facingLocation.z,
+            },
+            keepVelocity: options?.keepVelocity === true,
+            checkForBlocks: options?.checkForBlocks === true,
+        }));
     }
 
     tryTeleport(location, options) {
-        this.teleport(location, options);
-        return true;
+        return this.teleport(location, options) === true;
     }
 
     remove() {
@@ -554,11 +559,13 @@ export class Entity {
     }
 
     getEffects() {
-        return [];
+        return JSON.parse(bridge.entityEffects(this.id)).map(effect => ({ ...effect, isValid: true }));
     }
 
-    getEffect() {
-        return undefined;
+    getEffect(type) {
+        const id = typeof type === "string" ? type : type?.id;
+        const wanted = id?.includes(":") ? id : "minecraft:" + id;
+        return this.getEffects().find(effect => effect.typeId === wanted);
     }
 
     addEffect(type, duration, options) {
@@ -587,8 +594,10 @@ export class Entity {
     }
 
     applyDamage(amount, options) {
-        return bridge.applyDamage(this.id, amount, options?.cause ?? "none",
-            options?.damagingEntity?.id ?? null);
+        // The projectile form of the options carries no cause of its own.
+        return bridge.applyDamage(this.id, amount,
+            options?.damagingProjectile ? "projectile" : options?.cause ?? "none",
+            (options?.damagingEntity ?? options?.damagingProjectile)?.id ?? null);
     }
 }
 
@@ -629,7 +638,7 @@ export class Player extends Entity {
     }
 
     playSound(soundId, options) {
-        bridge.playSoundAt(this.id, soundId, options?.volume ?? 1, options?.pitch ?? 1);
+        bridge.playSoundTo(this.id, soundId, options?.volume ?? 1, options?.pitch ?? 1);
     }
 
     getSpawnPoint() {
@@ -841,7 +850,7 @@ class EventSignal {
     }
 
     emit(event) {
-        const ready = this.shape ? this.shape(event) : event;
+        const ready = this.shape ? this.shape(shapeFields(event)) : shapeFields(event);
         for (const listener of this.#listeners.slice()) {
             try {
                 listener.callback(ready);
@@ -851,6 +860,40 @@ class EventSignal {
         }
         return ready;
     }
+}
+
+function blockFrom(fields) {
+    return new Block(fields.dimension, fields.x, fields.y, fields.z);
+}
+
+function permutationFrom(fields) {
+    return BlockPermutation.resolve(fields.typeId, { ...fields.states });
+}
+
+/**
+ * The event fields that reach a listener as an object rather than as what Java sent.
+ *
+ * Only primitives and plain objects cross the boundary, so a block arrives as its coordinates and
+ * its dimension id, an item stack as its type and count, and a dimension as its id alone. A field
+ * means the same thing in every event that carries it, so one table covers all of them.
+ */
+const FIELD_SHAPES = {
+    beforeItemStack: itemFrom,
+    block: blockFrom,
+    brokenBlockPermutation: permutationFrom,
+    dimension: dimensionOf,
+    fromDimension: dimensionOf,
+    itemStack: itemFrom,
+    itemStackAfterBreak: itemFrom,
+    itemStackBeforeBreak: itemFrom,
+    toDimension: dimensionOf,
+};
+
+function shapeFields(event) {
+    for (const name of Object.keys(FIELD_SHAPES)) {
+        if (event[name] !== undefined && event[name] !== null) event[name] = FIELD_SHAPES[name](event[name]);
+    }
+    return event;
 }
 
 /**
@@ -864,6 +907,13 @@ const EVENT_SHAPES = {
         // Nothing tells the mod which component groups an event changed, so a pack that asks is
         // told none rather than being handed a method that is not there.
         event.getModifiers = () => [];
+        return event;
+    },
+
+    entityItemDrop(event) {
+        // Bedrock hands over a list, and one throw drops one stack.
+        event.items = [event.item];
+        delete event.item;
         return event;
     },
 };
@@ -893,11 +943,17 @@ function eventGroup(raised) {
 /** Every event name this mod actually raises, by the group it belongs to. */
 const RAISED = {
     worldAfter: [
-        "dataDrivenEntityTrigger", "entityDie", "entityHurt", "entityLoad", "entityRemove",
-        "entitySpawn", "playerBreakBlock", "playerInteractWithBlock", "playerInteractWithEntity",
-        "playerJoin", "playerSpawn", "worldLoad",
+        "dataDrivenEntityTrigger", "entityDie", "entityHitEntity", "entityHurt", "entityItemDrop",
+        "entityLoad", "entityRemove", "entitySpawn", "itemCompleteUse", "itemReleaseUse",
+        "itemStartUse", "itemStartUseOn", "itemStopUse", "itemUse", "playerBreakBlock",
+        "playerDimensionChange", "playerGameModeChange", "playerInteractWithBlock",
+        "playerInteractWithEntity", "playerInventoryItemChange", "playerJoin", "playerLeave",
+        "playerPlaceBlock", "playerSpawn", "worldLoad",
     ],
-    worldBefore: [],
+    worldBefore: [
+        "entityHurt", "entityRemove", "itemUse", "playerBreakBlock", "playerInteractWithBlock",
+        "playerInteractWithEntity", "playerLeave",
+    ],
     systemAfter: ["scriptEventReceive"],
     systemBefore: ["startup"],
 };
@@ -941,8 +997,9 @@ export class World {
     }
 
     getPlayers(options) {
-        const players = this.getAllPlayers();
-        return options === undefined ? players : players.filter(player => player.matches(options));
+        return options === undefined
+            ? this.getAllPlayers()
+            : list(bridge.matchingPlayers(JSON.stringify(options))).map(entityFor);
     }
 
     getEntity(id) {
