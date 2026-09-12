@@ -204,7 +204,7 @@ public final class ServerHooks {
 
     private static void stop() {
         if (scripts != null) {
-            scripts.raiseSystemEvent("shutdown", Map.of());
+            scripts.raiseSystemBeforeEvent("shutdown", Map.of());
             scripts.stop();
             scripts = null;
         }

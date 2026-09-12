@@ -135,15 +135,27 @@ public final class WorldEvents {
         return fields;
     }
 
-    /** Somebody walking over a dropped item and taking it. */
-    public static void pickedUp(Player player, ItemEntity item) {
+    /**
+     * Somebody walking over a dropped item and taking it, which a pack may refuse.
+     *
+     * Answering true leaves the item on the ground, so the before event runs first and the after
+     * event only follows once the pickup is going to happen.
+     */
+    public static boolean pickupRefused(Player player, ItemEntity item) {
         ScriptHost scripts = ServerHooks.scripts();
-        if (scripts == null || !(player instanceof ServerPlayer)) return;
+        if (scripts == null || !(player instanceof ServerPlayer)) return false;
 
+        if (scripts.raiseCancellable("entityItemPickup", pickup(player, item))) return true;
+
+        scripts.raiseWorldEvent("entityItemPickup", pickup(player, item));
+        return false;
+    }
+
+    private static Map<String, Object> pickup(Player player, ItemEntity item) {
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("entity", new ScriptHost.EntityHandle(player.getStringUUID()));
         fields.put("itemStack", item(item.getItem()));
-        scripts.raiseWorldEvent("entityItemPickup", fields);
+        return fields;
     }
 
     /**

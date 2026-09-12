@@ -224,6 +224,11 @@ public final class ScriptHost {
         raise("systemAfter", name, fields);
     }
 
+    /** `system.beforeEvents.<name>`, which is where a pack learns the server is going down. */
+    public void raiseSystemBeforeEvent(String name, Map<String, Object> fields) {
+        raise("systemBefore", name, fields);
+    }
+
     /**
      * Holds a world event back until the next tick.
      *

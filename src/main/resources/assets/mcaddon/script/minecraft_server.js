@@ -948,14 +948,15 @@ const RAISED = {
         "itemStartUse", "itemStartUseOn", "itemStopUse", "itemUse", "playerBreakBlock",
         "playerDimensionChange", "playerGameModeChange", "playerInteractWithBlock",
         "playerInteractWithEntity", "playerInventoryItemChange", "playerJoin", "playerLeave",
-        "playerPlaceBlock", "playerSpawn", "worldLoad",
+        "playerPlaceBlock", "playerSpawn", "worldLoad", "effectAdd", "entityItemPickup",
+        "buttonPush", "projectileHitEntity", "projectileHitBlock",
     ],
     worldBefore: [
         "entityHurt", "entityRemove", "itemUse", "playerBreakBlock", "playerInteractWithBlock",
-        "playerInteractWithEntity", "playerLeave",
+        "playerInteractWithEntity", "playerLeave", "effectAdd", "entityItemPickup",
     ],
     systemAfter: ["scriptEventReceive"],
-    systemBefore: ["startup"],
+    systemBefore: ["startup", "shutdown"],
 };
 
 export class World {
