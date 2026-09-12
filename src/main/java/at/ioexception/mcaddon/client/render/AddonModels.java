@@ -50,6 +50,9 @@ public final class AddonModels {
         }
     }
 
+    /** The entities already named as drawing nothing, so the log carries each of them once. */
+    private static final Set<String> REPORTED = new HashSet<>();
+
     private final BedrockAssets assets;
     private final ConvertedPack converted;
     private final Map<String, BakedGeometry> baked = new HashMap<>();
@@ -85,7 +88,35 @@ public final class AddonModels {
             Pass glow = emissivePass(pass, definition, environment, controller);
             if (glow != null) passes.add(glow);
         }
-        return passes;
+        return passes.isEmpty() ? fallback(definition) : passes;
+    }
+
+    /**
+     * What to draw for an entity whose own controllers chose nothing.
+     *
+     * A controller picks its geometry and texture by name, and a name it works out that the entity
+     * does not carry leaves the pass with nothing to draw. Drawing nothing at all makes the entity
+     * invisible while whatever is worn over it stays in the air, so the first geometry and texture
+     * the entity does carry are drawn instead and the miss is reported.
+     */
+    private List<Pass> fallback(ClientEntityDefinition definition) {
+        String geometryId = definition.geometry().get("default");
+        if (geometryId == null) {
+            geometryId = definition.geometry().values().stream().findFirst().orElse(null);
+        }
+        String texturePath = definition.textures().getOrDefault("default",
+            definition.textures().values().stream().findFirst().orElse(null));
+
+        BakedGeometry geometry = geometryId == null ? null : bake(geometryId);
+        if (geometry == null || texturePath == null) return List.of();
+
+        if (REPORTED.add(definition.identifier())) {
+            at.ioexception.mcaddon.McAddon.LOGGER.warn(
+                "{} chose no model from its render controllers; drawing its default.",
+                definition.identifier());
+        }
+        return List.of(new Pass(geometry, textureId(texturePath), Set.of(),
+            new UvShift(0, 0), null));
     }
 
     private Pass resolvePass(RenderController controller, ClientEntityDefinition definition,
