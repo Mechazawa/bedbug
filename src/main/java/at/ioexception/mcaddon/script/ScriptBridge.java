@@ -6,6 +6,7 @@ import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.script.surface.Blocks;
 import at.ioexception.mcaddon.script.surface.Containers;
 import at.ioexception.mcaddon.script.surface.EntityMembers;
+import at.ioexception.mcaddon.script.surface.GameTests;
 import at.ioexception.mcaddon.script.surface.Items;
 import at.ioexception.mcaddon.script.surface.Players;
 import at.ioexception.mcaddon.script.surface.Registries;
@@ -99,6 +100,9 @@ public final class ScriptBridge {
     @HostAccess.Export
     public final Worlds worlds;
 
+    @HostAccess.Export
+    public final GameTests gametests;
+
     ScriptBridge(MinecraftServer server, AddonState state, ScriptCoverage coverage) {
         this.server = server;
         this.state = state;
@@ -110,6 +114,7 @@ public final class ScriptBridge {
         this.registries = new Registries(server, coverage);
         this.entityMembers = new EntityMembers(server, coverage, state);
         this.worlds = new Worlds(server, coverage);
+        this.gametests = new GameTests(server, coverage);
     }
 
     void beginTick(long budgetNanos) {
@@ -1152,10 +1157,21 @@ public final class ScriptBridge {
      */
     private int run(CommandSourceStack source, String command) {
         String trimmed = command.startsWith("/") ? command.substring(1) : command;
+        CommandSourceStack quiet = source.withSuppressedOutput();
+
+        // Brigadier raises the same kind of failure for a command it cannot read and one that read
+        // fine and found nothing to do. Only the first is a gap; `forceload query` finding no chunks
+        // is the game answering the question, and reporting it would name a gap that is not there.
+        com.mojang.brigadier.ParseResults<CommandSourceStack> parsed =
+            server.getCommands().getDispatcher().parse(trimmed, quiet);
+        if (!parsed.getExceptions().isEmpty() || parsed.getReader().canRead()) {
+            coverage.failedCommand(trimmed, "the command could not be read");
+            return 0;
+        }
+
         try {
-            return server.getCommands().getDispatcher().execute(trimmed, source.withSuppressedOutput());
-        } catch (CommandSyntaxException error) {
-            coverage.failedCommand(trimmed, error.getMessage());
+            return server.getCommands().getDispatcher().execute(parsed);
+        } catch (CommandSyntaxException ranAndFoundNothing) {
             return 0;
         }
     }

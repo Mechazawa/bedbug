@@ -31,6 +31,7 @@ stonecutter {
         replace("@GameTest(structure = ", "@GameTest(template = ")
         // Mojang counts the same limit in ticks under a different name.
         replace("maxTicks = ", "timeoutTicks = ")
+        replace("ChunkPos.pack(", "ChunkPos.asLong(")
     }
 }
 

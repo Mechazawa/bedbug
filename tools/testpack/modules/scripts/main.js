@@ -39,7 +39,8 @@ system.run(() => {
         report("common.numberRange", new NumberRange(1, 4).max);
         report("serverUi.form", new ActionFormData().title("probe").button("ok").constructor.name);
 
-        const registration = register("probe", "one", () => {}).tag(Tags.suiteDefault).maxTicks(20);
+        const registration = register("probe", "one", test => test.succeed())
+            .tag(Tags.suiteDefault).maxTicks(20);
         report("gametest.registration", registration.constructor.name);
     } catch (error) {
         report("threw", error && error.stack ? error.stack : String(error));

@@ -60,6 +60,10 @@ server decides what happens; the client draws it.
   and nothing else on disk. Commands a script registers on startup become real commands,
   `@minecraft/server-ui` forms become real screens, and the world, system, entity, dimension, block,
   scoreboard, game rule and structure surfaces are answered by the game.
+- The tests a behaviour pack ships through `@minecraft/server-gametest`. `/gametest run <name>`,
+  `/gametest runset <tag>` and `/gametest runall` build the structure a test named out of the pack's
+  own `.mcstructure`, place it beside you, hand the pack's function a `Test` bound to that area and
+  report what it decided. `/gametest clearall` takes the areas back.
 - The other modules a pack may import: `@minecraft/math`, `@minecraft/common`, and
   `@minecraft/vanilla-data`, whose tables of vanilla ids are read from this game's own registries so
   they hold what the version you play ships.
@@ -84,13 +88,15 @@ belong there.
 `inputpermission`, `immutableworld`, `wsserver` and `connect` name a renderer feature Java has none
 of, or a server Java does not speak to. A function using one keeps its other lines and the dropped
 command is reported. `testfor`, `testforblock`, `testforblocks` and `titleraw` are translated;
-`playanimation`, `event`, `scriptevent`, `music`, `toggledownfall`, `structure` and `mobevent` are
-registered by this mod.
+`playanimation`, `event`, `scriptevent`, `music`, `toggledownfall`, `structure`, `mobevent` and
+`gametest` are registered by this mod.
 
-**The tests a pack ships.** A pack can import `@minecraft/server-gametest` and register its tests,
-and the registration is taken and counted rather than refused, because refusing it would cost the
-pack the rest of its script. No test is run: a Bedrock test builds its world from a structure and
-asserts against Bedrock components, and Java's framework of the same name shares neither.
+**The player a test drives itself.** `Test.spawnSimulatedPlayer` and every member of the
+`SimulatedPlayer` it answers with describe a player the game walks, attacks and builds with. Java's
+own stand-in player lives inside its test framework and carries none of that vocabulary, so each of
+those members is counted by `/mcaddon scripts` instead of doing nothing in silence. A test that
+spawns mobs, places blocks and asserts against the world runs. Running one test at several rotations
+or several times over is counted the same way: a run places one structure and calls the test once.
 
 Surface lighting from a physically based texture set is the one thing that depends on what the
 player has installed: the emissive channel is drawn again at full brightness with or without a

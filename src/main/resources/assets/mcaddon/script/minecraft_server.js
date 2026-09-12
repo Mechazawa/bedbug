@@ -3067,6 +3067,9 @@ const customEnums = new Map();
 globalThis.__mcaddon_runtime__ = {
     tick(tick) {
         system.pump(tick);
+        // Only a pack importing `@minecraft/server-gametest` installs this, so its absence means no
+        // pack ships tests and there is nothing to advance.
+        globalThis.__mcaddon_gametests__?.pump(tick);
     },
     entityFor,
     dimensionOf,

@@ -103,6 +103,14 @@ BUILD_FAILED = re.compile(r"FAILURE: Build failed|BUILD FAILED")
 # told apart from one the game does not know.
 SUMMONED = re.compile(r"Summoned new ")
 
+# The verdict a pack's own `@minecraft/server-gametest` test reaches, and the two the probe pack
+# ships. One of them is written to fail, so a run where everything passed means the failure was
+# never noticed and the verdict is worth no more than a run where nothing was tested at all.
+TEST_PASSED = re.compile(r"([\w.:-]+) passed\.")
+TEST_FAILED = re.compile(r"([\w.:-]+) failed: ")
+PROBE_PASSES = "probe:floor_is_stone"
+PROBE_FAILS = "probe:diamond_is_missing"
+
 # Counts the mod reports, pulled back out of the log so they can be checked against the source pack.
 REPORTED = (
     ("textures", r"Converted .*?: (\d+) textures"),
@@ -320,6 +328,7 @@ def console_script(identifiers: list[str], summons: int) -> list[tuple[float, st
     steps = [(2.0, "mcaddon packs"), (1.0, "mcaddon entities"), (1.0, "mcaddon scripts")]
     steps += [(0.3, f"summon {identifier} 0 100 0") for identifier in chosen]
     steps += [(2.0, f"kill @e[type={identifier}]") for identifier in chosen]
+    steps += [(2.0, "gametest runall"), (4.0, "gametest clearall")]
     steps += [(2.0, "mcaddon scripts")]
     return steps
 
@@ -598,6 +607,28 @@ def gradle_failed(lines: list[str], outcome: str, verdict: Verdict) -> None:
         verdict.fail("gradle failed", "the version did not build or the run task failed", failed)
 
 
+def pack_gametests(lines: list[str], verdict: Verdict) -> None:
+    """Checks that the tests a pack declares itself ran, and that a failing one was called failing.
+
+    The probe pack ships one test written to pass and one written to fail, so both verdicts have to
+    appear. Counting only the passes would call a run green where every test silently never started.
+    """
+    passed = {match.group(1) for match in (TEST_PASSED.search(line) for line in lines) if match}
+    failed = {match.group(1) for match in (TEST_FAILED.search(line) for line in lines) if match}
+    if not passed and not failed:
+        return
+
+    verdict.notes.append(f"{len(passed)} pack-declared test(s) passed, {len(failed)} failed")
+    if PROBE_PASSES not in passed:
+        verdict.fail("a pack's own test never passed",
+                     f"{PROBE_PASSES} reached no verdict, so nothing proves a pack's tests run")
+    if PROBE_FAILS not in failed:
+        verdict.fail("a failing test was not reported as failing",
+                     f"{PROBE_FAILS} is written to fail and the run did not say so")
+    for name in sorted(failed - {PROBE_FAILS}):
+        verdict.fail("a pack's own test failed", name)
+
+
 def check_server(root: Path, version: str, timeout: float, summons: int, verbose: bool) -> Verdict:
     verdict = Verdict(f"{version} server")
     if occupied(SERVER, verdict):
@@ -621,6 +652,8 @@ def check_server(root: Path, version: str, timeout: float, summons: int, verbose
     if summoned < attempted:
         verdict.fail("entity would not summon",
                      f"{attempted} summon commands, {summoned} entities")
+
+    pack_gametests(lines, verdict)
 
     reported = reported_counts(lines)
     verdict.counts = {"source": expected, "reported by the mod": reported}

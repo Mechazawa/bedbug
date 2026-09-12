@@ -2,11 +2,17 @@ package at.ioexception.mcaddon.server;
 
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonParticles;
+import at.ioexception.mcaddon.script.ScriptHost;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
@@ -19,11 +25,13 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 
 import java.util.Collection;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Predicate;
 
 /**
  * The Bedrock commands a pack expects to exist and Java does not ship.
  *
- * Both are things this mod already does from script, so a `.mcfunction` or a command block gets the
+ * Most are things this mod already does from script, so a `.mcfunction` or a command block gets the
  * same behaviour the pack's script half gets. What Bedrock's own form takes and this does not is
  * `/playanimation`'s `next_state` and `controller`, which name a scratch animation controller; a
  * stop expression covers what packs actually use them for.
@@ -109,6 +117,96 @@ public final class BedrockCommands {
                 .then(Commands.argument("targets", EntityArgument.entities())
                     .then(Commands.argument("event", StringArgumentType.greedyString())
                         .executes(BedrockCommands::entityEvent)))));
+
+        // The tests a behaviour pack registered through `@minecraft/server-gametest`. A test names
+        // itself `class:name`, which Brigadier's unquoted string stops at, so the name is greedy.
+        dispatcher.register(Commands.literal("gametest")
+            .requires(source -> Platform.allowedAt(source, 1))
+            .then(Commands.literal("run")
+                .then(Commands.argument("name", StringArgumentType.greedyString())
+                    .suggests(BedrockCommands::testNames)
+                    .executes(command -> runTests(command.getSource(),
+                        named(StringArgumentType.getString(command, "name"))))))
+            .then(Commands.literal("runset")
+                .then(Commands.argument("tag", StringArgumentType.greedyString())
+                    .executes(command -> runTests(command.getSource(),
+                        tagged(StringArgumentType.getString(command, "tag"))))))
+            .then(Commands.literal("runall").executes(command -> runTests(command.getSource(), test -> true)))
+            .then(Commands.literal("clearall").executes(command -> clearTests(command.getSource()))));
+    }
+
+    /** A test the name picks out, by its full `class:name` or by its name alone. */
+    private static Predicate<JsonObject> named(String wanted) {
+        String asked = wanted.trim();
+        return test -> asked.equalsIgnoreCase(text(test, "name"))
+            || asked.equalsIgnoreCase(text(test, "testName"));
+    }
+
+    private static Predicate<JsonObject> tagged(String wanted) {
+        String asked = wanted.trim();
+        return test -> test.getAsJsonArray("tags").asList().stream()
+            .anyMatch(tag -> asked.equalsIgnoreCase(tag.getAsString()));
+    }
+
+    /**
+     * Builds an area for every matching test and hands each to the script that registered it.
+     *
+     * The area is prepared here rather than in the script, because where a test goes depends on who
+     * asked for it, and the verdict comes back to that same source once the test settles.
+     */
+    private static int runTests(CommandSourceStack source, Predicate<JsonObject> wanted) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null) {
+            source.sendFailure(Component.literal("No pack scripts are running."));
+            return 0;
+        }
+
+        JsonArray tests = JsonParser.parseString(scripts.gameTests()).getAsJsonArray();
+        int started = 0;
+        for (int i = 0; i < tests.size(); i++) {
+            JsonObject test = tests.get(i).getAsJsonObject();
+            if (!wanted.test(test)) continue;
+
+            String placement = scripts.bridge().gametests.begin(source, text(test, "structureName"),
+                test.get("padding").getAsInt());
+            scripts.startGameTest(i, placement);
+            started++;
+        }
+
+        if (started == 0) {
+            source.sendFailure(Component.literal("No loaded pack has registered such a test."));
+            return 0;
+        }
+        int running = started;
+        source.sendSuccess(() -> Component.literal("Started " + running + " test(s)."), false);
+        return started;
+    }
+
+    private static int clearTests(CommandSourceStack source) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null) {
+            source.sendFailure(Component.literal("No pack scripts are running."));
+            return 0;
+        }
+
+        scripts.stopGameTests();
+        int cleared = scripts.bridge().gametests.clearAll();
+        source.sendSuccess(() -> Component.literal("Cleared " + cleared + " test area(s)."), false);
+        return cleared;
+    }
+
+    private static CompletableFuture<Suggestions> testNames(CommandContext<CommandSourceStack> command,
+        SuggestionsBuilder builder) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null) return builder.buildFuture();
+
+        JsonParser.parseString(scripts.gameTests()).getAsJsonArray()
+            .forEach(test -> builder.suggest(text(test.getAsJsonObject(), "name")));
+        return builder.buildFuture();
+    }
+
+    private static String text(JsonObject test, String key) {
+        return test.has(key) && !test.get(key).isJsonNull() ? test.get(key).getAsString() : "";
     }
 
     /**

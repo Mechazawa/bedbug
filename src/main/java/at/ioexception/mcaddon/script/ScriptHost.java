@@ -217,6 +217,37 @@ public final class ScriptHost {
         }, new com.google.gson.JsonObject());
     }
 
+    /**
+     * The tests the packs registered, as JSON, and an empty list while no pack imports the module.
+     *
+     * The module is only evaluated when a pack imports it, so the hook it installs stands in for
+     * whether any pack ships tests at all.
+     */
+    public String gameTests() {
+        return enter("listing the tests", () -> {
+            Value tests = context.getBindings("js").getMember("__mcaddon_gametests__");
+            return tests == null ? "[]" : tests.invokeMember("list").asString();
+        }, "[]");
+    }
+
+    /** Starts one registered test in the area the caller already built for it. */
+    public void startGameTest(int index, String placementJson) {
+        enter("starting a test", () -> {
+            Value tests = context.getBindings("js").getMember("__mcaddon_gametests__");
+            if (tests != null) tests.invokeMember("start", index, placementJson);
+            return null;
+        }, null);
+    }
+
+    /** Abandons every test still running, which is what clearing their areas means for the script. */
+    public void stopGameTests() {
+        enter("stopping the tests", () -> {
+            Value tests = context.getBindings("js").getMember("__mcaddon_gametests__");
+            if (tests != null) tests.invokeMember("stop");
+            return null;
+        }, null);
+    }
+
     /** Hands a form's answer back to the promise the pack is waiting on. */
     public void formResponse(int formId, String answer) {
         enter("handling a form answer", () -> {

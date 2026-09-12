@@ -128,6 +128,20 @@ These are the checks that catch things:
   It prints a `MODULEPROBE` line per answer, so a run carrying all of them says every module
   resolved. A missing module or a missing named export shows up instead as the pack's script
   failing to load, with no `MODULEPROBE` line at all.
+- **`tools/testpack/build_gametests.py`** builds a third add-on, which registers two
+  `@minecraft/server-gametest` tests and ships the `.mcstructure` both of them build. Its sources
+  are a manifest and one script under `tools/testpack/gametests/`; the structure is written by the
+  script, in Bedrock's own little endian NBT, so no file here came out of the game.
+
+  ```bash
+  python3 tools/testpack/build_gametests.py --version 26.2
+  ```
+
+  Started from the server console, `gametest run probe:floor_is_stone` has to answer `passed` and
+  `gametest run probe:diamond_is_missing` has to answer with the message the assertion raised. A
+  test only advances while the server ticks, so a server left empty past its
+  `pause-when-empty-seconds` reaches no verdict at all; set it to `0` to work at that pace by hand.
+  `verify.py` runs its tests well inside the default minute.
 - **`tools/verify/verify.py`** does those game runs without a human watching the log. It starts the
   game, reads the output back for the failures that only appear at runtime, writes
   `build/verify/verdict.json` and a log per run under `build/verify/`, and exits non-zero when
@@ -147,7 +161,10 @@ These are the checks that catch things:
 
   A green `run` proves the mod started, every mixin applied, the packs converted and registered, the
   server reached `Done (`, and no pack script hit a missing `@minecraft/server` member while the
-  pack's own entities were summoned and killed. It proves nothing about rendering.
+  pack's own entities were summoned and killed. It also types `gametest runall`, which is why the
+  probe pack ships one test written to pass and one written to fail: a run has to report both, so a
+  run where every test silently never started fails the same way as one where a test broke. It
+  proves nothing about rendering.
 
   A green `client` proves what the server half cannot reach: every mixin applied on the drawing side,
   every model a pack's items and blocks name loaded, every texture those models name was stitched,
@@ -234,7 +251,7 @@ build.named.gradle.kts       26.2, which Mojang ships unobfuscated
 gradle/mod.gradle.kts        Shared build logic: toolchain, GraalJS bundling, checkstyle, checkTools
 config/checkstyle/           Lint rules and the Stonecutter suppressions
 
-tools/testpack/              The two add-ons the harness checks against, and the scripts building them
+tools/testpack/              The three add-ons the harness checks against, and the scripts building them
 tools/verify/verify.py       End to end harness: drives a dev server and checks a conversion
 tools/preview/render.py      Offline model renderer
 tools/molang/MolangCheck.java  Molang conformance harness
@@ -250,6 +267,7 @@ src/main/java/at/ioexception/mcaddon/
   bedrock/entity/            Client entity definitions and the animator that runs them
   bedrock/behaviour/         Entities, items, blocks, recipes, loot, trading, spawn rules, filters
   script/                    GraalJS host, the bridge, pack-declared commands, coverage
+  structure/                 Bedrock `.mcstructure` reading, whose NBT is little endian
   entity/                    The one mob class every add-on entity uses
   block/                     The block class that carries a pack's own states
   server/                    Server lifecycle, commands, sensors, entity events, property sync
@@ -266,7 +284,8 @@ src/main/resources/assets/mcaddon/script/
   minecraft_common.js        The @minecraft/common error types and shapes
   minecraft_math.js          The @minecraft/math vectors, arithmetic only
   minecraft_vanilla_data.js  The @minecraft/vanilla-data tables, read from the registries
-  minecraft_server_gametest.js  The @minecraft/server-gametest surface, which runs no test
+  minecraft_server_gametest.js  The @minecraft/server-gametest surface: registrations, the Test
+                                object, the sequence and the runner the server tick drives
 ```
 
 `ScriptHost.MODULES` maps an import specifier to one of these files. A module is linked before any
