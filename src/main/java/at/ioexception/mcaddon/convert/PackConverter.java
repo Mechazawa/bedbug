@@ -8,6 +8,7 @@ import at.ioexception.mcaddon.bedrock.behaviour.ItemDefinition;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import at.ioexception.mcaddon.bedrock.molang.MolangValue;
+import at.ioexception.mcaddon.bedrock.particle.ParticleDefinition;
 import at.ioexception.mcaddon.block.AddonBlock;
 import at.ioexception.mcaddon.bedrock.behaviour.LootTableDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.RecipeDefinition;
@@ -101,6 +102,7 @@ public final class PackConverter {
                 writeLootTables(root, loot, namespace);
                 writeBlockModels(root, icons, blocks, assets, sprites);
                 writeAtlas(root, sprites);
+                writeParticles(pack, root, textures.paths());
                 writeFunctions(bundle, root, namespace);
             }
 
@@ -635,7 +637,8 @@ public final class PackConverter {
             writeCubeModel(assets, name, faces, geometryOf(block, geometries));
 
             JsonObject blockstate = new JsonObject();
-            blockstate.add("variants", variants(block, namespace, name, textureKeys, assets, geometries));
+            blockstate.add("variants",
+                variants(block, namespace, name, textureKeys, assets, geometries, sprites));
             write(assets.resolve("blockstates").resolve(name + ".json"), blockstate);
 
             JsonObject item = new JsonObject();
@@ -649,6 +652,44 @@ public final class PackConverter {
             definition.add("model", reference);
             write(assets.resolve("items").resolve(name + ".json"), definition);
         }
+    }
+
+    /**
+     * The sprite each particle effect is drawn from, named the way the game looks one up.
+     *
+     * A registered particle type reads `particles/<name>.json` for its sprites, and the sprites
+     * themselves come off the particle atlas rather than the block one, so both the definition and
+     * an atlas source are written. A pack's own particle texture is what its effect draws.
+     */
+    private static void writeParticles(BedrockPack pack, Path root, Map<String, String> texturePaths)
+        throws IOException {
+        Map<String, ParticleDefinition> particles = ParticleDefinition.readAll(pack);
+        if (particles.isEmpty()) return;
+
+        JsonArray atlas = new JsonArray();
+        for (ParticleDefinition particle : particles.values()) {
+            String sprite = particle.texture() == null ? null : texturePaths.get(particle.texture());
+            if (sprite == null) continue;
+
+            Names.Identifier id = Names.split(particle.identifier(), "mcaddon");
+            JsonArray textures = new JsonArray();
+            textures.add(sprite);
+
+            JsonObject definition = new JsonObject();
+            definition.add("textures", textures);
+            write(root.resolve("assets").resolve(id.namespace()).resolve("particles")
+                .resolve(id.path() + ".json"), definition);
+
+            JsonObject source = new JsonObject();
+            source.addProperty("type", "minecraft:single");
+            source.addProperty("resource", sprite);
+            atlas.add(source);
+        }
+        if (atlas.isEmpty()) return;
+
+        JsonObject sources = new JsonObject();
+        sources.add("sources", atlas);
+        write(root.resolve("assets/minecraft/atlases/particles.json"), sources);
     }
 
     /** Functions come from the behaviour packs, which is where a pack keeps its commands. */
@@ -668,7 +709,8 @@ public final class PackConverter {
      * Bedrock applies them in.
      */
     private static JsonObject variants(BlockDefinition block, String namespace, String name,
-        Map<String, String> textureKeys, Path assets, BedrockAssets geometries) throws IOException {
+        Map<String, String> textureKeys, Path assets, BedrockAssets geometries, Set<String> sprites)
+        throws IOException {
         JsonObject variants = new JsonObject();
         if (block.states().isEmpty()) {
             variants.add("", modelReference(namespace, name));
@@ -695,7 +737,11 @@ public final class PackConverter {
                     ? options.get(at).getAsString() : String.valueOf(at)));
             }
 
+            // A permutation may name a texture the block's own faces never do, and a sprite nothing
+            // names is never stitched, so the ones a variant reaches are collected here too.
             Map<String, String> faces = facesFor(block, chosen, textureKeys);
+            sprites.addAll(faces.values());
+
             String variantName = name + "_" + combination;
             writeCubeModel(assets, variantName, faces, geometryOf(block, geometries));
             variants.add(String.join(",", key), modelReference(namespace, variantName));
