@@ -65,6 +65,16 @@ for that this mod does not implement yet, which answers "will my pack work" with
 
 ## What does not work
 
+**Twenty entity components with no Java counterpart.** A villager's day (`behavior.sleep`,
+`behavior.play`, `behavior.take_flower`, `dweller`, `home`), breeding (`behavior.breed`,
+`behavior.follow_parent`, `breedable`, `offspring`), and the Bedrock-only ones (`balloonable`,
+`color`, `dimension_bound`, `hide`, `leashable_to`, `managed_wandering_trader`,
+`spawn_egg_interaction`, `target_nearby_sensor`, `behavior.celebrate_survive`,
+`behavior.drink_milk`, `behavior.drink_potion`, `behavior.share_items`). Java's own versions of
+these are written into the vanilla mobs that use them rather than exposed as parts a mob can be
+built from. Each is counted and named by `/mcaddon entities`, so a pack that relies on one is told
+rather than left wondering.
+
 **Stencil-masked material passes.** A material's alpha testing, blending, culling and emissiveness
 all become the render type the pass is drawn with. What cannot follow is the stencil buffer itself:
 a pass that exists only to write a mask is left out rather than drawn as a shape that does not
