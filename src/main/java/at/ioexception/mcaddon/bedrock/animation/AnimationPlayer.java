@@ -27,8 +27,22 @@ public final class AnimationPlayer {
         float animTime;
         float lastFiredTime = -1;
 
+        /** When this holds, the clip starts blending out. Null for a clip nothing is watching for. */
+        MolangExpression stopExpression;
+        float blendOutSeconds;
+
+        /** Full strength until the clip is on its way out, then down to zero over `blendOutSeconds`. */
+        float fade = 1f;
+
         Running(BedrockAnimation animation) {
             this.animation = animation;
+        }
+
+        /** Whether the clip is still worth drawing after this much time has passed. */
+        boolean fadeOut(float deltaSeconds) {
+            if (blendOutSeconds <= 0f) return false;
+            fade -= deltaSeconds / blendOutSeconds;
+            return fade > 0f;
         }
     }
 
@@ -49,9 +63,24 @@ public final class AnimationPlayer {
 
     /** Starts a clip, or restarts it from the beginning if it is already playing. */
     public void play(String name) {
+        play(name, null, 0f);
+    }
+
+    /**
+     * Starts a clip that ends on its own terms.
+     *
+     * `stopExpression` is what `/playanimation` takes: a Molang test that ends the clip once it
+     * holds, whatever the clip's own length says. `blendOutSeconds` is how long the clip takes to
+     * fade once it is over, so a gesture releases rather than snaps back.
+     */
+    public void play(String name, MolangExpression stopExpression, float blendOutSeconds) {
         BedrockAnimation animation = assets.animation(name);
         if (animation == null) return;
-        running.put(name, new Running(animation));
+
+        Running clip = new Running(animation);
+        clip.stopExpression = stopExpression;
+        clip.blendOutSeconds = blendOutSeconds;
+        running.put(name, clip);
     }
 
     /** Whether any clip in flight has run past its length, which `q.any_animation_finished` asks. */
@@ -104,10 +133,11 @@ public final class AnimationPlayer {
             fireTimeline(clip);
             applyBones(clip);
 
-            if (clip.animation.loop() == BedrockAnimation.Loop.ONCE
-                && clip.animTime >= clip.animation.length()) {
-                entries.remove();
-            }
+            boolean over = clip.stopExpression != null
+                && clip.stopExpression.evaluate(environment).truthy();
+            over |= clip.animation.loop() == BedrockAnimation.Loop.ONCE
+                && clip.animTime >= clip.animation.length();
+            if (over && !clip.fadeOut(deltaSeconds)) entries.remove();
         }
     }
 
@@ -138,9 +168,9 @@ public final class AnimationPlayer {
         if (!clip.animation.hasBones()) return;
 
         float position = clip.animation.positionAt(clip.animTime);
-        float weight = clip.animation.blendWeight() == null
+        float weight = clip.fade * (clip.animation.blendWeight() == null
             ? 1f
-            : clip.animation.blendWeight().asFloat(environment);
+            : clip.animation.blendWeight().asFloat(environment));
         if (weight == 0f) return;
 
         environment.setAnimTime(position);

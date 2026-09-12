@@ -6,6 +6,7 @@ import at.ioexception.mcaddon.bedrock.animation.AnimationPlayer;
 import at.ioexception.mcaddon.bedrock.animation.BonePose;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
+import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -129,8 +130,16 @@ public final class EntityAnimator {
 
     /** Plays a clip outside the controller graph, which is how a spoken line is delivered. */
     public void playDirect(String animationName) {
-        player.play(animationName);
-        direct.add(animationName);
+        playDirect(animationName, null, 0f);
+    }
+
+    /** The form `/playanimation` uses, where the pack says when the clip ends and how it lets go. */
+    public void playDirect(String animationName, String stopExpression, float blendOutSeconds) {
+        MolangExpression stop = stopExpression == null || stopExpression.isBlank()
+            ? null : MolangParser.parse(stopExpression);
+        String resolved = definition.resolveAnimation(animationName);
+        player.play(resolved, stop, blendOutSeconds);
+        direct.add(resolved);
     }
 
     public BonePose poseOf(String bone) {

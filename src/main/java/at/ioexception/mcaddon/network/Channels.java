@@ -100,13 +100,16 @@ public final class Channels {
 
     //? if >=1.21 {
     /** A clip the server asked an entity to play, which only the client can actually run. */
-    private record Animation(int entityId, String animation) implements CustomPacketPayload {
+    private record Animation(int entityId, String animation, String stopExpression, float blendOut)
+        implements CustomPacketPayload {
         private static final CustomPacketPayload.Type<Animation> TYPE =
             new CustomPacketPayload.Type<>(ANIMATION);
 
         private static final StreamCodec<FriendlyByteBuf, Animation> CODEC = StreamCodec.composite(
             ByteBufCodecs.VAR_INT, Animation::entityId,
             ByteBufCodecs.STRING_UTF8, Animation::animation,
+            ByteBufCodecs.STRING_UTF8, Animation::stopExpression,
+            ByteBufCodecs.FLOAT, Animation::blendOut,
             Animation::new);
 
         @Override
@@ -116,30 +119,42 @@ public final class Channels {
     }
     //?}
 
-    public static void sendAnimation(ServerPlayer player, int entityId, String animation) {
+    /** What a client needs to run one clip: which entity, which animation, and how it ends. */
+    @FunctionalInterface
+    public interface AnimationHandler {
+        void play(int entityId, String animation, String stopExpression, float blendOut);
+    }
+
+    public static void sendAnimation(ServerPlayer player, int entityId, String animation,
+        String stopExpression, float blendOut) {
         //? if >=1.21 {
-        ServerPlayNetworking.send(player, new Animation(entityId, animation));
+        ServerPlayNetworking.send(player, new Animation(entityId, animation, stopExpression, blendOut));
         //?} else {
         /*FriendlyByteBuf buffer = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         buffer.writeVarInt(entityId);
         buffer.writeUtf(animation);
+        buffer.writeUtf(stopExpression);
+        buffer.writeFloat(blendOut);
         ServerPlayNetworking.send(player, ANIMATION, buffer);
         *///?}
     }
 
-    public static void receiveAnimation(java.util.function.BiConsumer<Integer, String> handler) {
+    public static void receiveAnimation(AnimationHandler handler) {
         //? if >=1.21 {
         net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
             Animation.TYPE,
             (payload, context) -> context.client().execute(
-                () -> handler.accept(payload.entityId(), payload.animation())));
+                () -> handler.play(payload.entityId(), payload.animation(),
+                    payload.stopExpression(), payload.blendOut())));
         //?} else {
         /*net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
             ANIMATION,
             (client, network, buffer, sender) -> {
                 int entityId = buffer.readVarInt();
                 String animation = buffer.readUtf();
-                client.execute(() -> handler.accept(entityId, animation));
+                String stopExpression = buffer.readUtf();
+                float blendOut = buffer.readFloat();
+                client.execute(() -> handler.play(entityId, animation, stopExpression, blendOut));
             });
         *///?}
     }

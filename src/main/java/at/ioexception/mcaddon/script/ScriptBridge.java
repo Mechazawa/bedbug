@@ -40,6 +40,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.WeakHashMap;
 
 /**
  * The Java side of `@minecraft/server`.
@@ -411,11 +412,7 @@ public final class ScriptBridge {
     @HostAccess.Export
     public void playAnimation(String id, String animation) {
         Entity entity = entity(id);
-        if (entity == null) return;
-
-        for (ServerPlayer player : net.fabricmc.fabric.api.networking.v1.PlayerLookup.tracking(entity)) {
-            Channels.sendAnimation(player, entity.getId(), animation);
-        }
+        if (entity != null) at.ioexception.mcaddon.server.Animations.play(entity, animation, "", 0f);
     }
 
     @HostAccess.Export
@@ -667,7 +664,10 @@ public final class ScriptBridge {
         Entity spawned = Platform.createMob(type, level);
         if (spawned == null) return null;
         Platform.placeAt(spawned, x, y, z, 0, 0);
-        return level.addFreshEntity(spawned) ? spawned.getStringUUID() : null;
+        if (!level.addFreshEntity(spawned)) return null;
+
+        remember(spawned);
+        return spawned.getStringUUID();
     }
 
     @HostAccess.Export
@@ -676,7 +676,10 @@ public final class ScriptBridge {
         if (level == null) return null;
 
         ItemEntity dropped = new ItemEntity(level, x, y, z, stack(itemId, amount));
-        return level.addFreshEntity(dropped) ? dropped.getStringUUID() : null;
+        if (!level.addFreshEntity(dropped)) return null;
+
+        remember(dropped);
+        return dropped.getStringUUID();
     }
 
     @HostAccess.Export
@@ -880,6 +883,13 @@ public final class ScriptBridge {
 
     // Helpers, not exported
 
+    /**
+     * The entity an id names, whether or not the level has indexed it yet.
+     *
+     * A level indexes an entity by uuid a tick after it is added, so an entity a script is told
+     * about the moment it spawns cannot be found by uuid alone. The weak map covers that gap and
+     * lets go of the entity as soon as the world does.
+     */
     Entity entity(String id) {
         UUID uuid = uuid(id);
         if (uuid == null) return null;
@@ -887,7 +897,17 @@ public final class ScriptBridge {
             Entity found = Platform.entityByUuid(level, uuid);
             if (found != null) return found;
         }
-        return null;
+
+        java.lang.ref.WeakReference<Entity> pending = PENDING.get(uuid);
+        Entity fresh = pending == null ? null : pending.get();
+        return fresh == null || fresh.isRemoved() ? null : fresh;
+    }
+
+    private static final Map<UUID, java.lang.ref.WeakReference<Entity>> PENDING = new WeakHashMap<>();
+
+    /** Remembers an entity a script is about to be told about, before the level has indexed it. */
+    public static void remember(Entity entity) {
+        PENDING.put(entity.getUUID(), new java.lang.ref.WeakReference<>(entity));
     }
 
     BlockPos worldSpawn() {

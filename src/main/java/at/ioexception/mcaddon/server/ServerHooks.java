@@ -209,8 +209,10 @@ public final class ServerHooks {
     private static void raiseEntityEvent(String event, Entity entity) {
         if (scripts == null) return;
 
+        at.ioexception.mcaddon.script.ScriptBridge.remember(entity);
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("entity", new ScriptHost.EntityHandle(entity.getStringUUID()));
+        fields.put("cause", event.equals("entitySpawn") ? "Spawned" : "Loaded");
         scripts.raiseWorldEvent(event, fields);
 
         if (entity instanceof ServerPlayer player && event.equals("entityLoad")) {
@@ -229,6 +231,8 @@ public final class ServerHooks {
      */
     private static void registerCommands(CommandDispatcher<CommandSourceStack> dispatcher,
         CommandBuildContext context, Commands.CommandSelection selection) {
+        BedrockCommands.register(dispatcher);
+
         dispatcher.register(Commands.literal("scriptevent")
             .then(Commands.argument("id", StringArgumentType.word())
                 .then(Commands.argument("message", StringArgumentType.greedyString())
