@@ -19,6 +19,9 @@ public final class MolangParser {
     private final String source;
     private int at;
 
+    /** Set where the parser meets something it cannot read, which makes the whole value zero. */
+    private boolean malformed;
+
     private MolangParser(String source) {
         this.source = source;
         this.at = 0;
@@ -60,7 +63,8 @@ public final class MolangParser {
             else break;
         }
 
-        if (statements.isEmpty()) return MolangExpression.ZERO;
+        skipSpace();
+        if (malformed || at < source.length() || statements.isEmpty()) return MolangExpression.ZERO;
         if (statements.size() == 1) return statements.get(0);
 
         List<MolangExpression> program = List.copyOf(statements);
@@ -274,7 +278,9 @@ public final class MolangParser {
         if (Character.isDigit(start) || start == '.') return parseNumber();
         if (Character.isLetter(start) || start == '_') return parsePath();
 
-        // Nothing else is valid here; reading it as zero keeps one bad expression from killing a model.
+        // Nothing else is valid here. Bedrock answers zero for a malformed expression as a whole, so
+        // reading the part before the mistake and calling that the answer would be worse than nothing.
+        malformed = true;
         at += 1;
         return MolangExpression.ZERO;
     }
