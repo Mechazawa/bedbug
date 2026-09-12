@@ -181,7 +181,8 @@ public final class AddonEntities {
         "minecraft:preferred_path", "minecraft:leashable", "minecraft:angry",
         "minecraft:pushable_by_entity", "minecraft:pushable_by_block", "minecraft:rideable",
         "minecraft:teleport", "minecraft:trade_resupply", "minecraft:behavior.trade_with_player",
-        "minecraft:behavior.trade_interest");
+        "minecraft:behavior.trade_interest", "minecraft:behavior.pickup_items",
+        "minecraft:shareables", "minecraft:inventory", "minecraft:equipment");
 
     /**
      * The trade table an entity names, read while the pack it came from is still in hand.

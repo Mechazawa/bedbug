@@ -185,6 +185,46 @@ public class AddonEntity extends PathfinderMob implements Merchant {
     *///?}
 
     /**
+     * Picks up what the pack said this entity collects.
+     *
+     * Bedrock keeps an inventory on the entity and lists what may go in it; Java gives a mob one
+     * hand and a body, so what is picked up is held rather than stored, which is what a pack using
+     * this for a villager carrying bread is describing anyway.
+     */
+    private void pickUpNearby() {
+        if (!has("minecraft:behavior.pickup_items") || level().isClientSide()) return;
+        if (!getMainHandItem().isEmpty()) return;
+
+        double range = number(definition, "minecraft:behavior.pickup_items", "max_dist", 3);
+        for (net.minecraft.world.entity.item.ItemEntity dropped
+            : level().getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
+                getBoundingBox().inflate(range))) {
+            if (!dropped.isAlive() || dropped.hasPickUpDelay()) continue;
+            if (!shareable(dropped.getItem())) continue;
+
+            setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, dropped.getItem().copy());
+            dropped.discard();
+            return;
+        }
+    }
+
+    /** Whether the pack's `shareables` list allows this item, which allows everything when absent. */
+    private boolean shareable(net.minecraft.world.item.ItemStack stack) {
+        com.google.gson.JsonObject body = definition.components().get("minecraft:shareables");
+        com.google.gson.JsonArray items = body == null ? null : body.getAsJsonArray("items");
+        if (items == null) return true;
+
+        String id = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+        for (com.google.gson.JsonElement item : items) {
+            if (!item.isJsonObject()) continue;
+
+            String named = at.ioexception.mcaddon.util.Json.text(item.getAsJsonObject(), "item", null);
+            if (named != null && (named.equals(id) || ("minecraft:" + named).equals(id))) return true;
+        }
+        return false;
+    }
+
+    /**
      * Restocks the trades a pack said should come back.
      *
      * Bedrock counts the restock in days and Java counts the world's own time, so a day is the
@@ -321,6 +361,7 @@ public class AddonEntity extends PathfinderMob implements Merchant {
             Sensors.tick(this, ServerHooks.state());
             resupply();
             teleportAbout();
+            pickUpNearby();
         }
     }
 
