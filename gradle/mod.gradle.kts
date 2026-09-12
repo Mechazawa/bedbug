@@ -117,6 +117,39 @@ project.tasks.named<JavaCompile>("compileTestJava") {
  */
 
 /**
+ * Puts the synthetic add-on where the game tests will find it.
+ *
+ * Without a pack the tests can only assert what holds with no add-on loaded, which leaves the whole
+ * of the conversion untested in a running world. The pack is this repository's own, built from
+ * `tools/testpack`, so nothing anybody else authored is copied anywhere.
+ */
+val installTestPack = project.tasks.register("installTestPack") {
+    group = "verification"
+    description = "Build the synthetic add-on into this version's game test directory."
+
+    val generator = rootProject.layout.projectDirectory.file("tools/testpack/build.py").asFile
+    val addons = project.layout.buildDirectory.dir("run/gameTest/addons")
+    inputs.dir(rootProject.layout.projectDirectory.dir("tools/testpack"))
+    outputs.dir(addons)
+
+    doLast {
+        val target = addons.get().asFile
+        target.mkdirs()
+
+        val archive = File(target, "test-addon.mcaddon")
+        val process = ProcessBuilder("python3", generator.absolutePath, "--out", archive.absolutePath)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().readText()
+        if (process.waitFor() != 0) throw GradleException("The test pack would not build: $output")
+    }
+}
+
+project.tasks.named("runGameTest") {
+    dependsOn(installTestPack)
+}
+
+/**
  * A syntax gate for the tools, which no compiler otherwise covers.
  *
  * These scripts are only run by hand and could otherwise sit broken for weeks. This is a parse
