@@ -270,8 +270,17 @@ public final class ScriptBridge {
         return entity != null && entity.isAlive();
     }
 
+    /**
+     * Whether an id names somebody playing, which decides the class a script is handed.
+     *
+     * The player list is asked first and answers for anybody connected, however far through joining
+     * they are. Searching the levels alone would say no for the moment between a player connecting
+     * and the level indexing them, and a script told `Entity` then has no player members at all.
+     */
     @HostAccess.Export
     public boolean entityIsPlayer(String id) {
+        UUID uuid = uuid(id);
+        if (uuid != null && server.getPlayerList().getPlayer(uuid) != null) return true;
         return entity(id) instanceof ServerPlayer;
     }
 

@@ -62,11 +62,11 @@ public final class DamageSources {
         Map<String, Object> described = new LinkedHashMap<>();
         described.put("cause", CAUSES.getOrDefault(source.getMsgId(), "none"));
         if (source.getEntity() != null) {
-            described.put("damagingEntity", new ScriptHost.EntityHandle(source.getEntity().getStringUUID()));
+            described.put("damagingEntity", ScriptHost.EntityHandle.of(source.getEntity()));
         }
         if (source.getDirectEntity() != null && source.getDirectEntity() != source.getEntity()) {
             described.put("damagingProjectile",
-                new ScriptHost.EntityHandle(source.getDirectEntity().getStringUUID()));
+                ScriptHost.EntityHandle.of(source.getDirectEntity()));
         }
         return described;
     }

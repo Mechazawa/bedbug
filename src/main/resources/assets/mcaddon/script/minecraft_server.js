@@ -2249,11 +2249,21 @@ function itemJson(stack) {
     });
 }
 
-export function entityFor(id) {
+/**
+ * The one wrapper an id gets, so a pack comparing two references to one entity sees them as equal.
+ *
+ * An id may be met before the game will say whose it is: a player's arrives while they are still
+ * joining, and the player list does not have them yet. Caching that answer would leave a plain
+ * entity standing in for somebody for the rest of the session, with none of the player members on
+ * it, so a caller holding something it already knows to be a player says so and the wrapper is
+ * replaced rather than kept.
+ */
+export function entityFor(id, knownPlayer) {
     if (id === null || id === undefined) return undefined;
+
     let wrapper = entityCache.get(id);
-    if (wrapper === undefined) {
-        wrapper = bridge.entityIsPlayer(id) ? new Player(id) : new Entity(id);
+    if (wrapper === undefined || (knownPlayer && !(wrapper instanceof Player))) {
+        wrapper = knownPlayer || bridge.entityIsPlayer(id) ? new Player(id) : new Entity(id);
         entityCache.set(id, wrapper);
     }
     return wrapper;
@@ -2276,7 +2286,8 @@ export class Dimension {
     }
 
     getPlayers(options) {
-        return this.getEntities({ ...(options ?? {}), type: "minecraft:player" });
+        return list(bridge.dimensionEntities(this.id,
+            JSON.stringify({ ...(options ?? {}), type: "minecraft:player" }))).map(id => entityFor(id, true));
     }
 
     getEntitiesAtBlockLocation(location) {
@@ -2666,13 +2677,13 @@ export class World {
     }
 
     getAllPlayers() {
-        return list(bridge.players()).map(entityFor);
+        return list(bridge.players()).map(id => entityFor(id, true));
     }
 
     getPlayers(options) {
         return options === undefined
             ? this.getAllPlayers()
-            : list(bridge.matchingPlayers(JSON.stringify(options))).map(entityFor);
+            : list(bridge.matchingPlayers(JSON.stringify(options))).map(id => entityFor(id, true));
     }
 
     getEntity(id) {

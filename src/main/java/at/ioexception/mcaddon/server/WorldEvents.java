@@ -94,8 +94,8 @@ public final class WorldEvents {
         if (scripts == null || !(entity instanceof ItemEntity item) || item.getOwner() == null) return;
 
         Map<String, Object> fields = new LinkedHashMap<>();
-        fields.put("entity", new ScriptHost.EntityHandle(item.getOwner().getStringUUID()));
-        fields.put("item", new ScriptHost.EntityHandle(item.getStringUUID()));
+        fields.put("entity", ScriptHost.EntityHandle.of(item.getOwner()));
+        fields.put("item", ScriptHost.EntityHandle.of(item));
         scripts.raiseWorldEvent("entityItemDrop", fields);
     }
 
@@ -111,7 +111,7 @@ public final class WorldEvents {
         if (scripts == null) return false;
 
         Map<String, Object> fields = new LinkedHashMap<>();
-        fields.put("entity", new ScriptHost.EntityHandle(entity.getStringUUID()));
+        fields.put("entity", ScriptHost.EntityHandle.of(entity));
         fields.put("effect", describe(effect));
         return scripts.raiseCancellable("effectAdd", fields);
     }
@@ -122,7 +122,7 @@ public final class WorldEvents {
         if (scripts == null) return;
 
         Map<String, Object> fields = new LinkedHashMap<>();
-        fields.put("entity", new ScriptHost.EntityHandle(entity.getStringUUID()));
+        fields.put("entity", ScriptHost.EntityHandle.of(entity));
         fields.put("effect", describe(effect));
         scripts.raiseWorldEvent("effectAdd", fields);
     }
@@ -153,7 +153,7 @@ public final class WorldEvents {
 
     private static Map<String, Object> pickup(Player player, ItemEntity item) {
         Map<String, Object> fields = new LinkedHashMap<>();
-        fields.put("entity", new ScriptHost.EntityHandle(player.getStringUUID()));
+        fields.put("entity", ScriptHost.EntityHandle.of(player));
         fields.put("itemStack", item(item.getItem()));
         return fields;
     }
@@ -170,9 +170,9 @@ public final class WorldEvents {
         if (scripts == null) return;
 
         Map<String, Object> fields = new LinkedHashMap<>();
-        fields.put("projectile", new ScriptHost.EntityHandle(projectile.getStringUUID()));
+        fields.put("projectile", ScriptHost.EntityHandle.of(projectile));
         fields.put("dimension", Platform.idOf(projectile.level().dimension()).toString());
-        if (shooter != null) fields.put("source", new ScriptHost.EntityHandle(shooter.getStringUUID()));
+        if (shooter != null) fields.put("source", ScriptHost.EntityHandle.of(shooter));
 
         Map<String, Object> location = new LinkedHashMap<>();
         location.put("x", hit.getLocation().x);
@@ -182,7 +182,7 @@ public final class WorldEvents {
 
         if (hit instanceof net.minecraft.world.phys.EntityHitResult entityHit) {
             fields.put("hitEntity",
-                new ScriptHost.EntityHandle(entityHit.getEntity().getStringUUID()));
+                ScriptHost.EntityHandle.of(entityHit.getEntity()));
             scripts.raiseWorldEvent("projectileHitEntity", fields);
             return;
         }
@@ -201,7 +201,7 @@ public final class WorldEvents {
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("block", block(level, position));
         fields.put("dimension", Platform.idOf(level.dimension()).toString());
-        if (player != null) fields.put("source", new ScriptHost.EntityHandle(player.getStringUUID()));
+        if (player != null) fields.put("source", ScriptHost.EntityHandle.of(player));
         scripts.raiseWorldEvent("buttonPush", fields);
     }
 
@@ -219,7 +219,7 @@ public final class WorldEvents {
         BREAKING_WITH.put(player.getUUID(), held.copy());
 
         Map<String, Object> fields = new LinkedHashMap<>();
-        fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
+        fields.put("player", ScriptHost.EntityHandle.of(player));
         fields.put("block", block(level, position));
         fields.put("dimension", Platform.idOf(level.dimension()).toString());
         fields.put("itemStack", item(held));
@@ -233,7 +233,7 @@ public final class WorldEvents {
         ItemStack before = BREAKING_WITH.remove(player.getUUID());
 
         Map<String, Object> fields = new LinkedHashMap<>();
-        fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
+        fields.put("player", ScriptHost.EntityHandle.of(player));
         fields.put("block", block(level, position));
         fields.put("dimension", Platform.idOf(level.dimension()).toString());
         fields.put("brokenBlockPermutation", permutation(state));
@@ -251,7 +251,7 @@ public final class WorldEvents {
 
         ItemStack held = player.getItemInHand(hand);
         Map<String, Object> fields = new LinkedHashMap<>();
-        fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
+        fields.put("player", ScriptHost.EntityHandle.of(player));
         fields.put("block", block(level, hit.getBlockPos()));
         fields.put("dimension", Platform.idOf(level.dimension()).toString());
         fields.put("blockFace", capitalised(hit.getDirection().getName()));
@@ -264,7 +264,7 @@ public final class WorldEvents {
 
         if (!held.isEmpty()) {
             Map<String, Object> started = new LinkedHashMap<>();
-            started.put("source", new ScriptHost.EntityHandle(player.getStringUUID()));
+            started.put("source", ScriptHost.EntityHandle.of(player));
             started.put("block", block(level, hit.getBlockPos()));
             started.put("blockFace", capitalised(hit.getDirection().getName()));
             started.put("itemStack", item(held));
@@ -283,8 +283,8 @@ public final class WorldEvents {
 
         ItemStack held = player.getItemInHand(hand);
         Map<String, Object> fields = new LinkedHashMap<>();
-        fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
-        fields.put("target", new ScriptHost.EntityHandle(target.getStringUUID()));
+        fields.put("player", ScriptHost.EntityHandle.of(player));
+        fields.put("target", ScriptHost.EntityHandle.of(target));
         fields.put("itemStack", item(held));
         fields.put("beforeItemStack", item(held));
         if (scripts.raiseCancellable("playerInteractWithEntity", fields)) return InteractionResult.FAIL;
@@ -298,8 +298,8 @@ public final class WorldEvents {
         if (scripts == null || !(player instanceof ServerPlayer)) return InteractionResult.PASS;
 
         Map<String, Object> fields = new LinkedHashMap<>();
-        fields.put("damagingEntity", new ScriptHost.EntityHandle(player.getStringUUID()));
-        fields.put("hitEntity", new ScriptHost.EntityHandle(target.getStringUUID()));
+        fields.put("damagingEntity", ScriptHost.EntityHandle.of(player));
+        fields.put("hitEntity", ScriptHost.EntityHandle.of(target));
         scripts.raiseWorldEvent("entityHitEntity", fields);
         return InteractionResult.PASS;
     }
@@ -314,7 +314,7 @@ public final class WorldEvents {
         if (held.isEmpty()) return false;
 
         Map<String, Object> fields = new LinkedHashMap<>();
-        fields.put("source", new ScriptHost.EntityHandle(player.getStringUUID()));
+        fields.put("source", ScriptHost.EntityHandle.of(player));
         fields.put("itemStack", item(held));
         if (scripts.raiseCancellable("itemUse", fields)) return true;
 
@@ -354,7 +354,7 @@ public final class WorldEvents {
             if (at == null || player == null) continue;
 
             Map<String, Object> fields = new LinkedHashMap<>();
-            fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
+            fields.put("player", ScriptHost.EntityHandle.of(player));
             fields.put("block", block(level, at));
             fields.put("dimension", Platform.idOf(level.dimension()).toString());
             fields.put("blockFace", capitalised(click.face().getName()));
@@ -487,7 +487,7 @@ public final class WorldEvents {
             if (current == gameMode) return;
 
             Map<String, Object> fields = new LinkedHashMap<>();
-            fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
+            fields.put("player", ScriptHost.EntityHandle.of(player));
             fields.put("fromGameMode", capitalised(gameMode.getName()));
             fields.put("toGameMode", capitalised(current.getName()));
             gameMode = current;
@@ -499,7 +499,7 @@ public final class WorldEvents {
             if (current.equals(dimension)) return;
 
             Map<String, Object> fields = new LinkedHashMap<>();
-            fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
+            fields.put("player", ScriptHost.EntityHandle.of(player));
             fields.put("fromDimension", Platform.idOf(dimension).toString());
             fields.put("fromLocation", vector(location));
             fields.put("toDimension", Platform.idOf(current).toString());
@@ -516,7 +516,7 @@ public final class WorldEvents {
                 if (ItemStack.matches(before, now)) continue;
 
                 Map<String, Object> fields = new LinkedHashMap<>();
-                fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
+                fields.put("player", ScriptHost.EntityHandle.of(player));
                 fields.put("slot", i);
                 fields.put("itemStack", item(now));
                 fields.put("beforeItemStack", item(before));
@@ -549,7 +549,7 @@ public final class WorldEvents {
 
         private void raiseItemUse(String event, ServerPlayer player, ScriptHost scripts) {
             Map<String, Object> fields = new LinkedHashMap<>();
-            fields.put("source", new ScriptHost.EntityHandle(player.getStringUUID()));
+            fields.put("source", ScriptHost.EntityHandle.of(player));
             fields.put("itemStack", item(using));
             fields.put("useDuration", useDuration);
             scripts.raiseWorldEvent(event, fields);

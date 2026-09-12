@@ -333,7 +333,9 @@ public final class ScriptHost {
      * reachable, so a pack reading a plain field of it would find nothing there.
      */
     private Object wrap(Object value) {
-        if (value instanceof EntityHandle handle) return runtime.invokeMember("entityFor", handle.uuid());
+        if (value instanceof EntityHandle handle) {
+            return runtime.invokeMember("entityFor", handle.uuid(), handle.player());
+        }
         if (!(value instanceof Map<?, ?> nested)) return value;
 
         Value object = context.eval("js", "({})");
@@ -341,8 +343,23 @@ public final class ScriptHost {
         return object;
     }
 
-    /** Marks a value as an entity id so it arrives in the script as an Entity and not as a string. */
-    public record EntityHandle(String uuid) {
+    /**
+     * Marks a value as an entity id so it arrives in the script as an Entity and not as a string.
+     *
+     * An event that can only ever carry somebody playing says so, because the game will not always
+     * answer that question in time: a player joining is not in the player list yet while the events
+     * about them are being raised, and a script handed a plain entity for a player has none of the
+     * player members to call.
+     */
+    public record EntityHandle(String uuid, boolean player) {
+        public EntityHandle(String uuid) {
+            this(uuid, false);
+        }
+
+        public static EntityHandle of(net.minecraft.world.entity.Entity entity) {
+            return new EntityHandle(entity.getStringUUID(),
+                entity instanceof net.minecraft.server.level.ServerPlayer);
+        }
     }
 
     /** The bridge a pack's script reaches the game through, for anything that has to ask it too. */

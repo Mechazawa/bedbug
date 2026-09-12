@@ -224,3 +224,19 @@ project.tasks.named<Jar>("jar") {
     from(rootProject.file("LICENSE")) { rename { "${it}_${prop("mod.id")}" } }
     from(rootProject.file("NOTICE")) { rename { "${it}_${prop("mod.id")}" } }
 }
+
+/**
+ * Lets a run open a world by itself, which is how the client half reaches a player at all.
+ *
+ * A client stopped at the title screen has nobody playing, so everything a pack does with a player
+ * goes untouched: the whole `Player` surface, the forms a pack opens, and every event carrying
+ * somebody who used something. `-PquickPlay=<world>` hands the game a save to load on startup.
+ */
+val quickPlayWorld = project.findProperty("quickPlay") as String?
+if (!quickPlayWorld.isNullOrBlank()) {
+    val loom = project.extensions.getByName("loom")
+    val runs = loom.javaClass.getMethod("getRuns").invoke(loom)
+    val client = runs.javaClass.getMethod("getByName", String::class.java).invoke(runs, "client")
+    client.javaClass.getMethod("programArgs", Array<String>::class.java)
+        .invoke(client, arrayOf("--quickPlaySingleplayer", quickPlayWorld))
+}

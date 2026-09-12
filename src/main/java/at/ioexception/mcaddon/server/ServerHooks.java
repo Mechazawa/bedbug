@@ -76,7 +76,7 @@ public final class ServerHooks {
         ServerEntityEvents.ENTITY_UNLOAD.register((entity, level) -> entityRemoved(entity));
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> {
             Map<String, Object> fields = new LinkedHashMap<>();
-            fields.put("deadEntity", new ScriptHost.EntityHandle(entity.getStringUUID()));
+            fields.put("deadEntity", ScriptHost.EntityHandle.of(entity));
             fields.put("damageSource", DamageSources.describe(source));
             if (scripts != null) scripts.raiseWorldEvent("entityDie", fields);
         });
@@ -85,7 +85,7 @@ public final class ServerHooks {
         //? if >=1.21 {
         ServerLivingEntityEvents.AFTER_DAMAGE.register((entity, source, base, taken, blocked) -> {
             Map<String, Object> fields = new LinkedHashMap<>();
-            fields.put("hurtEntity", new ScriptHost.EntityHandle(entity.getStringUUID()));
+            fields.put("hurtEntity", ScriptHost.EntityHandle.of(entity));
             fields.put("damage", (double) taken);
             fields.put("damageSource", DamageSources.describe(source));
             if (scripts != null) scripts.raiseWorldEvent("entityHurt", fields);
@@ -116,7 +116,7 @@ public final class ServerHooks {
         if (scripts == null) return false;
 
         Map<String, Object> fields = new LinkedHashMap<>();
-        fields.put("hurtEntity", new ScriptHost.EntityHandle(entity.getStringUUID()));
+        fields.put("hurtEntity", ScriptHost.EntityHandle.of(entity));
         fields.put("damage", (double) amount);
         fields.put("damageSource", DamageSources.describe(source));
         return scripts.raiseCancellable("entityHurt", fields);
@@ -126,7 +126,7 @@ public final class ServerHooks {
         if (scripts == null) return;
 
         Map<String, Object> fields = new LinkedHashMap<>();
-        fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
+        fields.put("player", ScriptHost.EntityHandle.of(player));
         fields.put("playerId", player.getStringUUID());
         fields.put("playerName", player.getName().getString());
         scripts.raiseWorldEvent("playerJoin", fields);
@@ -137,7 +137,7 @@ public final class ServerHooks {
         if (scripts == null) return;
 
         Map<String, Object> fields = new LinkedHashMap<>();
-        fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
+        fields.put("player", ScriptHost.EntityHandle.of(player));
         fields.put("initialSpawn", initial);
         scripts.raiseWorldEvent("playerSpawn", fields);
     }
@@ -147,7 +147,7 @@ public final class ServerHooks {
         if (scripts == null) return;
 
         Map<String, Object> leaving = new LinkedHashMap<>();
-        leaving.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
+        leaving.put("player", ScriptHost.EntityHandle.of(player));
         scripts.raiseCancellable("playerLeave", leaving);
 
         Map<String, Object> left = new LinkedHashMap<>();
@@ -226,7 +226,7 @@ public final class ServerHooks {
         if (scripts == null) return;
 
         Map<String, Object> fields = new LinkedHashMap<>();
-        fields.put("entity", new ScriptHost.EntityHandle(entity.getStringUUID()));
+        fields.put("entity", ScriptHost.EntityHandle.of(entity));
         fields.put("cause", event.equals("entitySpawn") ? "Spawned" : "Loaded");
         scripts.raiseWorldEvent(event, fields);
     }
@@ -236,7 +236,7 @@ public final class ServerHooks {
         if (scripts == null) return;
 
         Map<String, Object> leaving = new LinkedHashMap<>();
-        leaving.put("removedEntity", new ScriptHost.EntityHandle(entity.getStringUUID()));
+        leaving.put("removedEntity", ScriptHost.EntityHandle.of(entity));
         scripts.raiseCancellable("entityRemove", leaving);
 
         Map<String, Object> removed = new LinkedHashMap<>();
@@ -298,7 +298,7 @@ public final class ServerHooks {
         fields.put("message", message);
         fields.put("sourceType", source.getEntity() == null ? "Server" : "Entity");
         if (source.getEntity() != null) {
-            fields.put("sourceEntity", new ScriptHost.EntityHandle(source.getEntity().getStringUUID()));
+            fields.put("sourceEntity", ScriptHost.EntityHandle.of(source.getEntity()));
         }
         scripts.raiseSystemEvent("scriptEventReceive", fields);
         return 1;
