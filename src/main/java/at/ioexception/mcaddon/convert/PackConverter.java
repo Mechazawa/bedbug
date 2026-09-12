@@ -462,7 +462,11 @@ public final class PackConverter {
             if (icon == null) continue;
 
             sprites.add(icon);
-            writeFlatItem(root, Names.split(item.identifier(), "minecraft"), "", flat(icon), null);
+            // `hand_equipped` means the item is carried the way a tool is, which Java draws by
+            // parenting the model to `handheld` rather than to the flat one.
+            boolean held = item.components().containsKey("minecraft:hand_equipped");
+            writeFlatItem(root, Names.split(item.identifier(), "minecraft"), "",
+                flat(icon, held ? "minecraft:item/handheld" : "minecraft:item/generated"), null);
         }
     }
 
@@ -489,13 +493,13 @@ public final class PackConverter {
         write(assets.resolve("items").resolve(name + ".json"), definition);
     }
 
-    /** The model for a flat item: one texture, drawn as the sprite it is. */
-    private static JsonObject flat(String icon) {
+    /** The model for an item drawn from one texture, under whichever parent holds it right. */
+    private static JsonObject flat(String icon, String parent) {
         JsonObject textures = new JsonObject();
         textures.addProperty("layer0", icon);
 
         JsonObject model = new JsonObject();
-        model.addProperty("parent", "minecraft:item/generated");
+        model.addProperty("parent", parent);
         model.add("textures", textures);
         return model;
     }
@@ -541,7 +545,8 @@ public final class PackConverter {
             vanilla.addProperty("parent", "minecraft:item/template_spawn_egg");
 
             writeFlatItem(root, Names.split(egg.identifier(), "minecraft"), "_spawn_egg",
-                icon == null ? vanilla : flat(icon), icon == null ? tints(egg) : null);
+                icon == null ? vanilla : flat(icon, "minecraft:item/generated"),
+                icon == null ? tints(egg) : null);
         }
     }
 

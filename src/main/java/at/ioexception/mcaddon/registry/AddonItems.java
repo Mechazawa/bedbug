@@ -143,7 +143,7 @@ public final class AddonItems {
     private static final List<String> IMPLEMENTED = List.of(
         "minecraft:icon", "minecraft:display_name", "minecraft:max_stack_size", "minecraft:tags",
         "minecraft:food", "minecraft:wearable", "minecraft:use_modifiers", "minecraft:use_animation",
-        "minecraft:interact_button");
+        "minecraft:interact_button", "minecraft:hand_equipped");
 
     private static Identifier identifier(String bedrock) {
         Names.Identifier split = Names.split(bedrock, "minecraft");
