@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "at.ioexception.mcaddon.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "mixins": [
+    "PackRepositoryMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

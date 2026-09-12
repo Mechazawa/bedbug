@@ -17,6 +17,9 @@
       "at.ioexception.mcaddon.client.McAddonClient"
     ]
   },
+  "mixins": [
+    "${mod_id}.mixins.json"
+  ],
   "suggests": {
     "modmenu": "*"
   },

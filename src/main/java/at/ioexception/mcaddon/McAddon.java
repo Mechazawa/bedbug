@@ -3,6 +3,8 @@ package at.ioexception.mcaddon;
 import at.ioexception.mcaddon.pack.PackDiscovery;
 import at.ioexception.mcaddon.pack.PackSet;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonSounds;
+import at.ioexception.mcaddon.resource.AddonPacks;
 import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.api.ModInitializer;
 import net.minecraft.resources.Identifier;
@@ -34,6 +36,9 @@ public final class McAddon implements ModInitializer {
     public void onInitialize() {
         packs = PackDiscovery.scan();
         packs.report().forEach(LOGGER::info);
+
+        AddonPacks.convert(packs);
+        AddonSounds.register(AddonPacks.all());
         ServerHooks.register();
     }
 }

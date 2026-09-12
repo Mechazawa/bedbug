@@ -2,10 +2,22 @@ package at.ioexception.mcaddon.platform;
 
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+//? if >=1.21 {
+import net.minecraft.server.packs.PackLocationInfo;
+import net.minecraft.server.packs.PackSelectionConfig;
+//?}
+import net.minecraft.server.packs.PackResources;
+import net.minecraft.server.packs.PackType;
+import net.minecraft.server.packs.PathPackResources;
+import net.minecraft.server.packs.repository.Pack;
+import net.minecraft.server.packs.repository.PackCompatibility;
+import net.minecraft.server.packs.repository.PackSource;
+import net.minecraft.world.flag.FeatureFlagSet;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
@@ -14,6 +26,9 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -158,6 +173,46 @@ public final class Platform {
         return player.getInventory().getSelectedSlot();
         //?} else {
         /*return player.getInventory().selected;
+        *///?}
+    }
+
+    /**
+     * A pack the game reads out of a directory, built without consulting its metadata.
+     *
+     * The metadata is supplied here rather than read back off disk so the pack is always reported as
+     * compatible: one converted directory is contributed to both the resource and the data pack
+     * repository, and a single `pack.mcmeta` cannot carry the right format number for both.
+     */
+    public static Pack directoryPack(String id, String title, Path directory, PackType type) {
+        Component name = Component.literal(title);
+        //? if >=1.21 {
+        PackLocationInfo location = new PackLocationInfo(id, name, PackSource.BUILT_IN, Optional.empty());
+        Pack.ResourcesSupplier resources = new Pack.ResourcesSupplier() {
+            @Override
+            public PackResources openPrimary(PackLocationInfo info) {
+                return new PathPackResources(info, directory);
+            }
+
+            @Override
+            public PackResources openFull(PackLocationInfo info, Pack.Metadata metadata) {
+                return new PathPackResources(info, directory);
+            }
+        };
+        Pack.Metadata metadata = new Pack.Metadata(name, PackCompatibility.COMPATIBLE,
+            FeatureFlagSet.of(), List.of());
+        return new Pack(location, resources, metadata, new PackSelectionConfig(true, Pack.Position.TOP, true));
+        //?} else {
+        /*Pack.ResourcesSupplier resources = ignored -> new PathPackResources(id, directory, false);
+        return Pack.readMetaAndCreate(id, name, true, resources, type, Pack.Position.TOP, PackSource.BUILT_IN);
+        *///?}
+    }
+
+    /** The resource pack format this version reads, taken from the game rather than a table. */
+    public static int resourcePackFormat() {
+        //? if >=26 {
+        return net.minecraft.SharedConstants.getCurrentVersion().packVersion(PackType.CLIENT_RESOURCES).major();
+        //?} else {
+        /*return net.minecraft.SharedConstants.getCurrentVersion().getPackVersion(PackType.CLIENT_RESOURCES);
         *///?}
     }
 
