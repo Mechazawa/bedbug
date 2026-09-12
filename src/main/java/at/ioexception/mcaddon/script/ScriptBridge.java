@@ -622,22 +622,13 @@ public final class ScriptBridge {
 
         for (MobEffectInstance active : living.getActiveEffects()) {
             JsonObject effect = new JsonObject();
-            effect.addProperty("typeId", effectId(active));
+            effect.addProperty("typeId", Platform.effectId(active));
             effect.addProperty("duration", active.getDuration());
             effect.addProperty("amplifier", active.getAmplifier());
             effect.addProperty("displayName", Component.translatable(active.getDescriptionId()).getString());
             effects.add(effect);
         }
         return effects.toString();
-    }
-
-    /** The registry id of an active effect. What the instance carries became a holder in 1.21. */
-    private static String effectId(MobEffectInstance active) {
-        //? if >=1.21 {
-        return BuiltInRegistries.MOB_EFFECT.getKey(active.getEffect().value()).toString();
-        //?} else {
-        /*return BuiltInRegistries.MOB_EFFECT.getKey(active.getEffect()).toString();
-        *///?}
     }
 
     @HostAccess.Export

@@ -1,6 +1,6 @@
 # Working on this repository
 
-A Fabric mod that loads Bedrock `.mcaddon` files at runtime, built for three Minecraft versions from
+A Fabric mod that loads Bedrock `.mcaddon` files at runtime, built for four Minecraft versions from
 one source tree. Read `README.md` first for what the mod does; this file is about how to change it.
 
 ## Commands
@@ -8,7 +8,7 @@ one source tree. Read `README.md` first for what the mod does; this file is abou
 ```bash
 export JAVA_HOME=/opt/homebrew/opt/openjdk@25   # required: the 26.2 target needs Gradle on Java 25
 
-./gradlew build                 # all three versions, plus checkstyle and the tool parse gate
+./gradlew build                 # all four versions, plus checkstyle and the tool parse gate
 ./gradlew check                 # verification only
 ./gradlew :26.2:compileJava     # one version, for fast iteration
 ./gradlew :26.2:runGameTest     # the in-game tests, headless, part of check
@@ -72,7 +72,7 @@ that differs (the entity renderer, the network channels) carries two bodies inst
 
 These are the checks that catch things:
 
-- **`./gradlew build`** compiles all three versions, which is what catches a call that exists on only
+- **`./gradlew build`** compiles all four versions, which is what catches a call that exists on only
   one of them.
 - **`./gradlew :26.2:test`** runs the unit tests in `src/test/java/`, for the checked-out version
   only, for the same reason linting is. They cover what is a function of its input rather than of a

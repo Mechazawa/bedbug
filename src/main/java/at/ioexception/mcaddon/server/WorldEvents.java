@@ -99,6 +99,100 @@ public final class WorldEvents {
         scripts.raiseWorldEvent("entityItemDrop", fields);
     }
 
+    /**
+     * An effect being applied, which a pack may refuse before it lands.
+     *
+     * Fabric raises this before the effect is added, so the before event is the one with something to
+     * say and the after event follows once it is on.
+     */
+    public static boolean effectRefused(net.minecraft.world.entity.LivingEntity entity,
+        net.minecraft.world.effect.MobEffectInstance effect) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null) return false;
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("entity", new ScriptHost.EntityHandle(entity.getStringUUID()));
+        fields.put("effect", describe(effect));
+        return scripts.raiseCancellable("effectAdd", fields);
+    }
+
+    public static void effectAdded(net.minecraft.world.entity.LivingEntity entity,
+        net.minecraft.world.effect.MobEffectInstance effect) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null) return;
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("entity", new ScriptHost.EntityHandle(entity.getStringUUID()));
+        fields.put("effect", describe(effect));
+        scripts.raiseWorldEvent("effectAdd", fields);
+    }
+
+    private static Map<String, Object> describe(net.minecraft.world.effect.MobEffectInstance effect) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("typeId", Platform.effectId(effect));
+        fields.put("duration", effect.getDuration());
+        fields.put("amplifier", effect.getAmplifier());
+        return fields;
+    }
+
+    /** Somebody walking over a dropped item and taking it. */
+    public static void pickedUp(Player player, ItemEntity item) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null || !(player instanceof ServerPlayer)) return;
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("entity", new ScriptHost.EntityHandle(player.getStringUUID()));
+        fields.put("itemStack", item(item.getItem()));
+        scripts.raiseWorldEvent("entityItemPickup", fields);
+    }
+
+    /**
+     * An arrow or a thrown thing arriving somewhere.
+     *
+     * Bedrock hands the pack the projectile, whoever released it, and what it reached, as a block or
+     * an entity depending on which event it is.
+     */
+    public static void projectileHit(Entity projectile, Entity shooter,
+        net.minecraft.world.phys.HitResult hit) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null) return;
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("projectile", new ScriptHost.EntityHandle(projectile.getStringUUID()));
+        fields.put("dimension", Platform.idOf(projectile.level().dimension()).toString());
+        if (shooter != null) fields.put("source", new ScriptHost.EntityHandle(shooter.getStringUUID()));
+
+        Map<String, Object> location = new LinkedHashMap<>();
+        location.put("x", hit.getLocation().x);
+        location.put("y", hit.getLocation().y);
+        location.put("z", hit.getLocation().z);
+        fields.put("location", location);
+
+        if (hit instanceof net.minecraft.world.phys.EntityHitResult entityHit) {
+            fields.put("hitEntity",
+                new ScriptHost.EntityHandle(entityHit.getEntity().getStringUUID()));
+            scripts.raiseWorldEvent("projectileHitEntity", fields);
+            return;
+        }
+        if (hit instanceof BlockHitResult blockHit) {
+            fields.put("hitBlock", block(projectile.level(), blockHit.getBlockPos()));
+            fields.put("blockFace", blockHit.getDirection().getName());
+            scripts.raiseWorldEvent("projectileHitBlock", fields);
+        }
+    }
+
+    /** A button going down, which Bedrock reports with whoever pushed it. */
+    public static void buttonPushed(Level level, BlockPos position, Player player) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null) return;
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("block", block(level, position));
+        fields.put("dimension", Platform.idOf(level.dimension()).toString());
+        if (player != null) fields.put("source", new ScriptHost.EntityHandle(player.getStringUUID()));
+        scripts.raiseWorldEvent("buttonPush", fields);
+    }
+
     public static void forget() {
         BREAKING_WITH.clear();
         PLACEMENTS.clear();
@@ -148,7 +242,7 @@ public final class WorldEvents {
         fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
         fields.put("block", block(level, hit.getBlockPos()));
         fields.put("dimension", Platform.idOf(level.dimension()).toString());
-        fields.put("blockFace", face(hit.getDirection()));
+        fields.put("blockFace", capitalised(hit.getDirection().getName()));
         fields.put("faceLocation", faceLocation(hit));
         fields.put("isFirstEvent", true);
         fields.put("itemStack", item(held));
@@ -160,7 +254,7 @@ public final class WorldEvents {
             Map<String, Object> started = new LinkedHashMap<>();
             started.put("source", new ScriptHost.EntityHandle(player.getStringUUID()));
             started.put("block", block(level, hit.getBlockPos()));
-            started.put("blockFace", face(hit.getDirection()));
+            started.put("blockFace", capitalised(hit.getDirection().getName()));
             started.put("itemStack", item(held));
             scripts.raiseWorldEvent("itemStartUseOn", started);
         }
@@ -251,7 +345,7 @@ public final class WorldEvents {
             fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
             fields.put("block", block(level, at));
             fields.put("dimension", Platform.idOf(level.dimension()).toString());
-            fields.put("blockFace", face(click.face()));
+            fields.put("blockFace", capitalised(click.face().getName()));
             scripts.raiseWorldEvent("playerPlaceBlock", fields);
         }
     }
@@ -338,9 +432,8 @@ public final class WorldEvents {
         return vector(hit.getLocation().subtract(position.getX(), position.getY(), position.getZ()));
     }
 
-    /** Bedrock spells a face with a capital, using the same six names Java does. */
-    private static String face(Direction direction) {
-        String name = direction.getName();
+    /** Bedrock's names for a face and for a game mode are Java's under a capital. */
+    private static String capitalised(String name) {
         return Character.toUpperCase(name.charAt(0)) + name.substring(1);
     }
 
@@ -383,8 +476,8 @@ public final class WorldEvents {
 
             Map<String, Object> fields = new LinkedHashMap<>();
             fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
-            fields.put("fromGameMode", gameMode.getName());
-            fields.put("toGameMode", current.getName());
+            fields.put("fromGameMode", capitalised(gameMode.getName()));
+            fields.put("toGameMode", capitalised(current.getName()));
             gameMode = current;
             scripts.raiseWorldEvent("playerGameModeChange", fields);
         }

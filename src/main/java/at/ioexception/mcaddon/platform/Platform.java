@@ -654,6 +654,17 @@ public final class Platform {
         *///?}
     }
 
+    /** The registry id of an active effect. What the instance carries became a holder in 1.21. */
+    public static String effectId(net.minecraft.world.effect.MobEffectInstance active) {
+        //? if >=1.21 {
+        return net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT
+            .getKey(active.getEffect().value()).toString();
+        //?} else {
+        /*return net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT
+            .getKey(active.getEffect()).toString();
+        *///?}
+    }
+
     /** Opens a screen, or closes whatever is open when given null. Renamed in 26. */
     public static void setScreen(net.minecraft.client.gui.screens.Screen screen) {
         //? if >=26 {
@@ -663,11 +674,18 @@ public final class Platform {
         *///?}
     }
 
-    /** Where the player is looking from. The accessor lost its `get` prefix in 26. */
+    /**
+     * Where the player is looking from.
+     *
+     * Both accessors lost their `get` prefix on the way to 26, but not in the same release: the
+     * camera's own did first and the renderer's followed in 26.2.
+     */
     public static net.minecraft.world.phys.Vec3 cameraPosition() {
-        //? if >=26 {
+        //? if >=26.2 {
         return net.minecraft.client.Minecraft.getInstance().gameRenderer.mainCamera().position();
-        //?} else {
+        //?} elif >=26 {
+        /*return net.minecraft.client.Minecraft.getInstance().gameRenderer.getMainCamera().position();
+        *///?} else {
         /*return net.minecraft.client.Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         *///?}
     }

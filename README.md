@@ -89,6 +89,7 @@ counted and shown by `/mcaddon entities` and `/mcaddon scripts`.
 | --- | --- |
 | 1.20.1 | 21 |
 | 1.21.1 | 21 |
+| 26.1.2 | 25 |
 | 26.2 | 25 |
 
 These are anchors, not a range. Minecraft rewrote entity rendering in 1.21.2 and again in 1.21.5, so

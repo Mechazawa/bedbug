@@ -21,7 +21,9 @@ stonecutter {
         for (obfuscated in listOf("1.20.1", "1.21.1")) {
             version(obfuscated, obfuscated).buildscript = "build.remap.gradle.kts"
         }
-        version("26.2", "26.2").buildscript = "build.named.gradle.kts"
+        for (named in listOf("26.1.2", "26.2")) {
+            version(named, named).buildscript = "build.named.gradle.kts"
+        }
         vcsVersion = "26.2"
     }
 }
