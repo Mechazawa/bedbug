@@ -20,7 +20,7 @@ public final class ScriptCoverage {
     private final Map<String, AtomicInteger> missingSounds = new LinkedHashMap<>();
     private final Map<String, String> failedCommands = new LinkedHashMap<>();
 
-    void unsupported(String member) {
+    public void unsupported(String member) {
         count(unsupported, member);
     }
 
