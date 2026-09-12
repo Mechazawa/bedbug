@@ -26,6 +26,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -90,6 +91,7 @@ public final class PackConverter {
             if (fresh) {
                 writeItemModels(root, icons, items);
                 writeSpawnEggs(root, icons, eggs);
+                writeAtlas(root, icons.values());
                 writeRecipes(root, recipes);
                 writeLootTables(root, loot, namespace);
                 writeBlockModels(root, icons, blocks, BedrockAssets.read(pack));
@@ -470,6 +472,30 @@ public final class PackConverter {
      * Bedrock's shaped recipes carry a pattern and a key map exactly as Java's do, so the conversion
      * is a rename. Furnace recipes and anything with a Bedrock-only tag are left out and reported.
      */
+    /**
+     * Adds the pack's icons to the atlas every flat item model is drawn from.
+     *
+     * Java stitches only what its own atlas definition names, which is the `block` and `item`
+     * directories, and a Bedrock pack keeps its textures wherever it likes. A texture that never
+     * reaches the atlas draws as the missing-texture chequer however correct the model is. Atlas
+     * definitions from every loaded pack are merged, so naming the sprites here adds to vanilla's
+     * list rather than replacing it.
+     */
+    private static void writeAtlas(Path root, Collection<String> icons) throws IOException {
+        JsonArray sources = new JsonArray();
+        for (String icon : Set.copyOf(icons)) {
+            JsonObject single = new JsonObject();
+            single.addProperty("type", "minecraft:single");
+            single.addProperty("resource", icon);
+            sources.add(single);
+        }
+        if (sources.isEmpty()) return;
+
+        JsonObject atlas = new JsonObject();
+        atlas.add("sources", sources);
+        write(root.resolve("assets/minecraft/atlases/blocks.json"), atlas);
+    }
+
     /**
      * The model and the name for each entity's spawn egg.
      *

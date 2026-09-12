@@ -48,8 +48,7 @@ public record ItemDefinition(String identifier, String iconKey, String displayNa
         JsonObject declared = body.getAsJsonObject("components");
         if (declared != null) {
             for (Map.Entry<String, JsonElement> entry : declared.entrySet()) {
-                components.put(entry.getKey(), entry.getValue().isJsonObject()
-                    ? entry.getValue().getAsJsonObject() : new JsonObject());
+                components.put(entry.getKey(), component(entry.getValue()));
             }
         }
 
@@ -58,11 +57,37 @@ public record ItemDefinition(String identifier, String iconKey, String displayNa
             stackSize(declared), components);
     }
 
-    /** `minecraft:icon` is a bare texture key, or an object naming one under `texture`. */
+    /** A component written as a bare value keeps it under `value`, where the object form puts it. */
+    private static JsonObject component(JsonElement declared) {
+        if (declared.isJsonObject()) return declared.getAsJsonObject();
+
+        JsonObject wrapped = new JsonObject();
+        if (declared.isJsonPrimitive()) wrapped.add("value", declared);
+        return wrapped;
+    }
+
+    /**
+     * The texture key `minecraft:icon` names, in any of the three shapes Bedrock has used for it.
+     *
+     * The oldest is a bare string, then came an object with `texture`, and from format 1.21.20 a map
+     * of states to textures under `textures`. A pack written against any of them is still shipped.
+     */
     private static String icon(JsonObject component) {
         if (component == null) return null;
+
         String texture = Json.text(component, "texture", null);
-        return texture != null ? texture : Json.text(component, "value", null);
+        if (texture == null) texture = Json.text(component, "value", null);
+        if (texture != null) return texture;
+
+        JsonObject textures = component.getAsJsonObject("textures");
+        if (textures == null) return null;
+
+        String byState = Json.text(textures, "default", null);
+        if (byState != null) return byState;
+        return textures.entrySet().stream()
+            .filter(entry -> entry.getValue().isJsonPrimitive())
+            .map(entry -> entry.getValue().getAsString())
+            .findFirst().orElse(null);
     }
 
     private static String displayName(JsonObject component) {
