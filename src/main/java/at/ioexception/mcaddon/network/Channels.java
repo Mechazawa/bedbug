@@ -27,6 +27,8 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 public final class Channels {
     private static final Identifier PROPERTIES = McAddon.id("entity_properties");
     private static final Identifier PACKS = McAddon.id("pack_list");
+    private static final Identifier FORM = McAddon.id("form");
+    private static final Identifier FORM_RESPONSE = McAddon.id("form_response");
 
     private Channels() {
     }
@@ -63,12 +65,102 @@ public final class Channels {
     }
     //?}
 
+    //? if >=1.21 {
+    /** A form the server asks a client to show, and the answer that comes back. */
+    private record Form(int formId, String description) implements CustomPacketPayload {
+        private static final CustomPacketPayload.Type<Form> TYPE = new CustomPacketPayload.Type<>(FORM);
+
+        private static final StreamCodec<FriendlyByteBuf, Form> CODEC = StreamCodec.composite(
+            ByteBufCodecs.VAR_INT, Form::formId,
+            ByteBufCodecs.STRING_UTF8, Form::description,
+            Form::new);
+
+        @Override
+        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    private record FormResponse(int formId, String answer) implements CustomPacketPayload {
+        private static final CustomPacketPayload.Type<FormResponse> TYPE =
+            new CustomPacketPayload.Type<>(FORM_RESPONSE);
+
+        private static final StreamCodec<FriendlyByteBuf, FormResponse> CODEC = StreamCodec.composite(
+            ByteBufCodecs.VAR_INT, FormResponse::formId,
+            ByteBufCodecs.STRING_UTF8, FormResponse::answer,
+            FormResponse::new);
+
+        @Override
+        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+    //?}
+
     /** Called from the common initialiser, because the payload type has to exist on both sides. */
     public static void register() {
         //? if >=1.21 {
         PayloadTypeRegistry.clientboundPlay().register(Properties.TYPE, Properties.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Packs.TYPE, Packs.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(Form.TYPE, Form.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(FormResponse.TYPE, FormResponse.CODEC);
         //?}
+    }
+
+    public static void sendForm(ServerPlayer player, int formId, String description) {
+        //? if >=1.21 {
+        ServerPlayNetworking.send(player, new Form(formId, description));
+        //?} else {
+        /*FriendlyByteBuf buffer = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buffer.writeVarInt(formId);
+        buffer.writeUtf(description, 262144);
+        ServerPlayNetworking.send(player, FORM, buffer);
+        *///?}
+    }
+
+    /** The server side of the answer: which form, and what the player chose. */
+    public static void receiveFormResponse(java.util.function.BiConsumer<Integer, String> handler) {
+        //? if >=1.21 {
+        ServerPlayNetworking.registerGlobalReceiver(FormResponse.TYPE,
+            (payload, context) -> context.server().execute(
+                () -> handler.accept(payload.formId(), payload.answer())));
+        //?} else {
+        /*ServerPlayNetworking.registerGlobalReceiver(FORM_RESPONSE,
+            (server, player, network, buffer, sender) -> {
+                int formId = buffer.readVarInt();
+                String answer = buffer.readUtf(262144);
+                server.execute(() -> handler.accept(formId, answer));
+            });
+        *///?}
+    }
+
+    public static void receiveForm(java.util.function.BiConsumer<Integer, String> handler) {
+        //? if >=1.21 {
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+            Form.TYPE,
+            (payload, context) -> context.client().execute(
+                () -> handler.accept(payload.formId(), payload.description())));
+        //?} else {
+        /*net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+            FORM,
+            (client, network, buffer, sender) -> {
+                int formId = buffer.readVarInt();
+                String description = buffer.readUtf(262144);
+                client.execute(() -> handler.accept(formId, description));
+            });
+        *///?}
+    }
+
+    public static void sendFormResponse(int formId, String answer) {
+        //? if >=1.21 {
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(
+            new FormResponse(formId, answer));
+        //?} else {
+        /*FriendlyByteBuf buffer = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buffer.writeVarInt(formId);
+        buffer.writeUtf(answer, 262144);
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(FORM_RESPONSE, buffer);
+        *///?}
     }
 
     public static void sendPacks(ServerPlayer player, String packs) {

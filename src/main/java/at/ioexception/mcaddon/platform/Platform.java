@@ -348,6 +348,15 @@ public final class Platform {
         *///?}
     }
 
+    /** Opens a screen, or closes whatever is open when given null. Renamed in 26. */
+    public static void setScreen(net.minecraft.client.gui.screens.Screen screen) {
+        //? if >=26 {
+        net.minecraft.client.Minecraft.getInstance().setScreenAndShow(screen);
+        //?} else {
+        /*net.minecraft.client.Minecraft.getInstance().setScreen(screen);
+        *///?}
+    }
+
     /** Where the player is looking from. The accessor lost its `get` prefix in 26. */
     public static net.minecraft.world.phys.Vec3 cameraPosition() {
         //? if >=26 {

@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.script;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.state.AddonState;
 import com.google.gson.JsonObject;
@@ -52,6 +53,7 @@ public final class ScriptBridge {
     private final AddonState state;
     private final ScriptCoverage coverage;
     private long tickDeadline;
+    private final Map<Integer, String> openForms = new java.util.LinkedHashMap<>();
 
     ScriptBridge(MinecraftServer server, AddonState state, ScriptCoverage coverage) {
         this.server = server;
@@ -676,6 +678,30 @@ public final class ScriptBridge {
     @HostAccess.Export
     public String[] itemTags(String itemId) {
         return new String[0];
+    }
+
+    /**
+     * Asks one player's client to show a form.
+     *
+     * False when there is nobody to show it to, which is the same answer Bedrock gives when a player
+     * is busy: the pack's promise resolves as cancelled rather than waiting forever.
+     */
+    @HostAccess.Export
+    public boolean showForm(String playerId, int formId, String description) {
+        if (!(entity(playerId) instanceof ServerPlayer player)) return false;
+        openForms.put(formId, player.getStringUUID());
+        Channels.sendForm(player, formId, description);
+        return true;
+    }
+
+    @HostAccess.Export
+    public void closeForm(String playerId) {
+        if (entity(playerId) instanceof ServerPlayer player) Channels.sendForm(player, 0, "");
+    }
+
+    /** The form a player still has open, so a disconnect can resolve the promise waiting on it. */
+    Map<Integer, String> openForms() {
+        return openForms;
     }
 
     // Helpers, not exported

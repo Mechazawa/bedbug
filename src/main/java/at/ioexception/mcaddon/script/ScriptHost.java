@@ -145,6 +145,37 @@ public final class ScriptHost {
         }
     }
 
+    /** Raises `system.beforeEvents.startup` and returns what the pack registered on it, as JSON. */
+    public String startup() {
+        try {
+            return runtime.invokeMember("startup").asString();
+        } catch (PolyglotException error) {
+            McAddon.LOGGER.error("A script failed during startup: {}", error.getMessage());
+            return null;
+        }
+    }
+
+    /** Runs a command the pack registered. The outcome carries a status and a message to show. */
+    public com.google.gson.JsonObject runCommand(int index, String origin, String arguments) {
+        try {
+            String outcome = runtime.invokeMember("runCommand", index, origin, arguments).asString();
+            return com.google.gson.JsonParser.parseString(outcome).getAsJsonObject();
+        } catch (RuntimeException error) {
+            McAddon.LOGGER.error("A script command failed: {}", error.getMessage());
+            return new com.google.gson.JsonObject();
+        }
+    }
+
+    /** Hands a form's answer back to the promise the pack is waiting on. */
+    public void formResponse(int formId, String answer) {
+        try {
+            Value forms = context.getBindings("js").getMember("__mcaddon_forms__");
+            if (forms != null) forms.invokeMember("respond", formId, answer);
+        } catch (RuntimeException error) {
+            McAddon.LOGGER.error("A script failed handling a form answer: {}", error.getMessage());
+        }
+    }
+
     /** Raises a `world.afterEvents.<name>` with the fields the caller provides. */
     public void raiseWorldEvent(String name, Map<String, Object> fields) {
         raise("worldAfter", name, fields);

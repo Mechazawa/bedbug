@@ -4,6 +4,7 @@ import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.network.PackList;
+import at.ioexception.mcaddon.script.CustomCommands;
 import at.ioexception.mcaddon.script.ScriptHost;
 import at.ioexception.mcaddon.state.AddonState;
 import com.mojang.brigadier.CommandDispatcher;
@@ -87,6 +88,9 @@ public final class ServerHooks {
         //?}
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> state = null);
         CommandRegistrationCallback.EVENT.register(ServerHooks::registerCommands);
+        Channels.receiveFormResponse((formId, answer) -> {
+            if (scripts != null) scripts.formResponse(formId, answer);
+        });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
             Channels.sendPacks(handler.player, PackList.of(McAddon.packs()).encode()));
     }
@@ -94,7 +98,10 @@ public final class ServerHooks {
     private static void start(MinecraftServer server) {
         state = AddonState.load(server.getWorldPath(LevelResource.ROOT).resolve("data/mcaddon-state.json"));
         scripts = ScriptHost.start(server, McAddon.packs().packs(), state);
-        if (scripts != null) scripts.raiseWorldEvent("worldLoad", Map.of());
+        if (scripts != null) {
+            CustomCommands.install(server, scripts);
+            scripts.raiseWorldEvent("worldLoad", Map.of());
+        }
     }
 
     private static void stop() {

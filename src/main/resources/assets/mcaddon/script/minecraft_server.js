@@ -1043,6 +1043,16 @@ class ScriptSystem {
 
 export const system = new ScriptSystem();
 
+/**
+ * The commands a pack registers during startup.
+ *
+ * Bedrock hands the registry to the startup event and expects commands to exist from then on. Java
+ * builds its command tree before a pack's script has run, so what a pack registers is collected here
+ * and added to the live dispatcher once the script has loaded.
+ */
+const customCommands = [];
+const customEnums = new Map();
+
 // What Java calls into. Kept off the module exports so a pack cannot reach it through an import.
 globalThis.__mcaddon_runtime__ = {
     tick(tick) {
@@ -1062,4 +1072,74 @@ globalThis.__mcaddon_runtime__ = {
     systemBefore(name) {
         return system.beforeEvents[name];
     },
+
+    /** Raises the startup event and returns what the pack registered on it, as JSON for Java. */
+    startup() {
+        const event = {
+            customCommandRegistry: {
+                registerEnum(name, values) {
+                    customEnums.set(name, Array.from(values ?? []));
+                },
+                registerCommand(spec, callback) {
+                    customCommands.push({ spec, callback });
+                },
+            },
+            blockComponentRegistry: {
+                registerCustomComponent(name) {
+                    bridge.unsupported("blockComponentRegistry.registerCustomComponent(" + name + ")");
+                },
+            },
+            itemComponentRegistry: {
+                registerCustomComponent(name) {
+                    bridge.unsupported("itemComponentRegistry.registerCustomComponent(" + name + ")");
+                },
+            },
+        };
+        system.beforeEvents.startup.emit(event);
+
+        return JSON.stringify(customCommands.map(entry => ({
+            name: entry.spec?.name ?? "",
+            description: entry.spec?.description ?? "",
+            permissionLevel: entry.spec?.permissionLevel ?? 0,
+            cheatsRequired: entry.spec?.cheatsRequired !== false,
+            mandatory: (entry.spec?.mandatoryParameters ?? []).map(parameter),
+            optional: (entry.spec?.optionalParameters ?? []).map(parameter),
+        })));
+    },
+
+    /** Runs one registered command; Java passes the origin and the parsed arguments as JSON. */
+    runCommand(index, originJson, argumentsJson) {
+        const entry = customCommands[index];
+        if (entry === undefined) return JSON.stringify({ status: 1, message: "" });
+
+        const origin = JSON.parse(originJson);
+        const resolved = {
+            sourceEntity: origin.entity === null ? undefined : entityFor(origin.entity),
+            sourceBlock: undefined,
+            sourceType: origin.type,
+            initiator: undefined,
+        };
+
+        try {
+            const outcome = entry.callback(resolved, ...JSON.parse(argumentsJson));
+            return JSON.stringify({
+                status: outcome?.status ?? 0,
+                message: outcome?.message === undefined ? "" : rawText(outcome.message),
+            });
+        } catch (error) {
+            bridge.reportError(String(error && error.stack ? error.stack : error));
+            return JSON.stringify({ status: 1, message: "" });
+        }
+    },
+
+    /** The values of an enum a pack registered, so Java can offer them as command completions. */
+    enumValues(name) {
+        return JSON.stringify(customEnums.get(name) ?? []);
+    },
 };
+
+/** A parameter declaration, reduced to what Java needs to build a Brigadier argument. */
+function parameter(declaration) {
+    if (typeof declaration === "string") return { name: declaration, type: "String" };
+    return { name: declaration?.name ?? "", type: declaration?.type ?? "String" };
+}

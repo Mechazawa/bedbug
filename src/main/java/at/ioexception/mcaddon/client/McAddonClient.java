@@ -4,9 +4,11 @@ import at.ioexception.mcaddon.client.render.AddonClientAssets;
 import at.ioexception.mcaddon.client.render.AddonEntityRenderer;
 import at.ioexception.mcaddon.client.render.Animators;
 import at.ioexception.mcaddon.client.render.EntityProperties;
+import at.ioexception.mcaddon.client.screen.AddonFormScreen;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.network.PackList;
+import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientEntityEvents;
@@ -27,6 +29,9 @@ public final class McAddonClient implements ClientModInitializer {
 
         Channels.receiveProperties(EntityProperties::accept);
         Channels.receivePacks(McAddonClient::reportMissingPacks);
+        // An empty description is how a pack closes a form it opened.
+        Channels.receiveForm((formId, description) -> Platform.setScreen(
+            description.isEmpty() ? null : new AddonFormScreen(formId, description)));
 
         ClientEntityEvents.ENTITY_UNLOAD.register((entity, level) -> {
             Animators.forget(entity.getId());
