@@ -3,6 +3,7 @@ package at.ioexception.mcaddon;
 import at.ioexception.mcaddon.pack.PackDiscovery;
 import at.ioexception.mcaddon.pack.PackSet;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.api.ModInitializer;
 import net.minecraft.resources.Identifier;
 import org.slf4j.Logger;
@@ -33,5 +34,6 @@ public final class McAddon implements ModInitializer {
     public void onInitialize() {
         packs = PackDiscovery.scan();
         packs.report().forEach(LOGGER::info);
+        ServerHooks.register();
     }
 }

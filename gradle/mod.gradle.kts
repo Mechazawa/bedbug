@@ -5,6 +5,33 @@ fun prop(key: String) = project.property(key) as String
 val java = project.extensions.getByType(JavaPluginExtension::class.java)
 java.toolchain.languageVersion.set(JavaLanguageVersion.of(prop("deps.java").toInt()))
 
+/**
+ * GraalJS runs the behaviour packs' scripts, and it ships nested in the jar because a player cannot
+ * be asked to install a JavaScript engine.
+ *
+ * The artifacts are listed rather than resolved through the `js-community` aggregator POM, because
+ * Loom nests declared dependencies and not transitive ones. Same version for all of them.
+ */
+val graalArtifacts = listOf(
+    "org.graalvm.polyglot:polyglot",
+    "org.graalvm.js:js-language",
+    "org.graalvm.regex:regex",
+    "org.graalvm.sdk:collections",
+    "org.graalvm.sdk:jniutils",
+    "org.graalvm.sdk:nativeimage",
+    "org.graalvm.sdk:word",
+    "org.graalvm.shadowed:icu4j",
+    "org.graalvm.shadowed:xz",
+    "org.graalvm.truffle:truffle-api",
+    "org.graalvm.truffle:truffle-compiler",
+    "org.graalvm.truffle:truffle-runtime",
+)
+
+graalArtifacts.forEach { artifact ->
+    project.dependencies.add("implementation", "$artifact:${prop("deps.graaljs")}")
+    project.dependencies.add("include", "$artifact:${prop("deps.graaljs")}")
+}
+
 project.tasks.named<ProcessResources>("processResources") {
     val tokens = mapOf(
         "version" to project.version.toString(),
