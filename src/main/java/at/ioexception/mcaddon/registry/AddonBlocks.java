@@ -82,9 +82,8 @@ public final class AddonBlocks {
         "minecraft:destructible_by_explosion", "minecraft:light_emission", "minecraft:geometry");
 
     private static Identifier identifier(String bedrock) {
-        int colon = bedrock.indexOf(':');
-        String namespace = Names.sanitise(colon > 0 ? bedrock.substring(0, colon) : "minecraft");
-        String path = Names.sanitise(colon > 0 ? bedrock.substring(colon + 1) : bedrock);
-        return namespace.isEmpty() || path.isEmpty() ? null : Platform.id(namespace, path);
+        Names.Identifier split = Names.split(bedrock, "minecraft");
+        return split.namespace().isEmpty() || split.path().isEmpty() ? null
+            : Platform.id(split.namespace(), split.path());
     }
 }

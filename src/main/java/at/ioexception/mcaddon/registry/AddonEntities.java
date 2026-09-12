@@ -48,8 +48,20 @@ public final class AddonEntities {
         return TRADES.get(type);
     }
 
+    /**
+     * The entity type a Bedrock identifier names, whoever owns it.
+     *
+     * An add-on's own types are checked first, then the game's, under whichever name the two
+     * editions give it: a pack writing `minecraft:zombie_pigman` means Java's `zombified_piglin`,
+     * and it means that wherever the pack writes it.
+     */
     public static EntityType<?> typeOf(String identifier) {
-        return BY_IDENTIFIER.get(identifier);
+        EntityType<?> own = BY_IDENTIFIER.get(identifier);
+        if (own != null) return own;
+
+        String java = at.ioexception.mcaddon.convert.BedrockEntityNames.java(identifier);
+        Identifier id = java == null ? null : Identifier.tryParse(java);
+        return id == null ? null : BuiltInRegistries.ENTITY_TYPE.getOptional(id).orElse(null);
     }
 
     public static Map<EntityType<?>, ServerEntityDefinition> all() {
@@ -123,9 +135,8 @@ public final class AddonEntities {
 
     /** Bedrock identifiers carry characters a resource location rejects, so both halves are cleaned. */
     private static Identifier identifier(String bedrock) {
-        int colon = bedrock.indexOf(':');
-        String namespace = colon > 0 ? Names.sanitise(bedrock.substring(0, colon)) : "minecraft";
-        String path = Names.sanitise(colon > 0 ? bedrock.substring(colon + 1) : bedrock);
-        return namespace.isEmpty() || path.isEmpty() ? null : Platform.id(namespace, path);
+        Names.Identifier split = Names.split(bedrock, "minecraft");
+        return split.namespace().isEmpty() || split.path().isEmpty() ? null
+            : Platform.id(split.namespace(), split.path());
     }
 }
