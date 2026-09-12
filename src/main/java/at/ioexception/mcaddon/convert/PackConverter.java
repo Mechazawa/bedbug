@@ -152,10 +152,11 @@ public final class PackConverter {
         }
 
         void convert(BedrockPack pack, Path root, boolean write) throws IOException {
-            Set<String> auxiliary = auxiliaryImages(pack);
-            if (write) emissiveLayers(pack, root);
-            Path target = root.resolve("assets").resolve(namespace).resolve("textures");
+            List<TextureSet> sets = TextureSet.readAll(pack);
+            Set<String> auxiliary = new HashSet<>();
+            for (TextureSet set : sets) auxiliary.addAll(set.auxiliary());
 
+            Path target = root.resolve("assets").resolve(namespace).resolve("textures");
             for (Path source : pack.list("textures", "")) {
                 String relative = pack.root().relativize(source).toString().replace('\\', '/');
                 String name = source.getFileName().toString().toLowerCase(Locale.ROOT);
@@ -176,105 +177,38 @@ public final class PackConverter {
                 }
                 written++;
             }
-        }
 
-        /**
-         * Every image a texture set names as something other than its colour layer.
-         *
-         * A set names its channels by bare file name, relative to the directory the set itself is in,
-         * so the names have to be resolved against that directory before they mean anything. The
-         * colour layer is the one the pack actually draws with and stays.
-         */
-        private Set<String> auxiliaryImages(BedrockPack pack) {
-            Set<String> auxiliary = new HashSet<>();
-            for (Path set : pack.list("textures", ".texture_set.json")) {
-                try {
-                    JsonObject body = Json.parseObject(set).getAsJsonObject("minecraft:texture_set");
-                    if (body == null) continue;
-
-                    String directory = directoryOf(pack, set);
-                    for (Map.Entry<String, JsonElement> channel : body.entrySet()) {
-                        if (channel.getKey().equals("color") || !channel.getValue().isJsonPrimitive()) continue;
-                        auxiliary.add(directory + channel.getValue().getAsString());
-                    }
-                } catch (IOException | RuntimeException error) {
-                    McAddon.LOGGER.warn("Could not read {}.", set.getFileName());
-                }
-            }
-            return auxiliary;
-        }
-
-        /** Walks the pack's texture sets and builds an emissive layer wherever one has any. */
-        private void emissiveLayers(BedrockPack pack, Path root) {
-            for (Path set : pack.list("textures", ".texture_set.json")) {
-                try {
-                    JsonObject body = Json.parseObject(set).getAsJsonObject("minecraft:texture_set");
-                    if (body == null) continue;
-
-                    String directory = directoryOf(pack, set);
-                    String colour = Json.text(body, "color", null);
-                    String combined = Json.text(body, "metalness_emissive_roughness", null);
-                    if (combined == null) {
-                        combined = Json.text(body, "metalness_emissive_roughness_subsurface", null);
-                    }
-                    if (colour != null && combined != null) {
-                        writeEmissive(pack, root, directory + colour, directory + combined);
-                    }
-                } catch (IOException | RuntimeException error) {
-                    McAddon.LOGGER.warn("Could not read {}.", set.getFileName());
+            // A cached conversion has the files already, so what glows is read back rather than redone.
+            for (TextureSet set : sets) {
+                String inside = Names.sanitise(set.colour().substring("textures/".length()));
+                if (write) writeSurface(pack, set, target, inside);
+                if (Files.isRegularFile(target.resolve(inside + "_emissive.png"))) {
+                    emissive.put(set.colour(), namespace + ":" + inside + "_emissive");
                 }
             }
         }
 
-        /** The pack-relative directory a texture set sits in, with a trailing slash. */
-        private static String directoryOf(BedrockPack pack, Path set) {
-            String relative = pack.root().relativize(set).toString().replace('\\', '/');
-            return relative.substring(0, relative.lastIndexOf('/') + 1);
-        }
-
         /**
-         * Pulls the emissive layer out of a physically based texture set.
+         * Everything a physically based set can become, which is two different things at once.
          *
-         * Java has no deferred pipeline, so the normal, roughness and heightmap layers of a `pbr`
-         * pack have nowhere to go. Emissiveness does: the green channel of the combined map says
-         * which pixels glow, and a copy of the colour texture masked to those pixels can be drawn as
-         * a second, fully lit pass. That is the one part of Bedrock's material set Java can show.
+         * The emissive copy is what vanilla Java draws as a second lit pass. The `_n` and `_s`
+         * sidecars are what a shader pack loaded by Iris or OptiFine reads, and cost nothing when
+         * the player has no shader pack: the game never looks at them.
          */
-        private void writeEmissive(BedrockPack pack, Path root, String colourPath, String mapPath) {
-            Path colourFile = pack.file(colourPath + ".png");
-            Path mapFile = pack.file(mapPath + ".png");
-            if (!Files.isRegularFile(colourFile) || !Files.isRegularFile(mapFile)) return;
-
-            try {
-                BufferedImage colour = ImageIO.read(colourFile.toFile());
-                BufferedImage map = ImageIO.read(mapFile.toFile());
-                if (colour == null || map == null) return;
-
-                BufferedImage glow = new BufferedImage(colour.getWidth(), colour.getHeight(),
-                    BufferedImage.TYPE_INT_ARGB);
-                boolean any = false;
-
-                for (int y = 0; y < colour.getHeight(); y++) {
-                    for (int x = 0; x < colour.getWidth(); x++) {
-                        int emissive = (map.getRGB(
-                            x * map.getWidth() / colour.getWidth(),
-                            y * map.getHeight() / colour.getHeight()) >> 8) & 0xFF;
-                        if (emissive < EMISSIVE_THRESHOLD) continue;
-
-                        glow.setRGB(x, y, colour.getRGB(x, y));
-                        any = true;
-                    }
-                }
-                if (!any) return;
-
-                String inside = Names.sanitise(colourPath.substring("textures/".length())) + "_emissive";
-                Path destination = root.resolve("assets").resolve(namespace)
-                    .resolve("textures").resolve(inside + ".png");
+        private void writeSurface(BedrockPack pack, TextureSet set, Path target, String inside)
+            throws IOException {
+            BufferedImage glow = set.emissiveLayer(pack, EMISSIVE_THRESHOLD);
+            if (glow != null) {
+                Path destination = target.resolve(inside + "_emissive.png");
                 Files.createDirectories(destination.getParent());
                 ImageIO.write(glow, "PNG", destination.toFile());
-                emissive.put(colourPath, namespace + ":" + inside);
-            } catch (IOException | RuntimeException error) {
-                McAddon.LOGGER.warn("Could not build the emissive layer for {}.", colourPath);
+            }
+
+            for (TextureSet.Sidecar sidecar : set.shaderSidecars(pack)) {
+                Path destination = target.resolve(inside + sidecar.suffix() + ".png");
+                Files.createDirectories(destination.getParent());
+                ImageIO.write(sidecar.image(), "PNG", destination.toFile());
+                written++;
             }
         }
     }
