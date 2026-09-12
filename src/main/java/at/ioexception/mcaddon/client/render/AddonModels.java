@@ -6,6 +6,7 @@ import at.ioexception.mcaddon.bedrock.entity.EntityAnimator;
 import at.ioexception.mcaddon.bedrock.model.BakedGeometry;
 import at.ioexception.mcaddon.bedrock.model.BedrockGeometry;
 import at.ioexception.mcaddon.bedrock.model.GeometryBaker;
+import at.ioexception.mcaddon.bedrock.model.MaterialDefinition;
 import at.ioexception.mcaddon.bedrock.model.RenderController;
 import at.ioexception.mcaddon.bedrock.model.UvShift;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
@@ -35,7 +36,8 @@ public final class AddonModels {
      *
      * A hidden entry may be a glob, because a costume hides a whole family of bones at once.
      */
-    public record Pass(BakedGeometry geometry, Identifier texture, Set<String> hiddenBones, UvShift shift) {
+    public record Pass(BakedGeometry geometry, Identifier texture, Set<String> hiddenBones, UvShift shift,
+        MaterialDefinition material) {
         public boolean hides(String bone) {
             for (String pattern : hiddenBones) {
                 if (pattern.endsWith("*")
@@ -73,7 +75,11 @@ public final class AddonModels {
             if (controller == null) continue;
 
             Pass pass = resolvePass(controller, definition, environment);
-            if (pass != null) passes.add(pass);
+            if (pass == null) continue;
+
+            passes.add(pass);
+            Pass glow = emissivePass(pass, definition, environment, controller);
+            if (glow != null) passes.add(glow);
         }
         return passes;
     }
@@ -109,8 +115,67 @@ public final class AddonModels {
                 else hidden.add(bone.getKey());
             }
         }
+        MaterialDefinition material = resolveMaterial(controller, definition, environment);
+        if (material != null && material.invisible()) return null;
+
         return new Pass(geometry, texture, hidden,
-            new UvShift(offset(controller.uvOffsetU(), environment), offset(controller.uvOffsetV(), environment)));
+            new UvShift(offset(controller.uvOffsetU(), environment), offset(controller.uvOffsetV(), environment)),
+            material);
+    }
+
+    /**
+     * A second, fully lit pass over the glowing pixels of a physically based texture.
+     *
+     * Bedrock lights those pixels through a deferred pipeline Java does not have. Drawing the same
+     * model again with a texture masked to them, at full brightness, is what Java can do instead, and
+     * a material that already declares itself emissive needs no second pass.
+     */
+    private Pass emissivePass(Pass pass, ClientEntityDefinition definition,
+        MolangEnvironment environment, RenderController controller) {
+        if (pass.material() != null && pass.material().emissive()) return null;
+
+        String bedrockPath = null;
+        for (MolangExpression expression : controller.textures()) {
+            MolangValue value = expression.evaluate(environment);
+            String path = value.isText() ? definition.textures().get(value.text()) : null;
+            if (path != null) {
+                bedrockPath = path;
+                break;
+            }
+        }
+
+        String glow = bedrockPath == null ? null : converted.emissiveLayers().get(bedrockPath);
+        if (glow == null) return null;
+
+        int colon = glow.indexOf(':');
+        Identifier texture = Platform.id(glow.substring(0, colon),
+            "textures/" + glow.substring(colon + 1) + ".png");
+        return new Pass(pass.geometry(), texture, pass.hiddenBones(), pass.shift(), EMISSIVE);
+    }
+
+    /** The material an extracted emissive layer is drawn with: lit, and blended over what is below. */
+    private static final MaterialDefinition EMISSIVE = new MaterialDefinition("emissive", "emissive",
+        Set.of("USE_EMISSIVE"), Set.of(), Set.of());
+
+    /**
+     * The material a pass draws with, which decides blending, culling and whether it glows.
+     *
+     * A controller lists one material per bone pattern; the entry for every bone is the one that
+     * describes the pass as a whole, so that is the one taken.
+     */
+    private MaterialDefinition resolveMaterial(RenderController controller,
+        ClientEntityDefinition definition, MolangEnvironment environment) {
+        for (Map<String, MolangExpression> rule : controller.materials()) {
+            MolangExpression expression = rule.get("*");
+            if (expression == null) expression = rule.values().stream().findFirst().orElse(null);
+            if (expression == null) continue;
+
+            MolangValue value = expression.evaluate(environment);
+            String key = value.isText() ? value.text() : null;
+            String name = key == null ? null : definition.materials().get(key);
+            if (name != null) return assets.material(name);
+        }
+        return null;
     }
 
     private BakedGeometry bake(String identifier) {

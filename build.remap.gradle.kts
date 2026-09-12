@@ -7,6 +7,17 @@ plugins {
 stonecutter {
     replacements.string(true) {
         replace("Identifier", "ResourceLocation")
+        // 26 moved the render types into their own package and renamed two of them: what it calls
+        // `entityCutout` is the one that does not cull, and `entityCutoutCull` is the one that does.
+        // Every rule below matches a whole expression, so none of them can rewrite another's output.
+        replace("import net.minecraft.client.renderer.rendertype.RenderTypes;",
+            "import net.minecraft.client.renderer.RenderType;")
+        replace("import net.minecraft.client.renderer.rendertype.RenderType;",
+            "import net.minecraft.client.renderer.RenderType;")
+        replace("RenderTypes.entityCutoutCull(", "RenderType.entityCutout(")
+        replace("RenderTypes.entityCutout(", "RenderType.entityCutoutNoCull(")
+        replace("RenderTypes.entityTranslucentEmissive(", "RenderType.entityTranslucentEmissive(")
+        replace("RenderTypes.entityTranslucent(", "RenderType.entityTranslucent(")
         // Fabric API followed the game's own renames a version later than the game did.
         replace("clientboundPlay()", "playS2C()")
         replace("serverboundPlay()", "playC2S()")

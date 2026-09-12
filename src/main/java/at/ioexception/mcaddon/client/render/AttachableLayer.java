@@ -1,6 +1,8 @@
 package at.ioexception.mcaddon.client.render;
 
 import at.ioexception.mcaddon.bedrock.entity.EntityAnimator;
+import at.ioexception.mcaddon.bedrock.model.MaterialDefinition;
+import at.ioexception.mcaddon.platform.Platform;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.model.EntityModel;
 import net.minecraft.client.renderer.entity.RenderLayerParent;
@@ -13,16 +15,15 @@ import net.minecraft.world.item.ItemStack;
 import java.util.ArrayList;
 import java.util.List;
 
+import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+
 //? if >=1.21.2 {
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
-import net.minecraft.client.renderer.rendertype.RenderTypes;
-import net.minecraft.client.renderer.texture.OverlayTexture;
 //?} else {
 /*import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.renderer.texture.OverlayTexture;
 *///?}
 
 /**
@@ -46,6 +47,21 @@ public class AttachableLayer<S extends LivingEntityRenderState, M extends Entity
     @SuppressWarnings("unchecked")
     private static <A, B> B cast(A value) {
         return (B) value;
+    }
+
+
+    /**
+     * The render type a pass draws with, taken from the material its pack named.
+     *
+     * Without a material the pack meant Bedrock's default for an entity, which is an alpha test with
+     * back faces kept.
+     */
+    private static RenderType renderTypeOf(AddonModels.Pass pass) {
+        MaterialDefinition material = pass.material();
+        return Platform.renderType(pass.texture(),
+            material != null && material.blends(),
+            material != null && material.culls(),
+            material != null && material.emissive());
     }
 
     /** One drawing pass and the animator whose bones it should be posed by. */
@@ -85,7 +101,7 @@ public class AttachableLayer<S extends LivingEntityRenderState, M extends Entity
 
         for (Worn each : worn(entity, 0)) {
             AddonModels.Pass pass = each.pass();
-            collector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(pass.texture()),
+            collector.submitCustomGeometry(poseStack, renderTypeOf(pass),
                 (pose, buffer) -> {
                     PoseStack local = new PoseStack();
                     local.last().set(pose);
@@ -101,7 +117,7 @@ public class AttachableLayer<S extends LivingEntityRenderState, M extends Entity
         float ageInTicks, float netHeadYaw, float headPitch) {
         for (Worn each : worn(entity, partialTick)) {
             AddonModels.Pass pass = each.pass();
-            VertexConsumer buffer = buffers.getBuffer(RenderType.entityCutoutNoCull(pass.texture()));
+            VertexConsumer buffer = buffers.getBuffer(renderTypeOf(pass));
             BedrockModelRenderer.render(pass.geometry(), each.animator(), pass::hides, pass.shift(),
                 poseStack, buffer, light, OverlayTexture.NO_OVERLAY, -1);
         }

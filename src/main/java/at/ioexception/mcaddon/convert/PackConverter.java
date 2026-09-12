@@ -19,6 +19,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -102,7 +103,8 @@ public final class PackConverter {
             McAddon.LOGGER.error("Could not convert {}.", pack.displayName(), error);
         }
 
-        return new ConvertedPack(pack, root, namespace, textures.paths(), icons, List.copyOf(sounds));
+        return new ConvertedPack(pack, root, namespace, textures.paths(), textures.emissive(),
+            icons, List.copyOf(sounds));
     }
 
     private static void writeMetadata(BedrockPack pack, Path root) throws IOException {
@@ -130,6 +132,7 @@ public final class PackConverter {
     private static final class Textures {
         private final String namespace;
         private final Map<String, String> paths = new TreeMap<>();
+        private final Map<String, String> emissive = new TreeMap<>();
         private int written;
 
         Textures(String namespace) {
@@ -140,12 +143,17 @@ public final class PackConverter {
             return paths;
         }
 
+        Map<String, String> emissive() {
+            return emissive;
+        }
+
         int written() {
             return written;
         }
 
         void convert(BedrockPack pack, Path root, boolean write) throws IOException {
             Set<String> auxiliary = auxiliaryImages(pack);
+            if (write) emissiveLayers(pack, root);
             Path target = root.resolve("assets").resolve(namespace).resolve("textures");
 
             for (Path source : pack.list("textures", "")) {
@@ -170,6 +178,71 @@ public final class PackConverter {
             }
         }
 
+        /** Walks the pack's texture sets and builds an emissive layer wherever one has any. */
+        private void emissiveLayers(BedrockPack pack, Path root) {
+            for (Path set : pack.list("textures", ".texture_set.json")) {
+                try {
+                    JsonObject body = Json.parseObject(set).getAsJsonObject("minecraft:texture_set");
+                    if (body == null) continue;
+
+                    String colour = Json.text(body, "color", null);
+                    String combined = Json.text(body, "metalness_emissive_roughness", null);
+                    if (combined == null) {
+                        combined = Json.text(body, "metalness_emissive_roughness_subsurface", null);
+                    }
+                    if (colour != null && combined != null) writeEmissive(pack, root, colour, combined);
+                } catch (IOException | RuntimeException error) {
+                    McAddon.LOGGER.warn("Could not read {}.", set.getFileName());
+                }
+            }
+        }
+
+        /**
+         * Pulls the emissive layer out of a physically based texture set.
+         *
+         * Java has no deferred pipeline, so the normal, roughness and heightmap layers of a `pbr`
+         * pack have nowhere to go. Emissiveness does: the green channel of the combined map says
+         * which pixels glow, and a copy of the colour texture masked to those pixels can be drawn as
+         * a second, fully lit pass. That is the one part of Bedrock's material set Java can show.
+         */
+        private void writeEmissive(BedrockPack pack, Path root, String colourPath, String mapPath) {
+            Path colourFile = pack.file(colourPath + ".png");
+            Path mapFile = pack.file(mapPath + ".png");
+            if (!Files.isRegularFile(colourFile) || !Files.isRegularFile(mapFile)) return;
+
+            try {
+                BufferedImage colour = ImageIO.read(colourFile.toFile());
+                BufferedImage map = ImageIO.read(mapFile.toFile());
+                if (colour == null || map == null) return;
+
+                BufferedImage glow = new BufferedImage(colour.getWidth(), colour.getHeight(),
+                    BufferedImage.TYPE_INT_ARGB);
+                boolean any = false;
+
+                for (int y = 0; y < colour.getHeight(); y++) {
+                    for (int x = 0; x < colour.getWidth(); x++) {
+                        int emissive = (map.getRGB(
+                            x * map.getWidth() / colour.getWidth(),
+                            y * map.getHeight() / colour.getHeight()) >> 8) & 0xFF;
+                        if (emissive < EMISSIVE_THRESHOLD) continue;
+
+                        glow.setRGB(x, y, colour.getRGB(x, y));
+                        any = true;
+                    }
+                }
+                if (!any) return;
+
+                String inside = Names.sanitise(colourPath.substring("textures/".length())) + "_emissive";
+                Path destination = root.resolve("assets").resolve(namespace)
+                    .resolve("textures").resolve(inside + ".png");
+                Files.createDirectories(destination.getParent());
+                ImageIO.write(glow, "PNG", destination.toFile());
+                emissive.put(colourPath, namespace + ":" + inside);
+            } catch (IOException | RuntimeException error) {
+                McAddon.LOGGER.warn("Could not build the emissive layer for {}.", colourPath);
+            }
+        }
+
         /** Every image a texture set names as something other than its colour layer. */
         private Set<String> auxiliaryImages(BedrockPack pack) {
             Set<String> auxiliary = new HashSet<>();
@@ -190,6 +263,9 @@ public final class PackConverter {
             return auxiliary;
         }
     }
+
+    /** How bright the combined map's emissive channel has to be before a pixel counts as glowing. */
+    private static final int EMISSIVE_THRESHOLD = 8;
 
     /**
      * `sound_definitions.json` becomes Java's `sounds.json`, one registered event per definition.

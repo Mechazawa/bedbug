@@ -1,5 +1,7 @@
 package at.ioexception.mcaddon.platform;
 
+import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -548,6 +550,21 @@ public final class Platform {
         //?} else {
         /*template.fillFromWorld(level, corner, size, false, (Block) null);
         *///?}
+    }
+
+    /**
+     * The render type a Bedrock material asks for.
+     *
+     * Bedrock's entity materials disable culling by default and use an alpha test, which is Java's
+     * cutout-no-cull; a material that asks for blending gets a translucent type, and one that glows
+     * gets the emissive variant. 26 swapped two of the names: its `entityCutout` is the one that
+     * does not cull, and `entityCutoutNoCull` is gone.
+     */
+    public static RenderType renderType(Identifier texture, boolean blend, boolean cull,
+        boolean emissive) {
+        if (emissive) return RenderTypes.entityTranslucentEmissive(texture);
+        if (blend) return RenderTypes.entityTranslucent(texture);
+        return cull ? RenderTypes.entityCutoutCull(texture) : RenderTypes.entityCutout(texture);
     }
 
     /** Opens a screen, or closes whatever is open when given null. Renamed in 26. */

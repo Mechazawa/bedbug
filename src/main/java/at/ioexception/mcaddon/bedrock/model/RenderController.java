@@ -20,6 +20,7 @@ public record RenderController(
     MolangExpression geometry,
     List<MolangExpression> textures,
     List<Map<String, MolangExpression>> partVisibility,
+    List<Map<String, MolangExpression>> materials,
     MolangExpression uvOffsetU,
     MolangExpression uvOffsetV,
     Map<String, List<MolangValue>> arrays

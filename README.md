@@ -31,7 +31,8 @@ server decides what happens; the client draws it.
   length no clip has repaired on the way through.
 - Text, with Bedrock's `.lang` rules rather than a properties reader's.
 - Models, animations, animation controllers and render controllers, drawn through a full Molang
-  evaluator.
+  evaluator, with each pass drawn the way its `.material` asks: alpha tested or blended, culled or
+  not, plain or glowing.
 - Entities a behaviour pack declares, with their properties, events, component groups, filters and
   the sensors that fire them: environment, entity, timer, scheduler, damage, interact and
   hurt-on-condition. Their properties reach every client, so a model looks the same in multiplayer
@@ -55,10 +56,18 @@ for that this mod does not implement yet, which is the honest answer to "will my
 
 ## What does not work
 
-Bedrock's physically based rendering and its stencil material passes. Both are parts of a renderer
-Java does not have: the normal, heightmap and metalness maps a `pbr` pack ships are dropped, and a
-material that masks one pass against another through the stencil buffer draws as an ordinary cutout.
-Nothing else in a pack is deliberately left out; what a pack asks for that this mod cannot do is
+Two parts of Bedrock's renderer, both of which Java has no equivalent for.
+
+**Surface lighting from a physically based texture set.** The emissive channel is used: pixels a
+pack marked as glowing are drawn again at full brightness. The normal, roughness, metalness and
+heightmap channels are not, because a forward renderer lit per vertex has nothing to feed them to.
+
+**Stencil-masked material passes.** A material's alpha testing, blending, culling and emissiveness
+all become the render type the pass is drawn with. What cannot follow is the stencil buffer itself:
+a pass that exists only to write a mask is left out rather than drawn as a shape that does not
+belong there.
+
+Nothing else in a pack is deliberately left out. What a pack asks for that this mod cannot do is
 counted and shown by `/mcaddon entities` and `/mcaddon scripts`.
 
 ## Supported versions

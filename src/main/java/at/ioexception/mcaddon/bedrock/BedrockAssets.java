@@ -9,6 +9,7 @@ import at.ioexception.mcaddon.bedrock.entity.ClientEntityDefinition;
 import at.ioexception.mcaddon.bedrock.entity.ClientEntityParser;
 import at.ioexception.mcaddon.bedrock.model.BedrockGeometry;
 import at.ioexception.mcaddon.bedrock.model.GeometryParser;
+import at.ioexception.mcaddon.bedrock.model.MaterialDefinition;
 import at.ioexception.mcaddon.bedrock.model.RenderController;
 import at.ioexception.mcaddon.bedrock.model.RenderControllerParser;
 import at.ioexception.mcaddon.pack.BedrockPack;
@@ -36,6 +37,7 @@ public final class BedrockAssets {
     private final Map<String, RenderController> renderControllers = new LinkedHashMap<>();
     private final Map<String, ClientEntityDefinition> entities = new LinkedHashMap<>();
     private final Map<String, ClientEntityDefinition> attachables = new LinkedHashMap<>();
+    private final Map<String, MaterialDefinition> materials = new LinkedHashMap<>();
 
     private BedrockAssets() {
     }
@@ -43,6 +45,7 @@ public final class BedrockAssets {
     public static BedrockAssets read(BedrockPack pack) {
         BedrockAssets assets = new BedrockAssets();
 
+        assets.materials.putAll(MaterialDefinition.readAll(pack));
         assets.each(pack, "models", assets::readGeometries);
         assets.each(pack, "animations", root ->
             assets.readSection(root, "animations", AnimationParser::readAnimation, assets.animations));
@@ -75,6 +78,11 @@ public final class BedrockAssets {
 
     public AnimationController animationController(String name) {
         return animationControllers.get(name);
+    }
+
+    /** Null when a pack names a material the game already has, which carries its own behaviour. */
+    public MaterialDefinition material(String name) {
+        return materials.get(name);
     }
 
     public RenderController renderController(String name) {

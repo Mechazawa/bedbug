@@ -15,6 +15,7 @@ public record ClientEntityDefinition(
     String identifier,
     Map<String, String> geometry,
     Map<String, String> textures,
+    Map<String, String> materials,
     Map<String, String> animations,
     List<Gated> animate,
     List<Gated> renderControllers,

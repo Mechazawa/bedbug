@@ -37,11 +37,23 @@ public final class RenderControllerParser {
             }
         }
 
+        List<Map<String, MolangExpression>> materials = new ArrayList<>();
+        if (json.has("materials")) {
+            for (JsonElement rule : json.getAsJsonArray("materials")) {
+                Map<String, MolangExpression> parsed = new LinkedHashMap<>();
+                for (Map.Entry<String, JsonElement> bone : rule.getAsJsonObject().entrySet()) {
+                    parsed.put(bone.getKey(), MolangParser.parse(bone.getValue().getAsString()));
+                }
+                materials.add(Map.copyOf(parsed));
+            }
+        }
+
         return new RenderController(
             name,
             json.has("geometry") ? MolangParser.parse(json.get("geometry").getAsString()) : null,
             List.copyOf(textures),
             List.copyOf(visibility),
+            List.copyOf(materials),
             uvOffset(json, 0),
             uvOffset(json, 1),
             readArrays(json));

@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.client.render;
 
 import at.ioexception.mcaddon.bedrock.entity.EntityAnimator;
+import at.ioexception.mcaddon.bedrock.model.MaterialDefinition;
 import at.ioexception.mcaddon.entity.AddonEntity;
 import at.ioexception.mcaddon.platform.Platform;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -16,17 +17,16 @@ import net.minecraft.world.item.ItemStack;
 import java.util.ArrayList;
 import java.util.List;
 
+import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+
 //? if >=1.21.2 {
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
-import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
-import net.minecraft.client.renderer.texture.OverlayTexture;
 //?} else {
 /*import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.renderer.texture.OverlayTexture;
 *///?}
 
 /**
@@ -79,6 +79,21 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
         return passes;
     }
 
+
+    /**
+     * The render type a pass draws with, taken from the material its pack named.
+     *
+     * Without a material the pack meant Bedrock's default for an entity, which is an alpha test with
+     * back faces kept.
+     */
+    private static RenderType renderTypeOf(AddonModels.Pass pass) {
+        MaterialDefinition material = pass.material();
+        return Platform.renderType(pass.texture(),
+            material != null && material.blends(),
+            material != null && material.culls(),
+            material != null && material.emissive());
+    }
+
     //? if >=1.21.2 {
     /** What drawing needs, pulled off the entity while the entity is still safe to touch. */
     public static class State extends EntityRenderState {
@@ -120,7 +135,7 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
         EntityAnimator animator = state.animator;
         int light = state.lightCoords;
         for (AddonModels.Pass pass : state.passes) {
-            collector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(pass.texture()),
+            collector.submitCustomGeometry(poseStack, renderTypeOf(pass),
                 (pose, buffer) -> {
                     PoseStack local = new PoseStack();
                     local.last().set(pose);
@@ -153,7 +168,7 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
         List<AddonModels.Pass> passes = new ArrayList<>(binding.models().resolve(animator));
         passes.addAll(attachables(entity, partialTick));
         for (AddonModels.Pass pass : passes) {
-            VertexConsumer buffer = buffers.getBuffer(RenderType.entityCutoutNoCull(pass.texture()));
+            VertexConsumer buffer = buffers.getBuffer(renderTypeOf(pass));
             BedrockModelRenderer.render(pass.geometry(), animator, pass::hides, pass.shift(),
                 poseStack, buffer, light, OverlayTexture.NO_OVERLAY, -1);
         }
