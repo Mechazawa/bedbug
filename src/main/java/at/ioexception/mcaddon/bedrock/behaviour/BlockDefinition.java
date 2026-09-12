@@ -22,7 +22,12 @@ import java.util.Map;
  */
 public record BlockDefinition(String identifier, Map<String, String> faceTextures, String geometry,
     float hardness, float resistance, int lightEmission, boolean transparent,
-    Map<String, JsonObject> components) {
+    Map<String, JsonObject> components, Map<String, List<JsonElement>> states,
+    List<Permutation> permutations) {
+
+    /** One `permutations` entry: the components that apply while its Molang condition holds. */
+    public record Permutation(String condition, Map<String, JsonObject> components) {
+    }
 
     public static List<BlockDefinition> readAll(BedrockPack pack) {
         List<BlockDefinition> blocks = new ArrayList<>();
@@ -68,13 +73,49 @@ public record BlockDefinition(String identifier, Map<String, String> faceTexture
             }
         }
 
+        Map<String, List<JsonElement>> states = new LinkedHashMap<>();
+        JsonObject declaredStates = description.getAsJsonObject("states");
+        if (declaredStates != null) {
+            for (Map.Entry<String, JsonElement> entry : declaredStates.entrySet()) {
+                List<JsonElement> values = new ArrayList<>();
+                if (entry.getValue().isJsonArray()) {
+                    entry.getValue().getAsJsonArray().forEach(values::add);
+                } else if (entry.getValue().isJsonObject()) {
+                    // A range is written as `{"values": {"min": 0, "max": 3}}`.
+                    JsonObject range = entry.getValue().getAsJsonObject().getAsJsonObject("values");
+                    if (range != null && range.has("min") && range.has("max")) {
+                        for (int value = range.get("min").getAsInt(); value <= range.get("max").getAsInt();
+                            value++) {
+                            values.add(new com.google.gson.JsonPrimitive(value));
+                        }
+                    }
+                }
+                if (!values.isEmpty()) states.put(entry.getKey(), values);
+            }
+        }
+
+        List<Permutation> permutations = new ArrayList<>();
+        for (JsonElement element : Json.list(body, "permutations")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject permutation = element.getAsJsonObject();
+            Map<String, JsonObject> applied = new LinkedHashMap<>();
+            JsonObject inside = permutation.getAsJsonObject("components");
+            if (inside != null) {
+                for (Map.Entry<String, JsonElement> entry : inside.entrySet()) {
+                    applied.put(entry.getKey(), entry.getValue().isJsonObject()
+                        ? entry.getValue().getAsJsonObject() : new JsonObject());
+                }
+            }
+            permutations.add(new Permutation(Json.text(permutation, "condition", "1"), applied));
+        }
+
         return new BlockDefinition(identifier, faces,
             text(declared, "minecraft:geometry"),
             number(components.get("minecraft:destructible_by_mining"), "seconds_to_destroy", 1f),
             number(components.get("minecraft:destructible_by_explosion"), "explosion_resistance", 1f),
             (int) number(declared, "minecraft:light_emission", 0),
             transparent,
-            components);
+            components, states, permutations);
     }
 
     /** A component is written either as the bare value or as an object wrapping it. */

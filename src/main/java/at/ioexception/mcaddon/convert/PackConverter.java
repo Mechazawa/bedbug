@@ -3,6 +3,10 @@ package at.ioexception.mcaddon.convert;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.behaviour.BlockDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.ItemDefinition;
+import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
+import at.ioexception.mcaddon.bedrock.molang.MolangParser;
+import at.ioexception.mcaddon.bedrock.molang.MolangValue;
+import at.ioexception.mcaddon.block.AddonBlock;
 import at.ioexception.mcaddon.bedrock.behaviour.LootTableDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.RecipeDefinition;
 import at.ioexception.mcaddon.pack.BedrockPack;
@@ -59,7 +63,7 @@ public final class PackConverter {
             loot.addAll(LootTableDefinition.readAll(behaviour));
             blocks.addAll(BlockDefinition.readAll(behaviour));
         }
-        String namespace = Names.namespaceOf(pack);
+        String namespace = Names.namespaceOf(pack, bundle.behaviours());
         Path root = cache.resolve("converted").resolve("%s-%s-%d".formatted(
             pack.manifest().uuid(), pack.manifest().version(), Platform.resourcePackFormat()));
 
@@ -465,16 +469,7 @@ public final class PackConverter {
     private static void writeBlockModels(Path root, Map<String, String> textureKeys,
         List<BlockDefinition> blocks) throws IOException {
         for (BlockDefinition block : blocks) {
-            Map<String, String> faces = new TreeMap<>();
-            block.faceTextures().forEach((face, key) -> {
-                String texture = textureKeys.get(key);
-                if (texture == null) return;
-                switch (face) {
-                    case "*" -> FACES.forEach(name -> faces.put(name, texture));
-                    case "sides" -> SIDE_FACES.forEach(name -> faces.put(name, texture));
-                    default -> faces.put(face, texture);
-                }
-            });
+            Map<String, String> faces = resolveFaces(block.faceTextures(), textureKeys);
             if (faces.isEmpty()) continue;
 
             int colon = block.identifier().indexOf(':');
@@ -483,25 +478,10 @@ public final class PackConverter {
                 ? block.identifier().substring(colon + 1) : block.identifier());
             Path assets = root.resolve("assets").resolve(namespace);
 
-            JsonObject textures = new JsonObject();
-            boolean uniform = faces.values().stream().distinct().count() == 1;
-            if (uniform) {
-                textures.addProperty("all", faces.values().iterator().next());
-            } else {
-                faces.forEach(textures::addProperty);
-            }
+            writeCubeModel(assets, name, faces);
 
-            JsonObject model = new JsonObject();
-            model.addProperty("parent", uniform ? "minecraft:block/cube_all" : "minecraft:block/cube");
-            model.add("textures", textures);
-            write(assets.resolve("models/block").resolve(name + ".json"), model);
-
-            JsonObject variant = new JsonObject();
-            variant.addProperty("model", namespace + ":block/" + name);
-            JsonObject variants = new JsonObject();
-            variants.add("", variant);
             JsonObject blockstate = new JsonObject();
-            blockstate.add("variants", variants);
+            blockstate.add("variants", variants(block, namespace, name, textureKeys, assets));
             write(assets.resolve("blockstates").resolve(name + ".json"), blockstate);
 
             JsonObject item = new JsonObject();
@@ -524,6 +504,124 @@ public final class PackConverter {
             Functions.convert(behaviour, root, namespace, unsupported);
         }
         unsupported.forEach(at.ioexception.mcaddon.registry.AddonEntities::unsupported);
+    }
+
+    /**
+     * One variant per combination of the states a pack declared, with its permutations applied.
+     *
+     * A permutation's condition is Molang over `q.block_state`, so each combination is evaluated
+     * against the values it stands for and the last condition that holds wins, which is the order
+     * Bedrock applies them in.
+     */
+    private static JsonObject variants(BlockDefinition block, String namespace, String name,
+        Map<String, String> textureKeys, Path assets) throws IOException {
+        JsonObject variants = new JsonObject();
+        if (block.states().isEmpty()) {
+            variants.add("", modelReference(namespace, name));
+            return variants;
+        }
+
+        List<String> stateNames = new ArrayList<>(block.states().keySet());
+        List<List<JsonElement>> values = stateNames.stream().map(block.states()::get).toList();
+
+        int total = values.stream().mapToInt(List::size).reduce(1, (left, right) -> left * right);
+        for (int combination = 0; combination < total; combination++) {
+            Map<String, JsonElement> chosen = new LinkedHashMap<>();
+            List<String> key = new ArrayList<>();
+
+            int remaining = combination;
+            for (int index = 0; index < stateNames.size(); index++) {
+                List<JsonElement> options = values.get(index);
+                int at = remaining % options.size();
+                remaining /= options.size();
+
+                String state = stateNames.get(index);
+                chosen.put(state, options.get(at));
+                key.add(javaStateName(state) + "=" + (AddonBlock.isBoolean(options)
+                    ? options.get(at).getAsString() : String.valueOf(at)));
+            }
+
+            Map<String, String> faces = facesFor(block, chosen, textureKeys);
+            String variantName = name + "_" + combination;
+            writeCubeModel(assets, variantName, faces);
+            variants.add(String.join(",", key), modelReference(namespace, variantName));
+        }
+        return variants;
+    }
+
+    /** The textures that apply once the permutations whose conditions hold have been applied. */
+    private static Map<String, String> facesFor(BlockDefinition block, Map<String, JsonElement> states,
+        Map<String, String> textureKeys) {
+        Map<String, String> faces = resolveFaces(block.faceTextures(), textureKeys);
+
+        MolangEnvironment environment = new MolangEnvironment();
+        environment.setQueries((query, arguments) -> {
+            if (!query.equals("block_state") || arguments.isEmpty()) return MolangValue.ZERO;
+            JsonElement value = states.get(arguments.get(0).text());
+            if (value == null || !value.isJsonPrimitive()) return MolangValue.ZERO;
+            if (value.getAsJsonPrimitive().isBoolean()) return MolangValue.of(value.getAsBoolean());
+            if (value.getAsJsonPrimitive().isNumber()) return MolangValue.of(value.getAsDouble());
+            return MolangValue.of(value.getAsString());
+        });
+
+        for (BlockDefinition.Permutation permutation : block.permutations()) {
+            if (!MolangParser.parse(permutation.condition()).evaluate(environment).truthy()) continue;
+            JsonObject instances = permutation.components().get("minecraft:material_instances");
+            if (instances == null) continue;
+
+            Map<String, String> overrides = new LinkedHashMap<>();
+            for (Map.Entry<String, JsonElement> entry : instances.entrySet()) {
+                if (!entry.getValue().isJsonObject()) continue;
+                String texture = Json.text(entry.getValue().getAsJsonObject(), "texture", null);
+                if (texture != null) overrides.put(entry.getKey(), texture);
+            }
+            faces.putAll(resolveFaces(overrides, textureKeys));
+        }
+        return faces;
+    }
+
+    private static Map<String, String> resolveFaces(Map<String, String> declared,
+        Map<String, String> textureKeys) {
+        Map<String, String> faces = new TreeMap<>();
+        declared.forEach((face, key) -> {
+            String texture = textureKeys.get(key);
+            if (texture == null) return;
+            switch (face) {
+                case "*" -> FACES.forEach(name -> faces.put(name, texture));
+                case "sides" -> SIDE_FACES.forEach(name -> faces.put(name, texture));
+                default -> faces.put(face, texture);
+            }
+        });
+        return faces;
+    }
+
+    private static void writeCubeModel(Path assets, String name, Map<String, String> faces)
+        throws IOException {
+        if (faces.isEmpty()) return;
+
+        JsonObject textures = new JsonObject();
+        boolean uniform = faces.values().stream().distinct().count() == 1;
+        if (uniform) {
+            textures.addProperty("all", faces.values().iterator().next());
+        } else {
+            faces.forEach(textures::addProperty);
+        }
+
+        JsonObject model = new JsonObject();
+        model.addProperty("parent", uniform ? "minecraft:block/cube_all" : "minecraft:block/cube");
+        model.add("textures", textures);
+        write(assets.resolve("models/block").resolve(name + ".json"), model);
+    }
+
+    private static JsonObject modelReference(String namespace, String name) {
+        JsonObject variant = new JsonObject();
+        variant.addProperty("model", namespace + ":block/" + name);
+        return variant;
+    }
+
+    /** A Bedrock state name is namespaced; a Java property name is not allowed to be. */
+    private static String javaStateName(String bedrock) {
+        return Names.sanitise(bedrock).replace(':', '_').replace('.', '_').replace('/', '_');
     }
 
     private static final List<String> FACES = List.of("up", "down", "north", "south", "east", "west");

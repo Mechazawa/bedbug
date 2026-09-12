@@ -9,7 +9,11 @@ import at.ioexception.mcaddon.script.ScriptHost;
 import at.ioexception.mcaddon.state.AddonState;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import at.ioexception.mcaddon.platform.Platform;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
+import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -88,11 +92,54 @@ public final class ServerHooks {
         //?}
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> state = null);
         CommandRegistrationCallback.EVENT.register(ServerHooks::registerCommands);
+        registerInteractions();
         Channels.receiveFormResponse((formId, answer) -> {
             if (scripts != null) scripts.formResponse(formId, answer);
         });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
             Channels.sendPacks(handler.player, PackList.of(McAddon.packs()).encode()));
+    }
+
+    /**
+     * The player events a pack's script listens for.
+     *
+     * Each one carries the fields Bedrock's event of the same name carries, so a pack's handler
+     * reads what it expects rather than a shape invented here.
+     */
+    private static void registerInteractions() {
+        PlayerBlockBreakEvents.AFTER.register((level, player, position, state, entity) ->
+            raisePlayerEvent("playerBreakBlock", player, fields -> {
+                fields.put("block", blockFields(position));
+                fields.put("brokenBlockPermutation", Platform.idOf(
+                    net.minecraft.core.registries.BuiltInRegistries.BLOCK.getResourceKey(state.getBlock())
+                        .orElse(null)).toString());
+            }));
+
+        UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
+            raisePlayerEvent("playerInteractWithBlock", player, fields ->
+                fields.put("block", blockFields(hit.getBlockPos())));
+            return net.minecraft.world.InteractionResult.PASS;
+        });
+
+        UseEntityCallback.EVENT.register((player, level, hand, target, hit) -> {
+            raisePlayerEvent("playerInteractWithEntity", player, fields ->
+                fields.put("target", new ScriptHost.EntityHandle(target.getStringUUID())));
+            return net.minecraft.world.InteractionResult.PASS;
+        });
+    }
+
+    private static String blockFields(net.minecraft.core.BlockPos position) {
+        return position.getX() + "," + position.getY() + "," + position.getZ();
+    }
+
+    private static void raisePlayerEvent(String event, net.minecraft.world.entity.player.Player player,
+        java.util.function.Consumer<Map<String, Object>> extra) {
+        if (scripts == null) return;
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
+        extra.accept(fields);
+        scripts.raiseWorldEvent(event, fields);
     }
 
     private static void start(MinecraftServer server) {

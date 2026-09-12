@@ -41,14 +41,19 @@ public final class Names {
      * The namespace a pack's own content uses, recovered from the identifiers it declares.
      *
      * A pack's assets have no namespace of their own, only paths, so one has to be chosen for them.
-     * Taking the namespace the pack already uses for its entities and items means a texture ends up
-     * at `oreville_vn:textures/...` and not under some invented prefix, which keeps ids readable and
-     * keeps two packs apart without a lookup table.
+     * Taking the namespace the add-on already uses for its entities, items and blocks means a texture
+     * ends up at `oreville_vn:textures/...` and not under some invented prefix, which keeps ids
+     * readable and keeps two packs apart without a lookup table. The behaviour packs are read too,
+     * because a resource pack often declares no identifiers of its own.
      */
-    public static String namespaceOf(BedrockPack pack) {
+    public static String namespaceOf(BedrockPack pack, List<BedrockPack> behaviours) {
         Map<String, Integer> counts = new HashMap<>();
+        List<BedrockPack> everywhere = new java.util.ArrayList<>(behaviours);
+        everywhere.add(pack);
+
         for (String directory : List.of("entity", "entities", "items", "attachables", "blocks")) {
-            for (Path file : pack.list(directory, ".json")) {
+            for (Path file : everywhere.stream().flatMap(one -> one.list(directory, ".json").stream())
+                .toList()) {
                 String identifier = identifierIn(file);
                 if (identifier == null) continue;
                 int colon = identifier.indexOf(':');

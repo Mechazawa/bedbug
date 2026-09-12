@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.registry;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.behaviour.BlockDefinition;
+import at.ioexception.mcaddon.block.AddonBlock;
 import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.PackRole;
@@ -13,6 +14,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.world.level.block.state.properties.Property;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -61,7 +63,10 @@ public final class AddonBlocks {
             .lightLevel(state -> definition.lightEmission());
         if (definition.transparent()) properties = properties.noOcclusion();
 
-        Block block = Platform.buildBlock(properties, id);
+        Map<String, Property<?>> states = AddonBlock.propertiesOf(definition);
+        Block block = states.isEmpty()
+            ? Platform.buildBlock(properties, id)
+            : Platform.buildStatefulBlock(properties, id, new ArrayList<>(states.values()));
         Registry.register(BuiltInRegistries.BLOCK, id, block);
         BY_IDENTIFIER.put(definition.identifier(), block);
 

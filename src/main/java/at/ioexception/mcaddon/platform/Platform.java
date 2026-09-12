@@ -289,6 +289,20 @@ public final class Platform {
         *///?}
     }
 
+    /** The same as {@link #buildBlock}, for a block class that declares its own states. */
+    public static at.ioexception.mcaddon.block.AddonBlock buildStatefulBlock(
+        BlockBehaviour.Properties properties, Identifier id,
+        java.util.List<net.minecraft.world.level.block.state.properties.Property<?>> states) {
+        //? if >=1.21.2 {
+        BlockBehaviour.Properties named = properties
+            .setId(ResourceKey.create(net.minecraft.core.registries.Registries.BLOCK, id));
+        //?} else {
+        /*BlockBehaviour.Properties named = properties;
+        *///?}
+        return at.ioexception.mcaddon.block.AddonBlock.build(named, states,
+            at.ioexception.mcaddon.block.AddonBlock::new);
+    }
+
     public static Item buildBlockItem(Block block, Item.Properties properties, Identifier id) {
         //? if >=1.21.2 {
         return new net.minecraft.world.item.BlockItem(block,

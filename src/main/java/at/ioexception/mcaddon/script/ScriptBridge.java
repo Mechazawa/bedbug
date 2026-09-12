@@ -10,6 +10,8 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket;
+import net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -127,8 +129,7 @@ public final class ScriptBridge {
 
     @HostAccess.Export
     public int moonPhase() {
-        unsupported("World.getMoonPhase");
-        return 0;
+        return (int) (Platform.dayTime(server.overworld()) / 24000L % 8L);
     }
 
     @HostAccess.Export
@@ -137,6 +138,13 @@ public final class ScriptBridge {
         return new double[] {spawn.getX(), spawn.getY(), spawn.getZ()};
     }
 
+    /**
+     * Game rules are not read or written.
+     *
+     * 26 replaced Java's typed rule keys with a rule map of its own, so the three supported versions
+     * share no API here, and the rules the two editions have in common are few enough that a pack
+     * gains little. Reported rather than answered with a guess.
+     */
     @HostAccess.Export
     public String gameRule(String name) {
         unsupported("World.gameRules." + name);
@@ -541,12 +549,16 @@ public final class ScriptBridge {
 
     @HostAccess.Export
     public void setTitle(String id, String message) {
-        unsupported("Player.onScreenDisplay.setTitle");
+        if (entity(id) instanceof ServerPlayer player) {
+            player.connection.send(new ClientboundSetTitleTextPacket(Component.literal(message)));
+        }
     }
 
     @HostAccess.Export
     public void setSubtitle(String id, String message) {
-        unsupported("Player.onScreenDisplay.updateSubtitle");
+        if (entity(id) instanceof ServerPlayer player) {
+            player.connection.send(new ClientboundSetSubtitleTextPacket(Component.literal(message)));
+        }
     }
 
     // Dimensions and blocks
