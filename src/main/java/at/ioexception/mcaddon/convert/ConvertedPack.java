@@ -12,10 +12,11 @@ import java.util.Map;
  *
  * @param namespace      the namespace the pack's own assets were written under
  * @param texturePaths   Bedrock texture path, extension dropped, to the Java resource id
+ * @param itemIcons      `item_texture.json` key to the Java resource id it resolved to
  * @param soundEvents    every sound event the pack defines, as `namespace:path`
  */
 public record ConvertedPack(BedrockPack pack, Path root, String namespace,
-    Map<String, String> texturePaths, List<String> soundEvents) {
+    Map<String, String> texturePaths, Map<String, String> itemIcons, List<String> soundEvents) {
 
     public String displayName() {
         return pack.displayName();

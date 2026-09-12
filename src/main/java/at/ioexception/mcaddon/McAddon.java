@@ -4,7 +4,9 @@ import at.ioexception.mcaddon.pack.PackDiscovery;
 import at.ioexception.mcaddon.pack.PackSet;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.network.Channels;
+import at.ioexception.mcaddon.registry.AddonCreativeTab;
 import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.registry.AddonSounds;
 import at.ioexception.mcaddon.resource.AddonPacks;
 import at.ioexception.mcaddon.server.ServerHooks;
@@ -42,6 +44,8 @@ public final class McAddon implements ModInitializer {
         AddonPacks.convert(packs);
         AddonSounds.register(AddonPacks.all());
         AddonEntities.register(packs);
+        AddonItems.register(packs);
+        AddonCreativeTab.register();
         Channels.register();
         ServerHooks.register();
     }

@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.convert;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.behaviour.ItemDefinition;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.util.Json;
@@ -39,12 +40,13 @@ public final class PackConverter {
     private PackConverter() {
     }
 
-    public static ConvertedPack convert(BedrockPack pack, Path cache) {
+    public static ConvertedPack convert(BedrockPack pack, List<ItemDefinition> items, Path cache) {
         String namespace = Names.namespaceOf(pack);
         Path root = cache.resolve("converted").resolve("%s-%s-%d".formatted(
             pack.manifest().uuid(), pack.manifest().version(), Platform.resourcePackFormat()));
 
         Textures textures = new Textures(namespace);
+        Map<String, String> icons = new TreeMap<>();
         List<String> sounds = new ArrayList<>();
 
         try {
@@ -58,6 +60,8 @@ public final class PackConverter {
             textures.convert(pack, root, fresh);
             sounds.addAll(new Sounds(namespace).convert(pack, root, fresh));
             new Texts(namespace).convert(pack, root, fresh);
+            icons.putAll(new Icons(namespace).convert(pack, textures.paths()));
+            if (fresh) writeItemModels(root, icons, items);
 
             if (fresh) {
                 Files.writeString(root.resolve(MARKER), pack.displayName());
@@ -68,7 +72,7 @@ public final class PackConverter {
             McAddon.LOGGER.error("Could not convert {}.", pack.displayName(), error);
         }
 
-        return new ConvertedPack(pack, root, namespace, textures.paths(), List.copyOf(sounds));
+        return new ConvertedPack(pack, root, namespace, textures.paths(), icons, List.copyOf(sounds));
     }
 
     private static void writeMetadata(BedrockPack pack, Path root) throws IOException {
@@ -300,6 +304,75 @@ public final class PackConverter {
                 Files.writeString(target, json.toString(), StandardCharsets.UTF_8);
             }
         }
+    }
+
+    /**
+     * `textures/item_texture.json` maps the short key an item's icon names onto a texture path.
+     *
+     * The keys are what a behaviour pack writes, so resolving them is what lets the two halves of an
+     * add-on meet.
+     */
+    private record Icons(String namespace) {
+        Map<String, String> convert(BedrockPack pack, Map<String, String> texturePaths) {
+            Map<String, String> icons = new TreeMap<>();
+            Path file = pack.file("textures/item_texture.json");
+            if (!Files.isRegularFile(file)) return icons;
+
+            try {
+                JsonObject data = Json.parseObject(file).getAsJsonObject("texture_data");
+                if (data == null) return icons;
+
+                for (Map.Entry<String, JsonElement> entry : data.entrySet()) {
+                    if (!entry.getValue().isJsonObject()) continue;
+                    JsonElement textures = entry.getValue().getAsJsonObject().get("textures");
+                    String path = textures == null ? null
+                        : textures.isJsonArray() ? textures.getAsJsonArray().get(0).getAsString()
+                        : textures.getAsString();
+                    String resolved = path == null ? null : texturePaths.get(path);
+                    if (resolved != null) icons.put(entry.getKey(), resolved);
+                }
+            } catch (IOException | RuntimeException error) {
+                McAddon.LOGGER.warn("Could not read {}: {}", file.getFileName(), error.toString());
+            }
+            return icons;
+        }
+    }
+
+    /**
+     * An item model per behaviour pack item, in both shapes the supported versions need.
+     *
+     * Up to 1.21.3 an item finds its model by name under `models/item`; from 1.21.4 it needs an entry
+     * under `items` naming that model. Writing both costs a few hundred bytes and covers all three.
+     */
+    private static void writeItemModels(Path root, Map<String, String> icons, List<ItemDefinition> items)
+        throws IOException {
+        for (ItemDefinition item : items) {
+            String icon = item.iconKey() == null ? null : icons.get(item.iconKey());
+            if (icon == null) continue;
+
+            int colon = item.identifier().indexOf(':');
+            String namespace = Names.sanitise(colon > 0 ? item.identifier().substring(0, colon) : "minecraft");
+            String name = Names.sanitise(colon > 0 ? item.identifier().substring(colon + 1) : item.identifier());
+
+            JsonObject textures = new JsonObject();
+            textures.addProperty("layer0", icon);
+            JsonObject model = new JsonObject();
+            model.addProperty("parent", "minecraft:item/generated");
+            model.add("textures", textures);
+            write(root.resolve("assets").resolve(namespace).resolve("models/item").resolve(name + ".json"), model);
+
+            JsonObject reference = new JsonObject();
+            reference.addProperty("type", "minecraft:model");
+            reference.addProperty("model", namespace + ":item/" + name);
+            JsonObject definition = new JsonObject();
+            definition.add("model", reference);
+            write(root.resolve("assets").resolve(namespace).resolve("items").resolve(name + ".json"), definition);
+        }
+    }
+
+    private static void write(Path file, JsonObject content) throws IOException {
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, content.toString(), StandardCharsets.UTF_8);
     }
 
     private static String withoutExtension(String path) {

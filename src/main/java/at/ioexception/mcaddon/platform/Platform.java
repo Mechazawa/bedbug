@@ -18,6 +18,7 @@ import net.minecraft.server.packs.repository.Pack;
 import net.minecraft.server.packs.repository.PackCompatibility;
 import net.minecraft.server.packs.repository.PackSource;
 import net.minecraft.world.flag.FeatureFlagSet;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
@@ -215,6 +216,50 @@ public final class Platform {
         return Pack.readMetaAndCreate(id, name, true, resources, type, Pack.Position.TOP, PackSource.BUILT_IN);
         *///?}
     }
+
+    /** Fabric renamed its creative tab builder in 26 to follow the game's own rename. */
+    public static net.minecraft.world.item.CreativeModeTab.Builder creativeTab() {
+        //? if >=26 {
+        return net.fabricmc.fabric.api.creativetab.v1.FabricCreativeModeTab.builder();
+        //?} else {
+        /*return net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup.builder();
+        *///?}
+    }
+
+    /** An item has carried its own registry id since 1.21.2, so it must be set before registering. */
+    public static Item buildItem(Item.Properties properties, Identifier id) {
+        //? if >=1.21.2 {
+        return new Item(properties.setId(ResourceKey.create(net.minecraft.core.registries.Registries.ITEM, id)));
+        //?} else {
+        /*return new Item(properties);
+        *///?}
+    }
+
+    /**
+     * A spawn egg for an entity type.
+     *
+     * From 1.21.2 the entity moved into a data component, but the behaviour still lives in
+     * `SpawnEggItem`: a plain item carrying the component registers, shows an icon, and spawns
+     * nothing.
+     */
+    public static Item spawnEgg(EntityType<?> type, Identifier id) {
+        //? if >=1.21.2 {
+        return new net.minecraft.world.item.SpawnEggItem(new Item.Properties()
+            .spawnEgg(type)
+            .setId(ResourceKey.create(net.minecraft.core.registries.Registries.ITEM, id)));
+        //?} else {
+        /*return new net.minecraft.world.item.SpawnEggItem(castType(type), 0x4c6b32, 0xa0a0a0,
+            new Item.Properties());
+        *///?}
+    }
+
+    //? if <1.21.2 {
+    /*@SuppressWarnings("unchecked")
+    private static net.minecraft.world.entity.EntityType<? extends net.minecraft.world.entity.Mob>
+        castType(EntityType<?> type) {
+        return (net.minecraft.world.entity.EntityType<? extends net.minecraft.world.entity.Mob>) type;
+    }
+    *///?}
 
     /** Where the player is looking from. The accessor lost its `get` prefix in 26. */
     public static net.minecraft.world.phys.Vec3 cameraPosition() {

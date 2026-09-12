@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.resource;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.convert.ConvertedPack;
+import at.ioexception.mcaddon.bedrock.behaviour.ItemDefinition;
 import at.ioexception.mcaddon.convert.PackConverter;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.McAddonPaths;
@@ -12,7 +13,9 @@ import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.repository.Pack;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 /**
@@ -32,10 +35,26 @@ public final class AddonPacks {
         return converted;
     }
 
+    /**
+     * Converts each resource pack, with its add-on's items in hand.
+     *
+     * An item is declared in a behaviour pack and drawn from a texture the resource pack ships, so
+     * the two are paired by the file they came out of before either is converted.
+     */
     public static void convert(PackSet packs) {
+        Map<String, List<ItemDefinition>> itemsByOrigin = new LinkedHashMap<>();
+        for (BedrockPack pack : packs.packs()) {
+            if (pack.role() == PackRole.BEHAVIOUR) {
+                itemsByOrigin.computeIfAbsent(pack.origin(), origin -> new ArrayList<>())
+                    .addAll(ItemDefinition.readAll(pack));
+            }
+        }
+
         List<ConvertedPack> results = new ArrayList<>();
         for (BedrockPack pack : packs.packs()) {
-            if (pack.role() == PackRole.RESOURCE) results.add(PackConverter.convert(pack, McAddonPaths.cache()));
+            if (pack.role() != PackRole.RESOURCE) continue;
+            results.add(PackConverter.convert(pack,
+                itemsByOrigin.getOrDefault(pack.origin(), List.of()), McAddonPaths.cache()));
         }
         converted = List.copyOf(results);
     }
