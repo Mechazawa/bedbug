@@ -95,35 +95,67 @@ These are the checks that catch things:
   Fabric's game tests carry Mojang's annotation before 26 and Fabric's own from 26 on. The two
   spellings are one pair of string replacements in `build.remap.gradle.kts`, which is why `@GameTest`
   is written with empty parentheses.
-- **`tools/verify/verify.py`** does that same server run without a human watching the log. It starts
-  the dev server, types a scripted sequence of console commands into it, reads the output back for
-  the failures that only appear at runtime, writes `build/verify/verdict.json`, and exits non-zero
-  when anything failed. It kills the server on a deadline it keeps itself, because a `stop` typed
-  during startup is discarded. It kills only the servers it started, holds `scratchpad/verify.lock`
-  while a server is up so two runs cannot collide on the port, and refuses to start beside a dev
-  server somebody else is already running.
+- **`tools/testpack/build.py`** builds a small add-on to check the mod against, so a clean checkout
+  has something to verify itself with. Put it where the game reads packs from:
+
+  ```bash
+  python3 tools/testpack/build.py                 # build/testpack/test-addon.mcaddon
+  python3 tools/testpack/build.py --version 26.2  # and into versions/26.2/run/addons/
+  ```
+
+  Everything it ships is written in this repository rather than taken from anybody's pack: the JSON,
+  the `.lang` files and the `.mcfunction` are under `tools/testpack/pack/`, the textures are painted
+  by the script, and the one sound is a sine tone. The archive is a build output, so it is the
+  sources and the script that are committed.
+
+  It carries one of everything the mod has a reader for, so a reader that stops working shows up as
+  a count that dropped: an item icon in each of the three shapes a pack may write it in, a block with
+  states and permutations drawn with its own geometry, a shaped and a shapeless recipe, two entities
+  whose spawn eggs take each of the two forms, an animation firing a sound and a particle off its
+  timeline, three `particles/*.json` in the 1.10.0 format, a texture set whose emissive channel has
+  pixels in it, and a function using the commands and selector arguments that need translating.
+- **`tools/verify/verify.py`** does those game runs without a human watching the log. It starts the
+  game, reads the output back for the failures that only appear at runtime, writes
+  `build/verify/verdict.json` and a log per run under `build/verify/`, and exits non-zero when
+  anything failed. It ends the game on a deadline it keeps itself, because a `stop` typed during
+  startup is discarded. It kills only the games it started, matched on `fabric.dli.env=server` or
+  `fabric.dli.env=client` so the two halves cannot end each other, holds `scratchpad/verify.lock`
+  for the whole run so two of them cannot collide on the port or the world, and refuses to start
+  beside a game somebody else is already running.
 
   ```bash
   export JAVA_HOME=/opt/homebrew/opt/openjdk@25
-  python3 tools/verify/verify.py all                     # conversion counts, then a server per version
-  python3 tools/verify/verify.py run --version 26.2      # one version
+  python3 tools/verify/verify.py all                     # conversion, server and client per version
+  python3 tools/verify/verify.py run --version 26.2      # a server, one version
+  python3 tools/verify/verify.py client --version 1.21.1 # a client, one version
   python3 tools/verify/verify.py convert --source <extracted pack directory>   # no game
   ```
 
   A green `run` proves the mod started, every mixin applied, the packs converted and registered, the
   server reached `Done (`, and no pack script hit a missing `@minecraft/server` member while the
-  pack's own entities were summoned, read back and killed. Each of `ERROR`, `Caused by`, a crash
-  report, a mixin apply failure, `Script error:`, `Failed to load function`, `Multi threaded access
-  requested by thread`, `Could not initialize class` and `StackOverflowError` fails the run.
-  `No data fixer registered for` and the Realms authorisation failure are filtered, being normal in a
-  dev environment. It proves nothing about rendering.
+  pack's own entities were summoned and killed. It proves nothing about rendering.
+
+  A green `client` proves what the server half cannot reach: every mixin applied on the drawing side,
+  every model a pack's items and blocks name loaded, every texture those models name was stitched,
+  and the mod reported a client definition for more than zero add-on entities. It waits for
+  `N add-on entities have a client definition` rather than for a fixed time, so a slow start costs
+  nothing, then holds the window open briefly and kills it. `1.21.1` also loads Mod Menu, Sodium and
+  Iris, so it takes noticeably longer to reach that line than the other two.
+
+  Failing in either: `ERROR`, `Caused by`, a crash report, a mixin apply failure, `Script error:`,
+  `Failed to load function`, `Multi threaded access requested by thread`, `Could not initialize
+  class`, `StackOverflowError`, `Unable to load model`, `Missing textures in model`, a Java compile
+  error and a Gradle build failure. The last two model checks are logged at `WARN`, which is why they
+  went unread for so long. Filtered as normal in a dev environment: `No data fixer registered for`,
+  the Realms authorisation failure, `Failed to retrieve profile key pair`, and Sodium force-disabling
+  the mixins Iris replaces.
 
   A green `convert` proves the output under `versions/<version>/run/.mcaddon/converted/` holds one
   texture per texture the pack ships, one sound event per definition, and an `_n` and `_s` sidecar
   per texture set that asks for one. A stale cache shows up here as a count that moved.
 
-  With no `.mcaddon` in `versions/<version>/run/addons/`, both modes report that there was nothing to
-  test and still pass.
+  With no `.mcaddon` in `versions/<version>/run/addons/`, every mode reports that there was nothing
+  to test and still passes.
 
 - **`./gradlew :26.2:runServer`** for the same check by hand: grep the log for `Bedrock Add-ons`,
   `Done (`, `ERROR` and `Caused by`. Mixin failures fail the server, so a clean start proves
@@ -157,8 +189,9 @@ These are the checks that catch things:
 
 ## Conventions
 
-**No add-on content is committed.** No textures, sounds, models or text from any pack. The test pack
-lives outside the repository and `addons/` is gitignored. Keep that line.
+**No add-on content is committed.** No textures, sounds, models or text from any pack. Real packs
+live outside the repository and `addons/` is gitignored. What `tools/testpack/` holds is written
+here from nothing, which is why it may be committed. Keep that line.
 
 **Bedrock names survive.** A pack's own namespace becomes the Java namespace, sanitised to what a
 resource location accepts, so `vn:reporter` stays `vn:reporter`. Nothing is renamed into a mod
@@ -187,6 +220,7 @@ build.named.gradle.kts       26.2, which Mojang ships unobfuscated
 gradle/mod.gradle.kts        Shared build logic: toolchain, GraalJS bundling, checkstyle, checkTools
 config/checkstyle/           Lint rules and the Stonecutter suppressions
 
+tools/testpack/              The add-on the harness checks against, and the script that builds it
 tools/verify/verify.py       End to end harness: drives a dev server and checks a conversion
 tools/preview/render.py      Offline model renderer
 tools/molang/MolangCheck.java  Molang conformance harness

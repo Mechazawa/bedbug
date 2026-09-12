@@ -1,0 +1,53 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:block": {
+    "description": {
+      "identifier": "tp:lamp",
+      "menu_category": {
+        "category": "construction"
+      },
+      "states": {
+        "tp:lit": [false, true],
+        "tp:level": [0, 1, 2]
+      }
+    },
+    "components": {
+      "minecraft:material_instances": {
+        "*": {
+          "texture": "lamp_off",
+          "render_method": "opaque"
+        }
+      },
+      "minecraft:destructible_by_mining": {
+        "seconds_to_destroy": 0.5
+      },
+      "minecraft:destructible_by_explosion": {
+        "explosion_resistance": 2
+      },
+      "minecraft:light_emission": 0,
+      "minecraft:geometry": "geometry.lamp"
+    },
+    "permutations": [
+      {
+        "condition": "q.block_state('tp:lit') == true",
+        "components": {
+          "minecraft:material_instances": {
+            "*": {
+              "texture": "lamp_on",
+              "render_method": "opaque"
+            }
+          },
+          "minecraft:light_emission": 15
+        }
+      },
+      {
+        "condition": "q.block_state('tp:lit') == true && q.block_state('tp:level') == 2",
+        "components": {
+          "minecraft:destructible_by_mining": {
+            "seconds_to_destroy": 1.5
+          }
+        }
+      }
+    ]
+  }
+}

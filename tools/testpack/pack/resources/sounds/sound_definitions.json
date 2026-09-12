@@ -1,0 +1,16 @@
+{
+  "format_version": "1.14.0",
+  "sound_definitions": {
+    "tp:sprite.chime": {
+      "category": "neutral",
+      "sounds": [
+        {
+          "name": "sounds/tp/chime",
+          "volume": 0.8,
+          "pitch": 1.0,
+          "weight": 1
+        }
+      ]
+    }
+  }
+}

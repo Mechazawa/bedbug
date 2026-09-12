@@ -1,0 +1,88 @@
+{
+  "format_version": "1.20.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:sprite",
+      "is_spawnable": true,
+      "is_summonable": true,
+      "is_experimental": false,
+      "properties": {
+        "tp:mood": {
+          "type": "enum",
+          "values": ["calm", "bright"],
+          "default": "calm",
+          "client_sync": true
+        },
+        "tp:charge": {
+          "type": "float",
+          "range": [0.0, 1.0],
+          "default": 0.0,
+          "client_sync": true
+        }
+      }
+    },
+    "component_groups": {
+      "tp:bright": {
+        "minecraft:scale": {
+          "value": 1.25
+        }
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": ["tp_sprite", "mob"]
+      },
+      "minecraft:collision_box": {
+        "width": 0.6,
+        "height": 0.8
+      },
+      "minecraft:health": {
+        "value": 10,
+        "max": 10
+      },
+      "minecraft:movement": {
+        "value": 0.25
+      },
+      "minecraft:physics": {},
+      "minecraft:nameable": {},
+      "minecraft:navigation.walk": {
+        "can_path_over_water": false
+      },
+      "minecraft:movement.basic": {},
+      "minecraft:jump.static": {},
+      "minecraft:behavior.random_stroll": {
+        "priority": 4,
+        "speed_multiplier": 1.0
+      },
+      "minecraft:behavior.look_at_player": {
+        "priority": 6,
+        "look_distance": 8.0
+      },
+      "minecraft:timer": {
+        "looping": true,
+        "time": [4.0, 8.0],
+        "time_down_event": {
+          "event": "tp:brighten"
+        }
+      }
+    },
+    "events": {
+      "tp:brighten": {
+        "set_property": {
+          "tp:mood": "bright"
+        },
+        "add": {
+          "component_groups": ["tp:bright"]
+        }
+      },
+      "tp:calm": {
+        "set_property": {
+          "tp:mood": "calm"
+        },
+        "remove": {
+          "component_groups": ["tp:bright"]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+## Bedrock add-ons keep every name in the resource pack, including the names of things the
+## behaviour pack declares.
+pack.name=Test Add-On
+pack.description=Synthetic add-on the verify harness runs against
+item.tp:wand.name=Test Wand
+item.tp:shard.name=Test Shard
+item.tp:dust.name=Test Dust
+tile.tp:lamp.name=Test Lamp
+entity.tp:sprite.name=Test Sprite
+entity.tp:ember.name=Test Ember
+item.spawn_egg.entity.tp:sprite.name=Spawn Test Sprite
+item.spawn_egg.entity.tp:ember.name=Spawn Test Ember

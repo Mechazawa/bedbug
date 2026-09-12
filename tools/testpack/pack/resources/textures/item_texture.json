@@ -1,0 +1,18 @@
+{
+  "resource_pack_name": "tp",
+  "texture_name": "atlas.items",
+  "texture_data": {
+    "wand": {
+      "textures": "textures/items/wand"
+    },
+    "shard": {
+      "textures": "textures/items/shard"
+    },
+    "dust": {
+      "textures": "textures/items/dust"
+    },
+    "sprite_egg": {
+      "textures": "textures/items/sprite_egg"
+    }
+  }
+}

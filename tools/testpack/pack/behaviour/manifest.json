@@ -1,0 +1,23 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "Test Add-On",
+    "description": "Behaviour half of the add-on the verify harness runs against.",
+    "uuid": "19ac580e-f30a-4942-ae7e-712153db0685",
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 20, 0]
+  },
+  "modules": [
+    {
+      "type": "data",
+      "uuid": "3c926817-26cd-429d-b589-baad5ea0b841",
+      "version": [1, 0, 0]
+    }
+  ],
+  "dependencies": [
+    {
+      "uuid": "32e0d039-0df5-408f-99bb-fa898f5d1fc2",
+      "version": [1, 0, 0]
+    }
+  ]
+}

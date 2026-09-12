@@ -1,0 +1,36 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "tp:sprite",
+      "materials": {
+        "default": "entity_alphatest"
+      },
+      "textures": {
+        "default": "textures/entity/sprite"
+      },
+      "geometry": {
+        "default": "geometry.tp.sprite"
+      },
+      "animations": {
+        "idle": "animation.tp.sprite.idle",
+        "chime": "animation.tp.sprite.chime"
+      },
+      "scripts": {
+        "pre_animation": ["v.bob = math.sin(q.life_time * 90) * 0.5;"],
+        "animate": ["idle", {"chime": "q.is_alive"}]
+      },
+      "sound_effects": {
+        "ping": "tp:sprite.chime"
+      },
+      "particle_effects": {
+        "twinkle": "tp:sparkle",
+        "pop": "tp:burst"
+      },
+      "render_controllers": ["controller.render.tp.sprite"],
+      "spawn_egg": {
+        "texture": "sprite_egg"
+      }
+    }
+  }
+}
