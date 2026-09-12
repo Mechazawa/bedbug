@@ -15,10 +15,12 @@ import java.util.Map;
  * @param emissiveLayers those of them that a physically based texture set said have glowing pixels
  * @param textureKeys    `item_texture.json` and `terrain_texture.json` keys to Java resource ids
  * @param soundEvents    every sound event the pack defines, as `namespace:path`
+ * @param spawnEggs      how each entity's egg looks, by the entity's identifier
  */
 public record ConvertedPack(BedrockPack pack, Path root, String namespace,
     Map<String, String> texturePaths, Map<String, String> emissiveLayers,
-    Map<String, String> textureKeys, List<String> soundEvents) {
+    Map<String, String> textureKeys, List<String> soundEvents,
+    Map<String, SpawnEggAppearance> spawnEggs) {
 
     public String displayName() {
         return pack.displayName();

@@ -382,13 +382,15 @@ public final class Platform {
      * `SpawnEggItem`: a plain item carrying the component registers, shows an icon, and spawns
      * nothing.
      */
-    public static Item spawnEgg(EntityType<?> type, Identifier id) {
+    public static Item spawnEgg(EntityType<?> type, Identifier id, int baseColour, int overlayColour) {
         //? if >=1.21.2 {
+        // From 1.21.4 the two colours are tints in the item's own model definition, which the
+        // conversion writes, so the item itself carries only the entity it spawns.
         return new net.minecraft.world.item.SpawnEggItem(new Item.Properties()
             .spawnEgg(type)
             .setId(ResourceKey.create(net.minecraft.core.registries.Registries.ITEM, id)));
         //?} else {
-        /*return new net.minecraft.world.item.SpawnEggItem(castType(type), 0x4c6b32, 0xa0a0a0,
+        /*return new net.minecraft.world.item.SpawnEggItem(castType(type), baseColour, overlayColour,
             new Item.Properties());
         *///?}
     }

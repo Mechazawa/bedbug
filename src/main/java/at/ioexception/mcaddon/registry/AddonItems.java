@@ -7,6 +7,7 @@ import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.PackRole;
 import at.ioexception.mcaddon.pack.PackSet;
+import at.ioexception.mcaddon.convert.SpawnEggAppearance;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonObject;
@@ -75,6 +76,15 @@ public final class AddonItems {
      * The behaviour lives in the class: a plain item with the same component registers, shows an
      * icon and spawns nothing.
      */
+    /** How the pack that declared this entity wants its egg painted, when one of them said. */
+    private static SpawnEggAppearance appearanceOf(String identifier) {
+        for (at.ioexception.mcaddon.convert.ConvertedPack pack : at.ioexception.mcaddon.resource.AddonPacks.all()) {
+            SpawnEggAppearance appearance = pack.spawnEggs().get(identifier);
+            if (appearance != null) return appearance;
+        }
+        return null;
+    }
+
     private static void registerSpawnEggs() {
         for (Map.Entry<EntityType<?>, ServerEntityDefinition> entry : AddonEntities.all().entrySet()) {
             if (!entry.getValue().spawnable()) continue;
@@ -85,7 +95,10 @@ public final class AddonItems {
             Identifier id = Platform.id(type.getNamespace(), type.getPath() + "_spawn_egg");
             if (BuiltInRegistries.ITEM.containsKey(id)) continue;
 
-            Item egg = Platform.spawnEgg(entry.getKey(), id);
+            SpawnEggAppearance appearance = appearanceOf(entry.getValue().identifier());
+            Item egg = Platform.spawnEgg(entry.getKey(), id,
+                appearance == null ? 0x4C6B32 : appearance.baseColour(),
+                appearance == null ? 0xA0A0A0 : appearance.overlayColour());
             if (egg == null) continue;
             Registry.register(BuiltInRegistries.ITEM, id, egg);
             BY_IDENTIFIER.put(entry.getValue().identifier() + "_spawn_egg", egg);

@@ -73,6 +73,7 @@ public final class PackConverter {
         Textures textures = new Textures(namespace);
         Map<String, String> icons = new TreeMap<>();
         List<String> sounds = new ArrayList<>();
+        Map<String, SpawnEggAppearance> eggs = SpawnEggAppearance.readAll(pack);
 
         try {
             boolean fresh = !Files.isRegularFile(root.resolve(MARKER));
@@ -88,6 +89,7 @@ public final class PackConverter {
             icons.putAll(new Icons(namespace).convert(pack, textures.paths()));
             if (fresh) {
                 writeItemModels(root, icons, items);
+                writeSpawnEggs(root, icons, eggs);
                 writeRecipes(root, recipes);
                 writeLootTables(root, loot, namespace);
                 writeBlockModels(root, icons, blocks, BedrockAssets.read(pack));
@@ -104,7 +106,7 @@ public final class PackConverter {
         }
 
         return new ConvertedPack(pack, root, namespace, textures.paths(), textures.emissive(),
-            icons, List.copyOf(sounds));
+            icons, List.copyOf(sounds), eggs);
     }
 
     private static void writeMetadata(BedrockPack pack, Path root) throws IOException {
@@ -354,11 +356,43 @@ public final class PackConverter {
 
                 JsonObject json = new JsonObject();
                 entries.forEach(json::addProperty);
+                entries.forEach((key, value) -> {
+                    String java = javaKey(key);
+                    if (java != null && !json.has(java)) json.addProperty(java, value);
+                });
                 Path target = root.resolve("assets").resolve(namespace).resolve("lang").resolve(locale + ".json");
                 Files.createDirectories(target.getParent());
                 Files.writeString(target, json.toString(), StandardCharsets.UTF_8);
             }
         }
+    }
+
+    /**
+     * The same name under the key Java looks it up by, or null when Java has no such key.
+     *
+     * The two editions name the same thing differently: Bedrock keeps the colon of an identifier and
+     * ends every key with `.name`, and it calls a block a tile. Without the second spelling a pack's
+     * own translations are all present and none of them is ever found.
+     */
+    private static String javaKey(String bedrock) {
+        if (!bedrock.endsWith(".name")) return null;
+
+        String body = bedrock.substring(0, bedrock.length() - ".name".length());
+        if (body.startsWith("item.spawn_egg.entity.")) {
+            return identifierKey("item", body.substring("item.spawn_egg.entity.".length()), "_spawn_egg");
+        }
+        if (body.startsWith("entity.")) return identifierKey("entity", body.substring("entity.".length()), "");
+        if (body.startsWith("item.")) return identifierKey("item", body.substring("item.".length()), "");
+        if (body.startsWith("tile.")) return identifierKey("block", body.substring("tile.".length()), "");
+        return null;
+    }
+
+    private static String identifierKey(String kind, String identifier, String suffix) {
+        int colon = identifier.indexOf(':');
+        if (colon <= 0) return null;
+
+        return kind + "." + Names.sanitise(identifier.substring(0, colon))
+            + "." + Names.sanitise(identifier.substring(colon + 1)) + suffix;
     }
 
     /**
@@ -436,6 +470,59 @@ public final class PackConverter {
      * Bedrock's shaped recipes carry a pattern and a key map exactly as Java's do, so the conversion
      * is a rename. Furnace recipes and anything with a Bedrock-only tag are left out and reported.
      */
+    /**
+     * The model and the name for each entity's spawn egg.
+     *
+     * A pack that gave its egg an item texture gets a flat item drawn from that texture. One that
+     * gave colours gets the vanilla egg painted with them, which on a version reading item
+     * definitions is two constant tints and on an older one is the colours the item itself carries.
+     */
+    private static void writeSpawnEggs(Path root, Map<String, String> icons,
+        Map<String, SpawnEggAppearance> eggs) throws IOException {
+        for (SpawnEggAppearance egg : eggs.values()) {
+            int colon = egg.identifier().indexOf(':');
+            if (colon <= 0) continue;
+
+            String namespace = Names.sanitise(egg.identifier().substring(0, colon));
+            String name = Names.sanitise(egg.identifier().substring(colon + 1)) + "_spawn_egg";
+            String icon = egg.textureKey() == null ? null : icons.get(egg.textureKey());
+
+            JsonObject model = new JsonObject();
+            if (icon != null) {
+                JsonObject textures = new JsonObject();
+                textures.addProperty("layer0", icon);
+                model.addProperty("parent", "minecraft:item/generated");
+                model.add("textures", textures);
+            } else {
+                model.addProperty("parent", "minecraft:item/template_spawn_egg");
+            }
+            write(root.resolve("assets").resolve(namespace).resolve("models/item").resolve(name + ".json"),
+                model);
+
+            JsonObject reference = new JsonObject();
+            reference.addProperty("type", "minecraft:model");
+            reference.addProperty("model", namespace + ":item/" + name);
+            if (icon == null) reference.add("tints", tints(egg));
+
+            JsonObject definition = new JsonObject();
+            definition.add("model", reference);
+            write(root.resolve("assets").resolve(namespace).resolve("items").resolve(name + ".json"),
+                definition);
+        }
+    }
+
+    /** The two layers of the vanilla egg, each painted a colour the pack chose. */
+    private static JsonArray tints(SpawnEggAppearance egg) {
+        JsonArray tints = new JsonArray();
+        for (int colour : new int[] {egg.baseColour(), egg.overlayColour()}) {
+            JsonObject tint = new JsonObject();
+            tint.addProperty("type", "minecraft:constant");
+            tint.addProperty("value", colour);
+            tints.add(tint);
+        }
+        return tints;
+    }
+
     private static void writeRecipes(Path root, List<RecipeDefinition> recipes) throws IOException {
         boolean modern = Platform.modernDataPaths();
         String directory = modern ? "recipe" : "recipes";
