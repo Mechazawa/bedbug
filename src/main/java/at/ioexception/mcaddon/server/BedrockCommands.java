@@ -2,12 +2,18 @@ package at.ioexception.mcaddon.server;
 
 import at.ioexception.mcaddon.platform.Platform;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Vec3i;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 
@@ -64,6 +70,27 @@ public final class BedrockCommands {
             .requires(source -> Platform.allowedAt(source, 1))
             .executes(command -> toggleDownfall(command.getSource())));
 
+        // Bedrock saves a region under a name and places it again; Java has the same two operations
+        // behind a structure block and `/place template`, and no command that names them.
+        dispatcher.register(Commands.literal("structure")
+            .requires(source -> Platform.allowedAt(source, 1))
+            .then(Commands.literal("save")
+                .then(Commands.argument("name", StringArgumentType.string())
+                    .then(Commands.argument("from", BlockPosArgument.blockPos())
+                        .then(Commands.argument("to", BlockPosArgument.blockPos())
+                            .executes(BedrockCommands::saveStructure)))))
+            .then(Commands.literal("load")
+                .then(Commands.argument("name", StringArgumentType.string())
+                    .then(Commands.argument("to", BlockPosArgument.blockPos())
+                        .executes(BedrockCommands::loadStructure)))));
+
+        // A mob event switches a kind of spawning on or off, which Java states as a game rule.
+        dispatcher.register(Commands.literal("mobevent")
+            .requires(source -> Platform.allowedAt(source, 1))
+            .then(Commands.argument("event", StringArgumentType.string())
+                .then(Commands.argument("enabled", BoolArgumentType.bool())
+                    .executes(BedrockCommands::mobEvent))));
+
         dispatcher.register(Commands.literal("event")
             .requires(source -> Platform.allowedAt(source, 1))
             .then(Commands.literal("entity")
@@ -96,6 +123,56 @@ public final class BedrockCommands {
 
     private static int toggleDownfall(CommandSourceStack source) {
         return run(source, source.getLevel().isRaining() ? "weather clear" : "weather rain");
+    }
+
+    /** The region between the two corners, kept under the name the pack gave it. */
+    private static int saveStructure(CommandContext<CommandSourceStack> command)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        Identifier id = Identifier.tryParse(StringArgumentType.getString(command, "name"));
+        if (id == null) {
+            command.getSource().sendFailure(Component.literal("That is not a usable structure name."));
+            return 0;
+        }
+
+        BlockPos from = BlockPosArgument.getLoadedBlockPos(command, "from");
+        BlockPos to = BlockPosArgument.getLoadedBlockPos(command, "to");
+        BlockPos corner = new BlockPos(Math.min(from.getX(), to.getX()), Math.min(from.getY(), to.getY()),
+            Math.min(from.getZ(), to.getZ()));
+        Vec3i size = new Vec3i(Math.abs(from.getX() - to.getX()) + 1,
+            Math.abs(from.getY() - to.getY()) + 1, Math.abs(from.getZ() - to.getZ()) + 1);
+
+        StructureTemplateManager manager = command.getSource().getServer().getStructureManager();
+        Platform.fillFromWorld(manager.getOrCreate(id), command.getSource().getLevel(), corner, size);
+        return manager.save(id) ? 1 : 0;
+    }
+
+    private static int loadStructure(CommandContext<CommandSourceStack> command)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        BlockPos at = BlockPosArgument.getLoadedBlockPos(command, "to");
+        return run(command.getSource(), "place template "
+            + StringArgumentType.getString(command, "name") + " " + at.getX() + " " + at.getY()
+            + " " + at.getZ());
+    }
+
+    /**
+     * Switches one kind of spawning on or off.
+     *
+     * Bedrock names the event and Java names the rule, and only the two that Java has a rule for can
+     * be answered. The rest are reported rather than silently accepted.
+     */
+    private static int mobEvent(CommandContext<CommandSourceStack> command) {
+        String rule = switch (StringArgumentType.getString(command, "event")) {
+            case "minecraft:pillager_patrols_event" -> "doPatrolSpawning";
+            case "minecraft:wandering_trader_event" -> "doTraderSpawning";
+            default -> null;
+        };
+        if (rule == null) {
+            command.getSource().sendFailure(
+                Component.literal("Java has no rule for that mob event."));
+            return 0;
+        }
+        return run(command.getSource(), "gamerule " + rule
+            + " " + BoolArgumentType.getBool(command, "enabled"));
     }
 
     private static int playAnimation(CommandContext<CommandSourceStack> command, String stopExpression,
