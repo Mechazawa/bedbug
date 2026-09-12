@@ -66,16 +66,16 @@ def box_rectangles(uv, size):
     width, height, depth = size
     u, v = uv
     return {
-        ("y", 0): (u + depth, v, u + depth + width, v + depth),
-        ("y", 1): (u + depth + width, v + depth, u + depth + width * 2, v),
-        ("x", 0): (u, v + depth, u + depth, v + depth + height),
-        ("z", 0): (u + depth, v + depth, u + depth + width, v + depth + height),
-        ("x", 1): (u + depth + width, v + depth, u + depth * 2 + width, v + depth + height),
-        ("z", 1): (u + depth * 2 + width, v + depth, u + depth * 2 + width * 2, v + depth + height),
+        ("y", 0): (u + depth, v, u + depth + width, v + depth, 0),
+        ("y", 1): (u + depth + width, v + depth, u + depth + width * 2, v, 0),
+        ("x", 0): (u, v + depth, u + depth, v + depth + height, 0),
+        ("z", 0): (u + depth, v + depth, u + depth + width, v + depth + height, 0),
+        ("x", 1): (u + depth + width, v + depth, u + depth * 2 + width, v + depth + height, 0),
+        ("z", 1): (u + depth * 2 + width, v + depth, u + depth * 2 + width * 2, v + depth + height, 0),
     }
 
 
-def bake_cube(cube, bone_pivot):
+def bake_cube(cube, bone_pivot, bone_mirror=False):
     """Returns the quads of one cube, as (corner positions, uv rectangle, normal)."""
     origin = cube["origin"]
     size = cube["size"]
@@ -86,7 +86,7 @@ def bake_cube(cube, bone_pivot):
     min_y = MODEL_ORIGIN_HEIGHT - (origin[1] + size[1] + inflate)
     max_y = MODEL_ORIGIN_HEIGHT - (origin[1] - inflate)
 
-    mirror = cube.get("mirror", False)
+    mirror = cube.get("mirror", False) or bone_mirror
     if mirror:
         min_x, max_x = max_x, min_x
 
@@ -114,15 +114,20 @@ def bake_cube(cube, bone_pivot):
                 continue
             u, v = face["uv"]
             w, h = face.get("uv_size", [0, 0])
-            rectangles[FACES[name]] = (u, v, u + w, v + h)
+            if w == 0 or h == 0:
+                # Bedrock does not draw a face whose uv rectangle has no area.
+                continue
+            rectangles[FACES[name]] = (u, v, u + w, v + h, face.get("uv_rotation", 0))
 
     quads = []
     for face, rectangle in rectangles.items():
         indices = CORNERS[face]
         points = [corners[i] for i in indices]
+        normal = NORMALS[face]
         if mirror:
             points = points[::-1]
-        quads.append((points, rectangle, NORMALS[face]))
+            normal = (-normal[0], normal[1], normal[2])
+        quads.append((points, rectangle, normal))
     return quads
 
 
@@ -145,7 +150,7 @@ def bake(geometry):
         offset = tuple(p + t for p, t in zip(pivot, parent_transform))
 
         for cube in bone.get("cubes", []):
-            for points, rectangle, normal in bake_cube(cube, pivot):
+            for points, rectangle, normal in bake_cube(cube, pivot, bone.get("mirror", False)):
                 placed = [tuple(a + b for a, b in zip(rotate(point, angles), offset)) for point in points]
                 quads.append((placed, rectangle, rotate(normal, angles)))
 
@@ -178,8 +183,11 @@ def draw(quads, texture, size, view, scale, uv_offset=(0.0, 0.0)):
 
     for points, rectangle, normal in ordered:
         screen = [project(p) for p in points]
-        u0, v0, u1, v1 = rectangle
+        u0, v0, u1, v1, uv_rotation = rectangle
         corners = [(u1, v0), (u0, v0), (u0, v1), (u1, v1)]
+        # A per-face rotation turns the texture under the face in ninety degree steps.
+        for _ in range((uv_rotation // 90) % 4):
+            corners = corners[1:] + corners[:1]
 
         min_x = max(0, int(min(p[0] for p in screen)))
         max_x = min(size - 1, int(max(p[0] for p in screen)) + 1)

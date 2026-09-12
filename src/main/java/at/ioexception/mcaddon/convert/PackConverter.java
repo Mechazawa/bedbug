@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.convert;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.behaviour.ItemDefinition;
+import at.ioexception.mcaddon.bedrock.behaviour.LootTableDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.RecipeDefinition;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.platform.Platform;
@@ -42,7 +43,7 @@ public final class PackConverter {
     }
 
     public static ConvertedPack convert(BedrockPack pack, List<ItemDefinition> items,
-        List<RecipeDefinition> recipes, Path cache) {
+        List<RecipeDefinition> recipes, List<LootTableDefinition> loot, Path cache) {
         String namespace = Names.namespaceOf(pack);
         Path root = cache.resolve("converted").resolve("%s-%s-%d".formatted(
             pack.manifest().uuid(), pack.manifest().version(), Platform.resourcePackFormat()));
@@ -66,6 +67,7 @@ public final class PackConverter {
             if (fresh) {
                 writeItemModels(root, icons, items);
                 writeRecipes(root, recipes);
+                writeLootTables(root, loot, namespace);
             }
 
             if (fresh) {
@@ -382,7 +384,7 @@ public final class PackConverter {
      * is a rename. Furnace recipes and anything with a Bedrock-only tag are left out and reported.
      */
     private static void writeRecipes(Path root, List<RecipeDefinition> recipes) throws IOException {
-        boolean modern = Platform.modernRecipes();
+        boolean modern = Platform.modernDataPaths();
         String directory = modern ? "recipe" : "recipes";
 
         for (RecipeDefinition recipe : recipes) {
@@ -429,6 +431,24 @@ public final class PackConverter {
             String name = Names.sanitise(colon > 0
                 ? recipe.identifier().substring(colon + 1) : recipe.identifier());
             write(root.resolve("data").resolve(namespace).resolve(directory).resolve(name + ".json"), json);
+        }
+    }
+
+    /**
+     * Loot tables, filed under the path a behaviour pack's `minecraft:loot` names them by.
+     *
+     * Bedrock's paths are pack relative and keep their `loot_tables/` prefix, so the same string a
+     * pack writes resolves as a Java loot table id.
+     */
+    private static void writeLootTables(Path root, List<LootTableDefinition> tables, String namespace)
+        throws IOException {
+        String directory = Platform.modernDataPaths() ? "loot_table" : "loot_tables";
+
+        for (LootTableDefinition table : tables) {
+            String inside = Names.sanitise(withoutExtension(table.path().startsWith("loot_tables/")
+                ? table.path().substring("loot_tables/".length()) : table.path()));
+            write(root.resolve("data").resolve(namespace).resolve(directory).resolve(inside + ".json"),
+                table.java());
         }
     }
 

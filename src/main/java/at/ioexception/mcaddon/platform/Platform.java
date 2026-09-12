@@ -274,12 +274,13 @@ public final class Platform {
     *///?}
 
     /**
-     * How a data pack's recipes are written for this version.
+     * Whether this version uses the newer data pack layout.
      *
-     * 1.21.2 renamed the directory from `recipes` to `recipe`, made an ingredient a bare item id
-     * rather than an object, and renamed the result's `item` field to `id`.
+     * 1.21.2 renamed the directories from `recipes` and `loot_tables` to their singular forms, made
+     * a recipe ingredient a bare item id rather than an object, and renamed a result's `item` field
+     * to `id`.
      */
-    public static boolean modernRecipes() {
+    public static boolean modernDataPaths() {
         //? if >=1.21.2 {
         return true;
         //?} else {
