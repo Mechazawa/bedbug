@@ -76,15 +76,6 @@ public final class AddonItems {
      * The behaviour lives in the class: a plain item with the same component registers, shows an
      * icon and spawns nothing.
      */
-    /** How the pack that declared this entity wants its egg painted, when one of them said. */
-    private static SpawnEggAppearance appearanceOf(String identifier) {
-        for (at.ioexception.mcaddon.convert.ConvertedPack pack : at.ioexception.mcaddon.resource.AddonPacks.all()) {
-            SpawnEggAppearance appearance = pack.spawnEggs().get(identifier);
-            if (appearance != null) return appearance;
-        }
-        return null;
-    }
-
     private static void registerSpawnEggs() {
         for (Map.Entry<EntityType<?>, ServerEntityDefinition> entry : AddonEntities.all().entrySet()) {
             if (!entry.getValue().spawnable()) continue;
@@ -103,6 +94,15 @@ public final class AddonItems {
             Registry.register(BuiltInRegistries.ITEM, id, egg);
             BY_IDENTIFIER.put(entry.getValue().identifier() + "_spawn_egg", egg);
         }
+    }
+
+    /** How the pack that declared this entity wants its egg painted, when one of them said. */
+    private static SpawnEggAppearance appearanceOf(String identifier) {
+        for (at.ioexception.mcaddon.convert.ConvertedPack pack : at.ioexception.mcaddon.resource.AddonPacks.all()) {
+            SpawnEggAppearance appearance = pack.spawnEggs().get(identifier);
+            if (appearance != null) return appearance;
+        }
+        return null;
     }
 
     /**

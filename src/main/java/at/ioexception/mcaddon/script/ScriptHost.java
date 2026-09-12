@@ -17,8 +17,10 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * Runs the behaviour packs' scripts for one server.
@@ -34,13 +36,20 @@ public final class ScriptHost {
         "@minecraft/server", "minecraft_server.js",
         "@minecraft/server-ui", "minecraft_server_ui.js");
 
+    private final MinecraftServer server;
     private final Context context;
     private final ScriptBridge bridge;
     private final ScriptCoverage coverage;
+
+    /** World events raised by a pack's own data, waiting for the next tick to be delivered. */
+    private final List<Map.Entry<String, Map<String, Object>>> queued = new ArrayList<>();
+
     private Value runtime;
     private int loaded;
 
-    private ScriptHost(Context context, ScriptBridge bridge, ScriptCoverage coverage) {
+    private ScriptHost(MinecraftServer server, Context context, ScriptBridge bridge,
+        ScriptCoverage coverage) {
+        this.server = server;
         this.context = context;
         this.bridge = bridge;
         this.coverage = coverage;
@@ -79,7 +88,7 @@ public final class ScriptHost {
         globals.putMember("__mcaddon_bridge__", bridge);
         warmUpErrorReporting(context);
 
-        ScriptHost host = new ScriptHost(context, bridge, coverage);
+        ScriptHost host = new ScriptHost(server, context, bridge, coverage);
 
         // Importing the module here rather than waiting for a pack to do it: the runtime hook has to
         // exist even for a pack whose script never imports anything.
@@ -104,12 +113,6 @@ public final class ScriptHost {
     }
 
     /**
-     * Copies a pack's scripts into the guest file system and evaluates its entry.
-     *
-     * Everything under `scripts/` comes along rather than only the entry, because the entry imports
-     * its siblings by relative path.
-     */
-    /**
      * Makes the engine describe one thrown error while the stack is still shallow.
      *
      * Truffle loads the classes that build a guest stack trace the first time one is asked for. A
@@ -127,6 +130,12 @@ public final class ScriptHost {
         }
     }
 
+    /**
+     * Copies a pack's scripts into the guest file system and evaluates its entry.
+     *
+     * Everything under `scripts/` comes along rather than only the entry, because the entry imports
+     * its siblings by relative path.
+     */
     private void load(ScriptFileSystem files, BedrockPack pack) {
         String entry = pack.manifest().scriptEntry();
         String root = "/" + pack.manifest().uuid();
@@ -150,49 +159,60 @@ public final class ScriptHost {
         } catch (IOException error) {
             McAddon.LOGGER.error("{} declares {} as its script entry and it is not readable.",
                 pack.displayName(), entry, error);
-        } catch (PolyglotException | StackOverflowError | LinkageError error) {
-            McAddon.LOGGER.error("{} failed while loading {}: {}", pack.displayName(), entry, error.getMessage());
+        } catch (RuntimeException | Error error) {
+            McAddon.LOGGER.error("{} failed while loading {}: {}", pack.displayName(), entry, error.toString());
+        }
+    }
+
+    /**
+     * The one way into the guest, so nothing enters it unguarded or from the wrong thread.
+     *
+     * A script belongs to the server thread: the engine allows one thread per context and refuses
+     * the rest, which leaves the game stuck part way through a tick rather than merely failing. What
+     * comes back out is anything at all, including an `Error`, because a guest error deep in a call
+     * chain can exhaust the host stack or leave a lazily loaded engine class unusable. Neither is
+     * something a pack should be able to do to the game.
+     */
+    private <T> T enter(String what, Supplier<T> call, T fallback) {
+        if (!server.isSameThread()) {
+            McAddon.LOGGER.error("Something asked the scripts to {} off the server thread.", what);
+            return fallback;
+        }
+
+        try {
+            return call.get();
+        } catch (RuntimeException | Error error) {
+            McAddon.LOGGER.error("A script failed {}: {}", what, error.toString());
+            return fallback;
         }
     }
 
     public void tick(int tick) {
         bridge.beginTick(TICK_BUDGET_NANOS);
-        try {
-            runtime.invokeMember("tick", tick);
-        } catch (PolyglotException | StackOverflowError | LinkageError error) {
-            McAddon.LOGGER.error("A script failed during tick {}: {}", tick, error.getMessage());
-        }
+        deliverQueued();
+        enter("during tick " + tick, () -> runtime.invokeMember("tick", tick), null);
     }
 
     /** Raises `system.beforeEvents.startup` and returns what the pack registered on it, as JSON. */
     public String startup() {
-        try {
-            return runtime.invokeMember("startup").asString();
-        } catch (PolyglotException | StackOverflowError | LinkageError error) {
-            McAddon.LOGGER.error("A script failed during startup: {}", error.getMessage());
-            return null;
-        }
+        return enter("during startup", () -> runtime.invokeMember("startup").asString(), null);
     }
 
     /** Runs a command the pack registered. The outcome carries a status and a message to show. */
     public com.google.gson.JsonObject runCommand(int index, String origin, String arguments) {
-        try {
+        return enter("running a command", () -> {
             String outcome = runtime.invokeMember("runCommand", index, origin, arguments).asString();
             return com.google.gson.JsonParser.parseString(outcome).getAsJsonObject();
-        } catch (RuntimeException | StackOverflowError | LinkageError error) {
-            McAddon.LOGGER.error("A script command failed: {}", error.getMessage());
-            return new com.google.gson.JsonObject();
-        }
+        }, new com.google.gson.JsonObject());
     }
 
     /** Hands a form's answer back to the promise the pack is waiting on. */
     public void formResponse(int formId, String answer) {
-        try {
+        enter("handling a form answer", () -> {
             Value forms = context.getBindings("js").getMember("__mcaddon_forms__");
             if (forms != null) forms.invokeMember("respond", formId, answer);
-        } catch (RuntimeException | StackOverflowError | LinkageError error) {
-            McAddon.LOGGER.error("A script failed handling a form answer: {}", error.getMessage());
-        }
+            return null;
+        }, null);
     }
 
     /** Raises a `world.afterEvents.<name>` with the fields the caller provides. */
@@ -204,17 +224,37 @@ public final class ScriptHost {
         raise("systemAfter", name, fields);
     }
 
+    /**
+     * Holds a world event back until the next tick.
+     *
+     * An after event a pack's own data raised is delivered once the tick's work is done, because a
+     * listener that triggers more of the same is ordinary and raising it in place would let that
+     * recurse without end.
+     */
+    public void queueWorldEvent(String name, Map<String, Object> fields) {
+        queued.add(Map.entry(name, fields));
+    }
+
+    private void deliverQueued() {
+        if (queued.isEmpty()) return;
+
+        List<Map.Entry<String, Map<String, Object>>> raising = List.copyOf(queued);
+        queued.clear();
+        for (Map.Entry<String, Map<String, Object>> event : raising) {
+            raise("worldAfter", event.getKey(), event.getValue());
+        }
+    }
+
     private void raise(String group, String name, Map<String, Object> fields) {
-        try {
+        enter("handling " + name, () -> {
             Value signal = runtime.invokeMember(group, name);
-            if (signal.getMember("size").asInt() == 0) return;
+            if (signal.getMember("size").asInt() == 0) return null;
 
             Value event = context.eval("js", "({})");
             fields.forEach((key, value) -> event.putMember(key, wrap(value)));
             signal.invokeMember("emit", event);
-        } catch (PolyglotException | StackOverflowError | LinkageError error) {
-            McAddon.LOGGER.error("A script failed handling {}: {}", name, error.getMessage());
-        }
+            return null;
+        }, null);
     }
 
     /** An entity reaches a script as the wrapper the pack may already have stashed state on. */

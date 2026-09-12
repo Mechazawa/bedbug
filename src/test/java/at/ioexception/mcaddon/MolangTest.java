@@ -101,8 +101,22 @@ class MolangTest {
 
     /** A broken expression is a zero and never an exception, however badly it is written. */
     @ParameterizedTest
-    @CsvSource({"'((('", "'v.'", "'math.'", "'1 +'", "''", "'q.x(('"})
+    @CsvSource({"'((('", "'v.'", "'math.'", "'1 +'", "''", "'q.x(('", "'{'", "'loop('", "'v.x['"})
     void survivesNonsense(String source) {
+        assertEquals(0, evaluate(source), 1e-6, source);
+    }
+
+    /**
+     * A mistake makes the whole value zero, and not the part in front of it.
+     *
+     * Each of these reads as a valid expression up to the mistake, so a parser that answered with
+     * what it managed to read would hand back a plausible number. A bone placed by half an
+     * expression is worse than one left where the model put it, which is why unconsumed input counts
+     * as a failure rather than as the end of the value.
+     */
+    @ParameterizedTest
+    @CsvSource({"'1 + 2 @ 3'", "'2 + 2 garbage'", "'3 )'", "'v.x = '", "'1; @'"})
+    void answersZeroForAnExpressionWithAMistakeAfterAValidStart(String source) {
         assertEquals(0, evaluate(source), 1e-6, source);
     }
 

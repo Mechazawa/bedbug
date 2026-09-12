@@ -16,11 +16,23 @@ public final class MolangParser {
     /** Bedrock caps a loop's iterations too, so a pack cannot hang the game inside one expression. */
     private static final int LOOP_LIMIT = 1024;
 
+    /**
+     * Thrown where the parser meets something it cannot read.
+     *
+     * Bedrock answers zero for a malformed expression as a whole, so reading the part in front of
+     * the mistake and calling that the answer would be worse than nothing. Every site that cannot go
+     * on says so the same way, and `parse` turns all of them into the one answer.
+     */
+    private static final class Malformed extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+
+        Malformed() {
+            super(null, null, false, false);
+        }
+    }
+
     private final String source;
     private int at;
-
-    /** Set where the parser meets something it cannot read, which makes the whole value zero. */
-    private boolean malformed;
 
     private MolangParser(String source) {
         this.source = source;
@@ -30,7 +42,12 @@ public final class MolangParser {
     /** Parses a whole Molang value, which may be a plain expression or a list of statements. */
     public static MolangExpression parse(String source) {
         if (source == null || source.isBlank()) return MolangExpression.ZERO;
-        return new MolangParser(source).parseProgram();
+
+        try {
+            return new MolangParser(source).parseProgram();
+        } catch (Malformed ignored) {
+            return MolangExpression.ZERO;
+        }
     }
 
     /** Bedrock also allows a bare number where an expression is expected. */
@@ -64,7 +81,7 @@ public final class MolangParser {
         }
 
         skipSpace();
-        if (malformed || at < source.length() || statements.isEmpty()) return MolangExpression.ZERO;
+        if (at < source.length() || statements.isEmpty()) throw new Malformed();
         if (statements.size() == 1) return statements.get(0);
 
         List<MolangExpression> program = List.copyOf(statements);
@@ -278,11 +295,7 @@ public final class MolangParser {
         if (Character.isDigit(start) || start == '.') return parseNumber();
         if (Character.isLetter(start) || start == '_') return parsePath();
 
-        // Nothing else is valid here. Bedrock answers zero for a malformed expression as a whole, so
-        // reading the part before the mistake and calling that the answer would be worse than nothing.
-        malformed = true;
-        at += 1;
-        return MolangExpression.ZERO;
+        throw new Malformed();
     }
 
     private MolangExpression parseString(char quote) {
@@ -301,8 +314,7 @@ public final class MolangParser {
         try {
             return MolangExpression.constant(Double.parseDouble(text));
         } catch (NumberFormatException ignored) {
-            // A stray separator, not a number. Reading it as zero keeps the rest of the model alive.
-            return MolangExpression.ZERO;
+            throw new Malformed();
         }
     }
 
@@ -318,7 +330,7 @@ public final class MolangParser {
         if (head.equals("for_each")) return parseForEach();
 
         skipSpace();
-        if (peek() != '.') return MolangExpression.ZERO;
+        if (peek() != '.') throw new Malformed();
         at += 1;
         // A variable can hold a struct, so the name may carry further dotted segments.
         StringBuilder path = new StringBuilder(readName());
@@ -343,7 +355,7 @@ public final class MolangParser {
                 yield environment -> key;
             }
             case "array" -> parseArrayIndex(name);
-            default -> MolangExpression.ZERO;
+            default -> throw new Malformed();
         }, name);
     }
 
@@ -373,7 +385,7 @@ public final class MolangParser {
      */
     private MolangExpression parseLoop() {
         List<MolangExpression> arguments = readArguments();
-        if (arguments.size() < 2) return MolangExpression.ZERO;
+        if (arguments.size() < 2) throw new Malformed();
 
         MolangExpression count = arguments.get(0);
         MolangExpression body = arguments.get(1);
@@ -388,7 +400,8 @@ public final class MolangParser {
     /** `for_each(v.name, array, {statements})` runs its block once per element, binding each in turn. */
     private MolangExpression parseForEach() {
         List<MolangExpression> arguments = readArguments();
-        return arguments.size() < 3 ? MolangExpression.ZERO : arguments.get(2);
+        if (arguments.size() < 3) throw new Malformed();
+        return arguments.get(2);
     }
 
     private MolangExpression parseVariable(String name, boolean temporary) {

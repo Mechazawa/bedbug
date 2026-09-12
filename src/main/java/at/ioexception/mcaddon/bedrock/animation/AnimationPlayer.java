@@ -57,8 +57,8 @@ public final class AnimationPlayer {
     /**
      * Where an animation's sounds and particles go.
      *
-     * The player knows when an effect fires but not what a name means or how to show it, so it hands
-     * both on. Nothing listens on a server, where an animation runs only for its variables.
+     * The player knows when an effect fires but not what its name means or how to show it, so it
+     * hands both on. Nothing listens on a server, where an animation runs only for its variables.
      */
     public interface EffectSink {
         EffectSink NONE = new EffectSink() {
@@ -77,11 +77,7 @@ public final class AnimationPlayer {
     }
 
     public void setEffects(EffectSink effects) {
-        this.effects = effects == null ? EffectSink.NONE : effects;
-    }
-
-    public EffectSink effects() {
-        return effects;
+        this.effects = effects;
     }
 
     public AnimationPlayer(BedrockAssets assets) {
@@ -92,13 +88,8 @@ public final class AnimationPlayer {
         return environment;
     }
 
-    /** Starts a clip, or restarts it from the beginning if it is already playing. */
-    public void play(String name) {
-        play(name, null, 0f);
-    }
-
     /**
-     * Starts a clip that ends on its own terms.
+     * Starts a clip, or restarts it from the beginning if it is already playing.
      *
      * `stopExpression` is what `/playanimation` takes: a Molang test that ends the clip once it
      * holds, whatever the clip's own length says. `blendOutSeconds` is how long the clip takes to
@@ -139,7 +130,7 @@ public final class AnimationPlayer {
 
     /** Keeps a looping clip running without restarting it each frame. */
     public void ensurePlaying(String name) {
-        if (!running.containsKey(name)) play(name);
+        if (!running.containsKey(name)) play(name, null, 0f);
     }
 
     public void stopAll() {

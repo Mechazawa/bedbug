@@ -30,32 +30,16 @@ public final class EntityAnimator {
     private final Set<String> direct = new HashSet<>();
 
     private boolean initialised;
-    private Effects listener = Effects.NONE;
+    private AnimationPlayer.EffectSink listener = AnimationPlayer.EffectSink.NONE;
 
     /**
-     * What an entity's animations ask to be heard and seen, with every name already resolved.
+     * Names every effect through this entity's own definition before passing it on.
      *
-     * A pack writes short names that only the entity's own definition can turn into a sound event or
-     * a particle identifier, so the resolving happens here and whoever listens gets real ids.
+     * A pack writes short names that only the entity's definition turns into a sound event or a
+     * particle identifier, so whoever listens is handed real ids.
      */
-    public interface Effects {
-        Effects NONE = new Effects() {
-            @Override
-            public void sound(String soundId) {
-            }
-
-            @Override
-            public void particle(String particleId, String locator) {
-            }
-        };
-
-        void sound(String soundId);
-
-        void particle(String particleId, String locator);
-    }
-
-    public void setEffects(Effects effects) {
-        this.listener = effects == null ? Effects.NONE : effects;
+    public void setEffects(AnimationPlayer.EffectSink effects) {
+        listener = effects;
         player.setEffects(new AnimationPlayer.EffectSink() {
             @Override
             public void sound(String effect) {
@@ -136,6 +120,7 @@ public final class EntityAnimator {
      */
     private void runController(AnimationController controller, float deltaSeconds, Set<String> wanted) {
         MolangEnvironment environment = player.environment();
+        boolean firstRun = !controllers.containsKey(controller.name());
         ControllerState current = controllers.computeIfAbsent(controller.name(), name -> {
             ControllerState fresh = new ControllerState();
             fresh.state = controller.initialState();
@@ -145,7 +130,7 @@ public final class EntityAnimator {
         AnimationController.State state = controller.states().get(current.state);
         if (state == null) return;
 
-        if (current.timeInState == 0f && deltaSeconds > 0f) fireStateEffects(state);
+        if (firstRun) fireStateEffects(state);
 
         current.timeInState += deltaSeconds;
         environment.setStateTime(current.timeInState);
@@ -177,12 +162,12 @@ public final class EntityAnimator {
         }
     }
 
-    /** Plays a clip outside the controller graph, which is how a spoken line is delivered. */
-    public void playDirect(String animationName) {
-        playDirect(animationName, null, 0f);
-    }
-
-    /** The form `/playanimation` uses, where the pack says when the clip ends and how it lets go. */
+    /**
+     * Plays a clip outside the controller graph, which is how a spoken line is delivered.
+     *
+     * `/playanimation` is where the other two arguments come from: the pack says when the clip ends
+     * and how long it takes to let go.
+     */
     public void playDirect(String animationName, String stopExpression, float blendOutSeconds) {
         MolangExpression stop = stopExpression == null || stopExpression.isBlank()
             ? null : MolangParser.parse(stopExpression);

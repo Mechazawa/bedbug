@@ -100,9 +100,9 @@ public final class AddonGameTests {
     /**
      * Delivering the tick's data-driven triggers ends, and an entity no pack declares raises none.
      *
-     * A listener on `dataDrivenEntityTrigger` may trigger another event, so delivery runs outside
-     * the trigger it came from. Calling it twice over stands in for that: the second call has an
-     * empty queue and the tick still finishes.
+     * A listener on `dataDrivenEntityTrigger` may trigger another event, so the host holds the
+     * trigger until its next tick rather than raising it in place. Ticking twice stands in for that:
+     * the second tick has an empty queue and the tick still finishes.
      */
     @GameTest()
     public void entityEventDeliveryEndsInOneTick(GameTestHelper helper) {
@@ -111,8 +111,10 @@ public final class AddonGameTests {
         helper.assertFalse(EntityEvents.trigger(plain, "minecraft:entity_spawned", null, ServerHooks.state()),
             "An entity with no add-on definition ran an event.");
 
-        EntityEvents.deliver();
-        EntityEvents.deliver();
+        if (ServerHooks.scripts() != null) {
+            ServerHooks.scripts().tick(0);
+            ServerHooks.scripts().tick(1);
+        }
         helper.runAfterDelay(2, helper::succeed);
     }
 

@@ -1,10 +1,11 @@
 package at.ioexception.mcaddon.client.render;
 
-import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.animation.AnimationPlayer;
 import at.ioexception.mcaddon.bedrock.animation.BonePose;
 import at.ioexception.mcaddon.bedrock.entity.EntityAnimator;
 import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonEntities;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.util.Mth;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -14,9 +15,6 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import org.joml.Vector3f;
 
-import java.util.LinkedHashSet;
-import java.util.Set;
-
 /**
  * The sounds and particles an entity's animations ask for, played where the entity is.
  *
@@ -24,15 +22,12 @@ import java.util.Set;
  * a server, which is why a player who cannot see the entity hears and sees nothing.
  */
 public final class AddonEffects {
-    /** Particles already reported as unshowable, so one missing effect is not logged every frame. */
-    private static final Set<String> MISSING = new LinkedHashSet<>();
-
     private AddonEffects() {
     }
 
     /** Binds an animator to the entity it is drawn on, so its effects land in the world. */
-    public static EntityAnimator.Effects of(Entity entity, String namespace) {
-        return new EntityAnimator.Effects() {
+    public static AnimationPlayer.EffectSink of(Entity entity, EntityAnimator animator, String namespace) {
+        return new AnimationPlayer.EffectSink() {
             @Override
             public void sound(String soundId) {
                 play(entity, namespace, soundId);
@@ -40,7 +35,7 @@ public final class AddonEffects {
 
             @Override
             public void particle(String particleId, String locator) {
-                spawn(entity, particleId, locator);
+                spawn(entity, animator, particleId, locator);
             }
         };
     }
@@ -73,30 +68,28 @@ public final class AddonEffects {
      * A pack's own particle definitions have no Java counterpart, so what can be shown is the vanilla
      * effect a Bedrock id names. Anything else is counted and reported by `/mcaddon entities` rather
      * than silently doing nothing.
+     *
+     * A locator names a bone, and the animator drawing the entity is the one holding that bone.
      */
-    private static void spawn(Entity entity, String particleId, String locator) {
+    private static void spawn(Entity entity, EntityAnimator animator, String particleId, String locator) {
         if (particleId == null || entity.level() == null) return;
 
         ParticleOptions options = BedrockParticles.vanilla(particleId);
         if (options == null) {
-            if (MISSING.add(particleId)) {
-                McAddon.LOGGER.warn("A pack asked for the particle {}, which Java has no effect for.",
-                    particleId);
-            }
+            AddonEntities.unsupported("particle " + particleId);
             return;
         }
 
-        Vector3f at = anchor(entity, locator);
+        Vector3f at = anchor(entity, animator, locator);
         entity.level().addParticle(options, at.x(), at.y(), at.z(), 0, 0, 0);
     }
 
     /** Where the effect is born: the bone's current position when one is named, else the entity. */
-    private static Vector3f anchor(Entity entity, String locator) {
+    private static Vector3f anchor(Entity entity, EntityAnimator animator, String locator) {
         Vector3f position = new Vector3f((float) entity.getX(), (float) entity.getY(), (float) entity.getZ());
         if (locator == null) return position;
 
-        EntityAnimator animator = Animators.existing(entity);
-        BonePose pose = animator == null ? null : animator.poseOf(locator);
+        BonePose pose = animator.poseOf(locator);
         if (pose == null) return position;
 
         // A bone is placed in model space, sixteen units to the block, before the entity is turned.

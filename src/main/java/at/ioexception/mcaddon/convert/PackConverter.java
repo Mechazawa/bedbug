@@ -209,14 +209,15 @@ public final class PackConverter {
          */
         private void writeSurface(BedrockPack pack, TextureSet set, Path target, String inside)
             throws IOException {
-            BufferedImage glow = set.emissiveLayer(pack, EMISSIVE_THRESHOLD);
+            TextureSet.Layers layers = set.layers(pack);
+            BufferedImage glow = TextureSet.emissiveLayer(layers, EMISSIVE_THRESHOLD);
             if (glow != null) {
                 Path destination = target.resolve(inside + "_emissive.png");
                 Files.createDirectories(destination.getParent());
                 ImageIO.write(glow, "PNG", destination.toFile());
             }
 
-            for (TextureSet.Sidecar sidecar : set.shaderSidecars(pack)) {
+            for (TextureSet.Sidecar sidecar : TextureSet.shaderSidecars(layers)) {
                 Path destination = target.resolve(inside + sidecar.suffix() + ".png");
                 Files.createDirectories(destination.getParent());
                 ImageIO.write(sidecar.image(), "PNG", destination.toFile());
@@ -475,12 +476,6 @@ public final class PackConverter {
     }
 
     /**
-     * Crafting recipes, as a data pack the game reads out of the same directory.
-     *
-     * Bedrock's shaped recipes carry a pattern and a key map exactly as Java's do, so the conversion
-     * is a rename. Furnace recipes and anything with a Bedrock-only tag are left out and reported.
-     */
-    /**
      * Adds the pack's icons to the atlas every flat item model is drawn from.
      *
      * Java stitches only what its own atlas definition names, which is the `block` and `item`
@@ -557,6 +552,12 @@ public final class PackConverter {
         return tints;
     }
 
+    /**
+     * Crafting recipes, as a data pack the game reads out of the same directory.
+     *
+     * Bedrock's shaped recipes carry a pattern and a key map exactly as Java's do, so the conversion
+     * is a rename. Furnace recipes and anything with a Bedrock-only tag are left out and reported.
+     */
     private static void writeRecipes(Path root, List<RecipeDefinition> recipes) throws IOException {
         boolean modern = Platform.modernDataPaths();
         String directory = modern ? "recipe" : "recipes";

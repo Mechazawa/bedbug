@@ -60,15 +60,25 @@ public record TextureSet(String colour, String normal, String heightmap, String 
         return auxiliary;
     }
 
+    /** A set's images, decoded once, because each of them feeds more than one output. */
+    public record Layers(BufferedImage colour, BufferedImage normal, BufferedImage heightmap,
+        BufferedImage combined) {
+    }
+
+    public Layers layers(BedrockPack pack) {
+        return new Layers(read(pack, colour), read(pack, normal), read(pack, heightmap),
+            read(pack, combined));
+    }
+
     /**
      * The glowing pixels of the colour texture, on their own and with everything else transparent.
      *
      * This is the one part of a physically based set vanilla Java can show without a shader pack: a
      * copy drawn again at full brightness. Null when the set has no emissive pixels to speak of.
      */
-    public BufferedImage emissiveLayer(BedrockPack pack, int threshold) {
-        BufferedImage base = read(pack, colour);
-        BufferedImage map = read(pack, combined);
+    public static BufferedImage emissiveLayer(Layers layers, int threshold) {
+        BufferedImage base = layers.colour();
+        BufferedImage map = layers.combined();
         if (base == null || map == null) return null;
 
         BufferedImage glow = new BufferedImage(base.getWidth(), base.getHeight(),
@@ -77,7 +87,7 @@ public record TextureSet(String colour, String normal, String heightmap, String 
 
         for (int y = 0; y < base.getHeight(); y++) {
             for (int x = 0; x < base.getWidth(); x++) {
-                if (channel(map, base, x, y, 8) < threshold) continue;
+                if ((sample(map, base, x, y) >> 8 & 0xFF) < threshold) continue;
                 glow.setRGB(x, y, base.getRGB(x, y));
                 any = true;
             }
@@ -94,19 +104,15 @@ public record TextureSet(String colour, String normal, String heightmap, String 
      * normal, the ambient occlusion and the height, and `_s` carries smoothness, metalness,
      * subsurface scattering and emission.
      */
-    public List<Sidecar> shaderSidecars(BedrockPack pack) {
-        BufferedImage base = read(pack, colour);
+    public static List<Sidecar> shaderSidecars(Layers layers) {
+        BufferedImage base = layers.colour();
         if (base == null) return List.of();
 
         List<Sidecar> sidecars = new ArrayList<>();
-        BufferedImage normalMap = read(pack, normal);
-        BufferedImage height = read(pack, heightmap);
-        if (normalMap != null || height != null) {
-            sidecars.add(new Sidecar("_n", normals(base, normalMap, height)));
+        if (layers.normal() != null || layers.heightmap() != null) {
+            sidecars.add(new Sidecar("_n", normals(base, layers.normal(), layers.heightmap())));
         }
-
-        BufferedImage map = read(pack, combined);
-        if (map != null) sidecars.add(new Sidecar("_s", specular(base, map)));
+        if (layers.combined() != null) sidecars.add(new Sidecar("_s", specular(base, layers.combined())));
         return sidecars;
     }
 
@@ -121,10 +127,9 @@ public record TextureSet(String colour, String normal, String heightmap, String 
 
         for (int y = 0; y < base.getHeight(); y++) {
             for (int x = 0; x < base.getWidth(); x++) {
-                int red = normalMap == null ? 127 : channel(normalMap, base, x, y, 16);
-                int green = normalMap == null ? 127 : channel(normalMap, base, x, y, 8);
-                int alpha = height == null ? 255 : channel(height, base, x, y, 16);
-                result.setRGB(x, y, alpha << 24 | red << 16 | green << 8 | 255);
+                int facing = normalMap == null ? 0x7F7F : sample(normalMap, base, x, y) >> 8 & 0xFFFF;
+                int alpha = height == null ? 255 : sample(height, base, x, y) >> 16 & 0xFF;
+                result.setRGB(x, y, alpha << 24 | (facing & 0xFFFF) << 8 | 255);
             }
         }
         return result;
@@ -140,13 +145,15 @@ public record TextureSet(String colour, String normal, String heightmap, String 
     private static BufferedImage specular(BufferedImage base, BufferedImage map) {
         BufferedImage result = new BufferedImage(base.getWidth(), base.getHeight(),
             BufferedImage.TYPE_INT_ARGB);
+        boolean scatters = map.getColorModel().hasAlpha();
 
         for (int y = 0; y < base.getHeight(); y++) {
             for (int x = 0; x < base.getWidth(); x++) {
-                int metalness = channel(map, base, x, y, 16);
-                int emissive = channel(map, base, x, y, 8);
-                int roughness = channel(map, base, x, y, 0);
-                int subsurface = map.getColorModel().hasAlpha() ? channel(map, base, x, y, 24) : 0;
+                int packed = sample(map, base, x, y);
+                int metalness = packed >> 16 & 0xFF;
+                int emissive = packed >> 8 & 0xFF;
+                int roughness = packed & 0xFF;
+                int subsurface = scatters ? packed >>> 24 : 0;
 
                 int smoothness = (int) Math.round(255 * (1 - Math.sqrt(roughness / 255.0)));
                 int reflectance = metalness >= 128 ? 255 : Math.max(10, metalness * 229 / 255);
@@ -160,15 +167,14 @@ public record TextureSet(String colour, String normal, String heightmap, String 
     }
 
     /**
-     * One channel of a map, sampled where the colour texture's pixel sits.
+     * One pixel of a map, taken where the colour texture's pixel sits.
      *
      * A pack is free to ship its maps at a different resolution from the colour layer, so the
      * coordinate is scaled rather than used directly.
      */
-    private static int channel(BufferedImage map, BufferedImage base, int x, int y, int shift) {
-        int argb = map.getRGB(x * map.getWidth() / base.getWidth(),
+    private static int sample(BufferedImage map, BufferedImage base, int x, int y) {
+        return map.getRGB(x * map.getWidth() / base.getWidth(),
             y * map.getHeight() / base.getHeight());
-        return (argb >> shift) & 0xFF;
     }
 
     private static BufferedImage read(BedrockPack pack, String path) {
