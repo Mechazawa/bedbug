@@ -117,6 +117,17 @@ These are the checks that catch things:
   whose spawn eggs take each of the two forms, an animation firing a sound and a particle off its
   timeline, three `particles/*.json` in the 1.10.0 format, a texture set whose emissive channel has
   pixels in it, and a function using the commands and selector arguments that need translating.
+- **`tools/testpack/build_modules.py`** builds a second add-on, whose script imports every
+  `@minecraft/*` module the mod provides and calls one thing from each. Its sources are a manifest
+  and one script under `tools/testpack/modules/`.
+
+  ```bash
+  python3 tools/testpack/build_modules.py --version 26.2
+  ```
+
+  It prints a `MODULEPROBE` line per answer, so a run carrying all of them says every module
+  resolved. A missing module or a missing named export shows up instead as the pack's script
+  failing to load, with no `MODULEPROBE` line at all.
 - **`tools/verify/verify.py`** does those game runs without a human watching the log. It starts the
   game, reads the output back for the failures that only appear at runtime, writes
   `build/verify/verdict.json` and a log per run under `build/verify/`, and exits non-zero when
@@ -223,7 +234,7 @@ build.named.gradle.kts       26.2, which Mojang ships unobfuscated
 gradle/mod.gradle.kts        Shared build logic: toolchain, GraalJS bundling, checkstyle, checkTools
 config/checkstyle/           Lint rules and the Stonecutter suppressions
 
-tools/testpack/              The add-on the harness checks against, and the script that builds it
+tools/testpack/              The two add-ons the harness checks against, and the scripts building them
 tools/verify/verify.py       End to end harness: drives a dev server and checks a conversion
 tools/preview/render.py      Offline model renderer
 tools/molang/MolangCheck.java  Molang conformance harness
@@ -252,4 +263,13 @@ src/main/java/at/ioexception/mcaddon/
 src/main/resources/assets/mcaddon/script/
   minecraft_server.js        The @minecraft/server surface, in JavaScript
   minecraft_server_ui.js     The @minecraft/server-ui surface
+  minecraft_common.js        The @minecraft/common error types and shapes
+  minecraft_math.js          The @minecraft/math vectors, arithmetic only
+  minecraft_vanilla_data.js  The @minecraft/vanilla-data tables, read from the registries
+  minecraft_server_gametest.js  The @minecraft/server-gametest surface, which runs no test
 ```
+
+`ScriptHost.MODULES` maps an import specifier to one of these files. A module is linked before any
+of it runs, so a specifier a pack imports that is not in that map, or a named export missing from
+one that is, ends that pack's whole script rather than the line that asked for it. Add the name
+even when the mod cannot act on what the module offers.

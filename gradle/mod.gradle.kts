@@ -188,8 +188,36 @@ val checkTools = project.tasks.register("checkTools") {
     }
 }
 
+/**
+ * Checks the script modules link, which parsing them one at a time does not.
+ *
+ * A module is linked before any of it runs, so one name declared twice, or an import of a name
+ * nothing exports, is a failure at load time that switches off every pack's script at once. Both
+ * have happened here, and `node --check` sees neither.
+ */
+val checkScriptModules = project.tasks.register("checkScriptModules") {
+    group = "verification"
+    description = "Link every module a pack can import."
+
+    val checker = rootProject.layout.projectDirectory.file("tools/modules/check.py").asFile
+    val modules = rootProject.layout.projectDirectory
+        .dir("src/main/resources/assets/mcaddon/script").asFile
+    inputs.dir(modules).withPropertyName("modules")
+    outputs.upToDateWhen { true }
+    onlyIf { project.name == activeName }
+
+    doLast {
+        val process = ProcessBuilder("python3", checker.absolutePath)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().readText()
+        if (process.waitFor() != 0) throw GradleException(output.trim())
+        logger.lifecycle(output.trim())
+    }
+}
+
 project.tasks.named("check") {
-    dependsOn(checkTools)
+    dependsOn(checkTools, checkScriptModules)
 }
 
 project.tasks.named<Jar>("jar") {

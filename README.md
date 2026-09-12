@@ -59,6 +59,9 @@ server decides what happens; the client draws it.
   and nothing else on disk. Commands a script registers on startup become real commands,
   `@minecraft/server-ui` forms become real screens, and the world, system, entity, dimension, block,
   scoreboard, game rule and structure surfaces are answered by the game.
+- The other modules a pack may import: `@minecraft/math`, `@minecraft/common`, and
+  `@minecraft/vanilla-data`, whose tables of vanilla ids are read from this game's own registries so
+  they hold what the version you play ships.
 
 `/mcaddon packs` lists what loaded. `/mcaddon entities` and `/mcaddon scripts` list what a pack asked
 for that this mod does not implement yet, which answers "will my pack work" with evidence.
@@ -86,6 +89,11 @@ of, or a server Java does not speak to. A function using one keeps its other lin
 command is reported. `testfor`, `testforblock`, `testforblocks` and `titleraw` are translated;
 `playanimation`, `event`, `scriptevent`, `music`, `toggledownfall`, `structure` and `mobevent` are
 registered by this mod.
+
+**The tests a pack ships.** A pack can import `@minecraft/server-gametest` and register its tests,
+and the registration is taken and counted rather than refused, because refusing it would cost the
+pack the rest of its script. No test is run: a Bedrock test builds its world from a structure and
+asserts against Bedrock components, and Java's framework of the same name shares neither.
 
 Surface lighting from a physically based texture set is the one thing that depends on what the
 player has installed: the emissive channel is drawn again at full brightness with or without a
