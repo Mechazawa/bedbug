@@ -3,8 +3,12 @@ package at.ioexception.mcaddon.script;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.server.DamageSources;
 import at.ioexception.mcaddon.state.AddonState;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
@@ -12,11 +16,15 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket;
 import net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket;
+import net.minecraft.network.protocol.game.ClientboundSoundPacket;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.Mth;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -30,17 +38,20 @@ import net.minecraft.world.scores.Objective;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Value;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.WeakHashMap;
+import java.util.function.Predicate;
 
 /**
  * The Java side of `@minecraft/server`.
@@ -180,6 +191,17 @@ public final class ScriptBridge {
             .toArray(String[]::new);
     }
 
+    /** The online players the query keeps, in whichever dimension each of them is in. */
+    @HostAccess.Export
+    public String[] matchingPlayers(String queryJson) {
+        EntityQuery query = EntityQuery.parse(queryJson, this);
+        List<String> found = server.getPlayerList().getPlayers().stream()
+            .filter(query::matches)
+            .map(ServerPlayer::getStringUUID)
+            .toList();
+        return query.limit(found).toArray(String[]::new);
+    }
+
     @HostAccess.Export
     public Object worldDynamicProperty(String name) {
         return state.worldProperty(name);
@@ -304,16 +326,67 @@ public final class ScriptBridge {
         entity.hurtMarked = true;
     }
 
+    /**
+     * Moves an entity, into another dimension when the options name one.
+     *
+     * False when `checkForBlocks` is set and the entity would not fit where it is being sent, which
+     * is the answer `tryTeleport` reports. Velocity is dropped unless `keepVelocity` asks to keep
+     * it, the way Bedrock drops it.
+     */
     @HostAccess.Export
-    public void teleport(String id, double x, double y, double z, String dimension, Value pitch, Value yaw) {
+    public boolean teleport(String id, double x, double y, double z, String optionsJson) {
         Entity entity = entity(id);
-        if (entity == null) return;
-        if (dimension != null && !dimension.equals(Platform.idOf(entity.level().dimension()).toString())) {
-            unsupported("Entity.teleport across dimensions");
+        if (entity == null) return false;
+
+        JsonObject options = com.google.gson.JsonParser.parseString(optionsJson).getAsJsonObject();
+        String named = text(options, "dimension");
+        ServerLevel target = named != null ? level(named)
+            : entity.level() instanceof ServerLevel current ? current : null;
+        if (target == null) return false;
+
+        if (flag(options, "checkForBlocks") && !target.noCollision(entity,
+            entity.getBoundingBox().move(x - entity.getX(), y - entity.getY(), z - entity.getZ()))) {
+            return false;
         }
-        Platform.placeAt(entity, x, y, z,
-            yaw.isNumber() ? (float) yaw.asDouble() : entity.getYRot(),
-            pitch.isNumber() ? (float) pitch.asDouble() : entity.getXRot());
+
+        float[] rotation = facing(options, entity, x, y, z);
+        Vec3 velocity = entity.getDeltaMovement();
+        if (!teleportTo(entity, target, x, y, z, rotation[0], rotation[1])) return false;
+
+        // Crossing a dimension rebuilds the entity, so whatever answers to the id afterwards is the
+        // one whose movement has to be set.
+        Entity placed = entity(id);
+        if (placed == null) return true;
+        placed.setDeltaMovement(flag(options, "keepVelocity") ? velocity : Vec3.ZERO);
+        placed.hurtMarked = true;
+        return true;
+    }
+
+    /** The yaw and pitch to land on: a facing point beats a rotation, which beats standing still. */
+    private static float[] facing(JsonObject options, Entity entity, double x, double y, double z) {
+        JsonObject point = object(options, "facingLocation");
+        if (point != null) {
+            double towardsX = point.get("x").getAsDouble() - x;
+            double towardsY = point.get("y").getAsDouble() - (y + entity.getEyeHeight());
+            double towardsZ = point.get("z").getAsDouble() - z;
+            double flat = Math.sqrt(towardsX * towardsX + towardsZ * towardsZ);
+            return new float[] {(float) (Math.toDegrees(Math.atan2(towardsZ, towardsX)) - 90),
+                (float) -Math.toDegrees(Math.atan2(towardsY, flat))};
+        }
+
+        JsonObject rotation = object(options, "rotation");
+        return rotation == null ? new float[] {entity.getYRot(), entity.getXRot()}
+            : new float[] {(float) rotation.get("y").getAsDouble(), (float) rotation.get("x").getAsDouble()};
+    }
+
+    /** 26 added a flag for whether a player's camera snaps back to them, which it always does. */
+    private static boolean teleportTo(Entity entity, ServerLevel target, double x, double y, double z,
+        float yaw, float pitch) {
+        //? if >=1.21.2 {
+        return entity.teleportTo(target, x, y, z, Set.of(), yaw, pitch, true);
+        //?} else {
+        /*return entity.teleportTo(target, x, y, z, Set.of(), yaw, pitch);
+        *///?}
     }
 
     @HostAccess.Export
@@ -390,7 +463,7 @@ public final class ScriptBridge {
     @HostAccess.Export
     public boolean entityMatches(String id, String queryJson) {
         Entity entity = entity(id);
-        return entity != null && EntityQuery.parse(queryJson).matches(entity, this);
+        return entity != null && EntityQuery.parse(queryJson, this).matches(entity);
     }
 
     @HostAccess.Export
@@ -512,12 +585,26 @@ public final class ScriptBridge {
         if (rider != null && rider.getVehicle() == entity(id)) rider.stopRiding();
     }
 
+    /** False when the damage did not land: the entity resisted it, or is already gone. */
     @HostAccess.Export
     public boolean applyDamage(String id, double amount, String cause, String sourceId) {
         Entity entity = entity(id);
         if (entity == null || !(entity.level() instanceof ServerLevel level)) return false;
-        Platform.hurt(entity, level, level.damageSources().generic(), (float) amount);
-        return true;
+        return hurt(entity, level, DamageSources.forCause(level, cause, entity(sourceId)), (float) amount);
+    }
+
+    /**
+     * Whether the damage landed.
+     *
+     * The shared {@link Platform#hurt} returns nothing, where a pack's `applyDamage` answers with
+     * whether the entity took the hit.
+     */
+    private static boolean hurt(Entity entity, ServerLevel level, DamageSource source, float amount) {
+        //? if >=1.21.2 {
+        return entity.hurtServer(level, source, amount);
+        //?} else {
+        /*return entity.hurt(source, amount);
+        *///?}
     }
 
     @HostAccess.Export
@@ -525,6 +612,32 @@ public final class ScriptBridge {
         Identifier parsed = Identifier.tryParse(effect);
         return parsed != null && entity(id) instanceof LivingEntity living
             && Platform.addEffect(living, parsed, duration, amplifier, particles);
+    }
+
+    /** Every effect the entity is under, as the JSON a script's `Effect` objects are built from. */
+    @HostAccess.Export
+    public String entityEffects(String id) {
+        JsonArray effects = new JsonArray();
+        if (!(entity(id) instanceof LivingEntity living)) return effects.toString();
+
+        for (MobEffectInstance active : living.getActiveEffects()) {
+            JsonObject effect = new JsonObject();
+            effect.addProperty("typeId", effectId(active));
+            effect.addProperty("duration", active.getDuration());
+            effect.addProperty("amplifier", active.getAmplifier());
+            effect.addProperty("displayName", Component.translatable(active.getDescriptionId()).getString());
+            effects.add(effect);
+        }
+        return effects.toString();
+    }
+
+    /** The registry id of an active effect. What the instance carries became a holder in 1.21. */
+    private static String effectId(MobEffectInstance active) {
+        //? if >=1.21 {
+        return BuiltInRegistries.MOB_EFFECT.getKey(active.getEffect().value()).toString();
+        //?} else {
+        /*return BuiltInRegistries.MOB_EFFECT.getKey(active.getEffect()).toString();
+        *///?}
     }
 
     @HostAccess.Export
@@ -536,8 +649,9 @@ public final class ScriptBridge {
 
     @HostAccess.Export
     public String equipment(String id, String slot) {
-        if (!(entity(id) instanceof LivingEntity living)) return null;
-        ItemStack held = living.getItemBySlot(equipmentSlot(slot));
+        EquipmentSlot which = equipmentSlot(slot);
+        if (which == null || !(entity(id) instanceof LivingEntity living)) return null;
+        ItemStack held = living.getItemBySlot(which);
         if (held.isEmpty()) return null;
         JsonObject item = new JsonObject();
         item.addProperty("typeId", BuiltInRegistries.ITEM.getKey(held.getItem()).toString());
@@ -549,8 +663,9 @@ public final class ScriptBridge {
 
     @HostAccess.Export
     public boolean setEquipment(String id, String slot, String itemId, int amount) {
-        if (!(entity(id) instanceof LivingEntity living)) return false;
-        living.setItemSlot(equipmentSlot(slot), itemId == null ? ItemStack.EMPTY : stack(itemId, amount));
+        EquipmentSlot which = equipmentSlot(slot);
+        if (which == null || !(entity(id) instanceof LivingEntity living)) return false;
+        living.setItemSlot(which, itemId == null ? ItemStack.EMPTY : stack(itemId, amount));
         return true;
     }
 
@@ -566,22 +681,25 @@ public final class ScriptBridge {
         return entity(id) instanceof ServerPlayer player ? Platform.selectedSlot(player) : 0;
     }
 
+    /** Bedrock capitalises its game mode names where Java does not, so `survival` reads `Survival`. */
     @HostAccess.Export
     public String playerGameMode(String id) {
-        return entity(id) instanceof ServerPlayer player
+        String name = entity(id) instanceof ServerPlayer player
             ? Platform.gameMode(player).getName()
             : GameType.SURVIVAL.getName();
+        return Character.toUpperCase(name.charAt(0)) + name.substring(1);
     }
 
     @HostAccess.Export
     public void setPlayerGameMode(String id, String mode) {
-        if (!(entity(id) instanceof ServerPlayer player)) return;
+        if (!(entity(id) instanceof ServerPlayer player) || mode == null) return;
         for (GameType type : GameType.values()) {
-            if (type.getName().equals(mode)) {
+            if (type.getName().equalsIgnoreCase(mode)) {
                 player.setGameMode(type);
                 return;
             }
         }
+        unsupported("Player.setGameMode(" + mode + ")");
     }
 
     @HostAccess.Export
@@ -623,12 +741,12 @@ public final class ScriptBridge {
         ServerLevel level = level(dimension);
         if (level == null) return new String[0];
 
-        EntityQuery query = EntityQuery.parse(queryJson);
+        EntityQuery query = EntityQuery.parse(queryJson, this);
         List<String> found = new ArrayList<>();
         for (Entity entity : level.getAllEntities()) {
-            if (query.matches(entity, this)) found.add(entity.getStringUUID());
+            if (query.matches(entity)) found.add(entity.getStringUUID());
         }
-        return query.limit(found, level).toArray(String[]::new);
+        return query.limit(found).toArray(String[]::new);
     }
 
     @HostAccess.Export
@@ -714,6 +832,25 @@ public final class ScriptBridge {
         if (entity == null) return;
         playSoundAtLocation(Platform.idOf(entity.level().dimension()).toString(), sound,
             entity.getX(), entity.getY(), entity.getZ(), volume, pitch);
+    }
+
+    /**
+     * A sound only one player hears, played where that player is standing.
+     *
+     * Sent down that player's own connection rather than through the level, because a level plays a
+     * sound to everybody in range of it.
+     */
+    @HostAccess.Export
+    public void playSoundTo(String id, String sound, double volume, double pitch) {
+        Identifier parsed = sound == null ? null : Identifier.tryParse(sound);
+        if (parsed == null || !(entity(id) instanceof ServerPlayer player)) return;
+
+        BuiltInRegistries.SOUND_EVENT.getOptional(parsed).ifPresentOrElse(
+            event -> player.connection.send(new ClientboundSoundPacket(
+                BuiltInRegistries.SOUND_EVENT.wrapAsHolder(event), SoundSource.NEUTRAL,
+                player.getX(), player.getY(), player.getZ(), (float) volume, (float) pitch,
+                player.getRandom().nextLong())),
+            () -> coverage.missingSound(parsed.toString()));
     }
 
     @HostAccess.Export
@@ -848,14 +985,23 @@ public final class ScriptBridge {
         return false;
     }
 
-    /** Where a scoreboard objective is shown: the sidebar, the player list, or under a name. */
+    /**
+     * Where a scoreboard objective is shown: the sidebar, the player list, or under a name.
+     *
+     * Bedrock capitalised these names in its 2.0 break, so both spellings are read.
+     */
     @HostAccess.Export
     public void setDisplaySlot(String slot, String objective) {
-        String java = switch (slot) {
+        String java = switch (slot == null ? "" : slot.toLowerCase(Locale.ROOT)) {
             case "list" -> "list";
-            case "belowName", "belowname" -> "below_name";
-            default -> "sidebar";
+            case "belowname" -> "below_name";
+            case "sidebar" -> "sidebar";
+            default -> null;
         };
+        if (java == null) {
+            unsupported("Scoreboard display slot " + slot);
+            return;
+        }
         run(server.createCommandSourceStack(), objective == null || objective.isBlank()
             ? "scoreboard objectives setdisplay " + java
             : "scoreboard objectives setdisplay " + java + " " + objective);
@@ -887,9 +1033,14 @@ public final class ScriptBridge {
         return item == null ? 0 : new ItemStack(item).getMaxDamage();
     }
 
+    /** The tags the item is in, under Java's names for them: a pack reading these sees `swords`. */
     @HostAccess.Export
     public String[] itemTags(String itemId) {
-        return new String[0];
+        Identifier parsed = itemId == null ? null : Identifier.tryParse(itemId);
+        Item item = parsed == null ? null : BuiltInRegistries.ITEM.getOptional(parsed).orElse(null);
+        return item == null ? new String[0] : item.builtInRegistryHolder().tags()
+            .map(tag -> tag.location().toString())
+            .toArray(String[]::new);
     }
 
     /**
@@ -988,15 +1139,19 @@ public final class ScriptBridge {
         return property.getName(block.getValue(property));
     }
 
-    private static EquipmentSlot equipmentSlot(String slot) {
-        return switch (slot.toLowerCase(Locale.ROOT)) {
+    /** Null for a slot this mod has no Java slot for, which is reported rather than guessed at. */
+    private EquipmentSlot equipmentSlot(String slot) {
+        EquipmentSlot found = switch (slot == null ? "" : slot.toLowerCase(Locale.ROOT)) {
             case "head" -> EquipmentSlot.HEAD;
             case "chest" -> EquipmentSlot.CHEST;
             case "legs" -> EquipmentSlot.LEGS;
             case "feet" -> EquipmentSlot.FEET;
             case "offhand" -> EquipmentSlot.OFFHAND;
-            default -> EquipmentSlot.MAINHAND;
+            case "mainhand" -> EquipmentSlot.MAINHAND;
+            default -> null;
         };
+        if (found == null) unsupported("EquipmentSlot." + slot);
+        return found;
     }
 
     private static UUID uuid(String id) {
@@ -1014,6 +1169,48 @@ public final class ScriptBridge {
         if (value.isNumber()) return value.asDouble();
         if (value.isString()) return value.asString();
         return value.toString();
+    }
+
+    // Reading an option bag a script passed as JSON. A key the pack left out is absent, not null.
+
+    private static String text(JsonObject options, String key) {
+        return options.has(key) && options.get(key).isJsonPrimitive() ? options.get(key).getAsString() : null;
+    }
+
+    private static Double number(JsonObject options, String key) {
+        return options.has(key) && options.get(key).isJsonPrimitive() ? options.get(key).getAsDouble() : null;
+    }
+
+    private static Integer integer(JsonObject options, String key) {
+        return options.has(key) && options.get(key).isJsonPrimitive() ? options.get(key).getAsInt() : null;
+    }
+
+    private static boolean flag(JsonObject options, String key) {
+        return options.has(key) && options.get(key).isJsonPrimitive() && options.get(key).getAsBoolean();
+    }
+
+    private static JsonObject object(JsonObject options, String key) {
+        return options.has(key) && options.get(key).isJsonObject() ? options.getAsJsonObject(key) : null;
+    }
+
+    private static List<JsonObject> objects(JsonObject options, String key) {
+        if (!options.has(key) || !options.get(key).isJsonArray()) return List.of();
+        return options.getAsJsonArray(key).asList().stream()
+            .filter(JsonElement::isJsonObject)
+            .map(JsonElement::getAsJsonObject)
+            .toList();
+    }
+
+    private static Set<String> strings(JsonObject options, String key) {
+        if (!options.has(key) || !options.get(key).isJsonArray()) return Set.of();
+        Set<String> values = new java.util.LinkedHashSet<>();
+        options.getAsJsonArray(key).forEach(element -> values.add(element.getAsString()));
+        return values;
+    }
+
+    private static double[] point(JsonObject location) {
+        return location == null ? null : new double[] {
+            location.get("x").getAsDouble(), location.get("y").getAsDouble(), location.get("z").getAsDouble()};
     }
 
     /** Bedrock type families come from the behaviour pack; nothing declares them for vanilla types. */
@@ -1037,81 +1234,235 @@ public final class ScriptBridge {
         }
     }
 
-    /** `EntityQueryOptions`, as far as the keys real packs actually use. */
-    private record EntityQuery(String type, Set<String> excludeTypes, Set<String> tags, Set<String> families,
-        String name, double[] location, Double maxDistance, Double minDistance, boolean closest, int count) {
+    /**
+     * `EntityQueryOptions`, as one test per option the query carries.
+     *
+     * Every option the pack set becomes a test when the query is parsed, so an entity is measured
+     * against what was asked and against nothing else.
+     */
+    private static final class EntityQuery {
+        private final List<Predicate<Entity>> tests = new ArrayList<>();
+        private final ScriptBridge bridge;
+        private final double[] location;
+        private final double[] volume;
+        private final Integer closest;
+        private final Integer farthest;
 
-        static EntityQuery parse(String json) {
-            JsonObject options = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
-            return new EntityQuery(
-                text(options, "type"),
-                strings(options, "excludeTypes"),
-                strings(options, "tags"),
-                strings(options, "families"),
-                text(options, "name"),
-                point(options.getAsJsonObject("location")),
-                number(options, "maxDistance"),
-                number(options, "minDistance"),
-                options.has("closest"),
-                options.has("closest") ? options.get("closest").getAsInt() : 0);
+        static EntityQuery parse(String json, ScriptBridge bridge) {
+            return new EntityQuery(com.google.gson.JsonParser.parseString(json).getAsJsonObject(), bridge);
         }
 
-        boolean matches(Entity entity, ScriptBridge bridge) {
-            String typeId = EntityType.getKey(entity.getType()).toString();
-            if (type != null && !typeId.equals(qualify(type))) return false;
-            if (excludeTypes.stream().anyMatch(excluded -> typeId.equals(qualify(excluded)))) return false;
-            if (name != null && !name.equals(entity.getCustomName() == null
-                ? "" : entity.getCustomName().getString())) {
-                return false;
+        private EntityQuery(JsonObject options, ScriptBridge bridge) {
+            this.bridge = bridge;
+            location = point(object(options, "location"));
+            volume = point(object(options, "volume"));
+            closest = integer(options, "closest");
+            farthest = integer(options, "farthest");
+
+            kinds(options);
+            names(options);
+            players(options);
+            rotations(options);
+            place(options);
+            scores(options);
+            properties(options);
+        }
+
+        boolean matches(Entity entity) {
+            return tests.stream().allMatch(test -> test.test(entity));
+        }
+
+        /** What the entity is: its registered type, and the Bedrock families that type belongs to. */
+        private void kinds(JsonObject options) {
+            String type = text(options, "type");
+            if (type != null) tests.add(entity -> typeId(entity).equals(qualify(type)));
+
+            Set<String> excludeTypes = strings(options, "excludeTypes");
+            if (!excludeTypes.isEmpty()) {
+                tests.add(entity -> excludeTypes.stream().noneMatch(one -> typeId(entity).equals(qualify(one))));
             }
-            if (!tags.isEmpty() && !Platform.tagsOf(entity).containsAll(tags)) return false;
+
+            Set<String> families = strings(options, "families");
             if (!families.isEmpty()) {
-                Set<String> present = Set.of(EntityFamilies.of(typeId));
-                if (families.stream().noneMatch(present::contains)) return false;
+                tests.add(entity -> Set.of(EntityFamilies.of(typeId(entity))).containsAll(families));
             }
-            if (location != null) {
-                double distance = entity.position().distanceTo(new Vec3(location[0], location[1], location[2]));
-                if (maxDistance != null && distance > maxDistance) return false;
-                if (minDistance != null && distance < minDistance) return false;
+
+            Set<String> excludeFamilies = strings(options, "excludeFamilies");
+            if (!excludeFamilies.isEmpty()) {
+                tests.add(entity -> java.util.Collections.disjoint(
+                    Set.of(EntityFamilies.of(typeId(entity))), excludeFamilies));
             }
-            return true;
         }
 
-        /** `closest: n` keeps the n nearest to the query location, which is how packs find neighbours. */
-        List<String> limit(List<String> found, ServerLevel level) {
-            if (!closest || location == null || found.size() <= count) return found;
+        /** The name tag an entity shows, and the tags a pack put on it. */
+        private void names(JsonObject options) {
+            String name = text(options, "name");
+            if (name != null) tests.add(entity -> name.equals(nameOf(entity)));
+
+            Set<String> excludeNames = strings(options, "excludeNames");
+            if (!excludeNames.isEmpty()) tests.add(entity -> !excludeNames.contains(nameOf(entity)));
+
+            Set<String> tags = strings(options, "tags");
+            if (!tags.isEmpty()) tests.add(entity -> tags.stream().allMatch(tag -> tagged(entity, tag)));
+
+            Set<String> excludeTags = strings(options, "excludeTags");
+            if (!excludeTags.isEmpty()) {
+                tests.add(entity -> excludeTags.stream().noneMatch(tag -> tagged(entity, tag)));
+            }
+        }
+
+        /** An empty tag asks whether the entity carries any tag at all, the way a selector does. */
+        private static boolean tagged(Entity entity, String tag) {
+            Set<String> present = Platform.tagsOf(entity);
+            return tag.isEmpty() ? !present.isEmpty() : present.contains(tag);
+        }
+
+        /** Options only a player can answer, so anything else is out once one of them is set. */
+        private void players(JsonObject options) {
+            String gameMode = text(options, "gameMode");
+            if (gameMode != null) tests.add(entity -> gameMode.equalsIgnoreCase(modeOf(entity)));
+
+            Set<String> excludeGameModes = strings(options, "excludeGameModes");
+            if (!excludeGameModes.isEmpty()) {
+                tests.add(entity -> excludeGameModes.stream().noneMatch(mode -> mode.equalsIgnoreCase(modeOf(entity))));
+            }
+
+            Integer minLevel = integer(options, "minLevel");
+            if (minLevel != null) tests.add(entity -> experience(entity) != null && experience(entity) >= minLevel);
+
+            Integer maxLevel = integer(options, "maxLevel");
+            if (maxLevel != null) tests.add(entity -> experience(entity) != null && experience(entity) <= maxLevel);
+        }
+
+        private static String modeOf(Entity entity) {
+            return entity instanceof ServerPlayer player ? Platform.gameMode(player).getName() : null;
+        }
+
+        private static Integer experience(Entity entity) {
+            return entity instanceof ServerPlayer player ? player.experienceLevel : null;
+        }
+
+        /** Where the entity is looking. Bedrock measures the horizontal one from -180 to 180. */
+        private void rotations(JsonObject options) {
+            Double minVertical = number(options, "minVerticalRotation");
+            if (minVertical != null) tests.add(entity -> entity.getXRot() >= minVertical);
+
+            Double maxVertical = number(options, "maxVerticalRotation");
+            if (maxVertical != null) tests.add(entity -> entity.getXRot() <= maxVertical);
+
+            Double minHorizontal = number(options, "minHorizontalRotation");
+            if (minHorizontal != null) tests.add(entity -> Mth.wrapDegrees(entity.getYRot()) >= minHorizontal);
+
+            Double maxHorizontal = number(options, "maxHorizontalRotation");
+            if (maxHorizontal != null) tests.add(entity -> Mth.wrapDegrees(entity.getYRot()) <= maxHorizontal);
+        }
+
+        /** Distance from the query's own point, and the cuboid it may name instead. */
+        private void place(JsonObject options) {
+            if (location == null) return;
             Vec3 origin = new Vec3(location[0], location[1], location[2]);
+
+            Double maxDistance = number(options, "maxDistance");
+            if (maxDistance != null) tests.add(entity -> entity.position().distanceTo(origin) <= maxDistance);
+
+            Double minDistance = number(options, "minDistance");
+            if (minDistance != null) tests.add(entity -> entity.position().distanceTo(origin) >= minDistance);
+
+            if (volume == null) return;
+            AABB box = new AABB(origin.x, origin.y, origin.z,
+                origin.x + volume[0], origin.y + volume[1], origin.z + volume[2]);
+            tests.add(entity -> box.contains(entity.position()));
+        }
+
+        /** A scoreboard range. An entity with no score on the objective is outside every range. */
+        private void scores(JsonObject options) {
+            for (JsonObject option : objects(options, "scoreOptions")) {
+                String objective = text(option, "objective");
+                if (objective == null) continue;
+
+                Double minScore = number(option, "minScore");
+                Double maxScore = number(option, "maxScore");
+                boolean exclude = flag(option, "exclude");
+                tests.add(entity -> exclude != inRange(bridge.score(objective, entity.getScoreboardName()),
+                    minScore, maxScore));
+            }
+        }
+
+        private static boolean inRange(Integer score, Double minimum, Double maximum) {
+            return score != null && (minimum == null || score >= minimum)
+                && (maximum == null || score <= maximum);
+        }
+
+        /** An entity property a pack declared, read straight from the store the script writes to. */
+        private void properties(JsonObject options) {
+            for (JsonObject option : objects(options, "propertyOptions")) {
+                String property = text(option, "propertyId");
+                if (property == null) continue;
+
+                JsonElement wanted = option.get("value");
+                boolean exclude = flag(option, "exclude");
+                tests.add(entity -> exclude
+                    != compare(bridge.state.property(entity.getUUID(), property), wanted));
+            }
+        }
+
+        /** Bedrock compares a property either against a bare value or through a named operator. */
+        private static boolean compare(Object actual, JsonElement wanted) {
+            if (wanted == null || wanted.isJsonNull()) return actual != null;
+            if (wanted.isJsonPrimitive()) return equalTo(actual, wanted.getAsJsonPrimitive());
+
+            JsonObject operator = wanted.getAsJsonObject();
+            if (operator.has("equals")) return equalTo(actual, operator.getAsJsonPrimitive("equals"));
+            if (operator.has("notEquals")) return !equalTo(actual, operator.getAsJsonPrimitive("notEquals"));
+            if (!(actual instanceof Number number)) return false;
+
+            double value = number.doubleValue();
+            if (operator.has("greaterThan")) return value > operator.get("greaterThan").getAsDouble();
+            if (operator.has("greaterThanOrEquals")) {
+                return value >= operator.get("greaterThanOrEquals").getAsDouble();
+            }
+            if (operator.has("lessThan")) return value < operator.get("lessThan").getAsDouble();
+            if (operator.has("lessThanOrEquals")) return value <= operator.get("lessThanOrEquals").getAsDouble();
+            return operator.has("lowerBound") && operator.has("upperBound")
+                && value >= operator.get("lowerBound").getAsDouble()
+                && value <= operator.get("upperBound").getAsDouble();
+        }
+
+        private static boolean equalTo(Object actual, JsonPrimitive wanted) {
+            if (actual == null) return false;
+            if (wanted.isBoolean()) return Boolean.valueOf(wanted.getAsBoolean()).equals(actual);
+            if (wanted.isNumber() && actual instanceof Number number) {
+                return number.doubleValue() == wanted.getAsDouble();
+            }
+            return actual.toString().equals(wanted.getAsString());
+        }
+
+        /** `closest: n` and `farthest: n` keep the n nearest or furthest from the query's own point. */
+        List<String> limit(List<String> found) {
+            Integer count = closest != null ? closest : farthest;
+            if (count == null || location == null || found.size() <= count) return found;
+
+            Vec3 origin = new Vec3(location[0], location[1], location[2]);
+            Comparator<String> byDistance = Comparator.comparingDouble(id -> {
+                Entity entity = bridge.entity(id);
+                return entity == null ? Double.MAX_VALUE : entity.position().distanceToSqr(origin);
+            });
             return found.stream()
-                .sorted(java.util.Comparator.comparingDouble(id -> {
-                    Entity entity = Platform.entityByUuid(level, UUID.fromString(id));
-                    return entity == null ? Double.MAX_VALUE : entity.position().distanceToSqr(origin);
-                }))
+                .sorted(closest != null ? byDistance : byDistance.reversed())
                 .limit(count)
                 .toList();
         }
 
+        private static String typeId(Entity entity) {
+            return EntityType.getKey(entity.getType()).toString();
+        }
+
+        private static String nameOf(Entity entity) {
+            return entity.getCustomName() == null ? "" : entity.getCustomName().getString();
+        }
+
         private static String qualify(String type) {
             return type.contains(":") ? type : "minecraft:" + type;
-        }
-
-        private static String text(JsonObject options, String key) {
-            return options.has(key) && options.get(key).isJsonPrimitive() ? options.get(key).getAsString() : null;
-        }
-
-        private static Double number(JsonObject options, String key) {
-            return options.has(key) && options.get(key).isJsonPrimitive() ? options.get(key).getAsDouble() : null;
-        }
-
-        private static Set<String> strings(JsonObject options, String key) {
-            if (!options.has(key) || !options.get(key).isJsonArray()) return Set.of();
-            Set<String> values = new java.util.LinkedHashSet<>();
-            options.getAsJsonArray(key).forEach(element -> values.add(element.getAsString()));
-            return values;
-        }
-
-        private static double[] point(JsonObject location) {
-            return location == null ? null : new double[] {
-                location.get("x").getAsDouble(), location.get("y").getAsDouble(), location.get("z").getAsDouble()};
         }
     }
 }
