@@ -179,7 +179,9 @@ public final class AddonEntities {
         "minecraft:movement.fly", "minecraft:movement.hover", "minecraft:movement.jump",
         "minecraft:movement.skip", "minecraft:movement.sway", "minecraft:movement.amphibious",
         "minecraft:preferred_path", "minecraft:leashable", "minecraft:angry",
-        "minecraft:pushable_by_entity", "minecraft:pushable_by_block");
+        "minecraft:pushable_by_entity", "minecraft:pushable_by_block", "minecraft:rideable",
+        "minecraft:teleport", "minecraft:trade_resupply", "minecraft:behavior.trade_with_player",
+        "minecraft:behavior.trade_interest");
 
     /**
      * The trade table an entity names, read while the pack it came from is still in hand.

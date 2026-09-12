@@ -88,12 +88,19 @@ public class AddonEntity extends PathfinderMob implements Merchant {
      * numbers are read out of the components here rather than applied to an entity later.
      */
     public static AttributeSupplier.Builder attributes(ServerEntityDefinition definition) {
-        return PathfinderMob.createMobAttributes()
+        AttributeSupplier.Builder built = PathfinderMob.createMobAttributes()
             .add(Attributes.MAX_HEALTH, definition.maxHealth())
             .add(Attributes.MOVEMENT_SPEED, definition.movementSpeed())
             .add(Attributes.FOLLOW_RANGE, number(definition, "minecraft:follow_range", "value", 16))
             .add(Attributes.KNOCKBACK_RESISTANCE,
                 number(definition, "minecraft:knockback_resistance", "value", 0));
+
+        // 26 moved how far food tempts a mob out of the goal and onto the mob itself, and a goal
+        // reading an attribute the type never declared fails the tick it runs in.
+        //? if >=26 {
+        built = built.add(Attributes.TEMPT_RANGE, 10);
+        //?}
+        return built;
     }
 
     /** A number a component carries, or the fallback when the pack declared neither. */
@@ -142,6 +149,89 @@ public class AddonEntity extends PathfinderMob implements Merchant {
 
     private boolean has(String component) {
         return definition.components().containsKey(component);
+    }
+
+    /**
+     * How many riders the pack allows, which is what makes an entity rideable at all.
+     *
+     * Bedrock states the seats and Java asks the entity each time somebody tries to get on, so the
+     * count is read back out of the component rather than kept.
+     */
+    @Override
+    protected boolean canAddPassenger(net.minecraft.world.entity.Entity passenger) {
+        if (definition == null || !has("minecraft:rideable")) return false;
+        return getPassengers().size() < (int) number(definition, "minecraft:rideable", "seat_count", 1);
+    }
+
+    /**
+     * Where a rider sits, taken from the first seat the pack described.
+     *
+     * Bedrock measures a seat in the model's own units, sixteen to the block, and puts the vertical
+     * axis where Java does, so only the scale differs.
+     */
+    //? if >=1.21 {
+    @Override
+    protected net.minecraft.world.phys.Vec3 getPassengerAttachmentPoint(
+        net.minecraft.world.entity.Entity passenger,
+        net.minecraft.world.entity.EntityDimensions dimensions, float scale) {
+        return seat() == null
+            ? super.getPassengerAttachmentPoint(passenger, dimensions, scale) : seat();
+    }
+    //?} else {
+    /*@Override
+    public double getPassengersRidingOffset() {
+        return seat() == null ? super.getPassengersRidingOffset() : seat().y;
+    }
+    *///?}
+
+    /**
+     * Restocks the trades a pack said should come back.
+     *
+     * Bedrock counts the restock in days and Java counts the world's own time, so a day is the
+     * twenty-four thousand ticks the game already measures one by.
+     */
+    private void resupply() {
+        if (offers == null || !has("minecraft:trade_resupply")) return;
+
+        long day = level().getGameTime() / 24000L;
+        if (day == lastResupplyDay) return;
+
+        lastResupplyDay = day;
+        offers.forEach(MerchantOffer::resetUses);
+    }
+
+    private long lastResupplyDay = -1;
+
+    /**
+     * Moves the entity somewhere else nearby, the way Bedrock's teleport component does.
+     *
+     * A pack gives a chance and a distance; what it is describing is a mob that blinks about rather
+     * than walks, which Java has no component for but can be asked to do outright.
+     */
+    private void teleportAbout() {
+        if (!has("minecraft:teleport") || level().isClientSide()) return;
+
+        double chance = number(definition, "minecraft:teleport", "random_teleport_chance", 0.01);
+        if (random.nextDouble() > chance) return;
+
+        double range = number(definition, "minecraft:teleport", "max_random_teleport_time", 16);
+        double x = getX() + (random.nextDouble() - 0.5) * range * 2;
+        double y = getY() + (random.nextInt(8) - 4);
+        double z = getZ() + (random.nextDouble() - 0.5) * range * 2;
+        Platform.placeAt(this, x, y, z, getYRot(), getXRot());
+    }
+
+    /** The first seat a `minecraft:rideable` component names, or null when it names none. */
+    private net.minecraft.world.phys.Vec3 seat() {
+        com.google.gson.JsonObject body = definition == null
+            ? null : definition.components().get("minecraft:rideable");
+        com.google.gson.JsonArray seats = body == null ? null : body.getAsJsonArray("seats");
+        if (seats == null || seats.isEmpty() || !seats.get(0).isJsonObject()) return null;
+
+        com.google.gson.JsonArray at = seats.get(0).getAsJsonObject().getAsJsonArray("position");
+        return at == null || at.size() < 3 ? null
+            : new net.minecraft.world.phys.Vec3(at.get(0).getAsDouble() / 16,
+                at.get(1).getAsDouble() / 16, at.get(2).getAsDouble() / 16);
     }
 
     /** Bedrock says an entity is angry; Java asks the entity, so the flag is kept here. */
@@ -227,7 +317,11 @@ public class AddonEntity extends PathfinderMob implements Merchant {
     public void tick() {
         super.tick();
         if (definition == null || !(level() instanceof net.minecraft.server.level.ServerLevel)) return;
-        if ((tickCount + getId()) % Sensors.INTERVAL_TICKS == 0) Sensors.tick(this, ServerHooks.state());
+        if ((tickCount + getId()) % Sensors.INTERVAL_TICKS == 0) {
+            Sensors.tick(this, ServerHooks.state());
+            resupply();
+            teleportAbout();
+        }
     }
 
     /** True when one of the pack's interactions applied, which is what consumes the click. */
