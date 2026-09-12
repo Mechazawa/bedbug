@@ -178,6 +178,32 @@ public final class PackConverter {
             }
         }
 
+        /**
+         * Every image a texture set names as something other than its colour layer.
+         *
+         * A set names its channels by bare file name, relative to the directory the set itself is in,
+         * so the names have to be resolved against that directory before they mean anything. The
+         * colour layer is the one the pack actually draws with and stays.
+         */
+        private Set<String> auxiliaryImages(BedrockPack pack) {
+            Set<String> auxiliary = new HashSet<>();
+            for (Path set : pack.list("textures", ".texture_set.json")) {
+                try {
+                    JsonObject body = Json.parseObject(set).getAsJsonObject("minecraft:texture_set");
+                    if (body == null) continue;
+
+                    String directory = directoryOf(pack, set);
+                    for (Map.Entry<String, JsonElement> channel : body.entrySet()) {
+                        if (channel.getKey().equals("color") || !channel.getValue().isJsonPrimitive()) continue;
+                        auxiliary.add(directory + channel.getValue().getAsString());
+                    }
+                } catch (IOException | RuntimeException error) {
+                    McAddon.LOGGER.warn("Could not read {}.", set.getFileName());
+                }
+            }
+            return auxiliary;
+        }
+
         /** Walks the pack's texture sets and builds an emissive layer wherever one has any. */
         private void emissiveLayers(BedrockPack pack, Path root) {
             for (Path set : pack.list("textures", ".texture_set.json")) {
@@ -185,16 +211,25 @@ public final class PackConverter {
                     JsonObject body = Json.parseObject(set).getAsJsonObject("minecraft:texture_set");
                     if (body == null) continue;
 
+                    String directory = directoryOf(pack, set);
                     String colour = Json.text(body, "color", null);
                     String combined = Json.text(body, "metalness_emissive_roughness", null);
                     if (combined == null) {
                         combined = Json.text(body, "metalness_emissive_roughness_subsurface", null);
                     }
-                    if (colour != null && combined != null) writeEmissive(pack, root, colour, combined);
+                    if (colour != null && combined != null) {
+                        writeEmissive(pack, root, directory + colour, directory + combined);
+                    }
                 } catch (IOException | RuntimeException error) {
                     McAddon.LOGGER.warn("Could not read {}.", set.getFileName());
                 }
             }
+        }
+
+        /** The pack-relative directory a texture set sits in, with a trailing slash. */
+        private static String directoryOf(BedrockPack pack, Path set) {
+            String relative = pack.root().relativize(set).toString().replace('\\', '/');
+            return relative.substring(0, relative.lastIndexOf('/') + 1);
         }
 
         /**
@@ -241,26 +276,6 @@ public final class PackConverter {
             } catch (IOException | RuntimeException error) {
                 McAddon.LOGGER.warn("Could not build the emissive layer for {}.", colourPath);
             }
-        }
-
-        /** Every image a texture set names as something other than its colour layer. */
-        private Set<String> auxiliaryImages(BedrockPack pack) {
-            Set<String> auxiliary = new HashSet<>();
-            for (Path set : pack.list("textures", ".texture_set.json")) {
-                auxiliary.add(withoutExtension(withoutExtension(
-                    pack.root().relativize(set).toString().replace('\\', '/'))));
-                try {
-                    JsonObject body = Json.parseObject(set).getAsJsonObject("minecraft:texture_set");
-                    if (body == null) continue;
-                    for (Map.Entry<String, JsonElement> channel : body.entrySet()) {
-                        if (channel.getKey().equals("color") || !channel.getValue().isJsonPrimitive()) continue;
-                        auxiliary.add(channel.getValue().getAsString());
-                    }
-                } catch (IOException | RuntimeException error) {
-                    McAddon.LOGGER.warn("Could not read {}.", set);
-                }
-            }
-            return auxiliary;
         }
     }
 
