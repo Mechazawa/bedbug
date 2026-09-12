@@ -25,9 +25,23 @@ import org.joml.Vector3f;
 public record AddonParticleProvider(String identifier, SpriteSet sprites)
     implements ParticleProvider<SimpleParticleType> {
 
+    //? if >=26 {
     @Override
     public Particle createParticle(SimpleParticleType type, ClientLevel level,
         double x, double y, double z, double dx, double dy, double dz, RandomSource random) {
+        return make(level, x, y, z, dx, dy, dz, random);
+    }
+    //?} else {
+    /*@Override
+    public Particle createParticle(SimpleParticleType type, ClientLevel level,
+        double x, double y, double z, double dx, double dy, double dz) {
+        return make(level, x, y, z, dx, dy, dz, level.getRandom());
+    }
+    *///?}
+
+    /** The particle itself, once the game has said where it wants one. */
+    private Particle make(ClientLevel level, double x, double y, double z,
+        double dx, double dy, double dz, RandomSource random) {
         ParticleDefinition definition = AddonParticles.definitionOf(identifier);
         if (definition == null) return null;
 

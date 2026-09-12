@@ -19,7 +19,12 @@ import org.joml.Vector3f;
  * variables it was born with and re-evaluates them as it goes. `q.particle_age` and
  * `q.particle_lifetime` are what a pack's own expressions are usually written against.
  */
+//? if >=26 {
 public class AddonParticle extends SingleQuadParticle {
+//?} else {
+/*public class AddonParticle extends net.minecraft.client.particle.TextureSheetParticle {
+*///?}
+
     private final ParticleDefinition definition;
     private final MolangEnvironment environment;
 
@@ -36,7 +41,12 @@ public class AddonParticle extends SingleQuadParticle {
     protected AddonParticle(ClientLevel level, double x, double y, double z,
         double dx, double dy, double dz, TextureAtlasSprite sprite, ParticleDefinition definition,
         MolangEnvironment environment) {
+        //? if >=26 {
         super(level, x, y, z, sprite);
+        //?} else {
+        /*super(level, x, y, z);
+        setSprite(sprite);
+        *///?}
         this.definition = definition;
         this.environment = environment;
 
