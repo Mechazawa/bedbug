@@ -37,12 +37,14 @@ server decides what happens; the client draws it.
   hurt-on-condition. Their properties reach every client, so a model looks the same in multiplayer
   as it does alone.
 - Items, including edible and wearable ones, spawn eggs, and a creative tab per add-on.
-- Blocks, with the states and permutations a pack declares: each combination gets its own model and
-  the permutation conditions are evaluated through the Molang evaluator.
+- Blocks, with the states and permutations a pack declares: each combination gets its own model, the
+  permutation conditions are evaluated through the Molang evaluator, and a block drawn with its own
+  geometry keeps it.
 - Trading, with Bedrock's tiers and groups flattened into Java's merchant screen.
 - Recipes, loot tables, natural spawning, and `.mcfunction` files translated into Java's command
   dialect with a `tick` function tag.
-- Attachables: what an add-on entity wears or holds, animating on its own clock.
+- Attachables: what any entity wears or holds, players and vanilla mobs included, animating on its
+  own clock.
 - Behaviour pack scripts against `@minecraft/server`, sandboxed: a script sees its own pack's files
   and nothing else on disk. Commands a script registers on startup become real commands, and
   `@minecraft/server-ui` forms become real screens.
@@ -52,10 +54,9 @@ for that this mod does not implement yet, which is the honest answer to "will my
 
 ## What does not work yet
 
-Bedrock block geometry (a block gets a cube with the pack's textures, not its custom model), the
-scoreboard and structure parts of `@minecraft/server`, game rules, and attachables on players rather
-than on add-on entities. Bedrock's physically based rendering and its stencil material passes have
-no Java equivalent at all.
+The scoreboard and structure parts of `@minecraft/server`, and game rules, which 26 rewrote so
+thoroughly that the three supported versions share no API for them. Bedrock's physically based
+rendering and its stencil material passes have no Java equivalent at all.
 
 ## Supported versions
 

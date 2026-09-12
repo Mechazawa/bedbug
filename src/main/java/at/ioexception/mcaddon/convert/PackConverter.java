@@ -1,7 +1,9 @@
 package at.ioexception.mcaddon.convert;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.BedrockAssets;
 import at.ioexception.mcaddon.bedrock.behaviour.BlockDefinition;
+import at.ioexception.mcaddon.bedrock.model.BedrockGeometry;
 import at.ioexception.mcaddon.bedrock.behaviour.ItemDefinition;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
@@ -87,7 +89,7 @@ public final class PackConverter {
                 writeItemModels(root, icons, items);
                 writeRecipes(root, recipes);
                 writeLootTables(root, loot, namespace);
-                writeBlockModels(root, icons, blocks);
+                writeBlockModels(root, icons, blocks, BedrockAssets.read(pack));
                 writeFunctions(bundle, root, namespace);
             }
 
@@ -467,7 +469,7 @@ public final class PackConverter {
      * them, and the texture it names is a key resolved the same way an item's icon is.
      */
     private static void writeBlockModels(Path root, Map<String, String> textureKeys,
-        List<BlockDefinition> blocks) throws IOException {
+        List<BlockDefinition> blocks, BedrockAssets geometries) throws IOException {
         for (BlockDefinition block : blocks) {
             Map<String, String> faces = resolveFaces(block.faceTextures(), textureKeys);
             if (faces.isEmpty()) continue;
@@ -478,10 +480,10 @@ public final class PackConverter {
                 ? block.identifier().substring(colon + 1) : block.identifier());
             Path assets = root.resolve("assets").resolve(namespace);
 
-            writeCubeModel(assets, name, faces);
+            writeCubeModel(assets, name, faces, geometryOf(block, geometries));
 
             JsonObject blockstate = new JsonObject();
-            blockstate.add("variants", variants(block, namespace, name, textureKeys, assets));
+            blockstate.add("variants", variants(block, namespace, name, textureKeys, assets, geometries));
             write(assets.resolve("blockstates").resolve(name + ".json"), blockstate);
 
             JsonObject item = new JsonObject();
@@ -514,7 +516,7 @@ public final class PackConverter {
      * Bedrock applies them in.
      */
     private static JsonObject variants(BlockDefinition block, String namespace, String name,
-        Map<String, String> textureKeys, Path assets) throws IOException {
+        Map<String, String> textureKeys, Path assets, BedrockAssets geometries) throws IOException {
         JsonObject variants = new JsonObject();
         if (block.states().isEmpty()) {
             variants.add("", modelReference(namespace, name));
@@ -543,7 +545,7 @@ public final class PackConverter {
 
             Map<String, String> faces = facesFor(block, chosen, textureKeys);
             String variantName = name + "_" + combination;
-            writeCubeModel(assets, variantName, faces);
+            writeCubeModel(assets, variantName, faces, geometryOf(block, geometries));
             variants.add(String.join(",", key), modelReference(namespace, variantName));
         }
         return variants;
@@ -595,8 +597,14 @@ public final class PackConverter {
         return faces;
     }
 
-    private static void writeCubeModel(Path assets, String name, Map<String, String> faces)
-        throws IOException {
+    /**
+     * The model for one block, from its own geometry where it has one.
+     *
+     * A pack that names a `minecraft:geometry` drew its block itself, so the cubes come across as
+     * model elements; without one the block is a plain cube wearing the pack's textures.
+     */
+    private static void writeCubeModel(Path assets, String name, Map<String, String> faces,
+        BedrockGeometry geometry) throws IOException {
         if (faces.isEmpty()) return;
 
         JsonObject textures = new JsonObject();
@@ -608,7 +616,15 @@ public final class PackConverter {
         }
 
         JsonObject model = new JsonObject();
-        model.addProperty("parent", uniform ? "minecraft:block/cube_all" : "minecraft:block/cube");
+        JsonArray elements = geometry == null ? null : BlockGeometry.elements(geometry, "#all");
+        if (elements == null) {
+            model.addProperty("parent", uniform ? "minecraft:block/cube_all" : "minecraft:block/cube");
+        } else {
+            // A model with its own elements needs a particle texture; `all` is what the faces use.
+            if (!uniform) textures.addProperty("all", faces.values().iterator().next());
+            textures.addProperty("particle", "#all");
+            model.add("elements", elements);
+        }
         model.add("textures", textures);
         write(assets.resolve("models/block").resolve(name + ".json"), model);
     }
@@ -622,6 +638,11 @@ public final class PackConverter {
     /** A Bedrock state name is namespaced; a Java property name is not allowed to be. */
     private static String javaStateName(String bedrock) {
         return Names.sanitise(bedrock).replace(':', '_').replace('.', '_').replace('/', '_');
+    }
+
+    /** Null when the pack drew its block with a plain cube rather than its own geometry. */
+    private static BedrockGeometry geometryOf(BlockDefinition block, BedrockAssets geometries) {
+        return block.geometry() == null ? null : geometries.geometry(block.geometry());
     }
 
     private static final List<String> FACES = List.of("up", "down", "north", "south", "east", "west");

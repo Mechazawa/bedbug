@@ -13,4 +13,6 @@
       every form should be deleted rather than listed.
     -->
     <suppress files="client[\\/]render[\\/]AddonEntityRenderer\.java" checks="UnusedImports"/>
+    <suppress files="client[\\/]render[\\/]AttachableLayer\.java" checks="UnusedImports"/>
+    <suppress files="mixin[\\/]LivingEntityRendererMixin\.java" checks="UnusedImports"/>
 </suppressions>
