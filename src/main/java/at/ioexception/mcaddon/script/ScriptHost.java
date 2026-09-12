@@ -77,6 +77,7 @@ public final class ScriptHost {
 
         Value globals = context.getBindings("js");
         globals.putMember("__mcaddon_bridge__", bridge);
+        warmUpErrorReporting(context);
 
         ScriptHost host = new ScriptHost(context, bridge, coverage);
 
@@ -108,6 +109,24 @@ public final class ScriptHost {
      * Everything under `scripts/` comes along rather than only the entry, because the entry imports
      * its siblings by relative path.
      */
+    /**
+     * Makes the engine describe one thrown error while the stack is still shallow.
+     *
+     * Truffle loads the classes that build a guest stack trace the first time one is asked for. A
+     * script error deep in a call chain asks for one at the worst possible moment, and a stack
+     * overflow during that class load leaves the class permanently unusable, so every later script
+     * error becomes a crash instead of a logged message. Asking once here settles it.
+     */
+    private static void warmUpErrorReporting(Context context) {
+        try {
+            context.eval("js", "(function () { throw new TypeError('warm up'); })()");
+        } catch (PolyglotException error) {
+            error.getStackTrace();
+        } catch (RuntimeException error) {
+            McAddon.LOGGER.warn("The script engine could not prepare its error reporting.");
+        }
+    }
+
     private void load(ScriptFileSystem files, BedrockPack pack) {
         String entry = pack.manifest().scriptEntry();
         String root = "/" + pack.manifest().uuid();
@@ -131,7 +150,7 @@ public final class ScriptHost {
         } catch (IOException error) {
             McAddon.LOGGER.error("{} declares {} as its script entry and it is not readable.",
                 pack.displayName(), entry, error);
-        } catch (PolyglotException error) {
+        } catch (PolyglotException | StackOverflowError | LinkageError error) {
             McAddon.LOGGER.error("{} failed while loading {}: {}", pack.displayName(), entry, error.getMessage());
         }
     }
@@ -140,7 +159,7 @@ public final class ScriptHost {
         bridge.beginTick(TICK_BUDGET_NANOS);
         try {
             runtime.invokeMember("tick", tick);
-        } catch (PolyglotException error) {
+        } catch (PolyglotException | StackOverflowError | LinkageError error) {
             McAddon.LOGGER.error("A script failed during tick {}: {}", tick, error.getMessage());
         }
     }
@@ -149,7 +168,7 @@ public final class ScriptHost {
     public String startup() {
         try {
             return runtime.invokeMember("startup").asString();
-        } catch (PolyglotException error) {
+        } catch (PolyglotException | StackOverflowError | LinkageError error) {
             McAddon.LOGGER.error("A script failed during startup: {}", error.getMessage());
             return null;
         }
@@ -160,7 +179,7 @@ public final class ScriptHost {
         try {
             String outcome = runtime.invokeMember("runCommand", index, origin, arguments).asString();
             return com.google.gson.JsonParser.parseString(outcome).getAsJsonObject();
-        } catch (RuntimeException error) {
+        } catch (RuntimeException | StackOverflowError | LinkageError error) {
             McAddon.LOGGER.error("A script command failed: {}", error.getMessage());
             return new com.google.gson.JsonObject();
         }
@@ -171,7 +190,7 @@ public final class ScriptHost {
         try {
             Value forms = context.getBindings("js").getMember("__mcaddon_forms__");
             if (forms != null) forms.invokeMember("respond", formId, answer);
-        } catch (RuntimeException error) {
+        } catch (RuntimeException | StackOverflowError | LinkageError error) {
             McAddon.LOGGER.error("A script failed handling a form answer: {}", error.getMessage());
         }
     }
@@ -193,7 +212,7 @@ public final class ScriptHost {
             Value event = context.eval("js", "({})");
             fields.forEach((key, value) -> event.putMember(key, wrap(value)));
             signal.invokeMember("emit", event);
-        } catch (PolyglotException error) {
+        } catch (PolyglotException | StackOverflowError | LinkageError error) {
             McAddon.LOGGER.error("A script failed handling {}: {}", name, error.getMessage());
         }
     }

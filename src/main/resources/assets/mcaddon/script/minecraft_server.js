@@ -383,6 +383,23 @@ export class Entity {
         return vector(bridge.entityHeadLocation(this.id));
     }
 
+    /** The block the entity is standing on, which is the one under its feet. */
+    getBlockStandingOn() {
+        const at = bridge.entityLocation(this.id);
+        return new Block(bridge.entityDimension(this.id),
+            Math.floor(at[0]), Math.floor(at[1]) - 1, Math.floor(at[2]));
+    }
+
+    getBlockFromViewDirection(options) {
+        const hit = bridge.blockFromViewDirection(this.id, options?.maxDistance ?? 16);
+        if (hit === null) return undefined;
+        return {
+            block: new Block(bridge.entityDimension(this.id), hit[0], hit[1], hit[2]),
+            face: ["Down", "Up", "North", "South", "West", "East"][hit[3]] ?? "Up",
+            faceLocation: { x: 0, y: 0, z: 0 },
+        };
+    }
+
     getRotation() {
         const rotation = bridge.entityRotation(this.id);
         return { x: rotation[0], y: rotation[1] };

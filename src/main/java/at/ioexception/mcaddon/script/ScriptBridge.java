@@ -262,6 +262,30 @@ public final class ScriptBridge {
         return new double[] {view.x, view.y, view.z};
     }
 
+    /**
+     * The first solid block along the entity's line of sight, and which face was hit.
+     *
+     * The face comes back as the index of the direction so the guest can name it; null means the ray
+     * reached its limit without hitting anything.
+     */
+    @HostAccess.Export
+    public int[] blockFromViewDirection(String id, double maxDistance) {
+        Entity entity = entity(id);
+        if (entity == null) return null;
+
+        Vec3 from = entity.getEyePosition();
+        Vec3 to = from.add(entity.getViewVector(1).scale(maxDistance));
+        net.minecraft.world.level.ClipContext context = new net.minecraft.world.level.ClipContext(
+            from, to, net.minecraft.world.level.ClipContext.Block.OUTLINE,
+            net.minecraft.world.level.ClipContext.Fluid.NONE, entity);
+
+        net.minecraft.world.phys.BlockHitResult hit = entity.level().clip(context);
+        if (hit.getType() != net.minecraft.world.phys.HitResult.Type.BLOCK) return null;
+
+        net.minecraft.core.BlockPos position = hit.getBlockPos();
+        return new int[] {position.getX(), position.getY(), position.getZ(), hit.getDirection().ordinal()};
+    }
+
     @HostAccess.Export
     public double[] entityVelocity(String id) {
         Entity entity = entity(id);

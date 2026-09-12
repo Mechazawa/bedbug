@@ -34,6 +34,18 @@ repositories {
     mavenCentral()
     maven("https://maven.fabricmc.net/") { name = "Fabric" }
     maven("https://maven.terraformersmc.com/releases/") { name = "TerraformersMC" }
+    maven("https://api.modrinth.com/maven") { name = "Modrinth" }
+}
+
+/**
+ * Mods this one is meant to work beside, installed only for `runClient`.
+ *
+ * A version that has no build of one simply leaves the property empty. None of them is compiled
+ * against, so nothing here changes what the mod jar needs.
+ */
+fun companionMods() = listOf("sodium", "iris", "indium").mapNotNull { name ->
+    val version = findProperty("deps.$name") as String?
+    if (version.isNullOrBlank()) null else "maven.modrinth:$name:$version"
 }
 
 dependencies {
@@ -44,6 +56,8 @@ dependencies {
     modImplementation("net.fabricmc.fabric-api:fabric-api:${prop("deps.fabric_api")}")
     // Optional at runtime: the Mod Menu entrypoint is only invoked when Mod Menu is installed.
     modCompileOnly("com.terraformersmc:modmenu:${prop("deps.modmenu")}")
+    modLocalRuntime("com.terraformersmc:modmenu:${prop("deps.modmenu")}")
+    companionMods().forEach { modLocalRuntime(it) }
 }
 
 apply(from = rootProject.file("gradle/mod.gradle.kts"))

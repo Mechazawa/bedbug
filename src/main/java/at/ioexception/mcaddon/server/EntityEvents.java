@@ -58,7 +58,7 @@ public final class EntityEvents {
 
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("entity", new at.ioexception.mcaddon.script.ScriptHost.EntityHandle(entity.getStringUUID()));
-        fields.put("eventTrigger", name);
+        fields.put("eventId", name);
         ServerHooks.scripts().raiseWorldEvent("dataDrivenEntityTrigger", fields);
     }
 
