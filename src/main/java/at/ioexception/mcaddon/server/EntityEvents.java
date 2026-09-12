@@ -27,6 +27,11 @@ import java.util.Map;
  * behaviour happen at all rather than only its models being drawn.
  */
 public final class EntityEvents {
+    /** The events this mod raises on every entity, declared or not, as the game gives it cause. */
+    private static final java.util.Set<String> RAISED_ON_EVERY_ENTITY = java.util.Set.of(
+        "minecraft:entity_spawned", "minecraft:on_spawn", "minecraft:entity_born",
+        "minecraft:entity_transformed", "minecraft:on_hurt", "minecraft:on_death");
+
     /** An event that triggers another, that triggers the first, would otherwise not return. */
     private static final int MAX_DEPTH = 8;
 
@@ -39,7 +44,10 @@ public final class EntityEvents {
 
         EntityEvent event = definition.events().get(name);
         if (event == null) {
-            AddonEntities.unsupported("event " + name);
+            // An entity that never declared the event simply has nothing to do when it happens. Only
+            // an event a pack asked for by name is a gap; the ones this mod raises on every entity
+            // are not, or every entity would report the ones it had no reason to declare.
+            if (!RAISED_ON_EVERY_ENTITY.contains(name)) AddonEntities.unsupported("event " + name);
             return false;
         }
         run(entity, definition, event, other, state, 0);
@@ -133,7 +141,12 @@ public final class EntityEvents {
             }
             case "minecraft:is_sheared", "minecraft:is_baby", "minecraft:is_dyeable" ->
                 state.setProperty(entity.getUUID(), name.substring("minecraft:".length()), true);
-            default -> AddonEntities.unsupported(name);
+            // A component this does nothing about at the moment a group brings it in may still be
+            // one the entity honours from the moment it was built, so the register is asked rather
+            // than told: reporting it here would name a gap that is not there.
+            default -> {
+                if (!AddonEntities.implemented(name)) AddonEntities.unsupported(name);
+            }
         }
     }
 

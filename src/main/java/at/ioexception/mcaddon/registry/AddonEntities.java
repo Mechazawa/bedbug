@@ -120,6 +120,11 @@ public final class AddonEntities {
         FabricDefaultAttributeRegistry.register(type, AddonEntity.attributes(definition));
     }
 
+    /** Whether this mod does anything about a component, wherever the component was met. */
+    public static boolean implemented(String component) {
+        return IMPLEMENTED.contains(component);
+    }
+
     /**
      * Counts the components an entity declares that nothing here acts on.
      *
@@ -189,7 +194,8 @@ public final class AddonEntities {
         "minecraft:behavior.breed", "minecraft:behavior.follow_parent", "minecraft:behavior.sleep",
         "minecraft:behavior.drink_milk", "minecraft:behavior.drink_potion",
         "minecraft:behavior.share_items", "minecraft:dimension_bound", "minecraft:hide",
-        "minecraft:behavior.play");
+        "minecraft:behavior.play", "minecraft:balloonable", "minecraft:managed_wandering_trader",
+        "minecraft:behavior.take_flower", "minecraft:behavior.celebrate_survive");
 
     /**
      * The trade table an entity names, read while the pack it came from is still in hand.

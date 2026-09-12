@@ -88,6 +88,10 @@ public sealed interface Filter {
                 case "is_baby" -> entity instanceof LivingEntity living && living.isBaby();
                 case "is_sneaking" -> entity.isShiftKeyDown();
                 case "is_sleeping" -> entity instanceof LivingEntity living && living.isSleeping();
+                // The three conditions the panic goal itself runs away from. The attacker a mob
+                // remembers is cleared for it after a hundred ticks, so this stops on its own.
+                case "is_panicking" -> entity.isOnFire() || entity.isFullyFrozen()
+                    || (entity instanceof LivingEntity hurt && hurt.getLastHurtByMob() != null);
                 case "is_riding" -> entity.isPassenger();
                 case "is_leashed" -> entity instanceof net.minecraft.world.entity.Mob mob && mob.isLeashed();
                 case "is_moving" -> entity.getDeltaMovement().horizontalDistanceSqr() > 1.0E-4;

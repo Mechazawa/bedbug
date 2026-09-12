@@ -427,6 +427,95 @@ public class AddonEntity extends PathfinderMob implements Merchant {
             .forEach(effect -> removeEffect(effect.getEffect()));
     }
 
+    /**
+     * Taking the flower a golem is holding out, which is what `behavior.take_flower` waits for.
+     *
+     * Java's golem offers one and its own villager accepts; a pack's entity has to be walked over
+     * and made to take it, which is the whole of what the behaviour describes.
+     */
+    private void takeOfferedFlower() {
+        if (!definition.behaviours().contains("minecraft:behavior.take_flower")) return;
+
+        net.minecraft.world.entity.Entity golem = Platform.offeredFlower(this, 8);
+        if (golem == null) return;
+
+        if (distanceTo(golem) > 2) {
+            getNavigation().moveTo(golem, 0.6);
+            return;
+        }
+        Platform.takeFlower(golem);
+        setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND,
+            new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.POPPY));
+    }
+
+    /** Ticks of celebrating still owed, and whether the raid underfoot was already won last tick. */
+    private int celebrateFor;
+    private boolean sawRaidWon;
+
+    /**
+     * Celebrating a raid that has just been beaten.
+     *
+     * Bedrock gives the component a duration and the entity jumps for that long. A won raid stands
+     * for a while after it is won, so the countdown starts on the tick the win appears and not on
+     * every tick the win is still there.
+     */
+    private void celebrate() {
+        if (!definition.behaviours().contains("minecraft:behavior.celebrate_survive")) return;
+        if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
+
+        boolean won = Platform.raidWon(level, blockPosition());
+        if (won && !sawRaidWon) {
+            celebrateFor = (int) (number(definition, "minecraft:behavior.celebrate_survive",
+                "duration", 30) * 20);
+        }
+        sawRaidWon = won;
+        if (celebrateFor <= 0) return;
+        celebrateFor--;
+
+        getNavigation().stop();
+        if (onGround()) setDeltaMovement(getDeltaMovement().add(0, 0.42, 0));
+        if (celebrateFor % 20 == 0) {
+            playSound(SoundEvents.VILLAGER_CELEBRATE, getSoundVolume(), getVoicePitch());
+        }
+    }
+
+    /**
+     * Rising while something is tied to it, which is what a balloon does in Bedrock.
+     *
+     * Java has no balloon, and it has the lead: a thing tied to a mob at a distance. A pack marking
+     * an entity balloonable is describing one that floats once something is attached, so the force
+     * and the mass it gives are applied while a lead holds it, and the lead breaks past the distance
+     * the pack allows.
+     */
+    private void rise() {
+        if (!has("minecraft:balloonable") || getLeashHolder() == null) return;
+
+        double force = number(definition, "minecraft:balloonable", "force", 0.05);
+        double mass = Math.max(0.01, number(definition, "minecraft:balloonable", "mass", 1));
+        double liftUntil = number(definition, "minecraft:balloonable", "max_distance", 10);
+
+        if (distanceTo(getLeashHolder()) > liftUntil) {
+            Platform.dropLeash(this);
+            return;
+        }
+        setDeltaMovement(getDeltaMovement().add(0, force / mass, 0));
+        fallDistance = 0;
+    }
+
+    /**
+     * Going away again the way Bedrock's own trader does.
+     *
+     * `managed_wandering_trader` hands the entity to a manager that gives it a lifetime; Java has no
+     * such manager for anything but its own trader, so the lifetime is kept here and the entity
+     * leaves when it runs out.
+     */
+    private void manageAsTrader() {
+        if (!has("minecraft:managed_wandering_trader") || isPersistenceRequired()) return;
+
+        // Bedrock's own manager gives a trader two game days before it wanders off.
+        if (tickCount > 48000) discard();
+    }
+
     /** How long this entity stays willing to breed, counted in its own ticks. */
     private int inLoveUntil;
 
@@ -547,7 +636,11 @@ public class AddonEntity extends PathfinderMob implements Merchant {
                     targetSelector.addGoal(priority,
                         new net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal(this));
 
-                default -> AddonEntities.unsupported(behaviour);
+                // A behaviour this switch does not name may still be one the entity carries out on
+                // its own clock rather than through a goal, so the register decides, not the switch.
+                default -> {
+                    if (!AddonEntities.implemented(behaviour)) AddonEntities.unsupported(behaviour);
+                }
             }
         }
     }
@@ -570,6 +663,10 @@ public class AddonEntity extends PathfinderMob implements Merchant {
             breed();
             rest();
             drink();
+            takeOfferedFlower();
+            celebrate();
+            rise();
+            manageAsTrader();
         }
     }
 

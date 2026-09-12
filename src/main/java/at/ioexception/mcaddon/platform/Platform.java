@@ -706,6 +706,58 @@ public final class Platform {
         *///?}
     }
 
+    /**
+     * An iron golem near this point that is holding a flower out, or null when none is.
+     *
+     * A golem offering one is what `minecraft:behavior.take_flower` waits for. The class moved into
+     * its own package in 26, and the offer itself is a countdown the golem exposes either way.
+     */
+    public static net.minecraft.world.entity.Entity offeredFlower(
+        net.minecraft.world.entity.Entity near, double range) {
+        //? if >=26 {
+        for (net.minecraft.world.entity.animal.golem.IronGolem golem : near.level().getEntitiesOfClass(
+            net.minecraft.world.entity.animal.golem.IronGolem.class,
+            near.getBoundingBox().inflate(range))) {
+            if (golem.getOfferFlowerTick() > 0) return golem;
+        }
+        //?} else {
+        /*for (net.minecraft.world.entity.animal.IronGolem golem : near.level().getEntitiesOfClass(
+            net.minecraft.world.entity.animal.IronGolem.class,
+            near.getBoundingBox().inflate(range))) {
+            if (golem.getOfferFlowerTick() > 0) return golem;
+        }
+        *///?}
+        return null;
+    }
+
+    /** Takes the flower back off the golem, which is what ends the offer. */
+    public static void takeFlower(net.minecraft.world.entity.Entity golem) {
+        //? if >=26 {
+        if (golem instanceof net.minecraft.world.entity.animal.golem.IronGolem holding) {
+            holding.offerFlower(false);
+        }
+        //?} else {
+        /*if (golem instanceof net.minecraft.world.entity.animal.IronGolem holding) {
+            holding.offerFlower(false);
+        }
+        *///?}
+    }
+
+    /** Lets go of whatever is leashed to a mob. What the call takes changed in 1.21.2. */
+    public static void dropLeash(net.minecraft.world.entity.Mob mob) {
+        //? if >=1.21.2 {
+        mob.dropLeash();
+        //?} else {
+        /*mob.dropLeash(true, true);
+        *///?}
+    }
+
+    /** Whether a raid at this point has just been won, which is what a celebration follows. */
+    public static boolean raidWon(ServerLevel level, net.minecraft.core.BlockPos at) {
+        net.minecraft.world.entity.raid.Raid raid = level.getRaidAt(at);
+        return raid != null && raid.isVictory();
+    }
+
     /** Opens a screen, or closes whatever is open when given null. Renamed in 26. */
     public static void setScreen(net.minecraft.client.gui.screens.Screen screen) {
         //? if >=26 {
