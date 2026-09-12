@@ -27,10 +27,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -94,12 +94,13 @@ public final class PackConverter {
             new Texts(namespace).convert(pack, root, fresh);
             icons.putAll(new Icons(namespace).convert(pack, textures.paths()));
             if (fresh) {
-                writeItemModels(root, icons, items);
-                writeSpawnEggs(root, icons, eggs);
-                writeAtlas(root, icons.values());
+                Set<String> sprites = new LinkedHashSet<>();
+                writeItemModels(root, icons, items, sprites);
+                writeSpawnEggs(root, icons, eggs, sprites);
                 writeRecipes(root, recipes);
                 writeLootTables(root, loot, namespace);
-                writeBlockModels(root, icons, blocks, assets);
+                writeBlockModels(root, icons, blocks, assets, sprites);
+                writeAtlas(root, sprites);
                 writeFunctions(bundle, root, namespace);
             }
 
@@ -263,9 +264,9 @@ public final class PackConverter {
             for (Map.Entry<String, JsonElement> entry : entries.entrySet()) {
                 if (!entry.getValue().isJsonObject()) continue;
 
-                int colon = entry.getKey().indexOf(':');
-                String eventNamespace = colon > 0 ? Names.sanitise(entry.getKey().substring(0, colon)) : namespace;
-                String eventPath = Names.sanitise(colon > 0 ? entry.getKey().substring(colon + 1) : entry.getKey());
+                Names.Identifier event = Names.soundEvent(entry.getKey(), namespace);
+                String eventNamespace = event.namespace();
+                String eventPath = event.path();
 
                 JsonObject converted = new JsonObject();
                 JsonObject definition = entry.getValue().getAsJsonObject();
@@ -452,12 +453,13 @@ public final class PackConverter {
      * Up to 1.21.3 an item finds its model by name under `models/item`; from 1.21.4 it needs an entry
      * under `items` naming that model. Writing both costs a few hundred bytes and covers all three.
      */
-    private static void writeItemModels(Path root, Map<String, String> icons, List<ItemDefinition> items)
-        throws IOException {
+    private static void writeItemModels(Path root, Map<String, String> icons,
+        List<ItemDefinition> items, Set<String> sprites) throws IOException {
         for (ItemDefinition item : items) {
             String icon = item.iconKey() == null ? null : icons.get(item.iconKey());
             if (icon == null) continue;
 
+            sprites.add(icon);
             writeFlatItem(root, Names.split(item.identifier(), "minecraft"), "", flat(icon), null);
         }
     }
@@ -497,17 +499,18 @@ public final class PackConverter {
     }
 
     /**
-     * Adds the pack's icons to the atlas every flat item model is drawn from.
+     * Adds every sprite the written models point at to the atlas they are drawn from.
      *
      * Java stitches only what its own atlas definition names, which is the `block` and `item`
      * directories, and a Bedrock pack keeps its textures wherever it likes. A texture that never
-     * reaches the atlas draws as the missing-texture chequer however correct the model is. Atlas
-     * definitions from every loaded pack are merged, so naming the sprites here adds to vanilla's
-     * list rather than replacing it.
+     * reaches the atlas draws as the missing-texture chequer however correct the model is. The list
+     * comes from the models rather than from the pack's texture index, so a sprite a model reaches
+     * by any route is stitched and one nothing draws is not. Atlas definitions from every loaded
+     * pack are merged, so naming the sprites here adds to vanilla's list rather than replacing it.
      */
-    private static void writeAtlas(Path root, Collection<String> icons) throws IOException {
+    private static void writeAtlas(Path root, Set<String> icons) throws IOException {
         JsonArray sources = new JsonArray();
-        for (String icon : Set.copyOf(icons)) {
+        for (String icon : icons) {
             JsonObject single = new JsonObject();
             single.addProperty("type", "minecraft:single");
             single.addProperty("resource", icon);
@@ -528,9 +531,10 @@ public final class PackConverter {
      * definitions is two constant tints and on an older one is the colours the item itself carries.
      */
     private static void writeSpawnEggs(Path root, Map<String, String> icons,
-        Map<String, SpawnEggAppearance> eggs) throws IOException {
+        Map<String, SpawnEggAppearance> eggs, Set<String> sprites) throws IOException {
         for (SpawnEggAppearance egg : eggs.values()) {
             String icon = egg.textureKey() == null ? null : icons.get(egg.textureKey());
+            if (icon != null) sprites.add(icon);
             JsonObject vanilla = new JsonObject();
             vanilla.addProperty("parent", "minecraft:item/template_spawn_egg");
 
@@ -615,10 +619,12 @@ public final class PackConverter {
      * them, and the texture it names is a key resolved the same way an item's icon is.
      */
     private static void writeBlockModels(Path root, Map<String, String> textureKeys,
-        List<BlockDefinition> blocks, BedrockAssets geometries) throws IOException {
+        List<BlockDefinition> blocks, BedrockAssets geometries, Set<String> sprites) throws IOException {
         for (BlockDefinition block : blocks) {
             Map<String, String> faces = resolveFaces(block.faceTextures(), textureKeys);
             if (faces.isEmpty()) continue;
+
+            sprites.addAll(faces.values());
 
             int colon = block.identifier().indexOf(':');
             String namespace = Names.sanitise(colon > 0 ? block.identifier().substring(0, colon) : "minecraft");

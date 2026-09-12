@@ -53,6 +53,16 @@ public final class Names {
                 sanitise(identifier.substring(colon + 1)));
     }
 
+    /**
+     * The sound event a definition's key becomes.
+     *
+     * A key that carries its own namespace keeps it, and one that does not belongs to the pack that
+     * wrote it. Registering an event and looking one up have to agree, so both ask here.
+     */
+    public static Identifier soundEvent(String key, String packNamespace) {
+        return split(key, packNamespace);
+    }
+
     /** A Bedrock identifier in the shape the game reads, without being a `ResourceLocation` yet. */
     public record Identifier(String namespace, String path) {
     }

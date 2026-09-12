@@ -9,7 +9,6 @@ import at.ioexception.mcaddon.registry.AddonEntities;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.util.Mth;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
@@ -49,13 +48,9 @@ public final class AddonEffects {
     private static void play(Entity entity, String namespace, String soundId) {
         if (soundId == null || entity.level() == null) return;
 
-        int colon = soundId.indexOf(':');
-        Identifier id = colon > 0
-            ? Platform.id(Names.sanitise(soundId.substring(0, colon)),
-                Names.sanitise(soundId.substring(colon + 1)))
-            : Platform.id(namespace, Names.sanitise(soundId));
-
-        SoundEvent event = BuiltInRegistries.SOUND_EVENT.getOptional(id).orElse(null);
+        Names.Identifier name = Names.soundEvent(soundId, namespace);
+        SoundEvent event = BuiltInRegistries.SOUND_EVENT
+            .getOptional(Platform.id(name.namespace(), name.path())).orElse(null);
         if (event == null) return;
 
         entity.level().playLocalSound(entity.getX(), entity.getY(), entity.getZ(), event,
