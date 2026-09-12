@@ -173,9 +173,16 @@ public final class ServerHooks {
         return position.getX() + "," + position.getY() + "," + position.getZ();
     }
 
+    /**
+     * Raises one of a player's events, from the server side only.
+     *
+     * The interaction callbacks fire on both sides, and the script engine belongs to one thread. A
+     * client-side call would enter its context from the render thread, which the engine refuses and
+     * which leaves the game stuck part way through a tick.
+     */
     private static void raisePlayerEvent(String event, net.minecraft.world.entity.player.Player player,
         java.util.function.Consumer<Map<String, Object>> extra) {
-        if (scripts == null) return;
+        if (scripts == null || !(player instanceof ServerPlayer)) return;
 
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
@@ -202,6 +209,7 @@ public final class ServerHooks {
 
     /** Saving on a schedule as well as on shutdown, so a crash costs at most a minute of pack state. */
     private static void tick(MinecraftServer server) {
+        EntityEvents.deliver();
         if (scripts != null) scripts.tick(server.getTickCount());
         if (state != null && server.getTickCount() % 1200 == 0) state.save();
     }

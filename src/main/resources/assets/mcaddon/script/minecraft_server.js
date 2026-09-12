@@ -623,6 +623,20 @@ function normaliseComponent(component) {
 }
 
 /** Only the components real packs read are modelled; the rest report themselves as unsupported. */
+/**
+ * A data-driven trigger reports what it changed, which a pack reads to react to one component.
+ *
+ * The list is what the mod knows the event touched; an event that changed nothing still answers with
+ * a list rather than with nothing, because a pack calls this without checking.
+ */
+function triggerModifiers(fields) {
+    return list(fields ?? []).map(name => ({
+        getAddedComponentGroups: () => [],
+        getRemovedComponentGroups: () => [],
+        getTriggers: () => [name],
+    }));
+}
+
 function componentFor(entity, name) {
     switch (name) {
         case "minecraft:health":
@@ -809,23 +823,40 @@ class EventSignal {
     }
 
     emit(event) {
+        const ready = this.shape ? this.shape(event) : event;
         for (const listener of this.#listeners.slice()) {
             try {
-                listener.callback(event);
+                listener.callback(ready);
             } catch (error) {
                 bridge.reportError(String(error && error.stack ? error.stack : error));
             }
         }
-        return event;
+        return ready;
     }
 }
+
+/**
+ * The events that carry more than the plain fields the mod raises them with.
+ *
+ * An event reaches here as an object of values, and a pack calls methods on some of them, so the
+ * signal for those names fills the methods in before any listener sees the event.
+ */
+const EVENT_SHAPES = {
+    dataDrivenEntityTrigger(event) {
+        event.getModifiers = () => triggerModifiers(event.modifiers);
+        return event;
+    },
+};
 
 /** Every event name the mod can raise. An unknown name still gets a signal, so subscribing is safe. */
 function eventGroup() {
     return new Proxy({}, {
         get(target, name) {
             if (typeof name !== "string") return undefined;
-            if (target[name] === undefined) target[name] = new EventSignal();
+            if (target[name] === undefined) {
+                target[name] = new EventSignal();
+                target[name].shape = EVENT_SHAPES[name];
+            }
             return target[name];
         },
     });

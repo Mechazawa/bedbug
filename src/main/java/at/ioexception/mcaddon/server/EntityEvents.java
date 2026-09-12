@@ -30,6 +30,11 @@ public final class EntityEvents {
     /** An event that triggers another, that triggers the first, would otherwise not return. */
     private static final int MAX_DEPTH = 8;
 
+    /** A tick that raises more triggers than this is looping, and the rest are dropped. */
+    private static final int MAX_PENDING = 512;
+
+    private static final java.util.List<Map<String, Object>> PENDING = new java.util.ArrayList<>();
+
     private EntityEvents() {
     }
 
@@ -51,15 +56,30 @@ public final class EntityEvents {
      * A pack's script watches its own data half through this event.
      *
      * Bedrock raises it whenever a data-driven entity event fires, which is how a script reacts to
-     * something the behaviour pack decided without the two halves naming each other.
+     * something the behaviour pack decided without the two halves naming each other. It is an after
+     * event and is delivered once the tick's triggers are done: a listener that triggers another
+     * event is ordinary, and raising it from inside the trigger would let that recurse without end.
      */
     private static void raiseDataDriven(Entity entity, String name) {
         if (ServerHooks.scripts() == null) return;
+        if (PENDING.size() >= MAX_PENDING) return;
 
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("entity", new at.ioexception.mcaddon.script.ScriptHost.EntityHandle(entity.getStringUUID()));
         fields.put("eventId", name);
-        ServerHooks.scripts().raiseWorldEvent("dataDrivenEntityTrigger", fields);
+        fields.put("modifiers", java.util.List.of());
+        PENDING.add(fields);
+    }
+
+    /** Hands the tick's triggers to the scripts, in the order the pack's data raised them. */
+    public static void deliver() {
+        if (PENDING.isEmpty() || ServerHooks.scripts() == null) return;
+
+        java.util.List<Map<String, Object>> raising = java.util.List.copyOf(PENDING);
+        PENDING.clear();
+        for (Map<String, Object> fields : raising) {
+            ServerHooks.scripts().raiseWorldEvent("dataDrivenEntityTrigger", fields);
+        }
     }
 
     private static void run(Entity entity, ServerEntityDefinition definition, EntityEvent event,
