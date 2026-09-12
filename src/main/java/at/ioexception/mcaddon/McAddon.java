@@ -9,6 +9,7 @@ import at.ioexception.mcaddon.registry.AddonCreativeTab;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.registry.AddonSounds;
+import at.ioexception.mcaddon.registry.AddonSpawns;
 import at.ioexception.mcaddon.resource.AddonPacks;
 import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.api.ModInitializer;
@@ -47,6 +48,7 @@ public final class McAddon implements ModInitializer {
         AddonEntities.register(packs);
         AddonItems.register(packs);
         AddonBlocks.register(packs);
+        AddonSpawns.register(packs);
         AddonCreativeTab.register();
         Channels.register();
         ServerHooks.register();

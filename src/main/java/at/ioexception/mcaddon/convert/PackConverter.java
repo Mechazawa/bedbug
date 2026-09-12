@@ -43,9 +43,22 @@ public final class PackConverter {
     private PackConverter() {
     }
 
-    public static ConvertedPack convert(BedrockPack pack, List<ItemDefinition> items,
-        List<RecipeDefinition> recipes, List<LootTableDefinition> loot, List<BlockDefinition> blocks,
-        Path cache) {
+    /** One add-on: the resource pack, and the behaviour packs that came out of the same file. */
+    public record Bundle(BedrockPack resources, List<BedrockPack> behaviours) {
+    }
+
+    public static ConvertedPack convert(Bundle bundle, Path cache) {
+        BedrockPack pack = bundle.resources();
+        List<ItemDefinition> items = new ArrayList<>();
+        List<RecipeDefinition> recipes = new ArrayList<>();
+        List<LootTableDefinition> loot = new ArrayList<>();
+        List<BlockDefinition> blocks = new ArrayList<>();
+        for (BedrockPack behaviour : bundle.behaviours()) {
+            items.addAll(ItemDefinition.readAll(behaviour));
+            recipes.addAll(RecipeDefinition.readAll(behaviour));
+            loot.addAll(LootTableDefinition.readAll(behaviour));
+            blocks.addAll(BlockDefinition.readAll(behaviour));
+        }
         String namespace = Names.namespaceOf(pack);
         Path root = cache.resolve("converted").resolve("%s-%s-%d".formatted(
             pack.manifest().uuid(), pack.manifest().version(), Platform.resourcePackFormat()));
@@ -71,6 +84,7 @@ public final class PackConverter {
                 writeRecipes(root, recipes);
                 writeLootTables(root, loot, namespace);
                 writeBlockModels(root, icons, blocks);
+                writeFunctions(bundle, root, namespace);
             }
 
             if (fresh) {
@@ -501,6 +515,15 @@ public final class PackConverter {
             definition.add("model", reference);
             write(assets.resolve("items").resolve(name + ".json"), definition);
         }
+    }
+
+    /** Functions come from the behaviour packs, which is where a pack keeps its commands. */
+    private static void writeFunctions(Bundle bundle, Path root, String namespace) throws IOException {
+        Set<String> unsupported = new java.util.LinkedHashSet<>();
+        for (BedrockPack behaviour : bundle.behaviours()) {
+            Functions.convert(behaviour, root, namespace, unsupported);
+        }
+        unsupported.forEach(at.ioexception.mcaddon.registry.AddonEntities::unsupported);
     }
 
     private static final List<String> FACES = List.of("up", "down", "north", "south", "east", "west");

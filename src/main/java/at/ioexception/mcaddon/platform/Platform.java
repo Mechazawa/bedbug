@@ -26,6 +26,7 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 
@@ -259,6 +260,23 @@ public final class Platform {
         //?} else {
         /*return new net.minecraft.world.item.trading.MerchantOffer(costA, costB, result, maxUses,
             experience, 0.05f);
+        *///?}
+    }
+
+    /**
+     * Adds one natural spawn to a biome.
+     *
+     * The weight moved out of the spawner entry and into the call in 26, and Fabric renamed its
+     * accessor for the settings in the same release.
+     */
+    public static void addSpawn(net.fabricmc.fabric.api.biome.v1.BiomeModificationContext context,
+        MobCategory category, EntityType<?> type, int weight, int minimum, int maximum) {
+        //? if >=26 {
+        context.getMobSpawnSettings().addSpawn(category,
+            new net.minecraft.world.level.biome.MobSpawnSettings.SpawnerData(type, minimum, maximum), weight);
+        //?} else {
+        /*context.getSpawnSettings().addSpawn(category,
+            new net.minecraft.world.level.biome.MobSpawnSettings.SpawnerData(type, weight, minimum, maximum));
         *///?}
     }
 

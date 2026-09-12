@@ -2,10 +2,6 @@ package at.ioexception.mcaddon.resource;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.convert.ConvertedPack;
-import at.ioexception.mcaddon.bedrock.behaviour.BlockDefinition;
-import at.ioexception.mcaddon.bedrock.behaviour.ItemDefinition;
-import at.ioexception.mcaddon.bedrock.behaviour.LootTableDefinition;
-import at.ioexception.mcaddon.bedrock.behaviour.RecipeDefinition;
 import at.ioexception.mcaddon.convert.PackConverter;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.McAddonPaths;
@@ -39,37 +35,24 @@ public final class AddonPacks {
     }
 
     /**
-     * Converts each resource pack, with its add-on's items in hand.
+     * Converts each resource pack, with the behaviour packs that came out of the same file.
      *
-     * An item is declared in a behaviour pack and drawn from a texture the resource pack ships, so
-     * the two are paired by the file they came out of before either is converted.
+     * An item is declared in a behaviour pack and drawn from a texture the resource pack ships, and
+     * the same holds for a block, so the two halves are paired before either is converted.
      */
     public static void convert(PackSet packs) {
-        Map<String, List<ItemDefinition>> itemsByOrigin = new LinkedHashMap<>();
-        Map<String, List<RecipeDefinition>> recipesByOrigin = new LinkedHashMap<>();
-        Map<String, List<LootTableDefinition>> lootByOrigin = new LinkedHashMap<>();
-        Map<String, List<BlockDefinition>> blocksByOrigin = new LinkedHashMap<>();
+        Map<String, List<BedrockPack>> behavioursByOrigin = new LinkedHashMap<>();
         for (BedrockPack pack : packs.packs()) {
-            if (pack.role() != PackRole.BEHAVIOUR) continue;
-            itemsByOrigin.computeIfAbsent(pack.origin(), origin -> new ArrayList<>())
-                .addAll(ItemDefinition.readAll(pack));
-            recipesByOrigin.computeIfAbsent(pack.origin(), origin -> new ArrayList<>())
-                .addAll(RecipeDefinition.readAll(pack));
-            lootByOrigin.computeIfAbsent(pack.origin(), origin -> new ArrayList<>())
-                .addAll(LootTableDefinition.readAll(pack));
-            blocksByOrigin.computeIfAbsent(pack.origin(), origin -> new ArrayList<>())
-                .addAll(BlockDefinition.readAll(pack));
+            if (pack.role() == PackRole.BEHAVIOUR) {
+                behavioursByOrigin.computeIfAbsent(pack.origin(), origin -> new ArrayList<>()).add(pack);
+            }
         }
 
         List<ConvertedPack> results = new ArrayList<>();
         for (BedrockPack pack : packs.packs()) {
             if (pack.role() != PackRole.RESOURCE) continue;
-            results.add(PackConverter.convert(pack,
-                itemsByOrigin.getOrDefault(pack.origin(), List.of()),
-                recipesByOrigin.getOrDefault(pack.origin(), List.of()),
-                lootByOrigin.getOrDefault(pack.origin(), List.of()),
-                blocksByOrigin.getOrDefault(pack.origin(), List.of()),
-                McAddonPaths.cache()));
+            results.add(PackConverter.convert(new PackConverter.Bundle(pack,
+                behavioursByOrigin.getOrDefault(pack.origin(), List.of())), McAddonPaths.cache()));
         }
         converted = List.copyOf(results);
     }
