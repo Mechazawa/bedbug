@@ -24,7 +24,7 @@ import java.util.Set;
  * @param parent the material this one is written on top of, which carries the base behaviour
  */
 public record MaterialDefinition(String name, String parent, Set<String> defines, Set<String> states,
-    Set<String> removedStates) {
+    Set<String> removedStates, Set<String> removedDefines) {
 
     /** Drawn with blending rather than an alpha test, so the texture's alpha is a real fade. */
     public boolean blends() {
@@ -102,11 +102,16 @@ public record MaterialDefinition(String name, String parent, Set<String> defines
         for (JsonElement state : Json.list(body, "-states")) {
             if (state.isJsonPrimitive()) removed.add(state.getAsString());
         }
+
+        // A removal is kept rather than applied here, because what it usually cancels is a define the
+        // parent added, and the parent is not known until the chain is folded together.
+        Set<String> removedDefines = new LinkedHashSet<>();
         for (JsonElement define : Json.list(body, "-defines")) {
-            if (define.isJsonPrimitive()) defines.remove(define.getAsString());
+            if (define.isJsonPrimitive()) removedDefines.add(define.getAsString());
         }
+        defines.removeAll(removedDefines);
         states.removeAll(removed);
-        return new MaterialDefinition(name, parent, defines, states, removed);
+        return new MaterialDefinition(name, parent, defines, states, removed, removedDefines);
     }
 
     /**
@@ -123,6 +128,7 @@ public record MaterialDefinition(String name, String parent, Set<String> defines
         MaterialDefinition base = resolved(parent, materials, depth + 1);
         Set<String> defines = new LinkedHashSet<>(base.defines());
         defines.addAll(material.defines());
+        defines.removeAll(material.removedDefines());
 
         Set<String> states = new LinkedHashSet<>(base.states());
         states.addAll(material.states());
@@ -130,6 +136,10 @@ public record MaterialDefinition(String name, String parent, Set<String> defines
 
         Set<String> removed = new LinkedHashSet<>(base.removedStates());
         removed.addAll(material.removedStates());
-        return new MaterialDefinition(material.name(), base.parent(), defines, states, removed);
+
+        Set<String> removedDefines = new LinkedHashSet<>(base.removedDefines());
+        removedDefines.addAll(material.removedDefines());
+        return new MaterialDefinition(material.name(), base.parent(), defines, states, removed,
+            removedDefines);
     }
 }

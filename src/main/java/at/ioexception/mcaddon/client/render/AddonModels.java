@@ -159,7 +159,7 @@ public final class AddonModels {
 
     /** The material an extracted emissive layer is drawn with: lit, and blended over what is below. */
     private static final MaterialDefinition EMISSIVE = new MaterialDefinition("emissive", "emissive",
-        Set.of("USE_EMISSIVE"), Set.of(), Set.of());
+        Set.of("USE_EMISSIVE"), Set.of(), Set.of(), Set.of());
 
     /**
      * The material a pass draws with, which decides blending, culling and whether it glows.
