@@ -26,6 +26,11 @@ stonecutter {
         replace("import net.fabricmc.fabric.api.gametest.v1.GameTest;",
             "import net.minecraft.gametest.framework.GameTest;")
         replace("@GameTest()", "@GameTest(template = \"fabric-gametest-api-v1:empty\")")
+        // Fabric's annotation names the scene `structure`; Mojang's, which the older targets use,
+        // names the same thing `template`.
+        replace("@GameTest(structure = ", "@GameTest(template = ")
+        // Mojang counts the same limit in ticks under a different name.
+        replace("maxTicks = ", "timeoutTicks = ")
     }
 }
 

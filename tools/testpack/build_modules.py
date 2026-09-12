@@ -2,9 +2,9 @@
 """Builds the add-on that checks every `@minecraft/*` module resolves.
 
 A JavaScript module is linked before any of it runs, so an import of one the mod does not provide
-costs a pack its whole script rather than the line that asked for it. This pack imports each module
-the mod provides and calls one thing from each, printing a `MODULEPROBE` line per answer, so a run
-carrying all of them says every module resolved and answered.
+takes a pack's whole script down with it. This pack imports each module the mod provides and calls
+one thing from each, printing a `MODULEPROBE` line per answer, so a run carrying all of them says
+every module resolved and answered.
 
 Everything it ships is written in this repository: a manifest and one script, both under `modules/`.
 

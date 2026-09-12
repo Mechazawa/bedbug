@@ -19,7 +19,8 @@
     "fabric-gametest": [
       "at.ioexception.mcaddon.gametest.AddonGameTests",
       "at.ioexception.mcaddon.gametest.SurfaceGameTests",
-      "at.ioexception.mcaddon.gametest.PackGameTests"
+      "at.ioexception.mcaddon.gametest.PackGameTests",
+      "at.ioexception.mcaddon.gametest.StructureGameTests"
     ]
   },
   "mixins": [

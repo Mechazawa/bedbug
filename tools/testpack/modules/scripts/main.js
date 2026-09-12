@@ -1,9 +1,9 @@
 // Imports every module the mod provides and calls one thing from each.
 //
 // A JavaScript module is linked before any of it runs, so a specifier that does not resolve, or a
-// named export that is missing from one that does, ends this whole script rather than the line that
-// asked for it. Both are caught by the imports below: reaching the first MODULEPROBE line means
-// every module linked, and a line per module means each of them answered.
+// named export missing from one that does, costs this pack every line of its script. Both are
+// caught by the imports below: reaching the first MODULEPROBE line means every module linked, and a
+// line per module means each of them answered.
 
 import { system, world } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
