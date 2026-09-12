@@ -2,6 +2,8 @@ package at.ioexception.mcaddon.entity;
 
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
 import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.server.Sensors;
+import at.ioexception.mcaddon.server.ServerHooks;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
@@ -23,6 +25,8 @@ import net.minecraft.world.level.Level;
  */
 public class AddonEntity extends PathfinderMob {
     private final ServerEntityDefinition definition;
+    private final java.util.Set<String> activeGroups = new java.util.LinkedHashSet<>();
+    private int timerDueTick = -1;
 
     public AddonEntity(EntityType<? extends PathfinderMob> type, Level level) {
         super(type, level);
@@ -32,6 +36,25 @@ public class AddonEntity extends PathfinderMob {
 
     public ServerEntityDefinition definition() {
         return definition;
+    }
+
+    /**
+     * The component groups a pack's events have switched on.
+     *
+     * Tracked whole even where the components inside have no Java meaning, because a pack's own
+     * filters and later events read the set back.
+     */
+    public java.util.Set<String> activeGroups() {
+        return activeGroups;
+    }
+
+    /** When `minecraft:timer` next fires, in ticks of this entity's own age. Negative until set. */
+    public int timerDueTick() {
+        return timerDueTick;
+    }
+
+    public void setTimerDueTick(int tick) {
+        timerDueTick = tick;
     }
 
     public static AttributeSupplier.Builder attributes(ServerEntityDefinition definition) {
@@ -58,6 +81,19 @@ public class AddonEntity extends PathfinderMob {
                 default -> AddonEntities.unsupported(behaviour);
             }
         }
+    }
+
+    /**
+     * Bedrock's sensors have no Java equivalent, so they are evaluated here rather than as goals.
+     *
+     * Staggered by entity id: a pack's two big entities carry dozens of subsensors each, and every
+     * one of them landing on the same tick is what turns a crowded village into a stutter.
+     */
+    @Override
+    public void tick() {
+        super.tick();
+        if (definition == null || !(level() instanceof net.minecraft.server.level.ServerLevel)) return;
+        if ((tickCount + getId()) % Sensors.INTERVAL_TICKS == 0) Sensors.tick(this, ServerHooks.state());
     }
 
     @Override

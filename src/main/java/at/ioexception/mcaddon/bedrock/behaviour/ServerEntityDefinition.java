@@ -34,6 +34,8 @@ public record ServerEntityDefinition(
     Set<String> families,
     Map<String, Property> properties,
     Map<String, JsonObject> components,
+    Map<String, JsonObject> componentGroups,
+    Map<String, EntityEvent> events,
     Set<String> behaviours
 ) {
     /** A data-driven entity property, which is how a behaviour pack tells a resource pack what to draw. */
@@ -75,12 +77,14 @@ public record ServerEntityDefinition(
 
         Set<String> behaviours = new LinkedHashSet<>();
         collectBehaviours(declared, behaviours);
+
+        Map<String, JsonObject> componentGroups = new LinkedHashMap<>();
         JsonObject groups = body.getAsJsonObject("component_groups");
         if (groups != null) {
             for (Map.Entry<String, JsonElement> group : groups.entrySet()) {
-                if (group.getValue().isJsonObject()) {
-                    collectBehaviours(group.getValue().getAsJsonObject(), behaviours);
-                }
+                if (!group.getValue().isJsonObject()) continue;
+                componentGroups.put(group.getKey(), group.getValue().getAsJsonObject());
+                collectBehaviours(group.getValue().getAsJsonObject(), behaviours);
             }
         }
 
@@ -101,6 +105,8 @@ public record ServerEntityDefinition(
             families(components.get("minecraft:type_family")),
             properties(description.getAsJsonObject("properties")),
             components,
+            componentGroups,
+            EntityEvent.readAll(body.getAsJsonObject("events")),
             behaviours);
     }
 

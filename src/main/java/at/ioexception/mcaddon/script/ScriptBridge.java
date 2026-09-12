@@ -384,7 +384,8 @@ public final class ScriptBridge {
 
     @HostAccess.Export
     public void triggerEntityEvent(String id, String event) {
-        unsupported("Entity.triggerEvent(" + event + ")");
+        Entity entity = entity(id);
+        if (entity != null) at.ioexception.mcaddon.server.EntityEvents.trigger(entity, event, null, state);
     }
 
     @HostAccess.Export

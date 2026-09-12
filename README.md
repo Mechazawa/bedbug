@@ -30,17 +30,24 @@ server decides what happens; the client draws it.
 - Sounds, with every definition registered as a sound event, and files whose final page claims a
   length no clip has repaired on the way through.
 - Text, with Bedrock's `.lang` rules rather than a properties reader's.
+- Models, animations, animation controllers and render controllers, drawn through a full Molang
+  evaluator.
+- Entities a behaviour pack declares, with their properties, their events, their component groups
+  and the sensors that fire them. Their properties reach every client, so a model looks the same in
+  multiplayer as it does alone.
+- Items, spawn eggs and shaped and shapeless recipes.
 - Behaviour pack scripts against `@minecraft/server`, sandboxed: a script sees its own pack's files
   and nothing else on disk.
 
-`/mcaddon packs` lists what loaded. `/mcaddon scripts` lists what a pack's script asked for that this
-mod does not implement yet, which is the honest answer to "will my pack work".
+`/mcaddon packs` lists what loaded. `/mcaddon entities` and `/mcaddon scripts` list what a pack asked
+for that this mod does not implement yet, which is the honest answer to "will my pack work".
 
 ## What does not work yet
 
-Models, animations and render controllers; custom entities, items and blocks; recipes, trading and
-loot; Bedrock's `.mcfunction` dialect; and the parts of `@minecraft/server` not yet implemented.
-Bedrock's physically based rendering and its stencil material passes have no Java equivalent at all.
+Blocks, trading, loot tables, spawn rules, attachables, Bedrock's `.mcfunction` dialect, and the
+parts of `@minecraft/server` beyond world, system, entity, dimension and block. Bedrock's physically
+based rendering, its stencil material passes and its server-authored forms have no Java equivalent
+at all.
 
 ## Supported versions
 

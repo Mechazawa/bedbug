@@ -166,6 +166,18 @@ public final class Platform {
         *///?}
     }
 
+    /** Whether the entity currently has that effect. The lookup returns a holder from 1.21. */
+    public static boolean hasEffect(LivingEntity entity, Identifier effect) {
+        //? if >=26 {
+        return BuiltInRegistries.MOB_EFFECT.get(effect).map(entity::hasEffect).orElse(false);
+        //?} else if >=1.21 {
+        /*return BuiltInRegistries.MOB_EFFECT.getHolder(effect).map(entity::hasEffect).orElse(false);
+        *///?} else {
+        /*net.minecraft.world.effect.MobEffect found = BuiltInRegistries.MOB_EFFECT.get(effect);
+        return found != null && entity.hasEffect(found);
+        *///?}
+    }
+
     public static boolean removeEffect(LivingEntity entity, Identifier effect) {
         //? if >=26 {
         return BuiltInRegistries.MOB_EFFECT.get(effect).map(entity::removeEffect).orElse(false);
@@ -260,6 +272,20 @@ public final class Platform {
         return (net.minecraft.world.entity.EntityType<? extends net.minecraft.world.entity.Mob>) type;
     }
     *///?}
+
+    /**
+     * How a data pack's recipes are written for this version.
+     *
+     * 1.21.2 renamed the directory from `recipes` to `recipe`, made an ingredient a bare item id
+     * rather than an object, and renamed the result's `item` field to `id`.
+     */
+    public static boolean modernRecipes() {
+        //? if >=1.21.2 {
+        return true;
+        //?} else {
+        /*return false;
+        *///?}
+    }
 
     /** Where the player is looking from. The accessor lost its `get` prefix in 26. */
     public static net.minecraft.world.phys.Vec3 cameraPosition() {

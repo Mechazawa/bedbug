@@ -3,6 +3,7 @@ package at.ioexception.mcaddon.resource;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.convert.ConvertedPack;
 import at.ioexception.mcaddon.bedrock.behaviour.ItemDefinition;
+import at.ioexception.mcaddon.bedrock.behaviour.RecipeDefinition;
 import at.ioexception.mcaddon.convert.PackConverter;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.McAddonPaths;
@@ -43,18 +44,22 @@ public final class AddonPacks {
      */
     public static void convert(PackSet packs) {
         Map<String, List<ItemDefinition>> itemsByOrigin = new LinkedHashMap<>();
+        Map<String, List<RecipeDefinition>> recipesByOrigin = new LinkedHashMap<>();
         for (BedrockPack pack : packs.packs()) {
-            if (pack.role() == PackRole.BEHAVIOUR) {
-                itemsByOrigin.computeIfAbsent(pack.origin(), origin -> new ArrayList<>())
-                    .addAll(ItemDefinition.readAll(pack));
-            }
+            if (pack.role() != PackRole.BEHAVIOUR) continue;
+            itemsByOrigin.computeIfAbsent(pack.origin(), origin -> new ArrayList<>())
+                .addAll(ItemDefinition.readAll(pack));
+            recipesByOrigin.computeIfAbsent(pack.origin(), origin -> new ArrayList<>())
+                .addAll(RecipeDefinition.readAll(pack));
         }
 
         List<ConvertedPack> results = new ArrayList<>();
         for (BedrockPack pack : packs.packs()) {
             if (pack.role() != PackRole.RESOURCE) continue;
             results.add(PackConverter.convert(pack,
-                itemsByOrigin.getOrDefault(pack.origin(), List.of()), McAddonPaths.cache()));
+                itemsByOrigin.getOrDefault(pack.origin(), List.of()),
+                recipesByOrigin.getOrDefault(pack.origin(), List.of()),
+                McAddonPaths.cache()));
         }
         converted = List.copyOf(results);
     }

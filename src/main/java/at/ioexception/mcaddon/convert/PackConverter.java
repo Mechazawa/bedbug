@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.convert;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.behaviour.ItemDefinition;
+import at.ioexception.mcaddon.bedrock.behaviour.RecipeDefinition;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.util.Json;
@@ -40,7 +41,8 @@ public final class PackConverter {
     private PackConverter() {
     }
 
-    public static ConvertedPack convert(BedrockPack pack, List<ItemDefinition> items, Path cache) {
+    public static ConvertedPack convert(BedrockPack pack, List<ItemDefinition> items,
+        List<RecipeDefinition> recipes, Path cache) {
         String namespace = Names.namespaceOf(pack);
         Path root = cache.resolve("converted").resolve("%s-%s-%d".formatted(
             pack.manifest().uuid(), pack.manifest().version(), Platform.resourcePackFormat()));
@@ -61,7 +63,10 @@ public final class PackConverter {
             sounds.addAll(new Sounds(namespace).convert(pack, root, fresh));
             new Texts(namespace).convert(pack, root, fresh);
             icons.putAll(new Icons(namespace).convert(pack, textures.paths()));
-            if (fresh) writeItemModels(root, icons, items);
+            if (fresh) {
+                writeItemModels(root, icons, items);
+                writeRecipes(root, recipes);
+            }
 
             if (fresh) {
                 Files.writeString(root.resolve(MARKER), pack.displayName());
@@ -368,6 +373,70 @@ public final class PackConverter {
             definition.add("model", reference);
             write(root.resolve("assets").resolve(namespace).resolve("items").resolve(name + ".json"), definition);
         }
+    }
+
+    /**
+     * Crafting recipes, as a data pack the game reads out of the same directory.
+     *
+     * Bedrock's shaped recipes carry a pattern and a key map exactly as Java's do, so the conversion
+     * is a rename. Furnace recipes and anything with a Bedrock-only tag are left out and reported.
+     */
+    private static void writeRecipes(Path root, List<RecipeDefinition> recipes) throws IOException {
+        boolean modern = Platform.modernRecipes();
+        String directory = modern ? "recipe" : "recipes";
+
+        for (RecipeDefinition recipe : recipes) {
+            JsonObject json = new JsonObject();
+            switch (recipe.kind()) {
+                case SHAPED -> {
+                    json.addProperty("type", "minecraft:crafting_shaped");
+                    JsonArray pattern = new JsonArray();
+                    recipe.pattern().forEach(pattern::add);
+                    json.add("pattern", pattern);
+
+                    JsonObject key = new JsonObject();
+                    recipe.key().forEach((symbol, item) -> key.add(symbol, ingredient(item, modern)));
+                    json.add("key", key);
+                }
+                case SHAPELESS -> {
+                    json.addProperty("type", "minecraft:crafting_shapeless");
+                    JsonArray ingredients = new JsonArray();
+                    for (RecipeDefinition.Ingredient ingredient : recipe.ingredients()) {
+                        for (int i = 0; i < Math.max(1, ingredient.count()); i++) {
+                            ingredients.add(ingredient(ingredient.item(), modern));
+                        }
+                    }
+                    json.add("ingredients", ingredients);
+                }
+                case FURNACE -> {
+                    json.addProperty("type", "minecraft:smelting");
+                    json.add("ingredient", ingredient(recipe.ingredients().isEmpty()
+                        ? "minecraft:air" : recipe.ingredients().get(0).item(), modern));
+                    json.addProperty("cookingtime", 200);
+                    json.addProperty("experience", 0.1);
+                }
+                default -> { }
+            }
+
+            JsonObject result = new JsonObject();
+            result.addProperty(modern ? "id" : "item", recipe.result());
+            result.addProperty("count", Math.max(1, recipe.resultCount()));
+            json.add("result", result);
+
+            int colon = recipe.identifier().indexOf(':');
+            String namespace = Names.sanitise(colon > 0
+                ? recipe.identifier().substring(0, colon) : "minecraft");
+            String name = Names.sanitise(colon > 0
+                ? recipe.identifier().substring(colon + 1) : recipe.identifier());
+            write(root.resolve("data").resolve(namespace).resolve(directory).resolve(name + ".json"), json);
+        }
+    }
+
+    private static JsonElement ingredient(String item, boolean modern) {
+        if (modern) return new com.google.gson.JsonPrimitive(item);
+        JsonObject wrapped = new JsonObject();
+        wrapped.addProperty("item", item);
+        return wrapped;
     }
 
     private static void write(Path file, JsonObject content) throws IOException {

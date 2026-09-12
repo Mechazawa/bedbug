@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.server;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.script.ScriptHost;
 import at.ioexception.mcaddon.state.AddonState;
 import com.mojang.brigadier.CommandDispatcher;
@@ -21,6 +22,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.storage.LevelResource;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -49,7 +51,12 @@ public final class ServerHooks {
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> stop());
         ServerTickEvents.END_SERVER_TICK.register(ServerHooks::tick);
         ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {
-            if (state != null) EntityPropertySync.seed(entity, state);
+            if (state != null) {
+                EntityPropertySync.seed(entity, state);
+                // Bedrock raises this on every entity as it comes into the world, and a pack's
+                // starting state is usually set from it.
+                EntityEvents.trigger(entity, "minecraft:entity_spawned", null, state);
+            }
             raiseEntityEvent("entityLoad", entity);
         });
         EntityTrackingEvents.START_TRACKING.register((entity, player) -> {
@@ -117,6 +124,16 @@ public final class ServerHooks {
             .then(Commands.literal("packs").executes(command -> {
                 McAddon.packs().report().forEach(line ->
                     command.getSource().sendSuccess(() -> Component.literal(line), false));
+                return 1;
+            }))
+            .then(Commands.literal("entities").executes(command -> {
+                List<String> report = AddonEntities.report();
+                if (report.isEmpty()) {
+                    command.getSource().sendSuccess(
+                        () -> Component.literal("Every entity component the packs used is implemented."), false);
+                    return 1;
+                }
+                report.forEach(line -> command.getSource().sendSuccess(() -> Component.literal(line), false));
                 return 1;
             }))
             .then(Commands.literal("scripts").executes(command -> {
