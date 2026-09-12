@@ -98,6 +98,23 @@ project.tasks.named<Checkstyle>("checkstyleTest") {
     onlyIf { project.name == activeName }
 }
 
+// Compiling them for the other versions too would report the same source as broken under whichever
+// form Stonecutter did not write, which is what gating every other step on the active version avoids.
+project.tasks.named<JavaCompile>("compileTestJava") {
+    onlyIf { project.name == activeName }
+}
+
+/**
+ * The game tests, run for the checked-out version only.
+ *
+ * `fabricApi.configureTests` hangs these off `check`, so a failing one fails the build. They start a
+ * headless server and run against a real world, which is the half a unit test cannot reach: the
+ * commands, the entity events and the tick that has to survive a script throwing.
+ */
+project.tasks.named("runGameTest") {
+    onlyIf { project.name == activeName }
+}
+
 /**
  * A syntax gate for the tools, which no compiler otherwise covers.
  *

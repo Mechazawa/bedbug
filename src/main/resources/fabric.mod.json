@@ -15,6 +15,9 @@
     ],
     "client": [
       "at.ioexception.mcaddon.client.McAddonClient"
+    ],
+    "fabric-gametest": [
+      "at.ioexception.mcaddon.gametest.AddonGameTests"
     ]
   },
   "mixins": [

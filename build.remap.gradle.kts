@@ -21,6 +21,11 @@ stonecutter {
         // Fabric API followed the game's own renames a version later than the game did.
         replace("clientboundPlay()", "playS2C()")
         replace("serverboundPlay()", "playC2S()")
+        // Fabric's game tests carried Mojang's annotation until 26, and Mojang's structure
+        // attribute has no default, so the empty one Fabric ships has to be named.
+        replace("import net.fabricmc.fabric.api.gametest.v1.GameTest;",
+            "import net.minecraft.gametest.framework.GameTest;")
+        replace("@GameTest()", "@GameTest(template = \"fabric-gametest-api-v1:empty\")")
     }
 }
 
@@ -58,6 +63,13 @@ dependencies {
     modCompileOnly("com.terraformersmc:modmenu:${prop("deps.modmenu")}")
     modLocalRuntime("com.terraformersmc:modmenu:${prop("deps.modmenu")}")
     companionMods().forEach { modLocalRuntime(it) }
+}
+
+// The game tests live in the main source set, so there is no second one to create for them, and
+// every one of them is a server test.
+fabricApi.configureTests {
+    createSourceSet = false
+    enableClientGameTests = false
 }
 
 apply(from = rootProject.file("gradle/mod.gradle.kts"))

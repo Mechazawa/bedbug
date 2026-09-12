@@ -24,4 +24,11 @@ dependencies {
     compileOnly("com.terraformersmc:modmenu:${prop("deps.modmenu")}")
 }
 
+// The game tests live in the main source set, so there is no second one to create for them, and
+// every one of them is a server test.
+fabricApi.configureTests {
+    createSourceSet = false
+    enableClientGameTests = false
+}
+
 apply(from = rootProject.file("gradle/mod.gradle.kts"))
