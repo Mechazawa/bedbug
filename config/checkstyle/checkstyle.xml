@@ -1,0 +1,113 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+    "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+    "https://checkstyle.org/dtds/configuration_1_3.dtd">
+
+<!--
+  Lint only. There is deliberately no auto-formatter in this project: Stonecutter rewrites
+  src/main/java in place for whichever version is active, so a tool that rewrites source would
+  produce different output depending on that, and the committed form has to stay the 26.2 one.
+  These rules give the guarantees a formatter would, without touching a file.
+
+  Nothing here demands documentation. Comments are the exception in this codebase, not the rule.
+-->
+<module name="Checker">
+    <property name="severity" value="error"/>
+    <property name="fileExtensions" value="java"/>
+
+    <module name="NewlineAtEndOfFile"/>
+    <module name="FileTabCharacter"/>
+    <module name="UniqueProperties"/>
+
+    <module name="RegexpSingleline">
+        <property name="format" value="\s+$"/>
+        <property name="message" value="Trailing whitespace."/>
+    </module>
+
+    <!-- The renames applied for older versions make lines longer, so the ceiling has to hold
+         for the longest form: ResourceLocation is six characters wider than Identifier. -->
+    <module name="LineLength">
+        <property name="max" value="120"/>
+        <property name="ignorePattern" value="^\s*(//|\*)\s*https?://"/>
+    </module>
+
+    <module name="SuppressionFilter">
+        <property name="file" value="${config_loc}/suppressions.xml"/>
+    </module>
+
+    <module name="TreeWalker">
+        <!-- Imports. UnusedImports caught a real one; keep it. -->
+        <module name="UnusedImports">
+            <property name="processJavadoc" value="true"/>
+        </module>
+        <module name="RedundantImport"/>
+        <module name="AvoidStarImport"/>
+        <module name="IllegalImport"/>
+
+        <!-- Layout -->
+        <module name="Indentation">
+            <property name="basicOffset" value="4"/>
+            <property name="lineWrappingIndentation" value="4"/>
+            <property name="caseIndent" value="4"/>
+            <property name="throwsIndent" value="4"/>
+            <property name="arrayInitIndent" value="4"/>
+            <property name="forceStrictCondition" value="false"/>
+        </module>
+        <module name="LeftCurly"/>
+        <module name="RightCurly">
+            <property name="option" value="same"/>
+        </module>
+        <!-- `if (x) return;` on one line is used throughout and reads well; a wrapped body
+             without braces does not. -->
+        <module name="NeedBraces">
+            <property name="allowSingleLineStatement" value="true"/>
+        </module>
+        <module name="WhitespaceAfter"/>
+        <module name="WhitespaceAround">
+            <property name="allowEmptyConstructors" value="true"/>
+            <property name="allowEmptyMethods" value="true"/>
+            <property name="allowEmptyTypes" value="true"/>
+            <property name="allowEmptyLambdas" value="true"/>
+        </module>
+        <module name="NoWhitespaceBefore"/>
+        <module name="GenericWhitespace"/>
+        <module name="MethodParamPad"/>
+        <module name="ParenPad"/>
+        <module name="TypecastParenPad"/>
+        <module name="ArrayTypeStyle"/>
+        <module name="ModifierOrder"/>
+        <module name="UpperEll"/>
+
+        <!-- Structure -->
+        <module name="OneTopLevelClass"/>
+        <module name="OuterTypeFilename"/>
+        <module name="PackageDeclaration"/>
+        <module name="DefaultComesLast"/>
+        <module name="FallThrough"/>
+        <module name="MissingSwitchDefault"/>
+
+        <!-- Things that are almost always a mistake -->
+        <module name="EmptyStatement"/>
+        <module name="EqualsHashCode"/>
+        <module name="SimplifyBooleanExpression"/>
+        <module name="SimplifyBooleanReturn"/>
+        <module name="StringLiteralEquality"/>
+        <module name="NoFinalizer"/>
+        <module name="IllegalInstantiation"/>
+        <module name="MultipleVariableDeclarations"/>
+        <module name="UnusedLocalVariable"/>
+
+        <!-- Naming -->
+        <module name="PackageName"/>
+        <module name="TypeName"/>
+        <!-- Mixin requires an injector's name to carry the mod id, so `mcaddon$doThing`
+             is the convention rather than a mistake. -->
+        <module name="MethodName">
+            <property name="format" value="^[a-z][a-zA-Z0-9]*(\$[a-zA-Z][a-zA-Z0-9]*)?$"/>
+        </module>
+        <module name="LocalVariableName"/>
+        <module name="ParameterName"/>
+        <module name="MemberName"/>
+        <module name="ConstantName"/>
+    </module>
+</module>

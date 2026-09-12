@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<!DOCTYPE suppressions PUBLIC
+    "-//Checkstyle//DTD SuppressionFilter Configuration 1.2//EN"
+    "https://checkstyle.org/dtds/suppressions_1_2.dtd">
+
+<suppressions>
+    <!--
+      Stonecutter comments out the branch that does not apply to the active version, and Checkstyle
+      reads a comment as nothing at all. An import that only the commented branch needs therefore
+      reads as unused, and deleting it breaks every other version.
+
+      Only files carrying a whole alternative class body belong here. An import genuinely unused in
+      every form should be deleted rather than listed.
+    -->
+</suppressions>
