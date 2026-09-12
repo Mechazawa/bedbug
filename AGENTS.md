@@ -235,6 +235,11 @@ pack it came from, because two add-ons can name a geometry the same thing.
 is missing, a command that does not parse: each is counted and shown, never thrown and never
 silently dropped.
 
+**A gap and an answer are counted apart.** A command the game read and then declined, a selector that
+matched nothing, a structure holding a chest this cannot fill: those are listed after the verdict
+line rather than among the gaps, because counting them would make a pack asking an ordinary question
+read as a pack this mod cannot serve. `/mcaddon scripts` still says everything was implemented.
+
 **Comments state a present truth about the code.** No edit narration, no "now" or "previously", no
 pointers to files a reader cannot open, no restating the signature.
 
