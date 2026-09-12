@@ -2564,9 +2564,15 @@ const FIELD_SHAPES = {
     toDimension: dimensionOf,
 };
 
+// Bedrock spells an absent field `undefined`, and a pack guards one by testing for exactly that.
+// Java has only null to hand across for a thing that is not there, so every field that arrived null
+// is spelled the way the pack is going to test for before any of them is shaped.
 function shapeFields(event) {
+    for (const name of Object.keys(event)) {
+        if (event[name] === null) event[name] = undefined;
+    }
     for (const name of Object.keys(FIELD_SHAPES)) {
-        if (event[name] !== undefined && event[name] !== null) event[name] = FIELD_SHAPES[name](event[name]);
+        if (event[name] !== undefined) event[name] = FIELD_SHAPES[name](event[name]);
     }
     return event;
 }
