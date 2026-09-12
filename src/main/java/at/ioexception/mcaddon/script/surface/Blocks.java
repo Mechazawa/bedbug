@@ -1,0 +1,319 @@
+package at.ioexception.mcaddon.script.surface;
+
+import at.ioexception.mcaddon.convert.Names;
+import at.ioexception.mcaddon.script.ScriptCoverage;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.Container;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.BooleanProperty;
+import net.minecraft.world.level.block.state.properties.IntegerProperty;
+import net.minecraft.world.level.block.state.properties.Property;
+import org.graalvm.polyglot.HostAccess;
+
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * Blocks, block permutations and the two catalogues a pack looks a block up in.
+ *
+ * A permutation crosses the boundary as a type id and a JSON object of states, and every state value
+ * keeps its Bedrock type: a boolean property reads back as a boolean and a numbered one as a number,
+ * so a pack comparing `{ open: true }` matches. Names are the Java property's, with a pack's own
+ * state name sanitised the way the block registry sanitised it when the block was built.
+ */
+public final class Blocks extends Surface {
+    private String stateTypes;
+
+    public Blocks(MinecraftServer server, ScriptCoverage coverage) {
+        super(server, coverage);
+    }
+
+    /** The block at a position, as the type and states a permutation is rebuilt from. */
+    @HostAccess.Export
+    public String permutationAt(String dimension, int x, int y, int z) {
+        BlockState state = stateAt(dimension, x, y, z);
+        JsonObject permutation = new JsonObject();
+        permutation.addProperty("typeId", idOf(state.getBlock()));
+        permutation.add("states", statesOf(state));
+        return permutation.toString();
+    }
+
+    /**
+     * The states a type id and a partial set of states name, filled out with the block's defaults.
+     *
+     * Null when this game has no block by that name, which the guest raises as the error Bedrock's
+     * `BlockPermutation.resolve` raises.
+     */
+    @HostAccess.Export
+    public String resolve(String typeId, String statesJson) {
+        Block block = block(typeId);
+        if (block == null) return null;
+        return statesOf(withStates(block.defaultBlockState(), statesJson, typeId)).toString();
+    }
+
+    @HostAccess.Export
+    public void setPermutation(String dimension, int x, int y, int z, String typeId, String statesJson) {
+        ServerLevel level = level(dimension);
+        Block block = block(typeId);
+        if (level == null || block == null) return;
+        level.setBlockAndUpdate(new BlockPos(x, y, z), withStates(block.defaultBlockState(), statesJson, typeId));
+    }
+
+    /** True while the position is inside the world and its chunk is loaded. */
+    @HostAccess.Export
+    public boolean exists(String dimension, int x, int y, int z) {
+        ServerLevel level = level(dimension);
+        BlockPos position = new BlockPos(x, y, z);
+        return level != null && level.isInWorldBounds(position) && level.hasChunkAt(position);
+    }
+
+    @HostAccess.Export
+    public boolean isSolid(String dimension, int x, int y, int z) {
+        return stateAt(dimension, x, y, z).isSolid();
+    }
+
+    @HostAccess.Export
+    public boolean isWaterlogged(String dimension, int x, int y, int z) {
+        BlockState state = stateAt(dimension, x, y, z);
+        return state.hasProperty(BlockStateProperties.WATERLOGGED)
+            && state.getValue(BlockStateProperties.WATERLOGGED);
+    }
+
+    @HostAccess.Export
+    public void setWaterlogged(String dimension, int x, int y, int z, boolean waterlogged) {
+        ServerLevel level = level(dimension);
+        if (level == null) return;
+
+        BlockPos position = new BlockPos(x, y, z);
+        BlockState state = level.getBlockState(position);
+        if (!state.hasProperty(BlockStateProperties.WATERLOGGED)) {
+            unsupported("Block.setWaterlogged on " + idOf(state.getBlock()));
+            return;
+        }
+        level.setBlockAndUpdate(position, state.setValue(BlockStateProperties.WATERLOGGED, waterlogged));
+    }
+
+    /** The strongest signal reaching the position, and null where nothing can power it. */
+    @HostAccess.Export
+    public Integer redstonePower(String dimension, int x, int y, int z) {
+        ServerLevel level = level(dimension);
+        return level == null ? null : level.getBestNeighborSignal(new BlockPos(x, y, z));
+    }
+
+    /**
+     * Whether a type could be placed against a face of the block at a position.
+     *
+     * The face names where it would go, so a null face means the position itself. Both halves of
+     * Java's answer are needed: what is there has to give way, and what arrives has to survive.
+     */
+    @HostAccess.Export
+    public boolean canPlace(String dimension, int x, int y, int z, String typeId, String statesJson, String face) {
+        ServerLevel level = level(dimension);
+        Block block = block(typeId);
+        if (level == null || block == null) return false;
+
+        Direction side = direction(face);
+        if (face != null && side == null) {
+            unsupported("Block.canPlace facing " + face);
+            return false;
+        }
+
+        BlockPos target = side == null ? new BlockPos(x, y, z) : new BlockPos(x, y, z).relative(side);
+        return level.getBlockState(target).canBeReplaced()
+            && withStates(block.defaultBlockState(), statesJson, typeId).canSurvive(level, target);
+    }
+
+    /** Whether a liquid can be placed over the type, which in Java is the waterlogged state. */
+    @HostAccess.Export
+    public boolean canContainLiquid(String typeId) {
+        Block block = block(typeId);
+        return block != null && block.defaultBlockState().hasProperty(BlockStateProperties.WATERLOGGED);
+    }
+
+    /** The tags the block is in, under Java's names for them: a pack reading these sees `wool`. */
+    @HostAccess.Export
+    public String[] tags(String typeId) {
+        Block block = block(typeId);
+        return block == null ? new String[0] : block.builtInRegistryHolder().tags()
+            .map(tag -> tag.location().toString())
+            .toArray(String[]::new);
+    }
+
+    /** The item the block is picked up as, and null for one nothing can hold. */
+    @HostAccess.Export
+    public String itemId(String typeId) {
+        Block block = block(typeId);
+        Item item = block == null ? Items.AIR : block.asItem();
+        return item == Items.AIR ? null : BuiltInRegistries.ITEM.getKey(item).toString();
+    }
+
+    @HostAccess.Export
+    public String localizationKey(String typeId) {
+        Block block = block(typeId);
+        return block == null ? null : block.getDescriptionId();
+    }
+
+    @HostAccess.Export
+    public String[] typeIds() {
+        return BuiltInRegistries.BLOCK.keySet().stream().map(Identifier::toString).toArray(String[]::new);
+    }
+
+    /** Whether the block at a position holds items, which is what Bedrock's inventory component is. */
+    @HostAccess.Export
+    public boolean hasContainer(String dimension, int x, int y, int z) {
+        ServerLevel level = level(dimension);
+        return level != null && level.getBlockEntity(new BlockPos(x, y, z)) instanceof Container;
+    }
+
+    /** How a piston treats the block, under Bedrock's names for the two answers. */
+    @HostAccess.Export
+    public String movement(String dimension, int x, int y, int z) {
+        BlockState state = stateAt(dimension, x, y, z);
+        JsonObject component = new JsonObject();
+        component.addProperty("movementType", switch (state.getPistonPushReaction()) {
+            case NORMAL -> "PushPull";
+            case DESTROY -> "Popped";
+            case PUSH_ONLY -> "Push";
+            default -> "Immovable";
+        });
+        component.addProperty("stickyType", sticky(state.getBlock()) ? "Same" : "None");
+        return component.toString();
+    }
+
+    /**
+     * Every state any block declares, with the values it accepts.
+     *
+     * Java has no registry of properties, so the catalogue is the union over every block, and two
+     * blocks naming one state differently (`facing` on stairs and on a hopper) contribute both sets.
+     * Built once: the answer only changes when the block registry does, and that is frozen by now.
+     */
+    @HostAccess.Export
+    public String stateTypes() {
+        if (stateTypes != null) return stateTypes;
+
+        Map<String, Set<JsonElement>> values = new LinkedHashMap<>();
+        for (Block block : BuiltInRegistries.BLOCK) {
+            for (Property<?> property : block.getStateDefinition().getProperties()) {
+                values.computeIfAbsent(property.getName(), name -> new LinkedHashSet<>())
+                    .addAll(possibleValues(property));
+            }
+        }
+
+        JsonArray catalogue = new JsonArray();
+        values.forEach((name, valid) -> {
+            JsonObject type = new JsonObject();
+            type.addProperty("id", name);
+            JsonArray listed = new JsonArray();
+            valid.forEach(listed::add);
+            type.add("validValues", listed);
+            catalogue.add(type);
+        });
+        stateTypes = catalogue.toString();
+        return stateTypes;
+    }
+
+    private BlockState stateAt(String dimension, int x, int y, int z) {
+        ServerLevel level = level(dimension);
+        return level == null ? net.minecraft.world.level.block.Blocks.AIR.defaultBlockState()
+            : level.getBlockState(new BlockPos(x, y, z));
+    }
+
+    private static Block block(String typeId) {
+        Identifier parsed = typeId == null ? null : Identifier.tryParse(typeId);
+        return parsed == null ? null : BuiltInRegistries.BLOCK.getOptional(parsed).orElse(null);
+    }
+
+    private static String idOf(Block block) {
+        return BuiltInRegistries.BLOCK.getKey(block).toString();
+    }
+
+    private BlockState withStates(BlockState state, String statesJson, String typeId) {
+        JsonObject wanted = JsonParser.parseString(statesJson == null ? "{}" : statesJson).getAsJsonObject();
+        BlockState built = state;
+        for (String name : wanted.keySet()) {
+            Property<?> property = wanted.get(name).isJsonPrimitive() ? propertyNamed(built, name) : null;
+            if (property == null) {
+                unsupported("BlockPermutation state " + typeId + "[" + name + "]");
+                continue;
+            }
+            built = applied(built, property, wanted.get(name).getAsString());
+        }
+        return built;
+    }
+
+    /**
+     * The property a pack's state name means.
+     *
+     * A pack's own block carries its states under the sanitised names the block registry built them
+     * with, so a state written as `custom:facing` is the property `custom_facing` here.
+     */
+    private static Property<?> propertyNamed(BlockState state, String name) {
+        Property<?> exact = state.getBlock().getStateDefinition().getProperty(name);
+        if (exact != null) return exact;
+
+        String sanitised = Names.sanitise(name).replace('.', '_').replace('/', '_');
+        return state.getBlock().getStateDefinition().getProperty(sanitised);
+    }
+
+    private <T extends Comparable<T>> BlockState applied(BlockState state, Property<T> property, String value) {
+        T parsed = property.getValue(value).orElse(null);
+        if (parsed == null) {
+            unsupported("BlockPermutation state value " + property.getName() + "=" + value);
+            return state;
+        }
+        return state.setValue(property, parsed);
+    }
+
+    private static JsonObject statesOf(BlockState state) {
+        JsonObject states = new JsonObject();
+        for (Property<?> property : state.getProperties()) {
+            states.add(property.getName(), stateValue(state, property));
+        }
+        return states;
+    }
+
+    /** Reading a wildcard property's own value needs a method to capture the type in. */
+    private static <T extends Comparable<T>> JsonElement stateValue(BlockState state, Property<T> property) {
+        return value(property, state.getValue(property));
+    }
+
+    private static <T extends Comparable<T>> Set<JsonElement> possibleValues(Property<T> property) {
+        Set<JsonElement> values = new LinkedHashSet<>();
+        for (T possible : property.getPossibleValues()) values.add(value(property, possible));
+        return values;
+    }
+
+    /** A state value under the type Bedrock gives it: a flag is a boolean and a count is a number. */
+    private static <T extends Comparable<T>> JsonElement value(Property<T> property, T value) {
+        String name = property.getName(value);
+        if (property instanceof BooleanProperty) return new JsonPrimitive(Boolean.valueOf(name));
+        if (property instanceof IntegerProperty) return new JsonPrimitive(Integer.valueOf(name));
+        return new JsonPrimitive(name);
+    }
+
+    private static Direction direction(String face) {
+        return face == null ? null : Direction.byName(face.toLowerCase(Locale.ROOT));
+    }
+
+    private static boolean sticky(Block block) {
+        return block == net.minecraft.world.level.block.Blocks.SLIME_BLOCK
+            || block == net.minecraft.world.level.block.Blocks.HONEY_BLOCK;
+    }
+}

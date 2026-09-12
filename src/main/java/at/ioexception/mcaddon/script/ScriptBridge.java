@@ -3,6 +3,13 @@ package at.ioexception.mcaddon.script;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.script.surface.Blocks;
+import at.ioexception.mcaddon.script.surface.Containers;
+import at.ioexception.mcaddon.script.surface.EntityMembers;
+import at.ioexception.mcaddon.script.surface.Items;
+import at.ioexception.mcaddon.script.surface.Players;
+import at.ioexception.mcaddon.script.surface.Registries;
+import at.ioexception.mcaddon.script.surface.Worlds;
 import at.ioexception.mcaddon.server.DamageSources;
 import at.ioexception.mcaddon.state.AddonState;
 import com.google.gson.JsonArray;
@@ -71,10 +78,38 @@ public final class ScriptBridge {
     private long tickDeadline;
     private final Map<Integer, String> openForms = new java.util.LinkedHashMap<>();
 
+    @HostAccess.Export
+    public final Blocks blocks;
+
+    @HostAccess.Export
+    public final Containers containers;
+
+    @HostAccess.Export
+    public final Players players;
+
+    @HostAccess.Export
+    public final Items items;
+
+    @HostAccess.Export
+    public final Registries registries;
+
+    @HostAccess.Export
+    public final EntityMembers entityMembers;
+
+    @HostAccess.Export
+    public final Worlds worlds;
+
     ScriptBridge(MinecraftServer server, AddonState state, ScriptCoverage coverage) {
         this.server = server;
         this.state = state;
         this.coverage = coverage;
+        this.blocks = new Blocks(server, coverage);
+        this.containers = new Containers(server, coverage);
+        this.players = new Players(server, coverage);
+        this.items = new Items(server, coverage);
+        this.registries = new Registries(server, coverage);
+        this.entityMembers = new EntityMembers(server, coverage, state);
+        this.worlds = new Worlds(server, coverage);
     }
 
     void beginTick(long budgetNanos) {

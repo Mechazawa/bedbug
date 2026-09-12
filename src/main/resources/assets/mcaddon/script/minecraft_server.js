@@ -104,17 +104,42 @@ export class BlockVolume {
     }
 }
 
+const blockTypeCache = new Map();
+
+/** A block type, which is its id and the key its name is translated under. */
+function blockType(id) {
+    let type = blockTypeCache.get(id);
+    if (type === undefined) {
+        type = Object.freeze({ id, localizationKey: bridge.blocks.localizationKey(id) ?? id });
+        blockTypeCache.set(id, type);
+    }
+    return type;
+}
+
+function typeIdOf(value) {
+    if (typeof value === "string") return value;
+    return value?.type?.id ?? value?.id;
+}
+
 export class BlockPermutation {
+    /** The states a block really carries, which is what was asked for over the block's defaults. */
     static resolve(type, states) {
-        return new BlockPermutation(type, states ?? {});
+        const id = typeIdOf(type);
+        const resolved = bridge.blocks.resolve(id, JSON.stringify(states ?? {}));
+        if (resolved === null) throw new Error("No block type named " + id);
+        return new BlockPermutation(id, JSON.parse(resolved));
     }
 
     constructor(type, states) {
-        this.type = { id: type };
+        this.type = blockType(type);
         this.#states = states;
     }
 
     #states;
+
+    get localizationKey() {
+        return this.type.localizationKey;
+    }
 
     getState(name) {
         return this.#states[name];
@@ -124,6 +149,10 @@ export class BlockPermutation {
         return { ...this.#states };
     }
 
+    withState(name, value) {
+        return BlockPermutation.resolve(this.type.id, { ...this.#states, [name]: value });
+    }
+
     matches(type, states) {
         if (this.type.id !== type) return false;
         for (const key of Object.keys(states ?? {})) {
@@ -131,7 +160,48 @@ export class BlockPermutation {
         }
         return true;
     }
+
+    getItemStack(amount) {
+        const item = bridge.blocks.itemId(this.type.id);
+        return item === null ? undefined : new ItemStack(item, amount ?? 1);
+    }
+
+    getTags() {
+        return list(bridge.blocks.tags(this.type.id));
+    }
+
+    hasTag(tag) {
+        return this.getTags().includes(tag);
+    }
+
+    /** Water is the only liquid Bedrock names, so the argument cannot pick out another one. */
+    canContainLiquid() {
+        return bridge.blocks.canContainLiquid(this.type.id);
+    }
 }
+
+export const BlockTypes = Object.freeze({
+    get(typeName) {
+        return bridge.blocks.localizationKey(typeName) === null ? undefined : blockType(typeName);
+    },
+    getAll() {
+        return list(bridge.blocks.typeIds()).map(id => blockType(id));
+    },
+});
+
+// The catalogue is the same for as long as the game runs, and building it reads every block there
+// is, so it is read once and handed out as a copy.
+let blockStateTypes;
+
+export const BlockStates = Object.freeze({
+    get(stateName) {
+        return BlockStates.getAll().find(state => state.id === stateName);
+    },
+    getAll() {
+        if (blockStateTypes === undefined) blockStateTypes = JSON.parse(bridge.blocks.stateTypes());
+        return blockStateTypes.slice();
+    },
+});
 
 export class ItemStack {
     constructor(itemType, amount) {
@@ -145,6 +215,9 @@ export class ItemStack {
         copy.nameTag = this.nameTag;
         copy.damage = this.damage;
         copy.maxDurability = this.maxDurability;
+        copy.maxAmount = this.maxAmount;
+        copy.lore = [...(this.lore ?? [])];
+        copy.properties = { ...(this.properties ?? {}) };
         return copy;
     }
 
@@ -181,7 +254,15 @@ export class ItemStack {
     }
 
     getLore() {
-        return [];
+        return [...(this.lore ?? [])];
+    }
+
+    setLore(loreList) {
+        this.lore = (loreList ?? []).map(rawText);
+    }
+
+    getRawLore() {
+        return this.getLore().map(text => ({ text }));
     }
 
     getTags() {
@@ -190,6 +271,45 @@ export class ItemStack {
 
     hasTag(tag) {
         return list(bridge.itemTags(this.typeId)).includes(tag);
+    }
+
+    getDynamicProperty(identifier) {
+        return this.properties?.[identifier];
+    }
+
+    setDynamicProperty(identifier, value) {
+        const values = { ...(this.properties ?? {}) };
+        if (value === undefined || value === null) delete values[identifier];
+        else values[identifier] = value;
+        this.properties = values;
+    }
+
+    setDynamicProperties(values) {
+        for (const [identifier, value] of Object.entries(values ?? {})) {
+            this.setDynamicProperty(identifier, value);
+        }
+    }
+
+    getDynamicPropertyIds() {
+        return Object.keys(this.properties ?? {});
+    }
+
+    getDynamicPropertyTotalByteCount() {
+        return Object.entries(this.properties ?? {})
+            .reduce((total, [identifier, value]) => total + identifier.length + String(value).length, 0);
+    }
+
+    clearDynamicProperties() {
+        this.properties = {};
+    }
+
+    /** Whether the two carry the same item and the same extra data, however many each holds. */
+    isStackableWith(itemStack) {
+        return itemStack !== undefined && this.typeId === itemStack.typeId
+            && (this.nameTag ?? "") === (itemStack.nameTag ?? "")
+            && (this.damage ?? 0) === (itemStack.damage ?? 0)
+            && JSON.stringify(this.getLore()) === JSON.stringify(itemStack.getLore?.() ?? [])
+            && JSON.stringify(this.properties ?? {}) === JSON.stringify(itemStack.properties ?? {});
     }
 }
 
@@ -205,8 +325,12 @@ export class Block {
         return { x: this.x, y: this.y, z: this.z };
     }
 
-    get center() {
+    center() {
         return { x: this.x + 0.5, y: this.y + 0.5, z: this.z + 0.5 };
+    }
+
+    bottomCenter() {
+        return { x: this.x + 0.5, y: this.y, z: this.z + 0.5 };
     }
 
     get typeId() {
@@ -214,7 +338,15 @@ export class Block {
     }
 
     get type() {
-        return { id: this.typeId };
+        return blockType(this.typeId);
+    }
+
+    get localizationKey() {
+        return this.type.localizationKey;
+    }
+
+    get isValid() {
+        return bridge.blocks.exists(this.dimension.id, this.x, this.y, this.z);
     }
 
     get isAir() {
@@ -225,17 +357,58 @@ export class Block {
         return bridge.blockIsLiquid(this.dimension.id, this.x, this.y, this.z);
     }
 
+    get isSolid() {
+        return bridge.blocks.isSolid(this.dimension.id, this.x, this.y, this.z);
+    }
+
+    get isWaterlogged() {
+        return bridge.blocks.isWaterlogged(this.dimension.id, this.x, this.y, this.z);
+    }
+
     get permutation() {
-        return BlockPermutation.resolve(this.typeId,
-            JSON.parse(bridge.blockStates(this.dimension.id, this.x, this.y, this.z)));
+        const here = JSON.parse(bridge.blocks.permutationAt(this.dimension.id, this.x, this.y, this.z));
+        return new BlockPermutation(here.typeId, here.states);
     }
 
     getState(name) {
         return this.permutation.getState(name);
     }
 
+    matches(type, states) {
+        return this.permutation.matches(type, states);
+    }
+
+    getTags() {
+        return list(bridge.blocks.tags(this.typeId));
+    }
+
+    hasTag(tag) {
+        return this.getTags().includes(tag);
+    }
+
+    /** Undefined for a block nothing can hold, and for one whose chunk is not loaded. */
+    getItemStack(amount) {
+        const item = bridge.blocks.itemId(this.typeId);
+        return item === null ? undefined : new ItemStack(item, amount ?? 1);
+    }
+
+    getRedstonePower() {
+        return bridge.blocks.redstonePower(this.dimension.id, this.x, this.y, this.z) ?? undefined;
+    }
+
+    canContainLiquid() {
+        return bridge.blocks.canContainLiquid(this.typeId);
+    }
+
+    /** A face names where the block would go; without one it would replace this block. */
+    canPlace(blockToPlace, faceToPlaceOn) {
+        const states = blockToPlace instanceof BlockPermutation ? blockToPlace.getAllStates() : {};
+        return bridge.blocks.canPlace(this.dimension.id, this.x, this.y, this.z,
+            typeIdOf(blockToPlace), JSON.stringify(states), faceToPlaceOn ?? null);
+    }
+
     offset(delta) {
-        return new Block(this.dimension.id, this.x + delta.x, this.y + delta.y, this.z + delta.z);
+        return this.dimension.getBlock({ x: this.x + delta.x, y: this.y + delta.y, z: this.z + delta.z });
     }
 
     above(steps) {
@@ -263,16 +436,41 @@ export class Block {
     }
 
     setType(type) {
-        bridge.setBlockType(this.dimension.id, this.x, this.y, this.z,
-            typeof type === "string" ? type : type?.id);
+        bridge.setBlockType(this.dimension.id, this.x, this.y, this.z, typeIdOf(type));
     }
 
     setPermutation(permutation) {
-        this.setType(permutation.type.id);
+        bridge.blocks.setPermutation(this.dimension.id, this.x, this.y, this.z,
+            permutation.type.id, JSON.stringify(permutation.getAllStates()));
     }
 
-    getCapacity() {
-        return 0;
+    setWaterlogged(waterlogged) {
+        bridge.blocks.setWaterlogged(this.dimension.id, this.x, this.y, this.z, waterlogged === true);
+    }
+
+    getComponent(component) {
+        const name = normaliseComponent(component);
+        if (name === "minecraft:movable") return this.#movable();
+        return unsupported("Block.getComponent(" + name + ")");
+    }
+
+    getComponents() {
+        return [this.#movable()];
+    }
+
+    hasComponent(component) {
+        const name = normaliseComponent(component);
+        if (name === "minecraft:movable") return true;
+        if (name === "minecraft:inventory") {
+            return bridge.blocks.hasContainer(this.dimension.id, this.x, this.y, this.z);
+        }
+        unsupported("Block.hasComponent(" + name + ")");
+        return false;
+    }
+
+    #movable() {
+        const movement = JSON.parse(bridge.blocks.movement(this.dimension.id, this.x, this.y, this.z));
+        return { typeId: "minecraft:movable", block: this, ...movement };
     }
 }
 
@@ -288,6 +486,7 @@ export class EntityEquippableComponent extends EntityComponent {
 }
 
 export class EntityInventoryComponent extends EntityComponent {
+    static componentId = "minecraft:inventory";
 }
 
 export class EntityRideableComponent extends EntityComponent {
@@ -335,16 +534,294 @@ export class ItemFoodComponent extends ItemComponent {
 export class ItemCooldownComponent extends ItemComponent {
 }
 
+/**
+ * One slot of a container, held as the container it belongs to and the index in it.
+ *
+ * Every member reads the slot through the bridge rather than caching a stack, so a slot a pack keeps
+ * a reference to reports what is in it rather than what was there when it was handed out.
+ */
 export class ContainerSlot {
+    #handle;
+    #slot;
+
+    constructor(handle, slot) {
+        this.#handle = handle;
+        this.#slot = slot;
+    }
+
+    #read() {
+        const item = bridge.containers.item(this.#handle, this.#slot);
+        return item === null ? undefined : itemFrom(JSON.parse(item));
+    }
+
+    #write(itemStack) {
+        bridge.containers.setItem(this.#handle, this.#slot, itemJson(itemStack));
+    }
+
+    /** Reads, changes and writes back in one step, so a setter cannot drop the rest of the stack. */
+    #edit(change) {
+        const held = this.#read();
+        if (held === undefined) return;
+        change(held);
+        this.#write(held);
+    }
+
+    get isValid() {
+        return this.#slot >= 0 && this.#slot < bridge.containers.size(this.#handle);
+    }
+
+    get amount() {
+        return this.#read()?.amount ?? 0;
+    }
+
+    set amount(value) {
+        this.#edit(held => {
+            held.amount = value;
+        });
+    }
+
+    get typeId() {
+        return this.#read()?.typeId;
+    }
+
+    get type() {
+        const id = this.typeId;
+        return id === undefined ? undefined : { id };
+    }
+
+    get maxAmount() {
+        return this.#read()?.maxAmount ?? 0;
+    }
+
+    get isStackable() {
+        const held = this.#read();
+        return held !== undefined && held.maxAmount > 1 && !held.nameTag
+            && held.getLore().length === 0 && held.getDynamicPropertyIds().length === 0;
+    }
+
+    get nameTag() {
+        return this.#read()?.nameTag;
+    }
+
+    set nameTag(value) {
+        this.#edit(held => {
+            held.nameTag = value === "" ? undefined : value;
+        });
+    }
+
+    // Java honours neither of Bedrock's two per-slot restrictions, so both read as the default they
+    // have when a pack has not asked for anything, and asking for anything else is reported.
+
+    get keepOnDeath() {
+        return false;
+    }
+
+    set keepOnDeath(value) {
+        if (value) unsupported("ContainerSlot.keepOnDeath");
+    }
+
+    get lockMode() {
+        return ItemLockMode.none;
+    }
+
+    set lockMode(value) {
+        if (value !== ItemLockMode.none) unsupported("ContainerSlot.lockMode");
+    }
+
+    getItem() {
+        return this.#read();
+    }
+
+    setItem(itemStack) {
+        this.#write(itemStack);
+    }
+
+    hasItem() {
+        return this.#read() !== undefined;
+    }
+
+    getLore() {
+        return this.#read()?.getLore() ?? [];
+    }
+
+    getRawLore() {
+        return this.getLore().map(text => ({ text }));
+    }
+
+    setLore(loreList) {
+        this.#edit(held => held.setLore(loreList));
+    }
+
+    getTags() {
+        return this.#read()?.getTags() ?? [];
+    }
+
+    hasTag(tag) {
+        return this.getTags().includes(tag);
+    }
+
+    isStackableWith(itemStack) {
+        return this.#read()?.isStackableWith(itemStack) ?? false;
+    }
+
+    // Adventure mode reads Java's own block predicates, which this mod does not write.
+
+    getCanDestroy() {
+        return [];
+    }
+
+    getCanPlaceOn() {
+        return [];
+    }
+
+    setCanDestroy() {
+        unsupported("ContainerSlot.setCanDestroy");
+    }
+
+    setCanPlaceOn() {
+        unsupported("ContainerSlot.setCanPlaceOn");
+    }
+
+    getDynamicProperty(identifier) {
+        return this.#read()?.getDynamicProperty(identifier);
+    }
+
+    setDynamicProperty(identifier, value) {
+        this.#edit(held => held.setDynamicProperty(identifier, value));
+    }
+
+    setDynamicProperties(values) {
+        this.#edit(held => held.setDynamicProperties(values));
+    }
+
+    getDynamicPropertyIds() {
+        return this.#read()?.getDynamicPropertyIds() ?? [];
+    }
+
+    getDynamicPropertyTotalByteCount() {
+        return this.#read()?.getDynamicPropertyTotalByteCount() ?? 0;
+    }
+
+    clearDynamicProperties() {
+        this.#edit(held => held.clearDynamicProperties());
+    }
 }
 
+/**
+ * The items a player, an entity or a block holds.
+ *
+ * The handle names where to find the container again rather than holding it, so a container whose
+ * chest was broken or whose entity died answers as invalid instead of writing into nothing.
+ */
 export class Container {
+    #handle;
+
+    constructor(handle) {
+        this.#handle = handle;
+    }
+
+    get isValid() {
+        return bridge.containers.isValid(this.#handle);
+    }
+
+    get size() {
+        return bridge.containers.size(this.#handle);
+    }
+
+    get emptySlotsCount() {
+        return bridge.containers.emptySlots(this.#handle);
+    }
+
+    /** Bedrock weighs a bundle's contents. Java has no weight to read, so nothing answers this. */
+    get weight() {
+        unsupported("Container.weight");
+        return 0;
+    }
+
+    getItem(slot) {
+        const item = bridge.containers.item(this.#handle, slot);
+        return item === null ? undefined : itemFrom(JSON.parse(item));
+    }
+
+    setItem(slot, itemStack) {
+        bridge.containers.setItem(this.#handle, slot, itemJson(itemStack));
+    }
+
+    getSlot(slot) {
+        return new ContainerSlot(this.#handle, slot);
+    }
+
+    addItem(itemStack) {
+        const left = bridge.containers.addItem(this.#handle, itemJson(itemStack));
+        return left === null ? undefined : itemFrom(JSON.parse(left));
+    }
+
+    clearAll() {
+        bridge.containers.clearAll(this.#handle);
+    }
+
+    moveItem(fromSlot, toSlot, toContainer) {
+        bridge.containers.moveItem(this.#handle, fromSlot, toSlot, toContainer.#handle);
+    }
+
+    swapItems(slot, otherSlot, otherContainer) {
+        bridge.containers.swapItems(this.#handle, slot, otherSlot, otherContainer.#handle);
+    }
+
+    transferItem(fromSlot, toContainer) {
+        const left = bridge.containers.transferItem(this.#handle, fromSlot, toContainer.#handle);
+        return left === null ? undefined : itemFrom(JSON.parse(left));
+    }
+
+    contains(itemStack) {
+        return this.find(itemStack) !== undefined;
+    }
+
+    find(itemStack) {
+        return this.#search(slot => this.getItem(slot)?.isStackableWith(itemStack) === true, 1);
+    }
+
+    findLast(itemStack) {
+        return this.#search(slot => this.getItem(slot)?.isStackableWith(itemStack) === true, -1);
+    }
+
+    firstEmptySlot() {
+        return this.#search(slot => this.getItem(slot) === undefined, 1);
+    }
+
+    firstItem() {
+        return this.#search(slot => this.getItem(slot) !== undefined, 1);
+    }
+
+    /** The first slot the test keeps, walking forwards when `step` is 1 and backwards when it is -1. */
+    #search(test, step) {
+        const size = this.size;
+        for (let i = 0; i < size; i++) {
+            const slot = step === 1 ? i : size - 1 - i;
+            if (test(slot)) return slot;
+        }
+        return undefined;
+    }
+}
+
+/** The container a block holds, which is how the block surface reaches one. */
+export function containerAt(dimensionId, x, y, z) {
+    const handle = bridge.containers.ofBlock(dimensionId, x, y, z);
+    return handle === null ? undefined : new Container(handle);
 }
 
 export class Effect {
 }
 
 export class EffectType {
+    constructor(id) {
+        this.id = id;
+    }
+
+    /** Bedrock names an effect without its namespace, so `minecraft:speed` reads back as `speed`. */
+    getName() {
+        return this.id.startsWith("minecraft:") ? this.id.slice("minecraft:".length) : this.id;
+    }
 }
 
 export class EntityQueryOptions {
@@ -409,8 +886,25 @@ export class Entity {
         return bridge.entityFlag(this.id, "falling");
     }
 
+    get isSprinting() {
+        return bridge.entityMembers.isSprinting(this.id);
+    }
+
+    get localizationKey() {
+        return bridge.entityMembers.localizationKey(this.id);
+    }
+
+    get scoreboardIdentity() {
+        return identityOf(this.id);
+    }
+
     getHeadLocation() {
         return vector(bridge.entityHeadLocation(this.id));
+    }
+
+    getAABB() {
+        const box = bridge.entityMembers.boundingBox(this.id);
+        return { center: vector(box), extent: { x: box[3], y: box[4], z: box[5] } };
     }
 
     /** The block the entity is standing on, which is the one under its feet. */
@@ -420,14 +914,33 @@ export class Entity {
             Math.floor(at[0]), Math.floor(at[1]) - 1, Math.floor(at[2]));
     }
 
+    getAllBlocksStandingOn(options) {
+        const dimensionId = bridge.entityDimension(this.id);
+        return JSON.parse(bridge.entityMembers.blocksStandingOn(this.id, JSON.stringify(options ?? {})))
+            .map(at => new Block(dimensionId, at[0], at[1], at[2]));
+    }
+
     getBlockFromViewDirection(options) {
-        const hit = bridge.blockFromViewDirection(this.id, options?.maxDistance ?? 16);
-        if (hit === null) return undefined;
+        const found = bridge.entityMembers.blockFromViewDirection(this.id, JSON.stringify(options ?? {}));
+        if (found === null) return undefined;
+
+        const hit = JSON.parse(found);
         return {
-            block: new Block(bridge.entityDimension(this.id), hit[0], hit[1], hit[2]),
-            face: ["Down", "Up", "North", "South", "West", "East"][hit[3]] ?? "Up",
-            faceLocation: { x: 0, y: 0, z: 0 },
+            block: new Block(bridge.entityDimension(this.id), hit.x, hit.y, hit.z),
+            face: ["Down", "Up", "North", "South", "West", "East"][hit.face] ?? "Up",
+            faceLocation: vector(hit.faceLocation),
         };
+    }
+
+    /** The entity filter is applied here, where the query a pack wrote is already understood. */
+    getEntitiesFromViewDirection(options) {
+        return JSON.parse(bridge.entityMembers.entitiesFromViewDirection(this.id, JSON.stringify(options ?? {})))
+            .map(hit => ({ entity: entityFor(hit.id), distance: hit.distance }))
+            .filter(hit => hit.entity.matches(options ?? {}));
+    }
+
+    lookAt(target) {
+        bridge.entityMembers.lookAt(this.id, target.x, target.y, target.z);
     }
 
     getRotation() {
@@ -453,6 +966,22 @@ export class Entity {
 
     clearVelocity() {
         bridge.applyImpulse(this.id, 0, 0, 0);
+    }
+
+    /** 2.0 folded `(directionX, directionZ, horizontalStrength, verticalStrength)` into a vector. */
+    applyKnockback(...given) {
+        const [force, vertical] = given.length >= 4
+            ? [{ x: given[0] * given[2], z: given[1] * given[2] }, given[3]]
+            : [given[0] ?? {}, given[1]];
+        bridge.entityMembers.applyKnockback(this.id, force.x ?? 0, force.z ?? 0, vertical ?? 0);
+    }
+
+    setOnFire(seconds) {
+        return bridge.entityMembers.setOnFire(this.id, seconds);
+    }
+
+    extinguishFire() {
+        return bridge.entityMembers.extinguishFire(this.id);
     }
 
     teleport(location, options) {
@@ -524,6 +1053,10 @@ export class Entity {
         bridge.setEntityProperty(this.id, name, value);
     }
 
+    resetProperty(name) {
+        return bridge.entityMembers.resetProperty(this.id, name);
+    }
+
     getDynamicProperty(name) {
         return bridge.entityDynamicProperty(this.id, name);
     }
@@ -532,8 +1065,16 @@ export class Entity {
         bridge.setEntityDynamicProperty(this.id, name, value === undefined ? null : value);
     }
 
+    setDynamicProperties(values) {
+        Object.entries(values ?? {}).forEach(([name, value]) => this.setDynamicProperty(name, value));
+    }
+
     getDynamicPropertyIds() {
         return list(bridge.entityDynamicPropertyIds(this.id));
+    }
+
+    getDynamicPropertyTotalByteCount() {
+        return bridge.entityMembers.dynamicPropertyBytes(this.id);
     }
 
     clearDynamicProperties() {
@@ -545,17 +1086,18 @@ export class Entity {
     }
 
     hasComponent(component) {
-        return bridge.entityHasComponent(this.id, normaliseComponent(component));
+        return hasComponent(this, normaliseComponent(component));
     }
 
     getComponent(component) {
         const name = normaliseComponent(component);
-        if (!bridge.entityHasComponent(this.id, name)) return undefined;
-        return componentFor(this, name);
+        return hasComponent(this, name) ? componentFor(this, name) : undefined;
     }
 
     getComponents() {
-        return list(bridge.entityComponents(this.id)).map(name => componentFor(this, name));
+        const names = list(bridge.entityComponents(this.id));
+        if (hasComponent(this, "minecraft:inventory")) names.push("minecraft:inventory");
+        return names.map(name => componentFor(this, name));
     }
 
     getEffects() {
@@ -610,23 +1152,134 @@ export class Player extends Entity {
         return bridge.playerSelectedSlot(this.id);
     }
 
+    set selectedSlotIndex(index) {
+        bridge.players.setSelectedSlot(this.id, index);
+    }
+
+    get level() {
+        return bridge.players.experienceLevel(this.id);
+    }
+
+    get xpEarnedAtCurrentLevel() {
+        return bridge.players.xpEarnedAtCurrentLevel(this.id);
+    }
+
+    get totalXpNeededForNextLevel() {
+        return bridge.players.totalXpNeededForNextLevel(this.id);
+    }
+
+    get isFlying() {
+        return bridge.players.isFlying(this.id);
+    }
+
+    get isGliding() {
+        return bridge.players.isGliding(this.id);
+    }
+
+    get isJumping() {
+        return bridge.players.isJumping(this.id);
+    }
+
+    get commandPermissionLevel() {
+        return bridge.players.commandPermissionLevel(this.id);
+    }
+
+    // Java grants one operator flag at a level the server's own settings decide, so a script cannot
+    // put a player on a rung of Bedrock's ladder.
+    set commandPermissionLevel(level) {
+        unsupported("Player.commandPermissionLevel (write)");
+    }
+
+    get playerPermissionLevel() {
+        return bridge.players.playerPermissionLevel(this.id);
+    }
+
+    // What follows describes the Bedrock client itself: the camera it draws through, the device it
+    // runs on, the buttons held on it and the parts of its heads-up display. Java Edition's server
+    // is told none of it, so each of these reports itself rather than answering something made up.
+
+    get camera() {
+        return unsupported("Player.camera");
+    }
+
+    get clientSystemInfo() {
+        return unsupported("Player.clientSystemInfo");
+    }
+
+    get graphicsMode() {
+        return unsupported("Player.graphicsMode");
+    }
+
+    get inputInfo() {
+        return unsupported("Player.inputInfo");
+    }
+
+    get inputPermissions() {
+        return unsupported("Player.inputPermissions");
+    }
+
+    get isEmoting() {
+        return unsupported("Player.isEmoting");
+    }
+
+    getControlScheme() {
+        return unsupported("Player.getControlScheme");
+    }
+
+    setControlScheme() {
+        unsupported("Player.setControlScheme");
+    }
+
+    // An override shows one entity differently to one player, which needs a per-player entity state
+    // Java has no packet for.
+
+    setPropertyOverrideForEntity() {
+        unsupported("Player.setPropertyOverrideForEntity");
+    }
+
+    removePropertyOverrideForEntity() {
+        unsupported("Player.removePropertyOverrideForEntity");
+    }
+
+    clearPropertyOverridesForEntity() {
+        unsupported("Player.clearPropertyOverridesForEntity");
+    }
+
     get onScreenDisplay() {
         const id = this.id;
         return {
+            isValid: true,
             setActionBar(text) {
-                bridge.setActionBar(id, rawText(text));
+                bridge.players.setActionBar(id, JSON.stringify(text));
             },
-            setTitle(text) {
-                bridge.setTitle(id, rawText(text));
+            setTitle(text, options) {
+                bridge.players.setTitle(id, JSON.stringify(text), JSON.stringify(options ?? null));
             },
             updateSubtitle(text) {
-                bridge.setSubtitle(id, rawText(text));
+                bridge.players.updateSubtitle(id, JSON.stringify(text));
+            },
+            getHiddenHudElements() {
+                unsupported("ScreenDisplay.getHiddenHudElements");
+                return [];
+            },
+            hideAllExcept() {
+                unsupported("ScreenDisplay.hideAllExcept");
+            },
+            isForcedHidden() {
+                unsupported("ScreenDisplay.isForcedHidden");
+                return false;
+            },
+            resetHudElementsVisibility() {
+                unsupported("ScreenDisplay.resetHudElementsVisibility");
+            },
+            setHudVisibility() {
+                unsupported("ScreenDisplay.setHudVisibility");
             },
         };
     }
 
     sendMessage(message) {
-        bridge.sendMessageTo(this.id, rawText(message));
+        bridge.players.sendMessage(this.id, JSON.stringify(message));
     }
 
     getGameMode() {
@@ -634,15 +1287,67 @@ export class Player extends Entity {
     }
 
     setGameMode(mode) {
-        bridge.setPlayerGameMode(this.id, mode);
+        bridge.setPlayerGameMode(this.id, mode ?? bridge.players.defaultGameMode());
     }
 
     playSound(soundId, options) {
         bridge.playSoundTo(this.id, soundId, options?.volume ?? 1, options?.pitch ?? 1);
     }
 
+    // Java has no track queue, so a queued track starts now, which is what `/music queue` does too.
+
+    playMusic(trackId, options) {
+        bridge.players.playMusic(this.id, trackId, JSON.stringify(options ?? {}));
+    }
+
+    queueMusic(trackId, options) {
+        this.playMusic(trackId, options);
+    }
+
+    stopMusic() {
+        bridge.players.stopMusic(this.id);
+    }
+
+    spawnParticle(effectName, location, molangVariables) {
+        if (molangVariables !== undefined) unsupported("Player.spawnParticle molangVariables");
+        bridge.players.spawnParticle(this.id, effectName, location.x, location.y, location.z);
+    }
+
+    startItemCooldown(category, ticks) {
+        bridge.players.startItemCooldown(this.id, category, ticks);
+    }
+
+    getItemCooldown(category) {
+        return bridge.players.itemCooldown(this.id, category);
+    }
+
+    addExperience(amount) {
+        return bridge.players.addExperience(this.id, amount);
+    }
+
+    addLevels(amount) {
+        return bridge.players.addLevels(this.id, amount);
+    }
+
+    getTotalXp() {
+        return bridge.players.totalXp(this.id);
+    }
+
+    resetLevel() {
+        bridge.players.resetLevel(this.id);
+    }
+
     getSpawnPoint() {
-        return undefined;
+        const spawn = bridge.players.spawnPoint(this.id);
+        if (spawn === null) return undefined;
+
+        const at = JSON.parse(spawn);
+        return { dimension: dimensionOf(at.dimension), x: at.x, y: at.y, z: at.z };
+    }
+
+    setSpawnPoint(spawnPoint) {
+        bridge.players.setSpawnPoint(this.id, spawnPoint?.dimension?.id ?? null,
+            Math.floor(spawnPoint?.x ?? 0), Math.floor(spawnPoint?.y ?? 0), Math.floor(spawnPoint?.z ?? 0));
     }
 }
 
@@ -661,9 +1366,37 @@ function normaliseComponent(component) {
     return name.includes(":") ? name : "minecraft:" + name;
 }
 
+/**
+ * Whether the entity carries a component.
+ *
+ * The inventory is answered by whether a container could be found for the entity, because a player
+ * and a chest minecart hold their items in objects the entity component list knows nothing about.
+ */
+function hasComponent(entity, name) {
+    return name === "minecraft:inventory"
+        ? bridge.containers.ofEntity(entity.id) !== null
+        : bridge.entityHasComponent(entity.id, name);
+}
+
 /** Only the components real packs read are modelled; the rest report themselves as unsupported. */
 function componentFor(entity, name) {
     switch (name) {
+        case "minecraft:inventory":
+            return {
+                typeId: name, entity,
+                containerType: "inventory",
+                additionalSlotsPerStrength: 0,
+                canBeSiphonedFrom: false,
+                private: false,
+                restrictToOwner: false,
+                get container() {
+                    const handle = bridge.containers.ofEntity(entity.id);
+                    return handle === null ? undefined : new Container(handle);
+                },
+                get inventorySize() {
+                    return this.container?.size ?? 0;
+                },
+            };
         case "minecraft:health":
             return {
                 typeId: name, entity,
@@ -727,7 +1460,23 @@ function itemFrom(handle) {
     stack.nameTag = handle.nameTag === "" ? undefined : handle.nameTag;
     stack.damage = handle.damage ?? 0;
     stack.maxDurability = handle.maxDurability ?? 0;
+    stack.maxAmount = handle.maxAmount ?? 64;
+    stack.lore = handle.lore ?? [];
+    stack.properties = handle.properties ?? {};
     return stack;
+}
+
+/** The other way round, for a stack a pack is putting into a container. Null for an empty slot. */
+function itemJson(stack) {
+    if (stack === undefined || stack === null) return null;
+    return JSON.stringify({
+        typeId: stack.typeId,
+        amount: stack.amount ?? 1,
+        damage: stack.damage ?? 0,
+        nameTag: stack.nameTag ?? "",
+        lore: stack.lore ?? [],
+        properties: stack.properties ?? {},
+    });
 }
 
 export function entityFor(id) {
@@ -765,9 +1514,10 @@ export class Dimension {
     }
 
     getBlock(location) {
-        return bridge.isChunkLoaded(this.id, location.x, location.z)
-            ? new Block(this.id, Math.floor(location.x), Math.floor(location.y), Math.floor(location.z))
-            : undefined;
+        const x = Math.floor(location.x);
+        const y = Math.floor(location.y);
+        const z = Math.floor(location.z);
+        return bridge.blocks.exists(this.id, x, y, z) ? new Block(this.id, x, y, z) : undefined;
     }
 
     getTopmostBlock(location) {
@@ -785,7 +1535,12 @@ export class Dimension {
 
     setBlockType(location, type) {
         bridge.setBlockType(this.id, Math.floor(location.x), Math.floor(location.y), Math.floor(location.z),
-            typeof type === "string" ? type : type?.id);
+            typeIdOf(type));
+    }
+
+    setBlockPermutation(location, permutation) {
+        bridge.blocks.setPermutation(this.id, Math.floor(location.x), Math.floor(location.y),
+            Math.floor(location.z), permutation.type.id, JSON.stringify(permutation.getAllStates()));
     }
 
     spawnEntity(typeId, location) {
@@ -1115,13 +1870,17 @@ export class ScoreboardObjective {
         return bridge.scoreboardDisplayName(this.id) ?? this.id;
     }
 
-    isValid() {
+    get isValid() {
         return bridge.scoreboardHasObjective(this.id);
     }
 
     getScore(participant) {
         const score = bridge.score(this.id, nameOf(participant));
         return score === null ? undefined : score;
+    }
+
+    hasParticipant(participant) {
+        return bridge.score(this.id, nameOf(participant)) !== null;
     }
 
     setScore(participant, value) {
@@ -1142,7 +1901,7 @@ export class ScoreboardObjective {
     getParticipants() {
         return list(bridge.scoreboardParticipants())
             .filter(name => bridge.score(this.id, name) !== null)
-            .map(name => ({ displayName: name, type: "Player" }));
+            .map(identityFor);
     }
 
     getScores() {
@@ -1150,6 +1909,42 @@ export class ScoreboardObjective {
             participant, score: this.getScore(participant) ?? 0,
         }));
     }
+}
+
+/** A scoreboard participant: an entity, or a name that nothing in the world answers to. */
+export class ScoreboardIdentity {
+    constructor(displayName, id, type, entityId) {
+        this.displayName = displayName;
+        this.id = id;
+        this.type = type;
+        this.#entityId = entityId;
+    }
+
+    #entityId;
+
+    get isValid() {
+        return this.#entityId === undefined || bridge.entityIsValid(this.#entityId);
+    }
+
+    getEntity() {
+        return this.#entityId === undefined ? undefined : entityFor(this.#entityId);
+    }
+}
+
+/** Undefined when nothing answers to the handle, which is the answer for an entity that is gone. */
+function identityOf(handle) {
+    const found = bridge.entityMembers.scoreboardIdentity(handle);
+    if (found === null) return undefined;
+
+    const fields = JSON.parse(found);
+    return new ScoreboardIdentity(fields.displayName, fields.id, fields.type, handle);
+}
+
+/** A scoreboard name is a player's name, the UUID of any other entity, or neither. */
+function identityFor(name) {
+    const handle = list(bridge.players()).find(id => bridge.playerName(id) === name) ?? name;
+    return identityOf(handle)
+        ?? new ScoreboardIdentity(name, 0, ScoreboardIdentityType.FakePlayer, undefined);
 }
 
 /** A participant is a player, an entity, or the plain name of either. */
@@ -1180,8 +1975,7 @@ const scoreboard = {
     },
 
     getParticipants() {
-        return list(bridge.scoreboardParticipants())
-            .map(name => ({ displayName: name, type: "Player" }));
+        return list(bridge.scoreboardParticipants()).map(identityFor);
     },
 
     getObjectiveAtDisplaySlot() {
@@ -1498,9 +2292,7 @@ export class BlockRecordPlayerComponent {}
 export class BlockRedstoneProducerComponent {}
 export class BlockSignComponent {}
 export class BlockStateType {}
-export class BlockStates {}
 export class BlockType {}
-export class BlockTypes {}
 export class BlockVolumeBase {}
 export class ButtonPushAfterEvent {}
 export class ButtonPushAfterEventSignal {}
@@ -1756,7 +2548,6 @@ export class RandomDifficultyChanceCondition {}
 export class RandomDyeFunction {}
 export class RandomRegionalDifficultyChanceCondition {}
 export class Scoreboard {}
-export class ScoreboardIdentity {}
 export class ScoreboardScoreInfo {}
 export class ScreenDisplay {}
 export class ScriptEventCommandMessageAfterEvent {}
