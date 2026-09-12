@@ -143,11 +143,41 @@ export class ItemStack {
     clone() {
         const copy = new ItemStack(this.typeId, this.amount);
         copy.nameTag = this.nameTag;
+        copy.damage = this.damage;
+        copy.maxDurability = this.maxDurability;
         return copy;
     }
 
     getComponent(component) {
-        return unsupported("ItemStack.getComponent(" + component + ")");
+        const name = normaliseComponent(component);
+        if (name === "minecraft:durability") {
+            const max = this.maxDurability ?? bridge.itemMaxDurability(this.typeId);
+            if (max <= 0) return undefined;
+
+            const stack = this;
+            return {
+                typeId: name,
+                maxDurability: max,
+                get damage() {
+                    return stack.damage ?? 0;
+                },
+                set damage(value) {
+                    stack.damage = value;
+                },
+                getDamageChance: () => 100,
+            };
+        }
+        if (name === "minecraft:enchantable") return undefined;
+        return unsupported("ItemStack.getComponent(" + name + ")");
+    }
+
+    getComponents() {
+        const durability = this.getComponent("minecraft:durability");
+        return durability === undefined ? [] : [durability];
+    }
+
+    hasComponent(component) {
+        return this.getComponent(component) !== undefined;
     }
 
     getLore() {
@@ -700,6 +730,8 @@ function componentFor(entity, name) {
 function itemFrom(handle) {
     const stack = new ItemStack(handle.typeId, handle.amount);
     stack.nameTag = handle.nameTag === "" ? undefined : handle.nameTag;
+    stack.damage = handle.damage ?? 0;
+    stack.maxDurability = handle.maxDurability ?? 0;
     return stack;
 }
 

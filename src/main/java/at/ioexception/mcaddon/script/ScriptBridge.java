@@ -542,6 +542,8 @@ public final class ScriptBridge {
         JsonObject item = new JsonObject();
         item.addProperty("typeId", BuiltInRegistries.ITEM.getKey(held.getItem()).toString());
         item.addProperty("amount", held.getCount());
+        item.addProperty("damage", held.getDamageValue());
+        item.addProperty("maxDurability", held.getMaxDamage());
         return item.toString();
     }
 
@@ -874,6 +876,15 @@ public final class ScriptBridge {
             case "Z" -> "left_right";
             default -> "none";
         };
+    }
+
+    /** How much wear an item of this kind takes before it breaks, or zero when it never does. */
+    @HostAccess.Export
+    public int itemMaxDurability(String itemId) {
+        Identifier parsed = Identifier.tryParse(itemId);
+        net.minecraft.world.item.Item item = parsed == null ? null
+            : BuiltInRegistries.ITEM.getOptional(parsed).orElse(null);
+        return item == null ? 0 : new ItemStack(item).getMaxDamage();
     }
 
     @HostAccess.Export
