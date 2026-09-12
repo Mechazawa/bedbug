@@ -3,13 +3,16 @@ package at.ioexception.mcaddon.client.render;
 import at.ioexception.mcaddon.bedrock.entity.EntityAnimator;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangValue;
+import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.platform.Platform;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.Map;
 
 /**
@@ -96,9 +99,24 @@ public final class AddonQueries implements MolangEnvironment.Queries {
             case "any" -> MolangValue.of(arguments.stream().skip(2).anyMatch(MolangValue::truthy));
             case "all" -> MolangValue.of(arguments.stream().skip(2).allMatch(MolangValue::truthy));
 
-            default -> MolangValue.ZERO;
+            default -> unanswered(name);
         };
     }
+
+    /**
+     * A query this mod has no answer for.
+     *
+     * Bedrock answers zero for a query it does not know, so answering zero is right. Counting it is
+     * what stops a query nobody implemented from looking like one that legitimately returned zero,
+     * which is the difference between a reported gap and a model that silently sits still.
+     */
+    private static MolangValue unanswered(String name) {
+        if (UNANSWERED.add(name)) AddonEntities.unsupported("query q." + name);
+        return MolangValue.ZERO;
+    }
+
+    /** Counted once each, because a query is asked again on every frame it is read. */
+    private static final Set<String> UNANSWERED = new HashSet<>();
 
     private String nameOf() {
         return entity.getCustomName() == null ? "" : entity.getCustomName().getString();
