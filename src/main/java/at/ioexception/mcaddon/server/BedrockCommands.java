@@ -41,11 +41,14 @@ public final class BedrockCommands {
                                     StringArgumentType.getString(command, "stop_expression"),
                                     FloatArgumentType.getFloat(command, "blend_out_time")))))))));
 
+        // An event carries the namespace of the pack that declared it, and Brigadier's unquoted
+        // string stops at the colon. Greedy is what lets `vn:become_angry` through unquoted, which
+        // is how Bedrock writes it, and nothing follows the event for greed to swallow.
         dispatcher.register(Commands.literal("event")
             .requires(source -> Platform.allowedAt(source, 1))
             .then(Commands.literal("entity")
                 .then(Commands.argument("targets", EntityArgument.entities())
-                    .then(Commands.argument("event", StringArgumentType.string())
+                    .then(Commands.argument("event", StringArgumentType.greedyString())
                         .executes(BedrockCommands::entityEvent)))));
     }
 
