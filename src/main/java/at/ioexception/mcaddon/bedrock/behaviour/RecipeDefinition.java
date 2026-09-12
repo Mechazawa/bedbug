@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.bedrock.behaviour;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.pack.BedrockPack;
+import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -40,7 +41,19 @@ public record RecipeDefinition(String identifier, Kind kind, List<String> patter
         return recipes;
     }
 
+    /** The recipe kinds this mod converts, against which a pack's own file is checked. */
+    private static final java.util.Set<String> KINDS = java.util.Set.of(
+        "minecraft:recipe_shaped", "minecraft:recipe_shapeless", "minecraft:recipe_furnace");
+
     private static RecipeDefinition read(JsonObject root) {
+        // A recipe file names its kind as its only top-level key, so a kind nothing reads is a
+        // recipe that never reaches the game and is worth saying so.
+        for (String declared : root.keySet()) {
+            if (declared.startsWith("minecraft:recipe_") && !KINDS.contains(declared)) {
+                AddonEntities.unsupported(declared);
+            }
+        }
+
         for (Kind kind : Kind.values()) {
             String section = switch (kind) {
                 case SHAPED -> "minecraft:recipe_shaped";

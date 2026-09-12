@@ -55,8 +55,10 @@ export const EntityComponentTypes = Object.freeze({
 });
 
 export const ItemComponentTypes = Object.freeze({
-    Durability: "minecraft:durability", Enchantable: "minecraft:enchantable",
-    Food: "minecraft:food", Cooldown: "minecraft:cooldown",
+    Book: "minecraft:book", Compostable: "minecraft:compostable", Cooldown: "minecraft:cooldown",
+    Durability: "minecraft:durability", Dyeable: "minecraft:dyeable",
+    Enchantable: "minecraft:enchantable", Food: "minecraft:food", Inventory: "minecraft:inventory",
+    Potion: "minecraft:potion",
 });
 
 export const ScriptEventSource = Object.freeze({
@@ -97,11 +99,169 @@ export const StructureRotation = Object.freeze({
 
 export const StructureSaveMode = Object.freeze({ Memory: "Memory", World: "World" });
 
-export class BlockVolume {
+function blockPosition(location) {
+    return { x: Math.floor(location.x), y: Math.floor(location.y), z: Math.floor(location.z) };
+}
+
+function corner(from, to, pick) {
+    const one = blockPosition(from);
+    const other = blockPosition(to);
+    return { x: pick(one.x, other.x), y: pick(one.y, other.y), z: pick(one.z, other.z) };
+}
+
+function moved(location, delta) {
+    return { x: location.x + delta.x, y: location.y + delta.y, z: location.z + delta.z };
+}
+
+function samePosition(one, other) {
+    return one.x === other.x && one.y === other.y && one.z === other.z;
+}
+
+function* between(min, max) {
+    for (let x = min.x; x <= max.x; x++) {
+        for (let y = min.y; y <= max.y; y++) {
+            for (let z = min.z; z <= max.z; z++) yield { x, y, z };
+        }
+    }
+}
+
+/** The positions of a volume, handed out one at a time so a large region costs nothing to ask for. */
+export class BlockLocationIterator {
+    #positions;
+
+    constructor(positions) {
+        this.#positions = positions[Symbol.iterator]();
+    }
+
+    [Symbol.iterator]() {
+        return this;
+    }
+
+    next() {
+        return this.#positions.next();
+    }
+}
+
+/** What every volume answers, worked out from the two corners its own shape reports. */
+export class BlockVolumeBase {
+    getSpan() {
+        const min = this.getMin();
+        const max = this.getMax();
+        return { x: max.x - min.x + 1, y: max.y - min.y + 1, z: max.z - min.z + 1 };
+    }
+
+    getCapacity() {
+        const span = this.getSpan();
+        return span.x * span.y * span.z;
+    }
+
+    getBlockLocationIterator() {
+        return new BlockLocationIterator(between(this.getMin(), this.getMax()));
+    }
+
+    isInside(location) {
+        const at = blockPosition(location);
+        const min = this.getMin();
+        const max = this.getMax();
+        return at.x >= min.x && at.x <= max.x && at.y >= min.y && at.y <= max.y
+            && at.z >= min.z && at.z <= max.z;
+    }
+}
+
+export class BlockVolume extends BlockVolumeBase {
     constructor(from, to) {
+        super();
         this.from = from;
         this.to = to;
     }
+
+    getMin() {
+        return corner(this.from, this.to, Math.min);
+    }
+
+    getMax() {
+        return corner(this.from, this.to, Math.max);
+    }
+
+    translate(delta) {
+        this.from = moved(this.from, delta);
+        this.to = moved(this.to, delta);
+    }
+}
+
+/** The positions a fill or a search touched, which is how Bedrock hands a scattered region back. */
+export class ListBlockVolume extends BlockVolumeBase {
+    #positions;
+
+    constructor(locations) {
+        super();
+        this.#positions = (locations ?? []).map(blockPosition);
+    }
+
+    add(locations) {
+        for (const location of locations ?? []) {
+            if (!this.isInside(location)) this.#positions.push(blockPosition(location));
+        }
+    }
+
+    remove(locations) {
+        const dropped = (locations ?? []).map(blockPosition);
+        this.#positions = this.#positions.filter(
+            held => !dropped.some(at => samePosition(held, at)));
+    }
+
+    getMin() {
+        return this.#extreme(Math.min);
+    }
+
+    getMax() {
+        return this.#extreme(Math.max);
+    }
+
+    getCapacity() {
+        return this.#positions.length;
+    }
+
+    getBlockLocationIterator() {
+        return new BlockLocationIterator(this.#positions.slice());
+    }
+
+    isInside(location) {
+        const at = blockPosition(location);
+        return this.#positions.some(held => samePosition(held, at));
+    }
+
+    translate(delta) {
+        this.#positions = this.#positions.map(at => moved(at, delta));
+    }
+
+    #extreme(pick) {
+        if (this.#positions.length === 0) return { x: 0, y: 0, z: 0 };
+        return this.#positions.reduce((found, at) => corner(found, at, pick));
+    }
+}
+
+/**
+ * The boxes a volume covers.
+ *
+ * The bridge measures a region by its two corners, so a volume of scattered positions is asked for
+ * one position at a time and a volume that is already a box in one call.
+ */
+function boxesOf(volume) {
+    if (volume?.from !== undefined && volume?.to !== undefined) {
+        return [[corner(volume.from, volume.to, Math.min), corner(volume.from, volume.to, Math.max)]];
+    }
+    return [...(volume?.getBlockLocationIterator?.() ?? [])].map(at => [at, at]);
+}
+
+/** A run of positions reaches the guest as one flat array of x, y, z. */
+function positionsIn(flat) {
+    const found = [];
+    const values = list(flat);
+    for (let i = 0; i + 2 < values.length; i += 3) {
+        found.push({ x: values[i], y: values[i + 1], z: values[i + 2] });
+    }
+    return found;
 }
 
 const blockTypeCache = new Map();
@@ -121,13 +281,22 @@ function typeIdOf(value) {
     return value?.type?.id ?? value?.id;
 }
 
+// A block name without a namespace is a vanilla one, which is how the registry reads it too. Going
+// through the bridge for that would cost a host call per comparison, so the default is applied here.
+function blockNameOf(value) {
+    const id = typeIdOf(value);
+    return typeof id === "string" && !id.includes(":") ? "minecraft:" + id : id;
+}
+
 export class BlockPermutation {
     /** The states a block really carries, which is what was asked for over the block's defaults. */
     static resolve(type, states) {
         const id = typeIdOf(type);
         const resolved = bridge.blocks.resolve(id, JSON.stringify(states ?? {}));
         if (resolved === null) throw new Error("No block type named " + id);
-        return new BlockPermutation(id, JSON.parse(resolved));
+
+        const permutation = JSON.parse(resolved);
+        return new BlockPermutation(permutation.typeId, permutation.states);
     }
 
     constructor(type, states) {
@@ -154,7 +323,7 @@ export class BlockPermutation {
     }
 
     matches(type, states) {
-        if (this.type.id !== type) return false;
+        if (this.type.id !== blockNameOf(type)) return false;
         for (const key of Object.keys(states ?? {})) {
             if (this.#states[key] !== states[key]) return false;
         }
@@ -178,11 +347,25 @@ export class BlockPermutation {
     canContainLiquid() {
         return bridge.blocks.canContainLiquid(this.type.id);
     }
+
+    isLiquidBlocking() {
+        return bridge.blocks.isLiquidBlocking(this.type.id, JSON.stringify(this.#states));
+    }
+
+    canBeDestroyedByLiquidSpread() {
+        return bridge.blocks.destroyedByLiquid(this.type.id, JSON.stringify(this.#states));
+    }
+
+    /** Java breaks such a block and drops it in one step, so this is the answer above as well. */
+    liquidSpreadCausesSpawn() {
+        return bridge.blocks.destroyedByLiquid(this.type.id, JSON.stringify(this.#states));
+    }
 }
 
 export const BlockTypes = Object.freeze({
     get(typeName) {
-        return bridge.blocks.localizationKey(typeName) === null ? undefined : blockType(typeName);
+        const id = bridge.blocks.canonicalId(typeName);
+        return id === null ? undefined : blockType(id);
     },
     getAll() {
         return list(bridge.blocks.typeIds()).map(id => blockType(id));
@@ -203,11 +386,134 @@ export const BlockStates = Object.freeze({
     },
 });
 
+// A kind of item is the same for as long as the game runs, so what the game says about one is read
+// once and handed back frozen, which also keeps one ItemType object per id for a pack to compare.
+const itemTypeCache = new Map();
+
+/** An id with no namespace names a vanilla thing, wherever Bedrock takes one. */
+function namespaced(name) {
+    const id = typeof name === "string" ? name : name?.id;
+    return id !== undefined && id !== null && !id.includes(":") ? "minecraft:" + id : id;
+}
+
+/** What the game knows about a kind of item, with no fields at all for an id nothing registers. */
+function itemInfo(typeId) {
+    let info = itemTypeCache.get(typeId);
+    if (info === undefined) {
+        info = JSON.parse(bridge.items.describe(typeId ?? ""));
+        info.type = info.id === undefined ? undefined
+            : Object.freeze({ id: info.id, localizationKey: info.localizationKey });
+        Object.freeze(info);
+        itemTypeCache.set(typeId, info);
+    }
+    return info;
+}
+
+export const ItemTypes = Object.freeze({
+    get(itemId) {
+        return itemInfo(namespaced(itemId)).type;
+    },
+    getAll() {
+        return list(bridge.items.all()).map(id => itemInfo(id).type);
+    },
+});
+
+/** An enchantment type is its id and the highest level the game gives it. Undefined for a bad id. */
+function enchantmentType(type) {
+    const id = namespaced(type);
+    const maxLevel = id === undefined ? 0 : bridge.items.enchantmentMaxLevel(id);
+    return maxLevel === 0 ? undefined : Object.freeze({ id, maxLevel });
+}
+
+/** The pair a pack hands in, as the game's own type and a level the game allows that type. */
+function enchantmentOf(enchantment) {
+    const type = enchantmentType(enchantment?.type);
+    if (type === undefined) {
+        throw new EnchantmentTypeUnknownIdError("No enchantment named " + namespaced(enchantment?.type));
+    }
+    if (!(enchantment.level >= 1 && enchantment.level <= type.maxLevel)) {
+        throw new EnchantmentLevelOutOfBoundsError(
+            "Level " + enchantment.level + " is outside 1 to " + type.maxLevel + " for " + type.id);
+    }
+    return { type, level: enchantment.level };
+}
+
+/**
+ * The blocks a pack limits a stack to in adventure mode, checked against the game.
+ *
+ * Nothing carries the limit onto the item the world holds, so a list with anything in it is
+ * reported even though the stack answers it back.
+ */
+function placementBlocks(blockIdentifiers, member) {
+    const ids = (blockIdentifiers ?? []).map(namespaced);
+    const missing = ids.find(id => !bridge.items.blockExists(id));
+    if (missing !== undefined) throw new Error("No block type named " + missing);
+    if (ids.length > 0) unsupported(member);
+    return ids;
+}
+
+// The components a kind of item can carry here, which is what getComponents() offers a pack.
+const itemComponents = Object.freeze([
+    ItemComponentTypes.Durability, ItemComponentTypes.Food, ItemComponentTypes.Cooldown,
+    ItemComponentTypes.Enchantable, ItemComponentTypes.Dyeable, ItemComponentTypes.Potion,
+    ItemComponentTypes.Compostable,
+]);
+
+/**
+ * A stack of items, held as a value rather than as a slot in the world.
+ *
+ * What the game decides about the kind of item is read from the registry every time it is asked
+ * for. What a pack decides about this one stack (its lore, its dynamic properties, the blocks it
+ * may break) lives on the object, and reaches the world only as far as the container it is written
+ * into carries it.
+ */
 export class ItemStack {
     constructor(itemType, amount) {
-        this.typeId = typeof itemType === "string" ? itemType : itemType?.id;
+        this.typeId = namespaced(itemType);
         this.amount = amount ?? 1;
         this.nameTag = undefined;
+    }
+
+    get type() {
+        return itemInfo(this.typeId).type;
+    }
+
+    get localizationKey() {
+        return itemInfo(this.typeId).localizationKey ?? this.typeId;
+    }
+
+    get maxAmount() {
+        return itemInfo(this.typeId).maxAmount ?? 64;
+    }
+
+    get isStackable() {
+        return this.maxAmount > 1 && !this.nameTag && this.getLore().length === 0
+            && this.getDynamicPropertyIds().length === 0;
+    }
+
+    /** Bedrock counts four units per item, and nothing here carries a storage weight modifier. */
+    get weight() {
+        return this.amount * 4;
+    }
+
+    // Java honours neither of Bedrock's two restrictions on carrying an item, so both read as the
+    // default they have when a pack has not asked for anything, and asking for anything else is
+    // reported.
+
+    get keepOnDeath() {
+        return false;
+    }
+
+    set keepOnDeath(value) {
+        if (value) unsupported("ItemStack.keepOnDeath");
+    }
+
+    get lockMode() {
+        return ItemLockMode.none;
+    }
+
+    set lockMode(value) {
+        if (value !== ItemLockMode.none) unsupported("ItemStack.lockMode");
     }
 
     clone() {
@@ -215,38 +521,182 @@ export class ItemStack {
         copy.nameTag = this.nameTag;
         copy.damage = this.damage;
         copy.maxDurability = this.maxDurability;
-        copy.maxAmount = this.maxAmount;
+        copy.unbreakable = this.unbreakable;
         copy.lore = [...(this.lore ?? [])];
         copy.properties = { ...(this.properties ?? {}) };
+        copy.enchantments = [...(this.enchantments ?? [])];
+        copy.dyeColor = this.dyeColor;
+        copy.canDestroy = [...(this.canDestroy ?? [])];
+        copy.canPlaceOn = [...(this.canPlaceOn ?? [])];
         return copy;
+    }
+
+    /** States belong to blocks, so a stack of a block item answers with the ones it would place. */
+    matches(itemName, states) {
+        if (namespaced(itemName) !== this.typeId) return false;
+
+        const wanted = Object.entries(states ?? {});
+        if (wanted.length === 0) return true;
+
+        const resolved = bridge.blocks.resolve(this.typeId, "{}");
+        if (resolved === null) return false;
+
+        const placed = JSON.parse(resolved);
+        return wanted.every(([state, value]) => placed[state] === value);
+    }
+
+    getCanDestroy() {
+        return [...(this.canDestroy ?? [])];
+    }
+
+    setCanDestroy(blockIdentifiers) {
+        this.canDestroy = placementBlocks(blockIdentifiers, "ItemStack.setCanDestroy");
+    }
+
+    getCanPlaceOn() {
+        return [...(this.canPlaceOn ?? [])];
+    }
+
+    setCanPlaceOn(blockIdentifiers) {
+        this.canPlaceOn = placementBlocks(blockIdentifiers, "ItemStack.setCanPlaceOn");
     }
 
     getComponent(component) {
         const name = normaliseComponent(component);
-        if (name === "minecraft:durability") {
-            const max = this.maxDurability ?? bridge.itemMaxDurability(this.typeId);
-            if (max <= 0) return undefined;
-
-            const stack = this;
-            return {
-                typeId: name,
-                maxDurability: max,
-                get damage() {
-                    return stack.damage ?? 0;
-                },
-                set damage(value) {
-                    stack.damage = value;
-                },
-                getDamageChance: () => 100,
-            };
+        const info = itemInfo(this.typeId);
+        switch (name) {
+            case ItemComponentTypes.Durability:
+                return this.#durability(name);
+            case ItemComponentTypes.Food:
+                return info.food === undefined ? undefined : { typeId: name, ...info.food };
+            case ItemComponentTypes.Compostable:
+                return info.compostable === undefined ? undefined : { typeId: name, ...info.compostable };
+            case ItemComponentTypes.Cooldown:
+                return this.#cooldown(name, info.cooldown);
+            case ItemComponentTypes.Enchantable:
+                return this.#enchantable(name, info.enchantable);
+            case ItemComponentTypes.Dyeable:
+                return this.#dyeable(name, info.dyeable);
+            case ItemComponentTypes.Potion:
+                return this.#potion(name, info.potion);
+            default:
+                return unsupported("ItemStack.getComponent(" + name + ")");
         }
-        if (name === "minecraft:enchantable") return undefined;
-        return unsupported("ItemStack.getComponent(" + name + ")");
+    }
+
+    #durability(name) {
+        const max = this.maxDurability ?? bridge.itemMaxDurability(this.typeId);
+        if (max <= 0) return undefined;
+
+        const stack = this;
+        return {
+            typeId: name,
+            maxDurability: max,
+            get damage() {
+                return stack.damage ?? 0;
+            },
+            set damage(value) {
+                stack.damage = value;
+            },
+            get unbreakable() {
+                return stack.unbreakable ?? false;
+            },
+            set unbreakable(value) {
+                stack.unbreakable = value;
+                if (value) unsupported("ItemDurabilityComponent.unbreakable");
+            },
+            getDamageChance: () => 100,
+            getDamageChanceRange: () => ({ min: 100, max: 100 }),
+        };
+    }
+
+    /** A cooldown is read from a player, because it is the player and not the item that holds one. */
+    #cooldown(name, cooldown) {
+        if (cooldown === undefined) return undefined;
+
+        const typeId = this.typeId;
+        return {
+            typeId: name,
+            cooldownCategory: cooldown.cooldownCategory,
+            cooldownTicks: cooldown.cooldownTicks,
+            isCooldownCategory: category => category === cooldown.cooldownCategory,
+            getCooldownTicksRemaining: player => bridge.items.cooldownRemaining(player.id, typeId),
+            startCooldown: player => {
+                bridge.items.startCooldown(player.id, typeId, cooldown.cooldownTicks);
+            },
+        };
+    }
+
+    /**
+     * An enchantment a pack adds is kept on the stack and answered back. Nothing carries it onto the
+     * item the world holds, so adding one is reported.
+     */
+    #enchantable(name, enchantable) {
+        if (enchantable === undefined) return undefined;
+
+        const stack = this;
+        const held = () => stack.enchantments ?? [];
+        const add = enchantment => {
+            const added = enchantmentOf(enchantment);
+            stack.enchantments = [...held().filter(on => on.type.id !== added.type.id), added];
+            unsupported("ItemEnchantableComponent.addEnchantment");
+        };
+        return {
+            typeId: name,
+            slots: [...enchantable.slots],
+            getEnchantments: () => held().slice(),
+            getEnchantment: type => held().find(on => on.type.id === namespaced(type)),
+            hasEnchantment: type => held().some(on => on.type.id === namespaced(type)),
+            canAddEnchantment: enchantment => {
+                const asked = enchantmentOf(enchantment);
+                return !held().some(on => on.type.id === asked.type.id);
+            },
+            addEnchantment: add,
+            addEnchantments: enchantments => (enchantments ?? []).forEach(add),
+            removeEnchantment: type => {
+                stack.enchantments = held().filter(on => on.type.id !== namespaced(type));
+            },
+            removeAllEnchantments: () => {
+                stack.enchantments = [];
+            },
+        };
+    }
+
+    /** A colour a pack dyes the stack is answered back, and nothing carries it into the world. */
+    #dyeable(name, dyeable) {
+        if (dyeable === undefined) return undefined;
+
+        const stack = this;
+        return {
+            typeId: name,
+            defaultColor: { ...dyeable.defaultColor },
+            get color() {
+                return stack.dyeColor ?? { ...dyeable.defaultColor };
+            },
+            set color(value) {
+                stack.dyeColor = value;
+                unsupported("ItemDyeableComponent.color");
+            },
+        };
+    }
+
+    /** Which effect the potion carries is written on the stack in the world, not on its type. */
+    #potion(name, potion) {
+        if (potion === undefined) return undefined;
+
+        return {
+            typeId: name,
+            potionDeliveryType: Object.freeze({ id: potion.potionDeliveryType }),
+            get potionEffectType() {
+                return unsupported("ItemPotionComponent.potionEffectType");
+            },
+        };
     }
 
     getComponents() {
-        const durability = this.getComponent("minecraft:durability");
-        return durability === undefined ? [] : [durability];
+        return itemComponents
+            .map(name => this.getComponent(name))
+            .filter(component => component !== undefined);
     }
 
     hasComponent(component) {
@@ -270,7 +720,7 @@ export class ItemStack {
     }
 
     hasTag(tag) {
-        return list(bridge.itemTags(this.typeId)).includes(tag);
+        return this.getTags().includes(namespaced(tag));
     }
 
     getDynamicProperty(identifier) {
@@ -305,7 +755,7 @@ export class ItemStack {
 
     /** Whether the two carry the same item and the same extra data, however many each holds. */
     isStackableWith(itemStack) {
-        return itemStack !== undefined && this.typeId === itemStack.typeId
+        return itemStack !== undefined && this.isStackable && this.typeId === itemStack.typeId
             && (this.nameTag ?? "") === (itemStack.nameTag ?? "")
             && (this.damage ?? 0) === (itemStack.damage ?? 0)
             && JSON.stringify(this.getLore()) === JSON.stringify(itemStack.getLore?.() ?? [])
@@ -396,8 +846,34 @@ export class Block {
         return bridge.blocks.redstonePower(this.dimension.id, this.x, this.y, this.z) ?? undefined;
     }
 
+    getLightLevel() {
+        return bridge.worlds.lightLevel(this.dimension.id, this.x, this.y, this.z);
+    }
+
+    getSkyLightLevel() {
+        return bridge.worlds.skyLightLevel(this.dimension.id, this.x, this.y, this.z);
+    }
+
     canContainLiquid() {
         return bridge.blocks.canContainLiquid(this.typeId);
+    }
+
+    isLiquidBlocking() {
+        return this.permutation.isLiquidBlocking();
+    }
+
+    canBeDestroyedByLiquidSpread() {
+        return this.permutation.canBeDestroyedByLiquidSpread();
+    }
+
+    liquidSpreadCausesSpawn() {
+        return this.permutation.liquidSpreadCausesSpawn();
+    }
+
+    /** The direction the liquid comes from, which is the face of this block it arrives at. */
+    liquidCanFlowFromDirection(liquidType, flowDirection) {
+        return bridge.blocks.liquidCanFlowFrom(this.dimension.id, this.x, this.y, this.z,
+            flowDirection ?? null);
     }
 
     /** A face names where the block would go; without one it would replace this block. */
@@ -448,31 +924,136 @@ export class Block {
         bridge.blocks.setWaterlogged(this.dimension.id, this.x, this.y, this.z, waterlogged === true);
     }
 
+    /** Undefined for a block that has no such component; one this mod cannot build is reported. */
     getComponent(component) {
         const name = normaliseComponent(component);
-        if (name === "minecraft:movable") return this.#movable();
-        return unsupported("Block.getComponent(" + name + ")");
+        const build = BLOCK_COMPONENTS[name];
+        return build === undefined ? unsupported("Block.getComponent(" + name + ")") : build(this);
     }
 
     getComponents() {
-        return [this.#movable()];
+        return Object.values(BLOCK_COMPONENTS)
+            .map(build => build(this))
+            .filter(component => component !== undefined);
     }
 
     hasComponent(component) {
         const name = normaliseComponent(component);
-        if (name === "minecraft:movable") return true;
         if (name === "minecraft:inventory") {
             return bridge.blocks.hasContainer(this.dimension.id, this.x, this.y, this.z);
         }
-        unsupported("Block.hasComponent(" + name + ")");
-        return false;
-    }
 
-    #movable() {
-        const movement = JSON.parse(bridge.blocks.movement(this.dimension.id, this.x, this.y, this.z));
-        return { typeId: "minecraft:movable", block: this, ...movement };
+        const build = BLOCK_COMPONENTS[name];
+        if (build === undefined) {
+            unsupported("Block.hasComponent(" + name + ")");
+            return false;
+        }
+        return build(this) !== undefined;
     }
 }
+
+// Where a block stands, as the four arguments every component reader takes.
+function blockAt(block) {
+    return [block.dimension.id, block.x, block.y, block.z];
+}
+
+/** The bridge answers null for a block that does not carry the component, and JSON for one that does. */
+function blockComponent(state) {
+    return state === null ? undefined : JSON.parse(state);
+}
+
+function movableComponent(block) {
+    const movement = blockComponent(bridge.blocks.movement(...blockAt(block)));
+    return { typeId: "minecraft:movable", block, ...movement };
+}
+
+/**
+ * The sign a pack writes to, reading the block again for every answer.
+ *
+ * A pack holds a component and expects it to follow the sign, so nothing here is a copy taken when
+ * the component was handed out. A side is the front unless the back was asked for by name.
+ */
+function signComponent(block) {
+    const read = () => blockComponent(bridge.blocks.sign(...blockAt(block)));
+    if (read() === undefined) return undefined;
+
+    const isFront = side => side !== SignSide.Back;
+    const text = side => read()?.[isFront(side) ? "front" : "back"];
+    return {
+        typeId: "minecraft:sign",
+        block,
+        get isWaxed() {
+            return read()?.isWaxed === true;
+        },
+        getText: side => text(side)?.text,
+        getRawText: side => ({ rawtext: [{ text: text(side)?.text ?? "" }] }),
+        getTextDyeColor: side => text(side)?.color,
+        setText: (message, side) =>
+            bridge.blocks.setSignText(...blockAt(block), isFront(side), rawText(message)),
+        setTextDyeColor: (color, side) =>
+            bridge.blocks.setSignDye(...blockAt(block), isFront(side), color ?? null),
+        setWaxed: waxed => bridge.blocks.setSignWaxed(...blockAt(block), waxed === true),
+    };
+}
+
+function pistonComponent(block) {
+    const read = () => blockComponent(bridge.blocks.piston(...blockAt(block)));
+    if (read() === undefined) return undefined;
+
+    const attached = () => (read()?.attached ?? []).map(vector);
+    return {
+        typeId: "minecraft:piston",
+        block,
+        get isMoving() {
+            return read()?.isMoving === true;
+        },
+        get state() {
+            return read()?.state;
+        },
+        getAttachedBlocksLocations: attached,
+        getAttachedBlocks: () => attached().map(location => block.dimension.getBlock(location))
+            .filter(found => found !== undefined),
+    };
+}
+
+/** Java gives a block one map colour, so the tinted colour is that same colour untouched. */
+function mapColorComponent(block) {
+    const colour = blockComponent(bridge.blocks.mapColour(...blockAt(block)));
+    if (colour === undefined) return undefined;
+
+    return {
+        typeId: "minecraft:map_color",
+        block,
+        color: colour,
+        tintedColor: colour,
+        tintMethod: TintMethod.None,
+    };
+}
+
+function redstoneProducerComponent(block) {
+    const read = () => blockComponent(bridge.blocks.redstoneProducer(...blockAt(block)));
+    if (read() === undefined) return undefined;
+
+    return {
+        typeId: "minecraft:redstone_producer",
+        block,
+        get power() {
+            return read()?.power ?? 0;
+        },
+        getConnectedFaces: () => read()?.connectedFaces ?? [],
+        getStronglyPoweredFace: () => read()?.stronglyPoweredFace ?? undefined,
+    };
+}
+
+// Every component this mod answers for a block, by the name a pack asks for it under. A builder
+// hands back undefined for a block that does not carry its component, which is what Bedrock does.
+const BLOCK_COMPONENTS = {
+    "minecraft:movable": movableComponent,
+    "minecraft:sign": signComponent,
+    "minecraft:piston": pistonComponent,
+    "minecraft:map_color": mapColorComponent,
+    "minecraft:redstone_producer": redstoneProducerComponent,
+};
 
 // Component classes. A pack imports these to name a type, and the objects `getComponent` hands back
 // are plain objects, so these exist to satisfy the import and any `instanceof` written against them.
@@ -563,7 +1144,7 @@ export class ContainerSlot {
         const held = this.#read();
         if (held === undefined) return;
         change(held);
-        this.#write(held);
+        bridge.containers.editItem(this.#handle, this.#slot, itemJson(held));
     }
 
     get isValid() {
@@ -823,6 +1404,113 @@ export class EffectType {
         return this.id.startsWith("minecraft:") ? this.id.slice("minecraft:".length) : this.id;
     }
 }
+
+// The static lookup tables, each a view of one of the game's registries, so what a pack finds is
+// what this game has. Bedrock writes a vanilla id without its namespace, and every id handed back
+// carries one.
+
+export const EffectTypes = Object.freeze({
+    get(identifier) {
+        return bridge.registries.hasEffectType(identifier)
+            ? new EffectType(namespaced(identifier)) : undefined;
+    },
+
+    getAll() {
+        return list(bridge.registries.effectTypes()).map(id => new EffectType(id));
+    },
+});
+
+export class EntityType {
+    constructor(fields) {
+        this.id = fields.id;
+        this.localizationKey = fields.localizationKey;
+    }
+}
+
+export const EntityTypes = Object.freeze({
+    get(identifier) {
+        const found = bridge.registries.entityType(identifier);
+        return found === null ? undefined : new EntityType(JSON.parse(found));
+    },
+
+    getAll() {
+        return JSON.parse(bridge.registries.entityTypes()).map(fields => new EntityType(fields));
+    },
+});
+
+/** A pack may build one of these itself, which is why an id nothing answers to is an error here. */
+export class EnchantmentType {
+    constructor(enchantmentId) {
+        const found = bridge.registries.enchantment(enchantmentId);
+        if (found === null) {
+            throw new EnchantmentTypeUnknownIdError("No enchantment named " + namespaced(enchantmentId));
+        }
+
+        const fields = JSON.parse(found);
+        this.id = fields.id;
+        this.maxLevel = fields.maxLevel;
+    }
+}
+
+export const EnchantmentTypes = Object.freeze({
+    get(enchantmentId) {
+        return bridge.registries.enchantment(enchantmentId) === null
+            ? undefined : new EnchantmentType(enchantmentId);
+    },
+
+    getAll() {
+        return JSON.parse(bridge.registries.enchantments()).map(fields => new EnchantmentType(fields.id));
+    },
+});
+
+/** An instant effect has no duration, so `durationTicks` is absent on one instead of zero. */
+export class PotionEffectType {
+    constructor(fields) {
+        this.id = fields.id;
+        this.durationTicks = fields.durationTicks;
+    }
+}
+
+export const Potions = Object.freeze({
+    getEffectType(potionEffectId) {
+        const found = bridge.registries.potionEffectType(potionEffectId);
+        return found === null ? undefined : new PotionEffectType(JSON.parse(found));
+    },
+
+    getAllEffectTypes() {
+        return JSON.parse(bridge.registries.potionEffectTypes()).map(fields => new PotionEffectType(fields));
+    },
+
+    // Java has no registry of potion delivery shapes: a drunk, splash or lingering potion is three
+    // items. That leaves nothing to answer a delivery type with, and nothing for `resolve` to build.
+    getDeliveryType() {
+        return unsupported("Potions.getDeliveryType");
+    },
+
+    getAllDeliveryTypes() {
+        return unsupported("Potions.getAllDeliveryTypes");
+    },
+
+    resolve() {
+        return unsupported("Potions.resolve");
+    },
+});
+
+export class BiomeType {
+    constructor(id) {
+        this.id = id;
+    }
+}
+
+export const BiomeTypes = Object.freeze({
+    get(typeName) {
+        return bridge.registries.hasBiomeType(typeName) ? new BiomeType(namespaced(typeName)) : undefined;
+    },
+
+    getAll() {
+        return list(bridge.registries.biomeTypes()).map(id => new BiomeType(id));
+    },
+});
 
 export class EntityQueryOptions {
 }
@@ -1197,13 +1885,47 @@ export class Player extends Entity {
     // What follows describes the Bedrock client itself: the camera it draws through, the device it
     // runs on, the buttons held on it and the parts of its heads-up display. Java Edition's server
     // is told none of it, so each of these reports itself rather than answering something made up.
+    //
+    // The three that Bedrock hands back as an object are answered with one whose every member
+    // reports, because a pack reaching through `player.camera.setCamera(...)` for a feature Java has
+    // none of should cost that call and not the tick a TypeError would end.
 
     get camera() {
-        return unsupported("Player.camera");
+        return {
+            isValid: true,
+            attachToEntity() {
+                unsupported("Camera.attachToEntity");
+            },
+            clear() {
+                unsupported("Camera.clear");
+            },
+            fade() {
+                unsupported("Camera.fade");
+            },
+            playAnimation() {
+                unsupported("Camera.playAnimation");
+            },
+            setCamera() {
+                unsupported("Camera.setCamera");
+            },
+            setDefaultCamera() {
+                unsupported("Camera.setDefaultCamera");
+            },
+            setFov() {
+                unsupported("Camera.setFov");
+            },
+        };
     }
 
     get clientSystemInfo() {
-        return unsupported("Player.clientSystemInfo");
+        return {
+            get maxRenderDistance() {
+                return unsupported("ClientSystemInfo.maxRenderDistance");
+            },
+            get platformType() {
+                return unsupported("ClientSystemInfo.platformType");
+            },
+        };
     }
 
     get graphicsMode() {
@@ -1211,11 +1933,33 @@ export class Player extends Entity {
     }
 
     get inputInfo() {
-        return unsupported("Player.inputInfo");
+        return {
+            get lastInputModeUsed() {
+                return unsupported("InputInfo.lastInputModeUsed");
+            },
+            get touchOnlyAffectsHotbar() {
+                return unsupported("InputInfo.touchOnlyAffectsHotbar");
+            },
+            getButtonState() {
+                return unsupported("InputInfo.getButtonState");
+            },
+            getMovementVector() {
+                unsupported("InputInfo.getMovementVector");
+                return { x: 0, y: 0 };
+            },
+        };
     }
 
     get inputPermissions() {
-        return unsupported("Player.inputPermissions");
+        return {
+            isPermissionCategoryEnabled() {
+                unsupported("PlayerInputPermissions.isPermissionCategoryEnabled");
+                return true;
+            },
+            setPermissionCategory() {
+                unsupported("PlayerInputPermissions.setPermissionCategory");
+            },
+        };
     }
 
     get isEmoting() {
@@ -1290,7 +2034,10 @@ export class Player extends Entity {
         bridge.setPlayerGameMode(this.id, mode ?? bridge.players.defaultGameMode());
     }
 
+    // Sent down this player's own connection, so nobody else hears it.
+
     playSound(soundId, options) {
+        if (options?.location !== undefined) unsupported("PlayerSoundOptions.location");
         bridge.playSoundTo(this.id, soundId, options?.volume ?? 1, options?.pitch ?? 1);
     }
 
@@ -1460,7 +2207,6 @@ function itemFrom(handle) {
     stack.nameTag = handle.nameTag === "" ? undefined : handle.nameTag;
     stack.damage = handle.damage ?? 0;
     stack.maxDurability = handle.maxDurability ?? 0;
-    stack.maxAmount = handle.maxAmount ?? 64;
     stack.lore = handle.lore ?? [];
     stack.properties = handle.properties ?? {};
     return stack;
@@ -1520,13 +2266,150 @@ export class Dimension {
         return bridge.blocks.exists(this.id, x, y, z) ? new Block(this.id, x, y, z) : undefined;
     }
 
-    getTopmostBlock(location) {
-        const y = bridge.topmostBlockY(this.id, Math.floor(location.x), Math.floor(location.z));
-        return y === null ? undefined : new Block(this.id, Math.floor(location.x), y, Math.floor(location.z));
+    getTopmostBlock(locationXZ, minHeight) {
+        const x = Math.floor(locationXZ.x);
+        const z = Math.floor(locationXZ.z);
+        const from = minHeight === undefined ? this.heightRange.max : Math.floor(minHeight);
+        const y = bridge.worlds.topmostBlockY(this.id, x, z, from);
+        return y === null ? undefined : new Block(this.id, x, y, z);
     }
 
-    getBlockFromRay() {
-        return unsupported("Dimension.getBlockFromRay");
+    getBlockAbove(location, options) {
+        return this.#blockAt(bridge.worlds.blockAbove(this.id, Math.floor(location.x),
+            Math.floor(location.y), Math.floor(location.z), JSON.stringify(options ?? {})));
+    }
+
+    getBlockBelow(location, options) {
+        return this.#blockAt(bridge.worlds.blockBelow(this.id, Math.floor(location.x),
+            Math.floor(location.y), Math.floor(location.z), JSON.stringify(options ?? {})));
+    }
+
+    #blockAt(triple) {
+        return triple === null ? undefined : new Block(this.id, triple[0], triple[1], triple[2]);
+    }
+
+    getBlockFromRay(location, direction, options) {
+        const found = bridge.worlds.blockFromRay(this.id, location.x, location.y, location.z,
+            direction.x, direction.y, direction.z, JSON.stringify(options ?? {}));
+        if (found === null) return undefined;
+
+        const hit = JSON.parse(found);
+        return {
+            block: new Block(this.id, hit.x, hit.y, hit.z),
+            face: hit.face,
+            faceLocation: { x: hit.faceX, y: hit.faceY, z: hit.faceZ },
+        };
+    }
+
+    /** The entity filter is applied here, where the query a pack wrote is already understood. */
+    getEntitiesFromRay(location, direction, options) {
+        return JSON.parse(bridge.worlds.entitiesFromRay(this.id, location.x, location.y, location.z,
+            direction.x, direction.y, direction.z, JSON.stringify(options ?? {})))
+            .map(hit => ({ entity: entityFor(hit.entity), distance: hit.distance }))
+            .filter(hit => hit.entity.matches(options ?? {}));
+    }
+
+    createExplosion(location, radius, options) {
+        return bridge.worlds.createExplosion(this.id, location.x, location.y, location.z, radius,
+            JSON.stringify({ ...(options ?? {}), source: options?.source?.id }));
+    }
+
+    /**
+     * The positions a fill wrote, as the volume Bedrock hands back.
+     *
+     * The bridge fills with a block type's defaults, so filling with a permutation asks which
+     * positions the fill would take and writes each of them with the states the pack chose.
+     */
+    fillBlocks(volume, block, options) {
+        const states = block instanceof BlockPermutation ? block.getAllStates() : undefined;
+        const written = [];
+        for (const [min, max] of boxesOf(volume)) {
+            const found = states === undefined
+                ? bridge.worlds.fillBlocks(this.id, min.x, min.y, min.z, max.x, max.y, max.z,
+                    typeIdOf(block), JSON.stringify(options ?? {}))
+                : bridge.worlds.getBlocks(this.id, min.x, min.y, min.z, max.x, max.y, max.z,
+                    JSON.stringify(options?.blockFilter ?? {}), options?.ignoreChunkBoundErrors === true);
+            written.push(...positionsIn(found));
+        }
+
+        if (states !== undefined) {
+            const chosen = JSON.stringify(states);
+            for (const at of written) {
+                bridge.blocks.setPermutation(this.id, at.x, at.y, at.z, block.type.id, chosen);
+            }
+        }
+        return new ListBlockVolume(written);
+    }
+
+    getBlocks(volume, filter, allowUnloadedChunks) {
+        const found = [];
+        for (const [min, max] of boxesOf(volume)) {
+            found.push(...positionsIn(bridge.worlds.getBlocks(this.id, min.x, min.y, min.z,
+                max.x, max.y, max.z, JSON.stringify(filter ?? {}), allowUnloadedChunks === true)));
+        }
+        return new ListBlockVolume(found);
+    }
+
+    containsBlock(volume, filter, allowUnloadedChunks) {
+        return boxesOf(volume).some(([min, max]) => bridge.worlds.containsBlock(this.id,
+            min.x, min.y, min.z, max.x, max.y, max.z,
+            JSON.stringify(filter ?? {}), allowUnloadedChunks === true));
+    }
+
+    /** A volume of scattered positions is one box each, and a superset is answered by any of them. */
+    containsBiomes(volume, biomeFilter, isSuperset) {
+        const boxes = boxesOf(volume);
+        const answers = ([min, max]) => bridge.worlds.containsBiomes(this.id, min.x, min.y, min.z,
+            max.x, max.y, max.z, JSON.stringify(biomeFilter ?? {}), isSuperset === true);
+        return isSuperset === true ? boxes.some(answers) : boxes.every(answers);
+    }
+
+    getBiome(location) {
+        const id = bridge.worlds.biome(this.id, Math.floor(location.x), Math.floor(location.y),
+            Math.floor(location.z));
+        return id === null ? undefined : new BiomeType(id);
+    }
+
+    getLightLevel(location) {
+        return bridge.worlds.lightLevel(this.id, Math.floor(location.x), Math.floor(location.y),
+            Math.floor(location.z));
+    }
+
+    getSkyLightLevel(location) {
+        return bridge.worlds.skyLightLevel(this.id, Math.floor(location.x), Math.floor(location.y),
+            Math.floor(location.z));
+    }
+
+    setWeather(weatherType, duration) {
+        bridge.worlds.setWeather(this.id, weatherType, duration ?? 0);
+    }
+
+    getWeather() {
+        return bridge.worlds.weather(this.id);
+    }
+
+    placeFeature(featureName, location, shouldThrow) {
+        const placed = bridge.worlds.placeFeature(this.id, featureName, Math.floor(location.x),
+            Math.floor(location.y), Math.floor(location.z));
+        if (!placed && shouldThrow === true) throw new Error("Could not place feature " + featureName);
+        return placed;
+    }
+
+    placeFeatureRule(featureRuleName, location) {
+        return bridge.worlds.placeFeatureRule(this.id, featureRuleName, Math.floor(location.x),
+            Math.floor(location.y), Math.floor(location.z));
+    }
+
+    /** A dimension's particle reaches everybody in it, and the bridge sends one to one player. */
+    spawnParticle(effectName, location, molangVariables) {
+        if (molangVariables !== undefined) unsupported("Dimension.spawnParticle molangVariables");
+        for (const player of this.getPlayers()) {
+            bridge.players.spawnParticle(player.id, effectName, location.x, location.y, location.z);
+        }
+    }
+
+    get localizationKey() {
+        return unsupported("Dimension.localizationKey");
     }
 
     isChunkLoaded(location) {
@@ -1543,9 +2426,11 @@ export class Dimension {
             Math.floor(location.z), permutation.type.id, JSON.stringify(permutation.getAllStates()));
     }
 
-    spawnEntity(typeId, location) {
-        const id = bridge.spawnEntity(this.id, typeId, location.x, location.y, location.z);
-        if (id === null) throw new Error("Could not spawn " + typeId);
+    spawnEntity(identifier, location, options) {
+        const type = typeIdOf(identifier);
+        const id = bridge.worlds.spawnEntity(this.id, type, location.x, location.y, location.z,
+            JSON.stringify(options ?? {}));
+        if (id === null) throw new Error("Could not spawn " + type);
         return entityFor(id);
     }
 
@@ -1742,6 +2627,14 @@ export class World {
         return bridge.isHardcore();
     }
 
+    get seed() {
+        return bridge.worlds.seed();
+    }
+
+    get tickingAreaManager() {
+        return unsupported("World.tickingAreaManager");
+    }
+
     getDimension(id) {
         const full = id.includes(":") ? id : "minecraft:" + id;
         if (!list(bridge.dimensionIds()).includes(full)) throw new Error("Unknown dimension " + id);
@@ -1786,6 +2679,10 @@ export class World {
         return bridge.absoluteTime();
     }
 
+    setAbsoluteTime(absoluteTime) {
+        bridge.worlds.setAbsoluteTime(Math.floor(absoluteTime));
+    }
+
     getMoonPhase() {
         return bridge.moonPhase();
     }
@@ -1794,12 +2691,45 @@ export class World {
         return vector(bridge.defaultSpawnLocation());
     }
 
+    setDefaultSpawnLocation(spawnLocation) {
+        bridge.worlds.setDefaultSpawnLocation(Math.floor(spawnLocation.x), Math.floor(spawnLocation.y),
+            Math.floor(spawnLocation.z));
+    }
+
+    getDifficulty() {
+        return bridge.worlds.difficulty();
+    }
+
+    setDifficulty(difficulty) {
+        bridge.worlds.setDifficulty(difficulty);
+    }
+
+    playMusic(trackId, musicOptions) {
+        bridge.worlds.playMusic(trackId, JSON.stringify(musicOptions ?? {}), false);
+    }
+
+    queueMusic(trackId, musicOptions) {
+        bridge.worlds.playMusic(trackId, JSON.stringify(musicOptions ?? {}), true);
+    }
+
+    stopMusic() {
+        bridge.worlds.stopMusic();
+    }
+
+    getLootTableManager() {
+        return unsupported("World.getLootTableManager");
+    }
+
     getDynamicProperty(name) {
         return bridge.worldDynamicProperty(name);
     }
 
     setDynamicProperty(name, value) {
         bridge.setWorldDynamicProperty(name, value === undefined ? null : value);
+    }
+
+    setDynamicProperties(values) {
+        Object.entries(values ?? {}).forEach(([name, value]) => this.setDynamicProperty(name, value));
     }
 
     getDynamicPropertyIds() {
@@ -2059,6 +2989,10 @@ class ScriptSystem {
         return new Promise(resolve => this.runTimeout(resolve, ticks));
     }
 
+    sendScriptEvent(id, message) {
+        bridge.worlds.sendScriptEvent(id, message);
+    }
+
     /** Called once per server tick from Java. */
     pump(tick) {
         for (const [handle, run] of [...this.#runs]) {
@@ -2262,7 +3196,6 @@ export const TicksPerDay = 24000;
 export const TicksPerSecond = 20;
 
 /** Named so a pack can import one to describe a value; the game answers what they describe. */
-export class BiomeType {}
 export class BlockComponent {}
 export class BlockComponentBlockBreakEvent {}
 export class BlockComponentEntityEvent {}
@@ -2281,19 +3214,17 @@ export class BlockCustomComponentInstance {}
 export class BlockEvent {}
 export class BlockExplodeAfterEvent {}
 export class BlockExplodeAfterEventSignal {}
-export class BlockFluidContainerComponent {}
-export class BlockInventoryComponent {}
-export class BlockLocationIterator {}
-export class BlockMapColorComponent {}
-export class BlockMovableComponent {}
-export class BlockPistonComponent {}
-export class BlockPrecipitationInteractionsComponent {}
-export class BlockRecordPlayerComponent {}
-export class BlockRedstoneProducerComponent {}
-export class BlockSignComponent {}
+export class BlockFluidContainerComponent { static componentId = "minecraft:fluid_container"; }
+export class BlockInventoryComponent { static componentId = "minecraft:inventory"; }
+export class BlockMapColorComponent { static componentId = "minecraft:map_color"; }
+export class BlockMovableComponent { static componentId = "minecraft:movable"; }
+export class BlockPistonComponent { static componentId = "minecraft:piston"; }
+export class BlockPrecipitationInteractionsComponent { static componentId = "minecraft:precipitation_interactions"; }
+export class BlockRecordPlayerComponent { static componentId = "minecraft:record_player"; }
+export class BlockRedstoneProducerComponent { static componentId = "minecraft:redstone_producer"; }
+export class BlockSignComponent { static componentId = "minecraft:sign"; }
 export class BlockStateType {}
 export class BlockType {}
-export class BlockVolumeBase {}
 export class ButtonPushAfterEvent {}
 export class ButtonPushAfterEventSignal {}
 export class Camera {}
@@ -2312,14 +3243,11 @@ export class EffectAddAfterEvent {}
 export class EffectAddAfterEventSignal {}
 export class EffectAddBeforeEvent {}
 export class EffectAddBeforeEventSignal {}
-export class EffectTypes {}
 export class EmptyLootItem {}
 export class EnchantInfo {}
 export class EnchantRandomEquipmentFunction {}
 export class EnchantRandomlyFunction {}
 export class EnchantWithLevelsFunction {}
-export class EnchantmentType {}
-export class EnchantmentTypes {}
 export class EntityAddRiderComponent {}
 export class EntityAgeableComponent {}
 export class EntityAttributeComponent {}
@@ -2409,8 +3337,6 @@ export class EntitySpawnAfterEventSignal {}
 export class EntityStrengthComponent {}
 export class EntityTameMountComponent {}
 export class EntityTameableComponent {}
-export class EntityType {}
-export class EntityTypes {}
 export class EntityUnderwaterMovementComponent {}
 export class EntityWantsJockeyComponent {}
 export class ExplorationMapFunction {}
@@ -2456,7 +3382,6 @@ export class ItemStopUseAfterEventSignal {}
 export class ItemStopUseOnAfterEvent {}
 export class ItemStopUseOnAfterEventSignal {}
 export class ItemType {}
-export class ItemTypes {}
 export class ItemUseAfterEvent {}
 export class ItemUseAfterEventSignal {}
 export class ItemUseBeforeEvent {}
@@ -2468,7 +3393,6 @@ export class KilledByPlayerOrPetsCondition {}
 export class LeverActionAfterEvent {}
 export class LeverActionAfterEventSignal {}
 export class LinearSpline {}
-export class ListBlockVolume {}
 export class LootItem {}
 export class LootItemCondition {}
 export class LootItemFunction {}
@@ -2530,8 +3454,6 @@ export class PlayerSpawnAfterEventSignal {}
 export class PlayerSwingStartAfterEvent {}
 export class PlayerSwingStartAfterEventSignal {}
 export class PotionDeliveryType {}
-export class PotionEffectType {}
-export class Potions {}
 export class PressurePlatePopAfterEvent {}
 export class PressurePlatePopAfterEventSignal {}
 export class PressurePlatePushAfterEvent {}

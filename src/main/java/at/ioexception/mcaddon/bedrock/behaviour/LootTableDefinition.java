@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.bedrock.behaviour;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.pack.BedrockPack;
+import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -77,7 +78,10 @@ public record LootTableDefinition(String path, JsonObject java) {
                 entry.addProperty("type", "minecraft:loot_table");
                 entry.addProperty("value", name);
             }
-            default -> entry.addProperty("type", "minecraft:empty");
+            default -> {
+                AddonEntities.unsupported("loot entry " + type);
+                entry.addProperty("type", "minecraft:empty");
+            }
         }
 
         if (bedrock.has("weight")) entry.add("weight", bedrock.get("weight"));
@@ -109,6 +113,7 @@ public record LootTableDefinition(String path, JsonObject java) {
             case "enchant_randomly" -> function.addProperty("function", "minecraft:enchant_randomly");
             case "furnace_smelt" -> function.addProperty("function", "minecraft:furnace_smelt");
             default -> {
+                AddonEntities.unsupported("loot function " + name);
                 return null;
             }
         }

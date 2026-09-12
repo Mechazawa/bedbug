@@ -272,7 +272,9 @@ public final class Items extends Surface {
      */
     private void describePotion(JsonObject into, String itemId) {
         String delivery = switch (pathOf(itemId)) {
-            case "potion", "splash_potion", "lingering_potion" -> pathOf(itemId);
+            case "potion" -> "regular";
+            case "splash_potion" -> "splash";
+            case "lingering_potion" -> "lingering";
             default -> null;
         };
         if (delivery == null) return;

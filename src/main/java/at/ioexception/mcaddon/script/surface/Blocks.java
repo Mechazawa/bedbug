@@ -10,28 +10,39 @@ import com.google.gson.JsonPrimitive;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
+import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.SignBlockEntity;
+import net.minecraft.world.level.block.entity.SignText;
+import net.minecraft.world.level.block.piston.PistonBaseBlock;
+import net.minecraft.world.level.block.piston.PistonMovingBlockEntity;
+import net.minecraft.world.level.block.piston.PistonStructureResolver;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.world.level.material.MapColor;
 import org.graalvm.polyglot.HostAccess;
 
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
- * Blocks, block permutations and the two catalogues a pack looks a block up in.
+ * Blocks, block permutations, the components a block carries and the two catalogues a pack looks a
+ * block up in.
  *
  * A permutation crosses the boundary as a type id and a JSON object of states, and every state value
  * keeps its Bedrock type: a boolean property reads back as a boolean and a numbered one as a number,
@@ -56,7 +67,7 @@ public final class Blocks extends Surface {
     }
 
     /**
-     * The states a type id and a partial set of states name, filled out with the block's defaults.
+     * The type and states a type id and a partial set of states name, over the block's defaults.
      *
      * Null when this game has no block by that name, which the guest raises as the error Bedrock's
      * `BlockPermutation.resolve` raises.
@@ -65,7 +76,18 @@ public final class Blocks extends Surface {
     public String resolve(String typeId, String statesJson) {
         Block block = block(typeId);
         if (block == null) return null;
-        return statesOf(withStates(block.defaultBlockState(), statesJson, typeId)).toString();
+
+        JsonObject permutation = new JsonObject();
+        permutation.addProperty("typeId", idOf(block));
+        permutation.add("states", statesOf(withStates(block.defaultBlockState(), statesJson, typeId)));
+        return permutation.toString();
+    }
+
+    /** The registry's spelling of a block name, so a pack writing `dirt` names `minecraft:dirt`. */
+    @HostAccess.Export
+    public String canonicalId(String typeId) {
+        Block block = block(typeId);
+        return block == null ? null : idOf(block);
     }
 
     @HostAccess.Export
@@ -147,6 +169,39 @@ public final class Blocks extends Surface {
         return block != null && block.defaultBlockState().hasProperty(BlockStateProperties.WATERLOGGED);
     }
 
+    /**
+     * Whether liquid flowing in takes the space and leaves the block as an item on the floor.
+     *
+     * Java breaks such a block and drops it in one step, so this is the answer to both of Bedrock's
+     * questions about a block liquid reaches. A block the liquid can sit inside keeps its place, and
+     * that is the waterlogged state.
+     */
+    @HostAccess.Export
+    public boolean destroyedByLiquid(String typeId, String statesJson) {
+        BlockState state = permutation(typeId, statesJson);
+        return state != null && !state.isAir() && !state.blocksMotion()
+            && !state.hasProperty(BlockStateProperties.WATERLOGGED);
+    }
+
+    /** Whether liquid stops at the type, which in Java is a block a fluid cannot occupy. */
+    @HostAccess.Export
+    public boolean isLiquidBlocking(String typeId, String statesJson) {
+        BlockState state = permutation(typeId, statesJson);
+        return state != null && state.blocksMotion()
+            && !state.hasProperty(BlockStateProperties.WATERLOGGED);
+    }
+
+    /** Whether liquid arriving at a face gets in, which a face solid enough to build on stops. */
+    @HostAccess.Export
+    public boolean liquidCanFlowFrom(String dimension, int x, int y, int z, String face) {
+        ServerLevel level = level(dimension);
+        Direction side = direction(face);
+        if (level == null || side == null) return false;
+
+        BlockPos position = new BlockPos(x, y, z);
+        return !level.getBlockState(position).isFaceSturdy(level, position, side);
+    }
+
     /** The tags the block is in, under Java's names for them: a pack reading these sees `wool`. */
     @HostAccess.Export
     public String[] tags(String typeId) {
@@ -194,6 +249,120 @@ public final class Blocks extends Surface {
             default -> "Immovable";
         });
         component.addProperty("stickyType", sticky(state.getBlock()) ? "Same" : "None");
+        return component.toString();
+    }
+
+    /** Both sides of a sign and whether it is waxed, and null for a block that is not a sign. */
+    @HostAccess.Export
+    public String sign(String dimension, int x, int y, int z) {
+        SignBlockEntity sign = signAt(dimension, x, y, z);
+        if (sign == null) return null;
+
+        JsonObject component = new JsonObject();
+        component.addProperty("isWaxed", sign.isWaxed());
+        component.add("front", signSide(sign.getFrontText()));
+        component.add("back", signSide(sign.getBackText()));
+        return component.toString();
+    }
+
+    /** Writes a side of a sign, one line per newline, and drops what is past the fourth line. */
+    @HostAccess.Export
+    public void setSignText(String dimension, int x, int y, int z, boolean front, String text) {
+        SignBlockEntity sign = signAt(dimension, x, y, z);
+        if (sign == null) {
+            unsupported("BlockSignComponent.setText where there is no sign");
+            return;
+        }
+
+        String[] lines = (text == null ? "" : text).split("\n", -1);
+        sign.updateText(existing -> written(existing, lines), front);
+    }
+
+    @HostAccess.Export
+    public void setSignDye(String dimension, int x, int y, int z, boolean front, String colour) {
+        SignBlockEntity sign = signAt(dimension, x, y, z);
+        if (sign == null) return;
+
+        DyeColor dye = javaDye(colour);
+        sign.updateText(text -> text.setColor(dye), front);
+    }
+
+    @HostAccess.Export
+    public void setSignWaxed(String dimension, int x, int y, int z, boolean waxed) {
+        SignBlockEntity sign = signAt(dimension, x, y, z);
+        if (sign != null) sign.setWaxed(waxed);
+    }
+
+    /**
+     * A piston's arm and the blocks it carries, and null for a block that is not a piston.
+     *
+     * The blocks are the ones the arm would take with it from where it stands, which while it moves
+     * is what it has hold of.
+     */
+    @HostAccess.Export
+    public String piston(String dimension, int x, int y, int z) {
+        ServerLevel level = level(dimension);
+        if (level == null) return null;
+
+        BlockPos position = new BlockPos(x, y, z);
+        BlockState state = level.getBlockState(position);
+        if (!(state.getBlock() instanceof PistonBaseBlock)) return null;
+
+        Direction facing = state.getValue(BlockStateProperties.FACING);
+        boolean extended = state.getValue(PistonBaseBlock.EXTENDED);
+        Boolean extending = arm(level, position.relative(facing));
+
+        JsonObject component = new JsonObject();
+        component.addProperty("isMoving", extending != null);
+        component.addProperty("state", pistonState(extended, extending));
+        component.add("attached", pushed(level, position, facing, extended));
+        return component.toString();
+    }
+
+    /** The colour the block draws on a map, in the channels Bedrock reads a colour as. */
+    @HostAccess.Export
+    public String mapColour(String dimension, int x, int y, int z) {
+        ServerLevel level = level(dimension);
+        if (level == null) return null;
+
+        BlockPos position = new BlockPos(x, y, z);
+        MapColor colour = level.getBlockState(position).getMapColor(level, position);
+        if (colour == MapColor.NONE) return null;
+
+        JsonObject component = new JsonObject();
+        component.addProperty("red", (colour.col >> 16 & 0xFF) / 255f);
+        component.addProperty("green", (colour.col >> 8 & 0xFF) / 255f);
+        component.addProperty("blue", (colour.col & 0xFF) / 255f);
+        component.addProperty("alpha", 1f);
+        return component.toString();
+    }
+
+    /** What the block feeds the redstone around it, and null for a block that powers nothing. */
+    @HostAccess.Export
+    public String redstoneProducer(String dimension, int x, int y, int z) {
+        ServerLevel level = level(dimension);
+        if (level == null) return null;
+
+        BlockPos position = new BlockPos(x, y, z);
+        BlockState state = level.getBlockState(position);
+        if (!state.isSignalSource()) return null;
+
+        JsonArray connected = new JsonArray();
+        String strongest = null;
+        int power = 0;
+        for (Direction side : Direction.values()) {
+            int signal = state.getSignal(level, position, side);
+            power = Math.max(power, signal);
+            if (signal > 0) connected.add(bedrockFace(side));
+            if (strongest == null && state.getDirectSignal(level, position, side) > 0) {
+                strongest = bedrockFace(side);
+            }
+        }
+
+        JsonObject component = new JsonObject();
+        component.addProperty("power", power);
+        component.add("connectedFaces", connected);
+        component.addProperty("stronglyPoweredFace", strongest);
         return component.toString();
     }
 
@@ -306,6 +475,87 @@ public final class Blocks extends Surface {
         if (property instanceof BooleanProperty) return new JsonPrimitive(Boolean.valueOf(name));
         if (property instanceof IntegerProperty) return new JsonPrimitive(Integer.valueOf(name));
         return new JsonPrimitive(name);
+    }
+
+    private BlockState permutation(String typeId, String statesJson) {
+        Block block = block(typeId);
+        return block == null ? null : withStates(block.defaultBlockState(), statesJson, typeId);
+    }
+
+    private SignBlockEntity signAt(String dimension, int x, int y, int z) {
+        ServerLevel level = level(dimension);
+        if (level == null) return null;
+        return level.getBlockEntity(new BlockPos(x, y, z)) instanceof SignBlockEntity sign ? sign : null;
+    }
+
+    private static JsonObject signSide(SignText text) {
+        JsonObject side = new JsonObject();
+        side.addProperty("text", lines(text));
+        side.addProperty("color", bedrockDye(text.getColor()));
+        return side;
+    }
+
+    /** A side's four lines as one string, with the empty ones at the end left off. */
+    private static String lines(SignText text) {
+        return Arrays.stream(text.getMessages(false))
+            .map(Component::getString)
+            .collect(Collectors.joining("\n"))
+            .stripTrailing();
+    }
+
+    private static SignText written(SignText text, String[] lines) {
+        SignText written = text;
+        for (int i = 0; i < SignText.LINES; i++) {
+            written = written.setMessage(i, Component.literal(i < lines.length ? lines[i] : ""));
+        }
+        return written;
+    }
+
+    /** Bedrock's spelling of a dye colour, whose names run together and call light grey `Silver`. */
+    private static String bedrockDye(DyeColor dye) {
+        if (dye == DyeColor.LIGHT_GRAY) return "Silver";
+        return Arrays.stream(dye.getName().split("_"))
+            .map(word -> Character.toUpperCase(word.charAt(0)) + word.substring(1))
+            .collect(Collectors.joining());
+    }
+
+    private static DyeColor javaDye(String colour) {
+        if (colour == null) return DyeColor.BLACK;
+        if (colour.equals("Silver")) return DyeColor.LIGHT_GRAY;
+
+        String name = colour.replaceAll("(?<=.)([A-Z])", "_$1").toLowerCase(Locale.ROOT);
+        return DyeColor.byName(name, DyeColor.BLACK);
+    }
+
+    /** Whether the arm in front of a piston is moving out, and null while nothing is moving. */
+    private static Boolean arm(ServerLevel level, BlockPos head) {
+        return level.getBlockEntity(head) instanceof PistonMovingBlockEntity moving && moving.isSourcePiston()
+            ? moving.isExtending() : null;
+    }
+
+    private static String pistonState(boolean extended, Boolean extending) {
+        if (extending != null) return extending ? "Expanding" : "Retracting";
+        return extended ? "Expanded" : "Retracted";
+    }
+
+    private static JsonArray pushed(ServerLevel level, BlockPos piston, Direction facing, boolean extended) {
+        PistonStructureResolver resolver = new PistonStructureResolver(level, piston, facing, !extended);
+        JsonArray attached = new JsonArray();
+        if (!resolver.resolve()) return attached;
+
+        for (BlockPos position : resolver.getToPush()) {
+            JsonArray at = new JsonArray();
+            at.add(position.getX());
+            at.add(position.getY());
+            at.add(position.getZ());
+            attached.add(at);
+        }
+        return attached;
+    }
+
+    private static String bedrockFace(Direction side) {
+        String name = side.getName();
+        return Character.toUpperCase(name.charAt(0)) + name.substring(1);
     }
 
     private static Direction direction(String face) {

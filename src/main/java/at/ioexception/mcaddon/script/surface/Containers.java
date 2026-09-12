@@ -94,7 +94,22 @@ public final class Containers extends Surface {
     public void setItem(String handle, int slot, String itemJson) {
         Held held = held(handle);
         if (held == null || !held.holds(slot)) return;
-        held.container().setItem(slot, stack(itemJson));
+        held.container().setItem(slot, stack(itemJson, ItemStack.EMPTY));
+        held.changed();
+    }
+
+    /**
+     * Writes the values back onto the stack the slot already holds.
+     *
+     * A script changing one member of a slot sends the whole stack back, and the JSON carries only
+     * what Bedrock has a name for. Keeping the stack that is there leaves an enchantment, a trim or a
+     * shulker box's contents on an item whose count or lore a pack edited.
+     */
+    @HostAccess.Export
+    public void editItem(String handle, int slot, String itemJson) {
+        Held held = held(handle);
+        if (held == null || !held.holds(slot)) return;
+        held.container().setItem(slot, stack(itemJson, held.container().getItem(slot)));
         held.changed();
     }
 
@@ -104,7 +119,7 @@ public final class Containers extends Surface {
         Held held = held(handle);
         if (held == null) return null;
 
-        String left = json(insert(held, stack(itemJson)));
+        String left = json(insert(held, stack(itemJson, ItemStack.EMPTY)));
         held.changed();
         return left;
     }
@@ -122,7 +137,7 @@ public final class Containers extends Surface {
      *
      * A destination holding something else is swapped rather than written over, so no item is
      * destroyed by a move; a destination holding the same kind takes what fits and the rest stays
-     * where it was.
+     * where it was. An empty source slot moves nothing, so the destination keeps what it holds.
      */
     @HostAccess.Export
     public boolean moveItem(String handle, int fromSlot, int toSlot, String toHandle) {
@@ -131,6 +146,8 @@ public final class Containers extends Surface {
         if (from == null || to == null || !from.holds(fromSlot) || !to.holds(toSlot)) return false;
 
         ItemStack moving = from.container().getItem(fromSlot);
+        if (moving.isEmpty()) return false;
+
         ItemStack target = to.container().getItem(toSlot);
         if (!target.isEmpty() && !sameKind(moving, target)) return swap(from, fromSlot, to, toSlot);
 
@@ -275,7 +292,8 @@ public final class Containers extends Surface {
         return item.toString();
     }
 
-    private static ItemStack stack(String itemJson) {
+    /** The stack the JSON describes, built on `present` when that already holds the same item. */
+    private static ItemStack stack(String itemJson, ItemStack present) {
         if (itemJson == null || itemJson.isBlank()) return ItemStack.EMPTY;
 
         JsonObject item = JsonParser.parseString(itemJson).getAsJsonObject();
@@ -283,8 +301,9 @@ public final class Containers extends Surface {
         Item type = parsed == null ? null : BuiltInRegistries.ITEM.getOptional(parsed).orElse(null);
         if (type == null) return ItemStack.EMPTY;
 
-        ItemStack built = new ItemStack(type,
-            Math.max(1, item.has("amount") ? item.get("amount").getAsInt() : 1));
+        int amount = Math.max(1, item.has("amount") ? item.get("amount").getAsInt() : 1);
+        ItemStack built = present.is(type) ? present.copy() : new ItemStack(type, amount);
+        built.setCount(amount);
         if (item.has("damage")) built.setDamageValue(item.get("damage").getAsInt());
 
         String name = item.has("nameTag") && item.get("nameTag").isJsonPrimitive()
