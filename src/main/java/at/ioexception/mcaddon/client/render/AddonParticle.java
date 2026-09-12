@@ -9,8 +9,12 @@ import at.ioexception.mcaddon.bedrock.particle.ParticleDefinition;
 import at.ioexception.mcaddon.bedrock.particle.ParticleTint;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.particle.SingleQuadParticle;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import org.joml.Vector3f;
+
+import java.util.List;
 
 /**
  * One particle of a pack's own effect, moving and drawn the way the pack described it.
@@ -63,8 +67,12 @@ public class AddonParticle extends SingleQuadParticle {
         this.oRoll = this.roll;
 
         setParticleSpeed(dx, dy, dz);
-        this.hasPhysics = particle.collision() != null
-            && particle.collision().enabled().evaluate(environment).truthy();
+        ParticleDefinition.Particle.Collision collision = particle.collision();
+        this.hasPhysics = collision != null && collision.enabled().evaluate(environment).truthy();
+        if (hasPhysics) {
+            float radius = Math.max(0.01f, collision.radius().asFloat(environment));
+            setSize(radius * 2f, radius * 2f);
+        }
         this.friction = 1f;
         this.gravity = 0f;
 
@@ -92,6 +100,50 @@ public class AddonParticle extends SingleQuadParticle {
         spin += spinRate / 20f;
         roll = (float) Math.toRadians(spin);
         apply(age);
+
+        if (grounded()) return;
+        if (beyondKillPlane() || inWrongBlock()) remove();
+    }
+
+    /**
+     * What a collision does once the particle has touched something.
+     *
+     * Bedrock either ends the particle on contact or slows it and bounces it, and Java's own move
+     * has already stopped it against the block by the time this runs.
+     */
+    private boolean grounded() {
+        ParticleDefinition.Particle.Collision collision = definition.particle().collision();
+        if (collision == null || !onGround) return false;
+
+        if (collision.expireOnContact()) {
+            remove();
+            return true;
+        }
+
+        float drag = collision.drag().asFloat(environment);
+        float bounce = collision.restitution().asFloat(environment);
+        xd *= Math.max(0f, 1f - drag / 20f);
+        zd *= Math.max(0f, 1f - drag / 20f);
+        yd = Math.abs(yd) * bounce;
+        return false;
+    }
+
+    /** `particle_kill_plane` is a plane in the emitter's space, and anything past it is over. */
+    private boolean beyondKillPlane() {
+        ParticleDefinition.Particle.KillPlane plane = definition.particle().killPlane();
+        return plane != null
+            && plane.a() * x + plane.b() * y + plane.c() * z + plane.d() > 0;
+    }
+
+    /** `expire_if_in_blocks` and `expire_not_in_blocks`, which a pack uses to keep smoke indoors. */
+    private boolean inWrongBlock() {
+        List<String> inside = definition.particle().expireInBlocks();
+        List<String> outside = definition.particle().expireNotInBlocks();
+        if (inside.isEmpty() && outside.isEmpty()) return false;
+
+        String here = BuiltInRegistries.BLOCK
+            .getKey(level.getBlockState(BlockPos.containing(x, y, z)).getBlock()).toString();
+        return inside.contains(here) || (!outside.isEmpty() && !outside.contains(here));
     }
 
     /** Whether the pack says this one is finished, by its clock or by its own expression. */
@@ -259,6 +311,23 @@ public class AddonParticle extends SingleQuadParticle {
         float[] window = window();
         return window == null ? super.getV1() : across(window[3], super.getV0(), super.getV1());
     }
+
+    //? if >=1.21 {
+    /**
+     * Which way the quad turns to meet the camera.
+     *
+     * Bedrock offers ten modes and Java has the two that matter: turning on every axis, and turning
+     * only about the vertical one, which is what keeps a flat effect lying on the ground. A mode
+     * Java has no form of falls back to facing the camera outright.
+     */
+    @Override
+    public FacingCameraMode getFacingCameraMode() {
+        Billboard billboard = definition.particle().billboard();
+        return billboard != null && billboard.facing() == at.ioexception.mcaddon.bedrock.particle
+            .FacingCameraMode.ROTATE_Y
+            ? FacingCameraMode.LOOKAT_Y : FacingCameraMode.LOOKAT_XYZ;
+    }
+    //?}
 
     //? if >=26 {
     @Override

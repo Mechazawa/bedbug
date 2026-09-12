@@ -30,6 +30,7 @@ public final class Channels {
     private static final Identifier FORM = McAddon.id("form");
     private static final Identifier FORM_RESPONSE = McAddon.id("form_response");
     private static final Identifier ANIMATION = McAddon.id("play_animation");
+    private static final Identifier PARTICLE = McAddon.id("start_particle");
 
     private Channels() {
     }
@@ -119,6 +120,64 @@ public final class Channels {
     }
     //?}
 
+    //? if >=1.21 {
+    /** An effect the server asked for, which only a client can run because an emitter is drawn. */
+    private record Particle(String effect, double x, double y, double z) implements CustomPacketPayload {
+        private static final CustomPacketPayload.Type<Particle> TYPE =
+            new CustomPacketPayload.Type<>(PARTICLE);
+
+        private static final StreamCodec<FriendlyByteBuf, Particle> CODEC = StreamCodec.composite(
+            ByteBufCodecs.STRING_UTF8, Particle::effect,
+            ByteBufCodecs.DOUBLE, Particle::x,
+            ByteBufCodecs.DOUBLE, Particle::y,
+            ByteBufCodecs.DOUBLE, Particle::z,
+            Particle::new);
+
+        @Override
+        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+    //?}
+
+    /** What a client needs to start one effect: which one, and where. */
+    @FunctionalInterface
+    public interface ParticleHandler {
+        void start(String effect, double x, double y, double z);
+    }
+
+    public static void sendParticle(ServerPlayer player, String effect, double x, double y, double z) {
+        //? if >=1.21 {
+        ServerPlayNetworking.send(player, new Particle(effect, x, y, z));
+        //?} else {
+        /*FriendlyByteBuf buffer = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buffer.writeUtf(effect);
+        buffer.writeDouble(x);
+        buffer.writeDouble(y);
+        buffer.writeDouble(z);
+        ServerPlayNetworking.send(player, PARTICLE, buffer);
+        *///?}
+    }
+
+    public static void receiveParticle(ParticleHandler handler) {
+        //? if >=1.21 {
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+            Particle.TYPE,
+            (payload, context) -> context.client().execute(
+                () -> handler.start(payload.effect(), payload.x(), payload.y(), payload.z())));
+        //?} else {
+        /*net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+            PARTICLE,
+            (client, network, buffer, sender) -> {
+                String effect = buffer.readUtf();
+                double x = buffer.readDouble();
+                double y = buffer.readDouble();
+                double z = buffer.readDouble();
+                client.execute(() -> handler.start(effect, x, y, z));
+            });
+        *///?}
+    }
+
     /** What a client needs to run one clip: which entity, which animation, and how it ends. */
     @FunctionalInterface
     public interface AnimationHandler {
@@ -163,6 +222,7 @@ public final class Channels {
     public static void register() {
         //? if >=1.21 {
         PayloadTypeRegistry.clientboundPlay().register(Animation.TYPE, Animation.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(Particle.TYPE, Particle.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Properties.TYPE, Properties.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Packs.TYPE, Packs.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Form.TYPE, Form.CODEC);

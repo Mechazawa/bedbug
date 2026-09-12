@@ -92,7 +92,7 @@ public final class PackConverter {
 
             textures.convert(pack, root, fresh);
             sounds.addAll(new Sounds(namespace).convert(pack, root, fresh));
-            new Texts(namespace).convert(pack, root, fresh);
+            new Texts(namespace).convert(bundle, root, fresh);
             icons.putAll(new Icons(namespace).convert(pack, textures.paths()));
             if (fresh) {
                 Set<String> sprites = new LinkedHashSet<>();
@@ -364,21 +364,40 @@ public final class PackConverter {
             this.namespace = namespace;
         }
 
-        void convert(BedrockPack pack, Path root, boolean write) throws IOException {
+        /**
+         * Every `.lang` in the add-on, both halves together.
+         *
+         * A pack is free to put a name in either half and real ones use both, so the files are merged
+         * rather than taken from the resource pack alone. The resource pack is read last, because
+         * what a player sees is what it says.
+         */
+        void convert(Bundle bundle, Path root, boolean write) throws IOException {
             if (!write) return;
 
-            for (Path source : pack.list("texts", ".lang")) {
-                String locale = withoutExtension(source.getFileName().toString()).toLowerCase(Locale.ROOT);
-                Map<String, String> entries = LangFile.read(source);
-                if (entries.isEmpty()) continue;
+            Map<String, Map<String, String>> byLocale = new LinkedHashMap<>();
+            List<BedrockPack> everywhere = new ArrayList<>(bundle.behaviours());
+            everywhere.add(bundle.resources());
+
+            for (BedrockPack pack : everywhere) {
+                for (Path source : pack.list("texts", ".lang")) {
+                    String locale = withoutExtension(source.getFileName().toString()).toLowerCase(Locale.ROOT);
+                    byLocale.computeIfAbsent(locale, name -> new LinkedHashMap<>())
+                        .putAll(LangFile.read(source));
+                }
+            }
+
+            for (Map.Entry<String, Map<String, String>> locale : byLocale.entrySet()) {
+                if (locale.getValue().isEmpty()) continue;
 
                 JsonObject json = new JsonObject();
-                entries.forEach(json::addProperty);
-                entries.forEach((key, value) -> {
+                locale.getValue().forEach(json::addProperty);
+                locale.getValue().forEach((key, value) -> {
                     String java = javaKey(key);
                     if (java != null && !json.has(java)) json.addProperty(java, value);
                 });
-                Path target = root.resolve("assets").resolve(namespace).resolve("lang").resolve(locale + ".json");
+
+                Path target = root.resolve("assets").resolve(namespace).resolve("lang")
+                    .resolve(locale.getKey() + ".json");
                 Files.createDirectories(target.getParent());
                 Files.writeString(target, json.toString(), StandardCharsets.UTF_8);
             }

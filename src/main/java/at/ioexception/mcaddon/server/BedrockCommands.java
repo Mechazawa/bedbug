@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.server;
 
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonParticles;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.FloatArgumentType;
@@ -91,6 +92,17 @@ public final class BedrockCommands {
                 .then(Commands.argument("enabled", BoolArgumentType.bool())
                     .executes(BedrockCommands::mobEvent))));
 
+        // Java's own `/particle` knows nothing of a pack's effects, which are emitters rather than
+        // single particles, so the mod answers for those and hands the rest to the game.
+        dispatcher.register(Commands.literal("particle")
+            .requires(source -> Platform.allowedAt(source, 1))
+            .then(Commands.argument("effect", StringArgumentType.string())
+                .executes(command -> particle(command, null))
+                .then(Commands.argument("position", net.minecraft.commands.arguments.coordinates.Vec3Argument.vec3())
+                    .executes(command -> particle(command,
+                        net.minecraft.commands.arguments.coordinates.Vec3Argument.getVec3(command,
+                            "position"))))));
+
         dispatcher.register(Commands.literal("event")
             .requires(source -> Platform.allowedAt(source, 1))
             .then(Commands.literal("entity")
@@ -173,6 +185,22 @@ public final class BedrockCommands {
         }
         return run(command.getSource(), "gamerule " + rule
             + " " + BoolArgumentType.getBool(command, "enabled"));
+    }
+
+    /** A pack's own effect starts an emitter; anything else is Java's own particle command. */
+    private static int particle(CommandContext<CommandSourceStack> command,
+        net.minecraft.world.phys.Vec3 position) {
+        String effect = StringArgumentType.getString(command, "effect");
+        net.minecraft.world.phys.Vec3 where = position == null
+            ? command.getSource().getPosition() : position;
+
+        if (AddonParticles.definitionOf(effect) == null) {
+            return run(command.getSource(), "particle " + effect
+                + " " + where.x + " " + where.y + " " + where.z);
+        }
+
+        Particles.start(command.getSource().getLevel(), effect, where.x, where.y, where.z);
+        return 1;
     }
 
     private static int playAnimation(CommandContext<CommandSourceStack> command, String stopExpression,
