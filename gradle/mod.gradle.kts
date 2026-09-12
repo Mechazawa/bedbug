@@ -78,6 +78,27 @@ project.tasks.named("checkstyleMain") {
 }
 
 /**
+ * Unit tests, run for the checked-out version only, for the same reason linting is.
+ *
+ * What they cover is everything that is a function of its input rather than of a running game: the
+ * Molang evaluator, the readers for Targa and Ogg, pack discovery and ordering, the command
+ * translation, and the channel arithmetic of a texture set. Anything needing a world belongs in the
+ * game tests instead.
+ */
+project.dependencies.add("testImplementation", "org.junit.jupiter:junit-jupiter:5.11.4")
+project.dependencies.add("testRuntimeOnly", "org.junit.platform:junit-platform-launcher")
+
+project.tasks.named<Test>("test") {
+    useJUnitPlatform()
+    onlyIf { project.name == activeName }
+    testLogging { events("failed") }
+}
+
+project.tasks.named<Checkstyle>("checkstyleTest") {
+    onlyIf { project.name == activeName }
+}
+
+/**
  * A syntax gate for the tools, which no compiler otherwise covers.
  *
  * These scripts are only run by hand and could otherwise sit broken for weeks. This is a parse
