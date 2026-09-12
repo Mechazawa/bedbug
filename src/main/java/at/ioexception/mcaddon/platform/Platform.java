@@ -310,29 +310,95 @@ public final class Platform {
     }
 
     /**
-     * Makes an item wearable in a slot.
+     * An item a pack said can be worn, in the slot it named.
      *
-     * Only from 1.21.2, where a data component says what a stack can be worn as. Before that an item
-     * had to be an armour item with a material, which a pack's arbitrary item is not.
+     * What carries that differs by version. From 1.21.2 any item can say it is equippable through a
+     * data component. Before that only an armour item could be worn, and an armour item needs a
+     * material, so the item is built as one with a material that adds no protection and no armour
+     * layer of its own: a pack's hat is a costume, and its attachable is what draws it.
      */
-    public static Item.Properties wearable(Item.Properties properties,
+    public static Item buildWearable(Item.Properties properties, Identifier id,
         net.minecraft.world.entity.EquipmentSlot slot) {
         //? if >=1.21.2 {
-        return properties.component(net.minecraft.core.component.DataComponents.EQUIPPABLE,
-            net.minecraft.world.item.equipment.Equippable.builder(slot).build());
+        return buildItem(properties.component(net.minecraft.core.component.DataComponents.EQUIPPABLE,
+            net.minecraft.world.item.equipment.Equippable.builder(slot).build()), id);
         //?} else {
-        /*return properties;
+        /*net.minecraft.world.item.ArmorItem.Type type = armourType(slot);
+        if (type == null) return buildItem(properties, id);
+
+        return new net.minecraft.world.item.ArmorItem(costume(), type, properties.stacksTo(1));
         *///?}
     }
 
-    /** Whether {@link #wearable} does anything on this version. */
-    public static boolean supportsWearable() {
-        //? if >=1.21.2 {
-        return true;
-        //?} else {
-        /*return false;
-        *///?}
+    //? if <1.21.2 {
+    /*// The armour slot a Bedrock wearable names, or null for a slot Java has no armour item for.
+    private static net.minecraft.world.item.ArmorItem.Type armourType(
+        net.minecraft.world.entity.EquipmentSlot slot) {
+        return switch (slot) {
+            case HEAD -> net.minecraft.world.item.ArmorItem.Type.HELMET;
+            case CHEST -> net.minecraft.world.item.ArmorItem.Type.CHESTPLATE;
+            case LEGS -> net.minecraft.world.item.ArmorItem.Type.LEGGINGS;
+            case FEET -> net.minecraft.world.item.ArmorItem.Type.BOOTS;
+            default -> null;
+        };
     }
+    *///?}
+
+    //? if >=1.21 && <1.21.2 {
+    /*// A material that protects nothing and draws nothing, which is what a costume is.
+    private static net.minecraft.core.Holder<net.minecraft.world.item.ArmorMaterial> costume() {
+        return net.minecraft.core.Holder.direct(new net.minecraft.world.item.ArmorMaterial(
+            java.util.Map.of(), 0, net.minecraft.sounds.SoundEvents.ARMOR_EQUIP_LEATHER,
+            () -> net.minecraft.world.item.crafting.Ingredient.EMPTY, java.util.List.of(), 0f, 0f));
+    }
+    *///?}
+
+    //? if <1.21 {
+    /*// A material that protects nothing and draws nothing, which is what a costume is.
+    private static net.minecraft.world.item.ArmorMaterial costume() {
+        return new net.minecraft.world.item.ArmorMaterial() {
+            @Override
+            public int getDurabilityForType(net.minecraft.world.item.ArmorItem.Type type) {
+                return 0;
+            }
+
+            @Override
+            public int getDefenseForType(net.minecraft.world.item.ArmorItem.Type type) {
+                return 0;
+            }
+
+            @Override
+            public int getEnchantmentValue() {
+                return 0;
+            }
+
+            @Override
+            public net.minecraft.sounds.SoundEvent getEquipSound() {
+                return net.minecraft.sounds.SoundEvents.ARMOR_EQUIP_LEATHER;
+            }
+
+            @Override
+            public net.minecraft.world.item.crafting.Ingredient getRepairIngredient() {
+                return net.minecraft.world.item.crafting.Ingredient.EMPTY;
+            }
+
+            @Override
+            public String getName() {
+                return "mcaddon_costume";
+            }
+
+            @Override
+            public float getToughness() {
+                return 0f;
+            }
+
+            @Override
+            public float getKnockbackResistance() {
+                return 0f;
+            }
+        };
+    }
+    *///?}
 
     /** A block carries its own registry id from 1.21.2, the same way an item does. */
     public static Block buildBlock(BlockBehaviour.Properties properties, Identifier id) {

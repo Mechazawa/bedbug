@@ -59,13 +59,15 @@ public final class AddonItems {
 
         Item.Properties properties = new Item.Properties().stacksTo(definition.maxStackSize());
         properties = food(definition, properties);
-        properties = wearable(definition, properties);
 
         for (String component : definition.components().keySet()) {
             if (!IMPLEMENTED.contains(component)) AddonEntities.unsupported(component);
         }
 
-        Item item = Platform.buildItem(properties, id);
+        JsonObject wearable = definition.components().get("minecraft:wearable");
+        Item item = wearable == null
+            ? Platform.buildItem(properties, id)
+            : Platform.buildWearable(properties, id, slot(Json.text(wearable, "slot", "slot.armor.head")));
         Registry.register(BuiltInRegistries.ITEM, id, item);
         BY_IDENTIFIER.put(definition.identifier(), item);
     }
@@ -125,16 +127,6 @@ public final class AddonItems {
             // A pack that says a hat takes 9999 seconds to eat means it is never eaten, and Java
             // cannot express that, so the duration is kept within what a use can actually last.
             Math.min(seconds, 60f));
-    }
-
-    private static Item.Properties wearable(ItemDefinition definition, Item.Properties properties) {
-        JsonObject wearable = definition.components().get("minecraft:wearable");
-        if (wearable == null) return properties;
-        if (!Platform.supportsWearable()) {
-            AddonEntities.unsupported("minecraft:wearable");
-            return properties;
-        }
-        return Platform.wearable(properties, slot(Json.text(wearable, "slot", "slot.armor.head")));
     }
 
     /** Bedrock names a slot `slot.armor.head`; Java names the same slot `HEAD`. */
