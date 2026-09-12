@@ -26,7 +26,9 @@ server decides what happens; the client draws it.
 
 - Finding, unpacking and ordering packs, with their dependencies respected and their problems
   reported rather than swallowed.
-- Textures, including Targa, with the physically based sidecars a `pbr` pack ships left out.
+- Textures, including Targa. A `pbr` pack's texture sets are rewritten as labPBR sidecars, which is
+  what Iris and OptiFine shader packs read, so a physically based add-on lights correctly under any
+  shader pack and costs nothing when there is none.
 - Sounds, with every definition registered as a sound event, and files whose final page claims a
   length no clip has repaired on the way through.
 - Text, with Bedrock's `.lang` rules rather than a properties reader's.
@@ -52,20 +54,26 @@ server decides what happens; the client draws it.
   scoreboard, game rule and structure surfaces are answered by the game.
 
 `/mcaddon packs` lists what loaded. `/mcaddon entities` and `/mcaddon scripts` list what a pack asked
-for that this mod does not implement yet, which is the honest answer to "will my pack work".
+for that this mod does not implement yet, which answers "will my pack work" with evidence.
 
 ## What does not work
-
-Two parts of Bedrock's renderer, both of which Java has no equivalent for.
-
-**Surface lighting from a physically based texture set.** The emissive channel is used: pixels a
-pack marked as glowing are drawn again at full brightness. The normal, roughness, metalness and
-heightmap channels are not, because a forward renderer lit per vertex has nothing to feed them to.
 
 **Stencil-masked material passes.** A material's alpha testing, blending, culling and emissiveness
 all become the render type the pass is drawn with. What cannot follow is the stencil buffer itself:
 a pass that exists only to write a mask is left out rather than drawn as a shape that does not
 belong there.
+
+**A handful of Bedrock commands.** `fog`, `camera`, `camerashake`, `hud`, `dialogue`, `music`,
+`mobevent`, `structure`, `inputpermission`, `toggledownfall`, `immutableworld`, `wsserver` and
+`connect` name a renderer feature Java has none of, or a server Java does not speak to. A function
+using one keeps its other lines and the dropped command is reported. `testfor`, `testforblock`,
+`testforblocks` and `titleraw` are translated; `playanimation`, `event` and `scriptevent` are
+registered by this mod.
+
+Surface lighting from a physically based texture set is the one thing that depends on what the
+player has installed: the emissive channel is drawn again at full brightness with or without a
+shader pack, while normal, roughness, metalness and subsurface need Iris or OptiFine with a labPBR
+shader pack, because a forward renderer lit per vertex has nothing to feed them to.
 
 Nothing else in a pack is deliberately left out. What a pack asks for that this mod cannot do is
 counted and shown by `/mcaddon entities` and `/mcaddon scripts`.
