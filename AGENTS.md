@@ -99,7 +99,9 @@ These are the checks that catch things:
   the dev server, types a scripted sequence of console commands into it, reads the output back for
   the failures that only appear at runtime, writes `build/verify/verdict.json`, and exits non-zero
   when anything failed. It kills the server on a deadline it keeps itself, because a `stop` typed
-  during startup is discarded.
+  during startup is discarded. It kills only the servers it started, holds `scratchpad/verify.lock`
+  while a server is up so two runs cannot collide on the port, and refuses to start beside a dev
+  server somebody else is already running.
 
   ```bash
   export JAVA_HOME=/opt/homebrew/opt/openjdk@25
@@ -138,8 +140,18 @@ These are the checks that catch things:
   java -cp /tmp/molang/out MolangCheck <expressions.txt>
   ```
 
-- **`tools/preview/render.py`** bakes a geometry with the same conversion the mod uses and paints it
-  to a PNG, so model work can be checked without launching the game.
+- **`tools/preview/render.py`** bakes a geometry with the same conversion the mod uses and paints a
+  front and a side view to a PNG, so model work can be checked without launching the game. It reads
+  a resource pack directly: geometries from `models/**/*.json` in both the 1.12 and the 1.8 shape,
+  and a texture from the `.png` or the `.tga` at the path a pack names.
+
+  ```bash
+  python3 tools/preview/render.py --assets "<pack>/Villager News 1.0 Add-On RP" \
+    --geometry geometry.oreville_vn.-754165646 --texture textures/oreville/vn/dix \
+    --out /tmp/villager.png --size 512
+  ```
+
+  Pass a geometry name it does not have and it lists the ones it does.
 - **`/mcaddon packs`** and **`/mcaddon scripts`** in game report what loaded and what a pack asked
   for that is not implemented.
 
@@ -175,6 +187,7 @@ build.named.gradle.kts       26.2, which Mojang ships unobfuscated
 gradle/mod.gradle.kts        Shared build logic: toolchain, GraalJS bundling, checkstyle, checkTools
 config/checkstyle/           Lint rules and the Stonecutter suppressions
 
+tools/verify/verify.py       End to end harness: drives a dev server and checks a conversion
 tools/preview/render.py      Offline model renderer
 tools/molang/MolangCheck.java  Molang conformance harness
 

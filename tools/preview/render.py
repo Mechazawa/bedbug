@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-"""Renders a converted Bedrock model to a PNG, without starting Minecraft.
+"""Renders a Bedrock model from a resource pack to a PNG, without starting Minecraft.
 
 This mirrors the conversion the mod does at load time: the same axis flip, the same face mapping,
-the same UV rectangles. Looking at its output is how a change to that conversion gets checked, so a
-mistake shows up here rather than in the game.
+the same UV rectangles normalised against the geometry's declared texture size. Looking at its
+output is how a change to that conversion gets checked, so a mistake shows up here rather than in
+the game.
+
+It reads a pack the way the mod does. Geometries come from `models/**/*.json` in either shape a
+pack ships: the 1.12 `minecraft:geometry` array whose entries name themselves, or the 1.8 form
+where each geometry is a top level `geometry.name` key. A texture is named by its path inside the
+pack without an extension, and is read from the `.png` or the `.tga` beside it.
 """
 
 import argparse
@@ -43,6 +49,18 @@ NORMALS = {
     ("z", 0): (0, 0, -1), ("z", 1): (0, 0, 1),
 }
 
+TEXTURE_SUFFIXES = (".png", ".tga")
+
+USAGE = (__doc__ or "").splitlines()[0]
+
+
+def pixels_of(image):
+    """The per-pixel accessor of an image, which Pillow withholds for a format it cannot map."""
+    access = image.load()
+    if access is None:
+        raise RuntimeError(f"Pillow gave no pixel access to a {image.size} {image.mode} image")
+    return access
+
 
 def rotate(point, angles):
     """Applies a ZYX euler rotation in radians, matching Quaternionf.rotationZYX."""
@@ -62,6 +80,136 @@ def to_model_rotation(degrees):
     return math.radians(degrees[0]), math.radians(-degrees[1]), math.radians(degrees[2])
 
 
+def load_geometries(pack):
+    """Every geometry under `models/`, in both the 1.12 and the 1.8 shape, keyed by identifier."""
+    geometries = {}
+    for file in sorted((pack / "models").rglob("*.json")):
+        try:
+            root = json.loads(file.read_text(encoding="utf-8"))
+        except (ValueError, OSError) as error:
+            print(f"could not read {file}: {error}", file=sys.stderr)
+            continue
+        if not isinstance(root, dict):
+            continue
+
+        if "minecraft:geometry" in root:
+            for body in root["minecraft:geometry"]:
+                identifier = body.get("description", {}).get("identifier")
+                if identifier:
+                    geometries[identifier] = normalise(body.get("description", {}), body)
+            continue
+
+        for name, body in root.items():
+            # The 1.8 form keeps the texture size beside the bones instead of in a description.
+            if name.startswith("geometry.") and isinstance(body, dict):
+                geometries[name] = normalise(body, body)
+    return geometries
+
+
+def normalise(description, body):
+    return {
+        "texture_width": float(description.get("texture_width", 64)),
+        "texture_height": float(description.get("texture_height", 64)),
+        "bones": body.get("bones", []),
+    }
+
+
+def load_texture(pack, name):
+    """Reads a pack texture named without an extension, from the PNG or the Targa on disk."""
+    candidates = [pack / f"{name}{suffix}" for suffix in TEXTURE_SUFFIXES]
+    if pathlib.Path(name).suffix:
+        candidates.insert(0, pack / name)
+
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        if candidate.suffix.lower() == ".tga":
+            return read_tga(candidate.read_bytes())
+        return Image.open(candidate).convert("RGBA")
+
+    raise FileNotFoundError(f"no {' or '.join(TEXTURE_SUFFIXES)} for {name} under {pack}")
+
+
+def read_tga(data):
+    """Decodes the Targa shapes pack tools write: true colour, colour mapped and grey, raw or run
+    length encoded. Pillow rejects several of these, so the mod carries its own reader and so does
+    this."""
+    if len(data) < 18:
+        raise ValueError(f"not a Targa file: {len(data)} bytes")
+
+    id_length, colour_map_type, image_type = data[0], data[1], data[2]
+    colour_map_length = int.from_bytes(data[5:7], "little")
+    colour_map_depth = data[7]
+    width = int.from_bytes(data[12:14], "little")
+    height = int.from_bytes(data[14:16], "little")
+    depth = data[16]
+    descriptor = data[17]
+    top_down = bool(descriptor & 0x20)
+    right_to_left = bool(descriptor & 0x10)
+
+    if width <= 0 or height <= 0:
+        raise ValueError(f"Targa image is {width}x{height}")
+    kind = image_type % 8
+    if kind not in (1, 2, 3):
+        raise ValueError(f"unsupported Targa type {image_type}")
+
+    at = 18 + id_length
+    palette = []
+    if colour_map_type == 1:
+        entry_bytes = max(1, colour_map_depth // 8)
+        palette = [tga_pixel(data, at + index * entry_bytes, colour_map_depth)
+                   for index in range(colour_map_length)]
+        at += colour_map_length * entry_bytes
+
+    pixel_bytes = max(1, depth // 8)
+    pixels = []
+    while len(pixels) < width * height:
+        run, repeat = 1, False
+        if image_type >= 9:
+            packet = data[at]
+            at += 1
+            run, repeat = (packet & 0x7F) + 1, bool(packet & 0x80)
+
+        if repeat:
+            pixels += [tga_sample(data, at, depth, kind, palette)] * run
+            at += pixel_bytes
+            continue
+        for _ in range(run):
+            pixels.append(tga_sample(data, at, depth, kind, palette))
+            at += pixel_bytes
+    pixels = pixels[:width * height]
+
+    image = Image.new("RGBA", (width, height))
+    target = pixels_of(image)
+    for y in range(height):
+        row = y if top_down else height - 1 - y
+        for x in range(width):
+            target[width - 1 - x if right_to_left else x, row] = pixels[y * width + x]
+    return image
+
+
+def tga_sample(data, at, depth, kind, palette):
+    if kind == 1:
+        index = int.from_bytes(data[at:at + 2], "little") if depth == 16 else data[at]
+        return palette[index] if index < len(palette) else (0, 0, 0, 0)
+    if kind == 3:
+        return (data[at], data[at], data[at], 255)
+    return tga_pixel(data, at, depth)
+
+
+def tga_pixel(data, at, depth):
+    """Targa stores colour as blue, green, red, so the channels come back in the other order."""
+    if depth == 32:
+        return (data[at + 2], data[at + 1], data[at], data[at + 3])
+    if depth == 24:
+        return (data[at + 2], data[at + 1], data[at], 255)
+    if depth == 16:
+        packed = int.from_bytes(data[at:at + 2], "little")
+        return ((packed >> 10 & 0x1F) * 255 // 31, (packed >> 5 & 0x1F) * 255 // 31,
+                (packed & 0x1F) * 255 // 31, 255 if packed & 0x8000 else 0)
+    return (0, 0, 0, 0)
+
+
 def box_rectangles(uv, size):
     width, height, depth = size
     u, v = uv
@@ -75,8 +223,24 @@ def box_rectangles(uv, size):
     }
 
 
-def bake_cube(cube, bone_pivot, bone_mirror=False):
-    """Returns the quads of one cube, as (corner positions, uv rectangle, normal)."""
+def face_coordinates(rectangle, texture_size):
+    """The four UV corners of a face, normalised against the geometry's declared texture size.
+
+    The winding puts the texture's top right on the first vertex, as vanilla does. A face may
+    declare its texture turned in ninety degree steps, which walks that order round.
+    """
+    texture_width, texture_height = texture_size
+    u_min, v_min = rectangle[0] / texture_width, rectangle[1] / texture_height
+    u_max, v_max = rectangle[2] / texture_width, rectangle[3] / texture_height
+
+    coordinates = [(u_max, v_min), (u_min, v_min), (u_min, v_max), (u_max, v_max)]
+    for _ in range(int(rectangle[4]) // 90 % 4):
+        coordinates = coordinates[1:] + coordinates[:1]
+    return coordinates
+
+
+def bake_cube(cube, bone_pivot, bone_mirror, texture_size):
+    """Returns the quads of one cube, as (corner positions, corner UVs, normal)."""
     origin = cube["origin"]
     size = cube["size"]
     inflate = cube.get("inflate", 0)
@@ -95,11 +259,12 @@ def bake_cube(cube, bone_pivot, bone_mirror=False):
         for index in range(8)
     ]
 
-    if "rotation" in cube:
+    cube_angles = None
+    if any(cube.get("rotation", [0, 0, 0])):
         pivot = to_model_space(cube.get("pivot", [0, 0, 0]))
-        angles = to_model_rotation(cube["rotation"])
+        cube_angles = to_model_rotation(cube["rotation"])
         corners = [
-            tuple(a + b for a, b in zip(rotate([c - p for c, p in zip(corner, pivot)], angles), pivot))
+            tuple(a + b for a, b in zip(rotate([c - p for c, p in zip(corner, pivot)], cube_angles), pivot))
             for corner in corners
         ]
     corners = [tuple(c - p for c, p in zip(corner, bone_pivot)) for corner in corners]
@@ -121,22 +286,29 @@ def bake_cube(cube, bone_pivot, bone_mirror=False):
 
     quads = []
     for face, rectangle in rectangles.items():
-        indices = CORNERS[face]
-        points = [corners[i] for i in indices]
+        points = [corners[index] for index in CORNERS[face]]
+        coordinates = face_coordinates(rectangle, texture_size)
         normal = NORMALS[face]
         if mirror:
-            points = points[::-1]
-            normal = (-normal[0], normal[1], normal[2])
-        quads.append((points, rectangle, normal))
+            # The vertices carry their own UV, so reversing the winding takes the UVs with it.
+            points, coordinates = points[::-1], coordinates[::-1]
+            if face[0] == "x":
+                normal = tuple(-component for component in normal)
+        if cube_angles is not None:
+            normal = rotate(normal, cube_angles)
+        quads.append((points, coordinates, normal))
     return quads
 
 
 def bake(geometry):
-    """Walks the bone tree and returns quads with absolute positions."""
-    bones = geometry["bones"]
+    """Walks the bone tree and returns quads with absolute positions.
+
+    A child bone sits inside its parent's frame, so a parent's rotation turns everything under it.
+    """
+    texture_size = (geometry["texture_width"], geometry["texture_height"])
     children = {}
     roots = []
-    for bone in bones:
+    for bone in geometry["bones"]:
         if bone.get("parent") is None:
             roots.append(bone)
         else:
@@ -144,55 +316,54 @@ def bake(geometry):
 
     quads = []
 
-    def walk(bone, parent_transform):
+    def walk(bone, place, turn, parent_pivot):
         pivot = to_model_space(bone.get("pivot", [0, 0, 0]))
         angles = to_model_rotation(bone.get("rotation", [0, 0, 0]))
-        offset = tuple(p + t for p, t in zip(pivot, parent_transform))
+        offset = tuple(a - b for a, b in zip(pivot, parent_pivot))
+
+        def place_here(point):
+            return place(tuple(a + b for a, b in zip(offset, rotate(point, angles))))
+
+        def turn_here(vector):
+            return turn(rotate(vector, angles))
 
         for cube in bone.get("cubes", []):
-            for points, rectangle, normal in bake_cube(cube, pivot, bone.get("mirror", False)):
-                placed = [tuple(a + b for a, b in zip(rotate(point, angles), offset)) for point in points]
-                quads.append((placed, rectangle, rotate(normal, angles)))
+            for points, coordinates, normal in bake_cube(
+                    cube, pivot, bone.get("mirror", False), texture_size):
+                quads.append(([place_here(point) for point in points], coordinates, turn_here(normal)))
 
         for child in children.get(bone["name"], []):
-            walk(child, tuple(o - p for o, p in zip(offset, pivot)))
+            walk(child, place_here, turn_here, pivot)
 
     for root in roots:
-        walk(root, (0.0, 0.0, 0.0))
+        walk(root, lambda point: point, lambda vector: vector, (0.0, 0.0, 0.0))
     return quads
 
 
 def draw(quads, texture, size, view, scale, uv_offset=(0.0, 0.0)):
     """Paints the quads with a painter's algorithm, back to front, in an orthographic view."""
     image = Image.new("RGBA", (size, size), (32, 34, 38, 255))
-    pixels = image.load()
-    tex = texture.load()
+    pixels = pixels_of(image)
+    sampler = pixels_of(texture)
     tex_w, tex_h = texture.size
 
     def project(point):
         x, y, z = point
         # Java model space has Y running downward, so the screen Y is used as it is.
-        horizontal = x if view == "front" else z
-        if view == "front":
-            horizontal = -horizontal
+        horizontal = -x if view == "front" else z
         return size / 2 + horizontal * scale, size * 0.82 + (y - MODEL_ORIGIN_HEIGHT) * scale
 
     # Painter's algorithm: the farthest quad is drawn first so nearer ones cover it.
     depth_of = {"front": lambda p: p[2], "side": lambda p: -p[0]}[view]
-    ordered = sorted(quads, key=lambda quad: max(depth_of(p) for p in quad[0]), reverse=True)
+    ordered = sorted(quads, key=lambda quad: max(depth_of(point) for point in quad[0]), reverse=True)
 
-    for points, rectangle, normal in ordered:
-        screen = [project(p) for p in points]
-        u0, v0, u1, v1, uv_rotation = rectangle
-        corners = [(u1, v0), (u0, v0), (u0, v1), (u1, v1)]
-        # A per-face rotation turns the texture under the face in ninety degree steps.
-        for _ in range((uv_rotation // 90) % 4):
-            corners = corners[1:] + corners[:1]
+    for points, coordinates, normal in ordered:
+        screen = [project(point) for point in points]
 
-        min_x = max(0, int(min(p[0] for p in screen)))
-        max_x = min(size - 1, int(max(p[0] for p in screen)) + 1)
-        min_y = max(0, int(min(p[1] for p in screen)))
-        max_y = min(size - 1, int(max(p[1] for p in screen)) + 1)
+        min_x = max(0, int(min(point[0] for point in screen)))
+        max_x = min(size - 1, int(max(point[0] for point in screen)) + 1)
+        min_y = max(0, int(min(point[1] for point in screen)))
+        max_y = min(size - 1, int(max(point[1] for point in screen)) + 1)
         if max_x <= min_x or max_y <= min_y:
             continue
 
@@ -202,17 +373,22 @@ def draw(quads, texture, size, view, scale, uv_offset=(0.0, 0.0)):
                 weights = bilinear(screen, px + 0.5, py + 0.5)
                 if weights is None:
                     continue
-                s, t = weights
-                u = corners[1][0] + (corners[0][0] - corners[1][0]) * s
-                v = corners[1][1] + (corners[2][1] - corners[1][1]) * t
-                u += uv_offset[0] * tex_w
-                v += uv_offset[1] * tex_h
-                colour = tex[int(u) % tex_w, int(v) % tex_h]
+                u, v = sample_uv(coordinates, weights)
+                colour = sampler[int((u + uv_offset[0]) * tex_w) % tex_w,
+                                 int((v + uv_offset[1]) * tex_h) % tex_h]
                 if len(colour) == 4 and colour[3] < 16:
                     continue
                 pixels[px, py] = (
                     int(colour[0] * shade), int(colour[1] * shade), int(colour[2] * shade), 255)
     return image
+
+
+def sample_uv(coordinates, weights):
+    """The UV at a point inside a quad, blended across all four corners so a turned face follows."""
+    across, down = weights
+    top = [a + (b - a) * across for a, b in zip(coordinates[1], coordinates[0])]
+    bottom = [a + (b - a) * across for a, b in zip(coordinates[2], coordinates[3])]
+    return [a + (b - a) * down for a, b in zip(top, bottom)]
 
 
 def bilinear(screen, px, py):
@@ -235,10 +411,11 @@ def bilinear(screen, px, py):
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--assets", required=True)
-    parser.add_argument("--geometry", required=True)
-    parser.add_argument("--texture", required=True)
+    parser = argparse.ArgumentParser(description=USAGE)
+    parser.add_argument("--assets", required=True, help="the resource pack root, the folder holding models/")
+    parser.add_argument("--geometry", required=True, help="the geometry identifier, or `list` to name them all")
+    parser.add_argument("--texture", required=True,
+                        help="a texture path inside the pack, without its extension")
     parser.add_argument("--out", required=True)
     parser.add_argument("--size", type=int, default=320)
     parser.add_argument("--scale", type=float, default=7.0)
@@ -247,15 +424,19 @@ def main():
         help="slides the texture under the model, in whole texture widths (Bedrock uv_anim)")
     arguments = parser.parse_args()
 
-    assets = pathlib.Path(arguments.assets)
-    geometries = json.loads((assets / "bedrock/geometry.json").read_text())
+    pack = pathlib.Path(arguments.assets)
+    geometries = load_geometries(pack)
+    if not geometries:
+        print(f"no geometry under {pack / 'models'}", file=sys.stderr)
+        return 1
     if arguments.geometry not in geometries:
         print(f"no such geometry: {arguments.geometry}", file=sys.stderr)
         print("available:", ", ".join(sorted(geometries)), file=sys.stderr)
         return 1
 
-    quads = bake(geometries[arguments.geometry])
-    texture = Image.open(assets / "textures/entity" / f"{arguments.texture}.png").convert("RGBA")
+    geometry = geometries[arguments.geometry]
+    quads = bake(geometry)
+    texture = load_texture(pack, arguments.texture)
 
     views = [
         draw(quads, texture, arguments.size, view, arguments.scale, tuple(arguments.uv_offset))
@@ -265,7 +446,8 @@ def main():
     combined.paste(views[0], (0, 0))
     combined.paste(views[1], (arguments.size, 0))
     combined.save(arguments.out)
-    print(f"{arguments.out}  quads={len(quads)}  texture={texture.size}")
+    print(f"{arguments.out}  quads={len(quads)}  texture={texture.size}"
+          f"  declared={int(geometry['texture_width'])}x{int(geometry['texture_height'])}")
     return 0
 
 
