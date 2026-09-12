@@ -105,15 +105,16 @@ project.tasks.named<JavaCompile>("compileTestJava") {
 }
 
 /**
- * The game tests, run for the checked-out version only.
+ * The game tests, run for every version.
  *
  * `fabricApi.configureTests` hangs these off `check`, so a failing one fails the build. They start a
  * headless server and run against a real world, which is the half a unit test cannot reach: the
  * commands, the entity events and the tick that has to survive a script throwing.
+ *
+ * Unlike the linting and the unit tests, these are not gated on the checked-out version. They live in
+ * `src/main/java`, which Stonecutter rewrites per version, so each one runs against the game it was
+ * written for. A call that exists on only some versions is exactly what they are here to catch.
  */
-project.tasks.named("runGameTest") {
-    onlyIf { project.name == activeName }
-}
 
 /**
  * A syntax gate for the tools, which no compiler otherwise covers.

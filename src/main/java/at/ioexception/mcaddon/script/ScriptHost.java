@@ -303,6 +303,11 @@ public final class ScriptHost {
     public record EntityHandle(String uuid) {
     }
 
+    /** The bridge a pack's script reaches the game through, for anything that has to ask it too. */
+    public ScriptBridge bridge() {
+        return bridge;
+    }
+
     public ScriptCoverage coverage() {
         return coverage;
     }

@@ -7,9 +7,9 @@ import at.ioexception.mcaddon.script.ScriptHost;
 import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.ServerHooks;
 import com.google.gson.JsonArray;
+import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -717,11 +717,22 @@ public final class Worlds extends Surface {
 
     // Reading an option bag a script passed as JSON. A key the pack left out is absent, not null.
 
+    /**
+     * The options a pack passed, or none when it passed something that is not an object.
+     *
+     * What arrives here was written by a pack, so it has to be read the way every other pack-authored
+     * value is: a malformed one means the pack asked for nothing in particular, not that the tick it
+     * was called in ends.
+     */
     private static JsonObject parse(String json) {
         if (json == null || json.isBlank()) return new JsonObject();
 
-        JsonElement parsed = JsonParser.parseString(json);
-        return parsed.isJsonObject() ? parsed.getAsJsonObject() : new JsonObject();
+        try {
+            JsonElement parsed = Json.parse(json);
+            return parsed.isJsonObject() ? parsed.getAsJsonObject() : new JsonObject();
+        } catch (RuntimeException unreadable) {
+            return new JsonObject();
+        }
     }
 
     private static String text(JsonObject options, String key) {

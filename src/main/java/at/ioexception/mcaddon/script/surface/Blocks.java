@@ -202,12 +202,18 @@ public final class Blocks extends Surface {
         return !level.getBlockState(position).isFaceSturdy(level, position, side);
     }
 
-    /** The tags the block is in, under Java's names for them: a pack reading these sees `wool`. */
+    /**
+     * The tags the block is in, as a pack spells them: Java's own names, without the namespace.
+     *
+     * Bedrock writes a tag as a bare word, so `minecraft:stairs` is handed over as `stairs` and a
+     * pack asking `hasTag("stairs")` is answered. A tag a data pack added keeps its namespace, which
+     * is the only spelling that tells two of those apart.
+     */
     @HostAccess.Export
     public String[] tags(String typeId) {
         Block block = block(typeId);
         return block == null ? new String[0] : block.builtInRegistryHolder().tags()
-            .map(tag -> tag.location().toString())
+            .map(tag -> tagName(tag.location()))
             .toArray(String[]::new);
     }
 
@@ -407,6 +413,10 @@ public final class Blocks extends Surface {
     private static Block block(String typeId) {
         Identifier parsed = typeId == null ? null : Identifier.tryParse(typeId);
         return parsed == null ? null : BuiltInRegistries.BLOCK.getOptional(parsed).orElse(null);
+    }
+
+    private static String tagName(Identifier tag) {
+        return tag.getNamespace().equals("minecraft") ? tag.getPath() : tag.toString();
     }
 
     private static String idOf(Block block) {
