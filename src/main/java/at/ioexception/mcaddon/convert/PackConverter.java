@@ -13,6 +13,7 @@ import at.ioexception.mcaddon.bedrock.behaviour.LootTableDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.RecipeDefinition;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -172,14 +173,21 @@ public final class PackConverter {
                 paths.put(withoutExtension(relative), namespace + ":" + inside);
                 if (!write) continue;
 
-                Path destination = target.resolve(inside + ".png");
-                Files.createDirectories(destination.getParent());
-                if (targa) {
-                    ImageIO.write(TgaReader.read(Files.readAllBytes(source)), "PNG", destination.toFile());
-                } else {
-                    Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
+                // One texture this reader cannot make sense of costs the pack that texture, not the
+                // rest of its sounds, models and functions.
+                try {
+                    Path destination = target.resolve(inside + ".png");
+                    Files.createDirectories(destination.getParent());
+                    if (targa) {
+                        ImageIO.write(TgaReader.read(Files.readAllBytes(source)), "PNG", destination.toFile());
+                    } else {
+                        Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
+                    }
+                    written++;
+                } catch (IOException | RuntimeException error) {
+                    paths.remove(withoutExtension(relative));
+                    AddonEntities.unsupported("texture " + source.getFileName());
                 }
-                written++;
             }
 
             // A cached conversion has the files already, so what glows is read back rather than redone.

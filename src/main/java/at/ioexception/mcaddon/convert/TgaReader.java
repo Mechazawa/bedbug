@@ -34,6 +34,7 @@ final class TgaReader {
         int[] palette = new int[colourMapLength];
         if (colourMapType == 1) {
             int entryBytes = Math.max(1, colourMapDepth / 8);
+            require(bytes, offset, colourMapLength * entryBytes);
             for (int i = 0; i < colourMapLength; i++) {
                 palette[i] = pixel(bytes, offset + i * entryBytes, colourMapDepth);
             }
@@ -53,18 +54,21 @@ final class TgaReader {
             int runLength = 1;
             boolean repeat = false;
             if (encoded) {
+                require(bytes, at, 1);
                 int packet = bytes[at++] & 0xFF;
                 runLength = (packet & 0x7F) + 1;
                 repeat = (packet & 0x80) != 0;
             }
 
             if (repeat) {
+                require(bytes, at, pixelBytes);
                 int colour = sample(bytes, at, depth, kind, palette);
                 at += pixelBytes;
                 for (int i = 0; i < runLength && written < pixels.length; i++) pixels[written++] = colour;
                 continue;
             }
             for (int i = 0; i < runLength && written < pixels.length; i++) {
+                require(bytes, at, pixelBytes);
                 pixels[written++] = sample(bytes, at, depth, kind, palette);
                 at += pixelBytes;
             }
@@ -79,6 +83,20 @@ final class TgaReader {
             }
         }
         return image;
+    }
+
+    /**
+     * Refuses a file that ends before it said it would.
+     *
+     * A truncated image is a file this reader cannot read, which is what its callers already handle.
+     * Indexing past the end instead would throw where nothing is catching, and the conversion of one
+     * broken texture would take the whole pack with it.
+     */
+    private static void require(byte[] bytes, int at, int count) throws IOException {
+        if (at < 0 || count < 0 || at + count > bytes.length) {
+            throw new IOException("Targa data wants " + count + " bytes at " + at
+                + " and the file is " + bytes.length + " long");
+        }
     }
 
     private static int sample(byte[] bytes, int at, int depth, int kind, int[] palette) {
