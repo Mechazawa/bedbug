@@ -25,6 +25,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.scores.Objective;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -138,22 +139,29 @@ public final class ScriptBridge {
         return new double[] {spawn.getX(), spawn.getY(), spawn.getZ()};
     }
 
-    /**
-     * Game rules are not read or written.
-     *
-     * 26 replaced Java's typed rule keys with a rule map of its own, so the three supported versions
-     * share no API here, and the rules the two editions have in common are few enough that a pack
-     * gains little. Reported rather than answered with a guess.
-     */
+    /** A game rule both editions have. Bedrock's own rules have nowhere to read from. */
     @HostAccess.Export
     public String gameRule(String name) {
-        unsupported("World.gameRules." + name);
-        return null;
+        String value = Platform.gameRule(server, name);
+        if (value == null) unsupported("World.gameRules." + name);
+        return value;
     }
 
+    /**
+     * Written through the command rather than the rule map.
+     *
+     * `/gamerule` takes the same name on all three versions where the typed keys do not, and setting
+     * one is rare enough that going through the parser costs nothing.
+     */
     @HostAccess.Export
     public void setGameRule(String name, Value value) {
-        unsupported("World.gameRules." + name + " (write)");
+        if (Platform.gameRule(server, name) == null) {
+            unsupported("World.gameRules." + name + " (write)");
+            return;
+        }
+        // Bedrock capitalises the daylight rule differently; the rest share their spelling.
+        String rule = name.equals("doDayLightCycle") ? "doDaylightCycle" : name;
+        run(server.createCommandSourceStack(), "gamerule " + rule + " " + value);
     }
 
     @HostAccess.Export
@@ -702,6 +710,59 @@ public final class ScriptBridge {
     public int runCommandIn(String dimension, String command) {
         ServerLevel level = level(dimension);
         return level == null ? 0 : run(server.createCommandSourceStack().withLevel(level), command);
+    }
+
+    // Scoreboard. Reads go through the game's own objects; writes go through the command, whose
+    // spelling has not changed across the supported versions where the score API has.
+
+    @HostAccess.Export
+    public String[] scoreboardObjectives() {
+        return server.getScoreboard().getObjectiveNames().toArray(String[]::new);
+    }
+
+    @HostAccess.Export
+    public boolean scoreboardHasObjective(String objective) {
+        return server.getScoreboard().getObjective(objective) != null;
+    }
+
+    @HostAccess.Export
+    public String scoreboardDisplayName(String objective) {
+        Objective found = server.getScoreboard().getObjective(objective);
+        return found == null ? null : found.getDisplayName().getString();
+    }
+
+    @HostAccess.Export
+    public void addObjective(String objective, String displayName) {
+        run(server.createCommandSourceStack(), "scoreboard objectives add " + objective + " dummy "
+            + (displayName == null || displayName.isBlank() ? objective : displayName));
+    }
+
+    @HostAccess.Export
+    public void removeObjective(String objective) {
+        run(server.createCommandSourceStack(), "scoreboard objectives remove " + objective);
+    }
+
+    @HostAccess.Export
+    public Integer score(String objective, String participant) {
+        Objective found = server.getScoreboard().getObjective(objective);
+        return found == null ? null : Platform.score(server.getScoreboard(), found, participant);
+    }
+
+    @HostAccess.Export
+    public void setScore(String objective, String participant, int value) {
+        run(server.createCommandSourceStack(),
+            "scoreboard players set " + participant + " " + objective + " " + value);
+    }
+
+    @HostAccess.Export
+    public void removeParticipant(String objective, String participant) {
+        run(server.createCommandSourceStack(),
+            "scoreboard players reset " + participant + " " + objective);
+    }
+
+    @HostAccess.Export
+    public String[] scoreboardParticipants() {
+        return Platform.scoreboardParticipants(server.getScoreboard());
     }
 
     @HostAccess.Export

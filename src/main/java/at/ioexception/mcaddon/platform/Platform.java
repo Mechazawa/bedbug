@@ -414,6 +414,104 @@ public final class Platform {
         *///?}
     }
 
+    /**
+     * A game rule, by the name Bedrock calls it, as text.
+     *
+     * The three supported versions disagree about everything here: the rule constants were renamed
+     * in 26 and the map they live in was rewritten, so the mapping is written out per version rather
+     * than abstracted. Null for a rule Java does not have, such as whether coordinates are shown.
+     */
+    public static String gameRule(net.minecraft.server.MinecraftServer server, String bedrock) {
+        //? if >=26 {
+        net.minecraft.world.level.gamerules.GameRules rules = server.getGameRules();
+        return switch (bedrock) {
+            case "doDayLightCycle" -> String.valueOf(rules.get(
+                net.minecraft.world.level.gamerules.GameRules.ADVANCE_TIME));
+            case "doWeatherCycle" -> String.valueOf(rules.get(
+                net.minecraft.world.level.gamerules.GameRules.ADVANCE_WEATHER));
+            case "keepInventory" -> String.valueOf(rules.get(
+                net.minecraft.world.level.gamerules.GameRules.KEEP_INVENTORY));
+            case "mobGriefing" -> String.valueOf(rules.get(
+                net.minecraft.world.level.gamerules.GameRules.MOB_GRIEFING));
+            case "naturalRegeneration" -> String.valueOf(rules.get(
+                net.minecraft.world.level.gamerules.GameRules.NATURAL_HEALTH_REGENERATION));
+            case "sendCommandFeedback" -> String.valueOf(rules.get(
+                net.minecraft.world.level.gamerules.GameRules.SEND_COMMAND_FEEDBACK));
+            case "showDeathMessages" -> String.valueOf(rules.get(
+                net.minecraft.world.level.gamerules.GameRules.SHOW_DEATH_MESSAGES));
+            case "doImmediateRespawn" -> String.valueOf(rules.get(
+                net.minecraft.world.level.gamerules.GameRules.IMMEDIATE_RESPAWN));
+            case "doEntityDrops" -> String.valueOf(rules.get(
+                net.minecraft.world.level.gamerules.GameRules.ENTITY_DROPS));
+            case "doTileDrops" -> String.valueOf(rules.get(
+                net.minecraft.world.level.gamerules.GameRules.BLOCK_DROPS));
+            case "commandBlockOutput" -> String.valueOf(rules.get(
+                net.minecraft.world.level.gamerules.GameRules.COMMAND_BLOCK_OUTPUT));
+            case "randomTickSpeed" -> String.valueOf(rules.get(
+                net.minecraft.world.level.gamerules.GameRules.RANDOM_TICK_SPEED));
+            default -> null;
+        };
+        //?} else {
+        /*net.minecraft.world.level.GameRules rules = server.getGameRules();
+        return switch (bedrock) {
+            case "doDayLightCycle" -> String.valueOf(rules.getBoolean(
+                net.minecraft.world.level.GameRules.RULE_DAYLIGHT));
+            case "doWeatherCycle" -> String.valueOf(rules.getBoolean(
+                net.minecraft.world.level.GameRules.RULE_WEATHER_CYCLE));
+            case "keepInventory" -> String.valueOf(rules.getBoolean(
+                net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY));
+            case "mobGriefing" -> String.valueOf(rules.getBoolean(
+                net.minecraft.world.level.GameRules.RULE_MOBGRIEFING));
+            case "naturalRegeneration" -> String.valueOf(rules.getBoolean(
+                net.minecraft.world.level.GameRules.RULE_NATURAL_REGENERATION));
+            case "sendCommandFeedback" -> String.valueOf(rules.getBoolean(
+                net.minecraft.world.level.GameRules.RULE_SENDCOMMANDFEEDBACK));
+            case "showDeathMessages" -> String.valueOf(rules.getBoolean(
+                net.minecraft.world.level.GameRules.RULE_SHOWDEATHMESSAGES));
+            case "doImmediateRespawn" -> String.valueOf(rules.getBoolean(
+                net.minecraft.world.level.GameRules.RULE_DO_IMMEDIATE_RESPAWN));
+            case "doEntityDrops" -> String.valueOf(rules.getBoolean(
+                net.minecraft.world.level.GameRules.RULE_DOENTITYDROPS));
+            case "doTileDrops" -> String.valueOf(rules.getBoolean(
+                net.minecraft.world.level.GameRules.RULE_DOBLOCKDROPS));
+            case "commandBlockOutput" -> String.valueOf(rules.getBoolean(
+                net.minecraft.world.level.GameRules.RULE_COMMANDBLOCKOUTPUT));
+            case "randomTickSpeed" -> String.valueOf(rules.getInt(
+                net.minecraft.world.level.GameRules.RULE_RANDOMTICKING));
+            default -> null;
+        };
+        *///?}
+    }
+
+    /**
+     * One participant's score, or null when they have none on that objective.
+     *
+     * A score was keyed by a plain name until 1.20.3 and by a score holder after it, so reading one
+     * is the only part of the scoreboard that differs between the supported versions.
+     */
+    public static Integer score(net.minecraft.world.scores.Scoreboard scoreboard,
+        net.minecraft.world.scores.Objective objective, String participant) {
+        //? if >=1.21 {
+        net.minecraft.world.scores.ReadOnlyScoreInfo info = scoreboard.getPlayerScoreInfo(
+            net.minecraft.world.scores.ScoreHolder.forNameOnly(participant), objective);
+        return info == null ? null : info.value();
+        //?} else {
+        /*return scoreboard.getPlayerScores(participant).containsKey(objective)
+            ? scoreboard.getOrCreatePlayerScore(participant, objective).getScore() : null;
+        *///?}
+    }
+
+    /** Everyone the scoreboard is tracking, by name. */
+    public static String[] scoreboardParticipants(net.minecraft.world.scores.Scoreboard scoreboard) {
+        //? if >=1.21 {
+        return scoreboard.getTrackedPlayers().stream()
+            .map(net.minecraft.world.scores.ScoreHolder::getScoreboardName)
+            .toArray(String[]::new);
+        //?} else {
+        /*return scoreboard.getTrackedPlayers().toArray(String[]::new);
+        *///?}
+    }
+
     /** Opens a screen, or closes whatever is open when given null. Renamed in 26. */
     public static void setScreen(net.minecraft.client.gui.screens.Screen screen) {
         //? if >=26 {

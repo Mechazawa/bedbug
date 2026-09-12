@@ -918,17 +918,7 @@ export class World {
     }
 
     get scoreboard() {
-        return {
-            getObjective() {
-                return unsupported("Scoreboard.getObjective");
-            },
-            getObjectives() {
-                return [];
-            },
-            addObjective() {
-                return unsupported("Scoreboard.addObjective");
-            },
-        };
+        return scoreboard;
     }
 
     get structureManager() {
@@ -942,6 +932,98 @@ export class World {
         };
     }
 }
+
+/** A scoreboard objective, which is what a pack reads and writes scores through. */
+class ScoreboardObjective {
+    constructor(id) {
+        this.id = id;
+    }
+
+    get displayName() {
+        return bridge.scoreboardDisplayName(this.id) ?? this.id;
+    }
+
+    isValid() {
+        return bridge.scoreboardHasObjective(this.id);
+    }
+
+    getScore(participant) {
+        const score = bridge.score(this.id, nameOf(participant));
+        return score === null ? undefined : score;
+    }
+
+    setScore(participant, value) {
+        bridge.setScore(this.id, nameOf(participant), value);
+    }
+
+    addScore(participant, value) {
+        const current = this.getScore(participant) ?? 0;
+        this.setScore(participant, current + value);
+        return current + value;
+    }
+
+    removeParticipant(participant) {
+        bridge.removeParticipant(this.id, nameOf(participant));
+        return true;
+    }
+
+    getParticipants() {
+        return list(bridge.scoreboardParticipants())
+            .filter(name => bridge.score(this.id, name) !== null)
+            .map(name => ({ displayName: name, type: "Player" }));
+    }
+
+    getScores() {
+        return this.getParticipants().map(participant => ({
+            participant, score: this.getScore(participant) ?? 0,
+        }));
+    }
+}
+
+/** A participant is a player, an entity, or the plain name of either. */
+function nameOf(participant) {
+    if (typeof participant === "string") return participant;
+    if (participant instanceof Player) return participant.name;
+    if (participant instanceof Entity) return participant.id;
+    return String(participant?.displayName ?? participant);
+}
+
+const scoreboard = {
+    getObjective(id) {
+        return bridge.scoreboardHasObjective(id) ? new ScoreboardObjective(id) : undefined;
+    },
+
+    getObjectives() {
+        return list(bridge.scoreboardObjectives()).map(id => new ScoreboardObjective(id));
+    },
+
+    addObjective(id, displayName) {
+        bridge.addObjective(id, displayName ?? id);
+        return new ScoreboardObjective(id);
+    },
+
+    removeObjective(objective) {
+        bridge.removeObjective(typeof objective === "string" ? objective : objective.id);
+        return true;
+    },
+
+    getParticipants() {
+        return list(bridge.scoreboardParticipants())
+            .map(name => ({ displayName: name, type: "Player" }));
+    },
+
+    getObjectiveAtDisplaySlot() {
+        return unsupported("Scoreboard.getObjectiveAtDisplaySlot");
+    },
+
+    setObjectiveAtDisplaySlot() {
+        return unsupported("Scoreboard.setObjectiveAtDisplaySlot");
+    },
+
+    clearObjectiveAtDisplaySlot() {
+        return unsupported("Scoreboard.clearObjectiveAtDisplaySlot");
+    },
+};
 
 export const world = new World();
 
