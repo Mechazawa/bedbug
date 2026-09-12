@@ -44,12 +44,58 @@ public final class BedrockCommands {
         // An event carries the namespace of the pack that declared it, and Brigadier's unquoted
         // string stops at the colon. Greedy is what lets `vn:become_angry` through unquoted, which
         // is how Bedrock writes it, and nothing follows the event for greed to swallow.
+        // Bedrock plays a track for everyone; Java's own music is a sound in its own category, which
+        // is what `volume` and `fade` in Bedrock's form control and what a pack ships as a sound.
+        dispatcher.register(Commands.literal("music")
+            .requires(source -> Platform.allowedAt(source, 1))
+            .then(Commands.literal("stop").executes(command -> stopMusic(command.getSource())))
+            .then(Commands.literal("play")
+                .then(Commands.argument("track", StringArgumentType.string())
+                    .executes(command -> playMusic(command, 1f))
+                    .then(Commands.argument("volume", FloatArgumentType.floatArg(0))
+                        .executes(command -> playMusic(command,
+                            FloatArgumentType.getFloat(command, "volume"))))))
+            .then(Commands.literal("queue")
+                .then(Commands.argument("track", StringArgumentType.string())
+                    .executes(command -> playMusic(command, 1f)))));
+
+        // Bedrock toggles between clear and raining, which is the pair Java's own command names.
+        dispatcher.register(Commands.literal("toggledownfall")
+            .requires(source -> Platform.allowedAt(source, 1))
+            .executes(command -> toggleDownfall(command.getSource())));
+
         dispatcher.register(Commands.literal("event")
             .requires(source -> Platform.allowedAt(source, 1))
             .then(Commands.literal("entity")
                 .then(Commands.argument("targets", EntityArgument.entities())
                     .then(Commands.argument("event", StringArgumentType.greedyString())
                         .executes(BedrockCommands::entityEvent)))));
+    }
+
+    /**
+     * Bedrock's own commands, expressed as the Java commands that do the same thing.
+     *
+     * Running Java's own implementation rather than reaching for the server method behind it keeps
+     * this to one form across every version, and gives the pack the same feedback a player typing it
+     * would get.
+     */
+    private static int run(CommandSourceStack source, String command) {
+        source.getServer().getCommands().performPrefixedCommand(source.withSuppressedOutput(), command);
+        return 1;
+    }
+
+    /** A track is a sound in the music category, which is the slider a player turns down. */
+    private static int playMusic(CommandContext<CommandSourceStack> command, float volume) {
+        String track = StringArgumentType.getString(command, "track");
+        return run(command.getSource(), "playsound " + track + " music @a ~ ~ ~ " + volume);
+    }
+
+    private static int stopMusic(CommandSourceStack source) {
+        return run(source, "stopsound @a music");
+    }
+
+    private static int toggleDownfall(CommandSourceStack source) {
+        return run(source, source.getLevel().isRaining() ? "weather clear" : "weather rain");
     }
 
     private static int playAnimation(CommandContext<CommandSourceStack> command, String stopExpression,

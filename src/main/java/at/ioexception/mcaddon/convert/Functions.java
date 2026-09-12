@@ -30,13 +30,13 @@ public final class Functions {
     /**
      * Commands Bedrock has and Java has no counterpart for.
      *
-     * `scriptevent`, `playanimation` and `event` are not among them: this mod registers all three,
-     * because everything they need is already here. What is left asks for a renderer feature Java
-     * has none of, or for a server Java does not speak to.
+     * `scriptevent`, `playanimation`, `event`, `music` and `toggledownfall` are not among them: this
+     * mod registers all five, because everything they need is already here. What is left asks for a
+     * renderer feature Java has none of, or for a server Java does not speak to.
      */
     private static final Set<String> BEDROCK_ONLY = Set.of(
-        "fog", "camerashake", "camera", "music", "mobevent", "structure", "inputpermission", "hud",
-        "dialogue", "script", "toggledownfall", "immutableworld", "wsserver", "connect");
+        "fog", "camerashake", "camera", "mobevent", "structure", "inputpermission", "hud",
+        "dialogue", "script", "immutableworld", "wsserver", "connect");
 
     private static final Pattern SELECTOR = Pattern.compile("@[aeprsn]\\[([^\\]]*)\\]");
     private static final Pattern SPACE = Pattern.compile("\\s+");

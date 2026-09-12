@@ -70,12 +70,12 @@ shown as the Java one; a `particles/*.json` of the pack's own describes an emitt
 Molang, which is a renderer of its own rather than a translation. One a pack asks for and this mod
 cannot show is named in the log rather than passed over.
 
-**A handful of Bedrock commands.** `fog`, `camera`, `camerashake`, `hud`, `dialogue`, `music`,
-`mobevent`, `structure`, `inputpermission`, `toggledownfall`, `immutableworld`, `wsserver` and
-`connect` name a renderer feature Java has none of, or a server Java does not speak to. A function
-using one keeps its other lines and the dropped command is reported. `testfor`, `testforblock`,
-`testforblocks` and `titleraw` are translated; `playanimation`, `event` and `scriptevent` are
-registered by this mod.
+**A handful of Bedrock commands.** `fog`, `camera`, `camerashake`, `hud`, `dialogue`, `mobevent`,
+`structure`, `inputpermission`, `immutableworld`, `wsserver` and `connect` name a renderer feature
+Java has none of, or a server Java does not speak to. A function using one keeps its other lines and
+the dropped command is reported. `testfor`, `testforblock`, `testforblocks` and `titleraw` are
+translated; `playanimation`, `event`, `scriptevent`, `music` and `toggledownfall` are registered by
+this mod.
 
 Surface lighting from a physically based texture set is the one thing that depends on what the
 player has installed: the emissive channel is drawn again at full brightness with or without a
