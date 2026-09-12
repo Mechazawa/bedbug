@@ -130,18 +130,21 @@ tools/molang/MolangCheck.java  Molang conformance harness
 
 src/main/java/at/ioexception/mcaddon/
   pack/                      Discovery, manifests, dependency order
-  convert/                   Runtime conversion: Targa, Ogg repair, sounds, text, namespaces
+  convert/                   Runtime conversion: Targa, Ogg repair, sounds, text, models, functions
   resource/                  The converted packs and how the game is told about them
-  registry/                  Sound events and entity types from pack data
+  registry/                  Sounds, entities, items, blocks, spawns and the creative tab
   bedrock/molang/            Molang parser, evaluator, maths. Trig is in degrees.
   bedrock/model/             Geometry parsing, baking, render controllers
   bedrock/animation/         Animations, channels, player, controllers
   bedrock/entity/            Client entity definitions and the animator that runs them
-  bedrock/behaviour/         Server entity definitions from behaviour packs
-  script/                    GraalJS host, the bridge, and what is not implemented yet
+  bedrock/behaviour/         Entities, items, blocks, recipes, loot, trading, spawn rules, filters
+  script/                    GraalJS host, the bridge, pack-declared commands, coverage
   entity/                    The one mob class every add-on entity uses
-  server/                    Server lifecycle, commands, property sync
-  client/render/             Renderer, pass resolution, query answering, per-entity state
+  block/                     The block class that carries a pack's own states
+  server/                    Server lifecycle, commands, sensors, entity events, property sync
+  client/render/             Renderer, attachable layer, pass resolution, query answering
+  client/screen/             The screen a Bedrock form becomes
+  mixin/                     Pack repository source, and the attachable layer on living entities
   platform/Platform.java     Every call whose spelling differs across versions
   network/Channels.java      Payloads, in both the 1.21+ and the older form
 
