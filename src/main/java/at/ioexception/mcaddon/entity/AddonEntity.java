@@ -120,6 +120,48 @@ public class AddonEntity extends PathfinderMob implements Merchant {
         if (definition.components().containsKey("minecraft:experience_reward")) {
             xpReward = (int) number(definition, "minecraft:experience_reward", "on_death", xpReward);
         }
+        if (definition.components().containsKey("minecraft:persistent")) {
+            setPersistenceRequired();
+        }
+
+        // Bedrock names the kind of pathfinding; Java asks whether the navigator may take each route.
+        net.minecraft.world.entity.ai.navigation.PathNavigation navigation = getNavigation();
+        if (navigation instanceof net.minecraft.world.entity.ai.navigation.GroundPathNavigation ground) {
+            ground.setCanOpenDoors(has("minecraft:annotation.open_door"));
+            ground.setCanFloat(has("minecraft:navigation.swim") || has("minecraft:navigation.generic"));
+        }
+        if (has("minecraft:preferred_path")) {
+            // The enum naming a kind of ground was renamed in 1.21.
+            //? if >=1.21 {
+            setPathfindingMalus(net.minecraft.world.level.pathfinder.PathType.WATER, 8f);
+            //?} else {
+            /*setPathfindingMalus(net.minecraft.world.level.pathfinder.BlockPathTypes.WATER, 8f);
+            *///?}
+        }
+    }
+
+    private boolean has(String component) {
+        return definition.components().containsKey(component);
+    }
+
+    /** Bedrock says an entity is angry; Java asks the entity, so the flag is kept here. */
+    public boolean isAngry() {
+        return has("minecraft:angry");
+    }
+
+    /**
+     * Whether a lead can hold this entity.
+     *
+     * A pack saying so is describing what Java already allows for a mob, so the component only has
+     * to be honoured when it says the opposite.
+     */
+    // A mob could always be leashed before 1.21.2, where the question moved onto the entity.
+    //? if >=1.21.2 {
+    @Override
+    //?}
+    public boolean canBeLeashed() {
+        return definition == null || !definition.components().containsKey("minecraft:leashable")
+            || number(definition, "minecraft:leashable", "can_be_stolen", 1) != 0;
     }
 
     private void addGoals() {

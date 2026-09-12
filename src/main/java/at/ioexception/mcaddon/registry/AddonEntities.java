@@ -158,7 +158,28 @@ public final class AddonEntities {
         "minecraft:physics", "minecraft:pushable", "minecraft:push_through", "minecraft:despawn",
         "minecraft:nameable", "minecraft:persistent", "minecraft:loot", "minecraft:jump.static",
         "minecraft:can_climb", "minecraft:breathable", "minecraft:conditional_bandwidth_optimization",
-        "minecraft:entity_spawned");
+        "minecraft:entity_spawned", "minecraft:follow_range", "minecraft:knockback_resistance",
+        "minecraft:fire_immune", "minecraft:is_hidden_when_invisible", "minecraft:experience_reward",
+        "minecraft:behavior.float", "minecraft:behavior.panic", "minecraft:behavior.random_stroll",
+        "minecraft:behavior.move_outdoors", "minecraft:behavior.explore_outskirts",
+        "minecraft:behavior.look_at_player", "minecraft:behavior.look_at_trading_player",
+        "minecraft:behavior.random_look_around", "minecraft:behavior.move_indoors",
+        "minecraft:behavior.move_towards_dwelling_restriction", "minecraft:behavior.tempt",
+        "minecraft:behavior.move_towards_home_restriction",
+        "minecraft:behavior.move_towards_restriction", "minecraft:behavior.mount_pathing",
+        "minecraft:behavior.follow_owner", "minecraft:behavior.stroll_towards_village",
+        "minecraft:behavior.avoid_mob_type", "minecraft:behavior.hide",
+        "minecraft:behavior.avoid_block", "minecraft:behavior.panic_on_fire",
+        "minecraft:behavior.open_door", "minecraft:annotation.open_door",
+        "minecraft:behavior.melee_attack", "minecraft:behavior.melee_box_attack",
+        "minecraft:behavior.nearest_attackable_target", "minecraft:behavior.hurt_by_target",
+        "minecraft:navigation.walk", "minecraft:navigation.generic", "minecraft:navigation.swim",
+        "minecraft:navigation.float", "minecraft:navigation.fly", "minecraft:navigation.climb",
+        "minecraft:navigation.hover", "minecraft:movement.basic", "minecraft:movement.generic",
+        "minecraft:movement.fly", "minecraft:movement.hover", "minecraft:movement.jump",
+        "minecraft:movement.skip", "minecraft:movement.sway", "minecraft:movement.amphibious",
+        "minecraft:preferred_path", "minecraft:leashable", "minecraft:angry",
+        "minecraft:pushable_by_entity", "minecraft:pushable_by_block");
 
     /**
      * The trade table an entity names, read while the pack it came from is still in hand.

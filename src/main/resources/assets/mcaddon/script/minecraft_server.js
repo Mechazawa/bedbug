@@ -460,7 +460,7 @@ const itemComponents = Object.freeze([
 ]);
 
 /**
- * A stack of items, held as a value rather than as a slot in the world.
+ * A stack of items, held as a value of its own and not as a slot in the world.
  *
  * What the game decides about the kind of item is read from the registry every time it is asked
  * for. What a pack decides about this one stack (its lore, its dynamic properties, the blocks it
