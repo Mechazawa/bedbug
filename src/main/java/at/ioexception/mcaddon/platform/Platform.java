@@ -125,6 +125,15 @@ public final class Platform {
         *///?}
     }
 
+    /** The builder started naming its type with a registry key rather than a string in 1.21.2. */
+    public static <T extends Entity> EntityType<T> buildEntityType(EntityType.Builder<T> builder, Identifier id) {
+        //? if >=1.21.2 {
+        return builder.build(ResourceKey.create(net.minecraft.core.registries.Registries.ENTITY_TYPE, id));
+        //?} else {
+        /*return builder.build(id.toString());
+        *///?}
+    }
+
     public static Entity createMob(EntityType<?> type, ServerLevel level) {
         //? if >=1.21.2 {
         return type.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND);
@@ -204,6 +213,15 @@ public final class Platform {
         //?} else {
         /*Pack.ResourcesSupplier resources = ignored -> new PathPackResources(id, directory, false);
         return Pack.readMetaAndCreate(id, name, true, resources, type, Pack.Position.TOP, PackSource.BUILT_IN);
+        *///?}
+    }
+
+    /** Where the player is looking from. The accessor lost its `get` prefix in 26. */
+    public static net.minecraft.world.phys.Vec3 cameraPosition() {
+        //? if >=26 {
+        return net.minecraft.client.Minecraft.getInstance().gameRenderer.mainCamera().position();
+        //?} else {
+        /*return net.minecraft.client.Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         *///?}
     }
 

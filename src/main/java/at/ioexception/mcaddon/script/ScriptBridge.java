@@ -358,7 +358,10 @@ public final class ScriptBridge {
     @HostAccess.Export
     public void setEntityProperty(String id, String name, Value value) {
         Entity entity = entity(id);
-        if (entity != null) state.setProperty(entity.getUUID(), name, plain(value));
+        if (entity == null) return;
+        state.setProperty(entity.getUUID(), name, plain(value));
+        // Clients draw from these, so a change is pushed rather than waiting for the next full send.
+        at.ioexception.mcaddon.server.EntityPropertySync.broadcast(entity, state);
     }
 
     @HostAccess.Export

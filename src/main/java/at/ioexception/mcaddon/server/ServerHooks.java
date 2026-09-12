@@ -10,6 +10,7 @@ import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.networking.v1.EntityTrackingEvents;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -47,7 +48,13 @@ public final class ServerHooks {
         ServerLifecycleEvents.SERVER_STARTED.register(ServerHooks::start);
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> stop());
         ServerTickEvents.END_SERVER_TICK.register(ServerHooks::tick);
-        ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> raiseEntityEvent("entityLoad", entity));
+        ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {
+            if (state != null) EntityPropertySync.seed(entity, state);
+            raiseEntityEvent("entityLoad", entity);
+        });
+        EntityTrackingEvents.START_TRACKING.register((entity, player) -> {
+            if (state != null) EntityPropertySync.sendTo(player, entity, state);
+        });
         ServerEntityEvents.ENTITY_UNLOAD.register((entity, level) -> raiseEntityEvent("entityRemove", entity));
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> raiseEntityEvent("entityDie", entity));
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> state = null);

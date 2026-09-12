@@ -7,6 +7,9 @@ plugins {
 stonecutter {
     replacements.string(true) {
         replace("Identifier", "ResourceLocation")
+        // Fabric API followed the game's own renames a version later than the game did.
+        replace("clientboundPlay()", "playS2C()")
+        replace("serverboundPlay()", "playC2S()")
     }
 }
 

@@ -12,4 +12,5 @@
       Only files carrying a whole alternative class body belong here. An import genuinely unused in
       every form should be deleted rather than listed.
     -->
+    <suppress files="client[\\/]render[\\/]AddonEntityRenderer\.java" checks="UnusedImports"/>
 </suppressions>

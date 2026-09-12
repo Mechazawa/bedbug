@@ -54,6 +54,21 @@ public final class AnimationPlayer {
         running.put(name, new Running(animation));
     }
 
+    /** Whether any clip in flight has run past its length, which `q.any_animation_finished` asks. */
+    public boolean anyFinished() {
+        for (Running clip : running.values()) {
+            if (clip.animation.finished(clip.animTime)) return true;
+        }
+        return false;
+    }
+
+    public boolean allFinished() {
+        for (Running clip : running.values()) {
+            if (!clip.animation.finished(clip.animTime)) return false;
+        }
+        return true;
+    }
+
     public void stop(String name) {
         running.remove(name);
     }
