@@ -8,8 +8,12 @@ import com.mojang.math.Axis;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.Identifier;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.item.ItemStack;
 
+import java.util.ArrayList;
 import java.util.List;
 
 //? if >=1.21.2 {
@@ -52,11 +56,34 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
         return entity.definition() == null ? "" : entity.definition().identifier();
     }
 
+    /**
+     * The models for whatever the entity is wearing or holding.
+     *
+     * An attachable names itself after the item it belongs to, so an equipped stack finds its model
+     * by its own identifier. Each one animates on its own clock beside the wearer's.
+     */
+    private static List<AddonModels.Pass> attachables(AddonEntity entity, float partialTick) {
+        List<AddonModels.Pass> passes = new ArrayList<>();
+        for (EquipmentSlot slot : EquipmentSlot.values()) {
+            ItemStack held = entity.getItemBySlot(slot);
+            if (held.isEmpty()) continue;
+
+            String item = BuiltInRegistries.ITEM.getKey(held.getItem()).toString();
+            AddonClientAssets.Binding binding = AddonClientAssets.attachableFor(item);
+            if (binding == null) continue;
+
+            EntityAnimator animator = Animators.of(entity, binding, item, partialTick,
+                entity.tickCount + partialTick);
+            if (animator != null) passes.addAll(binding.models().resolve(animator));
+        }
+        return passes;
+    }
+
     //? if >=1.21.2 {
     /** What drawing needs, pulled off the entity while the entity is still safe to touch. */
     public static class State extends EntityRenderState {
         EntityAnimator animator;
-        List<AddonModels.Pass> passes = List.of();
+        List<AddonModels.Pass> passes = new ArrayList<>();
         float bodyRotation;
         float scale = 1;
     }
@@ -75,7 +102,9 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
         state.animator = binding == null
             ? null
             : Animators.of(entity, identifier, partialTick, entity.tickCount + partialTick);
-        state.passes = state.animator == null ? List.of() : binding.models().resolve(state.animator);
+        state.passes = new ArrayList<>();
+        if (state.animator != null) state.passes.addAll(binding.models().resolve(state.animator));
+        state.passes.addAll(attachables(entity, partialTick));
         state.bodyRotation = Mth.rotLerp(partialTick, entity.yBodyRotO, entity.yBodyRot);
         state.scale = state.animator == null ? 1 : state.animator.scale();
     }
@@ -121,7 +150,9 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
 
         poseStack.pushPose();
         applyModelSpace(poseStack, Mth.rotLerp(partialTick, entity.yBodyRotO, entity.yBodyRot), animator.scale());
-        for (AddonModels.Pass pass : binding.models().resolve(animator)) {
+        List<AddonModels.Pass> passes = new ArrayList<>(binding.models().resolve(animator));
+        passes.addAll(attachables(entity, partialTick));
+        for (AddonModels.Pass pass : passes) {
             VertexConsumer buffer = buffers.getBuffer(RenderType.entityCutoutNoCull(pass.texture()));
             BedrockModelRenderer.render(pass.geometry(), animator, pass::hides, pass.shift(),
                 poseStack, buffer, light, OverlayTexture.NO_OVERLAY, -1);

@@ -61,12 +61,30 @@ public final class ServerHooks {
                 EntityEvents.trigger(entity, "minecraft:entity_spawned", null, state);
             }
             raiseEntityEvent("entityLoad", entity);
+            // Bedrock separates the two: a chunk load raises one, coming into existence raises both.
+            if (entity.tickCount == 0) raiseEntityEvent("entitySpawn", entity);
         });
         EntityTrackingEvents.START_TRACKING.register((entity, player) -> {
             if (state != null) EntityPropertySync.sendTo(player, entity, state);
         });
         ServerEntityEvents.ENTITY_UNLOAD.register((entity, level) -> raiseEntityEvent("entityRemove", entity));
-        ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> raiseEntityEvent("entityDie", entity));
+        ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> {
+            Map<String, Object> fields = new LinkedHashMap<>();
+            fields.put("deadEntity", new ScriptHost.EntityHandle(entity.getStringUUID()));
+            fields.put("damageSource", source.getMsgId());
+            if (scripts != null) scripts.raiseWorldEvent("entityDie", fields);
+        });
+        // Fabric gained an after-damage event in 1.21; before that a pack learns of damage only
+        // through the death event.
+        //? if >=1.21 {
+        ServerLivingEntityEvents.AFTER_DAMAGE.register((entity, source, base, taken, blocked) -> {
+            Map<String, Object> fields = new LinkedHashMap<>();
+            fields.put("hurtEntity", new ScriptHost.EntityHandle(entity.getStringUUID()));
+            fields.put("damage", (double) taken);
+            fields.put("cause", source.getMsgId());
+            if (scripts != null) scripts.raiseWorldEvent("entityHurt", fields);
+        });
+        //?}
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> state = null);
         CommandRegistrationCallback.EVENT.register(ServerHooks::registerCommands);
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->

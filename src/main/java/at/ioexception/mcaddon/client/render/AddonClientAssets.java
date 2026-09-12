@@ -22,6 +22,7 @@ public final class AddonClientAssets {
     }
 
     private static final Map<String, Binding> BY_IDENTIFIER = new LinkedHashMap<>();
+    private static final Map<String, Binding> ATTACHABLES = new LinkedHashMap<>();
 
     private AddonClientAssets() {
     }
@@ -33,14 +34,22 @@ public final class AddonClientAssets {
             AddonModels models = new AddonModels(assets, converted);
             assets.entities().forEach((identifier, definition) ->
                 BY_IDENTIFIER.put(identifier, new Binding(models, definition)));
+            assets.attachables().forEach((identifier, definition) ->
+                ATTACHABLES.put(identifier, new Binding(models, definition)));
         }
         if (!BY_IDENTIFIER.isEmpty()) {
-            McAddon.LOGGER.info("{} add-on entities have a client definition.", BY_IDENTIFIER.size());
+            McAddon.LOGGER.info("{} add-on entities have a client definition, {} items are attachable.",
+                BY_IDENTIFIER.size(), ATTACHABLES.size());
         }
     }
 
     /** Null when a behaviour pack declares an entity its resource pack never described. */
     public static Binding of(String identifier) {
         return BY_IDENTIFIER.get(identifier);
+    }
+
+    /** The model worn or held for an item, which an attachable names by the item's own identifier. */
+    public static Binding attachableFor(String itemIdentifier) {
+        return ATTACHABLES.get(itemIdentifier);
     }
 }

@@ -16,6 +16,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -42,7 +43,23 @@ public final class EntityEvents {
             return false;
         }
         run(entity, definition, event, other, state, 0);
+        raiseDataDriven(entity, name);
         return true;
+    }
+
+    /**
+     * A pack's script watches its own data half through this event.
+     *
+     * Bedrock raises it whenever a data-driven entity event fires, which is how a script reacts to
+     * something the behaviour pack decided without the two halves naming each other.
+     */
+    private static void raiseDataDriven(Entity entity, String name) {
+        if (ServerHooks.scripts() == null) return;
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("entity", new at.ioexception.mcaddon.script.ScriptHost.EntityHandle(entity.getStringUUID()));
+        fields.put("eventTrigger", name);
+        ServerHooks.scripts().raiseWorldEvent("dataDrivenEntityTrigger", fields);
     }
 
     private static void run(Entity entity, ServerEntityDefinition definition, EntityEvent event,

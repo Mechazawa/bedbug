@@ -16,17 +16,27 @@ public final class Animators {
     private record Entry(EntityAnimator animator, AddonQueries queries, float[] lastTime) {
     }
 
-    private static final Map<Integer, Entry> ANIMATORS = new HashMap<>();
+    private static final Map<String, Entry> ANIMATORS = new HashMap<>();
 
     private Animators() {
     }
 
     /** Null when the entity's pack never described how it looks. */
     public static EntityAnimator of(Entity entity, String identifier, float partialTick, float ageInTicks) {
-        AddonClientAssets.Binding binding = AddonClientAssets.of(identifier);
+        return of(entity, AddonClientAssets.of(identifier), identifier, partialTick, ageInTicks);
+    }
+
+    /**
+     * One animator per entity and per thing drawn on it.
+     *
+     * A worn attachable runs its own animation script beside the entity's, so it needs a clock and a
+     * set of variables of its own rather than sharing the wearer's.
+     */
+    public static EntityAnimator of(Entity entity, AddonClientAssets.Binding binding, String key,
+        float partialTick, float ageInTicks) {
         if (binding == null) return null;
 
-        Entry entry = ANIMATORS.computeIfAbsent(entity.getId(), id -> {
+        Entry entry = ANIMATORS.computeIfAbsent(entity.getId() + "/" + key, id -> {
             EntityAnimator animator = new EntityAnimator(binding.models().assets(), binding.definition());
             AddonQueries queries = new AddonQueries(entity, animator);
             animator.environment().setQueries(queries);
@@ -42,7 +52,7 @@ public final class Animators {
     }
 
     public static void forget(int entityId) {
-        ANIMATORS.remove(entityId);
+        ANIMATORS.keySet().removeIf(key -> key.startsWith(entityId + "/"));
     }
 
     public static void clear() {

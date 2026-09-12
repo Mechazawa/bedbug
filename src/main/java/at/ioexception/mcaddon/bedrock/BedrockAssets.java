@@ -89,8 +89,8 @@ public final class BedrockAssets {
         return entities;
     }
 
-    public ClientEntityDefinition attachable(String identifier) {
-        return attachables.get(identifier);
+    public Map<String, ClientEntityDefinition> attachables() {
+        return attachables;
     }
 
     private void each(BedrockPack pack, String directory, Consumer<JsonObject> reader) {
