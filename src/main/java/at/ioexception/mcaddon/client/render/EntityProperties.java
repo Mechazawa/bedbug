@@ -1,7 +1,6 @@
 package at.ioexception.mcaddon.client.render;
 
 import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import java.util.HashMap;
@@ -43,21 +42,6 @@ public final class EntityProperties {
 
     public static void clear() {
         BY_ENTITY.clear();
-    }
-
-    /** Writes the shape the payload carries, which the server side uses to fill it. */
-    public static String encode(Map<String, Object> values) {
-        JsonObject json = new JsonObject();
-        values.forEach((name, value) -> {
-            if (value instanceof Boolean flag) {
-                json.addProperty(name, flag);
-            } else if (value instanceof Number number) {
-                json.addProperty(name, number);
-            } else {
-                json.addProperty(name, String.valueOf(value));
-            }
-        });
-        return json.toString();
     }
 
     private static Object value(JsonElement element) {

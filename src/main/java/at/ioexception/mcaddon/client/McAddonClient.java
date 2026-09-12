@@ -4,13 +4,17 @@ import at.ioexception.mcaddon.client.render.AddonClientAssets;
 import at.ioexception.mcaddon.client.render.AddonEntityRenderer;
 import at.ioexception.mcaddon.client.render.Animators;
 import at.ioexception.mcaddon.client.render.EntityProperties;
+import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.network.Channels;
+import at.ioexception.mcaddon.network.PackList;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientEntityEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.minecraft.world.entity.EntityType;
+
+import java.util.List;
 
 public final class McAddonClient implements ClientModInitializer {
     @Override
@@ -22,6 +26,7 @@ public final class McAddonClient implements ClientModInitializer {
         }
 
         Channels.receiveProperties(EntityProperties::accept);
+        Channels.receivePacks(McAddonClient::reportMissingPacks);
 
         ClientEntityEvents.ENTITY_UNLOAD.register((entity, level) -> {
             Animators.forget(entity.getId());
@@ -31,6 +36,24 @@ public final class McAddonClient implements ClientModInitializer {
             Animators.clear();
             EntityProperties.clear();
         });
+    }
+
+    /**
+     * Says which of the server's add-ons this client has not got.
+     *
+     * A pack is a file the player installs, so a server cannot hand one out. Without this the models
+     * are simply missing and nothing says why.
+     */
+    private static void reportMissingPacks(String encoded) {
+        List<PackList.Entry> missing = PackList.decode(encoded).missingFrom(PackList.of(McAddon.packs()));
+        if (missing.isEmpty()) return;
+
+        for (PackList.Entry entry : missing) {
+            McAddon.LOGGER.warn("The server has an add-on this client has not got: {} {}",
+                entry.name(), entry.version());
+        }
+        McAddon.LOGGER.warn("Entities and items from those add-ons will not appear until they are "
+            + "installed here as well.");
     }
 
     /**

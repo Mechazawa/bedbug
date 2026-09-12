@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Reads the JSON dialect Bedrock packs are written in.
@@ -44,6 +45,21 @@ public final class Json {
     public static String text(JsonObject json, String key, String fallback) {
         JsonElement value = json.get(key);
         return value == null || !value.isJsonPrimitive() ? fallback : value.getAsString();
+    }
+
+    /** Writes the boolean, number and string values an entity property is allowed to hold. */
+    public static String encode(Map<String, Object> values) {
+        JsonObject json = new JsonObject();
+        values.forEach((name, value) -> {
+            if (value instanceof Boolean flag) {
+                json.addProperty(name, flag);
+            } else if (value instanceof Number number) {
+                json.addProperty(name, number);
+            } else {
+                json.addProperty(name, String.valueOf(value));
+            }
+        });
+        return json.toString();
     }
 
     /** Bedrock writes a single value where a list is allowed, so both shapes reach this. */

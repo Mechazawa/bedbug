@@ -2,6 +2,8 @@ package at.ioexception.mcaddon.server;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.network.Channels;
+import at.ioexception.mcaddon.network.PackList;
 import at.ioexception.mcaddon.script.ScriptHost;
 import at.ioexception.mcaddon.state.AddonState;
 import com.mojang.brigadier.CommandDispatcher;
@@ -12,6 +14,7 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.EntityTrackingEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -66,6 +69,8 @@ public final class ServerHooks {
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> raiseEntityEvent("entityDie", entity));
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> state = null);
         CommandRegistrationCallback.EVENT.register(ServerHooks::registerCommands);
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
+            Channels.sendPacks(handler.player, PackList.of(McAddon.packs()).encode()));
     }
 
     private static void start(MinecraftServer server) {

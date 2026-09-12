@@ -26,6 +26,7 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
  */
 public final class Channels {
     private static final Identifier PROPERTIES = McAddon.id("entity_properties");
+    private static final Identifier PACKS = McAddon.id("pack_list");
 
     private Channels() {
     }
@@ -46,11 +47,53 @@ public final class Channels {
     }
     //?}
 
+    //? if >=1.21 {
+    /** What the server has loaded, so a client can say which add-ons it is missing. */
+    private record Packs(String packs) implements CustomPacketPayload {
+        private static final CustomPacketPayload.Type<Packs> TYPE = new CustomPacketPayload.Type<>(PACKS);
+
+        private static final StreamCodec<FriendlyByteBuf, Packs> CODEC = StreamCodec.composite(
+            ByteBufCodecs.STRING_UTF8, Packs::packs,
+            Packs::new);
+
+        @Override
+        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+    //?}
+
     /** Called from the common initialiser, because the payload type has to exist on both sides. */
     public static void register() {
         //? if >=1.21 {
         PayloadTypeRegistry.clientboundPlay().register(Properties.TYPE, Properties.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(Packs.TYPE, Packs.CODEC);
         //?}
+    }
+
+    public static void sendPacks(ServerPlayer player, String packs) {
+        //? if >=1.21 {
+        ServerPlayNetworking.send(player, new Packs(packs));
+        //?} else {
+        /*FriendlyByteBuf buffer = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buffer.writeUtf(packs, 262144);
+        ServerPlayNetworking.send(player, PACKS, buffer);
+        *///?}
+    }
+
+    public static void receivePacks(java.util.function.Consumer<String> handler) {
+        //? if >=1.21 {
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+            Packs.TYPE,
+            (payload, context) -> context.client().execute(() -> handler.accept(payload.packs())));
+        //?} else {
+        /*net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+            PACKS,
+            (client, network, buffer, sender) -> {
+                String packs = buffer.readUtf(262144);
+                client.execute(() -> handler.accept(packs));
+            });
+        *///?}
     }
 
     public static void sendProperties(ServerPlayer player, int entityId, String values) {

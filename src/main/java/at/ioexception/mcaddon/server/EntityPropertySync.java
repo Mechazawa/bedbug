@@ -1,10 +1,10 @@
 package at.ioexception.mcaddon.server;
 
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
-import at.ioexception.mcaddon.client.render.EntityProperties;
 import at.ioexception.mcaddon.entity.AddonEntity;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.state.AddonState;
+import at.ioexception.mcaddon.util.Json;
 import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -37,14 +37,14 @@ public final class EntityPropertySync {
     public static void sendTo(ServerPlayer player, Entity entity, AddonState state) {
         Map<String, Object> properties = state.properties(entity.getUUID());
         if (properties.isEmpty()) return;
-        Channels.sendProperties(player, entity.getId(), EntityProperties.encode(properties));
+        Channels.sendProperties(player, entity.getId(), Json.encode(properties));
     }
 
     public static void broadcast(Entity entity, AddonState state) {
         Map<String, Object> properties = state.properties(entity.getUUID());
         if (properties.isEmpty()) return;
 
-        String encoded = EntityProperties.encode(properties);
+        String encoded = Json.encode(properties);
         for (ServerPlayer player : PlayerLookup.tracking(entity)) {
             Channels.sendProperties(player, entity.getId(), encoded);
         }
