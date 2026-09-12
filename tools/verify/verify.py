@@ -407,9 +407,22 @@ def wait_for(process: subprocess.Popen, lines: list[str], pattern: re.Pattern, d
         time.sleep(0.25)
 
 
+def world(root: Path, version: str) -> str | None:
+    """A saved world this version can be told to open, or None when it has none yet.
+
+    A client stopped at the title screen has nobody playing, so everything a pack does with a player
+    is untouched by the run: the player surface, the forms a pack opens, and every event carrying
+    somebody who used something. Opening a world is what puts a player in front of that code.
+    """
+    saves = root / "versions" / version / "run" / "saves"
+    if not saves.is_dir():
+        return None
+    return next((one.name for one in sorted(saves.iterdir()) if (one / "level.dat").is_file()), None)
+
+
 def play(root: Path, version: str, launch: Launch, ready: re.Pattern,
          script: list[tuple[float, str]], timeout: float, hold: float,
-         verbose: bool) -> tuple[list[str], Path, str]:
+         verbose: bool, quick_play: str | None = None) -> tuple[list[str], Path, str]:
     """Starts one game, waits for it to load, and always ends it by the deadline.
 
     A server is asked to stop and killed if it will not; a client has nothing to ask, so it is held
@@ -421,8 +434,11 @@ def play(root: Path, version: str, launch: Launch, ready: re.Pattern,
     lines: list[str] = []
     deadline = time.monotonic() + timeout
     started_before = running(launch)
+    command = ["./gradlew", f":{version}:{launch.task}", "--console=plain"]
+    if quick_play:
+        command.append(f"-PquickPlay={quick_play}")
     process = subprocess.Popen(
-        ["./gradlew", f":{version}:{launch.task}", "--console=plain"],
+        command,
         cwd=root, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True, bufsize=1, start_new_session=True,
         env={**os.environ, "JAVA_HOME": JAVA_HOME})
@@ -673,9 +689,14 @@ def check_client(root: Path, version: str, timeout: float, hold: float, verbose:
 
     addons, _, expected = addon_source(root, version, verdict)
     ready = CLIENT.ready if addons else CLIENT.ready_without_addon
-    lines, log, outcome = play(root, version, CLIENT, ready, [], timeout, hold, verbose)
+    opened = world(root, version)
+    lines, log, outcome = play(root, version, CLIENT, ready, [], timeout, hold, verbose, opened)
 
     verdict.notes.append(f"client {outcome}, {len(lines)} lines in {log.relative_to(root)}")
+    if opened:
+        verdict.notes.append(f"opened the world {opened!r}, so a player was in it")
+    else:
+        verdict.notes.append("no saved world, so nothing a pack does with a player was run")
     scan(lines, verdict, EXPECTED_WITH_ADDON if addons else ())
     gradle_failed(lines, outcome, verdict)
 
