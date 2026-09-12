@@ -48,6 +48,8 @@ server decides what happens; the client draws it.
   dialect with a `tick` function tag.
 - Attachables: what any entity wears or holds, players and vanilla mobs included, animating on its
   own clock.
+- The sounds and particles an animation, an animation controller state or an entity's own definition
+  fires, played at the bone the pack anchored them to.
 - Behaviour pack scripts against `@minecraft/server`, sandboxed: a script sees its own pack's files
   and nothing else on disk. Commands a script registers on startup become real commands,
   `@minecraft/server-ui` forms become real screens, and the world, system, entity, dimension, block,
@@ -62,6 +64,11 @@ for that this mod does not implement yet, which answers "will my pack work" with
 all become the render type the pass is drawn with. What cannot follow is the stencil buffer itself:
 a pass that exists only to write a mask is left out rather than drawn as a shape that does not
 belong there.
+
+**Particle effects a pack defines itself.** A Bedrock particle id that names a vanilla effect is
+shown as the Java one; a `particles/*.json` of the pack's own describes an emitter and a billboard in
+Molang, which is a renderer of its own rather than a translation. One a pack asks for and this mod
+cannot show is named in the log rather than passed over.
 
 **A handful of Bedrock commands.** `fog`, `camera`, `camerashake`, `hud`, `dialogue`, `music`,
 `mobevent`, `structure`, `inputpermission`, `toggledownfall`, `immutableworld`, `wsserver` and
