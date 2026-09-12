@@ -2,6 +2,7 @@
 build/
 versions/*/build/
 versions/*/src/
+versions/*/logs/
 run/
 out/
 
