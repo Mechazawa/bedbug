@@ -38,6 +38,26 @@ public final class Names {
     }
 
     /**
+     * One Bedrock identifier split into the two halves a resource location is made of.
+     *
+     * An identifier with no colon belongs to whatever namespace the caller says, which differs by
+     * what is being named: a pack's own content takes the pack's namespace, while the game's own
+     * takes `minecraft`. Both halves come back sanitised, because that is the only form the game
+     * accepts and every caller wanted it.
+     */
+    public static Identifier split(String identifier, String fallbackNamespace) {
+        int colon = identifier.indexOf(':');
+        return colon <= 0
+            ? new Identifier(sanitise(fallbackNamespace), sanitise(identifier))
+            : new Identifier(sanitise(identifier.substring(0, colon)),
+                sanitise(identifier.substring(colon + 1)));
+    }
+
+    /** A Bedrock identifier in the shape the game reads, without being a `ResourceLocation` yet. */
+    public record Identifier(String namespace, String path) {
+    }
+
+    /**
      * The namespace a pack's own content uses, recovered from the identifiers it declares.
      *
      * A pack's assets have no namespace of their own, only paths, so one has to be chosen for them.

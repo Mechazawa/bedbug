@@ -39,6 +39,7 @@ public final class Functions {
         "dialogue", "script", "toggledownfall", "immutableworld", "wsserver", "connect");
 
     private static final Pattern SELECTOR = Pattern.compile("@[aeprsn]\\[([^\\]]*)\\]");
+    private static final Pattern SPACE = Pattern.compile("\\s+");
 
     private Functions() {
     }
@@ -75,12 +76,13 @@ public final class Functions {
         if (source.isEmpty() || source.startsWith("#")) return source.isEmpty() ? null : source;
 
         String command = source.startsWith("/") ? source.substring(1) : source;
-        String name = command.split("\\s+", 2)[0].toLowerCase(Locale.ROOT);
+        String[] parts = SPACE.split(command, 2);
+        String name = parts[0].toLowerCase(Locale.ROOT);
         if (BEDROCK_ONLY.contains(name)) {
             unsupported.add("command " + name);
             return null;
         }
-        String renamed = rename(name, command);
+        String renamed = rename(name, command, parts.length > 1 ? parts[1] : "");
         if (renamed == null) {
             unsupported.add("command " + name + ", which names an entity Java does not have");
             return null;
@@ -102,12 +104,9 @@ public final class Functions {
      *
      * Null when the command names an entity Java has none of, which the caller drops.
      */
-    private static String rename(String name, String command) {
-        String[] parts = command.split("\\s+", 2);
-        String rest = parts.length > 1 ? parts[1] : "";
-
+    private static String rename(String name, String command, String rest) {
         if (name.equals("summon")) {
-            String[] arguments = rest.split("\\s+", 2);
+            String[] arguments = SPACE.split(rest, 2);
             String type = BedrockEntityNames.java(arguments[0]);
             return type == null ? null
                 : "summon " + type + (arguments.length > 1 ? " " + arguments[1] : "");
@@ -128,8 +127,7 @@ public final class Functions {
         if (brace < 0) return arguments;
 
         try {
-            JsonObject body = com.google.gson.JsonParser.parseString(arguments.substring(brace))
-                .getAsJsonObject();
+            JsonObject body = Json.parse(arguments.substring(brace)).getAsJsonObject();
             JsonArray raw = body.getAsJsonArray("rawtext");
             if (raw == null) return arguments;
             return arguments.substring(0, brace) + raw;

@@ -9,6 +9,8 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
+import java.util.regex.Pattern;
 
 /**
  * What a Bedrock particle id looks like in Java.
@@ -20,46 +22,40 @@ import java.util.Map;
  */
 public final class BedrockParticles {
     private static final Map<String, String> RENAMED = Map.ofEntries(
-        Map.entry("basic_flame_particle", "flame"),
-        Map.entry("basic_smoke_particle", "smoke"),
-        Map.entry("basic_crit_particle", "crit"),
-        Map.entry("basic_bubble_particle", "bubble"),
-        Map.entry("bubble_column_up_particle", "bubble_column_up"),
-        Map.entry("water_splash_particle", "splash"),
-        Map.entry("water_wake_particle", "fishing"),
-        Map.entry("water_evaporation_actor_emitter", "cloud"),
+        Map.entry("basic_flame", "flame"),
+        Map.entry("basic_smoke", "smoke"),
+        Map.entry("basic_crit", "crit"),
+        Map.entry("basic_bubble", "bubble"),
+        Map.entry("water_splash", "splash"),
+        Map.entry("water_wake", "fishing"),
+        Map.entry("water_evaporation_actor", "cloud"),
+        Map.entry("evaporation", "cloud"),
         Map.entry("villager_happy", "happy_villager"),
         Map.entry("villager_angry", "angry_villager"),
-        Map.entry("heart_particle", "heart"),
-        Map.entry("note_particle", "note"),
-        Map.entry("explosion_particle", "explosion"),
-        Map.entry("huge_explosion_emitter", "explosion_emitter"),
-        Map.entry("huge_explosion_lab_misc_emitter", "explosion_emitter"),
+        Map.entry("huge_explosion", "explosion_emitter"),
+        Map.entry("huge_explosion_lab_misc", "explosion_emitter"),
         Map.entry("large_explosion", "explosion"),
-        Map.entry("critical_hit_emitter", "crit"),
-        Map.entry("enchanting_table_particle", "enchant"),
+        Map.entry("critical_hit", "crit"),
+        Map.entry("enchanting_table", "enchant"),
         Map.entry("mob_portal", "portal"),
         Map.entry("dragon_breath_fire", "dragon_breath"),
         Map.entry("dragon_breath_trail", "dragon_breath"),
         Map.entry("dragon_dying_explosion", "explosion_emitter"),
-        Map.entry("campfire_smoke_particle", "campfire_cosy_smoke"),
-        Map.entry("campfire_tall_smoke_particle", "campfire_signal_smoke"),
-        Map.entry("lava_particle", "lava"),
+        Map.entry("campfire_smoke", "campfire_cosy_smoke"),
+        Map.entry("campfire_tall_smoke", "campfire_signal_smoke"),
         Map.entry("endrod", "end_rod"),
-        Map.entry("ink_emitter", "squid_ink"),
-        Map.entry("totem_particle", "totem_of_undying"),
-        Map.entry("sculk_soul_particle", "sculk_soul"),
-        Map.entry("snowflake_particle", "snowflake"),
-        Map.entry("soul_particle", "soul"),
-        Map.entry("electric_spark_particle", "electric_spark"),
-        Map.entry("wax_particle", "wax_on"),
-        Map.entry("glow_particle", "glow"),
+        Map.entry("ink", "squid_ink"),
+        Map.entry("totem", "totem_of_undying"),
+        Map.entry("wax", "wax_on"),
         Map.entry("sonic_explosion", "sonic_boom"),
-        Map.entry("obsidian_glow_dust_particle", "reverse_portal"),
-        Map.entry("rising_borderdust_particle", "ash"),
-        Map.entry("evaporation", "cloud"));
+        Map.entry("obsidian_glow_dust", "reverse_portal"),
+        Map.entry("rising_borderdust", "ash"));
 
-    private static final Map<String, SimpleParticleType> RESOLVED = new HashMap<>();
+    /** Bedrock names an effect after what it is, and often ends it with what kind of thing it is. */
+    private static final Pattern KIND = Pattern.compile("_(particle|emitter)$");
+
+    /** Names already looked up, including the ones nothing matched, so a miss is asked once. */
+    private static final Map<String, Optional<SimpleParticleType>> RESOLVED = new HashMap<>();
 
     private BedrockParticles() {
     }
@@ -70,19 +66,32 @@ public final class BedrockParticles {
      * Only effects that carry no extra data are answered. A dust or a falling block needs a colour or
      * a block state that a particle name alone does not say, so those are reported as unimplemented
      * rather than drawn as the wrong thing.
+     *
+     * `minecraft:soul_particle` and `minecraft:soul` are the same effect, so the kind at the end of a
+     * Bedrock name is dropped before asking. Only what survives that is worth a table entry.
      */
     public static ParticleOptions vanilla(String bedrock) {
         String name = bedrock.startsWith("minecraft:")
             ? bedrock.substring("minecraft:".length()) : bedrock;
         if (name.contains(":")) return null;
 
-        return RESOLVED.computeIfAbsent(name.toLowerCase(Locale.ROOT), key -> {
-            SimpleParticleType found = lookUp(RENAMED.get(key));
-            if (found != null) return found;
+        return RESOLVED.computeIfAbsent(name.toLowerCase(Locale.ROOT), BedrockParticles::resolve)
+            .orElse(null);
+    }
 
-            found = lookUp(key);
-            return found != null ? found : lookUp(key.replaceAll("_particle$|_emitter$", ""));
-        });
+    /**
+     * The Java name for a Bedrock one: the same name without its kind, or what the table renames it.
+     *
+     * The rule comes first because it answers most of them, which keeps the table down to the names
+     * the two editions genuinely disagree on.
+     */
+    private static Optional<SimpleParticleType> resolve(String bedrock) {
+        String bare = KIND.matcher(bedrock).replaceAll("");
+
+        SimpleParticleType found = lookUp(RENAMED.get(bare));
+        if (found == null) found = lookUp(bare);
+        if (found == null) found = lookUp(bedrock);
+        return Optional.ofNullable(found);
     }
 
     private static SimpleParticleType lookUp(String java) {

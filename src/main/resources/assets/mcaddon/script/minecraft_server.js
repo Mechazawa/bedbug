@@ -653,20 +653,6 @@ function normaliseComponent(component) {
 }
 
 /** Only the components real packs read are modelled; the rest report themselves as unsupported. */
-/**
- * A data-driven trigger reports what it changed, which a pack reads to react to one component.
- *
- * The list is what the mod knows the event touched; an event that changed nothing still answers with
- * a list rather than with nothing, because a pack calls this without checking.
- */
-function triggerModifiers(fields) {
-    return list(fields ?? []).map(name => ({
-        getAddedComponentGroups: () => [],
-        getRemovedComponentGroups: () => [],
-        getTriggers: () => [name],
-    }));
-}
-
 function componentFor(entity, name) {
     switch (name) {
         case "minecraft:health":
@@ -875,7 +861,9 @@ class EventSignal {
  */
 const EVENT_SHAPES = {
     dataDrivenEntityTrigger(event) {
-        event.getModifiers = () => triggerModifiers(event.modifiers);
+        // Nothing tells the mod which component groups an event changed, so a pack that asks is
+        // told none rather than being handed a method that is not there.
+        event.getModifiers = () => [];
         return event;
     },
 };

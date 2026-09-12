@@ -75,7 +75,11 @@ public final class PackConverter {
         Textures textures = new Textures(namespace);
         Map<String, String> icons = new TreeMap<>();
         List<String> sounds = new ArrayList<>();
-        Map<String, SpawnEggAppearance> eggs = SpawnEggAppearance.readAll(pack);
+        BedrockAssets assets = BedrockAssets.read(pack);
+        Map<String, SpawnEggAppearance> eggs = new LinkedHashMap<>();
+        assets.entities().forEach((identifier, definition) -> {
+            if (definition.spawnEgg() != null) eggs.put(identifier, definition.spawnEgg());
+        });
 
         try {
             boolean fresh = !Files.isRegularFile(root.resolve(MARKER));
@@ -95,7 +99,7 @@ public final class PackConverter {
                 writeAtlas(root, icons.values());
                 writeRecipes(root, recipes);
                 writeLootTables(root, loot, namespace);
-                writeBlockModels(root, icons, blocks, BedrockAssets.read(pack));
+                writeBlockModels(root, icons, blocks, assets);
                 writeFunctions(bundle, root, namespace);
             }
 
@@ -399,11 +403,10 @@ public final class PackConverter {
     }
 
     private static String identifierKey(String kind, String identifier, String suffix) {
-        int colon = identifier.indexOf(':');
-        if (colon <= 0) return null;
+        if (identifier.indexOf(':') <= 0) return null;
 
-        return kind + "." + Names.sanitise(identifier.substring(0, colon))
-            + "." + Names.sanitise(identifier.substring(colon + 1)) + suffix;
+        Names.Identifier id = Names.split(identifier, "minecraft");
+        return kind + "." + id.namespace() + "." + id.path() + suffix;
     }
 
     /**
@@ -455,24 +458,42 @@ public final class PackConverter {
             String icon = item.iconKey() == null ? null : icons.get(item.iconKey());
             if (icon == null) continue;
 
-            int colon = item.identifier().indexOf(':');
-            String namespace = Names.sanitise(colon > 0 ? item.identifier().substring(0, colon) : "minecraft");
-            String name = Names.sanitise(colon > 0 ? item.identifier().substring(colon + 1) : item.identifier());
-
-            JsonObject textures = new JsonObject();
-            textures.addProperty("layer0", icon);
-            JsonObject model = new JsonObject();
-            model.addProperty("parent", "minecraft:item/generated");
-            model.add("textures", textures);
-            write(root.resolve("assets").resolve(namespace).resolve("models/item").resolve(name + ".json"), model);
-
-            JsonObject reference = new JsonObject();
-            reference.addProperty("type", "minecraft:model");
-            reference.addProperty("model", namespace + ":item/" + name);
-            JsonObject definition = new JsonObject();
-            definition.add("model", reference);
-            write(root.resolve("assets").resolve(namespace).resolve("items").resolve(name + ".json"), definition);
+            writeFlatItem(root, Names.split(item.identifier(), "minecraft"), "", flat(icon), null);
         }
+    }
+
+    /**
+     * One item drawn from one texture, in both the shapes a version may read it.
+     *
+     * Up to 1.21.3 the model at `models/item/<name>.json` is the whole answer. From 1.21.4 the game
+     * reads `items/<name>.json` first and that names the model, so both are written and whichever
+     * the running version looks for is there.
+     */
+    private static void writeFlatItem(Path root, Names.Identifier id, String suffix, JsonObject model,
+        JsonArray tints) throws IOException {
+        String name = id.path() + suffix;
+        Path assets = root.resolve("assets").resolve(id.namespace());
+        write(assets.resolve("models/item").resolve(name + ".json"), model);
+
+        JsonObject reference = new JsonObject();
+        reference.addProperty("type", "minecraft:model");
+        reference.addProperty("model", id.namespace() + ":item/" + name);
+        if (tints != null) reference.add("tints", tints);
+
+        JsonObject definition = new JsonObject();
+        definition.add("model", reference);
+        write(assets.resolve("items").resolve(name + ".json"), definition);
+    }
+
+    /** The model for a flat item: one texture, drawn as the sprite it is. */
+    private static JsonObject flat(String icon) {
+        JsonObject textures = new JsonObject();
+        textures.addProperty("layer0", icon);
+
+        JsonObject model = new JsonObject();
+        model.addProperty("parent", "minecraft:item/generated");
+        model.add("textures", textures);
+        return model;
     }
 
     /**
@@ -509,34 +530,12 @@ public final class PackConverter {
     private static void writeSpawnEggs(Path root, Map<String, String> icons,
         Map<String, SpawnEggAppearance> eggs) throws IOException {
         for (SpawnEggAppearance egg : eggs.values()) {
-            int colon = egg.identifier().indexOf(':');
-            if (colon <= 0) continue;
-
-            String namespace = Names.sanitise(egg.identifier().substring(0, colon));
-            String name = Names.sanitise(egg.identifier().substring(colon + 1)) + "_spawn_egg";
             String icon = egg.textureKey() == null ? null : icons.get(egg.textureKey());
+            JsonObject vanilla = new JsonObject();
+            vanilla.addProperty("parent", "minecraft:item/template_spawn_egg");
 
-            JsonObject model = new JsonObject();
-            if (icon != null) {
-                JsonObject textures = new JsonObject();
-                textures.addProperty("layer0", icon);
-                model.addProperty("parent", "minecraft:item/generated");
-                model.add("textures", textures);
-            } else {
-                model.addProperty("parent", "minecraft:item/template_spawn_egg");
-            }
-            write(root.resolve("assets").resolve(namespace).resolve("models/item").resolve(name + ".json"),
-                model);
-
-            JsonObject reference = new JsonObject();
-            reference.addProperty("type", "minecraft:model");
-            reference.addProperty("model", namespace + ":item/" + name);
-            if (icon == null) reference.add("tints", tints(egg));
-
-            JsonObject definition = new JsonObject();
-            definition.add("model", reference);
-            write(root.resolve("assets").resolve(namespace).resolve("items").resolve(name + ".json"),
-                definition);
+            writeFlatItem(root, Names.split(egg.identifier(), "minecraft"), "_spawn_egg",
+                icon == null ? vanilla : flat(icon), icon == null ? tints(egg) : null);
         }
     }
 

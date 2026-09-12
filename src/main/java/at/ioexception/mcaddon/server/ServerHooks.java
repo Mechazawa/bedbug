@@ -67,7 +67,10 @@ public final class ServerHooks {
             }
             raiseEntityEvent("entityLoad", entity);
             // Bedrock separates the two: a chunk load raises one, coming into existence raises both.
-            if (entity.tickCount == 0) raiseEntityEvent("entitySpawn", entity);
+            if (entity.tickCount == 0) {
+                at.ioexception.mcaddon.script.ScriptBridge.remember(entity);
+                raiseEntityEvent("entitySpawn", entity);
+            }
         });
         EntityTrackingEvents.START_TRACKING.register((entity, player) -> {
             if (state != null) EntityPropertySync.sendTo(player, entity, state);
@@ -216,7 +219,6 @@ public final class ServerHooks {
     private static void raiseEntityEvent(String event, Entity entity) {
         if (scripts == null) return;
 
-        at.ioexception.mcaddon.script.ScriptBridge.remember(entity);
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("entity", new ScriptHost.EntityHandle(entity.getStringUUID()));
         fields.put("cause", event.equals("entitySpawn") ? "Spawned" : "Loaded");

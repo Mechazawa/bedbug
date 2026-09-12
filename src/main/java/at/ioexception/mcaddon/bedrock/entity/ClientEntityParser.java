@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.bedrock.entity;
 
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
+import at.ioexception.mcaddon.convert.SpawnEggAppearance;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -32,7 +33,8 @@ public final class ClientEntityParser {
             gated(json.getAsJsonArray("render_controllers")),
             statements(scripts, "initialize"),
             statements(scripts, "pre_animation"),
-            scripts.has("scale") ? MolangParser.parse(primitive(scripts.get("scale"))) : null);
+            scripts.has("scale") ? MolangParser.parse(primitive(scripts.get("scale"))) : null,
+            SpawnEggAppearance.tryFrom(name, json));
     }
 
     private static Map<String, String> strings(JsonObject json, String field) {

@@ -1,14 +1,7 @@
 package at.ioexception.mcaddon.convert;
 
-import at.ioexception.mcaddon.McAddon;
-import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonObject;
-
-import java.io.IOException;
-import java.nio.file.Path;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 /**
  * How one entity's spawn egg looks, as its client definition describes it.
@@ -21,30 +14,18 @@ import java.util.Map;
  */
 public record SpawnEggAppearance(String identifier, String textureKey, int baseColour, int overlayColour) {
     /** Bedrock's own colours for an egg whose pack named none, so an egg always has some. */
-    private static final int DEFAULT_BASE = 0x4C6B32;
-    private static final int DEFAULT_OVERLAY = 0xA0A0A0;
+    public static final SpawnEggAppearance DEFAULT =
+        new SpawnEggAppearance("", null, 0x4C6B32, 0xA0A0A0);
 
-    public static Map<String, SpawnEggAppearance> readAll(BedrockPack pack) {
-        Map<String, SpawnEggAppearance> eggs = new LinkedHashMap<>();
-        for (Path file : pack.list("entity", ".json")) {
-            try {
-                JsonObject entity = Json.parseObject(file).getAsJsonObject("minecraft:client_entity");
-                JsonObject description = entity == null ? null : entity.getAsJsonObject("description");
-                JsonObject egg = description == null ? null : description.getAsJsonObject("spawn_egg");
-                if (egg == null) continue;
+    /** Null for an entity whose pack gave it no egg, which is most of them. */
+    public static SpawnEggAppearance tryFrom(String identifier, JsonObject description) {
+        JsonObject egg = description.getAsJsonObject("spawn_egg");
+        if (egg == null) return null;
 
-                String identifier = Json.text(description, "identifier", null);
-                if (identifier == null) continue;
-
-                eggs.put(identifier, new SpawnEggAppearance(identifier,
-                    Json.text(egg, "texture", null),
-                    colour(Json.text(egg, "base_color", null), DEFAULT_BASE),
-                    colour(Json.text(egg, "overlay_color", null), DEFAULT_OVERLAY)));
-            } catch (IOException | RuntimeException error) {
-                McAddon.LOGGER.warn("Could not read the spawn egg in {}.", file.getFileName());
-            }
-        }
-        return Map.copyOf(eggs);
+        return new SpawnEggAppearance(identifier,
+            Json.text(egg, "texture", null),
+            colour(Json.text(egg, "base_color", null), DEFAULT.baseColour()),
+            colour(Json.text(egg, "overlay_color", null), DEFAULT.overlayColour()));
     }
 
     private static int colour(String hex, int fallback) {

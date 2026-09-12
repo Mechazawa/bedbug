@@ -34,6 +34,13 @@ public final class Json {
         }
     }
 
+    /** Pack-authored JSON that arrived as text rather than as a file, read just as leniently. */
+    public static JsonElement parse(String source) {
+        JsonReader lenient = new JsonReader(new java.io.StringReader(source));
+        lenient.setLenient(true);
+        return JsonParser.parseReader(lenient);
+    }
+
     public static JsonObject parseObject(Path file) throws IOException {
         try (InputStream stream = Files.newInputStream(file)) {
             JsonElement parsed = parse(stream);

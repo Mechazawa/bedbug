@@ -88,21 +88,20 @@ public final class AddonItems {
 
             SpawnEggAppearance appearance = appearanceOf(entry.getValue().identifier());
             Item egg = Platform.spawnEgg(entry.getKey(), id,
-                appearance == null ? 0x4C6B32 : appearance.baseColour(),
-                appearance == null ? 0xA0A0A0 : appearance.overlayColour());
+                appearance.baseColour(), appearance.overlayColour());
             if (egg == null) continue;
             Registry.register(BuiltInRegistries.ITEM, id, egg);
             BY_IDENTIFIER.put(entry.getValue().identifier() + "_spawn_egg", egg);
         }
     }
 
-    /** How the pack that declared this entity wants its egg painted, when one of them said. */
+    /** How the pack that declared this entity wants its egg painted, or Bedrock's own colours. */
     private static SpawnEggAppearance appearanceOf(String identifier) {
         for (at.ioexception.mcaddon.convert.ConvertedPack pack : at.ioexception.mcaddon.resource.AddonPacks.all()) {
             SpawnEggAppearance appearance = pack.spawnEggs().get(identifier);
             if (appearance != null) return appearance;
         }
-        return null;
+        return SpawnEggAppearance.DEFAULT;
     }
 
     /**

@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.bedrock.entity;
 
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
+import at.ioexception.mcaddon.convert.SpawnEggAppearance;
 
 import java.util.List;
 import java.util.Map;
@@ -23,7 +24,9 @@ public record ClientEntityDefinition(
     List<Gated> renderControllers,
     List<MolangExpression> initialize,
     List<MolangExpression> preAnimation,
-    MolangExpression scale
+    MolangExpression scale,
+    /** Null when the pack gave this entity no spawn egg. */
+    SpawnEggAppearance spawnEgg
 ) {
     /** A name plus the condition under which it applies. A null condition always applies. */
     public record Gated(String name, MolangExpression condition) {
