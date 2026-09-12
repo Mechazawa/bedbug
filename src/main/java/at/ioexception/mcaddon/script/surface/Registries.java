@@ -120,6 +120,44 @@ public final class Registries extends Surface {
         return potion;
     }
 
+    /**
+     * Every vanilla id a pack may name, grouped by the registry that holds it.
+     *
+     * This is what `@minecraft/vanilla-data` publishes as its tables, read from the registries so
+     * that each one is what this version of the game ships rather than a list kept in step by hand.
+     * Only `minecraft:` ids are taken: an add-on's own blocks and items belong to that add-on.
+     */
+    @HostAccess.Export
+    public String vanillaTypes() {
+        JsonObject tables = new JsonObject();
+        tables.add("blocks", vanillaIds(BuiltInRegistries.BLOCK));
+        tables.add("items", vanillaIds(BuiltInRegistries.ITEM));
+        tables.add("entities", vanillaIds(BuiltInRegistries.ENTITY_TYPE));
+        tables.add("effects", vanillaIds(BuiltInRegistries.MOB_EFFECT));
+        tables.add("potionEffects", vanillaIds(BuiltInRegistries.POTION));
+        tables.add("enchantments",
+            vanillaIds(dynamic(net.minecraft.core.registries.Registries.ENCHANTMENT)));
+        tables.add("biomes", vanillaIds(dynamic(net.minecraft.core.registries.Registries.BIOME)));
+
+        // Bedrock's feature types name the structures a world generates, which Java keeps in a
+        // registry of its own rather than among the features a biome places.
+        tables.add("features", vanillaIds(dynamic(net.minecraft.core.registries.Registries.STRUCTURE)));
+
+        JsonArray dimensions = new JsonArray();
+        server.getAllLevels().forEach(level -> dimensions.add(dimensionOf(level)));
+        tables.add("dimensions", dimensions);
+
+        return tables.toString();
+    }
+
+    private static JsonArray vanillaIds(Registry<?> registry) {
+        JsonArray ids = new JsonArray();
+        registry.keySet().stream()
+            .filter(id -> id.getNamespace().equals("minecraft"))
+            .forEach(id -> ids.add(id.toString()));
+        return ids;
+    }
+
     @HostAccess.Export
     public String[] biomeTypes() {
         return dynamic(net.minecraft.core.registries.Registries.BIOME).keySet().stream()

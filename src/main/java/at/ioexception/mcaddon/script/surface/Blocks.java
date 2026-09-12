@@ -14,7 +14,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.Container;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
@@ -234,13 +233,6 @@ public final class Blocks extends Surface {
     @HostAccess.Export
     public String[] typeIds() {
         return BuiltInRegistries.BLOCK.keySet().stream().map(Identifier::toString).toArray(String[]::new);
-    }
-
-    /** Whether the block at a position holds items, which is what Bedrock's inventory component is. */
-    @HostAccess.Export
-    public boolean hasContainer(String dimension, int x, int y, int z) {
-        ServerLevel level = level(dimension);
-        return level != null && level.getBlockEntity(new BlockPos(x, y, z)) instanceof Container;
     }
 
     /** How a piston treats the block, under Bedrock's names for the two answers. */

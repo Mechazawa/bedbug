@@ -452,6 +452,20 @@ function placementBlocks(blockIdentifiers, member) {
     return ids;
 }
 
+/**
+ * Whether two stacks name the same item carrying the same data, however many each holds.
+ *
+ * This is what finding an item in a container asks, and it is separate from whether the two would
+ * stack: a sword is one to a slot and still the sword a pack is looking for.
+ */
+function sameItem(one, other) {
+    return one !== undefined && other !== undefined && one.typeId === other.typeId
+        && (one.nameTag ?? "") === (other.nameTag ?? "")
+        && (one.damage ?? 0) === (other.damage ?? 0)
+        && JSON.stringify(one.getLore?.() ?? []) === JSON.stringify(other.getLore?.() ?? [])
+        && JSON.stringify(one.properties ?? {}) === JSON.stringify(other.properties ?? {});
+}
+
 // The components a kind of item can carry here, which is what getComponents() offers a pack.
 const itemComponents = Object.freeze([
     ItemComponentTypes.Durability, ItemComponentTypes.Food, ItemComponentTypes.Cooldown,
@@ -753,13 +767,9 @@ export class ItemStack {
         this.properties = {};
     }
 
-    /** Whether the two carry the same item and the same extra data, however many each holds. */
+    /** Whether the two carry the same item and the same extra data, and stack at all. */
     isStackableWith(itemStack) {
-        return itemStack !== undefined && this.isStackable && this.typeId === itemStack.typeId
-            && (this.nameTag ?? "") === (itemStack.nameTag ?? "")
-            && (this.damage ?? 0) === (itemStack.damage ?? 0)
-            && JSON.stringify(this.getLore()) === JSON.stringify(itemStack.getLore?.() ?? [])
-            && JSON.stringify(this.properties ?? {}) === JSON.stringify(itemStack.properties ?? {});
+        return this.isStackable && sameItem(this, itemStack);
     }
 }
 
@@ -939,10 +949,6 @@ export class Block {
 
     hasComponent(component) {
         const name = normaliseComponent(component);
-        if (name === "minecraft:inventory") {
-            return bridge.blocks.hasContainer(this.dimension.id, this.x, this.y, this.z);
-        }
-
         const build = BLOCK_COMPONENTS[name];
         if (build === undefined) {
             unsupported("Block.hasComponent(" + name + ")");
@@ -993,6 +999,20 @@ function signComponent(block) {
         setTextDyeColor: (color, side) =>
             bridge.blocks.setSignDye(...blockAt(block), isFront(side), color ?? null),
         setWaxed: waxed => bridge.blocks.setSignWaxed(...blockAt(block), waxed === true),
+    };
+}
+
+/** The container a chest, a hopper or a furnace holds, read again on every call like the rest. */
+function inventoryComponent(block) {
+    const read = () => containerAt(...blockAt(block));
+    if (read() === undefined) return undefined;
+
+    return {
+        typeId: "minecraft:inventory",
+        block,
+        get container() {
+            return read();
+        },
     };
 }
 
@@ -1048,6 +1068,7 @@ function redstoneProducerComponent(block) {
 // Every component this mod answers for a block, by the name a pack asks for it under. A builder
 // hands back undefined for a block that does not carry its component, which is what Bedrock does.
 const BLOCK_COMPONENTS = {
+    "minecraft:inventory": inventoryComponent,
     "minecraft:movable": movableComponent,
     "minecraft:sign": signComponent,
     "minecraft:piston": pistonComponent,
@@ -1166,8 +1187,7 @@ export class ContainerSlot {
     }
 
     get type() {
-        const id = this.typeId;
-        return id === undefined ? undefined : { id };
+        return this.#read()?.type;
     }
 
     get maxAmount() {
@@ -1175,9 +1195,7 @@ export class ContainerSlot {
     }
 
     get isStackable() {
-        const held = this.#read();
-        return held !== undefined && held.maxAmount > 1 && !held.nameTag
-            && held.getLore().length === 0 && held.getDynamicPropertyIds().length === 0;
+        return this.#read()?.isStackable ?? false;
     }
 
     get nameTag() {
@@ -1359,11 +1377,11 @@ export class Container {
     }
 
     find(itemStack) {
-        return this.#search(slot => this.getItem(slot)?.isStackableWith(itemStack) === true, 1);
+        return this.#search(slot => sameItem(this.getItem(slot), itemStack), 1);
     }
 
     findLast(itemStack) {
-        return this.#search(slot => this.getItem(slot)?.isStackableWith(itemStack) === true, -1);
+        return this.#search(slot => sameItem(this.getItem(slot), itemStack), -1);
     }
 
     firstEmptySlot() {

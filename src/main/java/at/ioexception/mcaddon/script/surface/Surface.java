@@ -6,8 +6,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 
-import java.util.UUID;
-
 /**
  * What every part of the script surface needs: the server, and the lookups that reach into it.
  *
@@ -42,19 +40,8 @@ public abstract class Surface {
         return at.ioexception.mcaddon.platform.Platform.idOf(level.dimension()).toString();
     }
 
-    /** The entity an id names, wherever it is. */
+    /** The entity an id names, wherever it is, including one spawned in this same tick. */
     protected Entity entity(String id) {
-        UUID uuid;
-        try {
-            uuid = UUID.fromString(id);
-        } catch (IllegalArgumentException ignored) {
-            return null;
-        }
-
-        for (ServerLevel level : server.getAllLevels()) {
-            Entity found = at.ioexception.mcaddon.platform.Platform.entityByUuid(level, uuid);
-            if (found != null) return found;
-        }
-        return null;
+        return at.ioexception.mcaddon.script.ScriptBridge.entity(server, id);
     }
 }

@@ -32,9 +32,20 @@ public final class ScriptHost {
     /** How long the queued callbacks of all packs together may take in one tick. */
     private static final long TICK_BUDGET_NANOS = 5_000_000L;
 
+    /**
+     * Every module a behaviour pack may import, by the specifier it imports it under.
+     *
+     * A module is linked before any of it runs, so an import of one that does not resolve ends the
+     * pack's whole script rather than the line that asked for it. Every `@minecraft/*` module a
+     * pack can name is here for that reason, whether or not this mod can act on what it offers.
+     */
     private static final Map<String, String> MODULES = Map.of(
         "@minecraft/server", "minecraft_server.js",
-        "@minecraft/server-ui", "minecraft_server_ui.js");
+        "@minecraft/server-ui", "minecraft_server_ui.js",
+        "@minecraft/common", "minecraft_common.js",
+        "@minecraft/math", "minecraft_math.js",
+        "@minecraft/vanilla-data", "minecraft_vanilla_data.js",
+        "@minecraft/server-gametest", "minecraft_server_gametest.js");
 
     private final MinecraftServer server;
     private final Context context;

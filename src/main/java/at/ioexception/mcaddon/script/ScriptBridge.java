@@ -1103,6 +1103,11 @@ public final class ScriptBridge {
      * lets go of the entity as soon as the world does.
      */
     Entity entity(String id) {
+        return entity(server, id);
+    }
+
+    /** The same lookup for the surface classes, which reach entities without going through here. */
+    public static Entity entity(MinecraftServer server, String id) {
         UUID uuid = uuid(id);
         if (uuid == null) return null;
         for (ServerLevel level : server.getAllLevels()) {
