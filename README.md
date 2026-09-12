@@ -48,17 +48,18 @@ server decides what happens; the client draws it.
 - Behaviour pack scripts against `@minecraft/server`, sandboxed: a script sees its own pack's files
   and nothing else on disk. Commands a script registers on startup become real commands,
   `@minecraft/server-ui` forms become real screens, and the world, system, entity, dimension, block,
-  scoreboard and game rule surfaces are answered by the game.
+  scoreboard, game rule and structure surfaces are answered by the game.
 
 `/mcaddon packs` lists what loaded. `/mcaddon entities` and `/mcaddon scripts` list what a pack asked
 for that this mod does not implement yet, which is the honest answer to "will my pack work".
 
-## What does not work yet
+## What does not work
 
-Saving a structure from the world, and the display slots a scoreboard objective can be shown in.
-Bedrock's physically based rendering and its stencil material passes have no Java equivalent at all,
-and neither does its permission ladder, so a command a pack declares is open to everyone who can run
-commands.
+Bedrock's physically based rendering and its stencil material passes. Both are parts of a renderer
+Java does not have: the normal, heightmap and metalness maps a `pbr` pack ships are dropped, and a
+material that masks one pass against another through the stencil buffer draws as an ordinary cutout.
+Nothing else in a pack is deliberately left out; what a pack asks for that this mod cannot do is
+counted and shown by `/mcaddon entities` and `/mcaddon scripts`.
 
 ## Supported versions
 

@@ -923,9 +923,11 @@ export class World {
 
     get structureManager() {
         return {
-            /** A handle rather than a lookup: whether the structure exists shows when it is placed. */
             get(id) {
-                return { id, size: { x: 0, y: 0, z: 0 } };
+                const size = bridge.structureSize(id);
+                return size[0] === 0 && size[1] === 0 && size[2] === 0
+                    ? undefined
+                    : { id, size: { x: size[0], y: size[1], z: size[2] } };
             },
 
             place(structure, dimension, location, options) {
@@ -935,12 +937,23 @@ export class World {
                     options?.rotation ?? "None", options?.mirror ?? "None");
             },
 
-            createFromWorld() {
-                return unsupported("StructureManager.createFromWorld");
+            createFromWorld(id, dimension, from, to, options) {
+                const low = {
+                    x: Math.min(Math.floor(from.x), Math.floor(to.x)),
+                    y: Math.min(Math.floor(from.y), Math.floor(to.y)),
+                    z: Math.min(Math.floor(from.z), Math.floor(to.z)),
+                };
+                const size = {
+                    x: Math.abs(Math.floor(to.x) - Math.floor(from.x)) + 1,
+                    y: Math.abs(Math.floor(to.y) - Math.floor(from.y)) + 1,
+                    z: Math.abs(Math.floor(to.z) - Math.floor(from.z)) + 1,
+                };
+                bridge.saveStructure(dimension.id, id, low.x, low.y, low.z, size.x, size.y, size.z);
+                return { id, size };
             },
 
-            delete() {
-                return unsupported("StructureManager.delete");
+            delete(structure) {
+                return bridge.deleteStructure(typeof structure === "string" ? structure : structure?.id);
             },
         };
     }
@@ -1029,12 +1042,16 @@ const scoreboard = {
         return unsupported("Scoreboard.getObjectiveAtDisplaySlot");
     },
 
-    setObjectiveAtDisplaySlot() {
-        return unsupported("Scoreboard.setObjectiveAtDisplaySlot");
+    setObjectiveAtDisplaySlot(slot, options) {
+        const objective = options?.objective;
+        bridge.setDisplaySlot(slot, typeof objective === "string" ? objective : objective?.id);
+        return objective === undefined ? undefined : scoreboard.getObjective(
+            typeof objective === "string" ? objective : objective.id);
     },
 
-    clearObjectiveAtDisplaySlot() {
-        return unsupported("Scoreboard.clearObjectiveAtDisplaySlot");
+    clearObjectiveAtDisplaySlot(slot) {
+        bridge.setDisplaySlot(slot, "");
+        return undefined;
     },
 };
 

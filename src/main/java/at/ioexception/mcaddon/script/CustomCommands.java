@@ -64,9 +64,9 @@ public final class CustomCommands {
         List<JsonObject> all = new ArrayList<>(mandatory);
         all.addAll(optional);
 
-        // Bedrock's permission ladder is not enforced: 26 replaced Java's integer levels with a
-        // permission set, and the two ladders do not line up rung for rung in any case.
-        LiteralArgumentBuilder<CommandSourceStack> literal = Commands.literal(name);
+        int permission = command.has("permissionLevel") ? command.get("permissionLevel").getAsInt() : 0;
+        LiteralArgumentBuilder<CommandSourceStack> literal = Commands.literal(name)
+            .requires(source -> at.ioexception.mcaddon.platform.Platform.allowedAt(source, permission));
 
         // Every prefix of the argument list is executable, which is what makes the optional ones
         // optional without declaring the command several times over.

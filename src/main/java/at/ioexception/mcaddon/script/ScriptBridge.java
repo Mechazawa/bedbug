@@ -25,6 +25,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.world.scores.Objective;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
@@ -780,6 +781,55 @@ public final class ScriptBridge {
         String placed = "place template " + structure + " " + x + " " + y + " " + z
             + " " + javaRotation(rotation) + " " + javaMirror(mirror);
         return run(server.createCommandSourceStack().withLevel(level), placed) > 0;
+    }
+
+    /**
+     * Saves a region of the world as a structure a script can place again.
+     *
+     * The size is measured from the corner the pack gave, the way Bedrock measures it, and entities
+     * are left out because Bedrock's own default leaves them out.
+     */
+    @HostAccess.Export
+    public boolean saveStructure(String dimension, String structure, int x, int y, int z,
+        int width, int height, int depth) {
+        ServerLevel level = level(dimension);
+        Identifier id = structure == null ? null : Identifier.tryParse(structure);
+        if (level == null || id == null) return false;
+
+        StructureTemplate template = server.getStructureManager().getOrCreate(id);
+        Platform.fillFromWorld(template, level, new BlockPos(x, y, z),
+            new net.minecraft.core.Vec3i(width, height, depth));
+        return server.getStructureManager().save(id);
+    }
+
+    @HostAccess.Export
+    public int[] structureSize(String structure) {
+        Identifier id = structure == null ? null : Identifier.tryParse(structure);
+        if (id == null) return new int[] {0, 0, 0};
+
+        return server.getStructureManager().get(id)
+            .map(template -> new int[] {template.getSize().getX(), template.getSize().getY(),
+                template.getSize().getZ()})
+            .orElse(new int[] {0, 0, 0});
+    }
+
+    @HostAccess.Export
+    public boolean deleteStructure(String structure) {
+        unsupported("StructureManager.delete");
+        return false;
+    }
+
+    /** Where a scoreboard objective is shown: the sidebar, the player list, or under a name. */
+    @HostAccess.Export
+    public void setDisplaySlot(String slot, String objective) {
+        String java = switch (slot) {
+            case "list" -> "list";
+            case "belowName", "belowname" -> "below_name";
+            default -> "sidebar";
+        };
+        run(server.createCommandSourceStack(), objective == null || objective.isBlank()
+            ? "scoreboard objectives setdisplay " + java
+            : "scoreboard objectives setdisplay " + java + " " + objective);
     }
 
     private static String javaRotation(String bedrock) {

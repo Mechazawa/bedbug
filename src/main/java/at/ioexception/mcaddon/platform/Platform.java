@@ -512,6 +512,44 @@ public final class Platform {
         *///?}
     }
 
+    /**
+     * Whether a command source is allowed to run something at a given permission level.
+     *
+     * Java counted permission in integers until 26 replaced them with a set of named permissions, so
+     * Bedrock's ladder is mapped onto whichever the version has: `GameDirectors` and above need more
+     * than an ordinary player, and `Any` needs nothing.
+     */
+    public static boolean allowedAt(CommandSourceStack source, int bedrockLevel) {
+        if (bedrockLevel <= 0) return true;
+        //? if >=26 {
+        net.minecraft.server.permissions.PermissionLevel level = switch (bedrockLevel) {
+            case 1 -> net.minecraft.server.permissions.PermissionLevel.GAMEMASTERS;
+            case 2 -> net.minecraft.server.permissions.PermissionLevel.ADMINS;
+            default -> net.minecraft.server.permissions.PermissionLevel.OWNERS;
+        };
+        return source.permissions().hasPermission(
+            new net.minecraft.server.permissions.Permission.HasCommandLevel(level));
+        //?} else {
+        /*return source.hasPermission(Math.min(4, bedrockLevel + 1));
+        *///?}
+    }
+
+    /**
+     * Copies a region of the world into a structure template.
+     *
+     * What to leave out changed from one block to a list of them in 1.21.2; nothing is left out
+     * either way, which is what Bedrock does when a pack does not say otherwise.
+     */
+    public static void fillFromWorld(
+        net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate template,
+        ServerLevel level, net.minecraft.core.BlockPos corner, net.minecraft.core.Vec3i size) {
+        //? if >=1.21.2 {
+        template.fillFromWorld(level, corner, size, false, List.of());
+        //?} else {
+        /*template.fillFromWorld(level, corner, size, false, (Block) null);
+        *///?}
+    }
+
     /** Opens a screen, or closes whatever is open when given null. Renamed in 26. */
     public static void setScreen(net.minecraft.client.gui.screens.Screen screen) {
         //? if >=26 {
