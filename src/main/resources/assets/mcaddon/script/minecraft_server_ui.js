@@ -110,16 +110,32 @@ class FormBuilder {
         return this.#add("header", { text: text(value) });
     }
 
+    header(value) {
+        return this.Header(value);
+    }
+
     Label(value) {
         return this.#add("label", { text: text(value) });
+    }
+
+    label(value) {
+        return this.Label(value);
     }
 
     Divider() {
         return this.#add("divider", {});
     }
 
+    divider() {
+        return this.Divider();
+    }
+
     Spacer() {
         return this.#add("spacer", {});
+    }
+
+    spacer() {
+        return this.Spacer();
     }
 
     Button(label, icon) {
@@ -234,8 +250,97 @@ export class ModalFormData extends FormBuilder {
     }
 }
 
+/**
+ * A two-button question, which names its buttons by position rather than by adding them in turn.
+ *
+ * The answer still comes back as the index of the button pressed, so a message box is a form with
+ * exactly two buttons and the numbered names put them in the right order whichever is set first.
+ */
 export class MessageFormData extends FormBuilder {
+    #buttons = [];
+
     constructor() {
         super("MessageFormData");
     }
+
+    button1(label) {
+        this.#buttons[0] = text(label);
+        return this.#rebuild();
+    }
+
+    button2(label) {
+        this.#buttons[1] = text(label);
+        return this.#rebuild();
+    }
+
+    #rebuild() {
+        this.elements = this.elements.filter(element => element.type !== "button");
+        this.#buttons.forEach(label => this.elements.push({ type: "button", text: label ?? "", icon: "" }));
+        return this;
+    }
+}
+
+/** The same two-button question under the name a pack written against the older API imports. */
+export class MessageBox extends MessageFormData {
+}
+
+/** Every form open on a player, so a pack can shut them without knowing which is showing. */
+export const uiManager = Object.freeze({
+    closeAllForms(player) {
+        bridge.closeForm(player?.id ?? "");
+    },
+});
+
+export class UIManager {
+    closeAllForms(player) {
+        uiManager.closeAllForms(player);
+    }
+}
+
+export const FormRejectReason = Object.freeze({
+    MalformedResponse: "MalformedResponse",
+    PlayerQuit: "PlayerQuit",
+    ServerShutdown: "ServerShutdown",
+});
+
+export const FormVisibilityErrorReason = Object.freeze({
+    AlreadyShowing: "AlreadyShowing",
+    NotShowing: "NotShowing",
+});
+
+export const TextFilteringError = Object.freeze({
+    DisabledByPlayer: "DisabledByPlayer",
+    TextProcessorServiceUnreachable: "TextProcessorServiceUnreachable",
+    Unknown: "Unknown",
+});
+
+/** What a pack gets back from a form, named so it can be tested with `instanceof`. */
+export class FormResponse {
+}
+
+export class ActionFormResponse extends FormResponse {
+}
+
+export class MessageFormResponse extends FormResponse {
+}
+
+export class ModalFormResponse extends FormResponse {
+}
+
+export class FormRejectError extends Error {
+}
+
+export class FormVisibilityError extends Error {
+}
+
+export class InvalidFormError extends Error {
+}
+
+export class InvalidFormModificationError extends Error {
+}
+
+export class InvalidObservableError extends Error {
+}
+
+export class PlayerLeftError extends Error {
 }
