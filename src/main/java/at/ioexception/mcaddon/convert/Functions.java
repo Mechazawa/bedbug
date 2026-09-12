@@ -27,10 +27,15 @@ import java.util.regex.Pattern;
  * half runs is worse than one that says which line it dropped.
  */
 public final class Functions {
-    /** Commands Bedrock has and Java does not. `scriptevent` is not among them: this mod adds it. */
+    /**
+     * Commands Bedrock has and Java has no counterpart for.
+     *
+     * `scriptevent`, `playanimation` and `event` are not among them: this mod registers all three,
+     * because everything they need is already here. What is left asks for a renderer feature Java
+     * has none of, or for a server Java does not speak to.
+     */
     private static final Set<String> BEDROCK_ONLY = Set.of(
-        "testfor", "testforblock", "testforblocks", "titleraw", "fog", "camerashake", "camera",
-        "playanimation", "music", "mobevent", "structure", "event", "inputpermission", "hud",
+        "fog", "camerashake", "camera", "music", "mobevent", "structure", "inputpermission", "hud",
         "dialogue", "script", "toggledownfall", "immutableworld", "wsserver", "connect");
 
     private static final Pattern SELECTOR = Pattern.compile("@[aeprsn]\\[([^\\]]*)\\]");
@@ -65,7 +70,7 @@ public final class Functions {
         return converted;
     }
 
-    /** Null for a line Java would reject, which is a comment, a blank, or a Bedrock-only command. */
+    /** Null for a line Java would reject: a blank, a Bedrock-only command, or an entity Java lacks. */
     private static String line(String source, Set<String> unsupported) {
         if (source.isEmpty() || source.startsWith("#")) return source.isEmpty() ? null : source;
 
@@ -75,7 +80,62 @@ public final class Functions {
             unsupported.add("command " + name);
             return null;
         }
-        return selectors(command);
+        String renamed = rename(name, command);
+        if (renamed == null) {
+            unsupported.add("command " + name + ", which names an entity Java does not have");
+            return null;
+        }
+
+        String rewritten = selectors(renamed);
+        if (rewritten == null) {
+            unsupported.add("a selector naming an entity Java does not have");
+        }
+        return rewritten;
+    }
+
+    /**
+     * The commands Java spells differently but means the same by.
+     *
+     * A `testfor` is Java's `execute if`, which returns the same success and so drives the same
+     * chain command behind it. `titleraw` takes Bedrock's rawtext object, which is a text component
+     * with one extra wrapper around it.
+     *
+     * Null when the command names an entity Java has none of, which the caller drops.
+     */
+    private static String rename(String name, String command) {
+        String[] parts = command.split("\\s+", 2);
+        String rest = parts.length > 1 ? parts[1] : "";
+
+        if (name.equals("summon")) {
+            String[] arguments = rest.split("\\s+", 2);
+            String type = BedrockEntityNames.java(arguments[0]);
+            return type == null ? null
+                : "summon " + type + (arguments.length > 1 ? " " + arguments[1] : "");
+        }
+
+        return switch (name) {
+            case "testfor" -> "execute if entity " + rest;
+            case "testforblock" -> "execute if block " + rest;
+            case "testforblocks" -> "execute if blocks " + rest;
+            case "titleraw" -> "title " + rawText(rest);
+            default -> command;
+        };
+    }
+
+    /** Unwraps `{"rawtext":[...]}` into the bare component list Java's `title` reads. */
+    private static String rawText(String arguments) {
+        int brace = arguments.indexOf('{');
+        if (brace < 0) return arguments;
+
+        try {
+            JsonObject body = com.google.gson.JsonParser.parseString(arguments.substring(brace))
+                .getAsJsonObject();
+            JsonArray raw = body.getAsJsonArray("rawtext");
+            if (raw == null) return arguments;
+            return arguments.substring(0, brace) + raw;
+        } catch (RuntimeException error) {
+            return arguments;
+        }
     }
 
     /**
@@ -103,6 +163,12 @@ public final class Functions {
                 String value = parts[1].strip();
 
                 switch (key) {
+                    case "type" -> {
+                        boolean negated = value.startsWith("!");
+                        String java = BedrockEntityNames.java(negated ? value.substring(1) : value);
+                        if (java == null) return null;
+                        arguments.add("type=" + (negated ? "!" : "") + java);
+                    }
                     case "r" -> radius = value;
                     case "rm" -> minimumRadius = value;
                     case "c" -> arguments.add((value.startsWith("-") ? "limit=" + value.substring(1)
