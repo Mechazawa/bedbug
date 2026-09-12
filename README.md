@@ -50,9 +50,11 @@ server decides what happens; the client draws it.
   own clock.
 - The sounds and particles an animation, an animation controller state or an entity's own definition
   fires, played at the bone the pack anchored them to.
-- Particle effects a pack describes itself, with the emitter's shape deciding where each particle is
-  born and which way it leaves, and the particle's own Molang driving its motion, size and colour. A
-  Bedrock id naming a vanilla effect is shown as the Java one instead.
+- Particle effects a pack describes itself: the emitter runs on its own clock at the rate and
+  lifetime the pack chose, its shape decides where each particle is born and which way it leaves, and
+  the particle's Molang drives its motion, size, spin, colour gradient and flipbook. Collision, the
+  kill plane and the block filters are honoured. A Bedrock id naming a vanilla effect is shown as the
+  Java one instead.
 - Behaviour pack scripts against `@minecraft/server`, sandboxed: a script sees its own pack's files
   and nothing else on disk. Commands a script registers on startup become real commands,
   `@minecraft/server-ui` forms become real screens, and the world, system, entity, dimension, block,
