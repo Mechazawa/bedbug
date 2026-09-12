@@ -12,7 +12,10 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.ai.goal.AvoidEntityGoal;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
+import net.minecraft.world.entity.ai.goal.MoveTowardsRestrictionGoal;
+import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.PanicGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
@@ -23,6 +26,7 @@ import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.trading.Merchant;
@@ -48,7 +52,10 @@ public class AddonEntity extends PathfinderMob implements Merchant {
     public AddonEntity(EntityType<? extends PathfinderMob> type, Level level) {
         super(type, level);
         this.definition = AddonEntities.definitionOf(type);
-        if (definition != null) addGoals();
+        if (definition != null) {
+            addGoals();
+            applyComponents();
+        }
     }
 
     public ServerEntityDefinition definition() {
@@ -74,11 +81,45 @@ public class AddonEntity extends PathfinderMob implements Merchant {
         timerDueTick = tick;
     }
 
+    /**
+     * The attributes a pack's components describe, which Java fixes when the type is registered.
+     *
+     * Bedrock states these as components on the entity and Java as attributes on the type, so the
+     * numbers are read out of the components here rather than applied to an entity later.
+     */
     public static AttributeSupplier.Builder attributes(ServerEntityDefinition definition) {
         return PathfinderMob.createMobAttributes()
             .add(Attributes.MAX_HEALTH, definition.maxHealth())
             .add(Attributes.MOVEMENT_SPEED, definition.movementSpeed())
-            .add(Attributes.FOLLOW_RANGE, 16);
+            .add(Attributes.FOLLOW_RANGE, number(definition, "minecraft:follow_range", "value", 16))
+            .add(Attributes.KNOCKBACK_RESISTANCE,
+                number(definition, "minecraft:knockback_resistance", "value", 0));
+    }
+
+    /** A number a component carries, or the fallback when the pack declared neither. */
+    private static double number(ServerEntityDefinition definition, String component, String field,
+        double fallback) {
+        com.google.gson.JsonObject body = definition.components().get(component);
+        return body == null || !body.has(field) ? fallback : body.get(field).getAsDouble();
+    }
+
+    /**
+     * The components that change the entity itself rather than how it decides what to do.
+     *
+     * These are read once as the entity comes into the world, because each of them is a fact about
+     * the entity that Java holds on the entity rather than on its type.
+     */
+    private void applyComponents() {
+        if (definition.components().containsKey("minecraft:fire_immune")) {
+            setRemainingFireTicks(0);
+        }
+        if (definition.components().containsKey("minecraft:is_hidden_when_invisible")) {
+            setInvisible(isInvisible());
+        }
+
+        if (definition.components().containsKey("minecraft:experience_reward")) {
+            xpReward = (int) number(definition, "minecraft:experience_reward", "on_death", xpReward);
+        }
     }
 
     private void addGoals() {
@@ -95,6 +136,40 @@ public class AddonEntity extends PathfinderMob implements Merchant {
                     goalSelector.addGoal(priority, new LookAtPlayerGoal(this, Player.class, 8f));
                 case "minecraft:behavior.random_look_around" ->
                     goalSelector.addGoal(priority, new RandomLookAroundGoal(this));
+
+                // Bedrock names the kind of wandering; Java has one stroll goal and a speed.
+                case "minecraft:behavior.move_indoors",
+                     "minecraft:behavior.move_towards_dwelling_restriction",
+                     "minecraft:behavior.move_towards_home_restriction",
+                     "minecraft:behavior.move_towards_restriction" ->
+                    goalSelector.addGoal(priority, new MoveTowardsRestrictionGoal(this, 0.6));
+                case "minecraft:behavior.mount_pathing", "minecraft:behavior.follow_owner",
+                     "minecraft:behavior.stroll_towards_village" ->
+                    goalSelector.addGoal(priority, new WaterAvoidingRandomStrollGoal(this, 0.6));
+
+                case "minecraft:behavior.avoid_mob_type", "minecraft:behavior.hide",
+                     "minecraft:behavior.avoid_block" ->
+                    goalSelector.addGoal(priority,
+                        new AvoidEntityGoal<>(this, Monster.class, 8f, 1.0, 1.2));
+                case "minecraft:behavior.panic_on_fire" ->
+                    goalSelector.addGoal(priority, new PanicGoal(this, 1.25));
+
+                case "minecraft:behavior.tempt" ->
+                    goalSelector.addGoal(priority, Platform.temptGoal(this));
+                case "minecraft:behavior.open_door", "minecraft:annotation.open_door" ->
+                    goalSelector.addGoal(priority, new OpenDoorGoal(this, true));
+
+                case "minecraft:behavior.melee_attack", "minecraft:behavior.melee_box_attack" ->
+                    goalSelector.addGoal(priority,
+                        new net.minecraft.world.entity.ai.goal.MeleeAttackGoal(this, 1.0, false));
+                case "minecraft:behavior.nearest_attackable_target" ->
+                    targetSelector.addGoal(priority,
+                        new net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal<>(
+                            this, Player.class, true));
+                case "minecraft:behavior.hurt_by_target" ->
+                    targetSelector.addGoal(priority,
+                        new net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal(this));
+
                 default -> AddonEntities.unsupported(behaviour);
             }
         }

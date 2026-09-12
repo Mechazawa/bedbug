@@ -665,6 +665,23 @@ public final class Platform {
         *///?}
     }
 
+    /**
+     * A goal that follows whoever is holding food.
+     *
+     * Bedrock names the items in the component; Java took an ingredient until 1.21.2 and a test on
+     * the stack after. Anything edible tempts, which is what a pack's own list usually amounts to.
+     */
+    public static net.minecraft.world.entity.ai.goal.Goal temptGoal(
+        net.minecraft.world.entity.PathfinderMob mob) {
+        //? if >=1.21.2 {
+        return new net.minecraft.world.entity.ai.goal.TemptGoal(mob, 1.0,
+            stack -> stack.has(net.minecraft.core.component.DataComponents.FOOD), false);
+        //?} else {
+        /*return new net.minecraft.world.entity.ai.goal.TemptGoal(mob, 1.0,
+            net.minecraft.world.item.crafting.Ingredient.of(net.minecraft.world.item.Items.WHEAT), false);
+        *///?}
+    }
+
     /** Opens a screen, or closes whatever is open when given null. Renamed in 26. */
     public static void setScreen(net.minecraft.client.gui.screens.Screen screen) {
         //? if >=26 {

@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.registry;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
+import com.google.gson.JsonObject;
 import at.ioexception.mcaddon.bedrock.behaviour.TradeTable;
 import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.entity.AddonEntity;
@@ -19,6 +20,7 @@ import net.minecraft.world.entity.MobCategory;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Set;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -110,12 +112,53 @@ public final class AddonEntities {
                 .sized(definition.width() * definition.scale(), definition.height() * definition.scale()),
             id);
 
+        count(definition);
         DEFINITIONS.put(type, definition);
         BY_IDENTIFIER.put(definition.identifier(), type);
         readTrades(pack, definition).ifPresent(trades -> TRADES.put(type, trades));
         Registry.register(BuiltInRegistries.ENTITY_TYPE, id, type);
         FabricDefaultAttributeRegistry.register(type, AddonEntity.attributes(definition));
     }
+
+    /**
+     * Counts the components an entity declares that nothing here acts on.
+     *
+     * Every other reader pulls the components it knows by name, so a component nobody asked for is
+     * simply never seen. Walking the whole set once is what turns a silent gap into a reported one,
+     * which is the difference between `/mcaddon entities` being evidence and being a guess. A
+     * component group counts too: a pack switches those on at runtime and its contents are as real
+     * as the ones declared at the top.
+     */
+    private static void count(ServerEntityDefinition definition) {
+        for (String component : definition.components().keySet()) {
+            if (!IMPLEMENTED.contains(component)) unsupported(component);
+        }
+        for (JsonObject group : definition.componentGroups().values()) {
+            for (String component : group.keySet()) {
+                if (!IMPLEMENTED.contains(component)) unsupported(component);
+            }
+        }
+    }
+
+    /**
+     * Everything an entity can declare that this mod does something about.
+     *
+     * A component naming something the game already does for every mob is in here too: a pack saying
+     * an entity is pushable or has physics is describing what a Java mob does anyway, so honouring it
+     * is doing nothing, and reporting it would be noise rather than a gap.
+     */
+    private static final Set<String> IMPLEMENTED = Set.of(
+        "minecraft:health", "minecraft:scale", "minecraft:collision_box", "minecraft:movement",
+        "minecraft:variant", "minecraft:mark_variant", "minecraft:skin_id", "minecraft:is_baby",
+        "minecraft:is_sheared", "minecraft:is_dyeable", "minecraft:type_family",
+        "minecraft:trade_table", "minecraft:economy_trade_table", "minecraft:interact",
+        "minecraft:transformation", "minecraft:instant_despawn", "minecraft:damage_sensor",
+        "minecraft:environment_sensor", "minecraft:entity_sensor", "minecraft:timer",
+        "minecraft:scheduler", "minecraft:hurt_on_condition", "minecraft:spawn_entity",
+        "minecraft:physics", "minecraft:pushable", "minecraft:push_through", "minecraft:despawn",
+        "minecraft:nameable", "minecraft:persistent", "minecraft:loot", "minecraft:jump.static",
+        "minecraft:can_climb", "minecraft:breathable", "minecraft:conditional_bandwidth_optimization",
+        "minecraft:entity_spawned");
 
     /**
      * The trade table an entity names, read while the pack it came from is still in hand.
