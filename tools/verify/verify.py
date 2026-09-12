@@ -38,7 +38,6 @@ USAGE = (__doc__ or "").splitlines()[0]
 
 VERSIONS = ("1.20.1", "1.21.1", "26.2")
 JAVA_HOME = "/opt/homebrew/opt/openjdk@25"
-SERVER_PROCESS = "net.fabricmc.devlaunchinjector.Main"
 
 IMAGE_SUFFIXES = (".png", ".tga", ".jpg", ".jpeg")
 
@@ -57,7 +56,12 @@ FAILURES = (
     ("stack overflow", r"StackOverflowError"),
     ("mixin apply failure",
      r"Mixin apply failed|MixinApplyError|MixinTransformerError|MixinPrepareError"
-     r"|MixinError|InjectionError|Critical injection failure"),
+     r"|MixinError|InjectionError|Critical injection failure"
+     r"|[Mm]ixin.*(?:FAIL|fail(?:ed|ure))"),
+    # Both of these are logged at WARN, so the error check never sees them, and a model that did
+    # not load is a hole the player walks into rather than anything the game complains about.
+    ("model failed to load", r"Unable to load model"),
+    ("model missing textures", r"Missing textures in model"),
     ("crash report", r"[Cc]rash report (?:saved to|has been saved)"),
     ("exception cause", r"Caused by:"),
     ("error", r"/ERROR\]"),
@@ -70,18 +74,24 @@ BENIGN = (
     r"Couldn't connect to realms",
     r"Failed to fetch Realms feature flags",
     r"Failed to fetch user properties",
+    r"Failed to retrieve profile key pair",
     r"RealmsClient|RealmsAvailability|realmsclient",
     r"Failed to load properties from file: server\.properties",
+    # Sodium turns off the mixins Iris replaces, which is how the two are meant to work together.
+    r"\(Sodium\) Force-disabling mixin",
 )
 
 # What has to be in the log of a run that worked.
-EXPECTED = (
-    ("server reached done", r"Done \("),
-)
 EXPECTED_WITH_ADDON = (
     ("mod logged its startup", r"\(Bedrock Add-ons\)"),
     ("a pack was read", r"\(Bedrock Add-ons\) (?:resources|behaviour) "),
 )
+
+# The mod's line saying how much of an add-on reached the client, and the count it opens with.
+CLIENT_DEFINITIONS = re.compile(r"(\d+) add-on entities have a client definition")
+
+# Gradle's own failure, which ends a wait: nothing more is coming.
+BUILD_FAILED = re.compile(r"FAILURE: Build failed|BUILD FAILED")
 
 # What the console prints for a `summon` that worked, which is how a registered entity type is
 # told apart from one the game does not know.
@@ -100,6 +110,41 @@ REPORTED = (
 FAILURE_PATTERNS = tuple((name, re.compile(pattern)) for name, pattern in FAILURES)
 BENIGN_PATTERN = re.compile("|".join(BENIGN))
 EXAMPLES_PER_CHECK = 5
+
+
+@dataclass(frozen=True)
+class Launch:
+    """One way of starting the game, and the line that says it has finished loading.
+
+    Both halves run through the same dev launcher, so the environment it is given is what tells one
+    process from the other, and a check must never kill or wait on the wrong one.
+    """
+
+    name: str
+    task: str
+    signature: str
+    ready: re.Pattern
+    ready_without_addon: re.Pattern
+    takes_commands: bool
+
+
+SERVER = Launch(
+    name="server",
+    task="runServer",
+    signature="fabric.dli.env=server",
+    ready=re.compile(r"Done \("),
+    ready_without_addon=re.compile(r"Done \("),
+    takes_commands=True)
+
+# A client has no console to type into, so it is watched until the mod says it has drawn what the
+# pack gave it, held open a moment, and then killed.
+CLIENT = Launch(
+    name="client",
+    task="runClient",
+    signature="fabric.dli.env=client",
+    ready=CLIENT_DEFINITIONS,
+    ready_without_addon=re.compile(r"Sound engine started|Created: \d+x\d+x\d+ .*-atlas"),
+    takes_commands=False)
 
 
 @dataclass
@@ -188,10 +233,20 @@ def source_counts(names, read) -> dict:
         "sound events": events,
         "normal sidecars": normals,
         "specular sidecars": speculars,
-        "entity types": len([name for name in names if "/entities/" in name and name.endswith(".json")]),
-        "items": len([name for name in names if "/items/" in name and name.endswith(".json")]),
-        "blocks": len([name for name in names if "/blocks/" in name and name.endswith(".json")]),
+        "entity types": len(declared(names, "entities")),
+        "items": len(declared(names, "items")),
+        "blocks": len(declared(names, "blocks")),
     }
+
+
+def declared(names, directory: str) -> list[str]:
+    """The JSON a behaviour pack keeps in one of its own top level directories.
+
+    Anchored to the pack root, because a resource pack holds `models/blocks` and `textures/items`
+    whose files describe how something looks rather than declaring one.
+    """
+    pattern = re.compile(rf"^(?:[^/]+/)?{directory}/[^/]+\.json$")
+    return [name for name in names if pattern.match(name)]
 
 
 def converted_counts(directories: list[Path]) -> dict:
@@ -233,7 +288,7 @@ def converted_directories(names, read, root: Path) -> list[Path]:
 def entity_identifiers(names, read) -> list[str]:
     """The entity ids a behaviour pack declares, in the spelling the mod registers them under."""
     identifiers = []
-    for name in [one for one in names if "/entities/" in one and one.endswith(".json")]:
+    for name in declared(names, "entities"):
         description = json.loads(read(name)).get("minecraft:entity", {}).get("description", {})
         identifier = description.get("identifier")
         if identifier and ":" in identifier:
@@ -263,9 +318,9 @@ def console_script(identifiers: list[str], summons: int) -> list[tuple[float, st
     return steps
 
 
-def dev_servers() -> set[int]:
-    """Every dev server running on this machine, whoever started it."""
-    found = subprocess.run(["pgrep", "-f", SERVER_PROCESS], check=False,
+def running(launch: Launch) -> set[int]:
+    """Every game of this kind running on this machine, whoever started it."""
+    found = subprocess.run(["pgrep", "-f", launch.signature], check=False,
                            capture_output=True, text=True)
     return {int(one) for one in found.stdout.split() if one.isdigit()}
 
@@ -317,33 +372,48 @@ def free_world_lock(root: Path, version: str) -> None:
 
 
 def wait_for(process: subprocess.Popen, lines: list[str], pattern: re.Pattern, deadline: float) -> bool:
-    """Waits for a line, giving up on the deadline or as soon as the server has gone."""
-    while time.monotonic() < deadline:
-        if any(pattern.search(line) for line in lines):
-            return True
-        if process.poll() is not None:
+    """Waits for a line, giving up on the deadline, on a Gradle failure, or on the game exiting."""
+    seen = 0
+    draining = False
+    while True:
+        while seen < len(lines):
+            line = lines[seen]
+            seen += 1
+            if pattern.search(line):
+                return True
+            if BUILD_FAILED.search(line):
+                return False
+
+        if draining or time.monotonic() > deadline:
             return False
+        if process.poll() is not None:
+            # Let the reader hand over whatever the game printed on its way out.
+            draining = True
         time.sleep(0.25)
-    return False
 
 
-def run_server(root: Path, version: str, script: list[tuple[float, str]],
-               timeout: float, verbose: bool) -> tuple[list[str], Path, str]:
-    """Starts one dev server, types the script into it, and always kills it by the deadline."""
-    log = root / "build" / "verify" / f"{version}-server.log"
+def play(root: Path, version: str, launch: Launch, ready: re.Pattern,
+         script: list[tuple[float, str]], timeout: float, hold: float,
+         verbose: bool) -> tuple[list[str], Path, str]:
+    """Starts one game, waits for it to load, and always ends it by the deadline.
+
+    A server is asked to stop and killed if it will not; a client has nothing to ask, so it is held
+    open for a moment once the mod has loaded and then killed.
+    """
+    log = root / "build" / "verify" / f"{version}-{launch.name}.log"
     log.parent.mkdir(parents=True, exist_ok=True)
 
     lines: list[str] = []
     deadline = time.monotonic() + timeout
-    started_before = dev_servers()
+    started_before = running(launch)
     process = subprocess.Popen(
-        ["./gradlew", f":{version}:runServer", "--console=plain"],
+        ["./gradlew", f":{version}:{launch.task}", "--console=plain"],
         cwd=root, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True, bufsize=1, start_new_session=True,
         env={**os.environ, "JAVA_HOME": JAVA_HOME})
     output = process.stdout
     if output is None:
-        raise RuntimeError("the server was started without a readable output pipe")
+        raise RuntimeError(f"the {launch.name} was started without a readable output pipe")
 
     def pump() -> None:
         with log.open("w", encoding="utf-8") as sink:
@@ -357,29 +427,37 @@ def run_server(root: Path, version: str, script: list[tuple[float, str]],
     reader = Thread(target=pump, daemon=True)
     reader.start()
 
-    outcome = "stopped cleanly"
-    if not wait_for(process, lines, re.compile(r"Done \("), deadline):
-        outcome = "ended before reaching done" if process.poll() is not None else "never reached done"
-    else:
+    loaded = wait_for(process, lines, ready, deadline)
+    outcome = "loaded"
+    if not loaded:
+        outcome = "ended before loading" if process.poll() is not None else "never finished loading"
+    elif launch.takes_commands:
+        outcome = "stopped cleanly"
         for wait, command in script:
             if time.monotonic() + wait > deadline:
                 outcome = "script cut short by the deadline"
                 break
             time.sleep(wait)
             type_into(process, command)
+        type_into(process, "stop")
+    else:
+        time.sleep(min(hold, max(0.0, deadline - time.monotonic())))
 
-    type_into(process, "stop")
-    if not wait_until_exit(process, min(deadline, time.monotonic() + 30)):
-        outcome = "killed on the deadline"
-        kill(process, started_before)
+    if launch.takes_commands and loaded:
+        if not wait_until_exit(process, min(deadline, time.monotonic() + 30)):
+            outcome = "killed on the deadline"
+            kill(process, started_before, launch)
+    elif process.poll() is None:
+        outcome = "killed after loading" if loaded else "killed on the deadline"
+        kill(process, started_before, launch)
 
     close_input(process)
     reader.join(timeout=5)
 
-    # The next version's check refuses to start beside a running dev server, so wait for this one
-    # to leave the process table rather than have it read as somebody else's.
+    # The next check refuses to start beside a running game, so wait for this one to leave the
+    # process table rather than have it read as somebody else's.
     settle = time.monotonic() + 15
-    while dev_servers() - started_before and time.monotonic() < settle:
+    while running(launch) - started_before and time.monotonic() < settle:
         time.sleep(1)
 
     free_world_lock(root, version)
@@ -413,12 +491,12 @@ def wait_until_exit(process: subprocess.Popen, deadline: float) -> bool:
     return False
 
 
-def kill(process: subprocess.Popen, started_before: set[int]) -> None:
+def kill(process: subprocess.Popen, started_before: set[int], launch: Launch) -> None:
     """Ends this run's process group, then the game the Gradle daemon forked on its behalf.
 
     The Gradle daemon outlives a build and owns the forked game, so the group alone does not reach
-    it. Only dev servers that appeared after this run began are killed, which leaves a server
-    somebody else is running alone.
+    it. Only games that appeared after this run began are killed, which leaves one somebody else is
+    running alone.
     """
     for stage in (signal.SIGTERM, signal.SIGKILL):
         if process.poll() is not None:
@@ -429,14 +507,14 @@ def kill(process: subprocess.Popen, started_before: set[int]) -> None:
             break
         time.sleep(2)
 
-    for pid in dev_servers() - started_before:
+    for pid in running(launch) - started_before:
         try:
             os.kill(pid, signal.SIGKILL)
         except (ProcessLookupError, PermissionError):
             continue
 
 
-def scan(lines: list[str], verdict: Verdict, with_addon: bool) -> None:
+def scan(lines: list[str], verdict: Verdict, expected: tuple[tuple[str, str], ...]) -> None:
     """Files every log line under the first failure it matches, benign ones aside."""
     for number, line in enumerate(lines, start=1):
         if BENIGN_PATTERN.search(line):
@@ -446,7 +524,6 @@ def scan(lines: list[str], verdict: Verdict, with_addon: bool) -> None:
                 verdict.fail(name, "matched a known failure signature", [f"{number}: {line.strip()}"])
                 break
 
-    expected = EXPECTED + (EXPECTED_WITH_ADDON if with_addon else ())
     for name, pattern in expected:
         if not any(re.search(pattern, line) for line in lines):
             verdict.fail(name, f"no line matched {pattern!r}")
@@ -463,41 +540,58 @@ def reported_counts(lines: list[str]) -> dict[str, int]:
     return found
 
 
-def check_version(root: Path, version: str, timeout: float, summons: int, verbose: bool) -> Verdict:
-    verdict = Verdict(f"{version} server")
+def addon_source(root: Path, version: str, verdict: Verdict) -> tuple[list[Path], list[str], dict[str, int]]:
+    """What the add-ons installed for one version declare, counted before the game starts."""
     addons = addons_in(root / "versions" / version / "run" / "addons")
-
-    running = dev_servers()
-    if running:
-        verdict.fail("a dev server is already running",
-                     f"pid(s) {', '.join(str(one) for one in sorted(running))} hold the port; "
-                     "this harness does not kill a server it did not start")
-        return verdict
-
     identifiers: list[str] = []
     expected: dict[str, int] = {}
-    if addons:
-        for addon in addons:
-            names, read = open_source(addon)
-            identifiers += entity_identifiers(names, read)
-            for key, value in source_counts(names, read).items():
-                expected[key] = expected.get(key, 0) + value
-        verdict.notes.append(f"{len(addons)} add-on(s) in versions/{version}/run/addons")
-    else:
-        verdict.notes.append(f"no add-on in versions/{version}/run/addons, nothing to test against")
 
+    for addon in addons:
+        names, read = open_source(addon)
+        identifiers += entity_identifiers(names, read)
+        for key, value in source_counts(names, read).items():
+            expected[key] = expected.get(key, 0) + value
+
+    verdict.notes.append(
+        f"{len(addons)} add-on(s) in versions/{version}/run/addons" if addons
+        else f"no add-on in versions/{version}/run/addons, nothing to test against")
+    return addons, identifiers, expected
+
+
+def occupied(launch: Launch, verdict: Verdict) -> bool:
+    """Whether somebody else's game of this kind is up, which this harness will not disturb."""
+    others = running(launch)
+    if not others:
+        return False
+    verdict.fail(f"a dev {launch.name} is already running",
+                 f"pid(s) {', '.join(str(one) for one in sorted(others))} are up; "
+                 f"this harness does not kill a {launch.name} it did not start")
+    return True
+
+
+def gradle_failed(lines: list[str], outcome: str, verdict: Verdict) -> None:
+    """Gradle also reports a failure for a game this harness killed, so that outcome says nothing."""
+    if outcome.startswith("killed"):
+        return
+    failed = [line for line in lines if "FAILURE: Build failed" in line]
+    if failed:
+        verdict.fail("gradle failed", "the version did not build or the run task failed", failed)
+
+
+def check_server(root: Path, version: str, timeout: float, summons: int, verbose: bool) -> Verdict:
+    verdict = Verdict(f"{version} server")
+    if occupied(SERVER, verdict):
+        return verdict
+
+    addons, identifiers, expected = addon_source(root, version, verdict)
     free_world_lock(root, version)
     script = console_script(identifiers, summons)
-    lines, log, outcome = run_server(root, version, script, timeout, verbose)
+    lines, log, outcome = play(root, version, SERVER, SERVER.ready, script, timeout, 0.0, verbose)
 
     verdict.notes.append(f"server {outcome}, {len(lines)} lines in {log.relative_to(root)}")
-    scan(lines, verdict, with_addon=bool(addons))
-
-    # Gradle also reports a failure for a server this harness killed, so that outcome says nothing.
-    if outcome != "killed on the deadline":
-        failed = [line for line in lines if "FAILURE: Build failed" in line]
-        if failed:
-            verdict.fail("gradle failed", "the version did not build or the run task failed", failed)
+    scan(lines, verdict, (("server reached done", r"Done \("),)
+         + (EXPECTED_WITH_ADDON if addons else ()))
+    gradle_failed(lines, outcome, verdict)
 
     attempted = len([one for _, one in script if one.startswith("summon ")])
     summoned = len([one for one in lines if SUMMONED.search(one)])
@@ -513,6 +607,40 @@ def check_version(root: Path, version: str, timeout: float, summons: int, verbos
         if expected.get(key) and reported.get(key, 0) == 0:
             verdict.fail("nothing registered",
                          f"the packs declare {expected[key]} {key}, the mod registered none")
+
+    return verdict
+
+
+def check_client(root: Path, version: str, timeout: float, hold: float, verbose: bool) -> Verdict:
+    """Starts the client, which is the only half that loads models, textures and render controllers."""
+    verdict = Verdict(f"{version} client")
+    if occupied(CLIENT, verdict):
+        return verdict
+
+    addons, _, expected = addon_source(root, version, verdict)
+    ready = CLIENT.ready if addons else CLIENT.ready_without_addon
+    lines, log, outcome = play(root, version, CLIENT, ready, [], timeout, hold, verbose)
+
+    verdict.notes.append(f"client {outcome}, {len(lines)} lines in {log.relative_to(root)}")
+    scan(lines, verdict, EXPECTED_WITH_ADDON if addons else ())
+    gradle_failed(lines, outcome, verdict)
+
+    reported = reported_counts(lines)
+    verdict.counts = {"source": expected, "reported by the mod": reported}
+    if not addons:
+        return verdict
+
+    drawn = [CLIENT_DEFINITIONS.search(line) for line in lines]
+    definitions = next((int(one.group(1)) for one in drawn if one), None)
+    if definitions is None:
+        verdict.fail("add-on never reached the client",
+                     "the mod did not report how many entities have a client definition")
+    elif definitions == 0:
+        verdict.fail("no entity has a client definition",
+                     f"the packs declare {expected.get('entity types', 0)} entity types "
+                     "and the client drew none of them")
+    else:
+        verdict.notes.append(f"{definitions} add-on entities have a client definition")
 
     return verdict
 
@@ -565,13 +693,17 @@ def report(verdicts: list[Verdict], destination: Path) -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=USAGE)
-    parser.add_argument("mode", choices=("run", "convert", "all"))
+    parser.add_argument("mode", choices=("run", "client", "convert", "all"),
+                        help="`run` drives a dev server, `client` a dev client, "
+                             "`convert` compares a conversion offline, `all` does the three in turn")
     parser.add_argument("--version", action="append", choices=VERSIONS,
                         help="a Minecraft version to check; repeatable, all three by default")
     parser.add_argument("--source", type=Path,
                         help="the extracted add-on directory or archive to compare a conversion against")
-    parser.add_argument("--timeout", type=float, default=300.0,
-                        help="seconds before the server is killed, whatever it is doing")
+    parser.add_argument("--timeout", type=float, default=600.0,
+                        help="seconds before the game is killed, whatever it is doing")
+    parser.add_argument("--hold", type=float, default=15.0,
+                        help="seconds to leave the client running once the mod has loaded")
     parser.add_argument("--summons", type=int, default=4, help="how many add-on entities to summon")
     parser.add_argument("--report", type=Path, help="where to write the JSON verdict")
     parser.add_argument("--lock-wait", type=float, default=1800.0,
@@ -593,11 +725,16 @@ def main() -> int:
         verdicts += [check_conversion(root, source, version)
                      for version in versions for source in sources]
 
-    if arguments.mode in ("run", "all"):
+    # One lock for the whole run, because a server and a client of the same version share a world.
+    if arguments.mode in ("run", "client", "all"):
         with exclusive(root, arguments.lock_wait):
-            verdicts += [
-                check_version(root, version, arguments.timeout, arguments.summons, arguments.verbose)
-                for version in versions]
+            for version in versions:
+                if arguments.mode in ("run", "all"):
+                    verdicts.append(check_server(
+                        root, version, arguments.timeout, arguments.summons, arguments.verbose))
+                if arguments.mode in ("client", "all"):
+                    verdicts.append(check_client(
+                        root, version, arguments.timeout, arguments.hold, arguments.verbose))
 
     return 0 if report(verdicts, destination) else 1
 
