@@ -175,45 +175,41 @@ def datapack(world: pathlib.Path, commands: list[str]) -> pathlib.Path:
     return pack
 
 
-def windowBounds() -> tuple[int, int, int, int] | None:
-    """Where the game's window sits, so a capture holds the game and not the whole desktop."""
-    asking = ('tell application "System Events" to tell (first process whose name is "java") '
-              'to get {position of window 1, size of window 1}')
-    found = subprocess.run(["osascript", "-e", asking], capture_output=True, text=True, check=False)
-    numbers = [one.strip() for one in found.stdout.strip().split(",")]
-    if len(numbers) != 4 or not all(one.lstrip("-").isdigit() for one in numbers):
-        return None
-    left, top, across, down = (int(one) for one in numbers)
-    return (left, top, across, down)
+# F1 takes the heads-up display off the screen, F2 makes the game save a picture of itself.
+HIDE_HUD = 122
+SCREENSHOT = 120
 
 
-def hideHud() -> None:
-    """Takes the chat, the hotbar and the crosshair off the screen, which is what F1 does.
-
-    The game keeps no setting for this, so the key is sent once. It is the only key this tool
-    presses, and the scene itself still runs without one.
-    """
-    pressing = ('tell application "System Events" to tell (first process whose name is "java") '
-                'to key code 122')
+def press(code: int) -> None:
+    """Sends one key to the game, which is the only interaction this tool has with it."""
     subprocess.run(["osascript", "-e",
                     'tell application "System Events" to set frontmost of '
                     '(first process whose name is "java") to true'], check=False)
+    time.sleep(0.6)
+    subprocess.run(["osascript", "-e",
+                    'tell application "System Events" to tell (first process whose name is "java") '
+                    f"to key code {code}"], check=False)
     time.sleep(0.8)
-    subprocess.run(["osascript", "-e", pressing], check=False)
-    time.sleep(0.8)
 
 
-def capture(target: pathlib.Path) -> None:
-    """Photographs the game's window and leaves one picture that is ready to look at.
+def capture(version: str, target: pathlib.Path) -> None:
+    """Has the game photograph itself, and leaves one picture that is ready to look at.
 
-    The whole desktop is what `screencapture` takes by default, and a window on a display that draws
-    two pixels per point comes back at twice the size it was asked for. Taking the window's own
-    rectangle and scaling the result down means the file can be opened and read as it is.
+    The game's own screenshot holds what it drew and nothing else: no title bar, no cursor, and no
+    doubling from a display that draws two pixels per point. It also does not care whether the window
+    is in front, which photographing the screen does.
     """
-    hideHud()
-    bounds = windowBounds()
-    region = ["-R", ",".join(str(one) for one in bounds)] if bounds else []
-    subprocess.run(["screencapture", "-x", "-o", *region, str(target)], check=False)
+    shots = ROOT / "versions" / version / "run" / "screenshots"
+    before = set(shots.glob("*.png")) if shots.is_dir() else set()
+
+    press(HIDE_HUD)
+    press(SCREENSHOT)
+    time.sleep(1.5)
+
+    taken = sorted(set(shots.glob("*.png")) - before) if shots.is_dir() else []
+    if not taken:
+        return
+    shutil.move(str(taken[-1]), target)
 
     try:
         from PIL import Image
@@ -285,7 +281,7 @@ def run(version: str, one: dict, timeout: float, keep: bool) -> tuple[bool, list
     if finished:
         # The window is up and the scene has run, so what is drawn is worth keeping.
         time.sleep(2.5)
-        capture(logs / f"{version}-{one['name']}.png")
+        capture(version, logs / f"{version}-{one['name']}.png")
 
     if not keep:
         for stop in (signal.SIGTERM, signal.SIGKILL):
