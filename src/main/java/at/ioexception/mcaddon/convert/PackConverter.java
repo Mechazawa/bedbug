@@ -103,6 +103,7 @@ public final class PackConverter {
                 writeRecipes(root, recipes);
                 writeLootTables(root, loot, namespace);
                 writeBlockData(root, blocks, loot);
+                writeItemTags(root, items);
                 writeBlockModels(root, icons, blocks, assets, sprites);
                 writeAtlas(root, sprites);
                 writeParticles(pack, root, textures.paths());
@@ -994,6 +995,57 @@ public final class PackConverter {
                 .resolve("tags").resolve(dataDirectory("block"))
                 .resolve(id.path() + ".json"), json);
         }
+    }
+
+    /**
+     * The item tags a pack asked its items to join, as the files Java reads them from.
+     *
+     * Bedrock states an item's tags on the item; Java keeps the membership in the tag instead, so
+     * the same list has to be turned inside out. A tag Java already knows gains the pack's items
+     * alongside the vanilla ones, which is how a pack's own item becomes dyeable or a boat fuel.
+     */
+    private static void writeItemTags(Path root, List<ItemDefinition> items) throws IOException {
+        Map<String, List<String>> tagged = new TreeMap<>();
+        for (ItemDefinition item : items) {
+            Names.Identifier id = Names.split(item.identifier(), "minecraft");
+            for (String tag : tagsOf(item)) {
+                tagged.computeIfAbsent(tag, name -> new ArrayList<>())
+                    .add(id.namespace() + ":" + id.path());
+            }
+        }
+
+        for (Map.Entry<String, List<String>> tag : tagged.entrySet()) {
+            Names.Identifier id = Names.split(tag.getKey(), "minecraft");
+            if (id.path().isEmpty()) continue;
+
+            JsonArray values = new JsonArray();
+            tag.getValue().forEach(values::add);
+            JsonObject json = new JsonObject();
+            json.add("values", values);
+            write(root.resolve("data").resolve(id.namespace())
+                .resolve("tags").resolve(dataDirectory("item"))
+                .resolve(id.path() + ".json"), json);
+        }
+    }
+
+    /**
+     * Every tag one item names, from either spelling.
+     *
+     * A pack writes `minecraft:tags` with a `tags` array, and older packs write the array straight
+     * onto the component. Both are the same list of names.
+     */
+    private static List<String> tagsOf(ItemDefinition item) {
+        JsonObject component = item.components().get("minecraft:tags");
+        if (component == null) return List.of();
+
+        JsonElement named = component.has("tags") ? component.get("tags") : component.get("value");
+        if (named == null || !named.isJsonArray()) return List.of();
+
+        List<String> tags = new ArrayList<>();
+        named.getAsJsonArray().forEach(one -> {
+            if (one.isJsonPrimitive()) tags.add(one.getAsString());
+        });
+        return tags;
     }
 
     /** The converted table the pack-relative path names, or null when the pack ships no such file. */

@@ -502,7 +502,7 @@ public final class AddonItems {
      * written against the older format versions still ship them, and both are read.
      */
     private static final List<String> IMPLEMENTED = List.of(
-        "minecraft:icon", "minecraft:display_name", "minecraft:max_stack_size",
+        "minecraft:icon", "minecraft:display_name", "minecraft:max_stack_size", "minecraft:tags",
         "minecraft:food", "minecraft:use_animation", "minecraft:use_duration",
         "minecraft:use_modifiers", "minecraft:durability", "minecraft:max_damage",
         "minecraft:repairable", "minecraft:wearable", "minecraft:armor",
