@@ -160,7 +160,10 @@ These are the checks it runs, and what each one catches:
   light reaching it and animated by a controller crossing between two states on a blend transition,
   and its scripts block asks to keep running out of view. The sprite is described twice over, the
   second file naming an older engine and a geometry the pack has not got, so a run that picks the
-  wrong one of the two draws nothing where the sprite should be.
+  wrong one of the two draws nothing where the sprite should be. The sprite is also declared young,
+  and one of its two controllers picks its body by `query.is_baby` while the other draws a cap
+  written to sit on top of the young body, so a query answering the wrong way leaves the cap in the
+  air with a gap under it.
 
   The recipes cover the seven kinds and the fields that decide what each becomes: a furnace recipe
   naming four cookers and an unlock item, a shapeless one tagged for the stonecutter and unlocked by

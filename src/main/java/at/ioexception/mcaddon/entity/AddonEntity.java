@@ -4004,9 +4004,18 @@ public class AddonEntity extends PathfinderMob
         return false;
     }
 
+    /**
+     * Whether the entity is young, which a pack's render controllers read as `query.is_baby`.
+     *
+     * Bedrock says it two ways. `minecraft:ageable` counts a wait and the entity is young until it
+     * is over; `minecraft:is_baby` is the flag for one that is young and stays that way, and a pack
+     * writing it is choosing the proportions its geometry was drawn for. The flag is read off the
+     * definition rather than off any state, so the drawing side answers it the same way the server
+     * does without being told.
+     */
     @Override
     public boolean isBaby() {
-        return age != null && age.baby();
+        return declaresNow("minecraft:is_baby") || (age != null && age.baby());
     }
 
     /**
