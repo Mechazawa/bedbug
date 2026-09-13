@@ -8,6 +8,7 @@ import at.ioexception.mcaddon.bedrock.model.BedrockBone;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.platform.Platform;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
@@ -32,6 +33,7 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.OwnableEntity;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.TamableAnimal;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.animal.allay.Allay;
 import net.minecraft.world.entity.animal.fox.Fox;
 import net.minecraft.world.entity.animal.panda.Panda;
@@ -287,6 +289,7 @@ public final class AddonQueries implements MolangEnvironment.Queries {
 
             case "any_animation_finished" -> MolangValue.of(animator.player().anyFinished());
             case "all_animations_finished" -> MolangValue.of(animator.player().allFinished());
+            case "key_frame_lerp_time" -> MolangValue.of(environment.keyFrameLerpTime());
 
             case "property" -> property(properties, arguments);
             case "has_property" -> MolangValue.of(!arguments.isEmpty()
@@ -299,6 +302,7 @@ public final class AddonQueries implements MolangEnvironment.Queries {
             case "is_transforming" -> MolangValue.of(flag(properties, "is_transforming"));
             case "is_gliding" -> MolangValue.of(entity instanceof LivingEntity living && living.isFallFlying());
             case "is_avoiding_mobs" -> MolangValue.of(flag(properties, "is_avoiding_mobs"));
+            case "is_avoiding_block" -> MolangValue.of(flag(properties, "is_avoiding_block"));
             case "has_target" -> MolangValue.of(flag(properties, "has_target"));
             case "last_hit_by_player" -> MolangValue.of(flag(properties, "last_hit_by_player"));
             case "trade_tier" -> MolangValue.of(number(properties.get("trade_tier")));
@@ -333,6 +337,8 @@ public final class AddonQueries implements MolangEnvironment.Queries {
             case "entity_biome_has_any_identifier" -> MolangValue.of(biomeNamed(arguments));
             case "above_top_solid", "heightmap" -> MolangValue.of(surfaceHeight(arguments));
             case "surface_particle_color" -> surfaceColour(member);
+            case "surface_particle_texture_coordinate" -> surfaceTextureAt(member);
+            case "surface_particle_texture_size" -> surfaceTextureSize(member);
 
             // Bedrock answers these while a block is being placed, and an entity being drawn is
             // never that moment.
@@ -349,6 +355,8 @@ public final class AddonQueries implements MolangEnvironment.Queries {
 
             case "get_animation_frame" -> MolangValue.of(environment.animTime());
             case "bone_orientation_trs", "bone_origin" -> boneOrigin(arguments);
+            case "bone_rotation" -> boneRotation(arguments, member);
+            case "bone_aabb" -> boneBox(arguments, member);
             case "get_default_bone_pivot" -> MolangValue.of(bonePivot(arguments));
             case "get_locator_offset" -> MolangValue.of(locatorOffset(animator, arguments));
             case "get_root_locator_offset" -> MolangValue.of(locatorOffset(rootModel(), arguments));
@@ -375,7 +383,20 @@ public final class AddonQueries implements MolangEnvironment.Queries {
             // share still to run rather than as a count of ticks, which is what the swing is drawn
             // against anyway.
             case "cooldown_time_remaining" -> MolangValue.of(cooldownLeft());
+            case "cooldown_time" -> MolangValue.of(cooldownLength(arguments));
             case "is_cooldown_category" -> MolangValue.of(cooldownLeft() > 0);
+
+            // Java states how many swings a second an item allows, so the time one takes is that
+            // the other way up. Only the second of the two carries what acts on whoever swings.
+            case "base_swing_duration" -> MolangValue.of(entity instanceof LivingEntity living
+                ? swingSeconds(Platform.baseAttackSpeed(living, worn(EquipmentSlot.MAINHAND))) : 0);
+            case "modified_swing_duration" -> MolangValue.of(entity instanceof LivingEntity living
+                ? swingSeconds(living.getAttributeValue(Attributes.ATTACK_SPEED)) : 0);
+
+            case "kinetic_weapon_delay", "kinetic_weapon_damage_duration",
+                "kinetic_weapon_knockback_duration", "kinetic_weapon_dismount_duration" ->
+                MolangValue.of(kineticTiming(name));
+            case "ticks_since_last_kinetic_weapon_hit" -> MolangValue.of(kineticHitAge());
             case "equipment_count" -> MolangValue.of(ARMOUR.stream()
                 .filter(slot -> !worn(slot).isEmpty()).count());
             case "has_head_gear" -> MolangValue.of(!worn(EquipmentSlot.HEAD).isEmpty());
@@ -423,6 +444,15 @@ public final class AddonQueries implements MolangEnvironment.Queries {
 
             case "has_collision" -> MolangValue.of(!entity.noPhysics);
             case "invulnerable_ticks" -> MolangValue.of(entity.invulnerableTime);
+            case "is_lingering" -> MolangValue.of(Platform.isLingering(entity));
+            case "shake_angle" -> MolangValue.of(entity instanceof Wolf wolf
+                ? Platform.wolfShakeAngle(wolf, partialTick) : 0);
+            case "shield_blocking_bob" -> MolangValue.of(shieldBob());
+            case "overlay_alpha" -> MolangValue.of(overlayAlpha());
+            case "spellcolor" -> spellColour(member);
+            // Bedrock draws an elder guardian's curse as a ghost of the guardian itself. Java draws
+            // that same curse over the screen instead, so no entity is ever one.
+            case "is_ghost" -> MolangValue.ZERO;
             case "is_orphaned" -> MolangValue.of(!properties.containsKey("owner"));
             case "life_span" -> MolangValue.of(entity.tickCount / 20d);
 
@@ -459,6 +489,8 @@ public final class AddonQueries implements MolangEnvironment.Queries {
 
             case "actor_count" -> MolangValue.of(actorCount());
             case "total_emitter_count" -> MolangValue.of(AddonEmitters.running());
+            case "total_particle_count" -> MolangValue.of(particleCount());
+            case "get_level_seed_based_fraction" -> MolangValue.of(seedFraction());
             case "scoreboard" -> MolangValue.of(Platform.score(entity, text(arguments, 0)));
             case "all_tags" -> MolangValue.of(families(properties, arguments, true));
             case "any_tag" -> MolangValue.of(families(properties, arguments, false));
@@ -479,6 +511,19 @@ public final class AddonQueries implements MolangEnvironment.Queries {
             case "count" -> MolangValue.of(arguments.size());
             case "get_actor_info_id" -> MolangValue.of(actorInfoId(arguments));
             case "log", "debug_output" -> logged(arguments);
+
+            // A Molang value here is a number or a string. A matrix and an array of entities are
+            // each more than that, so a pack asking for one is told rather than handed a number.
+            case "bone_orientation_matrix", "combine_entities" -> unanswered(name);
+
+            // Pack settings are the sliders, toggles and dropdowns Bedrock shows beside a resource
+            // pack on a screen of its own. Java has no such screen and nothing behind one to read.
+            case "get_pack_setting", "is_pack_setting_enabled", "is_pack_setting_selected" ->
+                unanswered(name);
+
+            // Both count what belongs to the particle effect whose own Molang is being evaluated.
+            // This answers for an entity, which belongs to no effect.
+            case "effect_emitter_count", "effect_particle_count" -> unanswered(name);
 
             default -> unanswered(name);
         };
@@ -827,6 +872,260 @@ public final class AddonQueries implements MolangEnvironment.Queries {
     private MolangValue boneOrigin(List<MolangValue> arguments) {
         BonePose pose = animator.poseOf(text(arguments, 0));
         return pose == null ? MolangValue.ZERO : MolangValue.of(alongAxis(pose.position, arguments));
+    }
+
+    /** The resting rotation a bone was modelled at, along one axis, in degrees. */
+    private MolangValue boneRotation(List<MolangValue> arguments, String axis) {
+        BedrockBone bone = animator.bone(text(arguments, 0));
+        return along(bone == null ? NOWHERE : bone.rotation(), axis, "bone_rotation");
+    }
+
+    /**
+     * The corners of the box a bone's own boxes fill, in the space the model is built in.
+     *
+     * A bone with no boxes of its own encloses nothing, so both of its corners sit on its pivot.
+     */
+    private MolangValue boneBox(List<MolangValue> arguments, String member) {
+        BedrockBone bone = animator.bone(text(arguments, 0));
+        Vector3f smallest = new Vector3f(bone == null ? NOWHERE : bone.pivot());
+        Vector3f largest = new Vector3f(smallest);
+        if (bone != null && !bone.cubes().isEmpty()) {
+            smallest.set(Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE);
+            largest.set(-Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE);
+            bone.cubes().forEach(cube -> {
+                float grown = cube.inflate();
+                smallest.min(new Vector3f(cube.origin()).sub(grown, grown, grown));
+                largest.max(new Vector3f(cube.origin()).add(cube.size()).add(grown, grown, grown));
+            });
+        }
+
+        int split = member.indexOf('.');
+        String corner = split < 0 ? member : member.substring(0, split);
+        String axis = split < 0 ? "" : member.substring(split + 1);
+        return switch (corner) {
+            case "min" -> along(smallest, axis, "bone_aabb");
+            case "max" -> along(largest, axis, "bone_aabb");
+            default -> unanswered("bone_aabb");
+        };
+    }
+
+    /** What a bone query answers with for a bone the model does not have. */
+    private static final Vector3f NOWHERE = new Vector3f();
+
+    /**
+     * One axis of a vector a query answers with.
+     *
+     * A value here is a number or a string, so a query answering with several numbers at once only
+     * answers when the expression names the one it wants. A pack storing the whole of it in a
+     * variable is told rather than handed a zero that reads like an answer.
+     */
+    private static MolangValue along(Vector3f vector, String axis, String query) {
+        return switch (axis) {
+            case "x" -> MolangValue.of(vector.x());
+            case "y" -> MolangValue.of(vector.y());
+            case "z" -> MolangValue.of(vector.z());
+            default -> unanswered(query);
+        };
+    }
+
+    /** The sprite the block under the entity makes its own particles out of, cut from the atlas. */
+    private net.minecraft.client.renderer.texture.TextureAtlasSprite groundSprite() {
+        BlockPos ground = groundBelow();
+        return ground == null ? null
+            : Platform.blockParticleSprite(entity.level().getBlockState(ground));
+    }
+
+    /** Where in the atlas that sprite begins, in pixels. Ground the scan never reached has none. */
+    private MolangValue surfaceTextureAt(String axis) {
+        net.minecraft.client.renderer.texture.TextureAtlasSprite sprite = groundSprite();
+        return switch (axis) {
+            case "u" -> MolangValue.of(sprite == null ? 0 : sprite.getX());
+            case "v" -> MolangValue.of(sprite == null ? 0 : sprite.getY());
+            default -> unanswered("surface_particle_texture_coordinate");
+        };
+    }
+
+    /** How large that sprite is, in pixels. */
+    private MolangValue surfaceTextureSize(String axis) {
+        net.minecraft.client.renderer.texture.TextureAtlasSprite sprite = groundSprite();
+        return switch (axis) {
+            case "u" -> MolangValue.of(sprite == null ? 0 : sprite.contents().width());
+            case "v" -> MolangValue.of(sprite == null ? 0 : sprite.contents().height());
+            default -> unanswered("surface_particle_texture_size");
+        };
+    }
+
+    /**
+     * The colour of the effects the entity is under, by channel.
+     *
+     * Bedrock calls this the entity's spell colour and paints its swirls and its spell particles
+     * with it. Java mixes the same colour out of the visible effects, each counting for as much as
+     * it is strong. An entity under nothing has no colour at all, alpha included.
+     */
+    private MolangValue spellColour(String channel) {
+        int weight = 0;
+        double red = 0;
+        double green = 0;
+        double blue = 0;
+        for (net.minecraft.world.effect.MobEffectInstance active : effects()) {
+            if (!active.isVisible()) continue;
+
+            int colour = Platform.effectColour(active);
+            int strength = active.getAmplifier() + 1;
+            red += (colour >> 16 & 255) * strength;
+            green += (colour >> 8 & 255) * strength;
+            blue += (colour & 255) * strength;
+            weight += strength;
+        }
+
+        return switch (channel) {
+            case "r" -> MolangValue.of(weight == 0 ? 0 : red / weight / 255);
+            case "g" -> MolangValue.of(weight == 0 ? 0 : green / weight / 255);
+            case "b" -> MolangValue.of(weight == 0 ? 0 : blue / weight / 255);
+            case "a" -> MolangValue.of(weight != 0);
+            default -> unanswered("spellcolor");
+        };
+    }
+
+    /** The effects on the entity, which anything that is not alive is under none of. */
+    private java.util.Collection<net.minecraft.world.effect.MobEffectInstance> effects() {
+        return entity instanceof LivingEntity living ? living.getActiveEffects() : List.of();
+    }
+
+    /**
+     * How many particles the client is drawing.
+     *
+     * The engine states its counts as the line the debug screen shows, which ends with the total on
+     * every version, so the digits at the end of that line are the number.
+     */
+    private static double particleCount() {
+        String counted = Minecraft.getInstance().particleEngine.countParticles();
+        int from = counted.length();
+        while (from > 0 && Character.isDigit(counted.charAt(from - 1))) from -= 1;
+
+        return from == counted.length() ? 0 : Double.parseDouble(counted.substring(from));
+    }
+
+    /**
+     * A number between nothing and one that is the same every time this world is opened.
+     *
+     * Nobody tells a client the seed the world was made from. What it does hold is the scrambled
+     * form of that seed the biomes are placed by, which is as fixed to one world as the seed is.
+     */
+    private double seedFraction() {
+        if (entity.level() == null) return 0;
+
+        long seed = ((at.ioexception.mcaddon.mixin.BiomeSeedAccessor) (Object)
+            entity.level().getBiomeManager()).mcaddon$biomeZoomSeed();
+        return (seed >>> 11) / (double) (1L << 53);
+    }
+
+    /**
+     * How strongly the entity is drawn with an overlay over its own texture.
+     *
+     * A wither fades one in across the whole of the spawn it is invulnerable for, and anything else
+     * flashes at full strength for as long as a hit lasts.
+     */
+    private double overlayAlpha() {
+        if (entity instanceof WitherBoss wither && wither.getInvulnerableTicks() > 0) {
+            return 1 - wither.getInvulnerableTicks() / (double) WITHER_SPAWN;
+        }
+        return entity instanceof LivingEntity living && living.hurtTime > 0 ? 1 : 0;
+    }
+
+    /** How long a wither stays invulnerable after it is built, in ticks. */
+    private static final int WITHER_SPAWN = 220;
+
+    /**
+     * How far a blocking shield dips, as a share of the hit it is taking.
+     *
+     * It dips only while a hit is running, so the answer follows the hurt animation down and is
+     * nothing at all the rest of the time.
+     */
+    private double shieldBob() {
+        if (!(entity instanceof LivingEntity living) || !living.isBlocking()
+            || living.hurtTime <= 0 || living.hurtDuration <= 0) {
+            return 0;
+        }
+        return living.hurtTime / (double) living.hurtDuration;
+    }
+
+    /** How long one swing takes, in seconds, given how many of them a second the speed allows. */
+    private static double swingSeconds(double swingsPerSecond) {
+        return swingsPerSecond <= 0 ? 0 : 1 / swingsPerSecond;
+    }
+
+    /** How long the cooldown on the item in a named slot lasts, in seconds. */
+    private double cooldownLength(List<MolangValue> arguments) {
+        EquipmentSlot slot = slotOf(text(arguments, 0));
+        if (slot == null) return 0;
+
+        ItemStack held = worn(slot);
+        float declared = AddonItems.cooldownOf(held.getItem());
+        return declared > 0 ? declared : Platform.cooldownSeconds(held);
+    }
+
+    /**
+     * The timings of the kinetic weapon in the main hand, or null while it holds none.
+     *
+     * 26 carries them on the stack, where the game's own spear keeps its as well. Below that only
+     * the pack's own declaration states them, which is kept beside the item it belongs to.
+     */
+    private AddonItems.KineticTimings kinetic() {
+        ItemStack held = worn(EquipmentSlot.MAINHAND);
+
+        //? if >=26 {
+        net.minecraft.world.item.component.KineticWeapon weapon =
+            held.get(net.minecraft.core.component.DataComponents.KINETIC_WEAPON);
+        if (weapon != null) {
+            return new AddonItems.KineticTimings(weapon.delayTicks(),
+                lasts(weapon.damageConditions()), lasts(weapon.knockbackConditions()),
+                lasts(weapon.dismountConditions()));
+        }
+        //?}
+        return AddonItems.kineticOf(held.getItem());
+    }
+
+    //? if >=26 {
+    /** How long one effect of a kinetic weapon lasts, in ticks, or nothing where it never applies. */
+    private static int lasts(
+        java.util.Optional<net.minecraft.world.item.component.KineticWeapon.Condition> condition) {
+        return condition
+            .map(net.minecraft.world.item.component.KineticWeapon.Condition::maxDurationTicks)
+            .orElse(0);
+    }
+    //?}
+
+    /** One of the durations `minecraft:kinetic_weapon` states, in ticks, by the query reading it. */
+    private double kineticTiming(String query) {
+        AddonItems.KineticTimings timings = kinetic();
+        if (timings == null) return 0;
+
+        return switch (query) {
+            case "kinetic_weapon_delay" -> timings.delay();
+            case "kinetic_weapon_damage_duration" -> timings.damage();
+            case "kinetic_weapon_knockback_duration" -> timings.knockback();
+            default -> timings.dismount();
+        };
+    }
+
+    /**
+     * How long since the entity last landed a hit with a kinetic weapon, in ticks.
+     *
+     * Bedrock answers -1 while nothing that could hit is being held, and while nothing has been hit
+     * yet. The game reports no hit at all and a hit this very instant as the same nothing, so it is
+     * asked again for a whole tick later, which only a real hit answers above zero.
+     */
+    private double kineticHitAge() {
+        //? if >=26 {
+        if (kinetic() == null || !(entity instanceof LivingEntity living)
+            || living.getTicksSinceLastKineticHitFeedback(1f) == 0f) {
+            return -1;
+        }
+        return living.getTicksSinceLastKineticHitFeedback(partialTick);
+        //?} else {
+        /*return -1;
+        *///?}
     }
 
     /** Whether this animator is drawing something worn or held rather than the entity itself. */

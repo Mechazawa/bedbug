@@ -12,9 +12,16 @@ public final class MolangCheck {
     public static void main(String[] args) throws Exception {
         List<String> expressions = Files.readAllLines(Path.of(args[0]));
         MolangEnvironment environment = new MolangEnvironment();
+        // A query answering with several numbers at once is asked for one member at a time, and the
+        // member reaches the answering side as part of the name whether or not the call took
+        // arguments. These stand in for the ones the game answers from an entity.
         environment.setQueries((name, arguments) -> switch (name) {
             case "is_baby" -> MolangValue.ONE;
             case "anim_time" -> MolangValue.of(0.5);
+            case "bone_rotation.x" -> MolangValue.of(arguments.size());
+            case "bone_aabb.min.y" -> MolangValue.of(-7);
+            case "spellcolor.r" -> MolangValue.of(0.25);
+            case "key_frame_lerp_time" -> MolangValue.of(0.5);
             default -> MolangValue.ZERO;
         });
 
@@ -54,6 +61,12 @@ public final class MolangCheck {
         failed += check(environment, "math.floor(-1.5)", -2);
         failed += check(environment, "math.trunc(-1.5)", -1);
         failed += check(environment, "2 < 3 && 3 <= 3", 1);
+        failed += check(environment, "q.bone_rotation('head').x", 1);
+        failed += check(environment, "q.bone_aabb('leg1a').min.y", -7);
+        failed += check(environment, "q.spellcolor.r", 0.25);
+        failed += check(environment, "q.key_frame_lerp_time * 4", 2);
+        failed += check(environment, "q.bone_rotation('head').x + 1", 2);
+        failed += check(environment, "q.bone_rotation('head').z", 0);
         System.out.println(failed == 0 ? "every assertion held" : failed + " assertions failed");
     }
 

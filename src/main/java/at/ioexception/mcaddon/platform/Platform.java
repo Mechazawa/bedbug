@@ -30,6 +30,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MobCategory;
+import net.minecraft.world.entity.animal.wolf.Wolf;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 //? if >=26 {
@@ -1361,6 +1362,116 @@ public final class Platform {
         return crop.isValidBonemealTarget(level, at, state);
         //?} else {
         /*return crop.isValidBonemealTarget(level, at, state, false);
+        *///?}
+    }
+
+    /**
+     * How far a wolf is through shaking the water off, which runs from nothing to two.
+     *
+     * 26 answers the count itself. The older versions keep the count private and offer only the
+     * shade the wolf is drawn at, which is that count and nothing else, so reading the shade
+     * backwards gives the count up to the moment it reaches full.
+     */
+    public static double wolfShakeAngle(Wolf wolf, float partialTick) {
+        //? if >=26 {
+        return wolf.getShakeAnim(partialTick);
+        //?} elif >=1.21 {
+        /*return (wolf.getWetShade(partialTick) - 0.75) * 8;
+        *///?} else {
+        /*return (wolf.getWetShade(partialTick) - 0.5) * 4;
+        *///?}
+    }
+
+    /**
+     * The atlas sprite a block's own particles are cut from.
+     *
+     * 26 moved the question from the block renderer to the model manager, and answers it with the
+     * material the sprite belongs to rather than with the sprite.
+     */
+    public static net.minecraft.client.renderer.texture.TextureAtlasSprite blockParticleSprite(
+        net.minecraft.world.level.block.state.BlockState state) {
+        //? if >=26 {
+        return net.minecraft.client.Minecraft.getInstance().getModelManager()
+            .getBlockStateModelSet().getParticleMaterial(state).sprite();
+        //?} else {
+        /*return net.minecraft.client.Minecraft.getInstance().getBlockRenderer()
+            .getBlockModelShaper().getParticleIcon(state);
+        *///?}
+    }
+
+    /**
+     * Whether the entity is a lingering effect rather than one that lands and is gone.
+     *
+     * 26 gave the two kinds of thrown potion a class each. Before that one class carried both, and
+     * the item it was thrown as is what tells them apart.
+     */
+    public static boolean isLingering(Entity entity) {
+        if (entity instanceof net.minecraft.world.entity.AreaEffectCloud) return true;
+
+        //? if >=26 {
+        return entity instanceof net.minecraft.world.entity.projectile.throwableitemprojectile
+            .ThrownLingeringPotion;
+        //?} else {
+        /*return entity instanceof net.minecraft.world.entity.projectile.ThrownPotion potion
+            && potion.getItem().is(net.minecraft.world.item.Items.LINGERING_POTION);
+        *///?}
+    }
+
+    /**
+     * How many swings a second the held item allows, before anything acting on whoever holds it.
+     *
+     * A weapon states its speed as an attribute modifier on the stack, which 1.21 moved from a
+     * multimap the item answers with into a component the stack carries.
+     */
+    public static double baseAttackSpeed(LivingEntity living, net.minecraft.world.item.ItemStack held) {
+        double speed = living.getAttributeBaseValue(
+            net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_SPEED);
+
+        //? if >=1.21 {
+        return speed + held.getOrDefault(
+                net.minecraft.core.component.DataComponents.ATTRIBUTE_MODIFIERS,
+                net.minecraft.world.item.component.ItemAttributeModifiers.EMPTY)
+            .modifiers().stream()
+            .filter(entry -> entry.attribute()
+                .equals(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_SPEED)
+                && entry.slot().test(net.minecraft.world.entity.EquipmentSlot.MAINHAND)
+                && entry.modifier().operation()
+                    == net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE)
+            .mapToDouble(entry -> entry.modifier().amount())
+            .sum();
+        //?} else {
+        /*return speed + held
+            .getAttributeModifiers(net.minecraft.world.entity.EquipmentSlot.MAINHAND)
+            .get(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_SPEED).stream()
+            .filter(modifier -> modifier.getOperation()
+                == net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADDITION)
+            .mapToDouble(net.minecraft.world.entity.ai.attributes.AttributeModifier::getAmount)
+            .sum();
+        *///?}
+    }
+
+    /** The colour an effect paints its swirls, which 1.21 reached through a holder. */
+    public static int effectColour(MobEffectInstance active) {
+        //? if >=1.21 {
+        return active.getEffect().value().getColor();
+        //?} else {
+        /*return active.getEffect().getColor();
+        *///?}
+    }
+
+    /**
+     * How long the cooldown a use puts the item under lasts, in seconds, or nothing while it has none.
+     *
+     * 26 carries the length on the stack, which is where the game's own items keep theirs. The older
+     * versions hold a cooldown while it runs and nowhere say how long it was.
+     */
+    public static float cooldownSeconds(net.minecraft.world.item.ItemStack stack) {
+        //? if >=26 {
+        net.minecraft.world.item.component.UseCooldown cooldown =
+            stack.get(net.minecraft.core.component.DataComponents.USE_COOLDOWN);
+        return cooldown == null ? 0f : cooldown.seconds();
+        //?} else {
+        /*return 0f;
         *///?}
     }
 }

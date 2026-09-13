@@ -1646,9 +1646,11 @@ public class AddonEntity extends PathfinderMob
                     goalSelector.addGoal(priority, new AvoidMobsGoal(this));
                 // Hiding and playing are both a Bedrock villager moving somewhere for a reason Java
                 // writes into its own villager. What carries across is the moving.
-                case "minecraft:behavior.hide", "minecraft:behavior.avoid_block" ->
+                case "minecraft:behavior.hide" ->
                     goalSelector.addGoal(priority,
                         new AvoidEntityGoal<>(this, Monster.class, 8f, 1.0, 1.2));
+                case "minecraft:behavior.avoid_block" ->
+                    goalSelector.addGoal(priority, new AvoidBlockGoal(this, componentBody(behaviour)));
                 case "minecraft:behavior.panic_on_fire" ->
                     goalSelector.addGoal(priority, new PanicGoal(this, 1.25));
 
