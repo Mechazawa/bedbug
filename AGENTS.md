@@ -325,6 +325,46 @@ These are the checks it runs, and what each one catches:
   not contain are stale or misspelt. Names an `IMPLEMENTED` declaration carries with no reader of
   their own are either a component Java does for every mob anyway, which is why the declaration
   names it, or a coverage claim nothing backs; each declaration's docblock says which it allows.
+- **`tools/census/model.py`** does the same for the drawing side: geometry, animations, animation
+  controllers, render controllers and client entity definitions. Mojang publishes a JSON schema per
+  behaviour pack component and none for any of these, so this measures against the files instead.
+  The resource pack in `bedrock-samples` is Mojang's own and carries every shape the engine accepts,
+  for every vanilla entity.
+
+  ```bash
+  bash tools/census/fetch.sh
+  python3 tools/census/model.py            # the table, then what is dropped and what is stale
+  python3 tools/census/model.py --strict   # exits non-zero while a published field has no reader
+  ```
+
+  The published side is one counter per kind of declaration: how many geometries, bones, cubes,
+  faces, animations, keyframes, controller states, render controllers and client entities carry each
+  field. The mod's side is the field names one named reader method takes out of a JSON object, found
+  by reading the `has`, `get` and helper calls in that method's body, so a field starts counting the
+  moment a reader names it.
+
+  Missing fields are listed with how many published declarations use each. That number is what makes
+  a gap worth ranking: `animation_length` is absent from 337 of 436 vanilla animations, and a reader
+  defaulting it to zero holds every one of them on its first frame.
+
+  Anything the census reports as dropped either has a reader now or is named below under what is
+  read and what is not. A field read that the published files never declare is a reader being more
+  tolerant than vanilla, which is fine, or a misspelling, which is not.
+
+### What the drawing readers do not read
+
+Four of the standing drops are deliberate, and the census will keep naming them:
+
+- **`visible_bounds_width`, `visible_bounds_height` and `visible_bounds_offset`** are the box the
+  engine culls a model against. Java builds its own from the entity's bounding box.
+- **`rebuild_animation_matrices`, `filter_lighting` and `light_color_multiplier`** describe how
+  Bedrock's own renderer schedules and lights a pass. `ignore_lighting` has a Java form, full
+  brightness, and is honoured; the other three do not.
+- **`texture_meshes` and `binding`** on a bone build geometry from a texture's opaque pixels and
+  attach a bone to another entity's skeleton. Neither has a Java counterpart in this renderer.
+- **`should_update_effects_offscreen`, `should_update_bones_and_effects_offscreen`,
+  `min_engine_version`, `enable_attachables` and `hide_armor`** each ask the Bedrock client for
+  behaviour it decides itself. Java decides those the same way for every entity.
 
 ## Conventions
 
@@ -369,6 +409,7 @@ tools/verify/verify.py       End to end harness: drives a dev server and checks 
 tools/preview/render.py      Offline model renderer
 tools/molang/MolangCheck.java  Molang conformance harness
 tools/census/components.py   Coverage of Bedrock's published vocabulary, no pack and no game
+tools/census/model.py        Coverage of the fields the geometry and animation readers act on
 tools/checkall.sh            Every check, in the order that fails fastest
 tools/census/script.py       How much of the published script API this mod offers
 tools/scene/scene.py         Scenes run inside the game, with nobody at the keyboard

@@ -6,6 +6,7 @@ import at.ioexception.mcaddon.entity.AddonEntity;
 import at.ioexception.mcaddon.platform.Platform;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
+import org.joml.Vector3f;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.Identifier;
@@ -100,7 +101,7 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
         EntityAnimator animator;
         List<AddonModels.Pass> passes = new ArrayList<>();
         float bodyRotation;
-        float scale = 1;
+        Vector3f scale = new Vector3f(1, 1, 1);
     }
 
     @Override
@@ -121,7 +122,7 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
         if (state.animator != null) state.passes.addAll(binding.models().resolve(state.animator));
         state.passes.addAll(attachables(entity, partialTick));
         state.bodyRotation = Mth.rotLerp(partialTick, entity.yBodyRotO, entity.yBodyRot);
-        state.scale = state.animator == null ? 1 : state.animator.scale();
+        state.scale = state.animator == null ? new Vector3f(1, 1, 1) : state.animator.scale();
     }
 
     @Override
@@ -140,7 +141,7 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
                     PoseStack local = new PoseStack();
                     local.last().set(pose);
                     BedrockModelRenderer.render(pass.geometry(), animator, pass::hides, pass.shift(),
-                        local, buffer, light, OverlayTexture.NO_OVERLAY, -1);
+                        local, buffer, pass.light(light), OverlayTexture.NO_OVERLAY, pass.colour());
                 });
         }
         poseStack.popPose();
@@ -170,7 +171,7 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
         for (AddonModels.Pass pass : passes) {
             VertexConsumer buffer = buffers.getBuffer(renderTypeOf(pass));
             BedrockModelRenderer.render(pass.geometry(), animator, pass::hides, pass.shift(),
-                poseStack, buffer, light, OverlayTexture.NO_OVERLAY, -1);
+                poseStack, buffer, pass.light(light), OverlayTexture.NO_OVERLAY, pass.colour());
         }
         poseStack.popPose();
     }
@@ -182,10 +183,10 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
      * A scale turns about the model origin rather than the feet, so it has to be compensated, or the
      * entity floats above or sinks into the hitbox it can still be hit in.
      */
-    static void applyModelSpace(PoseStack poseStack, float bodyRotation, float scale) {
+    static void applyModelSpace(PoseStack poseStack, float bodyRotation, Vector3f scale) {
         poseStack.mulPose(Axis.YP.rotationDegrees(180f - bodyRotation));
         poseStack.scale(-1f, -1f, 1f);
-        poseStack.scale(scale, scale, scale);
-        poseStack.translate(0, -MODEL_ORIGIN_BLOCKS / scale, 0);
+        poseStack.scale(scale.x, scale.y, scale.z);
+        poseStack.translate(0, -MODEL_ORIGIN_BLOCKS / scale.y, 0);
     }
 }

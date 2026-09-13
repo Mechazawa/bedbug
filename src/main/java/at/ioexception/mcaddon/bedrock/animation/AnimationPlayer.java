@@ -30,6 +30,12 @@ public final class AnimationPlayer {
         float animTime;
         float lastFiredTime = -1;
 
+        /** Where in the clip its clock currently leaves it, which is what the pose is read at. */
+        float position;
+
+        /** Seconds left of a start or loop delay, during which the clip holds where it stands. */
+        float waiting;
+
         /** When this holds, the clip starts blending out. Null for a clip nothing is watching for. */
         MolangExpression stopExpression;
         float blendOutSeconds;
@@ -112,6 +118,7 @@ public final class AnimationPlayer {
         Running clip = new Running(animation);
         clip.stopExpression = stopExpression;
         clip.blendOutSeconds = blendOutSeconds;
+        clip.waiting = animation.startDelaySeconds(environment);
         running.put(name, clip);
     }
 
@@ -173,19 +180,57 @@ public final class AnimationPlayer {
         }
     }
 
+    /**
+     * Moves one clip's clock on and works out where in the clip that leaves it.
+     *
+     * A clip driving its own clock through `anim_time_update` decides its time outright, and reads
+     * back whatever it last produced rather than the wrapped position, so an expression counting up
+     * keeps counting. Neither delay applies to a clip like that.
+     */
     private void advance(Running clip, float deltaSeconds) {
         MolangExpression update = clip.animation.animTimeUpdate();
-        if (update == null) {
+        if (update != null) {
+            environment.setAnimTime(clip.animTime);
+            clip.animTime = update.asFloat(environment);
+        } else if (clip.waiting > 0f) {
+            waitOut(clip, deltaSeconds);
+        } else {
             clip.animTime += deltaSeconds;
+            loopOver(clip);
+        }
+
+        // A clip waiting out a loop delay holds the last frame it drew rather than the first.
+        clip.position = clip.waiting > 0f && clip.animTime > 0f
+            ? clip.animation.length()
+            : clip.animation.positionAt(clip.animTime);
+    }
+
+    /** Counts a start or loop delay down, and starts the clip on whatever is left of the frame. */
+    private static void waitOut(Running clip, float deltaSeconds) {
+        clip.waiting -= deltaSeconds;
+        if (clip.waiting > 0f) return;
+
+        clip.animTime = -clip.waiting;
+        clip.waiting = 0f;
+        clip.lastFiredTime = -1;
+    }
+
+    /** Sends a looping clip round again once it passes its end, after the delay it asks for. */
+    private void loopOver(Running clip) {
+        float length = clip.animation.length();
+        if (clip.animation.loop() != BedrockAnimation.Loop.LOOP || length <= 0 || clip.animTime < length) {
             return;
         }
-        // The clip drives its own clock, so `q.anim_time` has to read as where it currently is.
-        environment.setAnimTime(clip.animTime);
-        clip.animTime = update.asFloat(environment);
+
+        clip.waiting = clip.animation.loopDelaySeconds(environment);
+        if (clip.waiting > 0f) return;
+
+        clip.animTime -= length * (float) Math.floor(clip.animTime / length);
+        clip.lastFiredTime = -1;
     }
 
     private void fireTimeline(Running clip) {
-        float position = clip.animation.positionAt(clip.animTime);
+        float position = clip.position;
         environment.setAnimTime(position);
         if (position < clip.lastFiredTime) clip.lastFiredTime = -1;
 
@@ -213,7 +258,7 @@ public final class AnimationPlayer {
     private void applyBones(Running clip) {
         if (!clip.animation.hasBones()) return;
 
-        float position = clip.animation.positionAt(clip.animTime);
+        float position = clip.position;
         float weight = clip.fade * (clip.animation.blendWeight() == null
             ? 1f
             : clip.animation.blendWeight().asFloat(environment));

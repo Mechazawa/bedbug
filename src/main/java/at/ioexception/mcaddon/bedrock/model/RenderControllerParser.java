@@ -54,24 +54,31 @@ public final class RenderControllerParser {
             List.copyOf(textures),
             List.copyOf(visibility),
             List.copyOf(materials),
-            uvOffset(json, 0),
-            uvOffset(json, 1),
-            readArrays(json));
+            uvAnim(json, "offset", 0),
+            uvAnim(json, "offset", 1),
+            uvAnim(json, "scale", 0),
+            uvAnim(json, "scale", 1),
+            json.has("ignore_lighting") && json.get("ignore_lighting").getAsBoolean(),
+            readArrays(json),
+            ControllerColour.tryFrom(json, "color"),
+            ControllerColour.tryFrom(json, "overlay_color"),
+            ControllerColour.tryFrom(json, "is_hurt_color"),
+            ControllerColour.tryFrom(json, "on_fire_color"));
     }
 
     /**
-     * One axis of `uv_anim.offset`, which may be a number or a Molang expression.
+     * One axis of a `uv_anim` field, which may be a number or a Molang expression.
      *
-     * Bedrock writes it in texture widths, so a value of one slides the texture past itself exactly
-     * once. Nothing in the add-on animates it; it picks a fixed row out of a tall strip.
+     * Bedrock writes an offset in texture widths, so a value of one slides the texture past itself
+     * exactly once. A scale of one leaves the texture at the size the geometry declared.
      */
-    private static MolangExpression uvOffset(JsonObject json, int axis) {
+    private static MolangExpression uvAnim(JsonObject json, String field, int axis) {
         if (!json.has("uv_anim")) return null;
 
         JsonObject animation = json.getAsJsonObject("uv_anim");
-        if (!animation.has("offset")) return null;
+        if (!animation.has(field)) return null;
 
-        JsonElement value = animation.getAsJsonArray("offset").get(axis);
+        JsonElement value = animation.getAsJsonArray(field).get(axis);
         return value.getAsJsonPrimitive().isString()
             ? MolangParser.parse(value.getAsString())
             : MolangExpression.constant(value.getAsFloat());

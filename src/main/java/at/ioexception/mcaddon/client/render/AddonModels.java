@@ -5,12 +5,14 @@ import at.ioexception.mcaddon.bedrock.entity.ClientEntityDefinition;
 import at.ioexception.mcaddon.bedrock.entity.EntityAnimator;
 import at.ioexception.mcaddon.bedrock.model.BakedGeometry;
 import at.ioexception.mcaddon.bedrock.model.BedrockGeometry;
+import at.ioexception.mcaddon.bedrock.model.ControllerColour;
 import at.ioexception.mcaddon.bedrock.model.GeometryBaker;
 import at.ioexception.mcaddon.bedrock.model.MaterialDefinition;
 import at.ioexception.mcaddon.bedrock.model.RenderController;
 import at.ioexception.mcaddon.bedrock.model.UvShift;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
+import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.convert.ConvertedPack;
 import at.ioexception.mcaddon.platform.Platform;
@@ -32,12 +34,18 @@ import java.util.Set;
  */
 public final class AddonModels {
     /**
-     * One pass: a baked model, the texture to draw it with, and the bones it leaves out.
+     * One pass: a baked model, the texture to draw it with, the bones it leaves out and its tint.
      *
      * A hidden entry may be a glob, because a costume hides a whole family of bones at once.
+     * `colour` is packed ARGB and multiplies the texture, white leaving it as it is.
      */
     public record Pass(BakedGeometry geometry, Identifier texture, Set<String> hiddenBones, UvShift shift,
-        MaterialDefinition material) {
+        MaterialDefinition material, int colour, boolean ignoresLighting) {
+        /** What this pass draws under: the light around the entity, or none of it. */
+        public int light(int light) {
+            return ignoresLighting ? FULL_BRIGHT : light;
+        }
+
         public boolean hides(String bone) {
             for (String pattern : hiddenBones) {
                 if (pattern.endsWith("*")
@@ -49,6 +57,9 @@ public final class AddonModels {
             return false;
         }
     }
+
+    /** Both light channels at their maximum, which is how Minecraft says "lit as if by the sun". */
+    private static final int FULL_BRIGHT = 0xF000F0;
 
     /** The entities already named as drawing nothing, so the log carries each of them once. */
     private static final Set<String> REPORTED = new HashSet<>();
@@ -116,7 +127,7 @@ public final class AddonModels {
                 definition.identifier());
         }
         return List.of(new Pass(geometry, textureId(texturePath), Set.of(),
-            new UvShift(0, 0), null));
+            UvShift.NONE, null, OPAQUE_WHITE, false));
     }
 
     private Pass resolvePass(RenderController controller, ClientEntityDefinition definition,
@@ -153,9 +164,62 @@ public final class AddonModels {
         MaterialDefinition material = resolveMaterial(controller, definition, environment);
         if (material != null && material.invisible()) return null;
 
-        return new Pass(geometry, texture, hidden,
-            new UvShift(offset(controller.uvOffsetU(), environment), offset(controller.uvOffsetV(), environment)),
-            material);
+        UvShift shift = new UvShift(
+            number(controller.uvOffsetU(), environment, 0f),
+            number(controller.uvOffsetV(), environment, 0f),
+            number(controller.uvScaleU(), environment, 1f),
+            number(controller.uvScaleV(), environment, 1f));
+        return new Pass(geometry, texture, hidden, shift, material,
+            tint(controller, environment), controller.ignoresLighting());
+    }
+
+    /** Opaque white, which leaves a texture drawn as it was painted. */
+    private static final int OPAQUE_WHITE = 0xFFFFFFFF;
+
+    /** The tint of a group that declares nothing, so an undeclared channel changes no pixel. */
+    private static final int TRANSPARENT = 0;
+
+    /** The two conditions a controller may tint under, which only the entity's own state answers. */
+    private static final MolangExpression HURT = MolangParser.parse("query.hurt_time > 0");
+    private static final MolangExpression ON_FIRE = MolangParser.parse("query.is_on_fire");
+
+    /**
+     * What one pass multiplies its texture by: its colour, with each overlay laid over in turn.
+     *
+     * Java tints a whole pass with one vertex colour, so the three overlay groups are folded into
+     * that colour by their own alpha rather than drawn as passes of their own.
+     */
+    private static int tint(RenderController controller, MolangEnvironment environment) {
+        int colour = controller.colour() == null
+            ? OPAQUE_WHITE : controller.colour().evaluate(environment, OPAQUE_WHITE);
+
+        colour = over(colour, controller.overlay(), environment);
+        if (controller.hurt() != null && HURT.evaluate(environment).truthy()) {
+            colour = over(colour, controller.hurt(), environment);
+        }
+        if (controller.onFire() != null && ON_FIRE.evaluate(environment).truthy()) {
+            colour = over(colour, controller.onFire(), environment);
+        }
+        return colour;
+    }
+
+    private static int over(int colour, ControllerColour group, MolangEnvironment environment) {
+        if (group == null) return colour;
+
+        int laid = group.evaluate(environment, TRANSPARENT);
+        float weight = (laid >>> 24) / 255f;
+        if (weight <= 0f) return colour;
+
+        return (colour & 0xFF000000)
+            | mix(colour, laid, weight, 16)
+            | mix(colour, laid, weight, 8)
+            | mix(colour, laid, weight, 0);
+    }
+
+    private static int mix(int colour, int laid, float weight, int shift) {
+        int under = colour >> shift & 0xFF;
+        int over = laid >> shift & 0xFF;
+        return Math.round(under + (over - under) * weight) << shift;
     }
 
     /**
@@ -185,7 +249,8 @@ public final class AddonModels {
         int colon = glow.indexOf(':');
         Identifier texture = Platform.id(glow.substring(0, colon),
             "textures/" + glow.substring(colon + 1) + ".png");
-        return new Pass(pass.geometry(), texture, pass.hiddenBones(), pass.shift(), EMISSIVE);
+        return new Pass(pass.geometry(), texture, pass.hiddenBones(), pass.shift(), EMISSIVE,
+            pass.colour(), pass.ignoresLighting());
     }
 
     /** The material an extracted emissive layer is drawn with: lit, and blended over what is below. */
@@ -220,8 +285,8 @@ public final class AddonModels {
         });
     }
 
-    private static float offset(MolangExpression expression, MolangEnvironment environment) {
-        return expression == null ? 0f : (float) expression.evaluate(environment).number();
+    private static float number(MolangExpression expression, MolangEnvironment environment, float fallback) {
+        return expression == null ? fallback : (float) expression.evaluate(environment).number();
     }
 
     /**

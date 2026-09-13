@@ -4,6 +4,7 @@ import at.ioexception.mcaddon.bedrock.entity.EntityAnimator;
 import at.ioexception.mcaddon.bedrock.model.MaterialDefinition;
 import at.ioexception.mcaddon.platform.Platform;
 import com.mojang.blaze3d.vertex.PoseStack;
+import org.joml.Vector3f;
 import net.minecraft.client.model.EntityModel;
 import net.minecraft.client.renderer.entity.RenderLayerParent;
 import net.minecraft.client.renderer.entity.layers.RenderLayer;
@@ -66,7 +67,7 @@ public class AttachableLayer<S extends LivingEntityRenderState, M extends Entity
         poseStack.pushPose();
         AddonEntityRenderer.applyModelSpace(poseStack,
             net.minecraft.util.Mth.rotLerp(partialTick, addon.yBodyRotO, addon.yBodyRot),
-            animator == null ? 1 : animator.scale());
+            animator == null ? new Vector3f(1, 1, 1) : animator.scale());
         return true;
     }
 
@@ -130,7 +131,7 @@ public class AttachableLayer<S extends LivingEntityRenderState, M extends Entity
                     PoseStack local = new PoseStack();
                     local.last().set(pose);
                     BedrockModelRenderer.render(pass.geometry(), each.animator(), pass::hides,
-                        pass.shift(), local, buffer, light, OverlayTexture.NO_OVERLAY, -1);
+                        pass.shift(), local, buffer, pass.light(light), OverlayTexture.NO_OVERLAY, pass.colour());
                 });
         }
         if (pushed) poseStack.popPose();
@@ -148,7 +149,7 @@ public class AttachableLayer<S extends LivingEntityRenderState, M extends Entity
             AddonModels.Pass pass = each.pass();
             VertexConsumer buffer = buffers.getBuffer(renderTypeOf(pass));
             BedrockModelRenderer.render(pass.geometry(), each.animator(), pass::hides, pass.shift(),
-                poseStack, buffer, light, OverlayTexture.NO_OVERLAY, -1);
+                poseStack, buffer, pass.light(light), OverlayTexture.NO_OVERLAY, pass.colour());
         }
         if (pushed) poseStack.popPose();
     }
