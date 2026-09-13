@@ -2,9 +2,13 @@ package at.ioexception.mcaddon;
 
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
+import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -90,6 +94,25 @@ class MolangTest {
     @Test
     void readsMemberNamesWithoutCase() {
         assertEquals(4, evaluate("{v.Mixed = 4; return v.mixed;}"), 1e-6);
+    }
+
+    /**
+     * A query answering with a struct is asked for one member at a time, and the member reaches the
+     * answering side as the tail of the query's name rather than as a read of its own.
+     *
+     * Whoever answers `q.surface_particle_color.r` therefore has to split the channel off the name,
+     * which is only correct while the parser keeps handing the two over together and lowercased.
+     */
+    @Test
+    void carriesAStructMemberInTheQueryName() {
+        List<String> asked = new ArrayList<>();
+        environment.setQueries((name, arguments) -> {
+            asked.add(name);
+            return MolangValue.of(arguments.size());
+        });
+
+        assertEquals(2, evaluate("q.surface_particle_color.r + q.Block_State('age', 1)"), 1e-6);
+        assertEquals(List.of("surface_particle_color.r", "block_state"), asked);
     }
 
     @Test

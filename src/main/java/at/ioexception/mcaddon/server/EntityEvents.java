@@ -141,6 +141,15 @@ public final class EntityEvents {
             }
             case "minecraft:is_sheared", "minecraft:is_baby", "minecraft:is_dyeable" ->
                 state.setProperty(entity.getUUID(), name.substring("minecraft:".length()), true);
+            // A group can hand the entity a different table, so what it drops belongs to the entity
+            // rather than to its type.
+            case "minecraft:loot" -> {
+                String table = at.ioexception.mcaddon.util.Json.text(values, "table", null);
+                if (entity instanceof AddonEntity addon && table != null) {
+                    addon.setLootTable(
+                        at.ioexception.mcaddon.registry.AddonEntities.lootTable(entity.getType(), table));
+                }
+            }
             // A component this does nothing about at the moment a group brings it in may still be
             // one the entity honours from the moment it was built, so the register is asked rather
             // than told: reporting it here would name a gap that is not there.

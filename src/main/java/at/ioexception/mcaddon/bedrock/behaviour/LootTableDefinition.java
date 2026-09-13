@@ -23,6 +23,19 @@ import java.util.List;
  */
 public record LootTableDefinition(String path, JsonObject java) {
 
+    /**
+     * The path inside a data pack that a Bedrock table path is written to.
+     *
+     * An entity's `minecraft:loot` names the file by the same pack-relative string the table itself
+     * came from, so the writer and the entity reading it back have to agree on one rule.
+     */
+    public static String javaPath(String table) {
+        String inside = table.startsWith("loot_tables/")
+            ? table.substring("loot_tables/".length()) : table;
+        int dot = inside.lastIndexOf('.');
+        return at.ioexception.mcaddon.convert.Names.sanitise(dot < 0 ? inside : inside.substring(0, dot));
+    }
+
     public static List<LootTableDefinition> readAll(BedrockPack pack) {
         List<LootTableDefinition> tables = new ArrayList<>();
         for (Path file : pack.list("loot_tables", ".json")) {

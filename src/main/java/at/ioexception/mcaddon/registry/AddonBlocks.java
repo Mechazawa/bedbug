@@ -3,6 +3,7 @@ package at.ioexception.mcaddon.registry;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.behaviour.BlockDefinition;
 import at.ioexception.mcaddon.block.AddonBlock;
+import at.ioexception.mcaddon.block.BlockComponents;
 import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.PackRole;
@@ -57,18 +58,24 @@ public final class AddonBlocks {
         for (String component : definition.components().keySet()) {
             if (!IMPLEMENTED.contains(component)) AddonEntities.unsupported(component);
         }
+        if (definition.components().has("minecraft:crafting_table")) {
+            // Java has one crafting grid and it makes every recipe, so the tags choosing which
+            // recipes a Bedrock table may make have nothing to become.
+            AddonEntities.unsupported("minecraft:crafting_table crafting_tags");
+        }
+        for (String part : BlockComponents.unmappedTransformation(definition)) {
+            AddonEntities.unsupported("minecraft:transformation " + part);
+        }
 
-        BlockBehaviour.Properties properties = BlockBehaviour.Properties.of()
-            .strength(definition.hardness(), definition.resistance())
-            .lightLevel(state -> definition.lightEmission());
-        if (definition.transparent()) properties = properties.noOcclusion();
-
+        BlockComponents components = BlockComponents.of(definition);
+        BlockBehaviour.Properties properties = BlockComponents.settings(definition);
         Map<String, Property<?>> states = AddonBlock.propertiesOf(definition);
-        Block block = states.isEmpty()
-            ? Platform.buildBlock(properties, id)
-            : Platform.buildStatefulBlock(properties, id, new ArrayList<>(states.values()));
+
+        Block block = AddonBlock.carrying(components,
+            () -> Platform.buildStatefulBlock(properties, id, new ArrayList<>(states.values())));
         Registry.register(BuiltInRegistries.BLOCK, id, block);
         BY_IDENTIFIER.put(definition.identifier(), block);
+        components.registerFlammability(block);
 
         if (!BuiltInRegistries.ITEM.containsKey(id)) {
             Item item = Platform.buildBlockItem(block, new Item.Properties(), id);
@@ -77,9 +84,22 @@ public final class AddonBlocks {
         }
     }
 
+    /**
+     * Everything a block can declare that this mod does something about.
+     *
+     * A component read only to shape another one belongs here too: `material_instances` decides both
+     * the faces a model wears and whether the block occludes. Nothing is listed on the grounds that
+     * Java does it anyway, so every name here has a reader that can be pointed at.
+     */
     private static final List<String> IMPLEMENTED = List.of(
-        "minecraft:material_instances", "minecraft:destructible_by_mining",
-        "minecraft:destructible_by_explosion", "minecraft:light_emission", "minecraft:geometry");
+        "minecraft:material_instances", "minecraft:geometry",
+        "minecraft:destructible_by_mining", "minecraft:destructible_by_explosion",
+        "minecraft:light_emission", "minecraft:light_dampening", "minecraft:friction",
+        "minecraft:map_color", "minecraft:flammable", "minecraft:replaceable",
+        "minecraft:collision_box", "minecraft:selection_box", "minecraft:movable",
+        "minecraft:redstone_conductivity", "minecraft:crafting_table", "minecraft:display_name",
+        "minecraft:loot", "minecraft:tags", "minecraft:transformation",
+        "minecraft:instrument_sound", "minecraft:random_offset");
 
     private static Identifier identifier(String bedrock) {
         Names.Identifier split = Names.split(bedrock, "minecraft");

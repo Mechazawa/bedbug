@@ -37,8 +37,23 @@ public final class AddonEntities {
     private static final Map<String, EntityType<?>> BY_IDENTIFIER = new LinkedHashMap<>();
     private static final Map<String, AtomicInteger> UNSUPPORTED = new TreeMap<>();
     private static final Map<EntityType<?>, TradeTable> TRADES = new LinkedHashMap<>();
+    private static final Map<EntityType<?>, String> NAMESPACES = new LinkedHashMap<>();
 
     private AddonEntities() {
+    }
+
+    /**
+     * The loot table id a pack-relative table path names, for an entity of this type.
+     *
+     * `minecraft:loot` names the table by the path the file sits at inside the behaviour pack, and
+     * the conversion files every table under the namespace the add-on's own content uses, so the id
+     * is those two put together. Null when the type came from no converted pack.
+     */
+    public static Identifier lootTable(EntityType<?> type, String table) {
+        String namespace = NAMESPACES.get(type);
+        return namespace == null ? null
+            : Platform.id(namespace, at.ioexception.mcaddon.bedrock.behaviour.LootTableDefinition
+                .javaPath(table));
     }
 
     public static ServerEntityDefinition definitionOf(EntityType<?> type) {
@@ -115,6 +130,7 @@ public final class AddonEntities {
         count(definition);
         DEFINITIONS.put(type, definition);
         BY_IDENTIFIER.put(definition.identifier(), type);
+        namespaceOf(pack).ifPresent(namespace -> NAMESPACES.put(type, namespace));
         readTrades(pack, definition).ifPresent(trades -> TRADES.put(type, trades));
         Registry.register(BuiltInRegistries.ENTITY_TYPE, id, type);
         FabricDefaultAttributeRegistry.register(type, AddonEntity.attributes(definition));
@@ -219,6 +235,34 @@ public final class AddonEntities {
         "minecraft:burns_in_daylight", "minecraft:damage_over_time",
         "minecraft:ambient_sound_interval", "minecraft:sound_volume",
         "minecraft:cannot_be_attacked", "minecraft:is_collidable",
+        "minecraft:loot", "minecraft:ageable", "minecraft:scale_by_age", "minecraft:healable",
+        "minecraft:tameable", "minecraft:tamemount", "minecraft:boss", "minecraft:break_blocks",
+        "minecraft:mob_effect", "minecraft:area_attack", "minecraft:inventory", "minecraft:shooter",
+        "minecraft:explode", "minecraft:spawn_on_death", "minecraft:on_death", "minecraft:on_hurt",
+        "minecraft:on_target_acquired", "minecraft:on_target_escape",
+        "minecraft:combat_regeneration", "minecraft:trail", "minecraft:grows_crop",
+        "minecraft:looked_at", "minecraft:can_fly", "minecraft:block_climber",
+        "minecraft:buoyant", "minecraft:floats_in_liquid", "minecraft:bounciness",
+        "minecraft:body_rotation_blocked", "minecraft:body_rotation_always_follows_head",
+        "minecraft:default_look_angle", "minecraft:drying_out_timer",
+        "minecraft:equippable", "minecraft:giveable", "minecraft:sittable", "minecraft:trusting",
+        "minecraft:underwater_movement", "minecraft:water_movement", "minecraft:lava_movement",
+        "minecraft:addrider", "minecraft:on_ignite", "minecraft:on_hurt_by_player",
+        "minecraft:on_start_takeoff", "minecraft:on_start_landing",
+        "minecraft:rotation_locked_to_vehicle", "minecraft:air_drag_modifier",
+        "minecraft:behavior.ranged_attack", "minecraft:behavior.ocelotattack",
+        "minecraft:behavior.follow_parent", "minecraft:behavior.follow_caravan",
+        "minecraft:behavior.follow_target_leader", "minecraft:behavior.move_to_block",
+        "minecraft:behavior.move_to_land", "minecraft:behavior.move_to_lava",
+        "minecraft:behavior.move_to_random_block", "minecraft:behavior.equip_item",
+        "minecraft:behavior.hold_ground", "minecraft:behavior.look_at_target",
+        "minecraft:behavior.door_interact", "minecraft:behavior.raid_garden",
+        "minecraft:behavior.harvest_farm_block", "minecraft:behavior.fertilize_farm_block",
+        "minecraft:behavior.stomp_turtle_egg", "minecraft:behavior.timer_flag_1",
+        "minecraft:behavior.timer_flag_2", "minecraft:behavior.timer_flag_3",
+        "minecraft:behavior.random_sitting", "minecraft:behavior.lay_down",
+        "minecraft:behavior.knockback_roar", "minecraft:behavior.eat_carried_item",
+        "minecraft:behavior.move_around_target", "minecraft:behavior.jump_around_target",
         "minecraft:is_charged", "minecraft:is_chested", "minecraft:is_saddled",
         "minecraft:is_ignited", "minecraft:is_illager_captain", "minecraft:is_pregnant",
         "minecraft:is_shaking", "minecraft:is_stackable", "minecraft:is_stunned",
@@ -239,6 +283,19 @@ public final class AddonEntities {
             if (table != null) return java.util.Optional.of(TradeTable.read(pack, table));
         }
         return java.util.Optional.empty();
+    }
+
+    /**
+     * The namespace the add-on this behaviour pack came out of writes its own data under.
+     *
+     * A behaviour pack and the resource pack beside it are one add-on and converted as one, so the
+     * namespace is looked up by the file both halves were unpacked from.
+     */
+    private static java.util.Optional<String> namespaceOf(BedrockPack pack) {
+        return at.ioexception.mcaddon.resource.AddonPacks.all().stream()
+            .filter(converted -> converted.pack().origin().equals(pack.origin()))
+            .map(at.ioexception.mcaddon.convert.ConvertedPack::namespace)
+            .findFirst();
     }
 
     /** Bedrock identifiers carry characters a resource location rejects, so both halves are cleaned. */

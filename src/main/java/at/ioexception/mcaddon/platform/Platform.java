@@ -476,17 +476,43 @@ public final class Platform {
     *///?}
 
     /**
-     * Whether this version uses the newer data pack layout.
+     * Whether a data pack's directories carry their singular names.
      *
-     * 1.21.2 renamed the directories from `recipes` and `loot_tables` to their singular forms, made
-     * a recipe ingredient a bare item id rather than an object, and renamed a result's `item` field
-     * to `id`.
+     * 1.21 renamed every one of them: `recipes`, `loot_tables`, `functions`, `advancements` and the
+     * registry directories under `tags` all lost their plural. A file written under the other
+     * spelling is read by nobody and reports nothing, so this is what decides where they go.
      */
-    public static boolean modernDataPaths() {
+    public static boolean singularDataDirectories() {
+        //? if >=1.21 {
+        return true;
+        //?} else {
+        /*return false;
+        *///?}
+    }
+
+    /**
+     * Whether a recipe's ingredient is written as a bare item id.
+     *
+     * 1.21.2 replaced the object that named one. Before that the id goes under an `item` key.
+     */
+    public static boolean bareRecipeIngredients() {
         //? if >=1.21.2 {
         return true;
         //?} else {
         /*return false;
+        *///?}
+    }
+
+    /**
+     * What a recipe result names its item under.
+     *
+     * 1.21 renamed the field from `item` to `id`, a version before the ingredient changed shape.
+     */
+    public static String recipeResultKey() {
+        //? if >=1.21 {
+        return "id";
+        //?} else {
+        /*return "item";
         *///?}
     }
 
@@ -1046,6 +1072,42 @@ public final class Platform {
             .filter(java.util.Objects::nonNull)
             .map(Identifier::getPath)
             .collect(Collectors.toSet());
+        *///?}
+    }
+
+    /**
+     * The key a loot table is asked for by, which became a registry key in 1.21.
+     *
+     * 1.20.1 names a table by its id alone, so there is nothing for it to be turned into there.
+     */
+    //? if >=1.21 {
+    public static ResourceKey<net.minecraft.world.level.storage.loot.LootTable>
+        lootTableKey(Identifier table) {
+        return ResourceKey.create(net.minecraft.core.registries.Registries.LOOT_TABLE, table);
+    }
+    //?}
+
+    /** A boss bar the server draws. 26 gave it the id every other bar already carried. */
+    public static net.minecraft.server.level.ServerBossEvent bossBar(Component name) {
+        //? if >=26 {
+        return new net.minecraft.server.level.ServerBossEvent(UUID.randomUUID(), name,
+            net.minecraft.world.BossEvent.BossBarColor.PURPLE,
+            net.minecraft.world.BossEvent.BossBarOverlay.PROGRESS);
+        //?} else {
+        /*return new net.minecraft.server.level.ServerBossEvent(name,
+            net.minecraft.world.BossEvent.BossBarColor.PURPLE,
+            net.minecraft.world.BossEvent.BossBarOverlay.PROGRESS);
+        *///?}
+    }
+
+    /** Whether bone meal would do anything here. 1.21 dropped the flag naming which side is asking. */
+    public static boolean canBonemeal(net.minecraft.world.level.block.BonemealableBlock crop,
+        ServerLevel level, net.minecraft.core.BlockPos at,
+        net.minecraft.world.level.block.state.BlockState state) {
+        //? if >=1.21 {
+        return crop.isValidBonemealTarget(level, at, state);
+        //?} else {
+        /*return crop.isValidBonemealTarget(level, at, state, false);
         *///?}
     }
 }

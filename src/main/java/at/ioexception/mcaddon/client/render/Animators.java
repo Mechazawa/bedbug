@@ -38,7 +38,8 @@ public final class Animators {
 
         Entry entry = ANIMATORS.computeIfAbsent(entity.getId() + "/" + key, id -> {
             EntityAnimator animator = new EntityAnimator(binding.models().assets(), binding.definition());
-            AddonQueries queries = new AddonQueries(entity, animator);
+            AddonQueries queries =
+                new AddonQueries(entity, animator, AddonClientAssets.attachableFor(key) != null);
             animator.environment().setQueries(queries);
             animator.setEffects(AddonEffects.of(entity, animator, binding.models().converted().namespace()));
             return new Entry(animator, queries, new float[] {ageInTicks});

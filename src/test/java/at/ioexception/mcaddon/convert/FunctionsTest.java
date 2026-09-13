@@ -146,7 +146,7 @@ class FunctionsTest {
         assertEquals(List.of("ns:greet"), Functions.convert(packAt(pack), output, "ns", problems));
 
         Path tag = output.resolve("data/minecraft")
-            .resolve(Platform.modernDataPaths() ? "tags/function" : "tags/functions")
+            .resolve(Platform.singularDataDirectories() ? "tags/function" : "tags/functions")
             .resolve("tick.json");
         assertEquals("{\"values\":[\"ns:greet\"]}", Files.readString(tag));
     }
@@ -163,7 +163,7 @@ class FunctionsTest {
         Functions.convert(packAt(pack), output, "ns", problems);
 
         String written = Files.readString(output.resolve("data/ns")
-            .resolve(Platform.modernDataPaths() ? "function" : "functions")
+            .resolve(Platform.singularDataDirectories() ? "function" : "functions")
             .resolve("greet.mcfunction"));
         return written.isEmpty() ? List.of() : List.of(written.split("\n", -1));
     }

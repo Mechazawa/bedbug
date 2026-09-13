@@ -10,6 +10,7 @@ import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.bedrock.particle.ParticleDefinition;
 import at.ioexception.mcaddon.block.AddonBlock;
+import at.ioexception.mcaddon.block.BlockComponents;
 import at.ioexception.mcaddon.bedrock.behaviour.LootTableDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.RecipeDefinition;
 import at.ioexception.mcaddon.pack.BedrockPack;
@@ -70,8 +71,9 @@ public final class PackConverter {
             blocks.addAll(BlockDefinition.readAll(behaviour));
         }
         String namespace = Names.namespaceOf(pack, bundle.behaviours());
-        Path root = cache.resolve("converted").resolve("%s-%s-%d".formatted(
-            pack.manifest().uuid(), pack.manifest().version(), Platform.resourcePackFormat()));
+        Path root = cache.resolve("converted").resolve("%s-%s-%d-%s".formatted(
+            pack.manifest().uuid(), pack.manifest().version(), Platform.resourcePackFormat(),
+            at.ioexception.mcaddon.McAddon.VERSION));
 
         Textures textures = new Textures(namespace);
         Map<String, String> icons = new TreeMap<>();
@@ -92,7 +94,7 @@ public final class PackConverter {
 
             textures.convert(pack, root, fresh);
             sounds.addAll(new Sounds(namespace).convert(pack, root, fresh));
-            new Texts(namespace).convert(bundle, root, fresh);
+            new Texts(namespace).convert(bundle, blocks, root, fresh);
             icons.putAll(new Icons(namespace).convert(pack, textures.paths()));
             if (fresh) {
                 Set<String> sprites = new LinkedHashSet<>();
@@ -100,6 +102,7 @@ public final class PackConverter {
                 writeSpawnEggs(root, icons, eggs, sprites);
                 writeRecipes(root, recipes);
                 writeLootTables(root, loot, namespace);
+                writeBlockData(root, blocks, loot);
                 writeBlockModels(root, icons, blocks, assets, sprites);
                 writeAtlas(root, sprites);
                 writeParticles(pack, root, textures.paths());
@@ -371,7 +374,8 @@ public final class PackConverter {
          * rather than taken from the resource pack alone. The resource pack is read last, because
          * what a player sees is what it says.
          */
-        void convert(Bundle bundle, Path root, boolean write) throws IOException {
+        void convert(Bundle bundle, List<BlockDefinition> blocks, Path root, boolean write)
+            throws IOException {
             if (!write) return;
 
             Map<String, Map<String, String>> byLocale = new LinkedHashMap<>();
@@ -395,11 +399,31 @@ public final class PackConverter {
                     String java = javaKey(key);
                     if (java != null && !json.has(java)) json.addProperty(java, value);
                 });
+                blockNames(blocks, locale.getValue(), json);
 
                 Path target = root.resolve("assets").resolve(namespace).resolve("lang")
                     .resolve(locale.getKey() + ".json");
                 Files.createDirectories(target.getParent());
                 Files.writeString(target, json.toString(), StandardCharsets.UTF_8);
+            }
+        }
+
+        /**
+         * The name a block's `minecraft:display_name` asks for, under the key Java reads it by.
+         *
+         * Bedrock takes the component as a translation key and falls back to showing the raw string,
+         * so a key this locale translates becomes the translation and anything else becomes itself.
+         */
+        private static void blockNames(List<BlockDefinition> blocks, Map<String, String> translations,
+            JsonObject json) {
+            for (BlockDefinition block : blocks) {
+                String name = BlockComponents.displayName(block);
+                if (name == null) continue;
+
+                Names.Identifier id = Names.split(block.identifier(), "minecraft");
+                String key = "block." + id.namespace() + "." + id.path();
+                if (json.has(key)) continue;
+                json.addProperty(key, translations.getOrDefault(name, name));
             }
         }
     }
@@ -588,8 +612,8 @@ public final class PackConverter {
      * is a rename. Furnace recipes and anything with a Bedrock-only tag are left out and reported.
      */
     private static void writeRecipes(Path root, List<RecipeDefinition> recipes) throws IOException {
-        boolean modern = Platform.modernDataPaths();
-        String directory = modern ? "recipe" : "recipes";
+        boolean bareIngredients = Platform.bareRecipeIngredients();
+        String directory = dataDirectory("recipe");
 
         for (RecipeDefinition recipe : recipes) {
             JsonObject json = new JsonObject();
@@ -601,7 +625,7 @@ public final class PackConverter {
                     json.add("pattern", pattern);
 
                     JsonObject key = new JsonObject();
-                    recipe.key().forEach((symbol, item) -> key.add(symbol, ingredient(item, modern)));
+                    recipe.key().forEach((symbol, item) -> key.add(symbol, ingredient(item, bareIngredients)));
                     json.add("key", key);
                 }
                 case SHAPELESS -> {
@@ -609,7 +633,7 @@ public final class PackConverter {
                     JsonArray ingredients = new JsonArray();
                     for (RecipeDefinition.Ingredient ingredient : recipe.ingredients()) {
                         for (int i = 0; i < Math.max(1, ingredient.count()); i++) {
-                            ingredients.add(ingredient(ingredient.item(), modern));
+                            ingredients.add(ingredient(ingredient.item(), bareIngredients));
                         }
                     }
                     json.add("ingredients", ingredients);
@@ -617,7 +641,7 @@ public final class PackConverter {
                 case FURNACE -> {
                     json.addProperty("type", "minecraft:smelting");
                     json.add("ingredient", ingredient(recipe.ingredients().isEmpty()
-                        ? "minecraft:air" : recipe.ingredients().get(0).item(), modern));
+                        ? "minecraft:air" : recipe.ingredients().get(0).item(), bareIngredients));
                     json.addProperty("cookingtime", 200);
                     json.addProperty("experience", 0.1);
                 }
@@ -625,7 +649,7 @@ public final class PackConverter {
             }
 
             JsonObject result = new JsonObject();
-            result.addProperty(modern ? "id" : "item", recipe.result());
+            result.addProperty(Platform.recipeResultKey(), recipe.result());
             result.addProperty("count", Math.max(1, recipe.resultCount()));
             json.add("result", result);
 
@@ -736,8 +760,9 @@ public final class PackConverter {
         Map<String, String> textureKeys, Path assets, BedrockAssets geometries, Set<String> sprites)
         throws IOException {
         JsonObject variants = new JsonObject();
+        int[] rotation = BlockComponents.rotation(block);
         if (block.states().isEmpty()) {
-            variants.add("", modelReference(namespace, name));
+            variants.add("", modelReference(namespace, name, rotation));
             return variants;
         }
 
@@ -768,7 +793,7 @@ public final class PackConverter {
 
             String variantName = name + "_" + combination;
             writeCubeModel(assets, variantName, faces, geometryOf(block, geometries));
-            variants.add(String.join(",", key), modelReference(namespace, variantName));
+            variants.add(String.join(",", key), modelReference(namespace, variantName, rotation));
         }
         return variants;
     }
@@ -790,8 +815,9 @@ public final class PackConverter {
 
         for (BlockDefinition.Permutation permutation : block.permutations()) {
             if (!MolangParser.parse(permutation.condition()).evaluate(environment).truthy()) continue;
-            JsonObject instances = permutation.components().get("minecraft:material_instances");
-            if (instances == null) continue;
+            JsonElement declared = permutation.components().get("minecraft:material_instances");
+            if (declared == null || !declared.isJsonObject()) continue;
+            JsonObject instances = declared.getAsJsonObject();
 
             Map<String, String> overrides = new LinkedHashMap<>();
             for (Map.Entry<String, JsonElement> entry : instances.entrySet()) {
@@ -851,9 +877,17 @@ public final class PackConverter {
         write(assets.resolve("models/block").resolve(name + ".json"), model);
     }
 
-    private static JsonObject modelReference(String namespace, String name) {
+    /**
+     * The model a variant draws, turned the way a `minecraft:transformation` asks for.
+     *
+     * A Java variant carries a quarter turn about x and one about y; the rest of what a
+     * transformation can say is reported by `AddonBlocks` instead.
+     */
+    private static JsonObject modelReference(String namespace, String name, int[] rotation) {
         JsonObject variant = new JsonObject();
         variant.addProperty("model", namespace + ":block/" + name);
+        if (rotation[0] != 0) variant.addProperty("x", rotation[0]);
+        if (rotation[1] != 0) variant.addProperty("y", rotation[1]);
         return variant;
     }
 
@@ -878,18 +912,82 @@ public final class PackConverter {
      */
     private static void writeLootTables(Path root, List<LootTableDefinition> tables, String namespace)
         throws IOException {
-        String directory = Platform.modernDataPaths() ? "loot_table" : "loot_tables";
+        String directory = dataDirectory("loot_table");
 
         for (LootTableDefinition table : tables) {
-            String inside = Names.sanitise(withoutExtension(table.path().startsWith("loot_tables/")
-                ? table.path().substring("loot_tables/".length()) : table.path()));
-            write(root.resolve("data").resolve(namespace).resolve(directory).resolve(inside + ".json"),
-                table.java());
+            write(root.resolve("data").resolve(namespace).resolve(directory)
+                .resolve(LootTableDefinition.javaPath(table.path()) + ".json"), table.java());
         }
     }
 
-    private static JsonElement ingredient(String item, boolean modern) {
-        if (modern) return new com.google.gson.JsonPrimitive(item);
+    /**
+     * A block's `minecraft:loot` and `minecraft:tags`, as the data pack files Java reads them from.
+     *
+     * Java looks a block's drops up under `<namespace>:blocks/<name>` and every supported version
+     * makes that key final once the block is registered, so the table the pack named is written a
+     * second time under the path the block already reads. The copy declares a block context instead
+     * of the entity one every converted table carries, because that is what validation checks a
+     * block's own table against.
+     */
+    private static void writeBlockData(Path root, List<BlockDefinition> blocks,
+        List<LootTableDefinition> tables) throws IOException {
+        Map<String, List<String>> tagged = new LinkedHashMap<>();
+
+        for (BlockDefinition block : blocks) {
+            Names.Identifier id = Names.split(block.identifier(), "minecraft");
+            if (id.namespace().isEmpty() || id.path().isEmpty()) continue;
+
+            String named = BlockComponents.loot(block);
+            LootTableDefinition table = named == null ? null : lootTable(tables, named);
+            if (table != null) {
+                JsonObject copy = table.java().deepCopy();
+                copy.addProperty("type", "minecraft:block");
+                write(root.resolve("data").resolve(id.namespace())
+                    .resolve(dataDirectory("loot_table")).resolve("blocks")
+                    .resolve(id.path() + ".json"), copy);
+            }
+
+            for (String tag : BlockComponents.tags(block)) {
+                tagged.computeIfAbsent(tag, name -> new ArrayList<>())
+                    .add(id.namespace() + ":" + id.path());
+            }
+        }
+
+        for (Map.Entry<String, List<String>> tag : tagged.entrySet()) {
+            Names.Identifier id = Names.split(tag.getKey(), "minecraft");
+            if (id.path().isEmpty()) continue;
+
+            JsonArray values = new JsonArray();
+            tag.getValue().forEach(values::add);
+            JsonObject json = new JsonObject();
+            json.add("values", values);
+            write(root.resolve("data").resolve(id.namespace())
+                .resolve("tags").resolve(dataDirectory("block"))
+                .resolve(id.path() + ".json"), json);
+        }
+    }
+
+    /** The converted table the pack-relative path names, or null when the pack ships no such file. */
+    private static LootTableDefinition lootTable(List<LootTableDefinition> tables, String named) {
+        String wanted = withoutExtension(named.startsWith("./") ? named.substring(2) : named);
+        for (LootTableDefinition table : tables) {
+            if (withoutExtension(table.path()).equals(wanted)) return table;
+        }
+        return null;
+    }
+
+    /**
+     * A data pack directory, spelt the way the running version spells it.
+     *
+     * 1.21 dropped the plural from every one of them: `loot_tables` became `loot_table` and
+     * `tags/blocks` became `tags/block`.
+     */
+    private static String dataDirectory(String singular) {
+        return Platform.singularDataDirectories() ? singular : singular + "s";
+    }
+
+    private static JsonElement ingredient(String item, boolean bare) {
+        if (bare) return new com.google.gson.JsonPrimitive(item);
         JsonObject wrapped = new JsonObject();
         wrapped.addProperty("item", item);
         return wrapped;

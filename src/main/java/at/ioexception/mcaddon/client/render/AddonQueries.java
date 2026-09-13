@@ -1,24 +1,47 @@
 package at.ioexception.mcaddon.client.render;
 
+import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.animation.BonePose;
+import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
 import at.ioexception.mcaddon.bedrock.entity.EntityAnimator;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.platform.Platform;
+import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.Holder;
+import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.OwnableEntity;
+import net.minecraft.world.entity.Pose;
+import net.minecraft.world.entity.TamableAnimal;
+import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
+import net.minecraft.world.entity.monster.Creeper;
+import net.minecraft.world.entity.monster.EnderMan;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.dimension.DimensionType;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.HashSet;
@@ -36,11 +59,19 @@ import java.util.Map;
 public final class AddonQueries implements MolangEnvironment.Queries {
     private final Entity entity;
     private final EntityAnimator animator;
+
+    /** Set for the animator of something worn or held, which is what Bedrock calls attached. */
+    private final boolean attached;
+
     private float partialTick;
 
-    public AddonQueries(Entity entity, EntityAnimator animator) {
+    /** The animator's own clock reading at which the entity caught fire, or -1 while it is not. */
+    private float litAt = -1;
+
+    public AddonQueries(Entity entity, EntityAnimator animator, boolean attached) {
         this.entity = entity;
         this.animator = animator;
+        this.attached = attached;
     }
 
     public void setPartialTick(float partialTick) {
@@ -48,9 +79,15 @@ public final class AddonQueries implements MolangEnvironment.Queries {
     }
 
     @Override
-    public MolangValue query(String name, List<MolangValue> arguments) {
+    public MolangValue query(String path, List<MolangValue> arguments) {
         MolangEnvironment environment = animator.environment();
         Map<String, Object> properties = EntityProperties.of(entity.getId());
+
+        // A few queries answer with a struct that a pack reads one member off, and the parser hands
+        // the member over as part of the name.
+        int dot = path.indexOf('.');
+        String name = dot < 0 ? path : path.substring(0, dot);
+        String member = dot < 0 ? "" : path.substring(dot + 1);
 
         return switch (name) {
             case "anim_time" -> MolangValue.of(environment.animTime());
@@ -72,6 +109,51 @@ public final class AddonQueries implements MolangEnvironment.Queries {
             case "is_sprinting" -> MolangValue.of(entity.isSprinting());
             case "is_riding" -> MolangValue.of(entity.isPassenger());
             case "has_rider" -> MolangValue.of(!entity.getPassengers().isEmpty());
+            case "has_player_rider" -> MolangValue.of(entity.getPassengers().stream()
+                .anyMatch(passenger -> passenger instanceof Player));
+            case "is_riding_any_entity_of_type" -> MolangValue.of(entity.getVehicle() != null
+                && isAnyType(entity.getVehicle(), arguments));
+            case "is_jumping" -> MolangValue.of(isJumping());
+            case "is_breathing" -> MolangValue.of(entity.getAirSupply() > 0);
+            case "is_attached", "is_attached_to_entity" -> MolangValue.of(attached);
+            case "has_owner" -> MolangValue.of(hasOwner());
+            case "has_any_family" -> MolangValue.of(hasAnyFamily(arguments));
+            case "has_cape" -> MolangValue.of(hasCape());
+            case "on_fire_time" -> MolangValue.of(secondsOnFire());
+            case "hurt_direction" -> MolangValue.of(entity instanceof LivingEntity living
+                ? living.getHurtDir() : 0);
+            case "sleep_rotation" -> MolangValue.of(bedRotation());
+            case "leashed_entity_count" -> MolangValue.of(leashing().size());
+            case "has_any_leashed_entity_of_type" -> MolangValue.of(leashing().stream()
+                .anyMatch(mob -> isAnyType(mob, arguments)));
+
+            // Each of these is a pose in Java, which reaches the client the way every pose does.
+            case "is_sitting" -> MolangValue.of(entity.getPose() == Pose.SITTING
+                || (entity instanceof TamableAnimal tamed && tamed.isInSittingPose()));
+            case "is_croaking" -> MolangValue.of(entity.getPose() == Pose.CROAKING);
+            case "is_roaring" -> MolangValue.of(entity.getPose() == Pose.ROARING);
+            case "is_sniffing" -> MolangValue.of(entity.getPose() == Pose.SNIFFING);
+            case "is_emerging" -> MolangValue.of(entity.getPose() == Pose.EMERGING);
+            case "is_digging" -> MolangValue.of(entity.getPose() == Pose.DIGGING);
+            case "is_jump_goal_jumping" -> MolangValue.of(entity.getPose() == Pose.LONG_JUMPING);
+
+            // Emotes and persona skins are Bedrock's own, so neither is ever the case here, and the
+            // published description of the counter is that it always answers zero.
+            case "is_emoting", "is_persona_or_premium_skin", "unhappy_counter" -> MolangValue.ZERO;
+
+            // Bedrock asks these of any entity and answers for the few its own game gives them to.
+            case "is_powered" -> MolangValue.of(entity instanceof Creeper creeper && creeper.isPowered());
+            case "swell_amount" -> MolangValue.of(entity instanceof Creeper creeper
+                ? creeper.getSwelling(partialTick) : 0);
+            case "swelling_dir" -> MolangValue.of(entity instanceof Creeper creeper
+                ? creeper.getSwellDir() : 0);
+            case "is_carrying_block" -> MolangValue.of(entity instanceof EnderMan enderman
+                && enderman.getCarriedBlock() != null);
+            case "show_bottom" -> MolangValue.of(entity instanceof EndCrystal crystal
+                && crystal.showsBottom());
+            case "texture_frame_index" -> MolangValue.of(entity instanceof ExperienceOrb orb
+                ? orb.getIcon() : 0);
+
             case "is_invisible" -> MolangValue.of(entity.isInvisible());
             case "is_silent" -> MolangValue.of(entity.isSilent());
             case "is_spectator" -> MolangValue.of(entity.isSpectator());
@@ -104,7 +186,18 @@ public final class AddonQueries implements MolangEnvironment.Queries {
             case "target_y_rotation", "head_y_rotation" -> MolangValue.of(entity instanceof LivingEntity living
                 ? living.yHeadRot - living.yBodyRot : 0);
             case "target_x_rotation", "head_x_rotation" -> MolangValue.of(entity.getXRot());
+            case "body_x_rotation" -> MolangValue.of(bodyPitch(entity));
+            case "eye_target_x_rotation" -> MolangValue.of(headPitch(entity));
+            case "eye_target_y_rotation" -> MolangValue.of(headYaw(entity));
             case "yaw_speed" -> MolangValue.of(entity.getYRot() - entity.yRotO);
+
+            case "ride_body_x_rotation" -> MolangValue.of(bodyPitch(entity.getVehicle()));
+            case "ride_head_x_rotation" -> MolangValue.of(headPitch(entity.getVehicle()));
+            case "ride_head_y_rotation" -> MolangValue.of(headYaw(entity.getVehicle()));
+            case "rider_body_x_rotation" -> MolangValue.of(bodyPitch(rider(arguments)));
+            case "rider_body_y_rotation" -> MolangValue.of(bodyYaw(rider(arguments)));
+            case "rider_head_x_rotation" -> MolangValue.of(headPitch(rider(arguments)));
+            case "rider_head_y_rotation" -> MolangValue.of(headYaw(rider(arguments)));
 
             case "ground_speed" -> MolangValue.of(horizontalSpeed());
             case "modified_move_speed" -> MolangValue.of(Math.min(1, horizontalSpeed() / 0.22));
@@ -125,6 +218,14 @@ public final class AddonQueries implements MolangEnvironment.Queries {
                 .getCameraType().isFirstPerson());
             case "is_in_ui" -> MolangValue.ZERO;
             case "graphics_mode_is_any" -> MolangValue.ZERO;
+            case "camera_rotation" -> MolangValue.of(cameraRotation(arguments));
+            case "lod_index" -> MolangValue.of(levelOfDetail(arguments));
+            case "client_max_render_distance" ->
+                MolangValue.of(Minecraft.getInstance().options.renderDistance().get());
+            // Java is played with a keyboard and a mouse, and offers no touch controls at all.
+            case "last_input_mode_is_any" -> MolangValue.of(arguments.stream()
+                .anyMatch(value -> value.isText() && value.text().equals("keyboard_and_mouse")));
+            case "touch_only_affects_hotbar" -> MolangValue.ZERO;
 
             case "time_stamp" -> MolangValue.of(entity.level().getGameTime());
             case "time_of_day" -> MolangValue.of(timeOfDay());
@@ -134,7 +235,7 @@ public final class AddonQueries implements MolangEnvironment.Queries {
 
             // Bedrock keeps no history of earlier frames, so its average, maximum and minimum over
             // that history all come out as the time the previous frame took.
-            case "average_frame_time", "maximum_frame_time", "minimum_frame_time" ->
+            case "average_frame_time", "maximum_frame_time", "minimum_frame_time", "last_frame_time" ->
                 MolangValue.of(environment.deltaTime());
 
             case "any_animation_finished" -> MolangValue.of(animator.player().anyFinished());
@@ -163,9 +264,23 @@ public final class AddonQueries implements MolangEnvironment.Queries {
                 "is_saddled", "is_shaking", "is_stackable", "is_stunned", "is_tamed",
                 "can_climb", "can_fly", "can_power_jump" -> MolangValue.of(flag(properties, name));
 
-            case "block_state" -> MolangValue.of(number(properties.get(text(arguments, 0))));
-            case "relative_block_has_any_tag" -> relativeBlockTag(arguments, false);
-            case "relative_block_has_all_tags" -> relativeBlockTag(arguments, true);
+            case "block_state", "block_property" -> MolangValue.of(number(properties.get(text(arguments, 0))));
+            case "has_block_state", "has_block_property" -> MolangValue.of(!arguments.isEmpty()
+                && properties.containsKey(text(arguments, 0)));
+            case "relative_block_has_any_tag", "block_neighbor_has_any_tag" -> blockTag(arguments, true, false);
+            case "relative_block_has_all_tags", "block_neighbor_has_all_tags" -> blockTag(arguments, true, true);
+            case "block_has_any_tag" -> blockTag(arguments, false, false);
+            case "block_has_all_tags" -> blockTag(arguments, false, true);
+
+            case "entity_biome_has_any_tags" -> MolangValue.of(biomeTags(arguments, false));
+            case "entity_biome_has_all_tags" -> MolangValue.of(biomeTags(arguments, true));
+            case "entity_biome_has_any_identifier" -> MolangValue.of(biomeNamed(arguments));
+            case "above_top_solid", "heightmap" -> MolangValue.of(surfaceHeight(arguments));
+            case "surface_particle_color" -> surfaceColour(member);
+
+            // Bedrock answers these while a block is being placed, and an entity being drawn is
+            // never that moment.
+            case "block_face", "cardinal_block_face_placed_on" -> MolangValue.of(FACING_UNDEFINED);
 
             case "in_range" -> MolangValue.of(arguments.size() >= 3
                 && arguments.get(0).number() >= arguments.get(1).number()
@@ -182,11 +297,18 @@ public final class AddonQueries implements MolangEnvironment.Queries {
             case "item_slot" -> MolangValue.of(number(properties.get("item_slot")));
             case "item_slot_to_bone_name" -> MolangValue.of(boneForSlot(text(arguments, 0)));
             case "item_is_charged" -> MolangValue.of(flag(properties, "item_is_charged"));
-            case "equipped_item_any_tag" -> MolangValue.ZERO;
+            case "equipped_item_any_tag" -> equippedTags(arguments, false);
+            case "equipped_item_all_tags" -> equippedTags(arguments, true);
+            case "equipped_item_is_attachable" -> MolangValue.of(
+                AddonClientAssets.attachableFor(itemName(handItem(arguments), true)) != null);
+            case "is_enchanted" -> MolangValue.of(worn(EquipmentSlot.MAINHAND).isEnchanted());
+            case "is_selected_item" -> MolangValue.of(entity instanceof Player player
+                && !player.getMainHandItem().isEmpty());
             case "main_hand_item_use_duration" -> MolangValue.of(useTicks());
             case "main_hand_item_max_duration" -> MolangValue.of(useDuration());
 
             case "has_armor_slot" -> hasArmourSlot(arguments);
+            case "armor_damage_slot" -> armourDamage(arguments);
             case "equipment_count" -> MolangValue.of(ARMOUR.stream()
                 .filter(slot -> !worn(slot).isEmpty()).count());
             case "has_head_gear" -> MolangValue.of(!worn(EquipmentSlot.HEAD).isEmpty());
@@ -209,6 +331,8 @@ public final class AddonQueries implements MolangEnvironment.Queries {
             case "all" -> MolangValue.of(arguments.stream().skip(2).allMatch(MolangValue::truthy));
             case "approx_eq" -> approximatelyEqual(arguments);
             case "count" -> MolangValue.of(arguments.size());
+            case "get_actor_info_id" -> MolangValue.of(actorInfoId(arguments));
+            case "log", "debug_output" -> logged(arguments);
 
             default -> unanswered(name);
         };
@@ -249,6 +373,172 @@ public final class AddonQueries implements MolangEnvironment.Queries {
         *///?}
     }
 
+    /** Whoever the entity belongs to, which the two versions keep under different names. */
+    private boolean hasOwner() {
+        //? if >=26 {
+        return entity instanceof OwnableEntity ownable && ownable.getOwnerReference() != null;
+        //?} else {
+        /*return entity instanceof OwnableEntity ownable && ownable.getOwnerUUID() != null;
+        *///?}
+    }
+
+    /** The cape moved into the skin record in 1.21 and became a client asset in 26. */
+    private boolean hasCape() {
+        if (!(entity instanceof AbstractClientPlayer player)) return false;
+
+        //? if >=26 {
+        return player.getSkin().cape() != null;
+        //?} elif >=1.21 {
+        /*return player.getSkin().capeTexture() != null;
+        *///?} else {
+        /*return player.getCloakTextureLocation() != null;
+        *///?}
+    }
+
+    /**
+     * The camera's own angle, which a model facing the viewer turns against.
+     *
+     * Both accessors lost their `get` prefix on the way to 26: the camera's own did first and the
+     * renderer's followed in 26.2.
+     */
+    private static double cameraRotation(List<MolangValue> arguments) {
+        boolean vertical = arguments.isEmpty() || arguments.get(0).number() == 0;
+
+        //? if >=26.2 {
+        Camera camera = Minecraft.getInstance().gameRenderer.mainCamera();
+        return vertical ? camera.xRot() : camera.yRot();
+        //?} elif >=26 {
+        /*Camera camera = Minecraft.getInstance().gameRenderer.getMainCamera();
+        return vertical ? camera.xRot() : camera.yRot();
+        *///?} else {
+        /*Camera camera = Minecraft.getInstance().gameRenderer.getMainCamera();
+        return vertical ? camera.getXRot() : camera.getYRot();
+        *///?}
+    }
+
+    /**
+     * Whether the entity is in the rising half of a jump.
+     *
+     * The flag Bedrock reads sits on the server, so this reads the arc instead: off the ground and
+     * still going up, which a fall and a swim are not.
+     */
+    private boolean isJumping() {
+        return !entity.onGround() && !entity.isInWater() && entity.getDeltaMovement().y > 0;
+    }
+
+    /**
+     * How long the entity has been burning, in seconds.
+     *
+     * The tick count behind it stays on the server and only the flag reaches the client, so the
+     * time is measured against the clock the animator already runs on.
+     */
+    private double secondsOnFire() {
+        float now = animator.environment().lifeTime();
+        if (!entity.isOnFire()) {
+            litAt = -1;
+            return 0;
+        }
+
+        if (litAt < 0) litAt = now;
+        return Math.max(0, now - litAt);
+    }
+
+    /** Which way the bed faces, which a sleeping model is laid along. */
+    private double bedRotation() {
+        if (!(entity instanceof LivingEntity living)) return 0;
+
+        Direction facing = living.getBedOrientation();
+        return facing == null ? 0 : facing.toYRot();
+    }
+
+    /** A leash breaks past ten blocks, so a box grown by that much holds everything still on one. */
+    private static final double LEASH_RANGE = 10;
+
+    /** Everything nearby whose leash this entity is holding. */
+    private List<Mob> leashing() {
+        if (entity.level() == null) return List.of();
+
+        return entity.level().getEntitiesOfClass(Mob.class,
+            entity.getBoundingBox().inflate(LEASH_RANGE), mob -> mob.getLeashHolder() == entity);
+    }
+
+    /** Whether an entity is one of the types named, each spelled the way a behaviour pack spells it. */
+    private static boolean isAnyType(Entity subject, List<MolangValue> arguments) {
+        return arguments.stream().anyMatch(value -> value.isText()
+            && subject.getType() == AddonEntities.typeOf(value.text()));
+    }
+
+    /** The families a behaviour pack gave the entity. Java's own player belongs to two of them. */
+    private boolean hasAnyFamily(List<MolangValue> arguments) {
+        if (entity instanceof Player) {
+            return arguments.stream().anyMatch(value -> value.isText()
+                && (value.text().equals("player") || value.text().equals("mob")));
+        }
+
+        ServerEntityDefinition definition = AddonEntities.definitionOf(entity.getType());
+        return definition != null && arguments.stream().anyMatch(value -> value.isText()
+            && definition.families().contains(value.text()));
+    }
+
+    /**
+     * A number standing for an entity type, which a pack compares against another of these.
+     *
+     * Bedrock hands out its own running numbers, so what a pack can rely on is that one name always
+     * answers the same and two names never answer alike. The registry's index does both.
+     */
+    private static double actorInfoId(List<MolangValue> arguments) {
+        EntityType<?> type = arguments.isEmpty() || !arguments.get(0).isText() ? null
+            : AddonEntities.typeOf(arguments.get(0).text());
+        return type == null ? 0 : BuiltInRegistries.ENTITY_TYPE.getId(type);
+    }
+
+    /**
+     * Writes a value out and hands it straight back, which is what Bedrock's own logging does.
+     *
+     * A render controller asks this again on every frame, so it goes to the debug log rather than
+     * the one a player reads.
+     */
+    private static MolangValue logged(List<MolangValue> arguments) {
+        if (arguments.isEmpty()) return MolangValue.ZERO;
+
+        MolangValue value = arguments.get(0);
+        McAddon.LOGGER.debug("molang: {}", value.isText() ? value.text() : value.number());
+        return value;
+    }
+
+    /** Which of the given distances the entity has passed, counting from the camera. */
+    private double levelOfDetail(List<MolangValue> arguments) {
+        double distance = distanceFromCamera();
+        return arguments.stream().filter(value -> distance > value.number()).count();
+    }
+
+    /** The passenger in the seat Bedrock names by index, or null when that seat is empty. */
+    private Entity rider(List<MolangValue> arguments) {
+        int index = arguments.isEmpty() ? 0 : (int) arguments.get(0).number();
+        List<Entity> riders = entity.getPassengers();
+        return index >= 0 && index < riders.size() ? riders.get(index) : null;
+    }
+
+    /** Java pitches the head and leaves the body upright, so only a one-piece entity has a body pitch. */
+    private static double bodyPitch(Entity of) {
+        return of == null || of instanceof LivingEntity ? 0 : of.getXRot();
+    }
+
+    private static double headPitch(Entity of) {
+        return of == null ? 0 : of.getXRot();
+    }
+
+    /** Bedrock reports a mount's and a rider's yaw in world space rather than against the body. */
+    private static double headYaw(Entity of) {
+        if (of == null) return 0;
+        return of instanceof LivingEntity living ? living.yHeadRot : of.getYRot();
+    }
+
+    private static double bodyYaw(Entity of) {
+        if (of == null) return 0;
+        return of instanceof LivingEntity living ? living.yBodyRot : of.getYRot();
+    }
+
     /** A property the server sent that is only ever on or off. */
     private static boolean flag(Map<String, Object> properties, String name) {
         Object value = properties.get(name);
@@ -260,18 +550,19 @@ public final class AddonQueries implements MolangEnvironment.Queries {
     }
 
     /**
-     * Whether a block near the entity carries the named tags.
+     * Whether a block carries the named tags.
      *
-     * The first three arguments are an offset in blocks and the rest are tag names, which is the
-     * shape Bedrock gives this: a pack asks about the ground under a mob by offsetting down one.
+     * The first three arguments are a position and the rest are tag names. Bedrock offers the
+     * position both ways round: measured from the entity, which is how a pack asks about the ground
+     * under a mob, and measured from the world origin.
      */
-    private MolangValue relativeBlockTag(List<MolangValue> arguments, boolean requireAll) {
+    private MolangValue blockTag(List<MolangValue> arguments, boolean fromEntity, boolean requireAll) {
         if (arguments.size() < 4 || entity.level() == null) return MolangValue.ZERO;
 
-        net.minecraft.core.BlockPos at = entity.blockPosition().offset(
-            (int) arguments.get(0).number(), (int) arguments.get(1).number(),
+        BlockPos at = new BlockPos((int) arguments.get(0).number(), (int) arguments.get(1).number(),
             (int) arguments.get(2).number());
-        BlockState state = entity.level().getBlockState(at);
+        BlockState state = entity.level().getBlockState(
+            fromEntity ? entity.blockPosition().offset(at) : at);
         List<MolangValue> tags = arguments.subList(3, arguments.size());
 
         return MolangValue.of(requireAll
@@ -280,11 +571,86 @@ public final class AddonQueries implements MolangEnvironment.Queries {
     }
 
     private static boolean carriesTag(BlockState state, MolangValue tag) {
-        if (!tag.isText()) return false;
+        TagKey<Block> key = tagKey(Registries.BLOCK, tag);
+        return key != null && state.is(key);
+    }
 
-        Identifier parsed = Identifier.tryParse(tag.text());
-        return parsed != null && state.is(net.minecraft.tags.TagKey.create(
-            net.minecraft.core.registries.Registries.BLOCK, parsed));
+    private static boolean carriesTag(ItemStack stack, MolangValue tag) {
+        TagKey<Item> key = tagKey(Registries.ITEM, tag);
+        return key != null && stack.is(key);
+    }
+
+    private static boolean carriesTag(Holder<Biome> biome, MolangValue tag) {
+        TagKey<Biome> key = tagKey(Registries.BIOME, tag);
+        return key != null && biome.is(key);
+    }
+
+    /** Null when the argument is not a name a resource location accepts, which matches nothing. */
+    private static <T> TagKey<T> tagKey(ResourceKey<Registry<T>> registry, MolangValue tag) {
+        Identifier parsed = tag.isText() ? Identifier.tryParse(tag.text()) : null;
+        return parsed == null ? null : TagKey.create(registry, parsed);
+    }
+
+    /** The biome tags where the entity is standing, which only a resource pack may ask about. */
+    private boolean biomeTags(List<MolangValue> arguments, boolean requireAll) {
+        if (arguments.isEmpty() || entity.level() == null) return false;
+
+        Holder<Biome> biome = entity.level().getBiome(entity.blockPosition());
+        return requireAll
+            ? arguments.stream().allMatch(tag -> carriesTag(biome, tag))
+            : arguments.stream().anyMatch(tag -> carriesTag(biome, tag));
+    }
+
+    /** A pack may leave the namespace off a biome name, which parsing the argument fills back in. */
+    private boolean biomeNamed(List<MolangValue> arguments) {
+        if (entity.level() == null) return false;
+
+        Holder<Biome> here = entity.level().getBiome(entity.blockPosition());
+        return arguments.stream().anyMatch(value -> {
+            Identifier named = value.isText() ? Identifier.tryParse(value.text()) : null;
+            return named != null && here.is(named);
+        });
+    }
+
+    private double surfaceHeight(List<MolangValue> arguments) {
+        if (arguments.size() < 2 || entity.level() == null) return 0;
+
+        return entity.level().getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+            (int) arguments.get(0).number(), (int) arguments.get(1).number());
+    }
+
+    /** How far down Bedrock looks for the ground beneath an entity before it gives up. */
+    private static final int SURFACE_SCAN = 10;
+
+    /**
+     * The colour of the ground under the entity, which a surface particle is tinted with.
+     *
+     * Bedrock answers with a struct, so the whole of it read as a number is a zero and only a named
+     * channel carries anything. Ground the scan never reached leaves every channel at zero, the
+     * alpha included.
+     */
+    private MolangValue surfaceColour(String channel) {
+        BlockPos ground = groundBelow();
+        if (ground == null) return MolangValue.ZERO;
+
+        int colour = entity.level().getBlockState(ground).getMapColor(entity.level(), ground).col;
+        return switch (channel) {
+            case "r" -> MolangValue.of((colour >> 16 & 255) / 255d);
+            case "g" -> MolangValue.of((colour >> 8 & 255) / 255d);
+            case "b" -> MolangValue.of((colour & 255) / 255d);
+            case "a" -> MolangValue.ONE;
+            default -> MolangValue.ZERO;
+        };
+    }
+
+    private BlockPos groundBelow() {
+        if (entity.level() == null) return null;
+
+        for (int down = 0; down <= SURFACE_SCAN; down++) {
+            BlockPos at = entity.blockPosition().below(down);
+            if (!entity.level().getBlockState(at).isAir()) return at;
+        }
+        return null;
     }
 
     /**
@@ -320,6 +686,7 @@ public final class AddonQueries implements MolangEnvironment.Queries {
 
     /** Bedrock's own facing numbers: Down=0, Up=1, North=2, South=3, West=4, East=5, Undefined=6. */
     private static final int[] COMPASS = {3, 4, 2, 5};
+    private static final int FACING_UNDEFINED = 6;
 
     private static double compassFacing(float yaw) {
         return COMPASS[Math.floorMod(Math.round(yaw / 90), 4)];
@@ -333,7 +700,7 @@ public final class AddonQueries implements MolangEnvironment.Queries {
 
     private static MolangValue playerFacing() {
         Player player = Minecraft.getInstance().player;
-        return player == null ? MolangValue.of(6)
+        return player == null ? MolangValue.of(FACING_UNDEFINED)
             : MolangValue.of(cardinalFacing(player.getYRot(), player.getXRot()));
     }
 
@@ -383,6 +750,29 @@ public final class AddonQueries implements MolangEnvironment.Queries {
         int index = arguments.isEmpty() ? -1 : (int) arguments.get(0).number();
         return index < 0 || index >= ARMOUR.size() ? MolangValue.ZERO
             : MolangValue.of(!worn(ARMOUR.get(index)).isEmpty());
+    }
+
+    private MolangValue armourDamage(List<MolangValue> arguments) {
+        int index = arguments.isEmpty() ? -1 : (int) arguments.get(0).number();
+        return index < 0 || index >= ARMOUR.size() ? MolangValue.ZERO
+            : MolangValue.of(worn(ARMOUR.get(index)).getDamageValue());
+    }
+
+    /**
+     * Whether the item in a named slot carries the tags after it.
+     *
+     * Bedrock spells a tag the way a resource location is spelled, so one naming no namespace is
+     * Minecraft's own.
+     */
+    private MolangValue equippedTags(List<MolangValue> arguments, boolean requireAll) {
+        EquipmentSlot slot = slotOf(text(arguments, 0));
+        if (slot == null || arguments.size() < 2) return MolangValue.ZERO;
+
+        ItemStack held = worn(slot);
+        List<MolangValue> tags = arguments.subList(1, arguments.size());
+        return MolangValue.of(requireAll
+            ? tags.stream().allMatch(tag -> carriesTag(held, tag))
+            : tags.stream().anyMatch(tag -> carriesTag(held, tag)));
     }
 
     private int remainingDurability() {

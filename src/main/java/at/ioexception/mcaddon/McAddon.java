@@ -22,6 +22,19 @@ import java.util.List;
 
 public final class McAddon implements ModInitializer {
     public static final String MOD_ID = "mcaddon";
+
+    /**
+     * This mod's own version, which every converted pack is filed under.
+     *
+     * What the conversion produces is a function of the pack and of the code that read it, so a
+     * build that converts differently has to be told apart from the one before it. Without this a
+     * pack converted by an older build is reused whole, and a fix to the conversion reaches nobody
+     * who already had that pack installed.
+     */
+    public static final String VERSION = net.fabricmc.loader.api.FabricLoader.getInstance()
+        .getModContainer(MOD_ID)
+        .map(container -> container.getMetadata().getVersion().getFriendlyString())
+        .orElse("dev");
     public static final Logger LOGGER = LoggerFactory.getLogger("Bedrock Add-ons");
 
     private static PackSet packs = new PackSet(List.of(), List.of());
@@ -47,8 +60,10 @@ public final class McAddon implements ModInitializer {
         AddonPacks.convert(packs);
         AddonSounds.register(AddonPacks.all());
         AddonEntities.register(packs);
-        AddonItems.register(packs);
+        // Blocks before items: an item that places a block names it, so the block has to be in the
+        // registry by the time the item asking for it is built.
         AddonBlocks.register(packs);
+        AddonItems.register(packs);
         AddonSpawns.register(packs);
         AddonParticles.register(AddonPacks.all());
         AddonCreativeTab.register();

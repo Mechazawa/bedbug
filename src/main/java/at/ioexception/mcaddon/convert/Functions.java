@@ -49,7 +49,8 @@ public final class Functions {
     public static List<String> convert(BedrockPack pack, Path root, String namespace,
         Set<String> unsupported) throws IOException {
         List<String> converted = new ArrayList<>();
-        String directory = at.ioexception.mcaddon.platform.Platform.modernDataPaths() ? "function" : "functions";
+        String directory = at.ioexception.mcaddon.platform.Platform.singularDataDirectories()
+            ? "function" : "functions";
 
         for (Path file : pack.list("functions", ".mcfunction")) {
             String relative = pack.root().relativize(file).toString().replace('\\', '/');
@@ -227,7 +228,7 @@ public final class Functions {
             JsonObject tag = new JsonObject();
             tag.add("values", values);
 
-            String directory = at.ioexception.mcaddon.platform.Platform.modernDataPaths()
+            String directory = at.ioexception.mcaddon.platform.Platform.singularDataDirectories()
                 ? "tags/function" : "tags/functions";
             Path target = root.resolve("data/minecraft").resolve(directory).resolve("tick.json");
             Files.createDirectories(target.getParent());

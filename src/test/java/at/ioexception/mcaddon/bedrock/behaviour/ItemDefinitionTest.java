@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -80,6 +81,94 @@ class ItemDefinitionTest {
 
         assertEquals(List.of("minecraft:food", "minecraft:wearable"), List.copyOf(item.components().keySet()));
         assertEquals(4, item.components().get("minecraft:food").get("nutrition").getAsInt());
+    }
+
+    /**
+     * A pack declares food beside an animation of `none` to make an item hold-to-use without being
+     * eaten, because in Bedrock the animation is what drives the interaction.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiterString = "->", value = {
+        "{\"minecraft:food\": {\"nutrition\": 4}} -> true",
+        "{\"minecraft:food\": {\"nutrition\": 4}, \"minecraft:use_animation\": \"eat\"} -> true",
+        "{\"minecraft:food\": {\"nutrition\": 4}, \"minecraft:use_animation\": \"drink\"} -> true",
+        "{\"minecraft:food\": {\"nutrition\": 0}, \"minecraft:use_animation\": \"none\"} -> false",
+        "{\"minecraft:food\": {\"use_animation\": \"none\"}} -> false",
+        "{\"minecraft:use_animation\": \"eat\"} -> false",
+    })
+    void eatsOnlyWhatTheAnimationSaysIsEaten(String components, boolean expected) throws IOException {
+        assertEquals(expected, item(components).edible());
+    }
+
+    /** Bedrock takes either a number or one of its named tiers where Java takes only a number. */
+    @ParameterizedTest
+    @CsvSource(delimiterString = "->", value = {
+        "{\"minecraft:food\": {\"saturation_modifier\": 0.4}} -> 0.4",
+        "{\"minecraft:food\": {\"saturation_modifier\": \"good\"}} -> 0.8",
+        "{\"minecraft:food\": {\"saturation_modifier\": \"supernatural\"}} -> 1.2",
+        "{\"minecraft:food\": {}} -> 0.6",
+        "{} -> 0.6",
+    })
+    void readsSaturationAsANumberOrATier(String components, float expected) throws IOException {
+        assertEquals(expected, item(components).saturation(), 0.0001f);
+    }
+
+    /** `use_modifiers` counts a use in seconds and `minecraft:use_duration` counts it in ticks. */
+    @ParameterizedTest
+    @CsvSource(delimiterString = "->", value = {
+        "{\"minecraft:use_modifiers\": {\"use_duration\": 3.2}} -> 3.2",
+        "{\"minecraft:use_duration\": 32} -> 1.6",
+        "{} -> 1.6",
+    })
+    void countsAUseInSeconds(String components, float expected) throws IOException {
+        assertEquals(expected, item(components).useSeconds(), 0.0001f);
+    }
+
+    @ParameterizedTest
+    @CsvSource(delimiterString = "->", value = {
+        "{\"minecraft:durability\": {\"max_durability\": 250}} -> 250",
+        "{\"minecraft:max_damage\": 250} -> 250",
+        "{\"minecraft:max_damage\": 0} -> 0",
+        "{} -> 0",
+    })
+    void readsEitherSpellingOfTheDurability(String components, int expected) throws IOException {
+        assertEquals(expected, item(components).durability());
+    }
+
+    /** A speed entry whose block is a Molang tag query names no fixed block to answer with. */
+    @Test
+    void keepsOnlyTheDiggerEntriesThatNameABlock() throws IOException {
+        ItemDefinition item = item("""
+            {"minecraft:digger": {"destroy_speeds": [
+                {"block": "minecraft:stone", "speed": 6},
+                {"block": {"tags": "q.any_tag('stone')"}, "speed": 4},
+                {"block": "minecraft:dirt"}]}}
+            """);
+
+        assertEquals(List.of(new ItemDefinition.DestroySpeed("minecraft:stone", 6f),
+            new ItemDefinition.DestroySpeed("minecraft:dirt", 1f)), item.destroySpeeds());
+    }
+
+    /** Each repair entry holds its own list of items, and a bare name stands for a list of one. */
+    @Test
+    void flattensTheRepairItems() throws IOException {
+        ItemDefinition item = item("""
+            {"minecraft:repairable": {"repair_items": [
+                {"items": ["minecraft:stick", "minecraft:oak_planks"], "repair_amount": 10},
+                "minecraft:diamond"]}}
+            """);
+
+        assertEquals(List.of("minecraft:stick", "minecraft:oak_planks", "minecraft:diamond"),
+            item.repairItems());
+    }
+
+    /** Bedrock turns a component off by writing false into it, keeping the component declared. */
+    @Test
+    void readsAComponentSwitchedOff() throws IOException {
+        assertTrue(item("{\"minecraft:glint\": true}").declaredTrue("minecraft:glint"));
+        assertTrue(item("{\"minecraft:glint\": {}}").declaredTrue("minecraft:glint"));
+        assertFalse(item("{\"minecraft:glint\": false}").declaredTrue("minecraft:glint"));
+        assertFalse(item("{}").declaredTrue("minecraft:glint"));
     }
 
     @Test

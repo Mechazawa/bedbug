@@ -5,6 +5,7 @@ import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -12,6 +13,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 /**
  * An item a behaviour pack declares.
@@ -64,6 +66,149 @@ public record ItemDefinition(String identifier, String iconKey, String displayNa
         JsonObject wrapped = new JsonObject();
         if (declared.isJsonPrimitive()) wrapped.add("value", declared);
         return wrapped;
+    }
+
+    /** The number `component` holds under `field`, falling back to the bare value it was written as. */
+    public float number(String component, String field, float fallback) {
+        JsonObject declared = components.get(component);
+        if (declared == null) return fallback;
+
+        JsonElement value = declared.get(field);
+        if (value == null) value = declared.get("value");
+        return value != null && value.isJsonPrimitive() ? value.getAsFloat() : fallback;
+    }
+
+    /** The text `component` holds under `field`, falling back to the bare value it was written as. */
+    public String text(String component, String field) {
+        JsonObject declared = components.get(component);
+        if (declared == null) return null;
+
+        String value = Json.text(declared, field, null);
+        return value != null ? value : Json.text(declared, "value", null);
+    }
+
+    /** Whether a component is declared without the `false` Bedrock switches one off with. */
+    public boolean declaredTrue(String component) {
+        JsonObject declared = components.get(component);
+        if (declared == null) return false;
+
+        JsonElement value = declared.get("value");
+        return value == null || !value.isJsonPrimitive() || value.getAsBoolean();
+    }
+
+    /** The damage this takes before it breaks, under either name a pack's format version has for it. */
+    public int durability() {
+        int declared = (int) number("minecraft:durability", "max_durability", 0f);
+        return declared > 0 ? declared : (int) number("minecraft:max_damage", "value", 0f);
+    }
+
+    /**
+     * What the player sees while holding right click.
+     *
+     * A food component with no animation beside it means eating, which is what food was added for.
+     */
+    public String useAnimation() {
+        String named = text("minecraft:use_animation", "value");
+        if (named != null) return named;
+
+        JsonObject food = components.get("minecraft:food");
+        if (food == null) return "none";
+
+        return Json.text(food, "use_animation", "eat");
+    }
+
+    /**
+     * Whether the pack means the player swallows this.
+     *
+     * `minecraft:food` beside a `use_animation` of `none` is how a pack makes an item hold-to-use
+     * without being eaten: in Bedrock the animation drives the interaction and `none` draws nothing.
+     * Java has one component for both, so a hat declared that way would feed the player.
+     */
+    public boolean edible() {
+        if (!components.containsKey("minecraft:food")) return false;
+
+        String animation = useAnimation();
+        return animation.equals("eat") || animation.equals("drink");
+    }
+
+    /**
+     * How much saturation eating this gives.
+     *
+     * The field takes a number or one of Bedrock's named tiers. 0.6 is what the engine uses for a
+     * food component that leaves it out.
+     */
+    public float saturation() {
+        JsonObject food = components.get("minecraft:food");
+        JsonElement declared = food == null ? null : food.get("saturation_modifier");
+        if (declared == null || !declared.isJsonPrimitive()) return 0.6f;
+
+        JsonPrimitive value = declared.getAsJsonPrimitive();
+        if (value.isNumber()) return value.getAsFloat();
+        return switch (value.getAsString()) {
+            case "poor" -> 0.1f;
+            case "low" -> 0.3f;
+            case "good" -> 0.8f;
+            case "max" -> 1.0f;
+            case "supernatural" -> 1.2f;
+            default -> 0.6f;
+        };
+    }
+
+    /**
+     * How long one use lasts, in seconds.
+     *
+     * `use_modifiers` counts it in seconds and `minecraft:use_duration` counts it in ticks. 1.6
+     * seconds is Bedrock's default for a food item and Java's as well.
+     */
+    public float useSeconds() {
+        float seconds = number("minecraft:use_modifiers", "use_duration", 0f);
+        if (seconds > 0f) return seconds;
+
+        float ticks = number("minecraft:use_duration", "value", 0f);
+        return ticks > 0f ? ticks / 20f : 1.6f;
+    }
+
+    /** Armour points, under whichever component the pack's format version carries them. */
+    public float protection() {
+        float worn = number("minecraft:wearable", "protection", 0f);
+        return worn > 0f ? worn : number("minecraft:armor", "protection", 0f);
+    }
+
+    /** One block `minecraft:digger` names, and how fast this breaks it. */
+    public record DestroySpeed(String block, float speed) {
+    }
+
+    /**
+     * The blocks `minecraft:digger` lists a speed for.
+     *
+     * An entry whose `block` is an object holds a Molang tag query, which picks blocks by a
+     * condition the game evaluates per block, so there is no fixed set of blocks to answer with.
+     */
+    public List<DestroySpeed> destroySpeeds() {
+        JsonObject digger = components.get("minecraft:digger");
+        if (digger == null) return List.of();
+
+        return Json.list(digger, "destroy_speeds").stream()
+            .filter(JsonElement::isJsonObject)
+            .map(JsonElement::getAsJsonObject)
+            .filter(entry -> entry.has("block") && entry.get("block").isJsonPrimitive())
+            .map(entry -> new DestroySpeed(entry.get("block").getAsString(),
+                entry.has("speed") ? entry.get("speed").getAsFloat() : 1f))
+            .toList();
+    }
+
+    /** The items `minecraft:repairable` accepts for repairing this one. */
+    public List<String> repairItems() {
+        JsonObject repairable = components.get("minecraft:repairable");
+        if (repairable == null) return List.of();
+
+        return Json.list(repairable, "repair_items").stream()
+            .flatMap(entry -> entry.isJsonObject()
+                ? Json.list(entry.getAsJsonObject(), "items").stream()
+                : Stream.of(entry))
+            .filter(JsonElement::isJsonPrimitive)
+            .map(JsonElement::getAsString)
+            .toList();
     }
 
     /**

@@ -117,6 +117,44 @@ public final class PackGameTests {
     }
 
     /**
+     * A pack's entity drops what its loot table holds.
+     *
+     * Where that table is asked for differs across the four versions this builds against, and a
+     * mistake there costs every pack its drops while everything else still works. Nothing short of
+     * a real death in a real world exercises it, which is why this is a game test and not a unit one.
+     */
+    @GameTest()
+    public void aPackEntityDropsItsLoot(GameTestHelper helper) {
+        EntityType<?> type = AddonEntities.typeOf(ENTITY);
+        if (type == null) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        Entity spawned = Platform.createMob(type, level);
+        helper.assertTrue(spawned instanceof at.ioexception.mcaddon.entity.AddonEntity,
+            ENTITY + " is not an add-on entity.");
+
+        BlockPos at = helper.absolutePos(STAND);
+        Platform.placeAt(spawned, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        level.addFreshEntity(spawned);
+
+        // A vanilla table rather than a pack's own: every version ships one, and what is under test
+        // is the hook that reaches a table at all, not which table a pack named.
+        ((at.ioexception.mcaddon.entity.AddonEntity) spawned)
+            .setLootTable(Platform.id("minecraft", "entities/cow"));
+        Platform.kill(spawned, level);
+
+        helper.runAfterDelay(3, () -> {
+            helper.assertFalse(level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
+                spawned.getBoundingBox().inflate(4)).isEmpty(),
+                ENTITY + " died holding a loot table and dropped nothing.");
+            helper.succeed();
+        });
+    }
+
+    /**
      * A pack's block places and comes back as itself.
      *
      * The conversion writes a block, its states and its models, and a pack's own block is the only

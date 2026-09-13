@@ -60,23 +60,68 @@ import net.minecraft.world.level.Level;
  * definition the entity's type was registered from. Bedrock's behaviour components become Java goals
  * where an equivalent exists, and the rest are reported rather than silently dropped.
  */
-public class AddonEntity extends PathfinderMob implements Merchant {
+public class AddonEntity extends PathfinderMob
+    implements Merchant, net.minecraft.world.entity.monster.RangedAttackMob {
     private final ServerEntityDefinition definition;
     private final java.util.Set<String> activeGroups = new java.util.LinkedHashSet<>();
     private int timerDueTick = -1;
     private Player tradingPlayer;
     private MerchantOffers offers;
     private int tradeExperience;
+    private Identifier lootTable;
+    private Age age;
+    private net.minecraft.server.level.ServerBossEvent bossBar;
+    private net.minecraft.world.SimpleContainer carried;
 
     public AddonEntity(EntityType<? extends PathfinderMob> type, Level level) {
         super(type, level);
         this.definition = AddonEntities.definitionOf(type);
         if (definition != null) {
+            age = Age.tryFrom(definition);
             addGoals();
             applyMoveControl();
             applyComponents();
         }
     }
+
+    /**
+     * The loot table this entity drops, which a pack names in `minecraft:loot`.
+     *
+     * A component group can bring a different one in, so it belongs to the entity rather than to its
+     * type. Null leaves the entity dropping whatever Java would have it drop.
+     */
+    public void setLootTable(Identifier table) {
+        lootTable = table;
+    }
+
+    /**
+     * What the entity leaves behind, asked for where each version lets it be answered.
+     *
+     * Before 26 a mob is asked for its default table and hands one back. From 26 that question is
+     * final on `Mob` and answered by the entity's type, so the drop itself is taken over instead.
+     */
+    //? if >=26 {
+    @Override
+    protected void dropFromLootTable(net.minecraft.server.level.ServerLevel level,
+        net.minecraft.world.damagesource.DamageSource source, boolean playerKill) {
+        if (lootTable == null) {
+            super.dropFromLootTable(level, source, playerKill);
+            return;
+        }
+        dropFromLootTable(level, source, playerKill, Platform.lootTableKey(lootTable));
+    }
+    //?} else if >=1.21 {
+    /*@Override
+    protected net.minecraft.resources.ResourceKey<net.minecraft.world.level.storage.loot.LootTable>
+        getDefaultLootTable() {
+        return lootTable == null ? super.getDefaultLootTable() : Platform.lootTableKey(lootTable);
+    }
+    *///?} else {
+    /*@Override
+    protected Identifier getDefaultLootTable() {
+        return lootTable == null ? super.getDefaultLootTable() : lootTable;
+    }
+    *///?}
 
     public ServerEntityDefinition definition() {
         return definition;
@@ -207,6 +252,26 @@ public class AddonEntity extends PathfinderMob implements Merchant {
             Platform.setHome(this, blockPosition(), Math.max(1, radius));
         }
 
+        String table = text("minecraft:loot", "table");
+        if (table != null) lootTable = AddonEntities.lootTable(getType(), table);
+
+        if (has("minecraft:inventory")) {
+            carried = new net.minecraft.world.SimpleContainer(
+                Math.max(1, (int) number(definition, "minecraft:inventory", "inventory_size", 5)));
+        }
+        if (has("minecraft:boss")) {
+            bossBar = Platform.bossBar(getDisplayName());
+            bossBar.setDarkenScreen(number(definition, "minecraft:boss", "should_darken_sky", 0) != 0);
+        }
+        // What a pack's render controller branches on, so a young entity is drawn as one.
+        if (age != null && age.baby()) ServerHooks.state().setProperty(getUUID(), "is_baby", true);
+
+        if (has("minecraft:default_look_angle")) {
+            float angle = (float) number(definition, "minecraft:default_look_angle", "value", 0);
+            setYHeadRot(angle);
+            setYBodyRot(angle);
+        }
+
         if (has("minecraft:preferred_path")) {
             // The enum naming a kind of ground was renamed in 1.21.
             //? if >=1.21 {
@@ -235,6 +300,29 @@ public class AddonEntity extends PathfinderMob implements Merchant {
         return definition.components().containsKey(component);
     }
 
+    /** A string a component carries, or null when the pack declared neither. */
+    private String text(String component, String field) {
+        com.google.gson.JsonObject body = definition.components().get(component);
+        return body == null ? null : at.ioexception.mcaddon.util.Json.text(body, field, null);
+    }
+
+    /**
+     * The body of a component wherever the pack declared it, or an empty one when it carries none.
+     *
+     * A behaviour is as real inside a component group as it is at the top, and a caller reading a
+     * list or a string out of one should not have to know which of the two it came from.
+     */
+    private com.google.gson.JsonObject body(String component) {
+        com.google.gson.JsonObject declared = definition.components().get(component);
+        if (declared != null) return declared;
+
+        return definition.componentGroups().values().stream()
+            .filter(group -> group.has(component) && group.get(component).isJsonObject())
+            .map(group -> group.getAsJsonObject(component))
+            .findFirst()
+            .orElseGet(com.google.gson.JsonObject::new);
+    }
+
     /**
      * The navigator the pack's `minecraft:navigation.*` component names.
      *
@@ -251,14 +339,16 @@ public class AddonEntity extends PathfinderMob implements Merchant {
         java.util.Set<String> components = declared.components().keySet();
         if (components.contains("minecraft:navigation.fly")
             || components.contains("minecraft:navigation.hover")
-            || components.contains("minecraft:navigation.float")) {
+            || components.contains("minecraft:navigation.float")
+            || components.contains("minecraft:can_fly")) {
             return new FlyingPathNavigation(this, level);
         }
         if (components.contains("minecraft:navigation.swim")) {
             return new WaterBoundPathNavigation(this, level);
         }
         if (components.contains("minecraft:navigation.climb")
-            || components.contains("minecraft:can_climb")) {
+            || components.contains("minecraft:can_climb")
+            || components.contains("minecraft:block_climber")) {
             return new WallClimberNavigation(this, level);
         }
         return super.createNavigation(level);
@@ -320,7 +410,7 @@ public class AddonEntity extends PathfinderMob implements Merchant {
      */
     private void pickUpNearby() {
         if (!has("minecraft:behavior.pickup_items") || level().isClientSide()) return;
-        if (!getMainHandItem().isEmpty()) return;
+        if (carried == null && !getMainHandItem().isEmpty()) return;
 
         double range = number(definition, "minecraft:behavior.pickup_items", "max_dist", 3);
         for (net.minecraft.world.entity.item.ItemEntity dropped
@@ -328,11 +418,24 @@ public class AddonEntity extends PathfinderMob implements Merchant {
                 getBoundingBox().inflate(range))) {
             if (!dropped.isAlive() || dropped.hasPickUpDelay()) continue;
             if (!shareable(dropped.getItem())) continue;
-
-            setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, dropped.getItem().copy());
-            dropped.discard();
+            if (stow(dropped.getItem().copy())) dropped.discard();
             return;
         }
+    }
+
+    /**
+     * Puts one item where the pack said this entity keeps what it collects.
+     *
+     * `minecraft:inventory` gives the entity slots of its own, which is what a pack describes for
+     * something that hauls goods. Without it there is one hand, which is enough for the villager
+     * carrying bread that most packs use this for. False when there is nowhere left to put it.
+     */
+    private boolean stow(ItemStack stack) {
+        if (carried == null) {
+            setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, stack);
+            return true;
+        }
+        return carried.addItem(stack).isEmpty();
     }
 
     /** Whether the pack's `shareables` list allows this item, which allows everything when absent. */
@@ -713,6 +816,248 @@ public class AddonEntity extends PathfinderMob implements Merchant {
             || number(definition, "minecraft:leashable", "can_be_stolen", 1) != 0;
     }
 
+    /**
+     * Breaks the blocks a pack listed as the entity walks into them.
+     *
+     * `minecraft:break_blocks` is how Bedrock describes a mob that leaves a hole behind it. The
+     * entity's own box is what decides which blocks those are, so nothing is searched for.
+     */
+    private void breakBlocks() {
+        if (!has("minecraft:break_blocks")) return;
+        if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
+
+        java.util.Set<String> wanted = new java.util.LinkedHashSet<>();
+        for (com.google.gson.JsonElement named
+            : at.ioexception.mcaddon.util.Json.list(body("minecraft:break_blocks"), "breakable_blocks")) {
+            if (named.isJsonPrimitive()) wanted.add(named.getAsString());
+        }
+        if (wanted.isEmpty()) return;
+
+        net.minecraft.world.phys.AABB box = getBoundingBox().inflate(0.2);
+        net.minecraft.core.BlockPos.betweenClosedStream(box)
+            .filter(at -> wanted.contains(
+                BuiltInRegistries.BLOCK.getKey(level.getBlockState(at).getBlock()).toString()))
+            .map(net.minecraft.core.BlockPos::immutable)
+            .toList()
+            .forEach(at -> level.destroyBlock(at, true, this));
+    }
+
+    /**
+     * Hands out the effect `minecraft:mob_effect` names to whatever comes close enough.
+     *
+     * Bedrock states the effect, how far it reaches and how long it lasts, and applies it to
+     * everything the component's filters allow. The entity itself is never one of them.
+     */
+    private void giveEffect() {
+        if (!has("minecraft:mob_effect")) return;
+        if (!(level() instanceof net.minecraft.server.level.ServerLevel)) return;
+
+        String effect = text("minecraft:mob_effect", "mob_effect");
+        Identifier id = effect == null ? null : Identifier.tryParse(
+            effect.contains(":") ? effect : "minecraft:" + effect);
+        if (id == null) return;
+
+        double range = number(definition, "minecraft:mob_effect", "effect_range", 0.2);
+        int seconds = (int) number(definition, "minecraft:mob_effect", "effect_time", 10);
+        Filter filter = Filter.parse(body("minecraft:mob_effect").get("entity_filter"));
+
+        for (net.minecraft.world.entity.LivingEntity nearby : level().getEntitiesOfClass(
+            net.minecraft.world.entity.LivingEntity.class, getBoundingBox().inflate(range))) {
+            if (nearby == this) continue;
+            if (!filter.matches(new Filter.Context(this, nearby, nearby, ServerHooks.state()))) continue;
+
+            Platform.addEffect(nearby, id, seconds * 20, 0, true);
+        }
+    }
+
+    /**
+     * Hurts whatever is standing against the entity, which is what `minecraft:area_attack` does.
+     *
+     * The damage is per second in Bedrock and this runs on the sensor interval, so what lands is
+     * the share of a second that has passed.
+     */
+    private void attackAround() {
+        if (!has("minecraft:area_attack")) return;
+        if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
+
+        double range = number(definition, "minecraft:area_attack", "damage_range", 0.2);
+        float perSecond = (float) number(definition, "minecraft:area_attack", "damage_per_tick", 2);
+        Filter filter = Filter.parse(body("minecraft:area_attack").get("entity_filter"));
+
+        for (net.minecraft.world.entity.LivingEntity nearby : level.getEntitiesOfClass(
+            net.minecraft.world.entity.LivingEntity.class, getBoundingBox().inflate(range))) {
+            if (nearby == this) continue;
+            if (!filter.matches(new Filter.Context(this, nearby, nearby, ServerHooks.state()))) continue;
+
+            Platform.hurt(nearby, level, damageSources().mobAttack(this),
+                perSecond * Sensors.INTERVAL_TICKS / 20f);
+        }
+    }
+
+    /**
+     * Leaves a block behind as the entity moves, the way `minecraft:trail` describes.
+     *
+     * Bedrock spawns the block under the entity while its own filters hold, which is how a pack
+     * makes something freeze the water it swims over or scorch the ground it walks on.
+     */
+    private void leaveTrail() {
+        if (!has("minecraft:trail")) return;
+        if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
+
+        String named = text("minecraft:trail", "block_type");
+        Identifier id = named == null ? null : Identifier.tryParse(named);
+        net.minecraft.world.level.block.Block block = id == null ? null
+            : BuiltInRegistries.BLOCK.getOptional(id).orElse(null);
+        if (block == null) return;
+
+        if (!Filter.parse(body("minecraft:trail").get("spawn_filter"))
+            .matches(new Filter.Context(this, this, null, ServerHooks.state()))) {
+            return;
+        }
+
+        net.minecraft.core.BlockPos under = blockPosition().below();
+        if (!level.getBlockState(under).canBeReplaced()) return;
+
+        level.setBlockAndUpdate(under, block.defaultBlockState());
+    }
+
+    /**
+     * Ripens the crops the entity is standing among, which is what `minecraft:grows_crop` does.
+     *
+     * Bedrock gives a chance and a radius. Java already knows what growing means for every block
+     * that can be given bone meal, so the block decides rather than a table of crops.
+     */
+    private void growCrops() {
+        if (!has("minecraft:grows_crop")) return;
+        if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
+
+        double chance = number(definition, "minecraft:grows_crop", "chance", 0.02);
+        if (random.nextDouble() > chance) return;
+
+        int radius = (int) number(definition, "minecraft:grows_crop", "charges", 1) + 1;
+        net.minecraft.core.BlockPos at = blockPosition().offset(
+            random.nextInt(radius * 2 + 1) - radius, 0, random.nextInt(radius * 2 + 1) - radius);
+        net.minecraft.world.level.block.state.BlockState state = level.getBlockState(at);
+        if (!(state.getBlock() instanceof net.minecraft.world.level.block.BonemealableBlock crop)) return;
+        if (!Platform.canBonemeal(crop, level, at, state)) return;
+
+        crop.performBonemeal(level, random, at, state);
+    }
+
+    /**
+     * Fires the event a pack asked for while somebody is looking at the entity.
+     *
+     * `minecraft:looked_at` is what makes an enderman's stare work, and a pack uses it for anything
+     * that should react to being watched. Bedrock measures the angle rather than the distance.
+     */
+    private void noticeBeingWatched() {
+        if (!has("minecraft:looked_at")) return;
+
+        String event = text("minecraft:looked_at", "looked_at_event");
+        if (event == null) return;
+
+        double reach = number(definition, "minecraft:looked_at", "search_radius", 10);
+        for (Player player : level().getEntitiesOfClass(Player.class, getBoundingBox().inflate(reach))) {
+            net.minecraft.world.phys.Vec3 towards = position().subtract(player.getEyePosition()).normalize();
+            if (player.getLookAngle().normalize().dot(towards) < 0.95) continue;
+
+            EntityEvents.trigger(this, event, player, ServerHooks.state());
+            return;
+        }
+    }
+
+    /**
+     * Heals the entity back up once nothing has hurt it for a while.
+     *
+     * `minecraft:combat_regeneration` is Bedrock's name for a mob that recovers between fights.
+     * Being hit resets the wait, which is what keeps it from healing through one.
+     */
+    private void regenerate() {
+        if (!has("minecraft:combat_regeneration") || getHealth() >= getMaxHealth()) return;
+        if (tickCount - lastHurtTick < 100) return;
+
+        heal(1);
+    }
+
+    /** Rises through the liquid it is in, which is the whole of what a buoyant entity does. */
+    private void rideLiquid() {
+        if (!has("minecraft:buoyant") && !has("minecraft:floats_in_liquid")) return;
+        if (!isInWater() && !isInLava()) return;
+
+        double lift = number(definition, "minecraft:buoyant", "liquid_blocks_scale", 1) * 0.03;
+        setDeltaMovement(getDeltaMovement().add(0, lift, 0));
+        fallDistance = 0;
+    }
+
+    /** Ticks of the entity's own age at which something last hurt it, for the components that wait. */
+    private int lastHurtTick = -1000;
+
+    /** Health as it stood last tick, which is how being hurt is noticed without a damage hook. */
+    private float healthLastTick = -1;
+
+    /**
+     * Hurts the entity while it is out of the liquid it belongs in.
+     *
+     * `minecraft:drying_out_timer` gives a pack's fish a while on land before it suffers, and names
+     * the events fired as it dries out and as it is put back.
+     */
+    private void dryOut() {
+        if (!has("minecraft:drying_out_timer")) return;
+        if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
+
+        if (isInWater()) {
+            if (dryingFor > 0) fire(text("minecraft:drying_out_timer", "stopped_drying_out_event"));
+            dryingFor = 0;
+            return;
+        }
+
+        int allowed = (int) (number(definition, "minecraft:drying_out_timer", "total_time", 60) * 20);
+        if (dryingFor == 0) fire(text("minecraft:drying_out_timer", "dried_out_event"));
+
+        dryingFor += Sensors.INTERVAL_TICKS;
+        if (dryingFor < allowed) return;
+
+        Platform.hurt(this, level, damageSources().dryOut(), 1);
+    }
+
+    private int dryingFor;
+
+    /** Runs one of a component's named events, and does nothing when the pack named none. */
+    private void fire(String event) {
+        if (event != null) EntityEvents.trigger(this, event, null, ServerHooks.state());
+    }
+
+    /**
+     * Whatever the pack's shooter component names, thrown at what the entity is hunting.
+     *
+     * `minecraft:shooter` names the projectile by its entity id, which is enough for Java to build
+     * one and aim it. The arc is Java's own for a bow, so an arrow drops the way a player's does.
+     */
+    @Override
+    public void performRangedAttack(net.minecraft.world.entity.LivingEntity target, float power) {
+        if (definition == null || !(level() instanceof net.minecraft.server.level.ServerLevel level)) {
+            return;
+        }
+
+        String named = text("minecraft:shooter", "def");
+        net.minecraft.world.entity.EntityType<?> type =
+            AddonEntities.typeOf(named == null ? "minecraft:arrow" : named);
+        net.minecraft.world.entity.Entity shot = type == null ? null : Platform.createMob(type, level);
+        if (!(shot instanceof net.minecraft.world.entity.projectile.Projectile projectile)) return;
+
+        Platform.placeAt(projectile, getX(), getEyeY() - 0.1, getZ(), getYRot(), getXRot());
+        projectile.setOwner(this);
+
+        double toX = target.getX() - getX();
+        double toY = target.getY(0.3333) - projectile.getY();
+        double toZ = target.getZ() - getZ();
+        double flat = Math.sqrt(toX * toX + toZ * toZ);
+        projectile.shoot(toX, toY + flat * 0.2, toZ, 1.6f, 6f);
+
+        playSound(SoundEvents.SKELETON_SHOOT, 1f, 1f / (random.nextFloat() * 0.4f + 0.8f));
+        level.addFreshEntity(projectile);
+    }
+
     private void addGoals() {
         int priority = 0;
         for (String behaviour : definition.behaviours()) {
@@ -817,6 +1162,71 @@ public class AddonEntity extends PathfinderMob implements Merchant {
                     targetSelector.addGoal(priority,
                         new net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal(this));
 
+                // Bedrock states the gap between shots in seconds and the reach in blocks; Java's
+                // goal counts the gap in ticks and asks the entity itself to release the projectile.
+                case "minecraft:behavior.ranged_attack" -> goalSelector.addGoal(priority,
+                    new net.minecraft.world.entity.ai.goal.RangedAttackGoal(this,
+                        number(definition, behaviour, "speed_multiplier", 1),
+                        (int) (number(definition, behaviour, "attack_interval_min", 1) * 20),
+                        (float) number(definition, behaviour, "attack_radius", 16)));
+                case "minecraft:behavior.ocelotattack" -> goalSelector.addGoal(priority,
+                    new net.minecraft.world.entity.ai.goal.OcelotAttackGoal(this));
+
+                case "minecraft:behavior.follow_parent" -> goalSelector.addGoal(priority,
+                    FollowKinGoal.parent(this, body(behaviour)));
+                case "minecraft:behavior.follow_caravan",
+                     "minecraft:behavior.follow_target_leader" -> goalSelector.addGoal(priority,
+                    FollowKinGoal.leader(this, body(behaviour)));
+
+                case "minecraft:behavior.move_to_block" -> goalSelector.addGoal(priority,
+                    MoveToMatchingBlockGoal.named(this, body(behaviour)));
+                case "minecraft:behavior.move_to_land" -> goalSelector.addGoal(priority,
+                    MoveToMatchingBlockGoal.land(this, body(behaviour)));
+                case "minecraft:behavior.move_to_lava" -> goalSelector.addGoal(priority,
+                    MoveToMatchingBlockGoal.lava(this, body(behaviour)));
+                case "minecraft:behavior.move_to_random_block" -> goalSelector.addGoal(priority,
+                    MoveToMatchingBlockGoal.anywhere(this, body(behaviour)));
+
+                case "minecraft:behavior.equip_item" ->
+                    goalSelector.addGoal(priority, new EquipItemGoal(this));
+                case "minecraft:behavior.hold_ground" ->
+                    goalSelector.addGoal(priority, HoldGroundGoal.standing(this));
+                case "minecraft:behavior.look_at_target" ->
+                    goalSelector.addGoal(priority, HoldGroundGoal.watching(this));
+                // Java writes door handling as two goals under one base, and opening is the half
+                // Bedrock's own door interaction does.
+                case "minecraft:behavior.door_interact" ->
+                    goalSelector.addGoal(priority, new OpenDoorGoal(this, true));
+
+                case "minecraft:behavior.raid_garden" -> goalSelector.addGoal(priority,
+                    MoveToMatchingBlockGoal.raid(this, body(behaviour)));
+                case "minecraft:behavior.harvest_farm_block" -> goalSelector.addGoal(priority,
+                    MoveToMatchingBlockGoal.harvest(this, body(behaviour)));
+                case "minecraft:behavior.fertilize_farm_block" -> goalSelector.addGoal(priority,
+                    MoveToMatchingBlockGoal.fertilize(this, body(behaviour)));
+                // Java's own goal for this is the one its zombie uses on the same block.
+                case "minecraft:behavior.stomp_turtle_egg" -> goalSelector.addGoal(priority,
+                    new net.minecraft.world.entity.ai.goal.RemoveBlockGoal(
+                        net.minecraft.world.level.block.Blocks.TURTLE_EGG, this,
+                        number(definition, behaviour, "speed_multiplier", 1),
+                        (int) number(definition, behaviour, "search_height", 2)));
+
+                case "minecraft:behavior.timer_flag_1", "minecraft:behavior.timer_flag_2",
+                     "minecraft:behavior.timer_flag_3" ->
+                    goalSelector.addGoal(priority, new TimerFlagGoal(this, body(behaviour)));
+                case "minecraft:behavior.random_sitting" ->
+                    goalSelector.addGoal(priority, RestGoal.sitting(this, body(behaviour)));
+                case "minecraft:behavior.lay_down" ->
+                    goalSelector.addGoal(priority, RestGoal.lyingDown(this, body(behaviour)));
+                case "minecraft:behavior.knockback_roar" ->
+                    goalSelector.addGoal(priority, new KnockbackRoarGoal(this, body(behaviour)));
+                case "minecraft:behavior.eat_carried_item" ->
+                    goalSelector.addGoal(priority, new EatCarriedItemGoal(this, body(behaviour)));
+                case "minecraft:behavior.move_around_target" ->
+                    goalSelector.addGoal(priority, CircleTargetGoal.walking(this, body(behaviour)));
+                case "minecraft:behavior.jump_around_target" ->
+                    goalSelector.addGoal(priority, CircleTargetGoal.jumping(this, body(behaviour)));
+
                 // A behaviour this switch does not name may still be one the entity carries out on
                 // its own clock rather than through a goal, so the register decides, not the switch.
                 default -> {
@@ -836,6 +1246,8 @@ public class AddonEntity extends PathfinderMob implements Merchant {
     public void tick() {
         super.tick();
         if (definition == null || !(level() instanceof net.minecraft.server.level.ServerLevel)) return;
+
+        everyTick();
         if ((tickCount + getId()) % Sensors.INTERVAL_TICKS == 0) {
             Sensors.tick(this, ServerHooks.state());
             resupply();
@@ -851,8 +1263,490 @@ public class AddonEntity extends PathfinderMob implements Merchant {
             despawn();
             burnInDaylight();
             hurtOverTime();
+            breakBlocks();
+            giveEffect();
+            attackAround();
+            leaveTrail();
+            growCrops();
+            noticeBeingWatched();
+            regenerate();
+            dryOut();
+            showBossBar();
+            addRider();
         }
     }
+
+    /**
+     * The components that have to be answered on the entity's own clock rather than the sensors'.
+     *
+     * Growing up, floating and how the body is held all read as a stutter when they are decided
+     * every tenth tick, so these are the few that pay for being asked every one.
+     */
+    private void everyTick() {
+        noticeBeingHurt();
+        noticeCatchingFire();
+        noticeLeavingTheGround();
+        growUp();
+        rideLiquid();
+        holdBody();
+        bounce();
+        swimAtItsOwnSpeed();
+        dragThroughAir();
+        faceTheVehicle();
+        if (bossBar != null) bossBar.setProgress(getMaxHealth() <= 0 ? 0 : getHealth() / getMaxHealth());
+    }
+
+    /** `minecraft:on_ignite` names what a pack does about its entity being set alight. */
+    private void noticeCatchingFire() {
+        boolean alight = getRemainingFireTicks() > 0;
+        boolean caught = alight && !wasAlight;
+        wasAlight = alight;
+        if (caught) fire(text("minecraft:on_ignite", "event"));
+    }
+
+    private boolean wasAlight;
+    private boolean wasOnGround = true;
+
+    /**
+     * `minecraft:on_start_takeoff` and `minecraft:on_start_landing` are the two edges of a flight.
+     *
+     * Bedrock raises them from its own flying navigation, which a pack's entity reaches only when it
+     * asked for one. Whether the entity is standing on something is the same question either way.
+     */
+    private void noticeLeavingTheGround() {
+        boolean grounded = onGround();
+        if (grounded == wasOnGround) return;
+
+        wasOnGround = grounded;
+        fire(text(grounded ? "minecraft:on_start_landing" : "minecraft:on_start_takeoff", "event"));
+    }
+
+    /**
+     * Moves the entity at the speed the pack said its medium allows.
+     *
+     * Bedrock states a speed per medium as its own component and Java has one movement speed, so the
+     * attribute is moved as the entity enters and leaves, and put back on land.
+     */
+    private void swimAtItsOwnSpeed() {
+        if (!has("minecraft:lava_movement") && !has("minecraft:underwater_movement")
+            && !has("minecraft:water_movement")) {
+            return;
+        }
+
+        String component = null;
+        if (isInLava() && has("minecraft:lava_movement")) {
+            component = "minecraft:lava_movement";
+        } else if (isInWater() && has("minecraft:underwater_movement")) {
+            component = "minecraft:underwater_movement";
+        } else if (isInWater() && has("minecraft:water_movement")) {
+            component = "minecraft:water_movement";
+        }
+
+        net.minecraft.world.entity.ai.attributes.AttributeInstance speed =
+            getAttribute(Attributes.MOVEMENT_SPEED);
+        if (speed == null) return;
+
+        double wanted = component == null ? definition.movementSpeed()
+            : number(definition, component, "value", definition.movementSpeed());
+        if (speed.getBaseValue() != wanted) speed.setBaseValue(wanted);
+    }
+
+    /** `minecraft:air_drag_modifier` is how quickly the entity loses the speed it left the ground with. */
+    private void dragThroughAir() {
+        if (!has("minecraft:air_drag_modifier") || onGround()) return;
+
+        double kept = number(definition, "minecraft:air_drag_modifier", "value", 1);
+        setDeltaMovement(getDeltaMovement().multiply(kept, 1, kept));
+    }
+
+    /** `minecraft:rotation_locked_to_vehicle` keeps a rider facing wherever it is being carried. */
+    private void faceTheVehicle() {
+        if (!has("minecraft:rotation_locked_to_vehicle") || getVehicle() == null) return;
+
+        float yaw = getVehicle().getYRot();
+        setYRot(yaw);
+        setYHeadRot(yaw);
+        setYBodyRot(yaw);
+    }
+
+    /**
+     * Puts the rider `minecraft:addrider` names on the entity's back, once it is in the world.
+     *
+     * The rider has to be spawned rather than declared, and an entity that is still being built has
+     * nowhere to put one, so this waits for the entity's first tick in a level.
+     */
+    private void addRider() {
+        if (!has("minecraft:addrider") || carriesRider) return;
+        if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
+
+        carriesRider = true;
+        String named = text("minecraft:addrider", "entity_type");
+        net.minecraft.world.entity.EntityType<?> type = named == null
+            ? null : AddonEntities.typeOf(named);
+        net.minecraft.world.entity.Entity rider = type == null ? null : Platform.createMob(type, level);
+        if (rider == null) return;
+
+        Platform.placeAt(rider, getX(), getY(), getZ(), getYRot(), 0f);
+        level.addFreshEntity(rider);
+        rider.startRiding(this);
+
+        String event = text("minecraft:addrider", "spawn_event");
+        if (event != null) EntityEvents.trigger(rider, event, this, ServerHooks.state());
+    }
+
+    private boolean carriesRider;
+
+    /**
+     * Counts the entity's growing up, and fires the event the pack named at the end of it.
+     *
+     * Bedrock states the wait in seconds and this runs once a tick, which is the same clock.
+     */
+    private void growUp() {
+        if (age == null || !age.advance(1)) return;
+
+        ServerHooks.state().setProperty(getUUID(), "is_baby", false);
+        fire(age.grownEvent());
+    }
+
+    /**
+     * Being handed one of the foods `minecraft:healable` names, which puts the health back.
+     *
+     * `force_use` is what lets a pack have the food eaten even by an entity that is already whole,
+     * which matters when the entry also carries effects.
+     */
+    private boolean healed(Player player, InteractionHand hand) {
+        if (!has("minecraft:healable")) return false;
+
+        ItemStack held = player.getItemInHand(hand);
+        boolean forced = number(definition, "minecraft:healable", "force_use", 0) != 0;
+        if (held.isEmpty() || (!forced && getHealth() >= getMaxHealth())) return false;
+        if (!Filter.parse(body("minecraft:healable").get("filters"))
+            .matches(new Filter.Context(this, player, null, ServerHooks.state()))) {
+            return false;
+        }
+
+        String id = BuiltInRegistries.ITEM.getKey(held.getItem()).toString();
+        for (com.google.gson.JsonElement element
+            : at.ioexception.mcaddon.util.Json.list(body("minecraft:healable"), "items")) {
+            if (!element.isJsonObject()) continue;
+            com.google.gson.JsonObject food = element.getAsJsonObject();
+            if (!names(at.ioexception.mcaddon.util.Json.text(food, "item", null), id)) continue;
+
+            heal(food.has("heal_amount") ? food.get("heal_amount").getAsFloat() : 1);
+            if (!player.getAbilities().instabuild) held.shrink(1);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Taming by hand, which both of Bedrock's components describe as feeding an entity the right food.
+     *
+     * `minecraft:tameable` gives the chance outright; `minecraft:tamemount` counts temper towards a
+     * ceiling. Either way what a player sees is a few tries and then an entity that belongs to them,
+     * so the chance stands in for the count.
+     */
+    private boolean tamedBy(Player player, InteractionHand hand) {
+        ItemStack held = player.getItemInHand(hand);
+        if (held.isEmpty()) return false;
+
+        String id = BuiltInRegistries.ITEM.getKey(held.getItem()).toString();
+        for (String component
+            : new String[] {"minecraft:tameable", "minecraft:tamemount", "minecraft:trusting"}) {
+            if (!has(component) || !foodOf(component, id)) continue;
+
+            if (!player.getAbilities().instabuild) held.shrink(1);
+            if (random.nextDouble() > number(definition, component, "probability", 0.33)) return true;
+
+            ServerHooks.state().setProperty(getUUID(), "is_tamed", true);
+            fire(namedEvent(component, component.endsWith("trusting") ? "trust_event" : "tame_event"));
+            return true;
+        }
+        return false;
+    }
+
+    /** Whether the item offered is one of the foods a taming or trusting component named. */
+    private boolean foodOf(String component, String offered) {
+        for (String key : new String[] {"tame_items", "feed_items", "trust_items", "items"}) {
+            for (com.google.gson.JsonElement element
+                : at.ioexception.mcaddon.util.Json.list(body(component), key)) {
+                if (element.isJsonPrimitive() && names(element.getAsString(), offered)) return true;
+                if (!element.isJsonObject()) continue;
+
+                if (names(at.ioexception.mcaddon.util.Json.text(
+                    element.getAsJsonObject(), "item", null), offered)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** The event named under one of a component's own `*_event` objects, or null when it names none. */
+    private String namedEvent(String component, String key) {
+        com.google.gson.JsonObject wrapper = body(component).getAsJsonObject(key);
+        return wrapper == null ? null : at.ioexception.mcaddon.util.Json.text(wrapper, "event", null);
+    }
+
+    /**
+     * Putting an item on the entity, which is what `minecraft:equippable` lets a player do.
+     *
+     * Bedrock lists the slots and what each accepts; what a pack uses this for is a saddle or a
+     * piece of armour on something Java would not otherwise let a player dress.
+     */
+    private boolean equippedBy(Player player, InteractionHand hand) {
+        if (!has("minecraft:equippable")) return false;
+
+        ItemStack held = player.getItemInHand(hand);
+        if (held.isEmpty()) return false;
+
+        String id = BuiltInRegistries.ITEM.getKey(held.getItem()).toString();
+        for (com.google.gson.JsonElement element
+            : at.ioexception.mcaddon.util.Json.list(body("minecraft:equippable"), "slots")) {
+            if (!element.isJsonObject()) continue;
+            com.google.gson.JsonObject slot = element.getAsJsonObject();
+            if (!names(at.ioexception.mcaddon.util.Json.text(slot, "item", null), id)) continue;
+
+            setItemSlot(getEquipmentSlotForItem(held), held.split(1));
+            fire(at.ioexception.mcaddon.util.Json.text(slot, "on_equip", null));
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Handing the entity something it was waiting for, which raises the pack's own event.
+     *
+     * `minecraft:giveable` is how a pack trades without a trade table: the entity takes the item and
+     * its event decides what that was worth.
+     */
+    private boolean givenTo(Player player, InteractionHand hand) {
+        if (!has("minecraft:giveable")) return false;
+
+        ItemStack held = player.getItemInHand(hand);
+        if (held.isEmpty()) return false;
+
+        String id = BuiltInRegistries.ITEM.getKey(held.getItem()).toString();
+        for (com.google.gson.JsonElement element
+            : at.ioexception.mcaddon.util.Json.list(body("minecraft:giveable"), "triggers")) {
+            if (!element.isJsonObject()) continue;
+            com.google.gson.JsonObject trigger = element.getAsJsonObject();
+
+            boolean wanted = at.ioexception.mcaddon.util.Json.list(trigger, "items").stream()
+                .anyMatch(item -> item.isJsonPrimitive() && names(item.getAsString(), id));
+            if (!wanted) continue;
+
+            if (!player.getAbilities().instabuild) held.shrink(1);
+            com.google.gson.JsonObject given = trigger.getAsJsonObject("on_give");
+            fire(given == null ? null : at.ioexception.mcaddon.util.Json.text(given, "event", null));
+            return true;
+        }
+        return false;
+    }
+
+    /** `minecraft:sittable` is an entity a player sits down and stands up again by clicking it. */
+    private boolean satDown(Player player) {
+        if (!has("minecraft:sittable") || !player.getItemInHand(InteractionHand.MAIN_HAND).isEmpty()) {
+            return false;
+        }
+
+        boolean sitting = getPose() == net.minecraft.world.entity.Pose.SITTING;
+        setPose(sitting ? net.minecraft.world.entity.Pose.STANDING
+            : net.minecraft.world.entity.Pose.SITTING);
+        if (!sitting) getNavigation().stop();
+
+        fire(namedEvent("minecraft:sittable", sitting ? "stand_event" : "sit_event"));
+        return true;
+    }
+
+    /** Bedrock writes an item without its namespace as often as with one, and means the same thing. */
+    private static boolean names(String bedrock, String javaId) {
+        return bedrock != null && (bedrock.equals(javaId) || ("minecraft:" + bedrock).equals(javaId));
+    }
+
+    /** One of `minecraft:ageable`'s own feed items, which brings growing up forward. */
+    private boolean grownByHand(Player player, InteractionHand hand) {
+        ItemStack held = player.getItemInHand(hand);
+        if (age == null || !age.fed(held)) return false;
+
+        if (!player.getAbilities().instabuild) held.shrink(1);
+        for (int i = 0; i < 5; i++) {
+            level().addParticle(net.minecraft.core.particles.ParticleTypes.HAPPY_VILLAGER,
+                getRandomX(1), getRandomY() + 0.5, getRandomZ(1), 0, 0, 0);
+        }
+        return true;
+    }
+
+    /**
+     * Keeps the entity's body where the pack said it should be.
+     *
+     * `minecraft:body_rotation_blocked` is a body that never turns and
+     * `minecraft:body_rotation_always_follows_head` is one that turns with every glance, which are
+     * the two ends of what Java otherwise eases between.
+     */
+    private void holdBody() {
+        if (has("minecraft:body_rotation_blocked")) {
+            setYBodyRot(yBodyRotO);
+        } else if (has("minecraft:body_rotation_always_follows_head")) {
+            setYBodyRot(getYHeadRot());
+        }
+    }
+
+    /** Throws the entity back up off the ground by as much as `minecraft:bounciness` asks. */
+    private void bounce() {
+        if (!has("minecraft:bounciness") || !onGround()) return;
+
+        double fell = -getDeltaMovement().y;
+        if (fell <= 0.1) return;
+
+        double kept = number(definition, "minecraft:bounciness", "bounciness_value", 0.9);
+        setDeltaMovement(getDeltaMovement().x, fell * kept, getDeltaMovement().z);
+        fallDistance = 0;
+    }
+
+    /**
+     * Takes a boss bar off every screen once the entity it belongs to is gone.
+     *
+     * A bar is drawn by whoever was told about it and nothing else takes it back, so an entity that
+     * died, despawned or left with its chunk would otherwise leave one standing at zero.
+     */
+    @Override
+    public void remove(net.minecraft.world.entity.Entity.RemovalReason reason) {
+        super.remove(reason);
+        if (bossBar != null) bossBar.removeAllPlayers();
+    }
+
+    /** Shows a pack's boss its bar, to everybody inside the range the component named. */
+    private void showBossBar() {
+        if (bossBar == null || !(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
+
+        double range = number(definition, "minecraft:boss", "hud_range", 55);
+
+        java.util.List<net.minecraft.server.level.ServerPlayer> watching =
+            level.getEntitiesOfClass(net.minecraft.server.level.ServerPlayer.class,
+                getBoundingBox().inflate(range));
+        java.util.List.copyOf(bossBar.getPlayers()).stream()
+            .filter(player -> !watching.contains(player))
+            .forEach(bossBar::removePlayer);
+        watching.forEach(bossBar::addPlayer);
+    }
+
+    /**
+     * Fires the event `minecraft:on_hurt` names, on the tick the entity's health drops.
+     *
+     * Bedrock raises this from inside the damage itself. Java's own damage events differ across the
+     * versions this runs on, and the health the entity is left with does not, so that is watched.
+     */
+    private void noticeBeingHurt() {
+        float health = getHealth();
+        if (healthLastTick < 0) {
+            healthLastTick = health;
+            return;
+        }
+
+        boolean hurt = health < healthLastTick;
+        healthLastTick = health;
+        if (!hurt) return;
+
+        lastHurtTick = tickCount;
+        raise("minecraft:on_hurt", getLastHurtByMob());
+        if (getLastHurtByMob() instanceof Player) raise("minecraft:on_hurt_by_player", getLastHurtByMob());
+    }
+
+    /** Runs the event a component names, against whoever brought it about. */
+    private void raise(String component, net.minecraft.world.entity.Entity other) {
+        String event = text(component, "event");
+        if (event != null) EntityEvents.trigger(this, event, other, ServerHooks.state());
+    }
+
+    /**
+     * What a pack asked for as the entity dies: its own event, what it leaves behind, and the bang.
+     *
+     * `minecraft:spawn_on_death` and `minecraft:explode` both happen here because both are a thing
+     * Bedrock does at the moment of death rather than a behaviour the entity carries out.
+     */
+    @Override
+    public void die(net.minecraft.world.damagesource.DamageSource source) {
+        super.die(source);
+        if (definition == null || !(level() instanceof net.minecraft.server.level.ServerLevel level)) {
+            return;
+        }
+
+        String event = text("minecraft:on_death", "event");
+        if (event != null) EntityEvents.trigger(this, event, source.getEntity(), ServerHooks.state());
+
+        // What a mob was hauling belongs on the ground once it is dead, the same as a chest's does.
+        if (carried != null) net.minecraft.world.Containers.dropContents(level, blockPosition(), carried);
+        spawnOnDeath(level);
+        explode(level);
+    }
+
+    /** `minecraft:spawn_on_death` leaves another entity where this one fell. */
+    private void spawnOnDeath(net.minecraft.server.level.ServerLevel level) {
+        String named = text("minecraft:spawn_on_death", "id");
+        net.minecraft.world.entity.EntityType<?> type = named == null
+            ? null : AddonEntities.typeOf(named);
+        net.minecraft.world.entity.Entity born = type == null ? null : Platform.createMob(type, level);
+        if (born == null) return;
+
+        Platform.placeAt(born, getX(), getY(), getZ(), getYRot(), 0f);
+        level.addFreshEntity(born);
+    }
+
+    /**
+     * `minecraft:explode` goes off where the entity was.
+     *
+     * Bedrock describes the fuse as well as the power, and a fuse only matters while the entity is
+     * still alive to count it; what a pack uses this for is the blast, which is what happens here.
+     */
+    private void explode(net.minecraft.server.level.ServerLevel level) {
+        if (!has("minecraft:explode")) return;
+
+        boolean breaks = number(definition, "minecraft:explode", "breaks_blocks", 1) != 0;
+        boolean burns = number(definition, "minecraft:explode", "causes_fire", 0) != 0;
+        level.explode(this, getX(), getY(), getZ(),
+            (float) number(definition, "minecraft:explode", "power", 3), burns,
+            breaks ? Level.ExplosionInteraction.MOB : Level.ExplosionInteraction.NONE);
+    }
+
+    /**
+     * Fires the events a pack asked for as the entity picks something to hunt, or loses it.
+     *
+     * Bedrock raises these from the targeting itself, which on Java is every goal that sets one, so
+     * the entity is asked here instead of each goal being wrapped.
+     */
+    @Override
+    public void setTarget(net.minecraft.world.entity.LivingEntity target) {
+        net.minecraft.world.entity.LivingEntity had = getTarget();
+        super.setTarget(target);
+        if (definition == null || !(level() instanceof net.minecraft.server.level.ServerLevel)) return;
+        if (had == target) return;
+
+        String event = target != null
+            ? text("minecraft:on_target_acquired", "event")
+            : text("minecraft:on_target_escape", "event");
+        if (event != null) {
+            EntityEvents.trigger(this, event, target == null ? had : target, ServerHooks.state());
+        }
+    }
+
+    /**
+     * How big the entity is drawn, which `minecraft:scale_by_age` moves as it grows up.
+     *
+     * 1.20.1 has one scale for the whole entity; from 1.21 the part that grows with age is asked
+     * for on its own, and the whole scale is final from 26.
+     */
+    //? if >=1.21 {
+    @Override
+    public float getAgeScale() {
+        return age == null ? super.getAgeScale() : age.scale();
+    }
+    //?} else {
+    /*@Override
+    public float getScale() {
+        return age == null ? super.getScale() : age.scale();
+    }
+    *///?}
 
     /**
      * Sets the entity alight while the sun is on it, the way a Bedrock undead mob burns.
@@ -986,7 +1880,7 @@ public class AddonEntity extends PathfinderMob implements Merchant {
 
     @Override
     public boolean isBaby() {
-        return false;
+        return age != null && age.baby();
     }
 
     /**
@@ -999,6 +1893,12 @@ public class AddonEntity extends PathfinderMob implements Merchant {
     public InteractionResult mobInteract(Player player, InteractionHand hand) {
         if (!isClientSide() && bredBySpawnEgg(player, hand)) return InteractionResult.SUCCESS;
         if (!isClientSide() && fed(player, hand)) return InteractionResult.SUCCESS;
+        if (!isClientSide() && healed(player, hand)) return InteractionResult.SUCCESS;
+        if (!isClientSide() && tamedBy(player, hand)) return InteractionResult.SUCCESS;
+        if (!isClientSide() && grownByHand(player, hand)) return InteractionResult.SUCCESS;
+        if (!isClientSide() && equippedBy(player, hand)) return InteractionResult.SUCCESS;
+        if (!isClientSide() && givenTo(player, hand)) return InteractionResult.SUCCESS;
+        if (!isClientSide() && satDown(player)) return InteractionResult.SUCCESS;
         if (!isClientSide() && interact(player)) return InteractionResult.SUCCESS;
 
         if (AddonEntities.tradesOf(getType()) == null || isClientSide()) {
