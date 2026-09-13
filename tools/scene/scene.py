@@ -41,6 +41,9 @@ JAVA_HOME = "/opt/homebrew/opt/openjdk@25"
 # Big enough that what a scene placed can be made out in the picture it leaves behind.
 WINDOW = "1600x900"
 
+# What a captured window is scaled down to, which is wide enough to read and small enough to open.
+READABLE_WIDTH = 1400
+
 # The flat lit stage every scene is set on, well above whatever the world generated.
 FLOOR_Y = 150
 # Only commands every supported version spells the same way. 26 renamed the game rules, so setting
@@ -50,6 +53,8 @@ STAGE = (
     f"fill -60 {FLOOR_Y + 1} -115 -20 {FLOOR_Y + 12} -80 minecraft:air",
     "time set noon",
     "weather clear",
+    # Whatever the player is holding is drawn over the corner of the window the scene is in.
+    "clear @a",
 )
 
 # Where a scene puts what it wants looked at, and where it stands to look: a row along z at a fixed
@@ -170,6 +175,42 @@ def datapack(world: pathlib.Path, commands: list[str]) -> pathlib.Path:
     return pack
 
 
+def windowBounds() -> tuple[int, int, int, int] | None:
+    """Where the game's window sits, so a capture holds the game and not the whole desktop."""
+    asking = ('tell application "System Events" to tell (first process whose name is "java") '
+              'to get {position of window 1, size of window 1}')
+    found = subprocess.run(["osascript", "-e", asking], capture_output=True, text=True, check=False)
+    numbers = [one.strip() for one in found.stdout.strip().split(",")]
+    if len(numbers) != 4 or not all(one.lstrip("-").isdigit() for one in numbers):
+        return None
+    left, top, across, down = (int(one) for one in numbers)
+    return (left, top, across, down)
+
+
+def capture(target: pathlib.Path) -> None:
+    """Photographs the game's window and leaves one picture that is ready to look at.
+
+    The whole desktop is what `screencapture` takes by default, and a window on a display that draws
+    two pixels per point comes back at twice the size it was asked for. Taking the window's own
+    rectangle and scaling the result down means the file can be opened and read as it is.
+    """
+    bounds = windowBounds()
+    region = ["-R", ",".join(str(one) for one in bounds)] if bounds else []
+    subprocess.run(["screencapture", "-x", "-o", *region, str(target)], check=False)
+
+    try:
+        from PIL import Image
+    except ImportError:
+        return
+
+    with Image.open(target) as picture:
+        if picture.width <= READABLE_WIDTH:
+            return
+        scaled = picture.convert("RGB").resize(
+            (READABLE_WIDTH, round(picture.height * READABLE_WIDTH / picture.width)))
+        scaled.save(target)
+
+
 def world_of(version: str) -> pathlib.Path | None:
     """The saved world a scene can be run in, or None when this version has none."""
     saves = ROOT / "versions" / version / "run" / "saves"
@@ -227,8 +268,7 @@ def run(version: str, one: dict, timeout: float, keep: bool) -> tuple[bool, list
     if finished:
         # The window is up and the scene has run, so what is drawn is worth keeping.
         time.sleep(2.5)
-        subprocess.run(["screencapture", "-x", "-o", str(logs / f"{version}-{one['name']}.png")],
-                       check=False)
+        capture(logs / f"{version}-{one['name']}.png")
 
     if not keep:
         for stop in (signal.SIGTERM, signal.SIGKILL):
