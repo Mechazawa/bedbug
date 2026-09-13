@@ -298,7 +298,15 @@ public final class AddonEntities {
         "minecraft:behavior.slime_float", "minecraft:behavior.slime_attack",
         "minecraft:flying_speed", "minecraft:luck", "minecraft:horse.jump_strength",
         "minecraft:variable_max_auto_step", "minecraft:strength", "minecraft:equipment",
-        "minecraft:equip_item");
+        "minecraft:equip_item",
+        "minecraft:behavior.admire_item", "minecraft:behavior.barter",
+        "minecraft:admire_item", "minecraft:barter",
+        "minecraft:behavior.work", "minecraft:behavior.work_composter",
+        "minecraft:behavior.share_items", "minecraft:behavior.transport_items",
+        "minecraft:behavior.drop_item_for", "minecraft:behavior.offer_flower",
+        "minecraft:behavior.inspect_bookshelf", "minecraft:behavior.make_love",
+        "minecraft:behavior.receive_love", "minecraft:behavior.nap",
+        "minecraft:behavior.snacking");
 
     /**
      * The trade table an entity names, read while the pack it came from is still in hand.

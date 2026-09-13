@@ -63,6 +63,13 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
         return new MoveToMatchingBlockGoal(mob, component, state -> !state.isAir(), null);
     }
 
+    /** `minecraft:behavior.inspect_bookshelf`, which is a walk over to a shelf and a look at it. */
+    public static MoveToMatchingBlockGoal bookshelf(PathfinderMob mob, JsonObject component) {
+        return new MoveToMatchingBlockGoal(mob, component,
+            state -> state.is(net.minecraft.world.level.block.Blocks.BOOKSHELF)
+                || state.is(net.minecraft.world.level.block.Blocks.CHISELED_BOOKSHELF), null);
+    }
+
     /** `minecraft:behavior.raid_garden`, which eats the blocks a pack listed rather than leaving them. */
     public static MoveToMatchingBlockGoal raid(PathfinderMob mob, JsonObject component) {
         return new MoveToMatchingBlockGoal(mob, component, among(component, "blocks"),

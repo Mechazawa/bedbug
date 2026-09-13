@@ -66,6 +66,7 @@ public class AddonEntity extends PathfinderMob
     private final ServerEntityDefinition definition;
     private final java.util.Set<String> activeGroups = new java.util.LinkedHashSet<>();
     private int timerDueTick = -1;
+    private int admireUntilTick = -1;
     private Player tradingPlayer;
     private MerchantOffers offers;
     private int tradeExperience;
@@ -147,6 +148,20 @@ public class AddonEntity extends PathfinderMob
 
     public void setTimerDueTick(int tick) {
         timerDueTick = tick;
+    }
+
+    /**
+     * When admiring what the entity is holding ends, in ticks of its own age. Negative until set.
+     *
+     * Bedrock splits admiring and bartering over two behaviours, and the second waits for the first
+     * to finish. A goal cannot see another goal, so the entity is where the two meet.
+     */
+    public int admireUntilTick() {
+        return admireUntilTick;
+    }
+
+    public void setAdmireUntilTick(int tick) {
+        admireUntilTick = tick;
     }
 
     /**
@@ -1579,6 +1594,37 @@ public class AddonEntity extends PathfinderMob
                     TradeGoal.whileTrading(this, componentBody(behaviour)));
                 case "minecraft:behavior.trade_interest" -> goalSelector.addGoal(priority,
                     TradeGoal.showingWares(this, componentBody(behaviour)));
+
+                // A villager's working life: the shift at a station, the handing round of what was
+                // gathered, and the pair of behaviours that make another villager.
+                case "minecraft:behavior.work" -> goalSelector.addGoal(priority,
+                    WorkGoal.working(this, componentBody(behaviour)));
+                case "minecraft:behavior.work_composter" -> goalSelector.addGoal(priority,
+                    WorkGoal.composting(this, componentBody(behaviour)));
+                case "minecraft:behavior.share_items" -> goalSelector.addGoal(priority,
+                    ShareItemsGoal.sharing(this, componentBody(behaviour)));
+                case "minecraft:behavior.transport_items" -> goalSelector.addGoal(priority,
+                    ShareItemsGoal.transporting(this, componentBody(behaviour)));
+                case "minecraft:behavior.drop_item_for" -> goalSelector.addGoal(priority,
+                    ShareItemsGoal.dropping(this, componentBody(behaviour)));
+                case "minecraft:behavior.offer_flower" -> goalSelector.addGoal(priority,
+                    ShareItemsGoal.offering(this, componentBody(behaviour)));
+                case "minecraft:behavior.inspect_bookshelf" -> goalSelector.addGoal(priority,
+                    MoveToMatchingBlockGoal.bookshelf(this, componentBody(behaviour)));
+                // Bedrock's villager courtship is its own pair of behaviours; what they come to is
+                // the same walk towards a willing partner that every other pack animal does.
+                case "minecraft:behavior.make_love", "minecraft:behavior.receive_love" ->
+                    goalSelector.addGoal(priority, new BreedGoal(this, componentBody(behaviour)));
+                // Napping is lying down, and snacking is eating what is already in hand.
+                case "minecraft:behavior.nap" -> goalSelector.addGoal(priority,
+                    RestGoal.lyingDown(this, componentBody(behaviour)));
+                case "minecraft:behavior.snacking" -> goalSelector.addGoal(priority,
+                    new EatCarriedItemGoal(this, componentBody(behaviour)));
+
+                case "minecraft:behavior.admire_item" -> goalSelector.addGoal(priority,
+                    BarterGoal.admiring(this, componentBody(behaviour)));
+                case "minecraft:behavior.barter" -> goalSelector.addGoal(priority,
+                    BarterGoal.bartering(this, componentBody(behaviour)));
 
                 case "minecraft:behavior.send_event" -> goalSelector.addGoal(priority,
                     SpellGoal.sendingEvents(this, componentBody(behaviour)));
