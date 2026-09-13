@@ -260,17 +260,35 @@ public final class Platform {
      */
     public static net.minecraft.world.item.trading.MerchantOffer offer(net.minecraft.world.item.ItemStack costA,
         net.minecraft.world.item.ItemStack costB, net.minecraft.world.item.ItemStack result,
-        int maxUses, int experience) {
+        int maxUses, int experience, float priceMultiplier) {
         //? if >=1.21 {
         return new net.minecraft.world.item.trading.MerchantOffer(
             new net.minecraft.world.item.trading.ItemCost(costA.getItem(), costA.getCount()),
             costB.isEmpty() ? java.util.Optional.empty()
                 : java.util.Optional.of(new net.minecraft.world.item.trading.ItemCost(
                     costB.getItem(), costB.getCount())),
-            result, maxUses, experience, 0.05f);
+            result, maxUses, experience, priceMultiplier);
         //?} else {
         /*return new net.minecraft.world.item.trading.MerchantOffer(costA, costB, result, maxUses,
-            experience, 0.05f);
+            experience, priceMultiplier);
+        *///?}
+    }
+
+    /**
+     * Enchants a stack the way a loot table or a trade asks for.
+     *
+     * 1.21 made enchantments data-driven, so what may be picked comes from the world's registries
+     * and the treasure flag became a tag naming a choice; with no tag named, every enchantment the
+     * game holds is on the list.
+     */
+    public static net.minecraft.world.item.ItemStack enchant(net.minecraft.util.RandomSource random,
+        net.minecraft.world.item.ItemStack stack, int levels, boolean treasure,
+        net.minecraft.core.RegistryAccess registries) {
+        //? if >=1.21 {
+        return EnchantmentHelper.enchantItem(random, stack, Math.max(1, levels), registries,
+            java.util.Optional.empty());
+        //?} else {
+        /*return EnchantmentHelper.enchantItem(random, stack, Math.max(1, levels), treasure);
         *///?}
     }
 
@@ -555,6 +573,141 @@ public final class Platform {
         return "id";
         //?} else {
         /*return "item";
+        *///?}
+    }
+
+    /**
+     * The result of a cooking or a stonecutting recipe, which those two state their own way.
+     *
+     * 1.20.1 names the item directly beside the recipe and puts a stonecutter's count beside it;
+     * 1.21 gave both the same result object every other recipe type carries.
+     */
+    public static void simpleResult(com.google.gson.JsonObject json, String item, int count) {
+        //? if >=1.21 {
+        com.google.gson.JsonObject result = new com.google.gson.JsonObject();
+        result.addProperty("id", item);
+        result.addProperty("count", Math.max(1, count));
+        json.add("result", result);
+        //?} else {
+        /*json.addProperty("result", item);
+        if (count > 1) json.addProperty("count", count);
+        *///?}
+    }
+
+    /**
+     * States which trim a smithing trim recipe applies, where the running version asks for one.
+     *
+     * 26 moved the pattern off the template item and onto the recipe. A trim pattern lives in a
+     * registry a data pack writes into, and a world holding such a pack is one the game calls
+     * experimental, so the only patterns available are the ones the game already ships: the name is
+     * read back out of a template called `<pattern>_armor_trim_smithing_template`. False when the
+     * template is a tag or is named some other way, which leaves the recipe unwritten and reported.
+     */
+    public static boolean smithingTrimPattern(com.google.gson.JsonObject json, String template) {
+        //? if >=26 {
+        String suffix = "_armor_trim_smithing_template";
+        if (template.startsWith("#") || !template.endsWith(suffix)) {
+            at.ioexception.mcaddon.registry.AddonEntities.unsupported(
+                "recipe smithing trim pattern of " + template);
+            return false;
+        }
+        json.addProperty("pattern", template.substring(0, template.length() - suffix.length()));
+        //?}
+        return true;
+    }
+
+    /**
+     * The loot function that raises a drop's count with the killer's looting level.
+     *
+     * 1.21 made enchantments data-driven and renamed the function with them, from one that meant
+     * looting alone to one naming whichever enchantment it counts.
+     */
+    public static void lootingCount(com.google.gson.JsonObject function,
+        com.google.gson.JsonElement count, com.google.gson.JsonElement limit) {
+        //? if >=1.21 {
+        function.addProperty("function", "minecraft:enchanted_count_increase");
+        function.addProperty("enchantment", "minecraft:looting");
+        //?} else {
+        /*function.addProperty("function", "minecraft:looting_enchant");
+        *///?}
+        function.add("count", count);
+        if (limit != null) function.add("limit", limit);
+    }
+
+    /**
+     * Which enchantments `minecraft:enchant_with_levels` may pick from.
+     *
+     * 1.21 replaced the treasure flag with a tag naming the choice, and the tag it ships holds the
+     * treasure enchantments alongside the rest, so asking for treasure and not asking for it reach
+     * the same list there.
+     */
+    public static void enchantmentChoice(com.google.gson.JsonObject function, boolean treasure) {
+        //? if >=1.21 {
+        function.addProperty("options", "#minecraft:on_random_loot");
+        //?} else {
+        /*function.addProperty("treasure", treasure);
+        *///?}
+    }
+
+    /**
+     * A chance that rises with the killer's looting level, as the running version states one.
+     *
+     * 1.21 replaced the looting-only condition with one naming its enchantment and stating the
+     * enchanted chance as a line through the level rather than as a multiplier.
+     */
+    public static void lootingChance(com.google.gson.JsonObject condition, double chance,
+        double multiplier) {
+        //? if >=1.21 {
+        condition.addProperty("condition", "minecraft:random_chance_with_enchanted_bonus");
+        condition.addProperty("enchantment", "minecraft:looting");
+        condition.addProperty("unenchanted_chance", chance);
+
+        com.google.gson.JsonObject enchanted = new com.google.gson.JsonObject();
+        enchanted.addProperty("type", "minecraft:linear");
+        enchanted.addProperty("base", chance + multiplier);
+        enchanted.addProperty("per_level_above_first", multiplier);
+        condition.add("enchanted_chance", enchanted);
+        //?} else {
+        /*condition.addProperty("condition", "minecraft:random_chance_with_looting");
+        condition.addProperty("chance", chance);
+        condition.addProperty("looting_multiplier", multiplier);
+        *///?}
+    }
+
+    /**
+     * What an entity predicate calls one of its own fields.
+     *
+     * 26 moved the fields of a predicate into a registry and gave each the namespace that goes with
+     * it, and renamed the one naming an entity type along the way.
+     */
+    public static String entityPredicateKey(String field) {
+        //? if >=26 {
+        return "minecraft:" + field;
+        //?} else {
+        /*return "entity_type".equals(field) ? "type" : field;
+        *///?}
+    }
+
+    /**
+     * Whether the game ships a structure tag for every map a Bedrock loot table can ask for.
+     *
+     * 1.20.1 has three of them: the buried treasure, the woodland mansion and the ocean monument.
+     * 1.21 added one per village, the jungle temple, the swamp hut and the trial chambers.
+     */
+    public static boolean everyExplorerMapTag() {
+        //? if >=1.21 {
+        return true;
+        //?} else {
+        /*return false;
+        *///?}
+    }
+
+    /** Whether the game has an ominous bottle for a loot table to set the amplifier of. */
+    public static boolean hasOminousBottle() {
+        //? if >=1.21 {
+        return true;
+        //?} else {
+        /*return false;
         *///?}
     }
 

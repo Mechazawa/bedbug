@@ -43,6 +43,24 @@
           }
         ]
       },
+      "minecraft:loot": {
+        "table": "loot_tables/entities/ember.json"
+      },
+      "minecraft:trade_table": {
+        "display_name": "Ember",
+        "table": "trading/ember_trades.json"
+      },
+      "minecraft:behavior.trade_with_player": {
+        "priority": 2
+      },
+      "minecraft:behavior.trade_interest": {
+        "priority": 3,
+        "within_radius": 6.0,
+        "interest_time": 45,
+        "remove_item_time": 1,
+        "carried_item_switch_time": 2,
+        "cooldown": 2
+      },
       "minecraft:variable_max_auto_step": {
         "base_value": 1.0
       },

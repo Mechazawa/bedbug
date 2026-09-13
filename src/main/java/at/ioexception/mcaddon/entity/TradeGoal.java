@@ -118,8 +118,8 @@ public final class TradeGoal extends Goal {
 
         String held = BuiltInRegistries.ITEM.getKey(player.getMainHandItem().getItem()).toString();
         return trades.offers().stream()
-            .anyMatch(offer -> held.equals(offer.costItem())
-                || held.equals(offer.secondCostItem()));
+            .anyMatch(offer -> held.equals(offer.cost().item())
+                || (offer.secondCost() != null && held.equals(offer.secondCost().item())));
     }
 
     /** The first thing the trader sells, which is what it holds up to be noticed. */
@@ -128,7 +128,7 @@ public final class TradeGoal extends Goal {
         if (trades == null) return java.util.Optional.empty();
 
         return trades.offers().stream()
-            .map(offer -> stack(offer.resultItem()))
+            .map(offer -> stack(offer.result().item()))
             .filter(stack -> !stack.isEmpty())
             .findFirst();
     }

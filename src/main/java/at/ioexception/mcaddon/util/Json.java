@@ -54,6 +54,16 @@ public final class Json {
         return value == null || !value.isJsonPrimitive() ? fallback : value.getAsString();
     }
 
+    public static boolean bool(JsonObject json, String key, boolean fallback) {
+        JsonElement value = json.get(key);
+        return value == null || !value.isJsonPrimitive() ? fallback : value.getAsBoolean();
+    }
+
+    public static double number(JsonObject json, String key, double fallback) {
+        JsonElement value = json.get(key);
+        return value == null || !value.isJsonPrimitive() ? fallback : value.getAsDouble();
+    }
+
     /** Writes the boolean, number and string values an entity property is allowed to hold. */
     public static String encode(Map<String, Object> values) {
         JsonObject json = new JsonObject();
