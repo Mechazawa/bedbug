@@ -34,6 +34,7 @@ import signal
 import subprocess
 import sys
 import time
+import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from threading import Lock, Thread
@@ -84,26 +85,55 @@ def scene(name: str, commands: list[str], wants: list[str]) -> dict:
 
 
 def declared(version: str, directory: str, key: str) -> list[str]:
-    """Every name a pack in this version's run directory declares under one of its directories.
+    """Every name a pack installed for this version declares under one of its directories.
+
+    Read out of `addons/` itself rather than out of the cache the mod unpacks into, because that
+    cache is written by a game and a scene would otherwise place whatever the previous run happened
+    to leave there. A name that no longer exists takes the whole scene function down with it, since
+    the game parses every line of a function before running any of it.
 
     No pack content belongs in this repository, so the names are taken from whatever the person
-    running this has installed. With nothing installed a scene has nothing to place and says so
-    rather than failing.
+    running this has installed. With nothing installed a scene has nothing to place.
     """
-    extracted = ROOT / "versions" / version / "run" / ".mcaddon" / "extracted"
-    if not extracted.is_dir():
+    addons = ROOT / "versions" / version / "run" / "addons"
+    if not addons.is_dir():
         return []
 
     found = []
-    for declaration in sorted(extracted.glob(f"*/*/{directory}/*.json")):
-        try:
-            body = json.loads(declaration.read_text(encoding="utf-8"))
-        except (ValueError, OSError):
-            continue
-        identifier = body.get(key, {}).get("description", {}).get("identifier")
-        if identifier and ":" in identifier and not identifier.startswith("minecraft:"):
-            found.append(identifier)
+    for entry in sorted(addons.iterdir()):
+        for body in declarations(entry, directory):
+            identifier = body.get(key, {}).get("description", {}).get("identifier")
+            if identifier and ":" in identifier and not identifier.startswith("minecraft:"):
+                found.append(identifier)
     return sorted(set(found))
+
+
+def declarations(entry: pathlib.Path, directory: str) -> list[dict]:
+    """Every JSON body one installed pack holds under a named directory, archived or unpacked."""
+    bodies = []
+    if entry.is_dir():
+        for declaration in sorted(entry.glob(f"**/{directory}/*.json")):
+            try:
+                bodies.append(json.loads(declaration.read_text(encoding="utf-8")))
+            except (ValueError, OSError):
+                continue
+        return bodies
+
+    if entry.suffix.lower() not in (".mcaddon", ".mcpack", ".zip"):
+        return bodies
+    try:
+        with zipfile.ZipFile(entry) as archive:
+            for name in sorted(archive.namelist()):
+                parts = name.split("/")
+                if len(parts) < 2 or parts[-2] != directory or not name.endswith(".json"):
+                    continue
+                try:
+                    bodies.append(json.loads(archive.read(name).decode("utf-8-sig")))
+                except (ValueError, UnicodeDecodeError):
+                    continue
+    except (OSError, zipfile.BadZipFile):
+        return bodies
+    return bodies
 
 
 def scenes(version: str) -> list[dict]:
@@ -127,8 +157,13 @@ def scenes(version: str) -> list[dict]:
         f"tp @a {CAMERA_X} {FLOOR_Y + 4} {middle}",
         f"tp @a {CAMERA_X} {FLOOR_Y + 4} {middle} facing {ROW_X} {FLOOR_Y + 2} {middle}",
     ]
+    # The count is asked for again afterwards rather than assumed, because a picture of an empty
+    # stage is what a scene looks like when every name it was given turned out not to exist. It is
+    # read as "at least one" instead of as the number placed, since a pack's own despawn rule may
+    # take one of them away and that is the pack working rather than the scene failing.
     counting = [
         "execute store result score #placed mcaddon run execute if entity @e[type=!player]",
+        "execute if score #placed mcaddon matches 1.. run say COUNTED entities",
         f"say PLACED {len(entities)} kinds",
     ]
 
@@ -144,6 +179,9 @@ def scenes(version: str) -> list[dict]:
     atItems = [
         f"tp @a {CAMERA_X} {FLOOR_Y + 3} {itemMiddle}",
         f"tp @a {CAMERA_X} {FLOOR_Y + 3} {itemMiddle} facing {ROW_X} {FLOOR_Y + 2} {itemMiddle}",
+        "execute store result score #stands mcaddon run execute if entity "
+        "@e[type=minecraft:armor_stand]",
+        "execute if score #stands mcaddon matches 1.. run say COUNTED stands",
     ]
 
     return [
@@ -151,12 +189,12 @@ def scenes(version: str) -> list[dict]:
         scene(
             "entities",
             ["kill @e[type=!player]"] + placing + looking + counting + ["say ENTITIES-PLACED"],
-            ["ENTITIES-PLACED"],
+            ["ENTITIES-PLACED"] + (["COUNTED entities"] if entities else []),
         ),
         scene(
             "items",
             ["kill @e[type=!player]"] + holding + atItems + [f"say SHOWN {len(items)} items"],
-            [f"SHOWN {len(items)} items"],
+            [f"SHOWN {len(items)} items"] + (["COUNTED stands"] if items else []),
         ),
         scene(
             "player",
