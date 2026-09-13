@@ -188,6 +188,25 @@ These are the checks that catch things:
   With no `.mcaddon` in `versions/<version>/run/addons/`, every mode reports that there was nothing
   to test and still passes.
 
+- **`tools/census/script.py`** says how much of the published script API this mod offers, which is
+  the one measurement `/mcaddon scripts` cannot make. That report names what a *loaded pack* asked
+  for and did not get, so a pack that never opens a form says nothing about forms, and a surface no
+  installed add-on touches reads as complete. The census compares against Mojang's own type
+  definitions instead, so the answer does not depend on which add-on is installed.
+
+  ```bash
+  python3 tools/census/script.py          # a line per module, implemented of published
+  python3 tools/census/script.py --list   # and the name of everything missing
+  ```
+
+  It needs the published packages saved under `scratchpad/mcapi/<module>.d.ts`, which the file's own
+  docstring says how to fetch. That directory is not tracked.
+
+  **A missing top level name is the serious kind.** A module is linked before any of it runs, so a
+  pack importing one name the module does not export loses its whole script rather than the line
+  that used it. A missing member costs only the call. Keep the first number at zero: add the name and
+  report it through `unsupported(...)` when there is nothing behind it.
+
 - **`./gradlew :26.2:runServer`** for the same check by hand: grep the log for `Bedrock Add-ons`,
   `Done (`, `ERROR` and `Caused by`. Mixin failures fail the server, so a clean start proves
   registration, conversion and mixins applied.
@@ -260,6 +279,7 @@ tools/testpack/              The three add-ons the harness checks against, and t
 tools/verify/verify.py       End to end harness: drives a dev server and checks a conversion
 tools/preview/render.py      Offline model renderer
 tools/molang/MolangCheck.java  Molang conformance harness
+tools/census/script.py       How much of the published script API this mod offers
 
 src/main/java/at/ioexception/mcaddon/
   pack/                      Discovery, manifests, dependency order
