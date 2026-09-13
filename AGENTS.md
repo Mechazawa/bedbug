@@ -107,6 +107,32 @@ These are the checks it runs, and what each one catches:
   Fabric's game tests carry Mojang's annotation before 26 and Fabric's own from 26 on. The two
   spellings are one pair of string replacements in `build.remap.gradle.kts`, which is why `@GameTest`
   is written with empty parentheses.
+
+  On 26 an annotated method is already a test instance. Fabric registers each one as a
+  `Consumer<GameTestHelper>` in `BuiltInRegistries.TEST_FUNCTION` and puts a
+  `FunctionGameTestInstance` straight into the `test_instance` registry as that registry loads,
+  behind the `fabric-api.gametest` property. 1.20.1 and 1.21.1 have neither registry and neither
+  class, so those two targets run the annotation framework Mojang shipped before 1.21.5.
+- **`/test run mcaddon:<name>`** runs one test instance this repository writes itself, which is the
+  same machinery reached without the annotation. Two halves:
+  `src/main/resources/data/mcaddon/test_instance/<name>.json` says which structure to build, which
+  environment to build it in and how long the test may run, and
+  `src/main/java/at/ioexception/mcaddon/gametest/TestInstances.java` registers the body it names.
+  Both registries arrived with the test instances, so the registration is written for 26 and up.
+
+  ```bash
+  ./gradlew :26.2:runServer      # then type: test run mcaddon:bedrock_commands_parse
+  ```
+
+  A pass reads `All required tests passed :)`. A failure names the test, the block it stood at, the
+  message the assertion raised and the tick it raised it on, at `ERROR`, which `verify.py` already
+  reads as a failure:
+
+  ```
+  [Server thread/ERROR] mcaddon:bedrock_commands_parse failed at -304, -64, 147! \
+      /playanimationx @e animation.walk does not parse. on tick 0
+  [Server thread/INFO] 1 required test(s) failed :(
+  ```
 - **`tools/testpack/build.py`** builds a small add-on to check the mod against, so a clean checkout
   has something to verify itself with. Put it where the game reads packs from:
 
@@ -198,16 +224,32 @@ These are the checks it runs, and what each one catches:
   run where every test silently never started fails the same way as one where a test broke. It
   proves nothing about rendering.
 
-  **Never write into a registry a data pack loads.** Loot tables, recipes, advancements, tags and
-  functions are safe. A jukebox song, a worldgen feature and anything else the game reads through
-  its dynamic registries are not: a world whose packs write into one of those is a world the game
-  calls experimental, and it then opens behind a screen asking the player whether to load it at all.
+  **A dynamic registry entry is safe from the mod's own data and unsafe from a converted pack.**
+  What decides it is the pack the entry was read from rather than the registry it went into. The
+  game gives an entry `Lifecycle.experimental()` when the pack carries no `KnownPack`, and a world
+  holding one experimental entry opens behind a screen asking the player whether to load it at all.
   That screen waits for a click forever, so a run under this harness stops dead on it, and a player
   gets the same question every time they open their world.
 
-  The built-in registries are a different thing and this mod does write into them at startup, which
-  is where its entity types, items, blocks and its own loot condition type go. Fabric keeps those
-  unfrozen until mod initialisation has run, and nothing about them makes a world experimental.
+  Three kinds of pack, measured on 26.2 by opening a world with a client and reading the log back
+  for the integrated server:
+
+  - **The mod's own `src/main/resources/data/mcaddon/`** is safe. Fabric gives every mod pack a
+    `KnownPack`, so a `jukebox_song`, a `test_instance` and a `test_environment` shipped there all
+    leave the world stable.
+  - **A data pack in the world's own `datapacks/`** is not. One `test_instance` plus one
+    `test_environment` written there stops a client on the screen exactly as one `jukebox_song`
+    does, which is what `tools/scene/scene.py` would hit if a scene ever wrote one.
+  - **A converted add-on pack** is not either. `Platform.directoryPack` builds its
+    `PackLocationInfo` with an empty `KnownPack`, which is the whole of why a record from a pack
+    cannot have its song.
+
+  Loot tables, recipes, advancements, tags and functions are safe from any of the three, because
+  none of them is a registry the world's lifecycle is read from.
+
+  The built-in registries are a different thing again, and this mod does write into them at startup,
+  which is where its entity types, items, blocks and its own loot condition type go. Fabric keeps
+  those unfrozen until mod initialisation has run, and nothing about them makes a world experimental.
 
   A green `client` proves what the server half cannot reach: every mixin applied on the drawing side,
   every model a pack's items and blocks name loaded, every texture those models name was stitched,

@@ -158,10 +158,11 @@ mob. `minecraft:custom_hit_test` gives an entity hit boxes apart from the one it
 has the one box for both. Each is counted and named rather than silently doing nothing.
 
 **A record plays nothing.** `minecraft:record` needs a jukebox song, and a song only exists as an
-entry in a registry a data pack writes into. A world holding such a pack is one the game calls
-experimental, and it then opens behind a screen asking whether to load it at all, every time. One
-item component does not pay for that, so a record is registered as a plain item and counted as a
-gap.
+entry in one of the registries a data pack writes into. An entry read from a pack the game has no
+`KnownPack` for is marked experimental, and a world holding one experimental entry opens behind a
+screen asking whether to load it at all, every time. A converted add-on pack is such a pack, so the
+song would have to come from one, and one item component does not pay for that. A record is
+registered as a plain item and counted as a gap.
 
 **An item's data value.** `set_data`, `random_aux_value`, `set_data_from_color_index` and
 `random_block_state` all pick one of the things a Bedrock id stands for by number. Java gave every
@@ -193,7 +194,7 @@ advancement trigger waits on a player standing in water or filling their invento
 
 **A smithing trim a pack invents.** From 26 the trim a smithing table applies is named on the recipe
 rather than carried by the template item, and a trim pattern is an entry in a registry a data pack
-writes into. A world holding such a pack is one the game calls experimental, so the patterns
+writes into. An entry from a converted pack is one the game marks experimental, so the patterns
 available are the ones the game already ships and the name is read back out of a template called
 `<pattern>_armor_trim_smithing_template`. A recipe naming any other template is reported instead.
 
