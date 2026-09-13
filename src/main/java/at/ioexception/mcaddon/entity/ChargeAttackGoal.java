@@ -115,6 +115,7 @@ public final class ChargeAttackGoal extends Goal {
         if (target == null) return;
 
         charged = 0;
+        mob.setValue("is_ram_attacking", true);
         Vec3 aim = target.position();
         if (overshoot > 0) {
             aim = aim.add(target.position().subtract(mob.position()).normalize().scale(overshoot));
@@ -144,6 +145,7 @@ public final class ChargeAttackGoal extends Goal {
 
     @Override
     public void stop() {
+        mob.setValue("is_ram_attacking", false);
         untilNext = Goals.between(mob.getRandom(), cooldownLow, cooldownHigh);
         towards = null;
     }

@@ -22,11 +22,15 @@ public final class TimerFlagGoal extends Goal {
     private final int cooldownLow;
     private final int cooldownHigh;
     private final String endEvent;
+
+    /** Which of Bedrock's three flags this one raises, which a pack's controller reads back. */
+    private final String flag;
     private int held;
     private int untilNext;
 
-    public TimerFlagGoal(AddonEntity mob, JsonObject component) {
+    public TimerFlagGoal(AddonEntity mob, JsonObject component, String flag) {
         this.mob = mob;
+        this.flag = flag;
         this.duration = (int) (number(component, "duration", 0.5) * 20);
         JsonObject onEnd = component.getAsJsonObject("on_end");
         this.endEvent = onEnd == null ? null : Json.text(onEnd, "event", null);
@@ -51,6 +55,7 @@ public final class TimerFlagGoal extends Goal {
     @Override
     public void start() {
         held = 0;
+        mob.setValue(flag, true);
     }
 
     @Override
@@ -61,6 +66,7 @@ public final class TimerFlagGoal extends Goal {
 
     @Override
     public void stop() {
+        mob.setValue(flag, false);
         untilNext = cooldownLow + mob.getRandom().nextInt(Math.max(1, cooldownHigh - cooldownLow + 1));
         if (endEvent != null) EntityEvents.trigger(mob, endEvent, null, ServerHooks.state());
     }

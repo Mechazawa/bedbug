@@ -74,6 +74,7 @@ public final class SpellGoal extends Goal {
     public void start() {
         cast = 0;
         done = 0;
+        mob.setValue("is_casting", true);
     }
 
     @Override
@@ -92,6 +93,7 @@ public final class SpellGoal extends Goal {
 
     @Override
     public void stop() {
+        mob.setValue("is_casting", false);
         untilNext = casting == null ? 0 : casting.cooldown;
         casting = null;
     }

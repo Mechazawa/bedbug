@@ -62,6 +62,7 @@ public final class SneezeGoal extends Goal {
     @Override
     public void start() {
         prepared = 0;
+        mob.setValue("is_sneezing", true);
         mob.getNavigation().stop();
         mob.playSound(prepareSound, mob.getSoundVolume(), mob.getVoicePitch());
     }
@@ -74,6 +75,7 @@ public final class SneezeGoal extends Goal {
 
     @Override
     public void stop() {
+        mob.setValue("is_sneezing", false);
         untilNext = cooldown;
         mob.playSound(sneezeSound, mob.getSoundVolume(), mob.getVoicePitch());
         if (!(mob.level() instanceof ServerLevel level)) return;

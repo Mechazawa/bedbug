@@ -52,6 +52,7 @@ public final class RestGoal extends Goal {
         held = 100 + mob.getRandom().nextInt(200);
         mob.getNavigation().stop();
         mob.setPose(pose);
+        resting(true);
     }
 
     @Override
@@ -64,6 +65,12 @@ public final class RestGoal extends Goal {
     public void stop() {
         held = 0;
         mob.setPose(Pose.STANDING);
+        resting(false);
+    }
+
+    /** A pack's controller reads the settling back as `q.is_resting`. */
+    private void resting(boolean still) {
+        if (mob instanceof AddonEntity addon) addon.setValue("is_resting", still);
     }
 
     private static double number(JsonObject component, String key, double fallback) {

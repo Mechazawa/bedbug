@@ -41,6 +41,16 @@ public final class RiseToLiquidLevelGoal extends Goal {
     }
 
     @Override
+    public void start() {
+        mob.setValue("is_rising", true);
+    }
+
+    @Override
+    public void stop() {
+        mob.setValue("is_rising", false);
+    }
+
+    @Override
     public void tick() {
         double surface = surfaceAbove();
         if (Double.isNaN(surface)) return;

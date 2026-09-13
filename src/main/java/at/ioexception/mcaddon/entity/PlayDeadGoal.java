@@ -58,6 +58,7 @@ public final class PlayDeadGoal extends Goal {
     @Override
     public void start() {
         played = 0;
+        mob.setValue("is_playing_dead", true);
         mob.setPose(Pose.SWIMMING);
         mob.setTarget(null);
         mob.getNavigation().stop();
@@ -75,6 +76,7 @@ public final class PlayDeadGoal extends Goal {
 
     @Override
     public void stop() {
+        mob.setValue("is_playing_dead", false);
         mob.setPose(Pose.STANDING);
         healthLastTick = mob.getHealth();
     }

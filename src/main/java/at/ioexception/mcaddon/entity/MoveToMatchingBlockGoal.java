@@ -23,21 +23,48 @@ import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 
 /**
- * Walks to the nearest block that answers a question, which is what four of Bedrock's goals are.
+ * Walks to the nearest block that answers a question, which is what several of Bedrock's goals are.
  *
  * Java's own goal already searches the ground around a mob and paths to what it finds; all that is
- * left is deciding what counts, and each of Bedrock's four differs only in that. The searching
- * happens on Java's own clock, so an entity carrying one costs no more than a vanilla mob does.
+ * left is deciding what counts, and what to do on arrival. The searching happens on Java's own
+ * clock, so an entity carrying one costs no more than a vanilla mob does.
  */
 public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
     private final Predicate<BlockState> wanted;
     private final BiConsumer<ServerLevel, BlockPos> arrival;
 
+    /** What a pack's controller reads this walk back as, or null where Bedrock publishes nothing. */
+    private final String flag;
+
     private MoveToMatchingBlockGoal(PathfinderMob mob, JsonObject component,
         Predicate<BlockState> wanted, BiConsumer<ServerLevel, BlockPos> arrival) {
+        this(mob, component, wanted, arrival, null);
+    }
+
+    private MoveToMatchingBlockGoal(PathfinderMob mob, JsonObject component,
+        Predicate<BlockState> wanted, BiConsumer<ServerLevel, BlockPos> arrival, String flag) {
         super(mob, speed(component), range(component), height(component));
         this.wanted = wanted;
         this.arrival = arrival;
+        this.flag = flag;
+    }
+
+    @Override
+    public void start() {
+        super.start();
+        publish(true);
+    }
+
+    @Override
+    public void stop() {
+        super.stop();
+        publish(false);
+    }
+
+    private void publish(boolean running) {
+        if (flag != null && mob instanceof AddonEntity addon) {
+            addon.setValue(flag, running);
+        }
     }
 
     /** `minecraft:behavior.move_to_block`, which names the blocks it is looking for. */
@@ -71,7 +98,7 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
      */
     public static MoveToMatchingBlockGoal searchingAndDigging(PathfinderMob mob, JsonObject component) {
         return new MoveToMatchingBlockGoal(mob, component, among(component, "target_blocks"),
-            (level, at) -> level.destroyBlock(at, true, mob));
+            (level, at) -> level.destroyBlock(at, true, mob), "is_searching");
     }
 
     /** `minecraft:behavior.inspect_bookshelf`, which is a walk over to a shelf and a look at it. */

@@ -50,11 +50,13 @@ public final class ChargeHeldItemGoal extends Goal {
 
     @Override
     public void start() {
+        mob.setValue("is_charging", true);
         mob.startUsingItem(InteractionHand.MAIN_HAND);
     }
 
     @Override
     public void stop() {
+        mob.setValue("is_charging", false);
         mob.stopUsingItem();
     }
 

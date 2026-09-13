@@ -48,6 +48,17 @@ public final class CircleTargetGoal extends Goal {
     @Override
     public void start() {
         angle = mob.getRandom().nextDouble() * Math.PI * 2;
+        stalking(true);
+    }
+
+    @Override
+    public void stop() {
+        stalking(false);
+    }
+
+    /** A pack's controller reads the circling back as `q.is_stalking`. */
+    private void stalking(boolean around) {
+        if (mob instanceof AddonEntity addon) addon.setValue("is_stalking", around);
     }
 
     @Override

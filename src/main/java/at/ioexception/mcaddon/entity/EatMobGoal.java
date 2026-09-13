@@ -54,6 +54,12 @@ public final class EatMobGoal extends Goal {
     @Override
     public void start() {
         eaten = 0;
+        mob.setValue("is_eating_mob", true);
+    }
+
+    @Override
+    public void stop() {
+        mob.setValue("is_eating_mob", false);
     }
 
     @Override

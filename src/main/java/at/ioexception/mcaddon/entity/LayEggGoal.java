@@ -65,7 +65,13 @@ public final class LayEggGoal extends Goal {
     @Override
     public void start() {
         laid = 0;
+        mob.setValue("is_laying_egg", true);
         mob.getNavigation().moveTo(nest.getX() + 0.5, nest.getY() + 1, nest.getZ() + 0.5, speed);
+    }
+
+    @Override
+    public void stop() {
+        mob.setValue("is_laying_egg", false);
     }
 
     @Override

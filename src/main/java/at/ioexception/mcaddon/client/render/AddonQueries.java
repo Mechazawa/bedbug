@@ -325,6 +325,34 @@ public final class AddonQueries implements MolangEnvironment.Queries {
 
             case "is_owner_identifier_any" -> MolangValue.ZERO;
             case "owning_entity" -> MolangValue.ZERO;
+            case "owner_identifier" -> MolangValue.of(
+                properties.get("owner") instanceof String owner ? owner : "");
+
+            // Each of these is a behaviour the server is running, published under the name Bedrock
+            // gives the query so a pack's own controller can branch on it.
+            case "is_admiring", "is_angry", "is_begging", "is_casting", "is_celebrating",
+                "is_charging", "is_eating_mob", "is_in_love", "is_laying_egg", "is_playing_dead",
+                "is_ram_attacking", "is_resting", "is_rising", "is_rolling", "is_scared",
+                "is_searching", "is_sneezing", "is_stalking", "timer_flag_1", "timer_flag_2",
+                "timer_flag_3" -> MolangValue.of(flag(properties, name));
+            case "anger_level" -> MolangValue.of(number(properties.get("anger_level")));
+
+            // The pose is the game's own, and it reaches the drawing side without this mod sending
+            // anything, so these read it rather than a property.
+            case "is_standing" -> MolangValue.of(entity.getPose() == Pose.STANDING);
+            case "is_laying_down" -> MolangValue.of(entity.getPose() == Pose.SLEEPING);
+            case "is_scenting" -> MolangValue.of(entity.getPose() == Pose.SNIFFING);
+            case "is_grazing" -> MolangValue.of(entity.getPose() == Pose.DIGGING);
+
+            case "has_collision" -> MolangValue.of(!entity.noPhysics);
+            case "invulnerable_ticks" -> MolangValue.of(entity.invulnerableTime);
+            case "is_orphaned" -> MolangValue.of(!properties.containsKey("owner"));
+            case "life_span" -> MolangValue.of(entity.tickCount / 20d);
+
+            // How flattened something that moves in hops is drawn, which Bedrock reads off a slime.
+            // A rising entity is stretched and a landing one is squashed, both within one block.
+            case "current_squish_value" -> MolangValue.of(squish());
+            case "previous_squish_value" -> MolangValue.of(squish());
 
             // `q.any` and `q.all` take a subject and a list of conditions the caller already resolved.
             case "any" -> MolangValue.of(arguments.stream().skip(2).anyMatch(MolangValue::truthy));
@@ -549,6 +577,17 @@ public final class AddonQueries implements MolangEnvironment.Queries {
     }
 
     /** A property the server sent that is only ever on or off. */
+    /**
+     * How flattened a hopping entity is drawn, between stretched at -1 and squashed at 1.
+     *
+     * Bedrock keeps a squish on the entity and lets it settle back towards nothing. What it comes
+     * to is how fast the entity is moving up or down, which the drawing side already has.
+     */
+    private double squish() {
+        double rising = entity.getDeltaMovement().y;
+        return Math.max(-1, Math.min(1, -rising * 2));
+    }
+
     private static boolean flag(Map<String, Object> properties, String name) {
         Object value = properties.get(name);
         return value instanceof Boolean set ? set : number(value) != 0;

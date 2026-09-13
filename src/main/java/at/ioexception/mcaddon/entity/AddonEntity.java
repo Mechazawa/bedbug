@@ -745,6 +745,12 @@ public class AddonEntity extends PathfinderMob
         return inLoveUntil > tickCount;
     }
 
+    /** A pack's controller reads being in the mood back as `q.is_in_love`. */
+    private void publishBeingInLove() {
+        boolean inLove = inTheMood();
+        if (inLove != Boolean.TRUE.equals(value("is_in_love"))) setValue("is_in_love", inLove);
+    }
+
     public void leaveTheMood() {
         inLoveUntil = 0;
     }
@@ -1514,7 +1520,8 @@ public class AddonEntity extends PathfinderMob
 
                 case "minecraft:behavior.timer_flag_1", "minecraft:behavior.timer_flag_2",
                      "minecraft:behavior.timer_flag_3" ->
-                    goalSelector.addGoal(priority, new TimerFlagGoal(this, componentBody(behaviour)));
+                    goalSelector.addGoal(priority, new TimerFlagGoal(this, componentBody(behaviour),
+                        behaviour.substring("minecraft:behavior.".length())));
                 case "minecraft:behavior.random_sitting" ->
                     goalSelector.addGoal(priority, RestGoal.sitting(this, componentBody(behaviour)));
                 case "minecraft:behavior.lay_down" ->
@@ -1871,6 +1878,7 @@ public class AddonEntity extends PathfinderMob
         hover();
         noticeTheBlockItIsIn();
         celebrateTheKill();
+        publishBeingInLove();
         if (bossBar != null) bossBar.setProgress(getMaxHealth() <= 0 ? 0 : getHealth() / getMaxHealth());
     }
 
