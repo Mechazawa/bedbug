@@ -45,7 +45,10 @@ public final class McAddonClient implements ClientModInitializer {
             description.isEmpty() ? null : new AddonFormScreen(formId, description)));
 
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK
-            .register(client -> at.ioexception.mcaddon.client.render.AddonEmitters.tick());
+            .register(client -> {
+                at.ioexception.mcaddon.client.render.AddonEmitters.tick();
+                if (client.level != null) Animators.tickOffscreen(client.level);
+            });
 
         ClientEntityEvents.ENTITY_UNLOAD.register((entity, level) -> {
             Animators.forget(entity.getId());

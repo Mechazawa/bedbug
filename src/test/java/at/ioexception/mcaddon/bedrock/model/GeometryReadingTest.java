@@ -5,6 +5,7 @@ import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.PackManifest;
 import at.ioexception.mcaddon.util.Json;
 import net.minecraft.core.Direction;
+import net.minecraft.world.phys.AABB;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -204,6 +205,41 @@ class GeometryReadingTest {
         assertEquals(3f, faces.faces().get(Direction.NORTH).height());
         assertEquals(5f, faces.faces().get(Direction.EAST).width());
         assertEquals(5f, faces.faces().get(Direction.UP).height());
+    }
+
+    /** The declared box is a width and a height about a point, which becomes two opposite corners. */
+    @Test
+    void turnsTheDeclaredExtentIntoABoxAboutTheFeet() {
+        AABB bounds = GeometryParser.readGeometry("geometry.test", Json.parse("""
+            {"description": {"visible_bounds_width": 3, "visible_bounds_height": 4,
+                             "visible_bounds_offset": [0, 2, 1]}, "bones": []}
+            """).getAsJsonObject()).visibleBounds();
+
+        assertEquals(-1.5, bounds.minX);
+        assertEquals(1.5, bounds.maxX);
+        assertEquals(0.0, bounds.minY);
+        assertEquals(4.0, bounds.maxY);
+        assertEquals(-0.5, bounds.minZ);
+        assertEquals(2.5, bounds.maxZ);
+    }
+
+    @Test
+    void readsTheExtentThe18ShapeKeepsBesideItsBones() throws IOException {
+        BedrockGeometry geometry = legacy("""
+            {
+              "format_version": "1.8.0",
+              "geometry.thing": {"visible_bounds_width": 2, "visible_bounds_height": 2,
+                                 "visible_bounds_offset": [0, 1, 0], "bones": []}
+            }
+            """).geometry("geometry.thing");
+
+        assertEquals(2.0, geometry.visibleBounds().maxY);
+        assertEquals(0.0, geometry.visibleBounds().minY);
+    }
+
+    @Test
+    void leavesAGeometryDeclaringNoExtentWithoutOne() {
+        assertNull(geometry("[]").visibleBounds());
     }
 
     private static BedrockBone bone(String body) {

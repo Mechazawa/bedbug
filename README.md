@@ -34,7 +34,14 @@ server decides what happens; the client draws it.
 - Text, with Bedrock's `.lang` rules rather than a properties reader's.
 - Models, animations, animation controllers and render controllers, drawn through a full Molang
   evaluator, with each pass drawn the way its `.material` asks: alpha tested or blended, culled or
-  not, plain or glowing, and tinted the colour its controller worked out for it.
+  not, plain or glowing, tinted the colour its controller worked out for it and lit by the light its
+  controller asked for. A model reaching past the box the server gave the entity is culled against
+  the extent its own geometry declares, so wings and a tail stay drawn while the hitbox is off the
+  side of the screen. A controller state a pack gave a blend transition is crossed out of rather
+  than left, so a walk releases into an idle instead of snapping. An entity whose pack asked for it
+  keeps running while nobody is looking at it, so a trail or an aura is still going when it comes
+  back into view, and a pack describing one entity several times over for different engines is drawn
+  from the newest of them its own engine version reaches.
 - Entities a behaviour pack declares, with their properties, events, component groups, filters,
   breeding, riding, leashing, home ranges, navigation and item pickup, and the sensors that fire
   their events: environment, entity, target-nearby, block, timer, scheduler, drying-out, damage,
@@ -96,7 +103,9 @@ server decides what happens; the client draws it.
 - Attachables: what any entity wears or holds, players and vanilla mobs included, animating on its
   own clock. A pack picks between several models for one item on a condition of its own, and what an
   attachable writes into whoever carries it reaches that entity's variables, so the layer it stands
-  in for switches off.
+  in for switches off. A pack's own entity wears what it has equipped where its client definition
+  says it may, and a definition hiding armour hides what is in an armour slot and keeps what is in a
+  hand.
 - The sounds and particles an animation, an animation controller state or an entity's own definition
   fires, played at the bone the pack anchored them to.
 - Particle effects a pack describes itself: the emitter runs on its own clock at the rate and
@@ -162,7 +171,7 @@ definitions. All of them compare what they read against the names this mod acts 
 | Recipe fields | 85% |
 | Trade table fields | 95% |
 | Trade item functions | 80% |
-| Geometry, animation and controller fields | 82% |
+| Geometry, animation and controller fields | 93% |
 | `@minecraft/server` and friends | 95% |
 
 Every name in the remaining share is counted and shown by `/mcaddon entities` and `/mcaddon
@@ -274,8 +283,10 @@ Java stops running a mob's goals the moment its health reaches zero, so a goal h
 play anything in. The dragon's other seven phases are flown, and `/mcaddon entities` names this one.
 
 **Two ways of building a bone.** `texture_meshes` builds geometry out of a texture's opaque pixels,
-and `binding` hangs a bone off the skeleton of whatever entity is carrying the model. Java's
-renderer has no form of either, so a bone written that way is drawn as the boxes it also declares.
+and `binding` names a bone of whatever entity is carrying the model and hangs this one off it. Every
+one Mojang ships is `q.item_slot_to_bone_name(...)` on an attachable, and an entity Java draws with a
+model of its own has parts rather than bones, with no two models naming theirs alike. A bone written
+either way is drawn as the boxes it also declares.
 
 **The item an engine puts in a hand.** `held_item_scale`, `held_item_ignores_lighting` and
 `hide_held_items` size, light and hide what Bedrock draws in an entity's hand by itself. The only

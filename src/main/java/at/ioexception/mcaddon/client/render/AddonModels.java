@@ -17,6 +17,7 @@ import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.convert.ConvertedPack;
 import at.ioexception.mcaddon.platform.Platform;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -40,10 +41,23 @@ public final class AddonModels {
      * `colour` is packed ARGB and multiplies the texture, white leaving it as it is.
      */
     public record Pass(BakedGeometry geometry, Identifier texture, Set<String> hiddenBones, UvShift shift,
-        MaterialDefinition material, int colour, boolean ignoresLighting) {
-        /** What this pass draws under: the light around the entity, or none of it. */
+        MaterialDefinition material, int colour, boolean ignoresLighting, float lightMultiplier) {
+        /**
+         * What this pass draws under: the light around the entity, or none of it, scaled by what
+         * the controller asked for.
+         *
+         * Java carries the two light channels as levels rather than as a colour, so a multiplier
+         * moves both of them and stops at the brightest level there is.
+         */
         public int light(int light) {
-            return ignoresLighting ? FULL_BRIGHT : light;
+            int lit = ignoresLighting ? FULL_BRIGHT : light;
+            if (lightMultiplier == 1f) return lit;
+
+            return scale(lit >>> 16 & 0xFFFF) << 16 | scale(lit & 0xFFFF);
+        }
+
+        private int scale(int channel) {
+            return Math.min(FULL_BRIGHT & 0xFFFF, Math.round(channel * lightMultiplier));
         }
 
         public boolean hides(String bone) {
@@ -67,6 +81,7 @@ public final class AddonModels {
     private final BedrockAssets assets;
     private final ConvertedPack converted;
     private final Map<String, BakedGeometry> baked = new HashMap<>();
+    private final Map<String, AABB> bounds = new HashMap<>();
 
     public AddonModels(BedrockAssets assets, ConvertedPack converted) {
         this.assets = assets;
@@ -127,7 +142,7 @@ public final class AddonModels {
                 definition.identifier());
         }
         return List.of(new Pass(geometry, textureId(texturePath), Set.of(),
-            UvShift.NONE, null, OPAQUE_WHITE, false));
+            UvShift.NONE, null, OPAQUE_WHITE, false, 1f));
     }
 
     private Pass resolvePass(RenderController controller, ClientEntityDefinition definition,
@@ -170,7 +185,8 @@ public final class AddonModels {
             number(controller.uvScaleU(), environment, 1f),
             number(controller.uvScaleV(), environment, 1f));
         return new Pass(geometry, texture, hidden, shift, material,
-            tint(controller, environment), controller.ignoresLighting());
+            tint(controller, environment), controller.ignoresLighting(),
+            number(controller.lightMultiplier(), environment, 1f));
     }
 
     /** Opaque white, which leaves a texture drawn as it was painted. */
@@ -250,7 +266,7 @@ public final class AddonModels {
         Identifier texture = Platform.id(glow.substring(0, colon),
             "textures/" + glow.substring(colon + 1) + ".png");
         return new Pass(pass.geometry(), texture, pass.hiddenBones(), pass.shift(), EMISSIVE,
-            pass.colour(), pass.ignoresLighting());
+            pass.colour(), pass.ignoresLighting(), pass.lightMultiplier());
     }
 
     /** The material an extracted emissive layer is drawn with: lit, and blended over what is below. */
@@ -276,6 +292,26 @@ public final class AddonModels {
             if (name != null) return assets.material(name);
         }
         return null;
+    }
+
+    /**
+     * The box the entity's own geometry says it fills, with its feet at the origin.
+     *
+     * A render controller picks one geometry per pass out of everything the definition offers, so
+     * the box has to hold all of them rather than whichever is drawn this frame. Null where no
+     * geometry declares one.
+     */
+    public AABB visibleBounds(ClientEntityDefinition definition) {
+        if (bounds.containsKey(definition.identifier())) return bounds.get(definition.identifier());
+
+        AABB widest = null;
+        for (String name : definition.geometry().values()) {
+            BedrockGeometry geometry = assets.geometry(name);
+            AABB declared = geometry == null ? null : geometry.visibleBounds();
+            if (declared != null) widest = widest == null ? declared : widest.minmax(declared);
+        }
+        bounds.put(definition.identifier(), widest);
+        return widest;
     }
 
     private BakedGeometry bake(String identifier) {

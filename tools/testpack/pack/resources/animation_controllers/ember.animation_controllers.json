@@ -1,0 +1,19 @@
+{
+  "format_version": "1.10.0",
+  "animation_controllers": {
+    "controller.animation.tp.ember.drift": {
+      "initial_state": "drifting",
+      "states": {
+        "drifting": {
+          "animations": ["idle"],
+          "blend_transition": 0.4,
+          "transitions": [{"settled": "q.state_time > 2"}]
+        },
+        "settled": {
+          "blend_transition": 0.4,
+          "transitions": [{"drifting": "q.state_time > 2"}]
+        }
+      }
+    }
+  }
+}

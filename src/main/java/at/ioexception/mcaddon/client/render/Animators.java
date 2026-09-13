@@ -1,6 +1,8 @@
 package at.ioexception.mcaddon.client.render;
 
 import at.ioexception.mcaddon.bedrock.entity.EntityAnimator;
+import at.ioexception.mcaddon.entity.AddonEntity;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.entity.Entity;
 
 import java.util.HashMap;
@@ -51,6 +53,29 @@ public final class Animators {
         entry.queries().setPartialTick(partialTick);
         entry.animator().tick(delta, now / 20f);
         return entry.animator();
+    }
+
+    /**
+     * Advances the entities whose packs asked to keep running while nobody is looking at them.
+     *
+     * An animator is otherwise made and advanced by the renderer, so an entity out of view holds
+     * its pose, its state machine stops where it stood and its emitters fall silent. A pack writing
+     * either offscreen field in its scripts block is saying that is the wrong answer for this
+     * entity, which anything with a trail, an aura or a clock of its own depends on.
+     *
+     * An entity in view is advanced by whichever of the two runs first in a frame, because the
+     * animator takes its step from how far the clock has moved since it last ran.
+     */
+    public static void tickOffscreen(ClientLevel level) {
+        for (Entity entity : level.entitiesForRendering()) {
+            if (!(entity instanceof AddonEntity addon)) continue;
+
+            String identifier = AddonEntityRenderer.identifierOf(addon);
+            AddonClientAssets.Binding binding = AddonClientAssets.of(identifier);
+            if (binding == null || !binding.definition().runsOffscreen()) continue;
+
+            of(addon, binding, identifier, false, 0f, addon.tickCount);
+        }
     }
 
     /**

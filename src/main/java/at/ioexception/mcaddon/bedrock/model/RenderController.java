@@ -30,6 +30,8 @@ public record RenderController(
     MolangExpression uvScaleV,
     /** Draws the pass at full brightness, whatever the light where the entity stands. */
     boolean ignoresLighting,
+    /** What the light reaching the pass is multiplied by. Null leaves it as the world lit it. */
+    MolangExpression lightMultiplier,
     Map<String, List<MolangValue>> arrays,
     ControllerColour colour,
     ControllerColour overlay,

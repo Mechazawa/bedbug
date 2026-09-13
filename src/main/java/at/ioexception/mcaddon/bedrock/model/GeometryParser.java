@@ -5,6 +5,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.core.Direction;
+import net.minecraft.world.phys.AABB;
 import org.joml.Vector2f;
 import org.joml.Vector3f;
 
@@ -18,20 +19,12 @@ import java.util.Map;
 public final class GeometryParser {
 
     /**
-     * The box Bedrock culls a model against, in both geometry shapes.
-     *
-     * Java culls an entity against the bounding box the server gave it, so what a geometry says
-     * about its own extent decides nothing here.
-     */
-    public static final List<String> UNREAD_DESCRIPTION =
-        List.of("visible_bounds_width", "visible_bounds_height", "visible_bounds_offset");
-
-    /**
      * Two ways of building a bone that this renderer has no form of.
      *
-     * `texture_meshes` builds geometry out of a texture's opaque pixels, and `binding` hangs the
-     * bone off the skeleton of whatever entity is carrying the model. A bone written either way is
-     * drawn as the boxes it also declares.
+     * `texture_meshes` builds geometry out of a texture's opaque pixels. `binding` names a bone of
+     * whatever entity is carrying the model and hangs this one off it, and an entity Java draws
+     * with a model of its own has parts rather than bones and no two models name theirs alike. A
+     * bone written either way is drawn as the boxes it also declares.
      */
     private static final List<String> UNREAD_BONE = List.of("texture_meshes", "binding");
 
@@ -40,7 +33,6 @@ public final class GeometryParser {
 
     public static BedrockGeometry readGeometry(String identifier, JsonObject json) {
         JsonObject description = json.getAsJsonObject("description");
-        AddonEntities.unsupportedFields("geometry", description, UNREAD_DESCRIPTION);
         List<BedrockBone> bones = new ArrayList<>();
         if (json.has("bones")) {
             for (JsonElement bone : json.getAsJsonArray("bones")) bones.add(readBone(bone.getAsJsonObject()));
@@ -49,7 +41,27 @@ public final class GeometryParser {
             identifier,
             optionalInt(description, "texture_width", 64),
             optionalInt(description, "texture_height", 64),
+            visibleBounds(
+                optionalFloat(description, "visible_bounds_width"),
+                optionalFloat(description, "visible_bounds_height"),
+                optionalVector(description, "visible_bounds_offset")),
             List.copyOf(bones));
+    }
+
+    /**
+     * The box the model fills, measured in blocks about a point above the entity's feet.
+     *
+     * A geometry that gives no width or no height has nothing to say about its extent, which is
+     * what a null stands for.
+     */
+    private static AABB visibleBounds(float width, float height, Vector3f offset) {
+        if (width <= 0f || height <= 0f) return null;
+
+        float halfWidth = width / 2f;
+        float halfHeight = height / 2f;
+        return new AABB(
+            offset.x - halfWidth, offset.y - halfHeight, offset.z - halfWidth,
+            offset.x + halfWidth, offset.y + halfHeight, offset.z + halfWidth);
     }
 
     private static BedrockBone readBone(JsonObject json) {
@@ -167,6 +179,10 @@ public final class GeometryParser {
 
     private static int optionalInt(JsonObject json, String field, int fallback) {
         return json.has(field) ? json.get(field).getAsInt() : fallback;
+    }
+
+    private static float optionalFloat(JsonObject json, String field) {
+        return json.has(field) ? json.get(field).getAsFloat() : 0f;
     }
 
 }

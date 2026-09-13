@@ -140,6 +140,13 @@ These are the checks it runs, and what each one catches:
   channel has pixels in it, and a function using the commands and selector arguments that need
   translating.
 
+  Four of those carry the drawing fields that are only visible in a picture. The sprite's geometry
+  declares the extent it is culled against. The ember is drawn through a controller that dims the
+  light reaching it and animated by a controller crossing between two states on a blend transition,
+  and its scripts block asks to keep running out of view. The sprite is described twice over, the
+  second file naming an older engine and a geometry the pack has not got, so a run that picks the
+  wrong one of the two draws nothing where the sprite should be.
+
   The recipes cover the five kinds and the fields that decide what each becomes: a furnace recipe
   naming four cookers and an unlock item, a shapeless one tagged for the stonecutter and unlocked by
   a context, a shaped one keyed on an item tag and carrying a `group`, a `priority` and an unlock
@@ -467,19 +474,17 @@ what the census calls missing is what `/mcaddon entities` names. The field names
 beside the reader rather than inside it, because the census reads a reader's own string literals to
 decide what it acts on and a reported field is still a dropped one.
 
-- **`visible_bounds_width`, `visible_bounds_height` and `visible_bounds_offset`** are the box the
-  engine culls a model against. Java culls against the bounding box the server gave the entity.
-- **`rebuild_animation_matrices`, `filter_lighting` and `light_color_multiplier`** describe how
-  Bedrock's own renderer schedules and lights a pass. `ignore_lighting` has a Java form, full
-  brightness, and is honoured; the other three do not.
-- **`texture_meshes` and `binding`** on a bone build geometry from a texture's opaque pixels and
-  attach a bone to another entity's skeleton. Neither has a Java counterpart in this renderer.
+- **`texture_meshes` and `binding`** on a bone build geometry from a texture's opaque pixels and hang
+  the bone off a named bone of whatever entity is carrying the model. Every published `binding` is
+  `q.item_slot_to_bone_name(...)` on an attachable, and an entity Java draws with a model of its own
+  has parts rather than bones, with no two models naming theirs alike.
+- **`rebuild_animation_matrices` and `filter_lighting`** describe how Bedrock's own renderer
+  schedules and lights a pass. Every pass here reads one skeleton posed for the frame out of the
+  same variables, so a rebuild between passes would change nothing, and Java lights a whole entity
+  from the one value at its position, so there is no second way of sampling to pick.
 - **`blend_via_shortest_path`** on a controller state picks which way round the circle a rotation
-  travels while one state crosses into the next. The clips of every state a controller reaches are
-  summed at the weight each declares, so no rotation is carried from one value to another.
-- **`should_update_effects_offscreen`, `should_update_bones_and_effects_offscreen`,
-  `min_engine_version`, `enable_attachables` and `hide_armor`** each ask the Bedrock client for
-  behaviour it decides itself. Java decides those the same way for every entity.
+  travels while one state crosses into the next. A bone's rotation is the weighted sum of every clip
+  contributing to it rather than a pair of angles with a route between them.
 - **`held_item_scale`, `held_item_ignores_lighting` and `hide_held_items`** size, light and hide the
   item the engine puts in an entity's hand. Nothing is drawn in an add-on entity's hand but the
   attachable a pack describes for it, which carries its own scale and its own material.
@@ -487,8 +492,30 @@ decide what it acts on and a reported field is still a dropped one.
   whoever is carrying it, which works for a pack's own entity and has nowhere to land on one Java
   draws with a model of its own.
 
-`blend_transition` is read into `AnimationController.State` and nothing acts on it, which the census
-counts as covered. Either give a state's clips a fade of that length or report the field.
+Five fields are read outside the renderer itself, which is where to look for them:
+
+- **`visible_bounds_width`, `visible_bounds_height` and `visible_bounds_offset`** are the box Bedrock
+  culls a model against. `EntityRenderer.shouldRender` carries the same spelling on all four
+  versions, so `AddonEntityRenderer` asks the frustum about the geometry's own extent as well as
+  about the box the server gave the entity, and a model wider or taller than its hitbox stays drawn
+  while part of it is on the screen.
+- **`min_engine_version`** on a client entity says which of several definitions of one identifier is
+  parsed, which `BedrockAssets.readDescribed` decides against the engine version the pack's own
+  manifest names. A pack every one of whose definitions is too new still gets the first, because an
+  entity nothing draws is worse than one drawn from a definition written later.
+- **`enable_attachables` and `hide_armor`** gate `Attachables.on`. An entity a pack described wears
+  what it has equipped only where its own definition says it may; one Java draws with a model of its
+  own carries no such definition and always wears it.
+- **`light_color_multiplier`** multiplies the light reaching a pass, in `AddonModels.Pass.light`.
+  Java carries the two light channels as levels packed in an integer, so the multiplier moves both
+  and stops at the brightest level there is.
+- **`should_update_effects_offscreen` and `should_update_bones_and_effects_offscreen`** keep an
+  entity's animation script running while nobody can see it, which `Animators.tickOffscreen` does off
+  the client tick. One pass advances the clips, fires their effects and poses the bones, so an entity
+  asking only for its effects has its bones posed as well.
+
+`blend_transition` is acted on as well: a state declaring one is crossed out of rather than left, its
+clips staying at a falling weight while the state it moved to comes up.
 - **`tools/census/commands.py`** does the same for the command dialect. A `.mcfunction` is the one
   part of a pack Java refuses by halves, one bad line costing the whole file, so knowing which
   commands survive translation matters more here than anywhere else.

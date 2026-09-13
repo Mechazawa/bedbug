@@ -13,7 +13,7 @@ import at.ioexception.mcaddon.bedrock.model.MaterialDefinition;
 import at.ioexception.mcaddon.bedrock.model.RenderController;
 import at.ioexception.mcaddon.bedrock.model.RenderControllerParser;
 import at.ioexception.mcaddon.pack.BedrockPack;
-import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.pack.SemVer;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -41,11 +41,15 @@ public final class BedrockAssets {
     private final Map<String, ClientEntityDefinition> attachables = new LinkedHashMap<>();
     private final Map<String, MaterialDefinition> materials = new LinkedHashMap<>();
 
-    private BedrockAssets() {
+    /** The engine the pack says it was built for, which picks between definitions of one entity. */
+    private final SemVer engineVersion;
+
+    private BedrockAssets(SemVer engineVersion) {
+        this.engineVersion = engineVersion == null ? SemVer.ZERO : engineVersion;
     }
 
     public static BedrockAssets read(BedrockPack pack) {
-        BedrockAssets assets = new BedrockAssets();
+        BedrockAssets assets = new BedrockAssets(pack.manifest().minEngineVersion());
 
         assets.materials.putAll(MaterialDefinition.readAll(pack));
         Map<String, JsonObject> legacy = new LinkedHashMap<>();
@@ -149,9 +153,6 @@ public final class BedrockAssets {
             String identifier = colon < 0 ? entry.getKey() : entry.getKey().substring(0, colon);
             JsonObject body = colon < 0 ? entry.getValue()
                 : inherit(entry.getValue(), entry.getKey().substring(colon + 1), legacy);
-            // The 1.8 shape keeps the description fields beside the bones rather than in one of
-            // their own, so the wrapper the parser reads carries none of them to report.
-            AddonEntities.unsupportedFields("geometry", body, GeometryParser.UNREAD_DESCRIPTION);
             geometries.put(identifier, GeometryParser.readGeometry(identifier, legacyGeometry(body)));
         }
     }
@@ -223,24 +224,27 @@ public final class BedrockAssets {
     }
 
     /**
-     * The 1.8 form keeps the texture size beside the bones; the parser expects a description.
+     * The 1.8 form keeps the description fields beside the bones; the parser expects a description.
      *
-     * It also spells the two fields without their underscore, which is the only place in a pack
+     * It also spells the texture size without its underscore, which is the only place in a pack
      * either name is written that way.
      */
     private static JsonObject legacyGeometry(JsonObject body) {
         JsonObject description = new JsonObject();
-        copySize(body, description, "texturewidth", "texture_width");
-        copySize(body, description, "textureheight", "texture_height");
+        copyField(body, description, "texturewidth", "texture_width");
+        copyField(body, description, "textureheight", "texture_height");
+        copyField(body, description, "visible_bounds_width", "visible_bounds_width");
+        copyField(body, description, "visible_bounds_height", "visible_bounds_height");
+        copyField(body, description, "visible_bounds_offset", "visible_bounds_offset");
         JsonObject wrapped = new JsonObject();
         wrapped.add("description", description);
         if (body.has("bones")) wrapped.add("bones", body.get("bones"));
         return wrapped;
     }
 
-    private static void copySize(JsonObject body, JsonObject description, String from, String to) {
+    private static void copyField(JsonObject body, JsonObject description, String from, String to) {
         JsonElement value = body.has(from) ? body.get(from) : body.get(to);
-        if (value != null && value.isJsonPrimitive()) description.add(to, value);
+        if (value != null && !value.isJsonNull()) description.add(to, value);
     }
 
     private <T> void readSection(JsonObject root, String section,
@@ -263,6 +267,25 @@ public final class BedrockAssets {
 
         String identifier = Json.text(description, "identifier", null);
         if (identifier == null) return;
-        into.put(identifier, ClientEntityParser.read(identifier, description));
+
+        ClientEntityDefinition definition = ClientEntityParser.read(identifier, description);
+        if (supersedes(definition, into.get(identifier))) into.put(identifier, definition);
+    }
+
+    /**
+     * Whether this definition is the one to draw the entity with.
+     *
+     * A pack may describe one identifier several times over, each written for a different engine,
+     * so that an older form of an entity ships beside the current one. The one to keep is the
+     * newest whose `min_engine_version` the pack itself reaches. A pack whose own manifest names an
+     * engine older than every definition it carries still gets the first one, because an entity
+     * nothing draws is worse than one drawn from a definition written later.
+     */
+    private boolean supersedes(ClientEntityDefinition offered, ClientEntityDefinition held) {
+        if (held == null) return true;
+        if (offered.minEngineVersion().compareTo(engineVersion) > 0) return false;
+
+        return held.minEngineVersion().compareTo(engineVersion) > 0
+            || offered.minEngineVersion().compareTo(held.minEngineVersion()) >= 0;
     }
 }

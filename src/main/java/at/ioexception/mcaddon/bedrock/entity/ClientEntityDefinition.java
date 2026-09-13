@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.bedrock.entity;
 
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.convert.SpawnEggAppearance;
+import at.ioexception.mcaddon.pack.SemVer;
 
 import java.util.List;
 import java.util.Map;
@@ -19,6 +20,16 @@ import java.util.Set;
  */
 public record ClientEntityDefinition(
     String identifier,
+    /** The engine this definition was written for, which decides which of several is drawn. */
+    SemVer minEngineVersion,
+    /** Whether what the entity has equipped is drawn on it at all. */
+    boolean attachablesEnabled,
+    /** Hides what is worn in an armour slot, whatever `enable_attachables` allowed. */
+    boolean armourHidden,
+    /** Keeps the entity's sounds and particles firing while nobody can see it. */
+    boolean effectsRunOffscreen,
+    /** Keeps its bones moving as well, so it is posed where it should be when it comes back. */
+    boolean bonesRunOffscreen,
     Map<String, String> geometry,
     Map<String, String> textures,
     Map<String, String> materials,
@@ -47,6 +58,16 @@ public record ClientEntityDefinition(
 ) {
     /** A name plus the condition under which it applies. A null condition always applies. */
     public record Gated(String name, MolangExpression condition) {
+    }
+
+    /**
+     * Whether this entity's animation script runs while it is out of view.
+     *
+     * One pass advances the clips, fires their effects and poses the bones, so an entity asking
+     * only for its effects has its bones posed as well, which nothing draws while it is away.
+     */
+    public boolean runsOffscreen() {
+        return effectsRunOffscreen || bonesRunOffscreen;
     }
 
     public String resolveAnimation(String shortName) {

@@ -19,14 +19,14 @@ public final class RenderControllerParser {
     /**
      * How Bedrock's own renderer schedules and lights a pass.
      *
-     * `rebuild_animation_matrices` asks it to pose the skeleton again before this pass,
-     * `filter_lighting` puts the pass through its lighting filter and `light_color_multiplier`
-     * tints the light reaching it. Java lights an entity per vertex from the light at its block and
-     * poses it once, so none of the three has a counterpart. `ignore_lighting` does: full
-     * brightness, which the render type carries.
+     * `rebuild_animation_matrices` asks it to pose the skeleton again before this pass, and every
+     * pass here already reads one skeleton posed for the frame from the same variables, so there is
+     * nothing a rebuild between passes would change. `filter_lighting` picks between two ways of
+     * sampling the light over a model, and Java lights a whole entity from the one value at its
+     * position, so there is no second way to pick.
      */
     private static final List<String> UNREAD = List.of(
-        "rebuild_animation_matrices", "filter_lighting", "light_color_multiplier");
+        "rebuild_animation_matrices", "filter_lighting");
 
     private RenderControllerParser() {
     }
@@ -74,11 +74,21 @@ public final class RenderControllerParser {
             uvAnim(json, "scale", 0),
             uvAnim(json, "scale", 1),
             json.has("ignore_lighting") && json.get("ignore_lighting").getAsBoolean(),
+            molang(json.get("light_color_multiplier")),
             readArrays(json),
             ControllerColour.tryFrom(json, "color"),
             ControllerColour.tryFrom(json, "overlay_color"),
             ControllerColour.tryFrom(json, "is_hurt_color"),
             ControllerColour.tryFrom(json, "on_fire_color"));
+    }
+
+    /** A field Mojang types as Molang and vanilla writes as a plain number. Null where absent. */
+    private static MolangExpression molang(JsonElement value) {
+        if (value == null || value.isJsonNull()) return null;
+
+        return value.getAsJsonPrimitive().isString()
+            ? MolangParser.parse(value.getAsString())
+            : MolangExpression.constant(value.getAsFloat());
     }
 
     /**
@@ -93,10 +103,7 @@ public final class RenderControllerParser {
         JsonObject animation = json.getAsJsonObject("uv_anim");
         if (!animation.has(field)) return null;
 
-        JsonElement value = animation.getAsJsonArray(field).get(axis);
-        return value.getAsJsonPrimitive().isString()
-            ? MolangParser.parse(value.getAsString())
-            : MolangExpression.constant(value.getAsFloat());
+        return molang(animation.getAsJsonArray(field).get(axis));
     }
 
     /** Named lists a controller indexes into, such as one texture per villager profession. */
