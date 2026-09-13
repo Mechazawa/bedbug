@@ -698,8 +698,63 @@ public final class PackConverter {
         if (recipe.group() != null) json.addProperty("group", recipe.group());
 
         Names.Identifier id = Names.split(recipe.identifier(), "minecraft");
-        write(root.resolve("data").resolve(id.namespace()).resolve(dataDirectory("recipe"))
-            .resolve(id.path() + suffix + ".json"), json);
+        Path data = root.resolve("data").resolve(id.namespace());
+        write(data.resolve(dataDirectory("recipe")).resolve(id.path() + suffix + ".json"), json);
+
+        if (recipe.unlock().isEmpty()) return;
+        write(data.resolve(dataDirectory("advancement")).resolve("recipes")
+            .resolve(id.path() + suffix + ".json"),
+            unlockAdvancement(id.namespace() + ":" + id.path() + suffix, recipe.unlock()));
+    }
+
+    /**
+     * The advancement that hands a player a recipe, which is how Java says one is unlocked.
+     *
+     * Java keeps a recipe out of the book until an advancement rewards it, so a Bedrock `unlock`
+     * list becomes one criterion per item named and holding any of them is enough. The recipe
+     * itself is a criterion too, which is what gives the book entry to a player handed the recipe
+     * by a command. The advancement carries no display, so nothing is shown when it is met.
+     */
+    private static JsonObject unlockAdvancement(String recipe, List<String> unlock) {
+        JsonObject criteria = new JsonObject();
+        JsonArray names = new JsonArray();
+
+        JsonObject recipeConditions = new JsonObject();
+        recipeConditions.addProperty("recipe", recipe);
+        criteria.add("has_the_recipe", trigger("minecraft:recipe_unlocked", recipeConditions));
+        names.add("has_the_recipe");
+
+        for (int i = 0; i < unlock.size(); i++) {
+            JsonArray items = new JsonArray();
+            items.add(Platform.heldItem(unlock.get(i)));
+            JsonObject conditions = new JsonObject();
+            conditions.add("items", items);
+
+            criteria.add("has_item_" + i, trigger("minecraft:inventory_changed", conditions));
+            names.add("has_item_" + i);
+        }
+
+        JsonArray requirements = new JsonArray();
+        requirements.add(names);
+
+        JsonArray rewarded = new JsonArray();
+        rewarded.add(recipe);
+        JsonObject rewards = new JsonObject();
+        rewards.add("recipes", rewarded);
+
+        JsonObject json = new JsonObject();
+        json.addProperty("parent", "minecraft:recipes/root");
+        json.add("criteria", criteria);
+        json.add("requirements", requirements);
+        json.add("rewards", rewards);
+        return json;
+    }
+
+    private static JsonObject trigger(String name, JsonObject conditions) {
+        JsonObject criterion = new JsonObject();
+        criterion.addProperty("trigger", name);
+        criterion.add("conditions", conditions);
+        return criterion;
     }
 
     private static JsonObject shaped(RecipeDefinition recipe) {

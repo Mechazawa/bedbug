@@ -57,14 +57,21 @@ server decides what happens; the client draws it.
 - Trading. A tier opens once its trader has earned the experience it asks for, a group offers the
   few trades it was told to pick weighted the way it weighted them, a payment listing several items
   becomes one offer per item, and `max_uses`, `trader_exp`, `reward_exp` and `price_multiplier` all
-  reach the merchant screen. A trade that enchants what it hands over hands over an enchanted item.
+  reach the merchant screen. A trade that enchants what it hands over hands over an enchanted item,
+  and one that dyes it hands over a dyed one.
 - Recipes: shaped, shapeless, furnace, smithing transform and smithing trim. `tags` names the block
   a recipe is made at, so one Bedrock furnace recipe listing a furnace, a blast furnace, a smoker
   and a campfire becomes four Java recipes, a shapeless recipe tagged for the stonecutter becomes a
-  stonecutting one, an ingredient naming a tag stays a tag, and a `group` keeps its group.
-- Loot tables, with the pool and entry conditions Java can ask the same question of, and the
-  functions that set a count, a damage, a potion, a named enchantment, a random enchantment at a
-  level, an explorer map, an ominous bottle's amplifier and a drop that grows with looting.
+  stonecutting one, an ingredient naming a tag stays a tag, and a `group` keeps its group. What a
+  recipe says a player must hold before it is theirs becomes the advancement Java unlocks a recipe
+  from, so a converted recipe reaches the recipe book the way a vanilla one does.
+- Loot tables, with the functions that set a count, a damage, a potion, a named enchantment, a
+  random enchantment at a level, an armour trim, an illager captain's banner, a suspicious stew's
+  effects, an explorer map, an ominous bottle's amplifier and a drop that grows with looting, and
+  the gear a mob spawns in enchanted by the rule Java's own spawning enchants it with. A condition
+  Java has a predicate for becomes that predicate; one it has none for is asked by this mod as the
+  loot is rolled, which is how an entity's variant, a property a pack declared, the world and the
+  regional difficulty, a kill by a player's pet and a Bedrock biome tag all still decide a drop.
 - `.mcfunction` files translated into Java's command dialect with a `tick` function tag.
 - Natural spawning from a pack's `spawn_rules`, with each alternative the rule lists becoming a
   biome spawn entry of its own. The weight, the group size and the biome tags decide which biomes
@@ -124,12 +131,12 @@ definitions. All of them compare what they read against the names this mod acts 
 | Particle components | 100% |
 | Particle component fields | 97% |
 | Particle curves and Molang variables | 100% |
-| Loot table functions | 56% |
-| Loot table conditions | 44% |
+| Loot table functions | 78% |
+| Loot table conditions | 94% |
 | Recipe types | 71% |
-| Recipe fields | 57% |
-| Trade table fields | 89% |
-| Trade item functions | 20% |
+| Recipe fields | 85% |
+| Trade table fields | 95% |
+| Trade item functions | 40% |
 | Geometry, animation and controller fields | 77% |
 | `@minecraft/server` and friends | 95% |
 
@@ -157,32 +164,31 @@ gap.
 
 **An item's data value.** `set_data`, `random_aux_value`, `set_data_from_color_index` and
 `random_block_state` all pick one of the things a Bedrock id stands for by number. Java gave every
-one of those its own id when it flattened blocks and items, so there is no number left to set. The
-same is why a recipe's `data` beside an item, and a result naming one, are read and reported.
+one of those its own id when it flattened blocks and items, so there is no number left to set, and
+the entry naming `minecraft:bed` or `minecraft:wool` beside one is already naming an item Java has
+none of. The same is why a recipe's `data` beside an item, and a result naming one, are read and
+reported.
 
-**Two loot functions that describe something other than a drop.** `enchant_random_gear` enchants the
-mob's own equipment as it spawns, and a Java loot table describes what the mob drops rather than
-what it wears. `enchant_book_for_trading` prices a book against a villager's level, which is part of
-how Java builds a trade in its own code rather than anything a loot function states.
+**A loot function that prices a trade.** `enchant_book_for_trading` prices a book against a
+villager's level, which is part of how Java builds a trade in its own code rather than anything a
+loot function states.
 
-**What a Bedrock loot condition asks that a Java predicate cannot.** `has_variant`,
-`has_mark_variant` and `bool_property` read Bedrock entity data and a pack's own entity properties,
-and a Java entity predicate has no field naming either. `entity_properties` carries a whole Bedrock
-filter, which is a separate vocabulary from the predicate Java would check. `entity_killed` asks
-what the dropping mob itself killed, and a Java loot context holds only the victim and the killer.
-`killed_by_player_or_pets` widens that killer to anything the player tamed. The two difficulty
-chances read the world difficulty, which no Java loot condition can. `biome_has_tag` names a
-Bedrock biome tag. Each is counted by `/mcaddon entities` rather than dropped without a word.
+**One loot condition with nothing to ask.** `entity_killed` asks what the dropping mob itself
+killed, and a Java loot context holds the victim and whoever killed it and no record of what the
+victim did. It is counted by `/mcaddon entities` rather than dropped without a word. A Bedrock biome
+tag with no Java biome carrying the same idea, `sulfur_caves` among them, is named the same way, and
+a `biome_has_tag` asking for one then reads as false.
 
 **Brewing and the material reducer.** `minecraft:recipe_brewing_mix` and
 `minecraft:recipe_brewing_container` describe a brewing stand, whose recipes Java builds in its own
 code rather than reading from a data pack, so a pack cannot add one. `recipe_material_reduction`
 describes the Education Edition material reducer, which the Java game does not have as a block.
 
-**A recipe's priority, its unlock and its symmetry.** Java offers every recipe that matches rather
-than the one with the highest priority, decides what a player has unlocked from an advancement
-rather than from the recipe, and mirrors a shaped pattern whatever `assume_symmetry` says. A Bedrock
-recipe writing one of the three keeps everything else and the field is reported.
+**A recipe's priority and its symmetry.** Java offers every recipe that matches rather than the one
+with the highest priority, and mirrors a shaped pattern whatever `assume_symmetry` says. A Bedrock
+recipe writing either keeps everything else and the field is reported. An unlock naming a game event
+instead of an item is reported the same way: Java unlocks a recipe from an advancement, and no
+advancement trigger waits on a player standing in water or filling their inventory.
 
 **A smithing trim a pack invents.** From 26 the trim a smithing table applies is named on the recipe
 rather than carried by the template item, and a trim pattern is an entry in a registry a data pack
@@ -191,10 +197,11 @@ available are the ones the game already ships and the name is read back out of a
 `<pattern>_armor_trim_smithing_template`. A recipe naming any other template is reported instead.
 
 **What a trade runs over the item it hands over.** `enchant_with_levels` and `enchant_randomly`
-enchant it and `set_count` counts it. `random_dye` and the aux value functions paint a data value
-Java has none of, `exploration_map` needs a structure searched for as the trade is made, and
+enchant it, `set_count` counts it and `random_dye` paints it one of the sixteen dyes. The aux value
+functions pick one of the things a Bedrock id stands for by number, which Java has not had since it
+flattened items. `exploration_map` needs a structure searched for as the trade is made and
 `enchant_book_for_trading` prices a book against the villager's own level; Java builds each of those
-three in its own code rather than from a table, so all three are counted instead.
+two in the code that makes that trade rather than from a table, so both are counted instead.
 
 **A filter on a trade item.** Bedrock checks it as the trade is offered, out of the filter
 vocabulary. A Java offer is built once and sent to the client, which leaves nothing to ask again.

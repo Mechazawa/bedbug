@@ -55,21 +55,27 @@ public record TradeTable(List<Offer> offers, List<Integer> tierExperience) {
         }
     }
 
-    /** Every field of a trade table this reads, qualified by the level carrying it. */
+    /**
+     * Every field of a trade table this reads, qualified by the level carrying it.
+     *
+     * A field Java has no place for counts here once it is read, because reading it is what lets
+     * `/mcaddon entities` name it: a filter on a trade item is reported rather than asked.
+     */
     private static final Set<String> HANDLES = Set.of(
         "table.tiers", "tier.groups", "tier.trades", "tier.total_exp_required",
         "group.num_to_select", "group.trades",
         "trade.wants", "trade.gives", "trade.max_uses", "trade.trader_exp", "trade.reward_exp",
         "trade.weight", "item.item", "item.quantity", "item.choice", "item.functions",
-        "item.price_multiplier");
+        "item.price_multiplier", "item.filters");
 
     /**
      * Runs one function over the stack a trade is about to offer.
      *
-     * `random_dye` and the two aux value functions paint a Bedrock item data value, which Java has
-     * no room for on a stack. `exploration_map` needs a structure found in the world, and
-     * `enchant_book_for_trading` prices a book against a villager's own level; both describe a trade
-     * Java builds in its own code rather than from a table.
+     * `random_aux_value` picks one of the things a Bedrock id stands for by number, and Java gave
+     * each of those an id of its own when it flattened items, so the stack the trade names is
+     * already the wrong one. `exploration_map` needs a structure searched for as the trade is made
+     * and `enchant_book_for_trading` prices a book against the villager's own level, which is a cost
+     * on the other side of the trade from the item this runs over.
      */
     private static ItemStack applyFunction(JsonObject function, ItemStack stack, RandomSource random,
         RegistryAccess registries) {
@@ -85,6 +91,8 @@ public record TradeTable(List<Offer> offers, List<Integer> tierExperience) {
                 registries);
             case "enchant_randomly" -> Platform.enchant(random, stack, 5 + random.nextInt(26),
                 false, registries);
+            case "random_dye" -> Platform.dyed(stack,
+                net.minecraft.world.item.DyeColor.byId(random.nextInt(16)));
             default -> {
                 AddonEntities.unsupported("trade function " + name);
                 yield stack;

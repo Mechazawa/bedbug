@@ -129,13 +129,15 @@ These are the checks it runs, and what each one catches:
   translating.
 
   The recipes cover the five kinds and the fields that decide what each becomes: a furnace recipe
-  naming four cookers, a shapeless one tagged for the stonecutter, a shaped one keyed on an item tag
-  and carrying a `group` and a `priority`, a smithing transform and a smithing trim. The ember's own
-  loot table and trade table are the other two: between them they use each loot function and
-  condition that converts, both entry types, a pool condition and an entry condition, a payment with
-  two items to choose between, two tiers with the second behind an experience threshold, and a trade
-  whose result is enchanted. Each also names one thing this mod reports rather than converts, so a
-  run says both halves of the reporting path still work.
+  naming four cookers and an unlock item, a shapeless one tagged for the stonecutter and unlocked by
+  a context, a shaped one keyed on an item tag and carrying a `group`, a `priority` and an unlock
+  naming both an item and a tag, a smithing transform and a smithing trim. The ember's own loot
+  table, its equipment table and its trade table are the other three: between them they use each
+  loot function and condition that converts, both entry types, a pool condition and an entry
+  condition, a payment with two items to choose between, two tiers with the second behind an
+  experience threshold, and a trade whose result is enchanted and one whose result is dyed. Each
+  also names something this mod reports rather than converts, so a run says both halves of the
+  reporting path still work.
 - **`tools/testpack/build_modules.py`** builds a second add-on, whose script imports every
   `@minecraft/*` module the mod provides and calls one thing from each. Its sources are a manifest
   and one script under `tools/testpack/modules/`.
@@ -196,12 +198,16 @@ These are the checks it runs, and what each one catches:
   run where every test silently never started fails the same way as one where a test broke. It
   proves nothing about rendering.
 
-  **Never write into a registry a data pack loads.** Loot tables, recipes, tags and functions are
-  safe. A jukebox song, a worldgen feature and anything else the game reads through its dynamic
-  registries are not: a world whose packs write into one of those is a world the game calls
-  experimental, and it then opens behind a screen asking the player whether to load it at all. That
-  screen waits for a click forever, so a run under this harness stops dead on it, and a player gets
-  the same question every time they open their world.
+  **Never write into a registry a data pack loads.** Loot tables, recipes, advancements, tags and
+  functions are safe. A jukebox song, a worldgen feature and anything else the game reads through
+  its dynamic registries are not: a world whose packs write into one of those is a world the game
+  calls experimental, and it then opens behind a screen asking the player whether to load it at all.
+  That screen waits for a click forever, so a run under this harness stops dead on it, and a player
+  gets the same question every time they open their world.
+
+  The built-in registries are a different thing and this mod does write into them at startup, which
+  is where its entity types, items, blocks and its own loot condition type go. Fabric keeps those
+  unfrozen until mod initialisation has run, and nothing about them makes a world experimental.
 
   A green `client` proves what the server half cannot reach: every mixin applied on the drawing side,
   every model a pack's items and blocks name loaded, every texture those models name was stitched,

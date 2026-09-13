@@ -6,7 +6,18 @@
         {
           "type": "item",
           "name": "minecraft:golden_helmet",
-          "weight": 1
+          "weight": 1,
+          "functions": [
+            {
+              "function": "enchant_random_gear",
+              "chance": 0.25
+            },
+            {
+              "function": "set_armor_trim",
+              "material": "copper",
+              "pattern": "coast"
+            }
+          ]
         }
       ]
     }

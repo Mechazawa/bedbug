@@ -7,6 +7,14 @@
     "tags": ["crafting_table"],
     "group": "tp_dust",
     "priority": 1,
+    "unlock": [
+      {
+        "tag": "minecraft:planks"
+      },
+      {
+        "item": "minecraft:stick"
+      }
+    ],
     "pattern": [
       "PP",
       "PP"

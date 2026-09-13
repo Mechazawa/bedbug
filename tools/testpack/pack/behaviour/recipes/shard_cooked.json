@@ -8,6 +8,11 @@
     "input": {
       "item": "tp:dust"
     },
+    "unlock": [
+      {
+        "item": "tp:dust"
+      }
+    ],
     "output": "tp:shard"
   }
 }

@@ -54,6 +54,10 @@ public final class McAddon implements ModInitializer {
      */
     @Override
     public void onInitialize() {
+        // Before the packs are read, because a converted loot table names this condition type and
+        // the game looks the name up as it parses the table.
+        at.ioexception.mcaddon.bedrock.behaviour.BedrockCondition.register();
+
         packs = PackDiscovery.scan();
         packs.report().forEach(LOGGER::info);
 
