@@ -59,9 +59,6 @@ public final class BedrockCommands {
                                     StringArgumentType.getString(command, "stop_expression"),
                                     FloatArgumentType.getFloat(command, "blend_out_time")))))))));
 
-        // An event carries the namespace of the pack that declared it, and Brigadier's unquoted
-        // string stops at the colon. Greedy is what lets `vn:become_angry` through unquoted, which
-        // is how Bedrock writes it, and nothing follows the event for greed to swallow.
         // Bedrock plays a track for everyone; Java's own music is a sound in its own category, which
         // is what `volume` and `fade` in Bedrock's form control and what a pack ships as a sound.
         dispatcher.register(Commands.literal("music")
@@ -119,6 +116,9 @@ public final class BedrockCommands {
                         net.minecraft.commands.arguments.coordinates.Vec3Argument.getVec3(command,
                             "position"))))));
 
+        // An event carries the namespace of the pack that declared it, and Brigadier's unquoted
+        // string stops at the colon. Greedy is what lets `vn:become_angry` through unquoted, which
+        // is how Bedrock writes it, and nothing follows the event for greed to swallow.
         dispatcher.register(Commands.literal("event")
             .requires(source -> Platform.allowedAt(source, 1))
             .then(Commands.literal("entity")
