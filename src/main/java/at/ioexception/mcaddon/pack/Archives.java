@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.Locale;
 import java.util.zip.ZipEntry;
@@ -56,6 +57,30 @@ final class Archives {
         Files.writeString(marker, archive.getFileName().toString());
         McAddon.LOGGER.info("Unpacked {} ({} files).", archive.getFileName(), files);
         return target;
+    }
+
+    /**
+     * Drops every unpacked archive except the ones this scan used.
+     *
+     * An archive is unpacked under a name carrying its size and timestamp, so editing a pack leaves
+     * the copy made before the edit behind, and deleting a pack leaves its last copy behind. Neither
+     * is read again, and a pack worked on for an afternoon would otherwise leave a directory per
+     * save.
+     */
+    static void forgetUnused(Path cache, Collection<Path> inUse) {
+        Path extracted = cache.resolve("extracted");
+        if (!Files.isDirectory(extracted)) return;
+
+        try (var unpacked = Files.list(extracted)) {
+            for (Path copy : unpacked.toList()) {
+                if (inUse.contains(copy)) continue;
+                delete(copy);
+                McAddon.LOGGER.info("Dropped the unpacked copy of {}, which nothing asks for.",
+                    copy.getFileName());
+            }
+        } catch (IOException failure) {
+            McAddon.LOGGER.warn("Could not tidy {}: {}", extracted, failure.toString());
+        }
     }
 
     /** Null when the entry name would write outside the target, which is how a zip attacks a host. */

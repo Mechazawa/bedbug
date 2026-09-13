@@ -30,29 +30,37 @@ public final class PackDiscovery {
             return PackOrder.sort(packs, problems);
         }
 
-        for (Path entry : sortedEntries(addons, problems)) {
+        List<Path> entries = sortedEntries(addons, problems);
+        // A listing that failed says nothing about what is installed, so nothing is dropped on it.
+        if (entries == null) return PackOrder.sort(packs, problems);
+
+        List<Path> unpacked = new ArrayList<>();
+        for (Path entry : entries) {
             try {
                 if (Files.isDirectory(entry)) {
                     collect(entry, entry.getFileName().toString(), packs, problems);
                 } else if (Archives.isArchive(entry)) {
-                    collect(Archives.extract(entry, McAddonPaths.cache()),
-                        entry.getFileName().toString(), packs, problems);
+                    Path copy = Archives.extract(entry, McAddonPaths.cache());
+                    unpacked.add(copy);
+                    collect(copy, entry.getFileName().toString(), packs, problems);
                 }
             } catch (IOException error) {
                 problems.add(entry.getFileName() + ": " + error.getMessage());
                 McAddon.LOGGER.error("Could not read {}.", entry, error);
             }
         }
+        Archives.forgetUnused(McAddonPaths.cache(), unpacked);
 
         return PackOrder.sort(packs, problems);
     }
 
+    /** Null where the directory could not be listed, which is not the same as holding no packs. */
     private static List<Path> sortedEntries(Path addons, List<String> problems) {
         try (Stream<Path> entries = Files.list(addons)) {
             return entries.sorted().toList();
         } catch (IOException error) {
             problems.add("Could not list " + addons + ": " + error.getMessage());
-            return List.of();
+            return null;
         }
     }
 
