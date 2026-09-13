@@ -49,6 +49,9 @@ export class Tags {
     static suiteNextUpdate = "suite:nextupdate";
 }
 
+/** Named so an import of it links; the spreading itself has no Java counterpart. */
+export class SculkSpreader {}
+
 export class GameTestError extends Error {
     constructor(message, type) {
         super(message);

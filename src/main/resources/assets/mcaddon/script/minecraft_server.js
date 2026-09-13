@@ -3565,8 +3565,63 @@ export class WorldBeforeEvents {}
 export class WorldLoadAfterEvent {}
 export class WorldLoadAfterEventSignal {}
 
+// Names the newest API adds that this mod has nothing behind yet. A module is linked before any of
+// it runs, so a pack importing one of these would lose its whole script over a name rather than
+// over the one line that used it. Each is here so the import succeeds; reaching for what they would
+// do reports through the same path every other gap does.
+export class AimAssistCategory {}
+export class AimAssistCategorySettings {}
+export class AimAssistPreset {}
+export class AimAssistPresetSettings {}
+export class AimAssistRegistry {}
+export class BlockComponentBlockStateChangeEvent {}
+export class BlockContainerClosedAfterEvent {}
+export class BlockContainerClosedAfterEventSignal {}
+export class BlockContainerOpenedAfterEvent {}
+export class BlockContainerOpenedAfterEventSignal {}
+export class DimensionRegistry {}
+export class EntityContainerClosedAfterEvent {}
+export class EntityContainerClosedAfterEventSignal {}
+export class EntityContainerOpenedAfterEvent {}
+export class EntityContainerOpenedAfterEventSignal {}
+export class EntityEnderInventoryComponent {}
+export class EntityUpgradeAfterEvent {}
+export class EntityUpgradeAfterEventSignal {}
+export class EntityWaypoint {}
+export class ISerializable {}
+export class LocationWaypoint {}
+export class LocatorBar {}
+export class PlayerAimAssist {}
+export class PlayerCancelBreakingBlockAfterEvent {}
+export class PlayerCancelBreakingBlockAfterEventSignal {}
+export class PlayerSplitScreenSlot {}
+export class PlayerStartBreakingBlockAfterEvent {}
+export class PlayerStartBreakingBlockAfterEventSignal {}
+export class PlayerWaypoint {}
+export class PrimitiveShape {}
+export class PrimitiveShapesManager {}
+export class SoundInstance {}
+export class TextPrimitive {}
+export class Waypoint {}
+export class WaypointTexture {}
+
+export const AimAssistTargetMode = Object.freeze({ Angle: "Angle", Distance: "Distance" });
+export const LocatorBarErrorReason = Object.freeze({
+    InvalidPlayer: "InvalidPlayer",
+    InvalidWaypoint: "InvalidWaypoint",
+});
+
 /** A failure a pack catches by name, which is why each of these is a real error. */
 export class BlockCustomComponentAlreadyRegisteredError extends Error {}
+export class CustomDimensionAlreadyRegisteredError extends Error {}
+export class CustomDimensionInvalidRegistryError extends Error {}
+export class CustomDimensionNameError extends Error {}
+export class CustomDimensionReloadNewDimensionError extends Error {}
+export class InvalidEntityComponentError extends Error {}
+export class InvalidWaypointError extends Error {}
+export class InvalidWaypointTextureSelectorError extends Error {}
+export class LocatorBarError extends Error {}
+export class PrimitiveShapeError extends Error {}
 export class BlockCustomComponentReloadNewComponentError extends Error {}
 export class BlockCustomComponentReloadNewEventError extends Error {}
 export class BlockCustomComponentReloadVersionError extends Error {}
