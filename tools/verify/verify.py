@@ -115,6 +115,14 @@ JOINED = re.compile(r"(\S+) joined the game")
 # Why a client left, which is the line carrying a registry the two halves disagreed about.
 LOST_CONNECTION = re.compile(r"lost connection: (.+)")
 
+# What a client says about an entry the server holds and it does not, naming the registry it looked
+# in. A client that never read the packs writes one of these per entry the packs declare.
+MISSING_ENTRY = re.compile(r"is missing from local registry \((minecraft:[a-z_]+)\)")
+
+# Everything the sync says while turning such a client away, which a run that asked for it reads as
+# the answer rather than as a fault.
+MISSING_SYNC = re.compile(r"ClientRegistrySyncHandler|Received unknown remote registry entries")
+
 # The console's answer to `give`, which says the item exists and was handed to somebody.
 GAVE = re.compile(r"Gave \d+ .* to ")
 
@@ -855,7 +863,30 @@ def check_client(root: Path, version: str, timeout: float, hold: float, verbose:
     return verdict
 
 
-def check_join(root: Path, version: str, timeout: float, hold: float, verbose: bool) -> Verdict:
+def refused(verdict: Verdict, seen: list[str]) -> Verdict:
+    """What a client joining without the add-on has to do, which is be turned away and told why.
+
+    Both halves build a pack's items, blocks, entity types, particles and sound events into the
+    registries themselves as the game starts, so a client that never read the packs is missing
+    entries the server holds and the two cannot agree. `README.md` says as much: a server and every
+    client carry the same packs. What is checked here is that the refusal is the orderly kind, which
+    names the registry and the entry it could not find, rather than a crash or a silent hang.
+    """
+    missing = [one for one in seen if MISSING_ENTRY.search(one)]
+    if not missing:
+        verdict.fail("a client without the add-on was not told what it lacked",
+                     "nothing named a registry entry it could not find, so whatever turned it away "
+                     "said nothing a player could act on")
+        return verdict
+
+    named = {match.group(1) for match in (MISSING_ENTRY.search(one) for one in missing) if match}
+    verdict.notes.append(f"turned away naming {len(missing)} entries across "
+                         + ", ".join(sorted(named)))
+    return verdict
+
+
+def check_join(root: Path, version: str, timeout: float, hold: float, verbose: bool,
+               bare: bool = False) -> Verdict:
     """Starts a dedicated server and connects a client to it, which is what a multiplayer world is.
 
     Everything the other two modes reach happens inside one process, where the two halves share
@@ -868,8 +899,14 @@ def check_join(root: Path, version: str, timeout: float, hold: float, verbose: b
     somebody is standing in the world, and a message typed into the server console comes back out of
     the client's log. The last one is the whole round trip, because only the server can send it and
     only a client in that server's world can print it.
+
+    With `bare`, the client is started after its packs have been taken away, which is the player who
+    joins without the add-on installed. A pack claiming a `KnownPack` tells the server that such a
+    client already holds its registry entries, so this is the run that says whether that claim is
+    true: the client has to reach the world all the same, and it may arrive without the add-on but
+    never short of something it was promised.
     """
-    verdict = Verdict(f"{version} join")
+    verdict = Verdict(f"{version} join" + (" without the add-on" if bare else ""))
     if occupied(SERVER, verdict, version) or occupied(CLIENT, verdict, version):
         return verdict
 
@@ -883,10 +920,19 @@ def check_join(root: Path, version: str, timeout: float, hold: float, verbose: b
     marker = f"MCADDONHEARD{os.getpid()}{int(time.time())}"
     heard = re.compile(re.escape(marker))
     client: dict = {"lines": [], "outcome": "never started", "log": None}
+    installed = root / "versions" / version / "run" / "addons"
+    withheld = root / "versions" / version / "run" / "addons-withheld"
+    if bare:
+        withheld.mkdir(parents=True, exist_ok=True)
 
     def connect(server: subprocess.Popen, served: list[str]) -> None:
         """Runs a client against the server that is up, and talks to it from the server console."""
         deadline = time.monotonic() + timeout
+        # The server has read its packs by now, so taking them away here leaves a client that has
+        # none of them, which is what a player joining without the add-on installed looks like.
+        if bare:
+            for addon in addons:
+                addon.rename(withheld / addon.name)
 
         def talk() -> None:
             if not wait_for(server, served, JOINED, deadline):
@@ -903,8 +949,17 @@ def check_join(root: Path, version: str, timeout: float, hold: float, verbose: b
             join=f"127.0.0.1:{port}")
         talking.join(timeout=10)
 
-    served, log, outcome = play(root, version, replace(SERVER, name="join-server"), SERVER.ready,
-                                [(1.0, "mcaddon packs")], timeout, 0.0, verbose, while_loaded=connect)
+    try:
+        served, log, outcome = play(root, version, replace(SERVER, name="join-server"), SERVER.ready,
+                                    [(1.0, "mcaddon packs")], timeout, 0.0, verbose,
+                                    while_loaded=connect)
+    finally:
+        # However the run ended, the packs go back where they were: a later run reading an addons
+        # directory this one emptied would report on a checkout nobody has.
+        if bare and withheld.is_dir():
+            for addon in sorted(withheld.iterdir()):
+                addon.rename(installed / addon.name)
+            withheld.rmdir()
 
     seen = client["lines"]
     verdict.notes.append(f"server {outcome}, {len(served)} lines in {log.relative_to(root)}")
@@ -917,9 +972,16 @@ def check_join(root: Path, version: str, timeout: float, hold: float, verbose: b
 
     scan(served, verdict, (("server reached done", r"Done \("),)
          + (EXPECTED_WITH_ADDON if addons else ()))
-    scan(seen, verdict, EXPECTED_WITH_ADDON if addons else ())
+    # A client that was never given the packs has nothing to say about them, so only the server side
+    # is held to reading one, and the entries it reports missing are the point of the run rather
+    # than a failure of it. What it still has to do is refuse in an orderly way, checked below.
+    scan([one for one in seen if not (bare and MISSING_SYNC.search(one))],
+         verdict, EXPECTED_WITH_ADDON if addons and not bare else ())
     gradle_failed(served, outcome, verdict)
     gradle_failed(seen, client["outcome"], verdict)
+
+    if bare:
+        return refused(verdict, seen)
 
     if not any(LOGGED_IN.search(one) for one in served):
         verdict.fail("no client logged in",
@@ -1052,6 +1114,12 @@ def main() -> int:
                 if arguments.mode in ("join", "all"):
                     found.append(check_join(
                         root, version, arguments.timeout, arguments.hold, arguments.verbose))
+                    # The same world again, with the packs kept from the client. A pack claiming a
+                    # KnownPack promises the server that such a client already holds its registry
+                    # entries, and this is the run that holds the promise to account.
+                    found.append(check_join(
+                        root, version, arguments.timeout, arguments.hold, arguments.verbose,
+                        bare=True))
             return found
 
         with ThreadPoolExecutor(max_workers=len(versions)) as running_versions:
