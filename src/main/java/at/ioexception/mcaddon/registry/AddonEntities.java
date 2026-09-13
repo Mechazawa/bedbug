@@ -333,7 +333,23 @@ public final class AddonEntities {
         "minecraft:inside_block_notifier", "minecraft:block_sensor", "minecraft:celebrate_hunt",
         "minecraft:friction_modifier", "minecraft:rotation_axis_aligned",
         "minecraft:flocking", "minecraft:boostable", "minecraft:vibration_damper",
-        "minecraft:hide");
+        "minecraft:hide",
+        "minecraft:behavior.guardian_attack", "minecraft:behavior.sonic_boom",
+        "minecraft:behavior.investigate_suspicious_location",
+        "minecraft:behavior.silverfish_merge_with_stone",
+        "minecraft:behavior.silverfish_wake_up_friends", "minecraft:behavior.vex_random_move",
+        "minecraft:behavior.vex_copy_owner_target",
+        "minecraft:behavior.wither_random_attack_pos_goal",
+        "minecraft:behavior.wither_target_highest_damage",
+        "minecraft:behavior.run_around_like_crazy", "minecraft:behavior.ocelot_sit_on_block",
+        "minecraft:behavior.player_ride_tamed", "minecraft:behavior.skeleton_horse_trap",
+        "minecraft:behavior.defend_village_target", "minecraft:behavior.use_kinetic_weapon",
+        "minecraft:behavior.stay_near_noteblock",
+        "minecraft:behavior.go_and_give_items_to_noteblock",
+        "minecraft:behavior.dragonholdingpattern", "minecraft:behavior.dragontakeoff",
+        "minecraft:behavior.dragonlanding", "minecraft:behavior.dragonscanning",
+        "minecraft:behavior.dragonchargeplayer", "minecraft:behavior.dragonstrafeplayer",
+        "minecraft:behavior.dragonflaming");
 
     /**
      * The trade table an entity names, read while the pack it came from is still in hand.

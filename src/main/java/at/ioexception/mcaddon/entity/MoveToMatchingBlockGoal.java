@@ -9,6 +9,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.ai.goal.MoveToBlockGoal;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Block;
@@ -36,17 +37,27 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
     /** What a pack's controller reads this walk back as, or null where Bedrock publishes nothing. */
     private final String flag;
 
+    /** The pose held on arrival, or null where the walk is all there is to the behaviour. */
+    private final Pose settled;
+
     private MoveToMatchingBlockGoal(PathfinderMob mob, JsonObject component,
         Predicate<BlockState> wanted, BiConsumer<ServerLevel, BlockPos> arrival) {
-        this(mob, component, wanted, arrival, null);
+        this(mob, component, wanted, arrival, null, null);
     }
 
     private MoveToMatchingBlockGoal(PathfinderMob mob, JsonObject component,
         Predicate<BlockState> wanted, BiConsumer<ServerLevel, BlockPos> arrival, String flag) {
+        this(mob, component, wanted, arrival, flag, null);
+    }
+
+    private MoveToMatchingBlockGoal(PathfinderMob mob, JsonObject component,
+        Predicate<BlockState> wanted, BiConsumer<ServerLevel, BlockPos> arrival, String flag,
+        Pose settled) {
         super(mob, speed(component), range(component), height(component));
         this.wanted = wanted;
         this.arrival = arrival;
         this.flag = flag;
+        this.settled = settled;
     }
 
     @Override
@@ -59,6 +70,7 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
     public void stop() {
         super.stop();
         publish(false);
+        if (settled != null) mob.setPose(Pose.STANDING);
     }
 
     private void publish(boolean running) {
@@ -132,11 +144,27 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
             (level, at) -> bonemeal(level, at, mob));
     }
 
+    /**
+     * `minecraft:behavior.ocelot_sit_on_block`, which is a cat claiming whatever is warm.
+     *
+     * Java writes this as a goal on its own cat, holding the list of blocks it likes. The list is
+     * the same here, because it is the blocks themselves that a pack means by the name. The sitting
+     * is the pose, which is what `q.is_sitting` already answers from.
+     */
+    public static MoveToMatchingBlockGoal sitOnBlock(PathfinderMob mob, JsonObject component) {
+        return new MoveToMatchingBlockGoal(mob, component,
+            state -> state.is(net.minecraft.world.level.block.Blocks.CHEST)
+                || state.is(net.minecraft.world.level.block.Blocks.FURNACE)
+                || state.getBlock() instanceof net.minecraft.world.level.block.BedBlock,
+            null, null, Pose.SITTING);
+    }
+
     @Override
     public void tick() {
         super.tick();
-        if (arrival == null || !isReachedTarget()) return;
-        if (!(mob.level() instanceof ServerLevel level)) return;
+        if (!isReachedTarget()) return;
+        if (settled != null) mob.setPose(settled);
+        if (arrival == null || !(mob.level() instanceof ServerLevel level)) return;
 
         arrival.accept(level, blockPos);
     }
