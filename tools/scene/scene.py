@@ -36,7 +36,7 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from threading import Thread
+from threading import Lock, Thread
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 JAVA_HOME = "/opt/homebrew/opt/openjdk@25"
@@ -215,10 +215,12 @@ def datapack(world: pathlib.Path, commands: list[str], format: int) -> pathlib.P
     }), encoding="utf-8")
 
     # Held over the stage while the chunks under it load: a fill reaches only what is loaded, and a
-    # player put down a moment too early falls through a floor that is not there yet.
+    # player put down a moment too early falls through a floor that is not there yet. A spectator
+    # is what waits there, because a spectator cannot fall, drown or suffocate, and a picture of a
+    # death screen says nothing about what was drawn.
     waiting = [
         "execute unless score #ran mcaddon matches 1 run scoreboard players add #wait mcaddon 1",
-        f"execute unless score #ran mcaddon matches 1 if entity @a run gamemode creative @a",
+        "execute unless score #ran mcaddon matches 1 if entity @a run gamemode spectator @a",
         f"execute unless score #ran mcaddon matches 1 if entity @a run "
         f"tp @a {CAMERA_X} {FLOOR_Y + 4} {ROW_Z}",
         f"execute if entity @a if score #wait mcaddon matches {SETTLE_TICKS}.. "
@@ -252,6 +254,28 @@ def datapack(world: pathlib.Path, commands: list[str], format: int) -> pathlib.P
 # F1 takes the heads-up display off the screen, F2 makes the game save a picture of itself.
 HIDE_HUD = 122
 SCREENSHOT = 120
+
+
+def dontPauseOnLostFocus(version: str) -> None:
+    """Tells this version's client to keep playing when another window takes the focus.
+
+    Four games are photographed at the same time and each picture is taken by bringing one of them
+    to the front, which takes the focus from the other three. A single player game stops and opens
+    its menu when that happens, and a picture of the menu says nothing about what was drawn.
+    """
+    options = ROOT / "versions" / version / "run" / "options.txt"
+    lines = []
+    if options.is_file():
+        lines = [one for one in options.read_text(encoding="utf-8").splitlines()
+                 if not one.startswith("pauseOnLostFocus:")]
+    lines.append("pauseOnLostFocus:false")
+    options.parent.mkdir(parents=True, exist_ok=True)
+    options.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+# One picture at a time, whichever version is being photographed: taking one means bringing a window
+# to the front, and two of those at once would each leave the other's picture showing the wrong game.
+PHOTOGRAPHING = Lock()
 
 
 def gamePid(version: str) -> int | None:
@@ -295,12 +319,13 @@ def capture(version: str, target: pathlib.Path) -> None:
     shots = ROOT / "versions" / version / "run" / "screenshots"
     before = set(shots.glob("*.png")) if shots.is_dir() else set()
 
-    pid = gamePid(version)
-    if pid is None:
-        return
-    press(pid, HIDE_HUD)
-    press(pid, SCREENSHOT)
-    time.sleep(1.5)
+    with PHOTOGRAPHING:
+        pid = gamePid(version)
+        if pid is None:
+            return
+        press(pid, HIDE_HUD)
+        press(pid, SCREENSHOT)
+        time.sleep(1.5)
 
     taken = sorted(set(shots.glob("*.png")) - before) if shots.is_dir() else []
     if not taken:
@@ -394,6 +419,7 @@ def run(version: str, one: dict, timeout: float, keep: bool) -> tuple[bool, list
     if world is None:
         return (False, [f"{version} has no saved world to open"])
 
+    dontPauseOnLostFocus(version)
     datapack(world, one["commands"], packFormat(version))
     logs = ROOT / "build" / "scene"
     logs.mkdir(parents=True, exist_ok=True)
