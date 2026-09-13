@@ -114,6 +114,10 @@ public final class EntityEvents {
 
         addon.activeGroups().removeAll(change.remove());
         addon.activeGroups().addAll(change.add());
+        // `q.had_component_group` is how a pack's render controller branches on a group, so the
+        // drawing side is told which are on.
+        change.remove().forEach(group -> addon.setValue("group." + group, false));
+        change.add().forEach(group -> addon.setValue("group." + group, true));
 
         for (String group : change.add()) {
             JsonObject components = definition.componentGroups().get(group);

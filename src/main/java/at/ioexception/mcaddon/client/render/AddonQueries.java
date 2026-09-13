@@ -309,6 +309,14 @@ public final class AddonQueries implements MolangEnvironment.Queries {
 
             case "has_armor_slot" -> hasArmourSlot(arguments);
             case "armor_damage_slot" -> armourDamage(arguments);
+            case "armor_texture_slot", "armor_material_slot" -> armourNamed(arguments);
+            case "armor_color_slot" -> armourColour(arguments, member);
+
+            // How much of the cooldown a use put the held item under is left. Java keeps it as the
+            // share still to run rather than as a count of ticks, which is what the swing is drawn
+            // against anyway.
+            case "cooldown_time_remaining" -> MolangValue.of(cooldownLeft());
+            case "is_cooldown_category" -> MolangValue.of(cooldownLeft() > 0);
             case "equipment_count" -> MolangValue.of(ARMOUR.stream()
                 .filter(slot -> !worn(slot).isEmpty()).count());
             case "has_head_gear" -> MolangValue.of(!worn(EquipmentSlot.HEAD).isEmpty());
@@ -353,6 +361,45 @@ public final class AddonQueries implements MolangEnvironment.Queries {
             // A rising entity is stretched and a landing one is squashed, both within one block.
             case "current_squish_value" -> MolangValue.of(squish());
             case "previous_squish_value" -> MolangValue.of(squish());
+
+            // How far through settling or standing up the entity is, which its pose already says.
+            case "sit_amount" -> MolangValue.of(entity.getPose() == Pose.SITTING ? 1 : 0);
+            case "lie_amount" -> MolangValue.of(entity.getPose() == Pose.SLEEPING ? 1 : 0);
+            case "standing_scale" -> MolangValue.of(entity.getPose() == Pose.STANDING ? 1 : 0);
+            case "is_idling" -> MolangValue.of(entity.getDeltaMovement().horizontalDistanceSqr() < 1e-4
+                && !flag(properties, "has_target"));
+            case "is_wall_climbing" -> MolangValue.of(entity.horizontalCollision
+                && flag(properties, "can_climb"));
+            case "is_critical" -> MolangValue.of(entity instanceof LivingEntity living
+                && living.fallDistance > 0 && !living.onGround());
+
+            // A wing beats faster the faster the entity is going, and its phase runs off the clock.
+            case "wing_flap_speed" -> MolangValue.of(
+                1 + entity.getDeltaMovement().horizontalDistance() * 10);
+            case "wing_flap_position" -> MolangValue.of(
+                Math.sin((environment.lifeTime() + partialTick / 20)
+                    * (1 + entity.getDeltaMovement().horizontalDistance() * 10) * Math.PI * 2));
+            case "cape_flap_amount" -> MolangValue.of(
+                Math.min(1, entity.getDeltaMovement().horizontalDistance() * 4));
+
+            // `minecraft:heartbeat` states the interval in seconds; the phase is how far into the
+            // current beat the entity is.
+            case "heartbeat_interval" -> MolangValue.of(number(properties.get("heartbeat_interval")));
+            case "heartbeat_phase" -> MolangValue.of(heartbeatPhase(properties));
+            case "fuse_time" -> MolangValue.of(number(properties.get("fuse_time")));
+
+            case "actor_count" -> MolangValue.of(actorCount());
+            case "all_tags" -> MolangValue.of(families(properties, arguments, true));
+            case "any_tag" -> MolangValue.of(families(properties, arguments, false));
+            case "has_biome_tag" -> MolangValue.of(biomeTags(arguments, false));
+            case "had_component_group" -> MolangValue.of(!arguments.isEmpty()
+                && properties.containsKey("group." + text(arguments, 0)));
+
+            // Bedrock reports what a device can afford to draw. A Java client has no such tiers, and
+            // the highest is what a pack written for one should get.
+            case "client_memory_tier", "server_memory_tier" -> MolangValue.of(MEMORY_TIER);
+
+            case "noise" -> MolangValue.of(noise(arguments));
 
             // `q.any` and `q.all` take a subject and a list of conditions the caller already resolved.
             case "any" -> MolangValue.of(arguments.stream().skip(2).anyMatch(MolangValue::truthy));
@@ -798,6 +845,103 @@ public final class AddonQueries implements MolangEnvironment.Queries {
         int index = arguments.isEmpty() ? -1 : (int) arguments.get(0).number();
         return index < 0 || index >= ARMOUR.size() ? MolangValue.ZERO
             : MolangValue.of(!worn(ARMOUR.get(index)).isEmpty());
+    }
+
+    /** The highest tier Bedrock reports for a device, which is what a Java client always is. */
+    private static final int MEMORY_TIER = 4;
+
+    /** The name of the item worn in one armour slot, which is what a pack branches its texture on. */
+    private MolangValue armourNamed(List<MolangValue> arguments) {
+        int index = arguments.isEmpty() ? -1 : (int) arguments.get(0).number();
+        return index < 0 || index >= ARMOUR.size() ? MolangValue.of("")
+            : MolangValue.of(itemName(worn(ARMOUR.get(index)), false));
+    }
+
+    /** The dyed colour of the item worn in one armour slot, by channel. */
+    private MolangValue armourColour(List<MolangValue> arguments, String channel) {
+        int index = arguments.isEmpty() ? -1 : (int) arguments.get(0).number();
+        if (index < 0 || index >= ARMOUR.size()) return MolangValue.ZERO;
+
+        //? if >=1.21 {
+        int colour = net.minecraft.world.item.component.DyedItemColor.getOrDefault(
+            worn(ARMOUR.get(index)), 0);
+        //?} else {
+        /*int colour = 0;
+        *///?}
+        return switch (channel) {
+            case "r" -> MolangValue.of((colour >> 16 & 255) / 255d);
+            case "g" -> MolangValue.of((colour >> 8 & 255) / 255d);
+            case "b" -> MolangValue.of((colour & 255) / 255d);
+            case "a" -> MolangValue.ONE;
+            default -> MolangValue.ZERO;
+        };
+    }
+
+    /** How much of the held item's cooldown is still to run, between nothing and one. */
+    private double cooldownLeft() {
+        return entity instanceof Player player
+            ? Platform.cooldownLeft(player, player.getMainHandItem()) : 0;
+    }
+
+    /** How far into the current beat the entity is, between nothing and one whole beat. */
+    private double heartbeatPhase(Map<String, Object> properties) {
+        double interval = number(properties.get("heartbeat_interval"));
+        if (interval <= 0) return 0;
+
+        return (animator.environment().lifeTime() % interval) / interval;
+    }
+
+    /** How many entities the client is holding, which is what Bedrock counts. */
+    private int actorCount() {
+        if (!(entity.level() instanceof net.minecraft.client.multiplayer.ClientLevel client)) return 0;
+
+        return (int) java.util.stream.StreamSupport
+            .stream(client.entitiesForRendering().spliterator(), false).count();
+    }
+
+    /**
+     * Whether the entity belongs to the families the arguments name.
+     *
+     * `minecraft:type_family` is what a Bedrock entity's families come from, and the server sends
+     * the set under `family.<name>` so the drawing side can answer without knowing the pack.
+     */
+    private static boolean families(Map<String, Object> properties, List<MolangValue> arguments,
+        boolean all) {
+        boolean any = false;
+        for (MolangValue argument : arguments) {
+            boolean has = properties.containsKey("family." + argument.text());
+            if (all && !has) return false;
+            any |= has;
+        }
+        return all ? !arguments.isEmpty() : any;
+    }
+
+    /**
+     * A number that stays the same for the same inputs and looks random across them.
+     *
+     * Bedrock answers `query.noise` from a Perlin field the engine seeds itself. Nothing a pack does
+     * depends on the exact field, only on it being smooth and repeatable, so this is value noise
+     * over the arguments with the same shape.
+     */
+    private static double noise(List<MolangValue> arguments) {
+        double along = 0;
+        for (int axis = 0; axis < arguments.size(); axis++) {
+            along += arguments.get(axis).number() * NOISE_AXES[axis % NOISE_AXES.length];
+        }
+
+        double whole = Math.floor(along);
+        double between = along - whole;
+        double smooth = between * between * (3 - 2 * between);
+        return valueAt(whole) + (valueAt(whole + 1) - valueAt(whole)) * smooth;
+    }
+
+    /** Three primes, so moving along one axis is not the same as moving along another. */
+    private static final double[] NOISE_AXES = {1.0, 57.0, 113.0};
+
+    /** One lattice point of the noise, between nothing and one. */
+    private static double valueAt(double point) {
+        long hashed = Double.doubleToLongBits(point) * 6364136223846793005L + 1442695040888963407L;
+        return ((hashed >>> 11) & 0xFFFFF) / (double) 0xFFFFF;
     }
 
     private MolangValue armourDamage(List<MolangValue> arguments) {

@@ -313,6 +313,7 @@ public class AddonEntity extends PathfinderMob
         *///?}
 
         wearWhatThePackRolled();
+        publishWhatItIs();
         if (declares("minecraft:boss")) {
             bossBar = Platform.bossBar(getDisplayName());
             bossBar.setDarkenScreen(number(definition, "minecraft:boss", "should_darken_sky", 0) != 0);
@@ -1673,6 +1674,35 @@ public class AddonEntity extends PathfinderMob
                     if (!AddonEntities.implemented(behaviour)) AddonEntities.unsupported(behaviour);
                 }
             }
+        }
+    }
+
+    /**
+     * Sends the drawing side the facts about this entity that never change while it lives.
+     *
+     * A pack's render controllers ask what the entity is as freely as they ask what it is doing:
+     * which families it belongs to, whether it can climb or swim, how long its fuse burns. All of
+     * that is in the behaviour pack, which the client may not have, so it is sent rather than read.
+     */
+    private void publishWhatItIs() {
+        for (com.google.gson.JsonElement family : at.ioexception.mcaddon.util.Json.list(
+            componentBody("minecraft:type_family"), "family")) {
+            if (family.isJsonPrimitive()) setValue("family." + family.getAsString(), true);
+        }
+
+        setValue("can_climb", declares("minecraft:can_climb"));
+        setValue("can_fly", declares("minecraft:navigation.fly") || declares("minecraft:movement.fly"));
+        setValue("can_swim", declares("minecraft:navigation.swim")
+            || declares("minecraft:movement.amphibious"));
+        setValue("can_walk", declares("minecraft:navigation.walk")
+            || declares("minecraft:navigation.generic"));
+        setValue("can_power_jump", declares("minecraft:can_power_jump"));
+
+        if (declares("minecraft:heartbeat")) {
+            setValue("heartbeat_interval", number(definition, "minecraft:heartbeat", "interval", 2));
+        }
+        if (declares("minecraft:explode")) {
+            setValue("fuse_time", number(definition, "minecraft:explode", "fuse_length", 1.5));
         }
     }
 

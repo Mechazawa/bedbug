@@ -847,6 +847,21 @@ public final class Platform {
     }
 
     /**
+     * How much of a stack's use cooldown is still to run, between nothing and one.
+     *
+     * 1.21.2 moved the question from the item to the stack, because a cooldown became something a
+     * stack's own components can name a group for.
+     */
+    public static float cooldownLeft(net.minecraft.world.entity.player.Player player,
+        net.minecraft.world.item.ItemStack stack) {
+        //? if >=1.21.2 {
+        return player.getCooldowns().getCooldownPercent(stack, 0f);
+        //?} else {
+        /*return player.getCooldowns().getCooldownPercent(stack.getItem(), 0f);
+        *///?}
+    }
+
+    /**
      * Paints a pack's dyeable items in the colour they carry.
      *
      * From 1.21.4 the colour is a tint named in the item's own definition file, which the converter
