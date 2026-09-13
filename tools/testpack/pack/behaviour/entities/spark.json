@@ -1,0 +1,103 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:spark",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false
+    },
+    "component_groups": {
+      "tp:landed": {
+        "minecraft:instant_despawn": {}
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": ["tp_spark"]
+      },
+      "minecraft:collision_box": {
+        "width": 0.25,
+        "height": 0.25
+      },
+      "minecraft:health": {
+        "value": 1,
+        "max": 1
+      },
+      "minecraft:physics": {},
+      "minecraft:custom_hit_test": {
+        "hitboxes": [
+          {
+            "width": 1.5,
+            "height": 1.0,
+            "pivot": [0, 0.5, 0]
+          }
+        ]
+      },
+      "minecraft:projectile": {
+        "power": 1.4,
+        "gravity": 0.03,
+        "inertia": 0.99,
+        "liquid_inertia": 0.6,
+        "anchor": 1,
+        "offset": [0, -0.1, 0],
+        "angle_offset": 2,
+        "shoot_target": true,
+        "shoot_sound": "random.bow",
+        "hit_sound": "random.bowhit",
+        "hit_ground_sound": "random.bowhit",
+        "uncertainty_base": 6,
+        "uncertainty_multiplier": 2,
+        "owner_launch_immunity_ticks": 5,
+        "on_fire_time": 3,
+        "homing": false,
+        "ignored_entities": ["tp:spark"],
+        "splash_range": 2,
+        "on_hit": {
+          "impact_damage": {
+            "damage": [2, 4],
+            "knockback": true,
+            "catch_fire": true,
+            "destroy_on_hit": true,
+            "filter": "mob"
+          },
+          "definition_event": {
+            "affect_projectile": true,
+            "event_trigger": {
+              "event": "tp:landed"
+            }
+          },
+          "particle_on_hit": {
+            "particle_type": "critical_hit",
+            "num_particles": 6,
+            "on_entity_hit": true,
+            "on_other_hit": true
+          },
+          "grant_xp": {
+            "minXP": 1,
+            "maxXP": 3
+          },
+          "mob_effect": {
+            "effect": "glowing",
+            "amplifier": 0,
+            "durationnormal": 60
+          },
+          "stick_in_ground": {
+            "shake_time": 0.5
+          },
+          "spawn_aoe_cloud": {
+            "radius": 2,
+            "duration": 20
+          }
+        }
+      }
+    },
+    "events": {
+      "tp:landed": {
+        "add": {
+          "component_groups": ["tp:landed"]
+        }
+      }
+    }
+  }
+}

@@ -52,6 +52,16 @@ server decides what happens; the client draws it.
   their events: environment, entity, target-nearby, block, timer, scheduler, drying-out, damage,
   interact, spawn-entity and hurt-on-condition. Their properties reach every client, so a model
   looks the same in multiplayer as it does alone.
+- What a pack's entity can be besides a mob that walks about. One a pack calls a projectile flies
+  the arc its own component describes, spread by the inaccuracy the pack asked for, and on landing
+  it damages, burns, poisons, sticks in the ground, drops experience, throws its particles and fires
+  the pack's own event; what shoots it is an ordinary `minecraft:shooter`. One that belongs on rails
+  stays on the track at the speed the pack allows and answers a live rail with its own event,
+  putting its riders off where it was told to. One that remembers writes down what came near it and
+  where it heard something happen, and its memory behaviours walk to that, flee it, or hold the
+  place it chose. One given the ender dragon's death takes the dragon's two hundred ticks over it
+  rather than a mob's twenty. And one declaring hit boxes wider than the box it collides in is hit
+  where it looks hit, by a swing and by an arrow alike, while still fitting through the same gap.
 - Items, including edible and wearable ones, spawn eggs, and a creative tab per add-on. A dyeable
   item takes the colour the pack painted it and the one a player dyes it. A bow draws and fires
   whatever the pack loads it with. A bag holds other items. A drop the pack asks to keep lies there.
@@ -166,13 +176,13 @@ compare what they read against the names this mod acts on:
 
 | Surface | Answered |
 | --- | --- |
-| Entity components | 93% |
-| Entity AI goals | 99% |
+| Entity components | 97% |
+| Entity AI goals | 100% |
 | Entity filters | 100% |
 | Molang queries | 100% |
 | Molang maths | 100% |
 | Block components | 100% |
-| Item components | 86% |
+| Item components | 88% |
 | Command names | 75% |
 | Command keywords | 60% |
 | Game rules | 78% |
@@ -195,15 +205,24 @@ get the current figures; the ones above are a snapshot.
 
 ## What does not work
 
-**What no add-on entity can be.** A pack's entity is a Java mob, which fixes what it can become.
-`minecraft:projectile` describes a thing that flies and hits, `rail_movement` and `rail_sensor`
-describe a minecart, and the `player.*` components describe a player; none of the three is a mob.
-The memory components describe Java's brain, which its own mobs have and a data-driven one does not.
-Aim assist, pack settings and the device memory tiers describe a Bedrock client rather than a world.
-`minecraft:exhaustion_values` prices a player's food bar, which a mob has none of, and
-`minecraft:bucketable` asks for the entity in a bucket, which Java keeps as an item made for that one
-mob. `minecraft:custom_hit_test` gives an entity hit boxes apart from the one it collides in, and Java
-has the one box for both. Each is counted and named rather than silently doing nothing.
+**What a pack writes on the player rather than on an entity of its own.** `minecraft:player.hunger`,
+`player.saturation`, `player.exhaustion`, `player.level` and `player.experience` set the five numbers
+a player carries, and `minecraft:exhaustion_values` prices each action against the food bar. Bedrock
+ignores all six anywhere but on the player, so the only place a pack can write them is its own
+`entities/player.json`, a definition of an entity the game already has rather than one it is adding.
+This mod keeps the game's definition of such an entity and names every component written on the
+pack's, these six included, so a pack overriding a vanilla entity is told which of its components
+went unread rather than finding out by watching.
+
+**An entity in a bucket.** `minecraft:bucketable` would make a mob one a bucket picks up, which Java
+has an interface for: a mob implementing `Bucketable` answers `getBucketItemStack()` with the item
+the player is left holding. What the component does not say is which item that is. Mojang publishes
+the name with an empty body, no field of any kind and no documentation, and no entity in the vanilla
+behaviour pack declares it, so there is nothing in a pack to build the bucket out of. It is counted
+and named.
+
+**Aim assist, pack settings and the device memory tiers** describe a Bedrock client rather than a
+world, and are counted and named the same way.
 
 **An item's data value.** `set_data`, `random_aux_value`, `set_data_from_color_index` and
 `random_block_state` all pick one of the things a Bedrock id stands for by number. Java gave every
@@ -215,10 +234,13 @@ stacks of one id but different numbers may merge, and in Java two stacks of one 
 item, so both answers to it describe what already happens.
 
 **What a bag may hold.** `minecraft:storage_weight_limit` caps what a bag carries and
-`minecraft:storage_weight_modifier` prices one item inside one. Java counts the same two numbers,
-sixty-four for a full bundle and a sixteenth of it for a bundle inside a bundle, but it counts them
-from a constant inside the bundle's own contents rather than from anything the item carries, and
-there is no data component holding either. A bag from a pack is a Java bundle of the ordinary size.
+`minecraft:storage_weight_modifier` prices one item inside one. Java counts the same two numbers and
+keeps both inside `BundleContents`: the cap is the literal `Fraction.ONE` that
+`BundleContents.Mutable.getMaxAmountToAdd` subtracts from, and an item's weight is
+`BundleContents.getWeight`, one over its stack size. Neither can be asked which bundle it is
+counting for, because `Mutable` holds the contents and their total and no reference to the item
+carrying them, so there is nowhere to read a pack's own cap from. 1.20.1 has no `BundleContents` at
+all. A bag from a pack is a Java bundle of the ordinary size, and both components are counted.
 
 **A camera and a touch button.** `minecraft:camera` times the black bars, the shutter and the
 photograph sliding away, which is a full-screen animation the Bedrock client plays while a player
@@ -293,10 +315,6 @@ hurts them for the right amount by a source that names no cause. Every other res
 can give runs: a command, a block state, dying, a sound, a particle, an effect added or taken away,
 a teleport, a swing, a loot table, a spent or swapped held item, and a block replaced here or one
 step away.
-
-**One ender dragon phase.** `behavior.dragondeath` is the animation a dragon plays while it dies.
-Java stops running a mob's goals the moment its health reaches zero, so a goal has no tick left to
-play anything in. The dragon's other seven phases are flown, and `/mcaddon entities` names this one.
 
 **Two ways of building a bone.** `texture_meshes` builds geometry out of a texture's opaque pixels,
 and `binding` names a bone of whatever entity is carrying the model and hangs this one off it. Every

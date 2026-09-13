@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.gametest;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.entity.AddonEntity;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.registry.AddonItems;
@@ -33,6 +34,10 @@ public final class PackGameTests {
     /** The entity the synthetic pack declares, which every assertion about one uses. */
     private static final String ENTITY = "tp:ember";
     private static final String BLOCK = "tp:lamp";
+
+    /** The two the pack declares for the components a plain mob has no occasion to use. */
+    private static final String PROJECTILE = "tp:spark";
+    private static final String SLOW_DYING = "tp:warden";
 
     /**
      * A pack's own entity reaches the world and stays there.
@@ -88,6 +93,97 @@ public final class PackGameTests {
             ENTITY + " arrived already hurt.");
         helper.succeed();
     }
+
+    /**
+     * A pack's projectile flies the arc its own component describes.
+     *
+     * A mob is not a `Projectile`, so nothing about the arc comes from the game: the velocity, the
+     * inertia taken off it each tick and the gravity under it are all read out of
+     * `minecraft:projectile`. What this catches is the flight never starting, which leaves the
+     * entity hanging where it was put with the goals and the gravity both switched off.
+     */
+    @GameTest()
+    public void aPackProjectileFlies(GameTestHelper helper) {
+        EntityType<?> type = AddonEntities.typeOf(PROJECTILE);
+        if (type == null) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        Entity shot = Platform.createMob(type, level);
+        helper.assertTrue(shot instanceof AddonEntity, PROJECTILE + " is not a pack entity.");
+
+        BlockPos at = helper.absolutePos(STAND);
+        Platform.placeAt(shot, at.getX() + 0.5, at.getY() + 3, at.getZ() + 0.5, 0f, 0f);
+        helper.assertTrue(level.addFreshEntity(shot), PROJECTILE + " was refused by the world.");
+
+        double from = shot.getZ();
+        ((AddonEntity) shot).launchAsProjectile(null, new net.minecraft.world.phys.Vec3(0, 0, 1));
+        helper.runAfterDelay(4, () -> {
+            helper.assertTrue(shot.getZ() > from,
+                PROJECTILE + " did not move along the direction it was fired in.");
+            helper.succeed();
+        });
+    }
+
+    /**
+     * `minecraft:custom_hit_test` widens what a hit may land on and leaves the collision box alone.
+     *
+     * The two are separate components in Bedrock and one question in Java, so the check is that the
+     * pick radius grew and the bounding box did not.
+     */
+    @GameTest()
+    public void aPackEntityIsHitOnItsOwnHitboxes(GameTestHelper helper) {
+        EntityType<?> type = AddonEntities.typeOf(PROJECTILE);
+        if (type == null) {
+            helper.succeed();
+            return;
+        }
+
+        Entity shot = Platform.createMob(type, helper.getLevel());
+        helper.assertTrue(shot.getPickRadius() > 0,
+            PROJECTILE + " declares hitboxes wider than its collision box and answers none of them.");
+        helper.assertTrue(shot.getBbWidth() < 1,
+            PROJECTILE + " widened its collision box, which the component does not describe.");
+        helper.succeed();
+    }
+
+    /**
+     * An entity a pack gave the dragon's death takes the dragon's two hundred ticks to die.
+     *
+     * A mob ordinarily disappears twenty ticks after its health reaches zero, so the entity is
+     * ticked past that and has to still be standing. The ticks are driven here rather than waited
+     * for, because a game test has twenty of its own to reach a verdict in.
+     */
+    @GameTest()
+    public void aPackEntityDiesTheLongWay(GameTestHelper helper) {
+        EntityType<?> type = AddonEntities.typeOf(SLOW_DYING);
+        if (type == null) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        Entity dying = Platform.createMob(type, level);
+        BlockPos at = helper.absolutePos(STAND);
+        Platform.placeAt(dying, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        helper.assertTrue(level.addFreshEntity(dying), SLOW_DYING + " was refused by the world.");
+
+        net.minecraft.world.entity.LivingEntity living = (net.minecraft.world.entity.LivingEntity) dying;
+        living.setHealth(0f);
+        for (int i = 0; i < ORDINARY_DEATH_TICKS * 2; i++) {
+            living.tick();
+        }
+        helper.assertFalse(dying.isRemoved(),
+            SLOW_DYING + " was gone before a two hundred tick death could finish.");
+        helper.assertTrue(living.deathTime > ORDINARY_DEATH_TICKS,
+            SLOW_DYING + " counted no further than an ordinary mob's death.");
+        helper.succeed();
+    }
+
+    /** How long a mob Java has no other plan for lies there before it is taken away. */
+    private static final int ORDINARY_DEATH_TICKS = 20;
 
     /**
      * A pack's entity runs its own events without ending the tick.

@@ -17,7 +17,8 @@ import re
 import sys
 from pathlib import Path
 
-from components import Surface, case_labels, literal_set, print_names, print_table, text
+from components import (Surface, case_labels, lenient, literal_set, print_names, print_table,
+                        text)
 
 ROOT = Path(__file__).resolve().parents[2]
 JAVA = ROOT / "src/main/java/at/ioexception/mcaddon"
@@ -26,42 +27,6 @@ DEFAULT_SAMPLES = ROOT / "scratchpad/bedrock/bedrock-samples"
 
 
 # --- reading Bedrock's own JSON ------------------------------------------------------------------
-
-def lenient(path):
-    """One of Mojang's JSON files, whose comments and trailing commas `json` alone refuses.
-
-    Several vanilla files carry `//` comments beside a value and a comma before a closing brace.
-    The game reads them, so a census that skipped them would measure a smaller vocabulary than the
-    one Mojang ships.
-    """
-    body = text(path)
-    out = []
-    index = 0
-    while index < len(body):
-        character = body[index]
-        if character == '"':
-            end = index + 1
-            while end < len(body):
-                if body[end] == "\\":
-                    end += 2
-                    continue
-                if body[end] == '"':
-                    break
-                end += 1
-            out.append(body[index:end + 1])
-            index = end + 1
-        elif body.startswith("//", index):
-            index = body.find("\n", index)
-            if index < 0:
-                break
-        elif body.startswith("/*", index):
-            index = body.find("*/", index) + 2
-        else:
-            out.append(character)
-            index += 1
-
-    return json.loads(re.sub(r",\s*([}\]])", r"\1", "".join(out)))
-
 
 def documents(samples, directory):
     for path in sorted((samples / "behavior_pack" / directory).rglob("*.json")):

@@ -16,6 +16,12 @@
         "max_weight_limit": 64,
         "allow_nested_storage_items": false
       },
+      "minecraft:storage_weight_limit": {
+        "max_weight_limit": 48
+      },
+      "minecraft:storage_weight_modifier": {
+        "weight_in_storage_item": 8
+      },
       "minecraft:bundle_interaction": {
         "num_viewable_slots": 8
       },

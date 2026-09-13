@@ -110,10 +110,18 @@ public record ServerEntityDefinition(
             behaviours);
     }
 
+    /**
+     * The component names that stand for something the entity decides to do.
+     *
+     * Bedrock spells a goal `minecraft:behavior.*` and a goal driven by a memory
+     * `minecraft:memory_behavior.*`, and both carry a priority and become a goal here.
+     */
     private static void collectBehaviours(JsonObject components, Set<String> into) {
         if (components == null) return;
         for (String key : components.keySet()) {
-            if (key.startsWith("minecraft:behavior.")) into.add(key);
+            if (key.startsWith("minecraft:behavior.") || key.startsWith("minecraft:memory_behavior.")) {
+                into.add(key);
+            }
         }
     }
 

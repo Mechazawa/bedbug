@@ -44,6 +44,7 @@
         "value": 0.25
       },
       "minecraft:physics": {},
+      "minecraft:bucketable": {},
       "minecraft:nameable": {},
       "minecraft:navigation.walk": {
         "can_path_over_water": false

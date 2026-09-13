@@ -1,0 +1,86 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:warden",
+      "is_spawnable": true,
+      "is_summonable": true,
+      "is_experimental": false
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": ["tp_warden", "mob"]
+      },
+      "minecraft:collision_box": {
+        "width": 0.6,
+        "height": 1.2
+      },
+      "minecraft:health": {
+        "value": 12,
+        "max": 12
+      },
+      "minecraft:movement": {
+        "value": 0.28
+      },
+      "minecraft:physics": {},
+      "minecraft:movement.basic": {},
+      "minecraft:navigation.walk": {},
+      "minecraft:jump.static": {},
+      "minecraft:is_illager_captain": {},
+      "minecraft:shooter": {
+        "def": "tp:spark"
+      },
+      "minecraft:rail_movement": {
+        "max_speed": 0.35
+      },
+      "minecraft:rail_sensor": {
+        "on_activate": {
+          "event": "tp:woken"
+        },
+        "on_deactivate": {
+          "event": "tp:rested"
+        },
+        "eject_on_activate": true,
+        "eject_on_deactivate": false,
+        "check_block_types": false,
+        "tick_command_block_on_activate": true
+      },
+      "minecraft:memory_sensor.in_range_of_entity": {},
+      "minecraft:memory_sensor.game_event": {},
+      "minecraft:memory_behavior.follow_target": {
+        "priority": 3
+      },
+      "minecraft:memory_behavior.flee_threat": {
+        "priority": 2
+      },
+      "minecraft:memory_behavior.move_to_position": {
+        "priority": 4
+      },
+      "minecraft:behavior.follow_target_captain": {
+        "priority": 5,
+        "speed_multiplier": 0.8,
+        "within_radius": 32,
+        "follow_distance": 5
+      },
+      "minecraft:behavior.dragondeath": {
+        "priority": 0
+      },
+      "minecraft:behavior.random_stroll": {
+        "priority": 6,
+        "speed_multiplier": 1.0
+      }
+    },
+    "events": {
+      "tp:woken": {
+        "queue_command": {
+          "command": ["scriptevent tp:woken rail"]
+        }
+      },
+      "tp:rested": {
+        "queue_command": {
+          "command": ["scriptevent tp:rested rail"]
+        }
+      }
+    }
+  }
+}

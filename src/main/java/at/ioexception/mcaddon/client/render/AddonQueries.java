@@ -73,6 +73,15 @@ import java.util.Map;
  * answered here reads as zero, which is what Bedrock does with an unknown query.
  */
 public final class AddonQueries implements MolangEnvironment.Queries {
+    /**
+     * Names this switch answers that belong to `context.` rather than to `query.`.
+     *
+     * Mojang publishes a list of every query the engine has and no list at all of the context
+     * names, so `tools/census/components.py` reads this declaration to tell one of its own case
+     * labels from the other. A name here is still answered; it is measured against nothing.
+     */
+    public static final Set<String> CONTEXT = Set.of("owning_entity");
+
     private final Entity entity;
     private final EntityAnimator animator;
 
@@ -181,7 +190,8 @@ public final class AddonQueries implements MolangEnvironment.Queries {
             case "is_sonic_boom" -> MolangValue.of(entity instanceof Warden warden
                 && warden.sonicBoomAnimationState.isStarted());
             case "is_interested" -> MolangValue.of((entity instanceof Wolf wolf && wolf.isInterested())
-                || (entity instanceof Fox fox && fox.isInterested()));
+                || (entity instanceof Fox fox && fox.isInterested())
+                || flag(properties, "is_interested"));
             case "roll_counter" -> MolangValue.of(entity instanceof Panda panda ? panda.rollCounter : 0);
             case "sneeze_counter" -> MolangValue.of(entity instanceof Panda panda
                 ? panda.getSneezeCounter() : 0);
@@ -361,7 +371,6 @@ public final class AddonQueries implements MolangEnvironment.Queries {
             case "get_locator_offset" -> MolangValue.of(locatorOffset(animator, arguments));
             case "get_root_locator_offset" -> MolangValue.of(locatorOffset(rootModel(), arguments));
 
-            case "item_slot" -> MolangValue.of(number(properties.get("item_slot")));
             case "item_slot_to_bone_name" -> MolangValue.of(boneForSlot(text(arguments, 0)));
             case "item_is_charged" -> MolangValue.of(flag(properties, "item_is_charged"));
             case "equipped_item_any_tag" -> equippedTags(arguments, false);
@@ -418,7 +427,7 @@ public final class AddonQueries implements MolangEnvironment.Queries {
 
             // Each of these is a behaviour the server is running, published under the name Bedrock
             // gives the query so a pack's own controller can branch on it.
-            case "is_admiring", "is_angry", "is_begging", "is_casting", "is_celebrating",
+            case "is_admiring", "is_angry", "is_casting", "is_celebrating",
                 "is_charging", "is_eating_mob", "is_in_love", "is_laying_egg", "is_playing_dead",
                 "is_ram_attacking", "is_resting", "is_rising", "is_rolling", "is_scared",
                 "is_searching", "is_sneezing", "is_stalking", "timer_flag_1", "timer_flag_2",
