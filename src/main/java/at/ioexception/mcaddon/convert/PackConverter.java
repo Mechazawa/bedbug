@@ -761,13 +761,22 @@ public final class PackConverter {
                 variants(block, namespace, name, textureKeys, assets, geometries, sprites));
             write(assets.resolve("blockstates").resolve(name + ".json"), blockstate);
 
+            // `minecraft:item_visual` gives the block's item a shape of its own, which Java reaches
+            // by pointing the item model at a second block model rather than at the block's.
+            BedrockGeometry held = itemGeometryOf(block, geometries);
+            String drawnAs = name;
+            if (held != null) {
+                drawnAs = name + "_in_hand";
+                writeCubeModel(assets, drawnAs, faces, held);
+            }
+
             JsonObject item = new JsonObject();
-            item.addProperty("parent", namespace + ":block/" + name);
+            item.addProperty("parent", namespace + ":block/" + drawnAs);
             write(assets.resolve("models/item").resolve(name + ".json"), item);
 
             JsonObject reference = new JsonObject();
             reference.addProperty("type", "minecraft:model");
-            reference.addProperty("model", namespace + ":block/" + name);
+            reference.addProperty("model", namespace + ":block/" + drawnAs);
             JsonObject definition = new JsonObject();
             definition.add("model", reference);
             write(assets.resolve("items").resolve(name + ".json"), definition);
@@ -999,7 +1008,18 @@ public final class PackConverter {
 
     /** Null when the pack drew its block with a plain cube rather than its own geometry. */
     private static BedrockGeometry geometryOf(BlockDefinition block, BedrockAssets geometries) {
+        // `minecraft:unit_cube` asks for the plain block shape whatever geometry sits beside it.
+        if (block.components().has("minecraft:unit_cube")) return null;
+
         return block.geometry() == null ? null : geometries.geometry(block.geometry());
+    }
+
+    /** The geometry `minecraft:item_visual` asks the block's item to be drawn from, where it names one. */
+    private static BedrockGeometry itemGeometryOf(BlockDefinition block, BedrockAssets geometries) {
+        JsonElement component = block.components().get("minecraft:item_visual");
+        String named = component == null || !component.isJsonObject() ? null
+            : Json.text(component.getAsJsonObject(), "geometry", null);
+        return named == null ? null : geometries.geometry(named);
     }
 
     private static final List<String> FACES = List.of("up", "down", "north", "south", "east", "west");

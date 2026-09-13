@@ -534,6 +534,10 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
     /** The tags the pack asked for, in the order it wrote them. */
     public static List<String> tags(BlockDefinition definition) {
         List<String> tags = new ArrayList<>();
+        // Java decides what a leash can be tied to from a tag rather than from the block, so a
+        // block a pack declared leashable joins the tag that already means it.
+        if (definition.components().has("minecraft:leashable")) tags.add("minecraft:fences");
+
         JsonElement component = definition.components().get("minecraft:tags");
         if (component == null || !component.isJsonArray()) return tags;
 

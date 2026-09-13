@@ -199,6 +199,18 @@ public sealed interface Filter {
                 case "taking_fire_damage" -> flag(entity.isOnFire() && !entity.fireImmune());
                 case "on_hot_block" -> flag(HOT_BLOCKS.contains(
                     BuiltInRegistries.BLOCK.getKey(entity.getBlockStateOn().getBlock()).getPath()));
+                // A Bedrock biome's humidity is its rainfall, which Java states as whether the biome
+                // has any precipitation at all.
+                case "is_humid" -> flag(entity.level()
+                    .getBiome(entity.blockPosition()).value().hasPrecipitation());
+                case "is_waterlogged" -> flag(waterlogged(entity));
+                case "is_block" -> BuiltInRegistries.BLOCK
+                    .getKey(entity.getBlockStateOn().getBlock()).toString()
+                    .equals(text().contains(":") ? text() : "minecraft:" + text());
+                case "surface_mob" -> flag(entity.level().canSeeSky(entity.blockPosition()));
+                case "is_in_village" -> entity.level() instanceof net.minecraft.server.level.ServerLevel
+                    server ? flag(server.isVillage(entity.blockPosition())) : null;
+
                 case "in_nether" -> flag(entity.level().dimension() == Level.NETHER);
                 case "in_overworld" -> flag(entity.level().dimension() == Level.OVERWORLD);
                 // Java draws its clouds at y 192 and has no cloud block an entity can be inside.
@@ -326,6 +338,16 @@ public sealed interface Filter {
             if (entity instanceof Player) return family.equals("player") || family.equals("mob");
             return AddonEntities.definitionOf(entity.getType()) != null
                 && AddonEntities.definitionOf(entity.getType()).families().contains(family);
+        }
+
+        /** Whether the block the entity is standing in holds water as well as itself. */
+        private static boolean waterlogged(Entity entity) {
+            net.minecraft.world.level.block.state.BlockState state =
+                entity.level().getBlockState(entity.blockPosition());
+            return state.hasProperty(net.minecraft.world.level.block.state.properties
+                .BlockStateProperties.WATERLOGGED)
+                && state.getValue(net.minecraft.world.level.block.state.properties
+                    .BlockStateProperties.WATERLOGGED);
         }
 
         private boolean weather(Entity entity) {
