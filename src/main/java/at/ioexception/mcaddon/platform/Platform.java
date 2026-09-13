@@ -1070,6 +1070,34 @@ public final class Platform {
         return raid != null && raid.isVictory();
     }
 
+    /** Where a raid still being fought around this point is centred, or null when none is. */
+    public static net.minecraft.core.BlockPos raidCentre(ServerLevel level, net.minecraft.core.BlockPos at) {
+        net.minecraft.world.entity.raid.Raid raid = level.getRaidAt(at);
+        return raid == null || !raid.isActive() || raid.isVictory() ? null : raid.getCenter();
+    }
+
+    /**
+     * Which switch in `minecraft:game_event_movement_tracking` decides whether this event is raised.
+     *
+     * Null for every other event, which the component says nothing about. The game event itself
+     * became a holder in 1.21, which is the whole difference between the two forms.
+     */
+    //? if >=1.21 {
+    public static String movementEvent(
+        net.minecraft.core.Holder<net.minecraft.world.level.gameevent.GameEvent> event) {
+        net.minecraft.world.level.gameevent.GameEvent raised = event.value();
+        if (raised == net.minecraft.world.level.gameevent.GameEvent.STEP.value()) return "emit_move";
+        if (raised == net.minecraft.world.level.gameevent.GameEvent.SWIM.value()) return "emit_swim";
+        return raised == net.minecraft.world.level.gameevent.GameEvent.FLAP.value() ? "emit_flap" : null;
+    }
+    //?} else {
+    /*public static String movementEvent(net.minecraft.world.level.gameevent.GameEvent event) {
+        if (event == net.minecraft.world.level.gameevent.GameEvent.STEP) return "emit_move";
+        if (event == net.minecraft.world.level.gameevent.GameEvent.SWIM) return "emit_swim";
+        return event == net.minecraft.world.level.gameevent.GameEvent.FLAP ? "emit_flap" : null;
+    }
+    *///?}
+
     /**
      * The reason a chunk stays loaded and ticking while this mod is holding it.
      *

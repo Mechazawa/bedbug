@@ -96,10 +96,10 @@ against the names this mod acts on:
 
 | Surface | Answered |
 | --- | --- |
-| Entity components | 82% |
+| Entity components | 93% |
 | Entity AI goals | 99% |
 | Entity filters | 100% |
-| Molang queries | 89% |
+| Molang queries | 91% |
 | Molang maths | 100% |
 | Block components | 92% |
 | Item components | 80% |
@@ -116,7 +116,10 @@ get the current figures; the ones above are a snapshot.
 describe a minecart, and the `player.*` components describe a player; none of the three is a mob.
 The memory components describe Java's brain, which its own mobs have and a data-driven one does not.
 Aim assist, pack settings and the device memory tiers describe a Bedrock client rather than a world.
-Each is counted and named rather than silently doing nothing.
+`minecraft:exhaustion_values` prices a player's food bar, which a mob has none of, and
+`minecraft:bucketable` asks for the entity in a bucket, which Java keeps as an item made for that one
+mob. `minecraft:custom_hit_test` gives an entity hit boxes apart from the one it collides in, and Java
+has the one box for both. Each is counted and named rather than silently doing nothing.
 
 **A record plays nothing.** `minecraft:record` needs a jukebox song, and a song only exists as an
 entry in a registry a data pack writes into. A world holding such a pack is one the game calls

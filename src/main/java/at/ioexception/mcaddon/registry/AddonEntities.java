@@ -391,7 +391,16 @@ public final class AddonEntities {
         "minecraft:behavior.dragonholdingpattern", "minecraft:behavior.dragontakeoff",
         "minecraft:behavior.dragonlanding", "minecraft:behavior.dragonscanning",
         "minecraft:behavior.dragonchargeplayer", "minecraft:behavior.dragonstrafeplayer",
-        "minecraft:behavior.dragonflaming");
+        "minecraft:behavior.dragonflaming",
+        "minecraft:genetics", "minecraft:spell_effects", "minecraft:trust", "minecraft:bribeable",
+        "minecraft:peek", "minecraft:insomnia", "minecraft:balloon", "minecraft:npc",
+        "minecraft:can_power_jump", "minecraft:dash_action", "minecraft:jump.dynamic",
+        "minecraft:wants_jockey", "minecraft:out_of_control", "minecraft:ravager_blocked",
+        "minecraft:raid_trigger", "minecraft:can_join_raid", "minecraft:renders_when_invisible",
+        "minecraft:walk_animation_speed", "minecraft:movement_sound_distance_offset",
+        "minecraft:game_event_movement_tracking", "minecraft:uses_legacy_friction",
+        "minecraft:uses_uniform_air_drag", "minecraft:vibration_listener",
+        "minecraft:suspect_tracking", "minecraft:wither_target_highest_damage");
 
     /**
      * The trade table an entity names, read while the pack it came from is still in hand.

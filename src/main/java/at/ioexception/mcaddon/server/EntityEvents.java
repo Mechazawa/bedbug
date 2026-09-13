@@ -85,7 +85,7 @@ public final class EntityEvents {
     private static void apply(Entity entity, ServerEntityDefinition definition, EntityEvent.Action action,
         Entity other, AddonState state, int depth) {
         switch (action) {
-            case EntityEvent.ChangeGroups groups -> changeGroups(entity, definition, groups, state);
+            case EntityEvent.ChangeGroups groups -> changeGroups(entity, definition, groups, other, state);
             case EntityEvent.SetProperties properties -> setProperties(entity, properties, state);
             case EntityEvent.RunCommands commands -> runCommands(entity, commands);
             case EntityEvent.TriggerEvent trigger -> trigger(entity, trigger.event(), other, state);
@@ -126,7 +126,7 @@ public final class EntityEvents {
      * still tracked in full, because a pack's filters and its own later events read it.
      */
     private static void changeGroups(Entity entity, ServerEntityDefinition definition,
-        EntityEvent.ChangeGroups change, AddonState state) {
+        EntityEvent.ChangeGroups change, Entity other, AddonState state) {
         if (!(entity instanceof AddonEntity addon)) return;
 
         addon.activeGroups().removeAll(change.remove());
@@ -135,17 +135,23 @@ public final class EntityEvents {
         // drawing side is told which are on.
         change.remove().forEach(group -> addon.setValue("group." + group, false));
         change.add().forEach(group -> addon.setValue("group." + group, true));
+        // Whether the entity is still its rider's to steer is decided by the set of groups rather
+        // than by any one of them, so it is answered once the whole swap is done.
+        if (AddonEntities.anyoneDeclares("minecraft:out_of_control")) {
+            addon.setValue("out_of_control", addon.declaresNow("minecraft:out_of_control"));
+        }
 
         for (String group : change.add()) {
             JsonObject components = definition.componentGroups().get(group);
             if (components == null) continue;
             for (Map.Entry<String, JsonElement> component : components.entrySet()) {
-                applyComponent(entity, component.getKey(), component.getValue(), state);
+                applyComponent(entity, component.getKey(), component.getValue(), other, state);
             }
         }
     }
 
-    private static void applyComponent(Entity entity, String name, JsonElement body, AddonState state) {
+    private static void applyComponent(Entity entity, String name, JsonElement body, Entity other,
+        AddonState state) {
         JsonObject values = body.isJsonObject() ? body.getAsJsonObject() : new JsonObject();
         switch (name) {
             case "minecraft:variant", "minecraft:mark_variant", "minecraft:skin_id" -> {
@@ -161,6 +167,10 @@ public final class EntityEvents {
                 }
             }
             case "minecraft:hide" -> hide(entity);
+            case "minecraft:spell_effects" -> cast(entity, values);
+            case "minecraft:trust" -> {
+                if (entity instanceof AddonEntity addon && other != null) addon.trust(other.getUUID());
+            }
             case "minecraft:is_sheared", "minecraft:is_baby", "minecraft:is_dyeable" ->
                 state.setProperty(entity.getUUID(), name.substring("minecraft:".length()), true);
             // A group can hand the entity a different table, so what it drops belongs to the entity
@@ -180,6 +190,49 @@ public final class EntityEvents {
             }
         }
     }
+
+    /**
+     * `minecraft:spell_effects` is what a group puts on the entity and takes off it again.
+     *
+     * Bedrock writes the effects to add as a list carrying a duration and a strength each, and the
+     * ones to take away as a name or a list of names, which is how a pack turns one omen into
+     * another. A group carrying the component with nothing in it clears what an earlier one added.
+     */
+    private static void cast(Entity entity, JsonObject values) {
+        if (!(entity instanceof LivingEntity living)) return;
+
+        for (JsonElement element : at.ioexception.mcaddon.util.Json.list(values, "add_effects")) {
+            if (!element.isJsonObject()) continue;
+
+            JsonObject added = element.getAsJsonObject();
+            net.minecraft.resources.Identifier id =
+                effect(at.ioexception.mcaddon.util.Json.text(added, "effect", null));
+            if (id == null) continue;
+
+            Platform.addEffect(living, id, (int) (number(added, "duration", 1) * TICKS_PER_SECOND),
+                (int) number(added, "amplifier", 0), true);
+        }
+        for (JsonElement element : at.ioexception.mcaddon.util.Json.list(values, "remove_effects")) {
+            if (!element.isJsonPrimitive()) continue;
+
+            net.minecraft.resources.Identifier id = effect(element.getAsString());
+            if (id != null) Platform.removeEffect(living, id);
+        }
+    }
+
+    /** An effect a spell names, which a pack writes as often without its namespace as with it. */
+    private static net.minecraft.resources.Identifier effect(String named) {
+        return named == null ? null
+            : net.minecraft.resources.Identifier.tryParse(named.contains(":") ? named : "minecraft:" + named);
+    }
+
+    private static double number(JsonObject body, String key, double fallback) {
+        JsonElement value = body.get(key);
+        return value == null || !value.isJsonPrimitive() ? fallback : value.getAsDouble();
+    }
+
+    /** Bedrock states a spell's duration in seconds, where an effect is measured in ticks. */
+    private static final int TICKS_PER_SECOND = 20;
 
     /**
      * `minecraft:hide` sends the entity to whatever it calls home and leaves it there.

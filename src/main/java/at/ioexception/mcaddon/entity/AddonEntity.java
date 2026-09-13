@@ -84,6 +84,7 @@ public class AddonEntity extends PathfinderMob
     private Identifier lootTable;
     private Age age;
     private Anger anger;
+    private Genetics genetics;
     private net.minecraft.server.level.ServerBossEvent bossBar;
     private net.minecraft.world.SimpleContainer carried;
 
@@ -93,6 +94,7 @@ public class AddonEntity extends PathfinderMob
         if (definition != null) {
             age = Age.tryFrom(definition);
             anger = Anger.tryFrom(definition);
+            genetics = Genetics.tryFrom(definition);
             addGoals();
             applyMoveControl();
             applyComponents();
@@ -373,6 +375,7 @@ public class AddonEntity extends PathfinderMob
             setYBodyRot(angle);
         }
 
+        wearTheSkinOfAnNpc();
         if (declares("minecraft:preferred_path")) {
             // The enum naming a kind of ground was renamed in 1.21.
             //? if >=1.21 {
@@ -381,6 +384,27 @@ public class AddonEntity extends PathfinderMob
             /*setPathfindingMalus(net.minecraft.world.level.pathfinder.BlockPathTypes.WATER, 8f);
             *///?}
         }
+    }
+
+    /**
+     * Gives a `minecraft:npc` entity one of the skins its pack listed.
+     *
+     * Bedrock keeps the skins in the component and picks one per entity, which a render controller
+     * then reads back as the variant. The rest of the component describes where a Bedrock client
+     * puts the portrait in its dialogue screen, which Java draws no such screen for.
+     */
+    private void wearTheSkinOfAnNpc() {
+        if (!declares("minecraft:npc")) return;
+
+        com.google.gson.JsonObject data = componentBody("minecraft:npc").getAsJsonObject("npc_data");
+        java.util.List<com.google.gson.JsonElement> skins = data == null
+            ? java.util.List.of() : at.ioexception.mcaddon.util.Json.list(data, "skin_list");
+        if (skins.isEmpty()) return;
+
+        com.google.gson.JsonElement chosen = skins.get(random.nextInt(skins.size()));
+        double variant = chosen.isJsonObject()
+            ? Goals.number(chosen.getAsJsonObject(), "variant", 0) : 0;
+        ServerHooks.state().setProperty(getUUID(), "variant", variant);
     }
 
     /**
@@ -399,6 +423,20 @@ public class AddonEntity extends PathfinderMob
 
     public boolean declares(String component) {
         return definition.components().containsKey(component);
+    }
+
+    /**
+     * Whether a component is on the entity at this moment, in its own list or in a live group.
+     *
+     * A pack that switches a component on partway through writes it into a component group rather
+     * than at the top, which is how Bedrock says a boat has been taken out of its rider's hands.
+     */
+    public boolean declaresNow(String component) {
+        if (declares(component)) return true;
+
+        return activeGroups.stream()
+            .map(definition.componentGroups()::get)
+            .anyMatch(group -> group != null && group.has(component));
     }
 
     /** A string a component carries, or null when the pack declared neither. */
@@ -509,6 +547,9 @@ public class AddonEntity extends PathfinderMob
     @Override
     public net.minecraft.world.entity.LivingEntity getControllingPassenger() {
         if (definition == null || !steerable()) return super.getControllingPassenger();
+        // `minecraft:out_of_control` is the mount taken out of its rider's hands, which Bedrock
+        // switches on while a boat is over a bubble column and nobody aboard can steer it.
+        if (declaresNow("minecraft:out_of_control")) return null;
 
         return getPassengers().stream()
             .filter(Player.class::isInstance)
@@ -752,7 +793,10 @@ public class AddonEntity extends PathfinderMob
 
         if (!player.getAbilities().instabuild) held.shrink(1);
         Platform.placeAt(child, getX(), getY(), getZ(), getYRot(), 0f);
-        if (child instanceof AddonEntity young) young.setYoung();
+        if (child instanceof AddonEntity young) {
+            young.setYoung();
+            young.inherit(this, this);
+        }
         level.addFreshEntity(child);
         return true;
     }
@@ -776,6 +820,39 @@ public class AddonEntity extends PathfinderMob
         }
         return true;
     }
+
+    /**
+     * Being handed one of the items `minecraft:bribeable` names, which buys the entity's company.
+     *
+     * Whoever pays becomes the owner a pack's own following behaviours read, which is what makes a
+     * bribed entity swim after the player who fed it. The cooldown the component carries is the
+     * wait before another bribe can be paid, and the bribe itself lasts the minute Bedrock gives it.
+     */
+    private boolean bribed(Player player, InteractionHand hand) {
+        if (!declares("minecraft:bribeable") || bribeReadyAt > tickCount) return false;
+
+        ItemStack held = player.getItemInHand(hand);
+        if (held.isEmpty()) return false;
+
+        String id = BuiltInRegistries.ITEM.getKey(held.getItem()).toString();
+        boolean wanted = at.ioexception.mcaddon.util.Json.list(
+                componentBody("minecraft:bribeable"), "bribe_items").stream()
+            .anyMatch(item -> item.isJsonPrimitive() && names(item.getAsString(), id));
+        if (!wanted) return false;
+
+        if (!player.getAbilities().instabuild) held.shrink(1);
+        bribedUntilTick = tickCount + BRIBE_TICKS;
+        bribeReadyAt = tickCount + (int) (number(definition, "minecraft:bribeable",
+            "bribe_cooldown", 2) * Goals.TICKS_PER_SECOND);
+        setOwner(player);
+        return true;
+    }
+
+    /** How long a bribe buys, in ticks of the entity's own age. */
+    private static final int BRIBE_TICKS = 1200;
+
+    private int bribedUntilTick;
+    private int bribeReadyAt;
 
     /** Whether one of the items the pack named as breeding food is what was offered. */
     private static boolean breedsWith(com.google.gson.JsonObject breedable,
@@ -835,6 +912,7 @@ public class AddonEntity extends PathfinderMob
         if (night) {
             getNavigation().stop();
             setDeltaMovement(0, getDeltaMovement().y, 0);
+            lastRestedDay = Platform.dayTime(level) / 24000L;
         }
     }
 
@@ -970,6 +1048,39 @@ public class AddonEntity extends PathfinderMob
     void setYoung() {
         ServerHooks.state().setProperty(getUUID(), "is_baby", true);
     }
+
+    /**
+     * Takes somebody into the set of people `minecraft:trust` says this entity will defend.
+     *
+     * Bedrock brings the component in through a component group at the moment somebody earns it, so
+     * whoever the event named is the one trusted. An entity may trust several at once, which is the
+     * whole difference between this and belonging to one owner.
+     */
+    public void trust(java.util.UUID player) {
+        trusted.add(player);
+        setValue("is_trusting", true);
+    }
+
+    /**
+     * Whoever this entity defends: its owner, or the nearest of the players it has been told to trust.
+     *
+     * A pack's defending behaviour asks one entity, and Bedrock's trust holds several at once, so
+     * the closest of them is the one whose fight the entity joins.
+     */
+    public net.minecraft.world.entity.LivingEntity guarded(double within) {
+        net.minecraft.world.entity.LivingEntity owner = getOwner();
+        if (owner != null || trusted.isEmpty()) return owner;
+
+        double reach = within > 0 ? within : getAttributeValue(Attributes.FOLLOW_RANGE);
+        return level().getEntitiesOfClass(Player.class, getBoundingBox().inflate(reach)).stream()
+            .filter(player -> trusted.contains(player.getUUID()))
+            .min(java.util.Comparator.comparingDouble(this::distanceToSqr))
+            .map(net.minecraft.world.entity.LivingEntity.class::cast)
+            .orElse(null);
+    }
+
+    /** The players `minecraft:trust` has added, which is a set rather than the one owner. */
+    private final java.util.Set<java.util.UUID> trusted = new java.util.LinkedHashSet<>();
 
     /** Bedrock says an entity is angry; Java asks the entity, so the flag is kept here. */
     public boolean isAngry() {
@@ -1332,8 +1443,47 @@ public class AddonEntity extends PathfinderMob
         boolean hit = super.doHurtTarget(target);
     *///?}
         if (hit) knockBack(target);
+        blockedBy(target);
         return hit;
     }
+
+    /**
+     * What `minecraft:ravager_blocked` does to an entity whose blow a shield turned away.
+     *
+     * Bedrock throws the entity back and picks one of the reactions the pack weighted, which is how
+     * a ravager comes to stand there stunned. Java answers whether the target was blocking and
+     * leaves what follows to whoever swung.
+     */
+    private void blockedBy(net.minecraft.world.entity.Entity target) {
+        if (definition == null || !declares("minecraft:ravager_blocked")) return;
+        if (!(target instanceof net.minecraft.world.entity.LivingEntity living) || !living.isBlocking()) {
+            return;
+        }
+
+        com.google.gson.JsonObject body = componentBody("minecraft:ravager_blocked");
+        double thrown = Goals.number(body, "knockback_strength", 3);
+        net.minecraft.world.phys.Vec3 away = position().subtract(target.position()).normalize();
+        setDeltaMovement(getDeltaMovement().add(away.x * thrown * BLOCKED_KNOCKBACK, 0,
+            away.z * thrown * BLOCKED_KNOCKBACK));
+
+        java.util.List<com.google.gson.JsonElement> choices =
+            at.ioexception.mcaddon.util.Json.list(body, "reaction_choices");
+        double roll = random.nextDouble() * choices.stream()
+            .filter(com.google.gson.JsonElement::isJsonObject)
+            .mapToDouble(choice -> Goals.number(choice.getAsJsonObject(), "weight", 1)).sum();
+        for (com.google.gson.JsonElement element : choices) {
+            if (!element.isJsonObject()) continue;
+
+            roll -= Goals.number(element.getAsJsonObject(), "weight", 1);
+            if (roll > 0) continue;
+
+            fire(Goals.event(element.getAsJsonObject(), "value"));
+            return;
+        }
+    }
+
+    /** What one point of the blocked knockback Bedrock states is worth as a Java velocity. */
+    private static final double BLOCKED_KNOCKBACK = 0.1;
 
     /** The first knockback preset whose conditions the target meets, applied where Java's would be. */
     private void knockBack(net.minecraft.world.entity.Entity target) {
@@ -1790,6 +1940,13 @@ public class AddonEntity extends PathfinderMob
                 }
             }
         }
+
+        // Bedrock spells answering the worst attacker both as a behaviour and as a plain component,
+        // and the two ask for the same fight.
+        if (declares("minecraft:wither_target_highest_damage")) {
+            targetSelector.addGoal(priority + 1, WitherGoal.answeringTheWorstAttacker(this,
+                componentBody("minecraft:wither_target_highest_damage")));
+        }
     }
 
     // A spawn rule describes natural spawning, so a spawner block and a spawn egg are left alone.
@@ -1865,6 +2022,15 @@ public class AddonEntity extends PathfinderMob
         if (declares("minecraft:explode")) {
             setValue("fuse_time", number(definition, "minecraft:explode", "fuse_length", 1.5));
         }
+
+        // `minecraft:walk_animation_speed` scales how fast a pack's own walk animation runs, which
+        // its controllers read back off the entity's speed, so the number goes with the speed.
+        if (declares("minecraft:walk_animation_speed")) {
+            setValue("walk_animation_speed",
+                number(definition, "minecraft:walk_animation_speed", "value", 1));
+        }
+        if (declares("minecraft:dash_action")) setValue("can_dash", true);
+        if (declares("minecraft:out_of_control")) setValue("out_of_control", true);
     }
 
     /**
@@ -1944,6 +2110,12 @@ public class AddonEntity extends PathfinderMob
             reflectProjectiles();
             drawFromHopper();
             coolDownAnger();
+            rollGenes();
+            loseSleep();
+            climbAboard();
+            joinTheRaid();
+            callARaid();
+            listenForVibrations();
         }
     }
 
@@ -2050,6 +2222,183 @@ public class AddonEntity extends PathfinderMob
         setValue("is_angry", anger.angry());
     }
 
+    /** A pack's first generation has no parents to take an allele from, so it rolls its own. */
+    private void rollGenes() {
+        inherit(null, null);
+    }
+
+    /**
+     * Rolls what `minecraft:genetics` says this entity was born with, off the pair that bred it.
+     *
+     * The variant the two alleles land in names an event, which fires on the entity itself; that is
+     * how a pack makes one goat in fifty a screaming one without a second entity type. Null parents
+     * roll both ends fresh, and the roll happens once however the entity came to be.
+     */
+    void inherit(AddonEntity first, AddonEntity second) {
+        if (genetics == null || rolledGenes) return;
+
+        rolledGenes = true;
+        genetics.rollInto(this, first, second, random).forEach(this::fire);
+    }
+
+    private boolean rolledGenes;
+
+    /**
+     * Sends the sky after an entity that has not slept, which is what `minecraft:insomnia` is for.
+     *
+     * Bedrock counts the days since the entity last rested and draws phantoms to it once the count
+     * passes what the pack allows. `minecraft:behavior.sleep` is the only thing that puts the count
+     * back, so an entity whose pack gave it no way to lie down keeps the company for good.
+     */
+    private void loseSleep() {
+        if (!declares("minecraft:insomnia")) return;
+        if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
+
+        long now = Platform.dayTime(level);
+        if (lastRestedDay < 0) {
+            lastRestedDay = now / 24000L;
+            return;
+        }
+
+        long night = now % 24000L;
+        double allowed = number(definition, "minecraft:insomnia", "days_until_insomnia", 3);
+        if (night < 13000L || night >= 23000L) return;
+        if (now / 24000L - lastRestedDay < allowed || random.nextInt(PHANTOM_CHANCE) != 0) return;
+
+        // 26.2 moved the vanilla entity types out of the class that builds them.
+        //? if >=26.2 {
+        net.minecraft.world.entity.Entity phantom =
+            Platform.createMob(net.minecraft.world.entity.EntityTypes.PHANTOM, level);
+        //?} else {
+        /*net.minecraft.world.entity.Entity phantom =
+            Platform.createMob(net.minecraft.world.entity.EntityType.PHANTOM, level);
+        *///?}
+        if (phantom == null) return;
+
+        Platform.placeAt(phantom, getX(), getY() + PHANTOM_HEIGHT + random.nextInt(PHANTOM_HEIGHT),
+            getZ(), getYRot(), 0f);
+        level.addFreshEntity(phantom);
+    }
+
+    /** The day the entity last lay down, counted the way the world counts its own. */
+    private long lastRestedDay = -1;
+
+    /** One chance in this many, per sensor tick of a sleepless night, of another phantom. */
+    private static final int PHANTOM_CHANCE = 400;
+
+    /** How far above a sleepless entity a phantom comes in, which is where Java starts its own. */
+    private static final int PHANTOM_HEIGHT = 20;
+
+    /**
+     * Climbs onto whatever is walking past, which is what `minecraft:wants_jockey` asks for.
+     *
+     * Bedrock puts the entity on the first mob near it that will carry one, which is how a pack
+     * describes something that rides rather than walks. A mob of the entity's own kind is left
+     * alone, or a crowd would spend its time riding itself.
+     */
+    private void climbAboard() {
+        if (!declares("minecraft:wants_jockey") || isPassenger()) return;
+
+        for (net.minecraft.world.entity.Mob mount : level().getEntitiesOfClass(
+            net.minecraft.world.entity.Mob.class, getBoundingBox().inflate(JOCKEY_RANGE))) {
+            if (mount == this || mount.getType() == getType()) continue;
+            if (!mount.getPassengers().isEmpty()) continue;
+            if (startRiding(mount)) return;
+        }
+    }
+
+    /** How far a jockey looks for something to ride. */
+    private static final double JOCKEY_RANGE = 4;
+
+    /**
+     * Walks towards a raid being fought nearby, which is as far as joining one reaches.
+     *
+     * Java counts a raider by its class rather than by what a pack declared, so a pack's entity is
+     * never one of the waves the game itself is counting down. What it can do is turn up, which is
+     * what a player sees of `minecraft:can_join_raid`.
+     */
+    private void joinTheRaid() {
+        if (!declares("minecraft:can_join_raid") || getTarget() != null) return;
+        if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
+
+        net.minecraft.core.BlockPos centre = Platform.raidCentre(level, blockPosition());
+        if (centre == null || centre.distSqr(blockPosition()) < RAID_ARRIVED * RAID_ARRIVED) return;
+
+        getNavigation().moveTo(centre.getX() + 0.5, centre.getY(), centre.getZ() + 0.5, 1);
+    }
+
+    /** How close to the middle of a raid counts as having got there. */
+    private static final double RAID_ARRIVED = 8;
+
+    /**
+     * Starts the raid `minecraft:raid_trigger` names, through the omen Java raises one from.
+     *
+     * Java begins a raid when a player carrying bad omen reaches a village rather than on anybody
+     * else's say-so, so the nearest player is given the omen and the pack's own event fires beside
+     * it. The component is a pack saying this entity brings a raid with it.
+     */
+    private void callARaid() {
+        if (!declares("minecraft:raid_trigger")) return;
+        if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
+
+        Player nearest = level.getNearestPlayer(this, RAID_TRIGGER_RANGE);
+        if (nearest == null || Platform.hasEffect(nearest, BAD_OMEN)) return;
+
+        Platform.addEffect(nearest, BAD_OMEN, BAD_OMEN_TICKS, 0, true);
+        fire(Goals.event(componentBody("minecraft:raid_trigger"), "triggered_event"));
+    }
+
+    /** How far the entity reaches for somebody to hand the omen to. */
+    private static final double RAID_TRIGGER_RANGE = 16;
+
+    /** The omen a raid follows, and how long Java's own bottle of it lasts. */
+    private static final Identifier BAD_OMEN = Platform.id("minecraft", "bad_omen");
+
+    private static final int BAD_OMEN_TICKS = 6000;
+
+    /**
+     * Notices something moving nearby, which is what a listener hears as a vibration.
+     *
+     * Java raises vibrations through a listener registered on the level, which belongs to the two
+     * mobs written to carry one. What any entity can hear is the thing those vibrations come from:
+     * another entity moving within earshot. `minecraft:suspect_tracking` keeps where it came from,
+     * which the behaviour that investigates a suspicious place then walks to, and
+     * `minecraft:vibration_listener` publishes how long ago it was for the pack to draw.
+     */
+    private void listenForVibrations() {
+        boolean listens = declares("minecraft:vibration_listener");
+        boolean remembers = declares("minecraft:suspect_tracking");
+        if (!listens && !remembers) return;
+
+        net.minecraft.world.entity.LivingEntity heard = level().getEntitiesOfClass(
+                net.minecraft.world.entity.LivingEntity.class,
+                getBoundingBox().inflate(VIBRATION_RANGE)).stream()
+            .filter(other -> other != this)
+            .filter(other -> other.getDeltaMovement().horizontalDistanceSqr() > VIBRATION_SPEED)
+            .min(java.util.Comparator.comparingDouble(this::distanceToSqr))
+            .orElse(null);
+        if (heard != null) {
+            heardAt = tickCount;
+            if (remembers) disturbance = heard.blockPosition();
+        }
+        if (!listens || heardAt < 0) return;
+
+        double since = (tickCount - heardAt) / (double) Goals.TICKS_PER_SECOND;
+        if (since <= VIBRATION_MEMORY) setValue("time_since_last_vibration_detection", since);
+    }
+
+    /** The entity's own age at which it last heard something, or negative while it has heard nothing. */
+    private int heardAt = -1;
+
+    /** How far a listener hears, which is the range Java gives its own sculk sensor. */
+    private static final double VIBRATION_RANGE = 8;
+
+    /** How fast something has to be going along the ground before it is worth hearing. */
+    private static final double VIBRATION_SPEED = 0.003;
+
+    /** Seconds after which a listener stops telling the drawing side about the last thing it heard. */
+    private static final double VIBRATION_MEMORY = 10;
+
     /**
      * The components that have to be answered on the entity's own clock rather than the sensors'.
      *
@@ -2067,6 +2416,13 @@ public class AddonEntity extends PathfinderMob
         swimAtItsOwnSpeed();
         dragThroughAir();
         rubAlongTheGround();
+        slideTheOldWay();
+        floatUpwards();
+        jumpForRider();
+        dash();
+        peek();
+        wearOffBribe();
+        beatTheAir();
         faceTheGrid();
         flock();
         beBoosted();
@@ -2362,13 +2718,24 @@ public class AddonEntity extends PathfinderMob
         if (speed.getBaseValue() != wanted) speed.setBaseValue(wanted);
     }
 
-    /** `minecraft:air_drag_modifier` is how quickly the entity loses the speed it left the ground with. */
+    /**
+     * `minecraft:air_drag_modifier` is how quickly the entity loses the speed it left the ground with.
+     *
+     * `minecraft:uses_uniform_air_drag` asks for that same drag on the rise and the fall. Java drags
+     * a mob along the ground plane and leaves the vertical to gravity alone, so the share it leaves
+     * a mob going sideways is applied upwards too.
+     */
     private void dragThroughAir() {
-        if (!declares("minecraft:air_drag_modifier") || onGround()) return;
+        boolean uniform = declares("minecraft:uses_uniform_air_drag");
+        if (!declares("minecraft:air_drag_modifier") && !uniform) return;
+        if (onGround()) return;
 
         double kept = number(definition, "minecraft:air_drag_modifier", "value", 1);
-        setDeltaMovement(getDeltaMovement().multiply(kept, 1, kept));
+        setDeltaMovement(getDeltaMovement().multiply(kept, uniform ? kept * AIR_DRAG : 1, kept));
     }
+
+    /** The share of its speed Java leaves a mob moving through air along the ground plane. */
+    private static final double AIR_DRAG = 0.91;
 
     /**
      * `minecraft:friction_modifier` is how much of the ground's grip this entity feels.
@@ -2389,6 +2756,191 @@ public class AddonEntity extends PathfinderMob
 
     /** How much of its speed an entity loses per tick for each point of friction above one. */
     private static final double FRICTION_PER_STEP = 0.2;
+
+    /**
+     * `minecraft:uses_legacy_friction` takes the ground's own grip out of how the entity slows down.
+     *
+     * Java slows a mob by the friction of the block under it, so ice carries it further than grass
+     * does. An entity on Bedrock's older rules feels the same friction wherever it stands, which is
+     * put back by correcting each step by the difference between the two.
+     */
+    private void slideTheOldWay() {
+        if (!declares("minecraft:uses_legacy_friction") || !onGround()) return;
+
+        float ground = level().getBlockState(blockPosition().below()).getBlock().getFriction();
+        if (ground <= 0 || ground == LEGACY_FRICTION) return;
+
+        double corrected = LEGACY_FRICTION / ground;
+        setDeltaMovement(getDeltaMovement().multiply(corrected, 1, corrected));
+    }
+
+    /** The one friction every block had before a block carried its own, which grass still has. */
+    private static final float LEGACY_FRICTION = 0.6f;
+
+    /**
+     * Rises the way `minecraft:balloon` describes, up to the height the pack allows.
+     *
+     * The component describes the balloon rather than what is tied to it, so what it carries is a
+     * mass and a ceiling. Java has gravity and no balloon, so the mass decides how hard the lift
+     * pulls against it and the ceiling is where the entity stops climbing.
+     */
+    private void floatUpwards() {
+        if (!declares("minecraft:balloon")) return;
+
+        double ceiling = number(definition, "minecraft:balloon", "max_height", 0);
+        if (ceiling > 0 && getY() >= ceiling) {
+            setDeltaMovement(getDeltaMovement().x, 0, getDeltaMovement().z);
+            return;
+        }
+
+        double mass = Math.max(0.01, number(definition, "minecraft:balloon", "mass", 1));
+        setDeltaMovement(getDeltaMovement().add(0, BALLOON_LIFT / mass, 0));
+        fallDistance = 0;
+    }
+
+    /** How hard a balloon of mass one pulls upwards in one tick. */
+    private static final double BALLOON_LIFT = 0.05;
+
+    /**
+     * Leaves the ground when the rider of a `minecraft:can_power_jump` mount asks for it.
+     *
+     * Java lets a player jump a horse and nothing else, and reads the mount's jump strength for how
+     * high. A pack's mount is neither a horse nor something a player may jump, so the rider's own
+     * jump is read and the mount jumps for them.
+     */
+    private void jumpForRider() {
+        if (!declares("minecraft:can_power_jump") || !onGround()) return;
+        if (!(getControllingPassenger() instanceof Player rider)) return;
+        if (!((at.ioexception.mcaddon.mixin.JumpingAccessor) rider).mcaddon$jumping()) return;
+
+        jumpFromGround();
+    }
+
+    /**
+     * How high a jump carries, which `minecraft:can_power_jump` takes off the jump strength.
+     *
+     * Java gives an ordinary mob a fixed jump and reads the attribute for a horse alone. A pack
+     * saying its mount can power jump is describing the second, so the attribute decides.
+     */
+    @Override
+    protected float getJumpPower() {
+        if (definition == null || !declares("minecraft:can_power_jump")) return super.getJumpPower();
+
+        return (float) getAttributeValue(Attributes.JUMP_STRENGTH);
+    }
+
+    /**
+     * The lunge `minecraft:dash_action` gives a mount, on the tick its rider asks for one.
+     *
+     * Bedrock states the momentum per second in both directions and the wait between two dashes.
+     * How far through that wait the entity is is what a pack's own controllers draw the recovery
+     * from, so it is published while it runs down rather than only at its ends.
+     */
+    private void dash() {
+        if (!declares("minecraft:dash_action")) return;
+
+        int wait = (int) (number(definition, "minecraft:dash_action", "cooldown_time", 1.75)
+            * Goals.TICKS_PER_SECOND);
+        if (dashReadyAt > tickCount) {
+            if (tickCount % Goals.TICKS_PER_SECOND == 0 && wait > 0) {
+                setValue("dash_cooldown_progress", (double) (wait - (dashReadyAt - tickCount)) / wait);
+            }
+            return;
+        }
+        if (!Boolean.TRUE.equals(value("can_dash"))) {
+            setValue("can_dash", true);
+            setValue("dash_cooldown_progress", 1d);
+        }
+        if (!onGround() || !(getControllingPassenger() instanceof Player rider)) return;
+        if (!((at.ioexception.mcaddon.mixin.JumpingAccessor) rider).mcaddon$jumping()) return;
+
+        double forward = number(definition, "minecraft:dash_action", "horizontal_momentum", 20)
+            / Goals.TICKS_PER_SECOND;
+        double facing = Math.toRadians(getYRot());
+        setDeltaMovement(getDeltaMovement().add(-Math.sin(facing) * forward,
+            number(definition, "minecraft:dash_action", "vertical_momentum", 0.6),
+            Math.cos(facing) * forward));
+        dashReadyAt = tickCount + wait;
+        setValue("can_dash", false);
+    }
+
+    /** The entity's own age at which it may dash again, which a spent dash pushes forward. */
+    private int dashReadyAt;
+
+    /**
+     * Opens and closes the way a shell does, which is what `minecraft:peek` describes.
+     *
+     * Bedrock names an event for closing and two for opening, the second of which is the entity
+     * opening because something worth watching turned up. How far open it is drawn is what a pack's
+     * own controllers read back, so the share is published as it changes.
+     */
+    private void peek() {
+        if (!declares("minecraft:peek")) return;
+
+        boolean open = getTarget() != null;
+        if (open == peeking) return;
+
+        peeking = open;
+        setValue("peek_amount", open ? 1d : 0d);
+        com.google.gson.JsonObject body = componentBody("minecraft:peek");
+        String opening = Goals.event(body, "on_target_open");
+        fire(open ? (opening == null ? Goals.event(body, "on_open") : opening)
+            : Goals.event(body, "on_close"));
+    }
+
+    private boolean peeking;
+
+    /** A pack's controllers read a paid bribe back as `q.is_bribed`, for as long as it lasts. */
+    private void wearOffBribe() {
+        if (!declares("minecraft:bribeable")) return;
+
+        boolean bribed = bribedUntilTick > tickCount;
+        if (bribed != Boolean.TRUE.equals(value("is_bribed"))) setValue("is_bribed", bribed);
+    }
+
+    /**
+     * Beats a wing loudly enough to be heard, which `emit_flap` is the pack asking for.
+     *
+     * Java raises this event from the few mobs written to fly rather than from anything that leaves
+     * the ground, so an entity whose pack asked for it raises its own while it is climbing.
+     */
+    private void beatTheAir() {
+        if (!declares("minecraft:game_event_movement_tracking") || onGround()) return;
+        if (tickCount % FLAP_INTERVAL != 0 || getDeltaMovement().y <= 0) return;
+        if (!Goals.flag(componentBody("minecraft:game_event_movement_tracking"), "emit_flap", false)) {
+            return;
+        }
+
+        gameEvent(net.minecraft.world.level.gameevent.GameEvent.FLAP);
+    }
+
+    /** Ticks between two wing beats loud enough to raise an event. */
+    private static final int FLAP_INTERVAL = 10;
+
+    /**
+     * Leaves the ground towards wherever the entity is being moved.
+     *
+     * `minecraft:jump.dynamic` keeps two sets of jump numbers and picks between them by the speed
+     * the entity is being moved at, which is what makes something skipping along clear more ground
+     * per hop than one ambling. Bedrock's own default height is a tenth of a block, so a pack's
+     * number is read against that and a hop is scaled by what it asked for.
+     */
+    void hop(double speed) {
+        com.google.gson.JsonObject dynamic = declares("minecraft:jump.dynamic")
+            ? componentBody("minecraft:jump.dynamic") : null;
+        if (dynamic == null) {
+            Goals.hop(this, speed);
+            return;
+        }
+
+        com.google.gson.JsonObject data = dynamic.getAsJsonObject(
+            speed > 1 ? "fast_skip_data" : "regular_skip_data");
+        Goals.hop(this, speed * Goals.number(data, "distance_scale", 1),
+            Goals.HOP_HEIGHT * Goals.number(data, "height", BEDROCK_HOP_HEIGHT) / BEDROCK_HOP_HEIGHT);
+    }
+
+    /** The height Bedrock gives a skip that says nothing about its own, which a pack scales from. */
+    private static final double BEDROCK_HOP_HEIGHT = 0.1;
 
     /** `minecraft:rotation_axis_aligned` keeps the entity square to the world rather than turning freely. */
     private void faceTheGrid() {
@@ -2502,6 +3054,7 @@ public class AddonEntity extends PathfinderMob
     public void gameEvent(net.minecraft.core.Holder<net.minecraft.world.level.gameevent.GameEvent> event,
         net.minecraft.world.entity.Entity cause) {
         if (definition != null && declares("minecraft:vibration_damper")) return;
+        if (definition != null && !raisesMovement(Platform.movementEvent(event))) return;
 
         super.gameEvent(event, cause);
     }
@@ -2510,10 +3063,40 @@ public class AddonEntity extends PathfinderMob
     public void gameEvent(net.minecraft.world.level.gameevent.GameEvent event,
         net.minecraft.world.entity.Entity cause) {
         if (definition != null && declares("minecraft:vibration_damper")) return;
+        if (definition != null && !raisesMovement(Platform.movementEvent(event))) return;
 
         super.gameEvent(event, cause);
     }
     *///?}
+
+    /**
+     * Whether `minecraft:game_event_movement_tracking` lets this movement be heard.
+     *
+     * The component is three switches, each naming one of the events an entity raises as it moves,
+     * and a pack turning one off is asking for that movement to make no sound anything listens for.
+     * Every other event, and every entity whose pack declared no tracking, passes through.
+     */
+    private boolean raisesMovement(String switched) {
+        if (switched == null || !declares("minecraft:game_event_movement_tracking")) return true;
+
+        return Goals.flag(componentBody("minecraft:game_event_movement_tracking"), switched, true);
+    }
+
+    /**
+     * How far the entity walks between two step sounds.
+     *
+     * `minecraft:movement_sound_distance_offset` is what a pack gives something with more legs than
+     * Java expects, or a longer stride, and Java counts a whole block per step.
+     */
+    @Override
+    protected float nextStep() {
+        if (definition == null || !declares("minecraft:movement_sound_distance_offset")) {
+            return super.nextStep();
+        }
+
+        return moveDist + (float) number(definition,
+            "minecraft:movement_sound_distance_offset", "value", 1);
+    }
 
     /** `minecraft:rotation_locked_to_vehicle` keeps a rider facing wherever it is being carried. */
     private void faceTheVehicle() {
@@ -3196,6 +3779,7 @@ public class AddonEntity extends PathfinderMob
         }
         if (!isClientSide() && bredBySpawnEgg(player, hand)) return InteractionResult.SUCCESS;
         if (!isClientSide() && fed(player, hand)) return InteractionResult.SUCCESS;
+        if (!isClientSide() && bribed(player, hand)) return InteractionResult.SUCCESS;
         if (!isClientSide() && healed(player, hand)) return InteractionResult.SUCCESS;
         if (!isClientSide() && tamedBy(player, hand)) return InteractionResult.SUCCESS;
         if (!isClientSide() && grownByHand(player, hand)) return InteractionResult.SUCCESS;
