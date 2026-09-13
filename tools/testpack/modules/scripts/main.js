@@ -5,7 +5,28 @@
 // caught by the imports below: reaching the first MODULEPROBE line means every module linked, and a
 // line per module means each of them answered.
 
-import { EntityRemoveBeforeEvent, system, world } from "@minecraft/server";
+import {
+    BlockContainerClosedAfterEventSignal,
+    BlockContainerOpenedAfterEventSignal,
+    BlockExplodeAfterEventSignal,
+    EntityContainerClosedAfterEventSignal,
+    EntityContainerOpenedAfterEventSignal,
+    EntityRemoveBeforeEvent,
+    ExplosionAfterEventSignal,
+    ExplosionBeforeEventSignal,
+    GameRuleChangeAfterEventSignal,
+    ItemStopUseOnAfterEventSignal,
+    PistonActivateAfterEventSignal,
+    PlayerCancelBreakingBlockAfterEventSignal,
+    PlayerStartBreakingBlockAfterEventSignal,
+    PlayerSwingStartAfterEventSignal,
+    PressurePlatePopAfterEventSignal,
+    PressurePlatePushAfterEventSignal,
+    TargetBlockHitAfterEventSignal,
+    TripWireTripAfterEventSignal,
+    system,
+    world,
+} from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 import { NumberRange } from "@minecraft/common";
 import { Vector3Builder, Vector3Utils, VECTOR3_UP, clampNumber } from "@minecraft/math";
@@ -57,8 +78,68 @@ system.beforeEvents.startup.subscribe(event => {
     registeredComponents = 2;
 });
 
+// The events the mod raises out of the game itself rather than out of a pack's own data. Each one
+// is asked for by name, so a signal the module stopped exporting ends this script at its import and
+// a signal handed back as the wrong class shows up as a `false` here.
+const RAISED_SIGNALS = {
+    blockContainerClosed: BlockContainerClosedAfterEventSignal,
+    blockContainerOpened: BlockContainerOpenedAfterEventSignal,
+    blockExplode: BlockExplodeAfterEventSignal,
+    entityContainerClosed: EntityContainerClosedAfterEventSignal,
+    entityContainerOpened: EntityContainerOpenedAfterEventSignal,
+    explosion: ExplosionAfterEventSignal,
+    gameRuleChange: GameRuleChangeAfterEventSignal,
+    itemStopUseOn: ItemStopUseOnAfterEventSignal,
+    pistonActivate: PistonActivateAfterEventSignal,
+    playerCancelBreakingBlock: PlayerCancelBreakingBlockAfterEventSignal,
+    playerStartBreakingBlock: PlayerStartBreakingBlockAfterEventSignal,
+    playerSwingStart: PlayerSwingStartAfterEventSignal,
+    pressurePlatePop: PressurePlatePopAfterEventSignal,
+    pressurePlatePush: PressurePlatePushAfterEventSignal,
+    targetBlockHit: TargetBlockHitAfterEventSignal,
+    tripWireTrip: TripWireTripAfterEventSignal,
+};
+
+const arrived = new Set();
+
+function watch(name) {
+    world.afterEvents[name].subscribe(event => {
+        if (arrived.has(name)) return;
+
+        arrived.add(name);
+        report("worldEvent." + name, event.constructor.name);
+    });
+}
+
+for (const name of Object.keys(RAISED_SIGNALS)) watch(name);
+
+world.beforeEvents.explosion.subscribe(event => {
+    if (arrived.has("explosion.before")) return;
+
+    arrived.add("explosion.before");
+    event.cancel = false;
+    report("worldEvent.explosion.before", event.getImpactedBlocks().length >= 0);
+});
+
 system.run(() => {
     try {
+        const named = Object.entries(RAISED_SIGNALS)
+            .filter(([name, signal]) => world.afterEvents[name] instanceof signal);
+        report("worldEvents.signalsNamed", named.length + " of " + Object.keys(RAISED_SIGNALS).length);
+        report("worldEvents.explosionBeforeNamed",
+            world.beforeEvents.explosion instanceof ExplosionBeforeEventSignal);
+
+        // Two of these the game can be made to raise with nobody playing: a rule written through
+        // the module's own setter, and a charge set off beside a block put there to lose. Both wait
+        // a few ticks, because a rule read for the first time on the tick it is written on is the
+        // value the world started with rather than a change.
+        system.runTimeout(() => {
+            world.gameRules.doFireTick = !world.gameRules.doFireTick;
+            const overworld = world.getDimension("overworld");
+            overworld.runCommand("setblock 1 100 0 stone");
+            overworld.runCommand("summon tnt 0 100 0");
+        }, 10);
+
         report("customComponents.registered", registeredComponents);
         report("math.distance", Vector3Utils.distance({ x: 0, y: 0, z: 0 }, { x: 3, y: 4, z: 0 }));
         report("math.builder", new Vector3Builder(VECTOR3_UP).scale(3).toString());

@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.server;
 
+import at.ioexception.mcaddon.convert.Functions;
 import at.ioexception.mcaddon.mixin.JumpingAccessor;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.script.ScriptHost;
@@ -18,6 +19,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.MenuProvider;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Inventory;
@@ -28,6 +30,7 @@ import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.LeverBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.phys.BlockHitResult;
@@ -44,7 +47,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * What a player does, told the way a pack's script asks about it.
+ * What happens in a world, told the way a pack's script asks about it.
  *
  * Each event carries the fields Bedrock's event of the same name carries, so a pack's handler finds
  * what it expects. Where Bedrock has a before event, it is raised first and a listener that sets
@@ -64,6 +67,20 @@ public final class WorldEvents {
 
     /** The weather each dimension carried at the end of the last tick. */
     private static final Map<ResourceKey<Level>, String> WEATHER = new HashMap<>();
+
+    /** Each game rule as it read at the end of the last tick, under the name Bedrock gives it. */
+    private static final Map<String, String> RULES = new HashMap<>();
+
+    /** The block each player is part way through breaking, and when they started on it. */
+    private static final Map<UUID, Breaking> BREAKING = new HashMap<>();
+
+    /** The container each player has open, ready for the event its closing raises. */
+    private static final Map<UUID, OpenContainer> OPENED = new HashMap<>();
+
+    /** The click each player is holding on a block, which ends the tick after the last one. */
+    private static final Map<UUID, Map<String, Object>> USING_ON = new HashMap<>();
+
+    private static final Set<UUID> USED_ON_THIS_TICK = new HashSet<>();
 
     /** How long Bedrock says a weather change lasts when nothing asked for a length. */
     private static final int WEATHER_TICKS = 6000;
@@ -97,7 +114,68 @@ public final class WorldEvents {
         confirmPlacements(server);
         pollPlayers(server);
         pollWeather(server);
+        pollGameRules(server);
+        endUseOn();
         BlockEvents.endTick(server);
+    }
+
+    /**
+     * A game rule moving, found by comparing each rule against the tick before.
+     *
+     * Java raises nothing when a rule is set, and it is set from the command, from a pack's own
+     * script and from the world being loaded. Reading the rules back catches every one of those, and
+     * a rule this version of Java has no form of answers with nothing and is skipped.
+     */
+    private static void pollGameRules(MinecraftServer server) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null) {
+            RULES.clear();
+            return;
+        }
+
+        for (String name : Functions.gameRuleNames()) {
+            String now = Platform.gameRule(server, name);
+            if (now == null) continue;
+
+            String before = RULES.put(name, now);
+            if (before == null || before.equals(now)) continue;
+
+            Map<String, Object> fields = new LinkedHashMap<>();
+            fields.put("rule", name);
+            fields.put("value", ruleValue(now));
+            scripts.raiseWorldEvent("gameRuleChange", fields);
+        }
+    }
+
+    /** Bedrock hands a rule's value over as a flag or a count, which is what its text spells. */
+    private static Object ruleValue(String written) {
+        if ("true".equals(written) || "false".equals(written)) return Boolean.valueOf(written);
+
+        boolean counted = !written.isEmpty() && written.chars().allMatch(Character::isDigit);
+        return counted ? Integer.valueOf(written) : written;
+    }
+
+    /**
+     * The click a player was holding on a block, ended once a tick passes with no click in it.
+     *
+     * The client sends a use-on packet for as long as the button is down, so a run of them is one
+     * use and the first tick without one is where it stopped.
+     */
+    private static void endUseOn() {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null) {
+            USING_ON.clear();
+            USED_ON_THIS_TICK.clear();
+            return;
+        }
+
+        USING_ON.entrySet().removeIf(held -> {
+            if (USED_ON_THIS_TICK.contains(held.getKey())) return false;
+
+            scripts.raiseWorldEvent("itemStopUseOn", held.getValue());
+            return true;
+        });
+        USED_ON_THIS_TICK.clear();
     }
 
     /**
@@ -259,6 +337,253 @@ public final class WorldEvents {
         scripts.raiseWorldEvent("buttonPush", fields);
     }
 
+    /**
+     * An explosion, asked about before it lands and reported once a listener has let it through.
+     *
+     * The blocks are the ones the game has already worked out it will take, and they are still
+     * standing at this point, so each one can be reported with the permutation it is about to lose.
+     * Gathering those is worth a check first: every explosion in the world would otherwise pay for
+     * a list nobody asked for.
+     */
+    public static boolean explosionRefused(Level level, Entity source, List<BlockPos> impacted) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null || !listensToExplosion(scripts)) return false;
+
+        if (scripts.raiseCancellable("explosion", explosion(level, source, impacted))) return true;
+
+        scripts.raiseWorldEvent("explosion", explosion(level, source, impacted));
+        for (BlockPos position : impacted) {
+            Map<String, Object> fields = new LinkedHashMap<>();
+            fields.put("block", block(level, position));
+            fields.put("dimension", Platform.idOf(level.dimension()).toString());
+            fields.put("explodedBlockPermutation", permutation(level.getBlockState(position)));
+            if (source != null) fields.put("source", ScriptHost.EntityHandle.of(source));
+            scripts.raiseWorldEvent("blockExplode", fields);
+        }
+        return false;
+    }
+
+    private static boolean listensToExplosion(ScriptHost scripts) {
+        return scripts.listens("worldBefore", "explosion")
+            || scripts.listens("worldAfter", "explosion")
+            || scripts.listens("worldAfter", "blockExplode");
+    }
+
+    private static Map<String, Object> explosion(Level level, Entity source, List<BlockPos> impacted) {
+        List<Object> blocks = new ArrayList<>();
+        for (BlockPos position : impacted) blocks.add(block(level, position));
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("dimension", Platform.idOf(level.dimension()).toString());
+        if (source != null) fields.put("source", ScriptHost.EntityHandle.of(source));
+        fields.put("impactedBlocks", blocks);
+        return fields;
+    }
+
+    /** A piston starting to move, which Bedrock reports with the way it is going. */
+    public static void pistonMoved(Level level, BlockPos position, boolean expanding) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null) return;
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("block", block(level, position));
+        fields.put("dimension", Platform.idOf(level.dimension()).toString());
+        fields.put("isExpanding", expanding);
+        scripts.raiseWorldEvent("pistonActivate", fields);
+    }
+
+    /**
+     * A pressure plate whose signal moved, which Bedrock splits into a push and a pop.
+     *
+     * A weighted plate answers with a strength rather than a flag, so any rise is a push and any
+     * fall is a pop. Only a push carries whoever caused it: a plate pops on its own clock, with
+     * nobody standing on it to name.
+     */
+    public static void plateSignalChanged(Level level, BlockPos position, Entity source, int before,
+        int now) {
+
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null || before == now) return;
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("block", block(level, position));
+        fields.put("dimension", Platform.idOf(level.dimension()).toString());
+        fields.put("previousRedstonePower", before);
+        fields.put("redstonePower", now);
+        if (now < before) {
+            scripts.raiseWorldEvent("pressurePlatePop", fields);
+            return;
+        }
+
+        if (source != null) fields.put("source", ScriptHost.EntityHandle.of(source));
+        scripts.raiseWorldEvent("pressurePlatePush", fields);
+    }
+
+    /** A tripwire whose line was crossed or cleared, with everything standing in it. */
+    public static void tripWireTripped(Level level, BlockPos position, boolean powered,
+        List<Entity> sources) {
+
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null) return;
+
+        List<Object> standing = new ArrayList<>();
+        for (Entity entity : sources) standing.add(ScriptHost.EntityHandle.of(entity));
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("block", block(level, position));
+        fields.put("dimension", Platform.idOf(level.dimension()).toString());
+        fields.put("isPowered", powered);
+        fields.put("sources", standing);
+        scripts.raiseWorldEvent("tripWireTrip", fields);
+    }
+
+    /**
+     * A target block struck by something, with the strength the hit was worth.
+     *
+     * Bedrock's hit vector is the way the projectile was going as it arrived, which is what Java
+     * carries as the thing's own motion.
+     */
+    public static void targetBlockHit(Level level, BlockPos position, Entity source, int before,
+        int now) {
+
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null) return;
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("block", block(level, position));
+        fields.put("dimension", Platform.idOf(level.dimension()).toString());
+        fields.put("hitVector", vector(source == null ? Vec3.ZERO : source.getDeltaMovement().normalize()));
+        fields.put("previousRedstonePower", before);
+        fields.put("redstonePower", now);
+        if (source != null) fields.put("source", ScriptHost.EntityHandle.of(source));
+        scripts.raiseWorldEvent("targetBlockHit", fields);
+    }
+
+    /** Somebody starting to break a block, which is the hold rather than the break that may follow. */
+    public static void startedBreaking(ServerPlayer player, BlockPos position, Direction face) {
+        BREAKING.put(player.getUUID(), new Breaking(position, face, player.tickCount));
+
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts != null) {
+            scripts.raiseWorldEvent("playerStartBreakingBlock", breaking(player, position, face));
+        }
+    }
+
+    /** Somebody letting go part way through, reported with how far the block had got. */
+    public static void cancelledBreaking(ServerPlayer player) {
+        Breaking started = BREAKING.remove(player.getUUID());
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null || started == null) return;
+
+        Map<String, Object> fields = breaking(player, started.position(), started.face());
+        fields.put("breakProgress", brokenSoFar(player, started));
+        scripts.raiseWorldEvent("playerCancelBreakingBlock", fields);
+    }
+
+    /** The break ran its course, so there is nothing left to cancel. */
+    public static void finishedBreaking(ServerPlayer player) {
+        BREAKING.remove(player.getUUID());
+    }
+
+    private static Map<String, Object> breaking(ServerPlayer player, BlockPos position, Direction face) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("player", ScriptHost.EntityHandle.of(player));
+        fields.put("block", block(player.level(), position));
+        fields.put("dimension", Platform.idOf(player.level().dimension()).toString());
+        fields.put("blockPermutation", permutation(player.level().getBlockState(position)));
+        fields.put("face", capitalised(face.getName()));
+        fields.put("heldItemStack", item(player.getMainHandItem()));
+        return fields;
+    }
+
+    /** How far the break had got, worked out the way the game does: the block's own speed per tick. */
+    private static float brokenSoFar(ServerPlayer player, Breaking started) {
+        BlockState state = player.level().getBlockState(started.position());
+        float perTick = state.getDestroyProgress(player, player.level(), started.position());
+        return Math.min(1.0F, perTick * (player.tickCount - started.startedAt() + 1));
+    }
+
+    /**
+     * The arm going out, which Java reports without saying why.
+     *
+     * The one reason the server already holds is a break in progress, so a swing during one is a
+     * mining swing and every other swing is reported with no source named.
+     */
+    public static void swung(ServerPlayer player) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null) return;
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("player", ScriptHost.EntityHandle.of(player));
+        fields.put("heldItemStack", item(player.getMainHandItem()));
+        fields.put("swingSource", BREAKING.containsKey(player.getUUID()) ? "Mine" : "None");
+        scripts.raiseWorldEvent("playerSwingStart", fields);
+    }
+
+    /**
+     * A game mode about to change, which a pack may refuse.
+     *
+     * The mode a player already has is set again as they join and as they come back from dying, so
+     * only a mode that differs from the one they carry is offered as a change.
+     */
+    public static boolean gameModeRefused(ServerPlayer player, GameType wanted) {
+        ScriptHost scripts = ServerHooks.scripts();
+        GameType current = Platform.gameMode(player);
+        if (scripts == null || current == wanted) return false;
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("player", ScriptHost.EntityHandle.of(player));
+        fields.put("fromGameMode", capitalised(current.getName()));
+        fields.put("toGameMode", capitalised(wanted.getName()));
+        return scripts.raiseCancellable("playerGameModeChange", fields);
+    }
+
+    /** A screen opening over a container, which is a block's when a block entity holds it. */
+    public static void menuOpened(ServerPlayer player, MenuProvider provider) {
+        if (provider instanceof BlockEntity held) {
+            openedBlock(player, held.getBlockPos());
+            return;
+        }
+        if (provider instanceof Entity held) openedEntity(player, held);
+    }
+
+    /** A mount's own inventory, which Java opens without going through a menu provider. */
+    public static void mountOpened(ServerPlayer player, Entity mount) {
+        openedEntity(player, mount);
+    }
+
+    public static void containerClosed(ServerPlayer player) {
+        OpenContainer open = OPENED.remove(player.getUUID());
+        if (open != null) raiseContainer(open.closing(), "closeSource", player, open.fields());
+    }
+
+    private static void openedBlock(ServerPlayer player, BlockPos position) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("block", block(player.level(), position));
+        fields.put("dimension", Platform.idOf(player.level().dimension()).toString());
+        OPENED.put(player.getUUID(), new OpenContainer("blockContainerClosed", fields));
+        raiseContainer("blockContainerOpened", "openSource", player, fields);
+    }
+
+    private static void openedEntity(ServerPlayer player, Entity holder) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("entity", ScriptHost.EntityHandle.of(holder));
+        OPENED.put(player.getUUID(), new OpenContainer("entityContainerClosed", fields));
+        raiseContainer("entityContainerOpened", "openSource", player, fields);
+    }
+
+    /** Bedrock names whoever reached the container in a shape of its own, holding that one entity. */
+    private static void raiseContainer(String event, String sourceField, ServerPlayer player,
+        Map<String, Object> fields) {
+
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null) return;
+
+        Map<String, Object> carried = new LinkedHashMap<>(fields);
+        carried.put(sourceField, Map.of("entity", ScriptHost.EntityHandle.of(player)));
+        scripts.raiseWorldEvent(event, carried);
+    }
+
     /** A lever going over, reported with the side it lands on and whoever put it there. */
     public static void leverPulled(Level level, BlockPos position, Player player) {
         ScriptHost scripts = ServerHooks.scripts();
@@ -331,6 +656,11 @@ public final class WorldEvents {
         PLACEMENTS.clear();
         WATCHED.clear();
         WEATHER.clear();
+        RULES.clear();
+        BREAKING.clear();
+        OPENED.clear();
+        USING_ON.clear();
+        USED_ON_THIS_TICK.clear();
         BlockEvents.forget();
     }
 
@@ -392,6 +722,13 @@ public final class WorldEvents {
             started.put("blockFace", capitalised(hit.getDirection().getName()));
             started.put("itemStack", item(held));
             scripts.raiseWorldEvent("itemStartUseOn", started);
+
+            Map<String, Object> stopping = new LinkedHashMap<>();
+            stopping.put("source", ScriptHost.EntityHandle.of(player));
+            stopping.put("block", block(level, hit.getBlockPos()));
+            stopping.put("itemStack", item(held));
+            USING_ON.put(player.getUUID(), stopping);
+            USED_ON_THIS_TICK.add(player.getUUID());
         }
         rememberPlacement(player, level, hit, held);
         return InteractionResult.PASS;
@@ -574,6 +911,13 @@ public final class WorldEvents {
 
     private record Placement(UUID player, ResourceKey<Level> dimension, BlockPos clicked, Direction face,
         Block placing, boolean clickedHeld, boolean beyondHeld) {
+    }
+
+    private record Breaking(BlockPos position, Direction face, int startedAt) {
+    }
+
+    /** What a player has open: the event its closing raises, and what that event says was closed. */
+    private record OpenContainer(String closing, Map<String, Object> fields) {
     }
 
     /**

@@ -95,6 +95,12 @@ server decides what happens; the client draws it.
   and nothing else on disk. Commands a script registers on startup become real commands,
   `@minecraft/server-ui` forms become real screens, and the world, system, entity, dimension, block,
   scoreboard, game rule and structure surfaces are answered by the game.
+- The world events a script subscribes to, raised out of the game rather than out of a pack's own
+  data: what a player breaks, places, uses, picks up and swings at, where they go and what they
+  hold, the weather turning and a game rule being set, an explosion and each block it takes, a
+  piston going out, a pressure plate, a tripwire, a target block, a button and a lever, and a
+  container opening and closing on a block or on an entity. An explosion is offered first as a
+  before event, so a listener can call one off, and the blocks it names are the ones still standing.
 - The tests a behaviour pack ships through `@minecraft/server-gametest`. `/gametest run <name>`,
   `/gametest runset <tag>` and `/gametest runall` build the structure a test named out of the pack's
   own `.mcstructure`, place it beside you, hand the pack's function a `Test` bound to that area and
@@ -281,12 +287,34 @@ spawns mobs, places blocks and asserts against the world runs. Running one test 
 or several times over is counted the same way: a run places one structure and calls the test once.
 
 **The parts of the script API that draw a Bedrock client.** Aim assist is how a controller and a
-touchscreen pick what a player is pointing at, the primitive shapes are text and boxes drawn over the
-world by the Bedrock renderer, and the locator bar and its waypoints are a Bedrock heads-up display.
-Java has none of the three, so every member of each is answered by `/mcaddon scripts` rather than
-quietly doing nothing. The same holds for `world.getPackSettings` and for the `get_pack_setting`,
-`is_pack_setting_enabled` and `is_pack_setting_selected` queries, which all read the sliders, toggles
-and dropdowns on a screen only Bedrock shows beside a resource pack.
+touchscreen pick what a player is pointing at, and the primitive shapes are text and boxes drawn over
+the world by the Bedrock renderer. Java has neither, so every member of both is answered by `/mcaddon
+scripts` rather than quietly doing nothing. The same holds for `world.getPackSettings` and for the
+`get_pack_setting`, `is_pack_setting_enabled` and `is_pack_setting_selected` queries, which all read
+the sliders, toggles and dropdowns on a screen only Bedrock shows beside a resource pack.
+
+**The locator bar's waypoints.** Java has a locator bar from 26, and its waypoints belong to entities:
+one is transmitted by whoever carries it, and it is shown to whoever is near enough. Bedrock's are a
+pack's own markers, placed at a location that need hold no entity, coloured and given a texture per
+waypoint and shown to a chosen list of players. Nothing in Java carries any of that, and the two
+older supported versions have no bar at all, so `Player.locatorBar` and every member of `Waypoint`,
+`EntityWaypoint`, `LocationWaypoint` and `PlayerWaypoint` are counted and named.
+
+**What four errors would carry.** `BookError.reason`, `BookPageContentError.reason`,
+`InvalidEntityError.id` and `InvalidItemStackError.itemType` are data on errors Bedrock raises where
+this mod answers instead: a book is written as far as the pack asks and an entity or an item that has
+gone reads as invalid rather than throwing. The errors are exported, so a pack catching one by name
+still compiles, and the four members are counted.
+
+**Four world events nothing in Java raises.** `entityUpgrade` fires when Bedrock migrates an entity
+to a newer version of the definition a pack wrote, which is a step in reading a pack rather than
+anything that happens in a world: this mod reads one definition and keeps it. `playerEmote` names a
+persona piece, and a persona is a Bedrock skin. `playerInputModeChange` says whether somebody is on a
+keyboard, a controller, a touchscreen or a motion controller, and `playerInputPermissionCategoryChange`
+follows Bedrock's `inputpermission` command, which takes movement and the camera away from a player.
+A Java client tells the server nothing about the device it is on, and Java has no such command. Each
+of the four hands a pack a signal of the class Bedrock names, so subscribing works, and `/mcaddon
+scripts` says the event is never raised.
 
 **Four spawn rule conditions with nothing to ask in Java.** `minecraft:permute_type` swaps the
 entity that spawns for another one after the biome list has already chosen a type.

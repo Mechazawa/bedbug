@@ -3688,9 +3688,12 @@ function permutationFrom(fields) {
 const FIELD_SHAPES = {
     beforeItemStack: itemFrom,
     block: blockFrom,
+    blockPermutation: permutationFrom,
     brokenBlockPermutation: permutationFrom,
     dimension: dimensionOf,
+    explodedBlockPermutation: permutationFrom,
     fromDimension: dimensionOf,
+    heldItemStack: itemFrom,
     hitBlock: blockFrom,
     hitBlockPermutation: permutationFrom,
     itemStack: itemFrom,
@@ -3736,6 +3739,19 @@ const EVENT_SHAPES = {
     weatherChange(event) {
         // The one event that names its dimension by id rather than handing the dimension over.
         event.dimension = event.dimension?.id ?? event.dimension;
+        return event;
+    },
+
+    explosion(event) {
+        const blocks = (event.impactedBlocks ?? []).map(blockFrom);
+        delete event.impactedBlocks;
+        event.getImpactedBlocks = () => blocks;
+        return event;
+    },
+
+    pistonActivate(event) {
+        // The piston is the component of the block the event already carries.
+        event.piston = event.block?.getComponent(BlockPistonComponent.componentId);
         return event;
     },
 };
@@ -3806,6 +3822,19 @@ function payloadsFor(group) {
         weatherChange: WeatherChangeAfterEvent,
         playerHotbarSelectedSlotChange: PlayerHotbarSelectedSlotChangeAfterEvent,
         playerButtonInput: PlayerButtonInputAfterEvent,
+        explosion: ExplosionAfterEvent, blockExplode: BlockExplodeAfterEvent,
+        pistonActivate: PistonActivateAfterEvent, gameRuleChange: GameRuleChangeAfterEvent,
+        pressurePlatePush: PressurePlatePushAfterEvent,
+        pressurePlatePop: PressurePlatePopAfterEvent,
+        tripWireTrip: TripWireTripAfterEvent, targetBlockHit: TargetBlockHitAfterEvent,
+        playerStartBreakingBlock: PlayerStartBreakingBlockAfterEvent,
+        playerCancelBreakingBlock: PlayerCancelBreakingBlockAfterEvent,
+        playerSwingStart: PlayerSwingStartAfterEvent,
+        itemStopUseOn: ItemStopUseOnAfterEvent,
+        blockContainerOpened: BlockContainerOpenedAfterEvent,
+        blockContainerClosed: BlockContainerClosedAfterEvent,
+        entityContainerOpened: EntityContainerOpenedAfterEvent,
+        entityContainerClosed: EntityContainerClosedAfterEvent,
     },
     worldBefore: {
         entityHurt: EntityHurtBeforeEvent, entityRemove: EntityRemoveBeforeEvent,
@@ -3814,7 +3843,8 @@ function payloadsFor(group) {
         playerInteractWithEntity: PlayerInteractWithEntityBeforeEvent,
         playerLeave: PlayerLeaveBeforeEvent, effectAdd: EffectAddBeforeEvent,
         entityItemPickup: EntityItemPickupBeforeEvent, entityHeal: EntityHealBeforeEvent,
-        weatherChange: WeatherChangeBeforeEvent,
+        weatherChange: WeatherChangeBeforeEvent, explosion: ExplosionBeforeEvent,
+        playerGameModeChange: PlayerGameModeChangeBeforeEvent,
     },
     systemAfter: {
         scriptEventReceive: ScriptEventCommandMessageAfterEvent,
@@ -3838,30 +3868,12 @@ let unraisedSignals;
 function unraisedFor(group) {
     unraisedSignals ??= {
     worldAfter: {
-        blockContainerClosed: BlockContainerClosedAfterEventSignal,
-        blockContainerOpened: BlockContainerOpenedAfterEventSignal,
-        blockExplode: BlockExplodeAfterEventSignal,
-        entityContainerClosed: EntityContainerClosedAfterEventSignal,
-        entityContainerOpened: EntityContainerOpenedAfterEventSignal,
-        entityUpgrade: EntityUpgradeAfterEventSignal, explosion: ExplosionAfterEventSignal,
-        gameRuleChange: GameRuleChangeAfterEventSignal,
-        itemStopUseOn: ItemStopUseOnAfterEventSignal,
-        pistonActivate: PistonActivateAfterEventSignal,
-        playerCancelBreakingBlock: PlayerCancelBreakingBlockAfterEventSignal,
+        entityUpgrade: EntityUpgradeAfterEventSignal,
         playerEmote: PlayerEmoteAfterEventSignal,
         playerInputModeChange: PlayerInputModeChangeAfterEventSignal,
         playerInputPermissionCategoryChange: PlayerInputPermissionCategoryChangeAfterEventSignal,
-        playerStartBreakingBlock: PlayerStartBreakingBlockAfterEventSignal,
-        playerSwingStart: PlayerSwingStartAfterEventSignal,
-        pressurePlatePop: PressurePlatePopAfterEventSignal,
-        pressurePlatePush: PressurePlatePushAfterEventSignal,
-        targetBlockHit: TargetBlockHitAfterEventSignal,
-        tripWireTrip: TripWireTripAfterEventSignal,
     },
-    worldBefore: {
-        explosion: ExplosionBeforeEventSignal,
-        playerGameModeChange: PlayerGameModeChangeBeforeEventSignal,
-    },
+    worldBefore: {},
     systemAfter: {},
     systemBefore: {},
 };
@@ -3944,6 +3956,24 @@ export class WeatherChangeAfterEventSignal extends EventSignal {}
 export class WeatherChangeBeforeEventSignal extends EventSignal {}
 export class PlayerHotbarSelectedSlotChangeAfterEventSignal extends EventSignal {}
 export class PlayerButtonInputAfterEventSignal extends EventSignal {}
+export class BlockContainerClosedAfterEventSignal extends EventSignal {}
+export class BlockContainerOpenedAfterEventSignal extends EventSignal {}
+export class BlockExplodeAfterEventSignal extends EventSignal {}
+export class EntityContainerClosedAfterEventSignal extends EventSignal {}
+export class EntityContainerOpenedAfterEventSignal extends EventSignal {}
+export class ExplosionAfterEventSignal extends EventSignal {}
+export class ExplosionBeforeEventSignal extends EventSignal {}
+export class GameRuleChangeAfterEventSignal extends EventSignal {}
+export class ItemStopUseOnAfterEventSignal extends EventSignal {}
+export class PistonActivateAfterEventSignal extends EventSignal {}
+export class PlayerCancelBreakingBlockAfterEventSignal extends EventSignal {}
+export class PlayerStartBreakingBlockAfterEventSignal extends EventSignal {}
+export class PlayerSwingStartAfterEventSignal extends EventSignal {}
+export class PressurePlatePopAfterEventSignal extends EventSignal {}
+export class PressurePlatePushAfterEventSignal extends EventSignal {}
+export class TargetBlockHitAfterEventSignal extends EventSignal {}
+export class TripWireTripAfterEventSignal extends EventSignal {}
+export class PlayerGameModeChangeBeforeEventSignal extends EventSignal {}
 
 const RAISED = {
     worldAfter: {
@@ -3973,6 +4003,21 @@ const RAISED = {
         weatherChange: WeatherChangeAfterEventSignal,
         playerHotbarSelectedSlotChange: PlayerHotbarSelectedSlotChangeAfterEventSignal,
         playerButtonInput: PlayerButtonInputAfterEventSignal,
+        explosion: ExplosionAfterEventSignal, blockExplode: BlockExplodeAfterEventSignal,
+        pistonActivate: PistonActivateAfterEventSignal,
+        gameRuleChange: GameRuleChangeAfterEventSignal,
+        pressurePlatePush: PressurePlatePushAfterEventSignal,
+        pressurePlatePop: PressurePlatePopAfterEventSignal,
+        tripWireTrip: TripWireTripAfterEventSignal,
+        targetBlockHit: TargetBlockHitAfterEventSignal,
+        playerStartBreakingBlock: PlayerStartBreakingBlockAfterEventSignal,
+        playerCancelBreakingBlock: PlayerCancelBreakingBlockAfterEventSignal,
+        playerSwingStart: PlayerSwingStartAfterEventSignal,
+        itemStopUseOn: ItemStopUseOnAfterEventSignal,
+        blockContainerOpened: BlockContainerOpenedAfterEventSignal,
+        blockContainerClosed: BlockContainerClosedAfterEventSignal,
+        entityContainerOpened: EntityContainerOpenedAfterEventSignal,
+        entityContainerClosed: EntityContainerClosedAfterEventSignal,
     },
     worldBefore: {
         entityHurt: EntityHurtBeforeEventSignal, entityRemove: EntityRemoveBeforeEventSignal,
@@ -3982,6 +4027,8 @@ const RAISED = {
         playerLeave: PlayerLeaveBeforeEventSignal, effectAdd: EffectAddBeforeEventSignal,
         entityItemPickup: EntityItemPickupBeforeEventSignal,
         entityHeal: EntityHealBeforeEventSignal, weatherChange: WeatherChangeBeforeEventSignal,
+        explosion: ExplosionBeforeEventSignal,
+        playerGameModeChange: PlayerGameModeChangeBeforeEventSignal,
     },
     systemAfter: {
         scriptEventReceive: ScriptEventCommandMessageAfterEventSignal,
@@ -4993,7 +5040,6 @@ export class BlockExplodeAfterEvent extends BlockEvent {
         return unsupported("BlockExplodeAfterEvent.source");
     }
 }
-export class BlockExplodeAfterEventSignal extends EventSignal {}
 export class BlockFluidContainerComponent extends BlockComponent {
     static componentId = "minecraft:fluid_container";
 
@@ -5456,7 +5502,6 @@ export class ExplosionAfterEvent {
         return unsupported("ExplosionAfterEvent.getImpactedBlocks");
     }
 }
-export class ExplosionAfterEventSignal extends EventSignal {}
 export class ExplosionBeforeEvent extends ExplosionAfterEvent {
     get cancel() {
         return unsupported("ExplosionBeforeEvent.cancel");
@@ -5466,7 +5511,6 @@ export class ExplosionBeforeEvent extends ExplosionAfterEvent {
         return unsupported("ExplosionBeforeEvent.setImpactedBlocks");
     }
 }
-export class ExplosionBeforeEventSignal extends EventSignal {}
 export class ExplosionDecayFunction {}
 export class FillContainerFunction {
     get lootTable() {
@@ -5483,7 +5527,6 @@ export class GameRuleChangeAfterEvent {
         return unsupported("GameRuleChangeAfterEvent.value");
     }
 }
-export class GameRuleChangeAfterEventSignal extends EventSignal {}
 export class IsBabyCondition {}
 export class ItemCompleteUseAfterEvent {
     get itemStack() {
@@ -5670,7 +5713,6 @@ export class ItemStopUseOnAfterEvent {
         return unsupported("ItemStopUseOnAfterEvent.source");
     }
 }
-export class ItemStopUseOnAfterEventSignal extends EventSignal {}
 export class ItemUseAfterEvent {
     get itemStack() {
         return unsupported("ItemUseAfterEvent.itemStack");
@@ -5864,7 +5906,6 @@ export class PistonActivateAfterEvent extends BlockEvent {
         return unsupported("PistonActivateAfterEvent.piston");
     }
 }
-export class PistonActivateAfterEventSignal extends EventSignal {}
 export class PlayerBreakBlockAfterEvent {
     get block() {
         return unsupported("PlayerBreakBlockAfterEvent.block");
@@ -5994,7 +6035,6 @@ export class PlayerGameModeChangeBeforeEvent {
         return unsupported("PlayerGameModeChangeBeforeEvent.toGameMode");
     }
 }
-export class PlayerGameModeChangeBeforeEventSignal extends EventSignal {}
 export class PlayerHotbarSelectedSlotChangeAfterEvent {
     get itemStack() {
         return unsupported("PlayerHotbarSelectedSlotChangeAfterEvent.itemStack");
@@ -6211,7 +6251,6 @@ export class PlayerSwingStartAfterEvent {
         return unsupported("PlayerSwingStartAfterEvent.swingSource");
     }
 }
-export class PlayerSwingStartAfterEventSignal extends EventSignal {}
 export class PressurePlatePopAfterEvent extends BlockEvent {
     get previousRedstonePower() {
         return unsupported("PressurePlatePopAfterEvent.previousRedstonePower");
@@ -6221,7 +6260,6 @@ export class PressurePlatePopAfterEvent extends BlockEvent {
         return unsupported("PressurePlatePopAfterEvent.redstonePower");
     }
 }
-export class PressurePlatePopAfterEventSignal extends EventSignal {}
 export class PressurePlatePushAfterEvent extends BlockEvent {
     get previousRedstonePower() {
         return unsupported("PressurePlatePushAfterEvent.previousRedstonePower");
@@ -6235,7 +6273,6 @@ export class PressurePlatePushAfterEvent extends BlockEvent {
         return unsupported("PressurePlatePushAfterEvent.source");
     }
 }
-export class PressurePlatePushAfterEventSignal extends EventSignal {}
 export class ProjectileHitBlockAfterEvent {
     get dimension() {
         return unsupported("ProjectileHitBlockAfterEvent.dimension");
@@ -6462,7 +6499,6 @@ export class TargetBlockHitAfterEvent extends BlockEvent {
         return unsupported("TargetBlockHitAfterEvent.source");
     }
 }
-export class TargetBlockHitAfterEventSignal extends EventSignal {}
 export class TripWireTripAfterEvent extends BlockEvent {
     get isPowered() {
         return unsupported("TripWireTripAfterEvent.isPowered");
@@ -6472,7 +6508,6 @@ export class TripWireTripAfterEvent extends BlockEvent {
         return unsupported("TripWireTripAfterEvent.sources");
     }
 }
-export class TripWireTripAfterEventSignal extends EventSignal {}
 export class WeatherChangeAfterEvent {
     get dimension() {
         return unsupported("WeatherChangeAfterEvent.dimension");
@@ -6526,13 +6561,11 @@ export class BlockContainerClosedAfterEvent extends BlockEvent {
         return unsupported("BlockContainerClosedAfterEvent.closeSource");
     }
 }
-export class BlockContainerClosedAfterEventSignal extends EventSignal {}
 export class BlockContainerOpenedAfterEvent extends BlockEvent {
     get openSource() {
         return unsupported("BlockContainerOpenedAfterEvent.openSource");
     }
 }
-export class BlockContainerOpenedAfterEventSignal extends EventSignal {}
 export class DimensionRegistry {
     registerCustomDimension() {
         return unsupported("DimensionRegistry.registerCustomDimension");
@@ -6547,7 +6580,6 @@ export class EntityContainerClosedAfterEvent {
         return unsupported("EntityContainerClosedAfterEvent.entity");
     }
 }
-export class EntityContainerClosedAfterEventSignal extends EventSignal {}
 export class EntityContainerOpenedAfterEvent {
     get entity() {
         return unsupported("EntityContainerOpenedAfterEvent.entity");
@@ -6557,7 +6589,6 @@ export class EntityContainerOpenedAfterEvent {
         return unsupported("EntityContainerOpenedAfterEvent.openSource");
     }
 }
-export class EntityContainerOpenedAfterEventSignal extends EventSignal {}
 export class EntityEnderInventoryComponent extends EntityComponent {
     get container() {
         return unsupported("EntityEnderInventoryComponent.container");
@@ -6603,7 +6634,6 @@ export class PlayerCancelBreakingBlockAfterEvent extends BlockEvent {
         return unsupported("PlayerCancelBreakingBlockAfterEvent.player");
     }
 }
-export class PlayerCancelBreakingBlockAfterEventSignal extends EventSignal {}
 export class PlayerSplitScreenSlot {}
 export class PlayerStartBreakingBlockAfterEvent extends BlockEvent {
     get blockPermutation() {
@@ -6622,7 +6652,6 @@ export class PlayerStartBreakingBlockAfterEvent extends BlockEvent {
         return unsupported("PlayerStartBreakingBlockAfterEvent.player");
     }
 }
-export class PlayerStartBreakingBlockAfterEventSignal extends EventSignal {}
 export class PlayerWaypoint {}
 export class PrimitiveShape {}
 export class PrimitiveShapesManager {}
