@@ -207,10 +207,22 @@ These are the checks it runs, and what each one catches:
   the game runs them itself as the world opens. Nothing is typed and no window has to be focused. A
   picture of the window is kept beside the log, and the datapack is removed again afterwards.
 
-  It needs a saved world in `versions/<version>/run/saves/`, and it reads the entity names to place
-  out of whatever packs are installed, so a checkout with no add-on still runs and simply places
-  nothing. **Only commands every supported version spells the same way belong in a scene**: 26
+  It needs a saved world in `versions/<version>/run/saves/`, and it reads the entity and item names
+  to place out of whatever packs are installed, so a checkout with no add-on still runs and simply
+  places nothing. **Only commands every supported version spells the same way belong in a scene**: 26
   renamed the game rules, and one command that will not parse takes the whole function with it.
+
+  The `items` scene stands one armour stand per add-on item and puts the item on its head, which is
+  what draws an item icon, its tint and its model in the world. The heads-up display is off while
+  the picture is taken, so an item in a hotbar or in a hand would not be in it.
+
+- **`tools/scene/zoom.py`** cuts a piece out of a scene's picture and scales it up without smearing
+  the pixels, for looking at one subject rather than the whole window.
+
+  ```bash
+  python3 tools/scene/zoom.py build/scene/26.2-items.png --slice 2/11
+  python3 tools/scene/zoom.py build/scene/26.2-items.png --box 340 380 560 470 --out /tmp/one.png
+  ```
 
 - **`tools/census/script.py`** says how much of the published script API this mod offers, which is
   the one measurement `/mcaddon scripts` cannot make. That report names what a *loaded pack* asked
@@ -335,6 +347,7 @@ tools/census/components.py   Coverage of Bedrock's published vocabulary, no pack
 tools/checkall.sh            Every check, in the order that fails fastest
 tools/census/script.py       How much of the published script API this mod offers
 tools/scene/scene.py         Scenes run inside the game, with nobody at the keyboard
+tools/scene/zoom.py          One piece of a scene's picture, scaled up to look at
 
 src/main/java/at/ioexception/mcaddon/
   pack/                      Discovery, manifests, dependency order

@@ -74,24 +74,24 @@ def scene(name: str, commands: list[str], wants: list[str]) -> dict:
     return {"name": name, "commands": commands, "wants": wants}
 
 
-def addonEntities(version: str) -> list[str]:
-    """Every entity a pack in this version's run directory declares, read from the packs themselves.
+def declared(version: str, directory: str, key: str) -> list[str]:
+    """Every name a pack in this version's run directory declares under one of its directories.
 
     No pack content belongs in this repository, so the names are taken from whatever the person
-    running this has installed. With nothing installed the entity scene has nothing to place and
-    says so rather than failing.
+    running this has installed. With nothing installed a scene has nothing to place and says so
+    rather than failing.
     """
     extracted = ROOT / "versions" / version / "run" / ".mcaddon" / "extracted"
     if not extracted.is_dir():
         return []
 
     found = []
-    for entity in sorted(extracted.glob("*/*/entities/*.json")):
+    for declaration in sorted(extracted.glob(f"*/*/{directory}/*.json")):
         try:
-            body = json.loads(entity.read_text(encoding="utf-8"))
+            body = json.loads(declaration.read_text(encoding="utf-8"))
         except (ValueError, OSError):
             continue
-        identifier = body.get("minecraft:entity", {}).get("description", {}).get("identifier")
+        identifier = body.get(key, {}).get("description", {}).get("identifier")
         if identifier and ":" in identifier and not identifier.startswith("minecraft:"):
             found.append(identifier)
     return sorted(set(found))
@@ -103,7 +103,8 @@ def scenes(version: str) -> list[dict]:
     A scene says what it is checking through `say`, because the game's own output is the record the
     runner reads. Anything a scene asserts has to be visible in the log rather than on the screen.
     """
-    entities = addonEntities(version)
+    entities = declared(version, "entities", "minecraft:entity")
+    items = declared(version, "items", "minecraft:item")
 
     # One of each, spread along a line on the stage, then counted back. An entity that vanished as it
     # spawned is the difference between the two numbers, which is how a pack's own despawn rule and a
@@ -122,12 +123,31 @@ def scenes(version: str) -> list[dict]:
         f"say PLACED {len(entities)} kinds",
     ]
 
+    # An item is only drawn once something is holding it, and a stand wears whatever is put on its
+    # head whether or not it is armour. That is what shows an icon, a tint and a model all at once.
+    holding = []
+    for index, name in enumerate(items):
+        z = ROW_Z + index * 2
+        holding.append(f"summon minecraft:armor_stand {ROW_X} {FLOOR_Y + 1} {z}")
+        holding.append(f"execute positioned {ROW_X} {FLOOR_Y + 1} {z} run item replace entity "
+                       f"@e[type=minecraft:armor_stand,limit=1,sort=nearest] armor.head with {name}")
+    itemMiddle = ROW_Z + max(len(items) - 1, 0)
+    atItems = [
+        f"tp @a {CAMERA_X} {FLOOR_Y + 3} {itemMiddle}",
+        f"tp @a {CAMERA_X} {FLOOR_Y + 3} {itemMiddle} facing {ROW_X} {FLOOR_Y + 2} {itemMiddle}",
+    ]
+
     return [
         scene("stage", ["say STAGE-BUILT"], ["STAGE-BUILT"]),
         scene(
             "entities",
             ["kill @e[type=!player]"] + placing + looking + counting + ["say ENTITIES-PLACED"],
             ["ENTITIES-PLACED"],
+        ),
+        scene(
+            "items",
+            ["kill @e[type=!player]"] + holding + atItems + [f"say SHOWN {len(items)} items"],
+            [f"SHOWN {len(items)} items"],
         ),
         scene(
             "player",
@@ -343,13 +363,12 @@ def run(version: str, one: dict, timeout: float, keep: bool) -> tuple[bool, list
     return (not problems, problems)
 
 
-def runOne(version: str, one: dict, timeout: float, keep: bool, failed: list) -> bool:
-    """Runs one scene and prints its verdict, collecting what went wrong."""
+def runOne(version: str, one: dict, timeout: float, keep: bool) -> bool:
+    """Runs one scene and prints its verdict."""
     passed, problems = run(version, one, timeout, keep)
     print(f"{'PASS' if passed else 'FAIL'}  {version} {one['name']}")
     for problem in problems:
         print(f"      {problem}")
-    failed += problems
     return passed
 
 
@@ -369,13 +388,13 @@ def main() -> int:
         print("no scene by that name", file=sys.stderr)
         return 2
 
-    failed = []
     with exclusive(arguments.wait):
-        for one in chosen:
-            passed, problems = runOne(arguments.version, one, arguments.timeout, arguments.keep, failed)
+        passed = [one["name"] for one in chosen
+                  if runOne(arguments.version, one, arguments.timeout, arguments.keep)]
 
-    print(f"{'PASS' if not failed else 'FAIL'}  {len(chosen) - len(set(failed))} of {len(chosen)} scenes")
-    return 1 if failed else 0
+    verdict = "PASS" if len(passed) == len(chosen) else "FAIL"
+    print(f"{verdict}  {len(passed)} of {len(chosen)} scenes")
+    return 0 if len(passed) == len(chosen) else 1
 
 
 if __name__ == "__main__":

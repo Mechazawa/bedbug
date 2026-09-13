@@ -9,6 +9,9 @@
         "texture": "shard"
       },
       "minecraft:max_stack_size": 16,
+      "minecraft:dyeable": {
+        "default_color": "#4C8FD1"
+      },
       "minecraft:display_name": {
         "value": "item.tp:shard.name"
       }

@@ -174,6 +174,30 @@ public record ItemDefinition(String identifier, String iconKey, String displayNa
         return worn > 0f ? worn : number("minecraft:armor", "protection", 0f);
     }
 
+    /**
+     * The colour a dyeable item starts out, or -1 where the pack declared no dyeing.
+     *
+     * `default_color` is written the way CSS writes one, and a pack that leaves it out means the
+     * leather brown Java falls back to as well.
+     */
+    public int dyeColour() {
+        JsonObject dyeable = components.get("minecraft:dyeable");
+        if (dyeable == null) return -1;
+
+        String colour = Json.text(dyeable, "default_color", null);
+        if (colour == null) return LEATHER_BROWN;
+
+        try {
+            return Integer.parseInt(colour.startsWith("#") ? colour.substring(1) : colour, 16)
+                & 0xFFFFFF;
+        } catch (NumberFormatException malformed) {
+            return LEATHER_BROWN;
+        }
+    }
+
+    /** What an undyed leather item is worth in both editions. */
+    private static final int LEATHER_BROWN = 0xA06540;
+
     /** One block `minecraft:digger` names, and how fast this breaks it. */
     public record DestroySpeed(String block, float speed) {
     }

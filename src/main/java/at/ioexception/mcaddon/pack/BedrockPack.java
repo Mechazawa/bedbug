@@ -87,6 +87,35 @@ public final class BedrockPack {
         }
     }
 
+    /**
+     * A number that changes when anything in the pack changes.
+     *
+     * A pack's own version is what an author bumps for players, not for every save, so keying the
+     * converted output on it alone leaves an edited pack showing its last conversion. The path, the
+     * size and the modification time of every file answer that without reading any of them.
+     */
+    public long contentStamp() {
+        try (Stream<Path> walk = Files.walk(root)) {
+            return walk.filter(Files::isRegularFile)
+                .sorted()
+                .mapToLong(BedrockPack::stampOf)
+                .reduce(1L, (stamp, file) -> stamp * 31L + file);
+        } catch (IOException error) {
+            McAddon.LOGGER.warn("Could not read {} to see whether it changed.", origin, error);
+            return 0L;
+        }
+    }
+
+    private static long stampOf(Path file) {
+        try {
+            return file.toString().hashCode() * 31L
+                + Files.size(file) * 31L
+                + Files.getLastModifiedTime(file).toMillis();
+        } catch (IOException unreadable) {
+            return file.toString().hashCode();
+        }
+    }
+
     /** The manifest name, with `pack.name` and the like resolved against the pack's own texts. */
     public String displayName() {
         String resolved = text(manifest.name());

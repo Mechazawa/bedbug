@@ -62,6 +62,7 @@ public final class ServerHooks {
                 // starting state is usually set from it.
                 EntityEvents.trigger(entity, "minecraft:entity_spawned", null, state);
             }
+            at.ioexception.mcaddon.registry.AddonItems.keepDropped(entity);
             raiseEntityEvent("entityLoad", entity);
             // Bedrock separates the two: a chunk load raises one, coming into existence raises both.
             if (entity.tickCount == 0) {

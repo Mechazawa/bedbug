@@ -3,6 +3,7 @@ package at.ioexception.mcaddon.gametest;
 import at.ioexception.mcaddon.entity.AddonEntity;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -10,7 +11,9 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
@@ -82,4 +85,59 @@ public final class BehaviourGameTests {
             "A table every version ships handed out nothing.");
         helper.succeed();
     }
+
+    /**
+     * A drop the pack asked to keep lies there past the five minutes an ordinary one lasts.
+     *
+     * The lifetime is counted on the entity and the pack states it on the item, so the two are only
+     * joined once a stack is lying in a world.
+     */
+    @GameTest()
+    public void aDropThePackKeepsIsGivenNoDeadline(GameTestHelper helper) {
+        Item kept = AddonItems.all().get(KEPT_ITEM);
+        if (kept == null) {
+            helper.succeed();
+            return;
+        }
+
+        BlockPos at = helper.absolutePos(STAND);
+        ItemEntity dropped = new ItemEntity(helper.getLevel(),
+            at.getX() + 0.5, at.getY(), at.getZ() + 0.5, new ItemStack(kept));
+        helper.getLevel().addFreshEntity(dropped);
+
+        helper.assertTrue(dropped.getAge() < 0,
+            KEPT_ITEM + " was dropped and started counting down to despawning anyway.");
+        helper.succeed();
+    }
+
+    /**
+     * A dyeable item starts out the colour the pack painted it.
+     *
+     * 1.20.1 decides a dyed colour from the item's Java class, which a data-driven item has none of,
+     * so there is nothing on the stack to read there.
+     */
+    @GameTest()
+    public void aDyeableItemCarriesThePacksColour(GameTestHelper helper) {
+        Item dyed = AddonItems.all().get(DYED_ITEM);
+        if (dyed == null) {
+            helper.succeed();
+            return;
+        }
+
+        //? if >=1.21 {
+        net.minecraft.world.item.component.DyedItemColor colour = new ItemStack(dyed)
+            .get(net.minecraft.core.component.DataComponents.DYED_COLOR);
+        helper.assertTrue(colour != null, DYED_ITEM + " was declared dyeable and carries no colour.");
+        helper.assertTrue((colour.rgb() & 0xFFFFFF) == DYED_COLOUR,
+            DYED_ITEM + " carries a colour the pack did not ask for.");
+        //?}
+        helper.succeed();
+    }
+
+    /** The item the synthetic pack asks to keep on the ground. */
+    private static final String KEPT_ITEM = "tp:dust";
+
+    /** The item the synthetic pack declares dyeable, and the colour it declares it. */
+    private static final String DYED_ITEM = "tp:shard";
+    private static final int DYED_COLOUR = 0x4C8FD1;
 }

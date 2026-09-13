@@ -504,6 +504,20 @@ public final class Platform {
     }
 
     /**
+     * Whether dyeing an item is stated as a recipe naming it.
+     *
+     * Up to 1.21 anything in `#minecraft:dyeable` could be dyed and washed. 26 dropped that tag for
+     * a `minecraft:crafting_dye` recipe per item, and kept a tag only for what a cauldron washes.
+     */
+    public static boolean dyeingIsARecipe() {
+        //? if >=26 {
+        return true;
+        //?} else {
+        /*return false;
+        *///?}
+    }
+
+    /**
      * What a recipe result names its item under.
      *
      * 1.21 renamed the field from `item` to `id`, a version before the ingredient changed shape.
@@ -808,6 +822,26 @@ public final class Platform {
         if (emissive) return RenderTypes.entityTranslucentEmissive(texture);
         if (blend) return RenderTypes.entityTranslucent(texture);
         return cull ? RenderTypes.entityCutoutCull(texture) : RenderTypes.entityCutout(texture);
+    }
+
+    /**
+     * Paints a pack's dyeable items in the colour they carry.
+     *
+     * From 1.21.4 the colour is a tint named in the item's own definition file, which the converter
+     * writes, so nothing is registered here. 1.21 reads tints from a colour provider instead, and
+     * 1.20.1 has no dyed colour on a stack at all.
+     */
+    public static void registerDyeTint(java.util.List<Item> items) {
+        //? if >=1.21 && <26 {
+        /*if (items.isEmpty()) return;
+
+        // 0xA06540 is the leather brown a stack carrying no colour of its own falls back to.
+        net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry.ITEM.register(
+            (stack, layer) -> layer == 0
+                ? net.minecraft.world.item.component.DyedItemColor.getOrDefault(stack, 0xA06540)
+                : -1,
+            items.toArray(new Item[0]));
+        *///?}
     }
 
     /**

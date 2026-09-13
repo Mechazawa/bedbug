@@ -24,7 +24,7 @@ public final class McAddon implements ModInitializer {
     public static final String MOD_ID = "mcaddon";
 
     /**
-     * This mod's own version, which every converted pack is filed under.
+     * This mod's own version, which is part of what says a converted pack is out of date.
      *
      * What the conversion produces is a function of the pack and of the code that read it, so a
      * build that converts differently has to be told apart from the one before it. Without this a

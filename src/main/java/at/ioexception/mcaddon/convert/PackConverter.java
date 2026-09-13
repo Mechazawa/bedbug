@@ -58,6 +58,31 @@ public final class PackConverter {
     public record Bundle(BedrockPack resources, List<BedrockPack> behaviours) {
     }
 
+    /**
+     * What the converted output was made from, as one line.
+     *
+     * Everything the conversion reads goes into it: every half of the add-on, and this mod's own
+     * version, because the output is a function of the code that wrote it as well. A pack edited in
+     * place gives a different answer and is converted again.
+     */
+    private static String stampOf(Bundle bundle) {
+        StringBuilder stamp = new StringBuilder(at.ioexception.mcaddon.McAddon.VERSION);
+        stamp.append(' ').append(bundle.resources().contentStamp());
+        for (BedrockPack behaviour : bundle.behaviours()) {
+            stamp.append(' ').append(behaviour.contentStamp());
+        }
+        return stamp.toString();
+    }
+
+    /** What the last conversion into this directory was made from, or null where there was none. */
+    private static String readMarker(Path root) {
+        try {
+            return Files.readString(root.resolve(MARKER));
+        } catch (IOException nothingThere) {
+            return null;
+        }
+    }
+
     public static ConvertedPack convert(Bundle bundle, Path cache) {
         BedrockPack pack = bundle.resources();
         List<ItemDefinition> items = new ArrayList<>();
@@ -71,9 +96,8 @@ public final class PackConverter {
             blocks.addAll(BlockDefinition.readAll(behaviour));
         }
         String namespace = Names.namespaceOf(pack, bundle.behaviours());
-        Path root = cache.resolve("converted").resolve("%s-%s-%d-%s".formatted(
-            pack.manifest().uuid(), pack.manifest().version(), Platform.resourcePackFormat(),
-            at.ioexception.mcaddon.McAddon.VERSION));
+        Path root = cache.resolve("converted").resolve("%s-%s-%d".formatted(
+            pack.manifest().uuid(), pack.manifest().version(), Platform.resourcePackFormat()));
 
         Textures textures = new Textures(namespace);
         Map<String, String> icons = new TreeMap<>();
@@ -85,7 +109,8 @@ public final class PackConverter {
         });
 
         try {
-            boolean fresh = !Files.isRegularFile(root.resolve(MARKER));
+            String stamp = stampOf(bundle);
+            boolean fresh = !stamp.equals(readMarker(root));
             if (fresh) {
                 deleteRecursively(root);
                 Files.createDirectories(root);
@@ -104,6 +129,7 @@ public final class PackConverter {
                 writeLootTables(root, loot, namespace);
                 writeBlockData(root, blocks, loot);
                 writeItemTags(root, items);
+                writeDyeRecipes(root, items);
                 writeBlockModels(root, icons, blocks, assets, sprites);
                 writeAtlas(root, sprites);
                 writeParticles(pack, root, textures.paths());
@@ -111,7 +137,7 @@ public final class PackConverter {
             }
 
             if (fresh) {
-                Files.writeString(root.resolve(MARKER), pack.displayName());
+                Files.writeString(root.resolve(MARKER), stamp);
                 McAddon.LOGGER.info("Converted {}: {} textures, {} sound events.",
                     pack.displayName(), textures.written(), sounds.size());
             }
@@ -510,8 +536,24 @@ public final class PackConverter {
             // parenting the model to `handheld` rather than to the flat one.
             boolean held = item.components().containsKey("minecraft:hand_equipped");
             writeFlatItem(root, Names.split(item.identifier(), "minecraft"), "",
-                flat(icon, held ? "minecraft:item/handheld" : "minecraft:item/generated"), null);
+                flat(icon, held ? "minecraft:item/handheld" : "minecraft:item/generated"),
+                dyeTint(item.dyeColour()));
         }
+    }
+
+    /**
+     * The dyed colour painted over an item's one layer, for the versions reading tints from an item
+     * definition. Older ones are told the same thing through a colour provider instead.
+     */
+    private static JsonArray dyeTint(int colour) {
+        if (colour < 0) return null;
+
+        JsonObject dye = new JsonObject();
+        dye.addProperty("type", "minecraft:dye");
+        dye.addProperty("default", colour);
+        JsonArray tints = new JsonArray();
+        tints.add(dye);
+        return tints;
     }
 
     /**
@@ -660,6 +702,35 @@ public final class PackConverter {
             String name = Names.sanitise(colon > 0
                 ? recipe.identifier().substring(colon + 1) : recipe.identifier());
             write(root.resolve("data").resolve(namespace).resolve(directory).resolve(name + ".json"), json);
+        }
+    }
+
+    /**
+     * A dyeing recipe per dyeable item, for the versions that decide dyeing from one.
+     *
+     * Up to 1.21 membership of `#minecraft:dyeable` was the whole answer and there is no recipe to
+     * write. The recipe holds no result of its own: the crafting grid keeps the item and changes
+     * only the colour it carries.
+     */
+    private static void writeDyeRecipes(Path root, List<ItemDefinition> items) throws IOException {
+        if (!Platform.dyeingIsARecipe()) return;
+
+        for (ItemDefinition item : items) {
+            if (item.dyeColour() < 0) continue;
+
+            Names.Identifier id = Names.split(item.identifier(), "minecraft");
+            String name = id.namespace() + ":" + id.path();
+
+            JsonObject json = new JsonObject();
+            json.addProperty("type", "minecraft:crafting_dye");
+            json.addProperty("dye", "#minecraft:dyes");
+            json.addProperty("target", name);
+            JsonObject result = new JsonObject();
+            result.addProperty(Platform.recipeResultKey(), name);
+            json.add("result", result);
+
+            write(root.resolve("data").resolve(id.namespace()).resolve(dataDirectory("recipe"))
+                .resolve(id.path() + "_dyed.json"), json);
         }
     }
 
@@ -1035,13 +1106,21 @@ public final class PackConverter {
      * onto the component. Both are the same list of names.
      */
     private static List<String> tagsOf(ItemDefinition item) {
+        List<String> tags = new ArrayList<>();
+        if (item.dyeColour() >= 0) {
+            // A dyeable item joins whichever tag the running version decides dyeing from: up to 1.21
+            // one tag answers both the crafting grid and the cauldron, and from 26 the grid reads a
+            // recipe instead and the tag is left saying only what a cauldron washes.
+            tags.add(Platform.dyeingIsARecipe()
+                ? "minecraft:cauldron_can_remove_dye" : "minecraft:dyeable");
+        }
+
         JsonObject component = item.components().get("minecraft:tags");
-        if (component == null) return List.of();
+        if (component == null) return tags;
 
         JsonElement named = component.has("tags") ? component.get("tags") : component.get("value");
-        if (named == null || !named.isJsonArray()) return List.of();
+        if (named == null || !named.isJsonArray()) return tags;
 
-        List<String> tags = new ArrayList<>();
         named.getAsJsonArray().forEach(one -> {
             if (one.isJsonPrimitive()) tags.add(one.getAsString());
         });

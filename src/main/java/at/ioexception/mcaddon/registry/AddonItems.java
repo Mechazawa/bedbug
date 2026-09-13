@@ -22,10 +22,12 @@ import net.minecraft.world.item.Rarity;
 import net.minecraft.world.level.block.Block;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * An item per item a behaviour pack declares, and a spawn egg per entity that can be spawned.
@@ -35,12 +37,33 @@ import java.util.Map;
  */
 public final class AddonItems {
     private static final Map<String, Item> BY_IDENTIFIER = new LinkedHashMap<>();
+    private static final List<Item> DYEABLE = new ArrayList<>();
+    private static final Set<Item> KEPT = new HashSet<>();
 
     private AddonItems() {
     }
 
     public static Map<String, Item> all() {
         return BY_IDENTIFIER;
+    }
+
+    /** The items a pack declared dyeable, which the drawing side has to paint their dyed colour. */
+    public static List<Item> dyeable() {
+        return DYEABLE;
+    }
+
+    /**
+     * Lets a dropped stack lie there forever where the pack asked it to.
+     *
+     * `minecraft:should_despawn` switches off the five minutes a dropped item lasts. Bedrock states
+     * that on the item and Java counts the time on the entity carrying it, so the answer is given
+     * to each drop as it comes into the world.
+     */
+    public static void keepDropped(net.minecraft.world.entity.Entity entity) {
+        if (entity instanceof net.minecraft.world.entity.item.ItemEntity dropped
+            && KEPT.contains(dropped.getItem().getItem())) {
+            dropped.setUnlimitedLifetime();
+        }
     }
 
     public static void register(PackSet packs) {
@@ -68,6 +91,11 @@ public final class AddonItems {
         Item item = build(definition, properties(definition), id);
         Registry.register(BuiltInRegistries.ITEM, id, item);
         BY_IDENTIFIER.put(definition.identifier(), item);
+        if (definition.dyeColour() >= 0) DYEABLE.add(item);
+        if (definition.components().containsKey("minecraft:should_despawn")
+            && !definition.declaredTrue("minecraft:should_despawn")) {
+            KEPT.add(item);
+        }
 
         fuel(definition, item);
         compostable(definition, item);
@@ -120,6 +148,7 @@ public final class AddonItems {
         properties = enchantable(definition, properties);
         properties = cooldown(definition, properties);
         properties = repairable(definition, properties);
+        properties = dyeable(definition, properties);
         return weapon(definition, properties);
     }
 
@@ -364,6 +393,28 @@ public final class AddonItems {
     }
 
     /**
+     * The colour a dyeable item is painted before anybody dyes it.
+     *
+     * What may be dyed is a tag before 26 and a recipe naming the item from 26 on, and the converter
+     * writes whichever the running version reads. 1.20.1 decides it from the item's Java class
+     * instead, which a data-driven item has none of, so a dyeable item is an ordinary one there.
+     */
+    private static Item.Properties dyeable(ItemDefinition definition, Item.Properties properties) {
+        int colour = definition.dyeColour();
+        if (colour < 0) return properties;
+
+        //? if >=26 {
+        return properties.component(net.minecraft.core.component.DataComponents.DYED_COLOR,
+            new net.minecraft.world.item.component.DyedItemColor(colour));
+        //?} else if >=1.21 {
+        /*return properties.component(net.minecraft.core.component.DataComponents.DYED_COLOR,
+            new net.minecraft.world.item.component.DyedItemColor(colour, true));
+        *///?} else {
+        /*return properties;
+        *///?}
+    }
+
+    /**
      * A weapon spends a point of durability on every swing, which is the whole of what Java's own
      * weapon component carries.
      */
@@ -512,7 +563,7 @@ public final class AddonItems {
         "minecraft:digger", "minecraft:can_destroy_in_creative", "minecraft:enchantable",
         "minecraft:cooldown", "minecraft:block", "minecraft:block_placer",
         "minecraft:seed", "minecraft:entity_placer", "minecraft:throwable",
-        "minecraft:projectile");
+        "minecraft:projectile", "minecraft:dyeable", "minecraft:should_despawn");
 
     private static Identifier identifier(String bedrock) {
         Names.Identifier split = Names.split(bedrock, "minecraft");

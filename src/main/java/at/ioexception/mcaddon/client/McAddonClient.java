@@ -32,6 +32,8 @@ public final class McAddonClient implements ClientModInitializer {
             Platform.registerParticle(at.ioexception.mcaddon.registry.AddonParticles.typeOf(identifier),
                 sprites -> new AddonParticleProvider(identifier, sprites)));
 
+        Platform.registerDyeTint(at.ioexception.mcaddon.registry.AddonItems.dyeable());
+
         Channels.receiveProperties(EntityProperties::accept);
         Channels.receivePacks(McAddonClient::reportMissingPacks);
         Channels.receiveAnimation(Animators::play);
