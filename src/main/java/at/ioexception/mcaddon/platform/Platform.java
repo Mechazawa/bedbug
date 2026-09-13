@@ -1183,6 +1183,20 @@ public final class Platform {
         *///?}
     }
 
+    /**
+     * The tag that lets a snow layer lie on a block whatever the shape of its top face.
+     *
+     * Without it a snow layer only settles where the face below it is full, which is the rule
+     * `minecraft:precipitation_interactions` overrides when it asks for snow to gather.
+     */
+    public static String snowSupportTag() {
+        //? if >=26 {
+        return "minecraft:support_override_snow_layer";
+        //?} else {
+        /*return "minecraft:snow_layer_can_survive_on";
+        *///?}
+    }
+
     /** The rule that decides whether a wandering trader appears, by the name this version calls it. */
     public static String traderSpawningRule() {
         //? if >=26 {

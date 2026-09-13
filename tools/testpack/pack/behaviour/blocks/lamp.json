@@ -37,6 +37,19 @@
         "event": "tp:brighten"
       },
       "minecraft:breathability": "air",
+      "minecraft:chest_obstruction": {
+        "obstruction_rule": "never"
+      },
+      "minecraft:support": {
+        "shape": "fence"
+      },
+      "minecraft:connection_rule": {
+        "accepts_connections_from": "none",
+        "enabled_directions": ["north", "south"]
+      },
+      "minecraft:precipitation_interactions": {
+        "precipitation_behavior": "obstruct_rain_accumulate_snow"
+      },
       "minecraft:block_entity": {
         "dynamic_properties": true
       },

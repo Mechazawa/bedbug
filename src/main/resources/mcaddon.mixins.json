@@ -12,7 +12,13 @@
     "ProjectileMixin",
     "ButtonBlockMixin",
     "LeverBlockMixin",
-    "PrimaryLevelDataMixin"
+    "PrimaryLevelDataMixin",
+    "ChestBlockMixin",
+    "BlockConnectionMixin",
+    "ItemStackMixin",
+    "SlotMixin",
+    "PlayerActionMixin",
+    "EntityPickMixin"
   ],
   "injectors": {
     "defaultRequire": 1

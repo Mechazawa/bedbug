@@ -43,6 +43,9 @@ server decides what happens; the client draws it.
 - Items, including edible and wearable ones, spawn eggs, and a creative tab per add-on. A dyeable
   item takes the colour the pack painted it and the one a player dyes it. A bow draws and fires
   whatever the pack loads it with. A bag holds other items. A drop the pack asks to keep lies there.
+  An item the pack lets into the off hand goes there and one it does not is refused, an item that
+  clips liquids aims at water and lava, and one carrying a durability sensor shows the particle and
+  plays the sound its threshold names as it wears down.
 - Records. A record a pack ships goes into a jukebox and plays, for the length the pack stated, with
   the comparator reading it asked for. Bedrock lets a pack give a record music of its own by writing
   one of the engine's own record sound names in its `sound_definitions.json`, which is the only way
@@ -59,6 +62,10 @@ server decides what happens; the client draws it.
   against the block standing in the world. A block that says it holds water is waterlogged, one with
   a placement filter only survives where the filter allows, one that produces redstone powers what it
   touches, and one a pack marks pottable gets the second block a flower pot needs.
+- What a block does to the things around it. A chest opens under a block that says it may whatever
+  the block does to redstone, a block that accepts no connections is one no fence, wall or pane
+  reaches across to, a block supporting like a fence carries what rests on it where a fence post
+  would, and a block that obstructs rain stops it, gathering snow on top where it asked to.
 - Trading. A tier opens once its trader has earned the experience it asks for, a group offers the
   few trades it was told to pick weighted the way it weighted them, a payment listing several items
   becomes one offer per item, and `max_uses`, `trader_exp`, `reward_exp` and `price_multiplier` all
@@ -132,8 +139,8 @@ definitions. All of them compare what they read against the names this mod acts 
 | Entity filters | 100% |
 | Molang queries | 100% |
 | Molang maths | 100% |
-| Block components | 92% |
-| Item components | 80% |
+| Block components | 100% |
+| Item components | 86% |
 | Command names | 75% |
 | Command keywords | 60% |
 | Game rules | 78% |
@@ -170,7 +177,28 @@ has the one box for both. Each is counted and named rather than silently doing n
 one of those its own id when it flattened blocks and items, so there is no number left to set, and
 the entry naming `minecraft:bed` or `minecraft:wool` beside one is already naming an item Java has
 none of. The same is why a recipe's `data` beside an item, and a result naming one, are read and
-reported.
+reported. `minecraft:stacked_by_data` is the same absence on the item itself: it says whether two
+stacks of one id but different numbers may merge, and in Java two stacks of one id are the same
+item, so both answers to it describe what already happens.
+
+**What a bag may hold.** `minecraft:storage_weight_limit` caps what a bag carries and
+`minecraft:storage_weight_modifier` prices one item inside one. Java counts the same two numbers,
+sixty-four for a full bundle and a sixteenth of it for a bundle inside a bundle, but it counts them
+from a constant inside the bundle's own contents rather than from anything the item carries, and
+there is no data component holding either. A bag from a pack is a Java bundle of the ordinary size.
+
+**A camera and a touch button.** `minecraft:camera` times the black bars, the shutter and the
+photograph sliding away, which is a full-screen animation the Bedrock client plays while a player
+takes a picture in a world. Java has neither the picture nor the screen. `minecraft:interact_button`
+writes the word on the button a touchscreen shows for using what is held, and Java has no touch
+controls to put one on.
+
+**The sounds a swing makes.** `minecraft:swing_sounds` names three members of Bedrock's own level
+sound event list, which the Bedrock client resolves through a catalogue of its own. That list and
+the sound definitions a pack ships are two vocabularies: of its 570 names only 219 are also
+definition names, and the three the component is written with, `attack`, `attack.strong` and
+`attack.critical`, are none of them. A pack's sound definitions are what this mod registers, so
+there is nothing to name a Java sound with.
 
 **A loot function that prices a trade.** `enchant_book_for_trading` prices a book against a
 villager's level, which is part of how Java builds a trade in its own code rather than anything a
@@ -214,6 +242,16 @@ names is already the wrong one and there is no number to pick. It is counted ins
 
 **A filter on a trade item.** Bedrock checks it as the trade is offered, out of the filter
 vocabulary. A Java offer is built once and sent to the client, which leaves nothing to ask again.
+
+**Three parts of what a block does to its surroundings.** `minecraft:support` shapes what rests on a
+block like a fence or like a stair, and the stair shape is read off the facing and the half that
+`minecraft:placement_direction` carries, which is a trait and becomes no Java property.
+`minecraft:connection_rule` saying `only_fences` separates a fence from a wall and a pane, and its
+`enabled_directions` narrows the rule to some sides only. Java asks a pane and a bar their question
+without saying which side is asking, so neither can be answered for them.
+`minecraft:precipitation_interactions` asking for `snowlogging` puts snow inside the block's own
+space, and Java keeps a snow layer as a block of its own standing on top, with no second occupant
+for the space below it. Each is reported and the rest of its component still decides.
 
 **The cause a block event names for its damage.** Bedrock picks from its own list of damage causes
 and Java builds a damage source out of what dealt the blow, so a block that hurts whoever set it off
