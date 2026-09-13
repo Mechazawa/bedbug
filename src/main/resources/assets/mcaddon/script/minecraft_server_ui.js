@@ -429,16 +429,22 @@ class FormBuilder {
 }
 
 /** What a pack gets back from a form, named so it can be tested with `instanceof`. */
+/** What every form answers with: whether the player closed it, and why if they did. */
 export class FormResponse {
+    canceled = false;
+    cancelationReason = undefined;
 }
 
 export class ActionFormResponse extends FormResponse {
+    selection = undefined;
 }
 
 export class MessageFormResponse extends FormResponse {
+    selection = undefined;
 }
 
 export class ModalFormResponse extends FormResponse {
+    formValues = undefined;
 }
 
 function responseOf(kind, fields) {

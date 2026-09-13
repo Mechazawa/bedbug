@@ -14,8 +14,15 @@ The definitions are the published `@minecraft/*` packages. Fetch them once with:
 and extract each `package/index.d.ts` as `<module>.d.ts`. The directory is not tracked by git.
 
 A name counts as offered when the module exports it. A member counts as offered when it is written
-in that name's body. Neither says the member behaves correctly, which is what the game tests are
-for; this says only whether a pack calling it reaches something.
+in that name's body, inherited from a class there, or named in a table the module builds members
+from. None of that says the member behaves correctly, which is what the game tests are for; it says
+only whether a pack calling it reaches something rather than nothing.
+
+Two limits worth knowing. A member built from a table is recognised by its name appearing as a key,
+so a short name that is also a coordinate would read as offered everywhere; names of three
+characters or fewer are therefore left out of that reading. And a member that reports itself through
+`unsupported(...)` counts as offered, because the pack reaches it and learns it is not implemented,
+which is the behaviour this project asks for over a silent wrong answer.
 """
 
 from __future__ import annotations
@@ -60,6 +67,9 @@ WRITTEN = (
 # Words the patterns above pick up that name no member of the class.
 NOT_MEMBERS = frozenset({"constructor", "get", "set", "if", "for", "while", "return", "switch"})
 
+# The definitions list a constructor to mark it private. A pack never calls one as a member.
+PUBLISHED_SKIP = frozenset({"constructor"})
+
 # What the mod's own modules export, in either of the two spellings they use.
 OFFERED = re.compile(r"^export\s+(?:class|const|let|var|function\*?|async\s+function)\s+(\w+)", re.M)
 RENAMED = re.compile(r"^export\s*\{([^}]*)\}", re.M)
@@ -73,7 +83,7 @@ def published(text: str) -> dict[str, set[str]]:
         body = text[match.end():]
         closing = body.find("\n}")
         names[name] = set() if kind in ("function", "const", "type") \
-            else set(MEMBER.findall(body[:closing if closing > 0 else 0]))
+            else set(MEMBER.findall(body[:closing if closing > 0 else 0])) - PUBLISHED_SKIP
     return names
 
 
@@ -86,12 +96,34 @@ def members(body: str) -> set[str]:
 
 
 def offered(text: str) -> dict[str, set[str]]:
-    """Every name the mod's module offers, against the members written inside each one."""
-    names: dict[str, set[str]] = {}
-    for match in re.finditer(r"^export\s+class\s+(\w+)", text, re.M):
+    """Every name the mod's module offers, against the members each one carries.
+
+    A class carries what its own body writes and what it inherits, because a pack calling an
+    inherited member reaches it either way. A base class the module keeps to itself counts for the
+    subclasses that export it, so it is read here even though it is not exported.
+    """
+    own: dict[str, set[str]] = {}
+    parents: dict[str, str] = {}
+    for match in re.finditer(r"^(?:export\s+)?class\s+(\w+)(?:\s+extends\s+(\w+))?", text, re.M):
         body = text[match.end():]
         closing = body.find("\n}")
-        names[match.group(1)] = members(body[:closing if closing > 0 else 0])
+        own[match.group(1)] = members(body[:closing if closing > 0 else 0])
+        if match.group(2):
+            parents[match.group(1)] = match.group(2)
+
+    names: dict[str, set[str]] = {}
+    for name in own:
+        inherited = set(own[name])
+        parent = parents.get(name)
+        seen = {name}
+        while parent in own and parent not in seen:
+            inherited |= own[parent]
+            seen.add(parent)
+            parent = parents.get(parent)
+        names[name] = inherited
+
+    exported = set(re.findall(r"^export\s+class\s+(\w+)", text, re.M))
+    names = {name: found for name, found in names.items() if name in exported}
 
     for name in OFFERED.findall(text):
         names.setdefault(name, set())
@@ -110,9 +142,16 @@ def compare(module: str, definitions: pathlib.Path, source: pathlib.Path) -> tup
     ours = offered(text)
 
     # Some of the surface is built at runtime rather than written out: the event groups are a proxy
-    # over a list of names, and the vanilla tables are read from the registries. Those members are
-    # only ever spelled as strings, so a name quoted anywhere in the module counts as offered.
+    # over a list of names, the vanilla tables are read from the registries, and the members that all
+    # answer the same way are installed from one table. A name spelled as a string or as a key of an
+    # object literal counts as offered, because that is what building a member looks like here.
     quoted = set(re.findall(r'"([A-Za-z_]\w*)"', text))
+    keys = set(re.findall(r"^\s*([A-Za-z_]\w*):\s", text, re.M))
+    keys |= set(re.findall(r"[{,]\s*([A-Za-z_]\w*):\s", text))
+
+    # A key short enough to be a coordinate is one every vector literal in the file would offer, so
+    # the reading is taken only for names long enough to be the member they look like.
+    quoted |= {one for one in keys if len(one) > 3}
 
     missing = []
     members_total = 0
