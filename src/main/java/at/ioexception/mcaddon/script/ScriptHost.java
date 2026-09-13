@@ -330,6 +330,17 @@ public final class ScriptHost {
         }, false));
     }
 
+    /**
+     * Whether anything is listening on one event, so a caller can decide before building it.
+     *
+     * Raising already costs nothing when nobody listens, and this is for the few events whose
+     * fields are expensive to gather: an explosion names every block it will take.
+     */
+    public boolean listens(String group, String name) {
+        return Boolean.TRUE.equals(enter("counting the listeners on " + name,
+            () -> runtime.invokeMember(group, name).getMember("size").asInt() > 0, false));
+    }
+
     private void raise(String group, String name, Map<String, Object> fields) {
         enter("handling " + name, () -> {
             Value signal = runtime.invokeMember(group, name);
@@ -347,11 +358,17 @@ public final class ScriptHost {
      *
      * An entity arrives as the wrapper the pack may already have stashed state on, and a map arrives
      * as a guest object rather than as a host one: only annotated members of a host object are
-     * reachable, so a pack reading a plain field of it would find nothing there.
+     * reachable, so a pack reading a plain field of it would find nothing there. A list is a guest
+     * array for the same reason, and because a pack maps and filters what it is handed.
      */
     private Object wrap(Object value) {
         if (value instanceof EntityHandle handle) {
             return runtime.invokeMember("entityFor", handle.uuid(), handle.player());
+        }
+        if (value instanceof List<?> items) {
+            Value array = context.eval("js", "([])");
+            for (int i = 0; i < items.size(); i++) array.setArrayElement(i, wrap(items.get(i)));
+            return array;
         }
         if (!(value instanceof Map<?, ?> nested)) return value;
 

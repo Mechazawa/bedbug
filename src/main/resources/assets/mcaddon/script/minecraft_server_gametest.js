@@ -49,8 +49,50 @@ export class Tags {
     static suiteNextUpdate = "suite:nextupdate";
 }
 
-/** Named so an import of it links; the spreading itself has no Java counterpart. */
-export class SculkSpreader {}
+/**
+ * The charge a sculk catalyst is spreading, which Java keeps on the catalyst's own listener.
+ *
+ * Bedrock calls one parcel of charge a cursor. A cursor's position is counted from the test's own
+ * corner, the way every other position a test is handed is, and an offset is counted from the
+ * catalyst itself, which is what the offset in the name means.
+ */
+export class SculkSpreader {
+    #dimensionId;
+    #catalyst;
+    #toRelative;
+
+    constructor(dimensionId, catalyst, toRelative, maxCharge) {
+        this.#dimensionId = dimensionId;
+        this.#catalyst = catalyst;
+        this.#toRelative = toRelative;
+        this.maxCharge = maxCharge;
+    }
+
+    getNumberOfCursors() {
+        return this.#cursors().length;
+    }
+
+    getTotalCharge() {
+        return this.#cursors().reduce((total, cursor) => total + cursor.charge, 0);
+    }
+
+    getCursorPosition(index) {
+        const cursor = this.#cursors()[index];
+        return cursor === undefined ? undefined : this.#toRelative(cursor);
+    }
+
+    addCursorsWithOffset(offset, charge) {
+        bridge.gametests.addSculkCharge(this.#dimensionId, this.#catalyst.x, this.#catalyst.y,
+            this.#catalyst.z, offset.x, offset.y, offset.z, charge);
+    }
+
+    /** A catalyst that has gone since is spreading nothing, which is what an empty list says. */
+    #cursors() {
+        const answer = bridge.gametests.sculkSpreader(this.#dimensionId, this.#catalyst.x,
+            this.#catalyst.y, this.#catalyst.z);
+        return answer === null ? [] : JSON.parse(answer).cursors;
+    }
+}
 
 export class GameTestError extends Error {
     constructor(message, type) {
@@ -783,7 +825,12 @@ export class Test {
     }
 
     getSculkSpreader(blockLocation) {
-        return runtime().unsupported("Test.getSculkSpreader", undefined);
+        const at = this.worldBlockLocation(blockLocation);
+        const answer = bridge.gametests.sculkSpreader(this.#run.dimensionId, at.x, at.y, at.z);
+        if (answer === null) return undefined;
+
+        return new SculkSpreader(this.#run.dimensionId, at,
+            cursor => this.relativeBlockLocation(cursor), JSON.parse(answer).maxCharge);
     }
 
     spreadFromFaceTowardDirection(blockLocation, fromFace, direction) {

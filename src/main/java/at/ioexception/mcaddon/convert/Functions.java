@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -175,6 +176,11 @@ public final class Functions {
 
     private static final Map<String, String> GAME_RULES = lowerCased(RULES_JAVA_SHARES,
         RULES_NEWER_JAVA_HAS);
+
+    /** Every rule a Bedrock name reaches, which is the set a change can be reported under. */
+    public static Collection<String> gameRuleNames() {
+        return GAME_RULES.values();
+    }
 
     /** The words a modern `execute` starts a clause with, which tell it apart from the old form. */
     private static final Set<String> EXECUTE_CLAUSES = Set.of(

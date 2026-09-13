@@ -18,7 +18,15 @@
     "ItemStackMixin",
     "SlotMixin",
     "PlayerActionMixin",
-    "EntityPickMixin"
+    "EntityPickMixin",
+    "BasePressurePlateBlockMixin",
+    "TripWireBlockMixin",
+    "TargetBlockMixin",
+    "PistonBaseBlockMixin",
+    "ExplosionMixin",
+    "ServerPlayerGameModeMixin",
+    "ServerGamePacketListenerMixin",
+    "ServerPlayerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

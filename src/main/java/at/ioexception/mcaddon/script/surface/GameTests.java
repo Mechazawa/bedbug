@@ -26,6 +26,8 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LayeredCauldronBlock;
+import net.minecraft.world.level.block.SculkSpreader;
+import net.minecraft.world.level.block.entity.SculkCatalystBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
@@ -350,6 +352,55 @@ public final class GameTests extends Surface {
     public void destroyBlock(String dimension, int x, int y, int z, boolean drop) {
         ServerLevel level = level(dimension);
         if (level != null) level.destroyBlock(new BlockPos(x, y, z), drop);
+    }
+
+    /**
+     * The spreader a sculk catalyst is working with, as JSON, or null where no catalyst stands.
+     *
+     * Java keeps the charge Bedrock calls a cursor on the catalyst's own listener, so the whole of
+     * what a test asks about one comes out of that: how many there are, where each of them is and
+     * how much charge it holds, and the ceiling the game puts on a single one.
+     */
+    @HostAccess.Export
+    public String sculkSpreader(String dimension, int x, int y, int z) {
+        SculkSpreader spreader = spreaderAt(dimension, new BlockPos(x, y, z));
+        if (spreader == null) return null;
+
+        JsonArray cursors = new JsonArray();
+        for (SculkSpreader.ChargeCursor cursor : spreader.getCursors()) {
+            JsonObject one = new JsonObject();
+            one.addProperty("x", cursor.getPos().getX());
+            one.addProperty("y", cursor.getPos().getY());
+            one.addProperty("z", cursor.getPos().getZ());
+            one.addProperty("charge", cursor.getCharge());
+            cursors.add(one);
+        }
+
+        JsonObject answer = new JsonObject();
+        answer.addProperty("maxCharge", SculkSpreader.MAX_CHARGE);
+        answer.add("cursors", cursors);
+        return answer.toString();
+    }
+
+    /** Puts charge into a catalyst's spreader at a place measured from the catalyst itself. */
+    @HostAccess.Export
+    public boolean addSculkCharge(String dimension, int x, int y, int z, int offsetX, int offsetY,
+        int offsetZ, int charge) {
+
+        BlockPos catalyst = new BlockPos(x, y, z);
+        SculkSpreader spreader = spreaderAt(dimension, catalyst);
+        if (spreader == null) return false;
+
+        spreader.addCursors(catalyst.offset(offsetX, offsetY, offsetZ), charge);
+        return true;
+    }
+
+    private SculkSpreader spreaderAt(String dimension, BlockPos position) {
+        ServerLevel level = level(dimension);
+        if (level == null) return null;
+
+        return level.getBlockEntity(position) instanceof SculkCatalystBlockEntity catalyst
+            ? catalyst.getListener().getSculkSpreader() : null;
     }
 
     /** The `north`, `east`, `south` and `west` states a fence carries, as JSON. */
