@@ -141,6 +141,12 @@ These are the checks it runs, and what each one catches:
   channel has pixels in it, a glyph page beside the locale list and the locale names a pack declares,
   and a function using the commands and selector arguments that need translating.
 
+  The sprite's own texture carries one thing a count cannot see. Its top four rows are written at an
+  alpha of three, which is how Bedrock marks a texel its alpha test draws and Java's cutout shader
+  discards, and the game test `aMarkedTexelIsConvertedOpaque` reads the converted file back to say
+  the conversion raised it. A regression there costs an entity its markings and leaves it drawn in
+  whatever is left of its texture, which no count here would report.
+
   The behaviour side carries a clip and a controller of its own, which is the same pair of readers
   driving the world rather than a model. The ember's `scripts.animate` names the controller; its
   first state waits on a Molang query, and the state it moves to assigns a variable, raises one of

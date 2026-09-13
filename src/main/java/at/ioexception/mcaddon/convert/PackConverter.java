@@ -245,10 +245,15 @@ public final class PackConverter {
                 try {
                     Path destination = target.resolve(inside + ".png");
                     Files.createDirectories(destination.getParent());
-                    if (targa) {
-                        ImageIO.write(TgaReader.read(Files.readAllBytes(source)), "PNG", destination.toFile());
-                    } else {
+                    BufferedImage decoded = targa
+                        ? TgaReader.read(Files.readAllBytes(source))
+                        : ImageIO.read(source.toFile());
+                    AlphaMask mask = AlphaMask.tryFrom(decoded);
+                    if (mask == null && !targa) {
                         Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
+                    } else {
+                        ImageIO.write(mask == null ? decoded : mask.opaque(), "PNG",
+                            destination.toFile());
                     }
                     Flipbook flipbook = flipbooks.get(withoutExtension(relative));
                     if (flipbook != null) flipbook.write(destination);

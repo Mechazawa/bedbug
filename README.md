@@ -28,7 +28,11 @@ server decides what happens; the client draws it.
   reported rather than swallowed.
 - Textures, including Targa. A `pbr` pack's texture sets are rewritten as labPBR sidecars, which is
   what Iris and OptiFine shader packs read, so a physically based add-on lights correctly under any
-  shader pack and costs nothing when there is none.
+  shader pack and costs nothing when there is none. Where a texture's alpha channel is one of
+  Bedrock's cut-out masks it is converted to the mask Java reads: Bedrock's alpha test draws every
+  texel carrying any alpha at all, which is why Mojang's own entity textures mark a sheep's face and
+  a cat's markings at an alpha of three, and Java's cutout shader keeps only what is above a tenth.
+  A channel also holding alpha Java draws partially is a real fade and is left as the pack wrote it.
 - Sounds, with every definition registered as a sound event, and files whose final page claims a
   length no clip has repaired on the way through.
 - Text, with Bedrock's `.lang` rules rather than a properties reader's. The locale list a pack ships

@@ -19,6 +19,7 @@ still works:
     an animation firing a sound and a particle off its timeline
     three particle definitions in the 1.10.0 format, one of them carrying a curve and events
     a texture set whose emissive channel has pixels in it
+    an entity texture with a band written the way Bedrock marks a cut-out texel
     a page of the pack's own glyphs, and the locale list naming the languages it ships
     a function using the commands and selector arguments that need translating
 
@@ -48,6 +49,10 @@ PACK_DIRECTORIES = (("behaviour", "Test Add-On BP"), ("resources", "Test Add-On 
 ZIP_TIMESTAMP = (2020, 1, 1, 0, 0, 0)
 
 TRANSPARENT = (0, 0, 0, 0)
+
+# The alpha Bedrock marks a drawn but not fully opaque texel with, which Java's cutout shader
+# discards and a conversion therefore has to raise.
+MARKED = 3
 
 
 def png(width: int, height: int, paint) -> bytes:
@@ -157,8 +162,17 @@ def lamp_on_normal(x: int, y: int) -> tuple[int, int, int, int]:
 
 
 def sprite_skin(x: int, y: int) -> tuple[int, int, int, int]:
+    """The sprite's skin, with the top four rows written the way Bedrock marks a cut-out texel.
+
+    Bedrock's alpha test draws every texel carrying any alpha and drops only the fully transparent
+    ones, so Mojang's own entity textures mark whole regions with an alpha of three: the face and
+    the bare skin of the vanilla sheep are written that way. Java's cutout shader drops everything
+    under a tenth, so the band is what a conversion has to raise for the model to keep it.
+    """
     if x >= 32 or y >= 32:
         return TRANSPARENT
+    if y < 4:
+        return (214, 96, 120, MARKED)
     if disc(x % 16, y % 16, 7.5, 6.0):
         return (96, 214, 120, 255)
     return (38, 96, 58, 255)
