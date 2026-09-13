@@ -1,18 +1,15 @@
-package at.ioexception.mcaddon.client.render;
+package at.ioexception.mcaddon.bedrock.entity;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.animation.AnimationPlayer;
 import at.ioexception.mcaddon.bedrock.animation.BonePose;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
-import at.ioexception.mcaddon.bedrock.entity.EntityAnimator;
 import at.ioexception.mcaddon.bedrock.model.BedrockBone;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.platform.Platform;
-import net.minecraft.client.Camera;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
@@ -61,6 +58,7 @@ import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
 
 import java.util.HashSet;
+import java.util.function.Supplier;
 import java.util.List;
 import java.util.Set;
 import java.util.Map;
@@ -68,25 +66,120 @@ import java.util.Map;
 /**
  * Answers `q.*` for one entity.
  *
- * The values a render controller branches on come from two places: the entity itself, which the
- * client already has, and the properties a behaviour pack set, which the server sent. Anything not
- * answered here reads as zero, which is what Bedrock does with an unknown query.
+ * The values a pack branches on come from two places: the entity itself, and the properties a
+ * behaviour pack set. Anything not answered here reads as zero, which is what Bedrock does with an
+ * unknown query.
+ *
+ * Both halves of an add-on ask the same questions, so both halves are answered here. A query about
+ * the camera, the local player or a posed bone has an answer only where somebody is drawing the
+ * entity, and reads as zero on a server.
  */
-public final class AddonQueries implements MolangEnvironment.Queries {
-    private final Entity entity;
-    private final EntityAnimator animator;
+public final class EntityQueries implements MolangEnvironment.Queries {
+    /**
+     * What only somebody drawing the entity can answer.
+     *
+     * A posed bone, the camera, the player at the keyboard and the client's own settings all belong
+     * to a client. A server hands over `NONE`, and each query reading one answers zero rather than
+     * naming a class a server has not got.
+     */
+    public interface Drawn {
+        Drawn NONE = new Drawn() { };
 
-    /** Set for the animator of something worn or held, which is what Bedrock calls attached. */
+        /** One bone of the model as the pack modelled it. */
+        default BedrockBone bone(String name) {
+            return null;
+        }
+
+        /** Where that bone has been posed for this frame. */
+        default BonePose poseOf(String name) {
+            return null;
+        }
+
+        default Vector3f locator(String name) {
+            return null;
+        }
+
+        /** The same offset on the model this one is drawn on, which for all but an attachable is this one. */
+        default Vector3f rootLocator(String name) {
+            return null;
+        }
+
+        /** Where the viewer is looking from, or null where nobody is looking. */
+        default Vec3 cameraPosition() {
+            return null;
+        }
+
+        /** The camera's own angle, which a model facing the viewer turns against. */
+        default double cameraRotation(boolean vertical) {
+            return 0;
+        }
+
+        default boolean isFirstPerson() {
+            return false;
+        }
+
+        default int renderDistance() {
+            return 0;
+        }
+
+        /** Whoever is at the keyboard, or null where nobody is. */
+        default Player localPlayer() {
+            return null;
+        }
+
+        /** Whether the skin this entity is drawn with carries a cape. */
+        default boolean hasCape(Entity drawn) {
+            return false;
+        }
+
+        default int emitterCount() {
+            return 0;
+        }
+
+        default double particleCount() {
+            return 0;
+        }
+
+        /** Whether the pack describes something worn for an item of this name. */
+        default boolean isAttachableItem(String item) {
+            return false;
+        }
+
+        /**
+         * Where a block's own particle texture sits on the atlas, in pixels, or null for none.
+         *
+         * The atlas is stitched by whoever draws, so a server has no coordinates to give.
+         */
+        default Sprite groundSprite(BlockState ground) {
+            return null;
+        }
+
+        /** One texture cut out of the atlas: where it begins, and how large it is. */
+        record Sprite(int x, int y, int width, int height) {
+        }
+    }
+
+    private final Entity entity;
+    private final AnimationPlayer player;
+    private final Drawn drawn;
+
+    /** The properties a behaviour pack set on the entity, read again on every query. */
+    private final Supplier<Map<String, Object>> properties;
+
+    /** Set where the answers are for something worn or held, which is what Bedrock calls attached. */
     private final boolean attached;
 
     private float partialTick;
 
-    /** The animator's own clock reading at which the entity caught fire, or -1 while it is not. */
+    /** The clock reading at which the entity caught fire, or -1 while it is not alight. */
     private float litAt = -1;
 
-    public AddonQueries(Entity entity, EntityAnimator animator, boolean attached) {
+    public EntityQueries(Entity entity, AnimationPlayer player, Drawn drawn,
+        Supplier<Map<String, Object>> properties, boolean attached) {
         this.entity = entity;
-        this.animator = animator;
+        this.player = player;
+        this.drawn = drawn;
+        this.properties = properties;
         this.attached = attached;
     }
 
@@ -96,8 +189,8 @@ public final class AddonQueries implements MolangEnvironment.Queries {
 
     @Override
     public MolangValue query(String path, List<MolangValue> arguments) {
-        MolangEnvironment environment = animator.environment();
-        Map<String, Object> properties = EntityProperties.of(entity.getId());
+        MolangEnvironment environment = player.environment();
+        Map<String, Object> properties = this.properties.get();
 
         // A few queries answer with a struct that a pack reads one member off, and the parser hands
         // the member over as part of the name.
@@ -134,7 +227,7 @@ public final class AddonQueries implements MolangEnvironment.Queries {
             case "is_attached", "is_attached_to_entity" -> MolangValue.of(attached);
             case "has_owner" -> MolangValue.of(hasOwner());
             case "has_any_family" -> MolangValue.of(hasAnyFamily(arguments));
-            case "has_cape" -> MolangValue.of(hasCape());
+            case "has_cape" -> MolangValue.of(drawn.hasCape(entity));
             case "on_fire_time" -> MolangValue.of(secondsOnFire());
             case "hurt_direction" -> MolangValue.of(entity instanceof LivingEntity living
                 ? living.getHurtDir() : 0);
@@ -202,7 +295,7 @@ public final class AddonQueries implements MolangEnvironment.Queries {
             case "is_invisible" -> MolangValue.of(entity.isInvisible());
             case "is_silent" -> MolangValue.of(entity.isSilent());
             case "is_spectator" -> MolangValue.of(entity.isSpectator());
-            case "is_local_player" -> MolangValue.of(entity == Minecraft.getInstance().player);
+            case "is_local_player" -> MolangValue.of(entity == drawn.localPlayer());
             case "has_gravity" -> MolangValue.of(!entity.isNoGravity());
             case "is_leashed" -> MolangValue.of(entity instanceof Mob mob && mob.isLeashed());
             case "is_moving" -> MolangValue.of(entity.position()
@@ -263,14 +356,13 @@ public final class AddonQueries implements MolangEnvironment.Queries {
             case "distance_from_camera" -> MolangValue.of(distanceFromCamera());
             case "camera_distance_range_lerp" -> cameraDistanceLerp(arguments);
             case "rotation_to_camera" -> MolangValue.of(rotationToCamera(arguments));
-            case "is_first_person" -> MolangValue.of(Minecraft.getInstance().options
-                .getCameraType().isFirstPerson());
+            case "is_first_person" -> MolangValue.of(drawn.isFirstPerson());
             case "is_in_ui" -> MolangValue.ZERO;
             case "graphics_mode_is_any" -> MolangValue.ZERO;
-            case "camera_rotation" -> MolangValue.of(cameraRotation(arguments));
+            case "camera_rotation" -> MolangValue.of(drawn.cameraRotation(
+                arguments.isEmpty() || arguments.get(0).number() == 0));
             case "lod_index" -> MolangValue.of(levelOfDetail(arguments));
-            case "client_max_render_distance" ->
-                MolangValue.of(Minecraft.getInstance().options.renderDistance().get());
+            case "client_max_render_distance" -> MolangValue.of(drawn.renderDistance());
             // Java is played with a keyboard and a mouse, and offers no touch controls at all.
             case "last_input_mode_is_any" -> MolangValue.of(arguments.stream()
                 .anyMatch(value -> value.isText() && value.text().equals("keyboard_and_mouse")));
@@ -287,8 +379,8 @@ public final class AddonQueries implements MolangEnvironment.Queries {
             case "average_frame_time", "maximum_frame_time", "minimum_frame_time", "last_frame_time" ->
                 MolangValue.of(environment.deltaTime());
 
-            case "any_animation_finished" -> MolangValue.of(animator.player().anyFinished());
-            case "all_animations_finished" -> MolangValue.of(animator.player().allFinished());
+            case "any_animation_finished" -> MolangValue.of(player.anyFinished());
+            case "all_animations_finished" -> MolangValue.of(player.allFinished());
             case "key_frame_lerp_time" -> MolangValue.of(environment.keyFrameLerpTime());
 
             case "property" -> property(properties, arguments);
@@ -358,16 +450,18 @@ public final class AddonQueries implements MolangEnvironment.Queries {
             case "bone_rotation" -> boneRotation(arguments, member);
             case "bone_aabb" -> boneBox(arguments, member);
             case "get_default_bone_pivot" -> MolangValue.of(bonePivot(arguments));
-            case "get_locator_offset" -> MolangValue.of(locatorOffset(animator, arguments));
-            case "get_root_locator_offset" -> MolangValue.of(locatorOffset(rootModel(), arguments));
+            case "get_locator_offset" ->
+                MolangValue.of(locatorOffset(drawn.locator(text(arguments, 0)), arguments));
+            case "get_root_locator_offset" ->
+                MolangValue.of(locatorOffset(drawn.rootLocator(text(arguments, 0)), arguments));
 
             case "item_slot" -> MolangValue.of(number(properties.get("item_slot")));
             case "item_slot_to_bone_name" -> MolangValue.of(boneForSlot(text(arguments, 0)));
             case "item_is_charged" -> MolangValue.of(flag(properties, "item_is_charged"));
             case "equipped_item_any_tag" -> equippedTags(arguments, false);
             case "equipped_item_all_tags" -> equippedTags(arguments, true);
-            case "equipped_item_is_attachable" -> MolangValue.of(
-                !AddonClientAssets.attachablesFor(itemName(handItem(arguments), true)).isEmpty());
+            case "equipped_item_is_attachable" ->
+                MolangValue.of(drawn.isAttachableItem(itemName(handItem(arguments), true)));
             case "is_enchanted" -> MolangValue.of(worn(EquipmentSlot.MAINHAND).isEnchanted());
             case "is_selected_item" -> MolangValue.of(entity instanceof Player player
                 && !player.getMainHandItem().isEmpty());
@@ -488,8 +582,8 @@ public final class AddonQueries implements MolangEnvironment.Queries {
             case "fuse_time" -> MolangValue.of(number(properties.get("fuse_time")));
 
             case "actor_count" -> MolangValue.of(actorCount());
-            case "total_emitter_count" -> MolangValue.of(AddonEmitters.running());
-            case "total_particle_count" -> MolangValue.of(particleCount());
+            case "total_emitter_count" -> MolangValue.of(drawn.emitterCount());
+            case "total_particle_count" -> MolangValue.of(drawn.particleCount());
             case "get_level_seed_based_fraction" -> MolangValue.of(seedFraction());
             case "scoreboard" -> MolangValue.of(Platform.score(entity, text(arguments, 0)));
             case "all_tags" -> MolangValue.of(families(properties, arguments, true));
@@ -574,7 +668,7 @@ public final class AddonQueries implements MolangEnvironment.Queries {
     private String ownerIdentifier() {
         if (attached) return BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString();
 
-        return EntityProperties.of(entity.getId()).get("owner") instanceof String owner ? owner : "";
+        return properties.get().get("owner") instanceof String owner ? owner : "";
     }
 
     /**
@@ -585,46 +679,12 @@ public final class AddonQueries implements MolangEnvironment.Queries {
      * a vanilla mob does carry the owner across, and a pack drawing one reads it that way.
      */
     private boolean hasOwner() {
-        if (EntityProperties.of(entity.getId()).get("owner") != null) return true;
+        if (properties.get().get("owner") != null) return true;
 
         //? if >=26 {
         return entity instanceof OwnableEntity ownable && ownable.getOwnerReference() != null;
         //?} else {
         /*return entity instanceof OwnableEntity ownable && ownable.getOwnerUUID() != null;
-        *///?}
-    }
-
-    /** The cape moved into the skin record in 1.21 and became a client asset in 26. */
-    private boolean hasCape() {
-        if (!(entity instanceof AbstractClientPlayer player)) return false;
-
-        //? if >=26 {
-        return player.getSkin().cape() != null;
-        //?} elif >=1.21 {
-        /*return player.getSkin().capeTexture() != null;
-        *///?} else {
-        /*return player.getCloakTextureLocation() != null;
-        *///?}
-    }
-
-    /**
-     * The camera's own angle, which a model facing the viewer turns against.
-     *
-     * Both accessors lost their `get` prefix on the way to 26: the camera's own did first and the
-     * renderer's followed in 26.2.
-     */
-    private static double cameraRotation(List<MolangValue> arguments) {
-        boolean vertical = arguments.isEmpty() || arguments.get(0).number() == 0;
-
-        //? if >=26.2 {
-        Camera camera = Minecraft.getInstance().gameRenderer.mainCamera();
-        return vertical ? camera.xRot() : camera.yRot();
-        //?} elif >=26 {
-        /*Camera camera = Minecraft.getInstance().gameRenderer.getMainCamera();
-        return vertical ? camera.xRot() : camera.yRot();
-        *///?} else {
-        /*Camera camera = Minecraft.getInstance().gameRenderer.getMainCamera();
-        return vertical ? camera.getXRot() : camera.getYRot();
         *///?}
     }
 
@@ -642,10 +702,10 @@ public final class AddonQueries implements MolangEnvironment.Queries {
      * How long the entity has been burning, in seconds.
      *
      * The tick count behind it stays on the server and only the flag reaches the client, so the
-     * time is measured against the clock the animator already runs on.
+     * time is measured against the clock the clips already run on.
      */
     private double secondsOnFire() {
-        float now = animator.environment().lifeTime();
+        float now = player.environment().lifeTime();
         if (!entity.isOnFire()) {
             litAt = -1;
             return 0;
@@ -882,13 +942,13 @@ public final class AddonQueries implements MolangEnvironment.Queries {
      * A pack asks this to hang one thing off another, and the axis it wants is the second argument.
      */
     private MolangValue boneOrigin(List<MolangValue> arguments) {
-        BonePose pose = animator.poseOf(text(arguments, 0));
+        BonePose pose = drawn.poseOf(text(arguments, 0));
         return pose == null ? MolangValue.ZERO : MolangValue.of(alongAxis(pose.position, arguments));
     }
 
     /** The resting rotation a bone was modelled at, along one axis, in degrees. */
     private MolangValue boneRotation(List<MolangValue> arguments, String axis) {
-        BedrockBone bone = animator.bone(text(arguments, 0));
+        BedrockBone bone = drawn.bone(text(arguments, 0));
         return along(bone == null ? NOWHERE : bone.rotation(), axis, "bone_rotation");
     }
 
@@ -898,7 +958,7 @@ public final class AddonQueries implements MolangEnvironment.Queries {
      * A bone with no boxes of its own encloses nothing, so both of its corners sit on its pivot.
      */
     private MolangValue boneBox(List<MolangValue> arguments, String member) {
-        BedrockBone bone = animator.bone(text(arguments, 0));
+        BedrockBone bone = drawn.bone(text(arguments, 0));
         Vector3f smallest = new Vector3f(bone == null ? NOWHERE : bone.pivot());
         Vector3f largest = new Vector3f(smallest);
         if (bone != null && !bone.cubes().isEmpty()) {
@@ -941,28 +1001,27 @@ public final class AddonQueries implements MolangEnvironment.Queries {
     }
 
     /** The sprite the block under the entity makes its own particles out of, cut from the atlas. */
-    private net.minecraft.client.renderer.texture.TextureAtlasSprite groundSprite() {
+    private Drawn.Sprite groundSprite() {
         BlockPos ground = groundBelow();
-        return ground == null ? null
-            : Platform.blockParticleSprite(entity.level().getBlockState(ground));
+        return ground == null ? null : drawn.groundSprite(entity.level().getBlockState(ground));
     }
 
     /** Where in the atlas that sprite begins, in pixels. Ground the scan never reached has none. */
     private MolangValue surfaceTextureAt(String axis) {
-        net.minecraft.client.renderer.texture.TextureAtlasSprite sprite = groundSprite();
+        Drawn.Sprite sprite = groundSprite();
         return switch (axis) {
-            case "u" -> MolangValue.of(sprite == null ? 0 : sprite.getX());
-            case "v" -> MolangValue.of(sprite == null ? 0 : sprite.getY());
+            case "u" -> MolangValue.of(sprite == null ? 0 : sprite.x());
+            case "v" -> MolangValue.of(sprite == null ? 0 : sprite.y());
             default -> unanswered("surface_particle_texture_coordinate");
         };
     }
 
     /** How large that sprite is, in pixels. */
     private MolangValue surfaceTextureSize(String axis) {
-        net.minecraft.client.renderer.texture.TextureAtlasSprite sprite = groundSprite();
+        Drawn.Sprite sprite = groundSprite();
         return switch (axis) {
-            case "u" -> MolangValue.of(sprite == null ? 0 : sprite.contents().width());
-            case "v" -> MolangValue.of(sprite == null ? 0 : sprite.contents().height());
+            case "u" -> MolangValue.of(sprite == null ? 0 : sprite.width());
+            case "v" -> MolangValue.of(sprite == null ? 0 : sprite.height());
             default -> unanswered("surface_particle_texture_size");
         };
     }
@@ -1002,20 +1061,6 @@ public final class AddonQueries implements MolangEnvironment.Queries {
     /** The effects on the entity, which anything that is not alive is under none of. */
     private java.util.Collection<net.minecraft.world.effect.MobEffectInstance> effects() {
         return entity instanceof LivingEntity living ? living.getActiveEffects() : List.of();
-    }
-
-    /**
-     * How many particles the client is drawing.
-     *
-     * The engine states its counts as the line the debug screen shows, which ends with the total on
-     * every version, so the digits at the end of that line are the number.
-     */
-    private static double particleCount() {
-        String counted = Minecraft.getInstance().particleEngine.countParticles();
-        int from = counted.length();
-        while (from > 0 && Character.isDigit(counted.charAt(from - 1))) from -= 1;
-
-        return from == counted.length() ? 0 : Double.parseDouble(counted.substring(from));
     }
 
     /**
@@ -1140,25 +1185,19 @@ public final class AddonQueries implements MolangEnvironment.Queries {
         *///?}
     }
 
-    /** Whether this animator is drawing something worn or held rather than the entity itself. */
-    boolean attached() {
+    /** Whether this is answering for something worn or held rather than for the entity itself. */
+    public boolean attached() {
         return attached;
-    }
-
-    /** The model this one is drawn on top of, which for anything but an attachable is this one. */
-    private EntityAnimator rootModel() {
-        return attached ? Animators.rootOf(entity.getId()) : animator;
     }
 
     /** The axis of a bone's own pivot, taken from the model rather than from the current pose. */
     private double bonePivot(List<MolangValue> arguments) {
-        BedrockBone bone = animator.bone(text(arguments, 0));
+        BedrockBone bone = drawn.bone(text(arguments, 0));
         return bone == null ? 0 : alongAxis(bone.pivot(), arguments);
     }
 
     /** The axis of a named locator's offset, which is how a pack hangs one model off another. */
-    private static double locatorOffset(EntityAnimator model, List<MolangValue> arguments) {
-        Vector3f offset = model == null ? null : model.locator(text(arguments, 0));
+    private static double locatorOffset(Vector3f offset, List<MolangValue> arguments) {
         return offset == null ? 0 : alongAxis(offset, arguments);
     }
 
@@ -1200,8 +1239,8 @@ public final class AddonQueries implements MolangEnvironment.Queries {
         return compassFacing(yaw);
     }
 
-    private static MolangValue playerFacing() {
-        Player player = Minecraft.getInstance().player;
+    private MolangValue playerFacing() {
+        Player player = drawn.localPlayer();
         return player == null ? MolangValue.of(FACING_UNDEFINED)
             : MolangValue.of(cardinalFacing(player.getYRot(), player.getXRot()));
     }
@@ -1295,7 +1334,7 @@ public final class AddonQueries implements MolangEnvironment.Queries {
         double interval = number(properties.get("heartbeat_interval"));
         if (interval <= 0) return 0;
 
-        return (animator.environment().lifeTime() % interval) / interval;
+        return (player.environment().lifeTime() % interval) / interval;
     }
 
     /** How many entities the client is holding, which is what Bedrock counts. */
@@ -1460,12 +1499,15 @@ public final class AddonQueries implements MolangEnvironment.Queries {
     }
 
     private double distanceFromCamera() {
-        return Platform.cameraPosition().distanceTo(entity.position());
+        Vec3 camera = drawn.cameraPosition();
+        return camera == null ? 0 : camera.distanceTo(entity.position());
     }
 
     /** The angle from the entity to the camera, which billboarded bones turn by. */
     private double rotationToCamera(List<MolangValue> arguments) {
-        Vec3 camera = Platform.cameraPosition();
+        Vec3 camera = drawn.cameraPosition();
+        if (camera == null) return 0;
+
         Vec3 toCamera = camera.subtract(entity.position());
         boolean vertical = !arguments.isEmpty() && arguments.get(0).number() == 0;
         return vertical

@@ -52,6 +52,15 @@ server decides what happens; the client draws it.
   their events: environment, entity, target-nearby, block, timer, scheduler, drying-out, damage,
   interact, spawn-entity and hurt-on-condition. Their properties reach every client, so a model
   looks the same in multiplayer as it does alone.
+- The clips and controllers a behaviour pack declares, which animate what an entity is rather than
+  where its bones are. A moment on a clip's timeline, and a controller state's entry and its exit,
+  each raise one of the entity's own events, run a command as the entity, or assign a Molang
+  variable the controllers read back, and the whole state machine runs on the server off the
+  entity's own tick. What its transitions ask is answered from the entity itself, so a controller
+  waiting on `query.is_on_ground`, on the entity's health or on a property the pack declared moves
+  when the world does. A command a state names runs with the server's own authority and with `@s`
+  standing for the entity, because a mob carries no authority of its own and a pack writing a
+  command means the one the console would run.
 - Items, including edible and wearable ones, spawn eggs, and a creative tab per add-on. A dyeable
   item takes the colour the pack painted it and the one a player dyes it. A bow draws and fires
   whatever the pack loads it with. A bag holds other items. A drop the pack asks to keep lies there.
@@ -186,7 +195,7 @@ compare what they read against the names this mod acts on:
 | Trade table fields | 100% |
 | Trade item functions | 80% |
 | Geometry, animation and controller fields | 93% |
-| Pack file kinds | 70% |
+| Pack file kinds | 74% |
 | `@minecraft/server` and friends | 100% |
 
 Every name in the remaining share is counted and shown by `/mcaddon entities` and `/mcaddon
@@ -406,38 +415,80 @@ nether tags among them, is named the same way and then left out of the filter, s
 rule still decides.
 
 **Whole directories that describe a Bedrock client.** `ui` is Bedrock's own screen language, which
-draws every menu the engine shows and has no counterpart in a Java resource pack. `fogs`,
-`atmospherics`, `lighting`, `color_grading` and `water` are the settings its deferred renderer reads,
-and the resource pack's `biomes` and `biomes_client.json` name one of each per biome; Java decides
-all of it from the dimension and the biome in its own code. `cameras` holds the presets `/camera`
-picks between and `dialogue` holds the screen an NPC opens, and both commands are already reported as
-ones Java has no form of. `textures/texture_list.json` is the index Bedrock keeps of every texture in
-the pack, and the conversion walks the directory itself. Each is named against the pack that shipped
-it, so `/mcaddon entities` says which directory went unread.
+draws every menu the engine shows and has no counterpart in a Java resource pack. `cameras` holds
+the presets `/camera` picks between and `dialogue` holds the screen an NPC opens, and both commands
+are already reported as ones Java has no form of. `textures/texture_list.json` is the index Bedrock
+keeps of every texture in the pack, and the conversion walks the directory itself. Each is named
+against the pack that shipped it, so `/mcaddon entities` says which directory went unread.
+
+**Four of the renderer directories, field by field.** `atmospherics` states a Rayleigh and Mie
+scattering model: `rayleigh_strength`, `sun_mie_strength`, `moon_mie_strength`, `sun_glare_shape`
+and the four `horizon_blend_stops`, each keyframed over the day. Java simulates no scattering and
+draws its sun as one textured quad, and its sky colour is a single value with Java's own time curve
+over it, so there is no keyframe table to put anywhere. `lighting` states a sun and a moon colour
+and illuminance as curves over the day, a lightning `flash` tint, an `orbital_offset_degrees`, an
+ambient colour and illuminance, an `emissive.desaturation` and a `sky.intensity`; Java holds one sky
+light colour and one ambient light colour per dimension from 26 and neither before, has no emissive
+pass and no lightning tint. `color_grading` states `contrast`, `gain`, `gamma`, `offset` and
+`saturation` per tonal band, a Kelvin `temperature` and a tonemapping operator, and a Java post
+effect file holds targets, passes and samplers with no grading term in it and nothing binding a
+chain to a biome. `water` states particle concentrations in milligrams per litre, a caustic
+projection and an eleven field wave model, where Java water is a flipbook texture tinted by one
+colour. Each of the four is read by Bedrock only under Vibrant Visuals, its deferred pipeline.
+
+**Two directories hold more than a deferred renderer reads.** `fogs` states a `distance` block per
+camera location, and its `air` and `water` fog colours are what Java carries as a biome's own fog
+colour and water fog colour, with the start and end distances answerable from 26 as well; only its
+`volumetric` block, the `transition_fog` fade and the lava, weather and powder snow locations have
+nothing behind them. The resource pack's `biomes` and `biomes_client.json` state a water surface
+colour on every one of Mojang's 88, and a grass colour, a foliage colour, a sky colour, a
+precipitation particle, ambient sounds and a music definition on some of them, each of which Java
+states on a biome too. Neither is read yet, so both are named against the pack that shipped them
+along with the rest.
 
 **Worldgen a data pack would write.** `biomes`, `features`, `feature_rules` and `dimensions` on the
 behaviour side belong in registries a Java data pack writes into, and a converted pack is a data pack
-the server loads, so the route exists. Three things stand in it.
+the server loads, so the route exists. What stands in it is the lifecycle on the oldest supported
+version, and what such an entry would be left holding.
 
-The first is the lifecycle. An entry read from a pack carrying a `KnownPack` leaves a world stable,
-and a converted pack carries one from 1.21 on. 1.20.1 has no such thing: the game marks every entry
-from a pack that is not vanilla experimental, the world data carries that lifecycle, and a client
-then asks the player whether to load the world at all, every time they open it. One `worldgen/biome`
-written for a pack would do that to every 1.20.1 world the pack is installed in.
+The lifecycle is the part that blocks. An entry read from a pack carrying a `KnownPack` leaves a
+world stable, and a converted pack carries one from 1.21 on. 1.20.1 has no such class at all:
+`RegistryDataLoader` keeps the decoded lifecycle for anything a pack that is not built in supplies,
+a worldgen codec decodes as experimental, `PrimaryLevelData` carries that through, and
+`WorldOpenFlows` then asks the player whether to load the world at all. Nothing records the answer,
+so it is asked on every open. One `worldgen/biome` written for a pack would do that to every 1.20.1
+world the pack is installed in. On 1.20.1 an extra `dimension` entry does it on its own besides,
+because the baked dimension registry is stable there only while it holds exactly the three the game
+ships.
 
-The second is placement. A biome in the registry appears in no overworld by itself: the parameter
-list a data pack may write names one of the game's own presets and cannot add a point to it, so a
-pack's biome would reach a world only through a mixin into that preset, and only a world made
-afterwards. A dimension is worse: it is read when a world is created and never again.
+Placement is open. `MultiNoiseBiomeSource`'s codec is an either: a `preset`
+naming one of the two lists the game holds in code, or an explicit `biomes` array of climate
+parameter points, and the second form is accepted wherever a biome source is written, on every
+supported version. `worldgen/world_preset` and `dimension` are both registries a data pack writes
+into, and `WorldDimensions.bake` takes the union of the data pack's entries and the ones the level
+data stored, resolving the pack's copy first, so a `dimension` file added after a world exists is
+read the next time that world loads. `/reload` reaches neither, because `reloadResources` rebuilds
+the server resources and never runs `RegistryDataLoader` again, so what this costs a player is a
+restart rather than a new world.
 
-The third is that the two formats describe different things. A Bedrock biome states its terrain, the
-surface builder, the height noise type, the mountain parameters and the hills and mutation rules, and
-a Java biome has a field for none of them; a Java biome instead insists on carvers, features,
-spawners and spawn costs, which a Bedrock one never states. A Bedrock dimension states an identifier,
-a generator type name and a height range, where a Java one needs a whole chunk generator with a biome
-source and a noise settings reference behind it. About a dozen of the feature types have a Java
-configured feature behind them and the rest are placement, which Java states on a placed feature, or
-carving, which is a registry of its own.
+What is left is that the two formats describe different things, which decides what a converted entry
+would hold rather than whether it can be written. A Bedrock biome states its climate and its tags,
+and of Mojang's own 88, 87 also state a surface builder, 75 an overworld height and 31 the overworld
+generation rules; a Java biome has a field for none of those, because Java states its surfaces in
+`worldgen/noise_settings` and its heights in density functions. A Java biome instead requires
+carvers, features, spawners and spawn costs, which a Bedrock one never states and each of which
+takes an empty value. A converted biome therefore comes out valid and empty: a climate, a water
+colour off the resource pack, and no terrain, no features, no carvers and no mobs in it. A Bedrock
+dimension states an identifier, a generator type name and a height range, where a Java one needs a
+whole chunk generator with a biome source and a noise settings reference behind it.
+
+The features are the same shape of answer. Of Bedrock's twenty-eight feature types thirteen have a
+Java configured feature behind them, six are placement, which Java states on a placed feature,
+three are carving, which is a registry of its own and none of Java's eleven generation steps, and
+six have nothing on any of those three: `aggregate_feature`, `conditional_list`,
+`beards_and_shavers`, `rect_layout`, `multi_block_feature` and `horizontal_tree_decoration_feature`.
+A feature rule also attaches in the opposite direction: it hangs one feature on every biome carrying
+a tag, where a Java biome lists its own features and no data pack construct adds one to a tag set.
 
 Surface lighting from a physically based texture set is the one thing that depends on what the
 player has installed: the emissive channel is drawn again at full brightness with or without a

@@ -1,6 +1,5 @@
 package at.ioexception.mcaddon.bedrock.animation;
 
-import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import com.google.gson.JsonElement;
@@ -103,15 +102,18 @@ public final class AnimationControllerParser {
         return longest;
     }
 
-    private static List<MolangExpression> readStatements(JsonObject json, String field) {
+    /**
+     * What a state fires as it is entered or left.
+     *
+     * Each entry is a command, one of the entity's own events or Molang, and which of the three it
+     * is comes out of the string itself.
+     */
+    private static List<AnimationAction> readStatements(JsonObject json, String field) {
         if (!json.has(field)) return List.of();
 
-        List<MolangExpression> statements = new ArrayList<>();
+        List<AnimationAction> statements = new ArrayList<>();
         for (JsonElement entry : json.getAsJsonArray(field)) {
-            String source = entry.getAsString();
-            // Slash commands are a behaviour pack concern; the Java port drives those itself.
-            if (source.startsWith("/") || source.startsWith("@s ")) continue;
-            statements.add(MolangParser.parse(source));
+            statements.add(AnimationAction.of(entry.getAsString()));
         }
         return List.copyOf(statements);
     }

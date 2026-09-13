@@ -42,6 +42,10 @@ public final class AddonEntities {
     private static final Map<EntityType<?>, String> NAMESPACES = new LinkedHashMap<>();
     private static final Map<EntityType<?>, EntitySounds> SOUNDS = new LinkedHashMap<>();
 
+    /** The clips and controllers each type's own behaviour pack ships, kept apart per pack. */
+    private static final Map<EntityType<?>, at.ioexception.mcaddon.bedrock.BedrockAssets> CLIPS =
+        new LinkedHashMap<>();
+
     private AddonEntities() {
     }
 
@@ -61,6 +65,11 @@ public final class AddonEntities {
 
     public static ServerEntityDefinition definitionOf(EntityType<?> type) {
         return DEFINITIONS.get(type);
+    }
+
+    /** What this type's own pack declares in `animations` and `animation_controllers`. */
+    public static at.ioexception.mcaddon.bedrock.BedrockAssets clipsOf(EntityType<?> type) {
+        return CLIPS.get(type);
     }
 
     /** Null when the entity does not trade. */
@@ -140,8 +149,11 @@ public final class AddonEntities {
 
         for (BedrockPack pack : packs.packs()) {
             if (pack.role() != PackRole.BEHAVIOUR) continue;
+
+            at.ioexception.mcaddon.bedrock.BedrockAssets clips =
+                at.ioexception.mcaddon.bedrock.BedrockAssets.readBehaviour(pack);
             for (ServerEntityDefinition definition : ServerEntityDefinition.readAll(pack)) {
-                register(pack, definition, sounds);
+                register(pack, definition, sounds, clips);
                 DECLARED.addAll(definition.components().keySet());
                 definition.componentGroups().values()
                     .forEach(group -> DECLARED.addAll(group.keySet()));
@@ -153,7 +165,7 @@ public final class AddonEntities {
     }
 
     private static void register(BedrockPack pack, ServerEntityDefinition definition,
-        Map<String, EntitySounds> sounds) {
+        Map<String, EntitySounds> sounds, at.ioexception.mcaddon.bedrock.BedrockAssets clips) {
         Identifier id = identifier(definition.identifier());
         if (id == null) {
             McAddon.LOGGER.warn("{} declares {}, which is not a usable identifier.",
@@ -172,6 +184,7 @@ public final class AddonEntities {
 
         count(definition);
         DEFINITIONS.put(type, definition);
+        if (!definition.script().isEmpty()) CLIPS.put(type, clips);
         BY_IDENTIFIER.put(definition.identifier(), type);
         namespaceOf(pack).ifPresent(namespace -> NAMESPACES.put(type, namespace));
         EntitySounds noises = EntitySounds.of(sounds, definition.identifier());

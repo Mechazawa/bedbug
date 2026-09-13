@@ -2080,6 +2080,7 @@ public class AddonEntity extends PathfinderMob
         super.tick();
         if (definition == null || !(level() instanceof net.minecraft.server.level.ServerLevel)) return;
 
+        animateState();
         everyTick();
         if (spawnRuleEvent != null) {
             String event = spawnRuleEvent;
@@ -2122,6 +2123,27 @@ public class AddonEntity extends PathfinderMob
             callARaid();
             listenForVibrations();
         }
+    }
+
+    /** The behaviour pack's own state machine, built the first tick an entity that has one runs. */
+    private at.ioexception.mcaddon.server.ServerAnimator animator;
+
+    /**
+     * Runs the clips and controllers this entity's behaviour pack declares.
+     *
+     * These carry no bones. What a moment on one of their timelines holds is an event of the
+     * entity's own, a command run as the entity, or a Molang variable the controllers read back.
+     */
+    private void animateState() {
+        if (definition.script().isEmpty()) return;
+
+        if (animator == null) {
+            at.ioexception.mcaddon.bedrock.BedrockAssets clips =
+                at.ioexception.mcaddon.registry.AddonEntities.clipsOf(getType());
+            if (clips == null) return;
+            animator = new at.ioexception.mcaddon.server.ServerAnimator(this, clips, definition.script());
+        }
+        animator.tick();
     }
 
     /** `minecraft:group_size` is how many of its own kind a pack's entity can see around it. */

@@ -34,7 +34,7 @@ public final class AnimationParser {
         if (json.has("timeline")) {
             for (Map.Entry<String, JsonElement> moment : json.getAsJsonObject("timeline").entrySet()) {
                 timeline.add(new BedrockAnimation.TimelineEntry(
-                    Float.parseFloat(moment.getKey()), readStatements(moment.getValue())));
+                    Float.parseFloat(moment.getKey()), readActions(moment.getValue())));
             }
             timeline.sort(Comparator.comparing(BedrockAnimation.TimelineEntry::time));
         }
@@ -114,7 +114,7 @@ public final class AnimationParser {
             optionalString(body, "effect"),
             optionalString(body, "locator"),
             body.has("pre_effect_script")
-                ? readStatements(body.get("pre_effect_script")) : List.of());
+                ? readExpressions(body.get("pre_effect_script")) : List.of());
     }
 
     private static BedrockAnimation.Loop readLoop(JsonElement json) {
@@ -127,7 +127,26 @@ public final class AnimationParser {
             : BedrockAnimation.Loop.LOOP;
     }
 
-    private static List<MolangExpression> readStatements(JsonElement json) {
+    /**
+     * A moment's statements, which Bedrock writes as either one string or a list of them.
+     *
+     * Each is a command, an entity event or Molang, and which of the three it is comes out of the
+     * string itself.
+     */
+    private static List<AnimationAction> readActions(JsonElement json) {
+        List<AnimationAction> statements = new ArrayList<>();
+        if (json.isJsonArray()) {
+            for (JsonElement statement : json.getAsJsonArray()) {
+                statements.add(AnimationAction.of(statement.getAsString()));
+            }
+        } else {
+            statements.add(AnimationAction.of(json.getAsString()));
+        }
+        return List.copyOf(statements);
+    }
+
+    /** A pre-effect script, which computes the variables the effect reads and nothing else. */
+    private static List<MolangExpression> readExpressions(JsonElement json) {
         List<MolangExpression> statements = new ArrayList<>();
         if (json.isJsonArray()) {
             for (JsonElement statement : json.getAsJsonArray()) {

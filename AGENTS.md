@@ -141,6 +141,13 @@ These are the checks it runs, and what each one catches:
   channel has pixels in it, a glyph page beside the locale list and the locale names a pack declares,
   and a function using the commands and selector arguments that need translating.
 
+  The behaviour side carries a clip and a controller of its own, which is the same pair of readers
+  driving the world rather than a model. The ember's `scripts.animate` names the controller; its
+  first state waits on a Molang query, and the state it moves to assigns a variable, raises one of
+  the ember's own events, runs a command as the ember and plays a clip whose timeline raises a
+  second event. Each of the three kinds of statement leaves a mark a game test asks the world about,
+  so a reader that stopped running shows up as an assertion rather than as a count.
+
   Four of those carry the drawing fields that are only visible in a picture. The sprite's geometry
   declares the extent it is culled against. The ember is drawn through a controller that dims the
   light reaching it and animated by a controller crossing between two states on a blend transition,
@@ -441,7 +448,7 @@ These are the checks it runs, and what each one catches:
 
   The mod's side is read out of the source: the `IMPLEMENTED` declarations in `AddonEntities`,
   `AddonItems` and `AddonBlocks`, and the `case "..."` labels in `AddonEntity.addGoals`,
-  `EntityEvents.applyComponent`, `Filter.evaluate`, `AddonQueries.query` and `MolangMath.call`. A
+  `EntityEvents.applyComponent`, `Filter.evaluate`, `EntityQueries.query` and `MolangMath.call`. A
   name added to one of those switches counts the moment it is added.
 
   The run ends with two lists worth reading. Names in the source that the published vocabulary does
@@ -692,7 +699,7 @@ src/main/java/at/ioexception/mcaddon/
   bedrock/molang/            Molang parser, evaluator, maths. Trig is in degrees.
   bedrock/model/             Geometry parsing, baking, render controllers
   bedrock/animation/         Animations, channels, player, controllers
-  bedrock/entity/            Client entity definitions and the animator that runs them
+  bedrock/entity/            Entity definitions, the animator that runs them, the query answers
   bedrock/behaviour/         Entities, items, blocks, recipes, loot, trading, spawn rules, filters
   script/                    GraalJS host, the bridge, pack-declared commands, coverage
   structure/                 Bedrock `.mcstructure` reading, whose NBT is little endian
@@ -700,7 +707,7 @@ src/main/java/at/ioexception/mcaddon/
   block/                     The block class that carries a pack's own states
   server/                    Server lifecycle, commands, sensors, entity events, property sync
   gametest/                  The Mojang game tests, reached through the fabric-gametest entrypoint
-  client/render/             Renderer, attachable layer, pass resolution, query answering
+  client/render/             Renderer, attachable layer, pass resolution, what only a client answers
   client/screen/             The screen a Bedrock form becomes
   mixin/                     Pack repository source, and the attachable layer on living entities
   platform/Platform.java     Every call whose spelling differs across versions
