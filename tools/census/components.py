@@ -14,6 +14,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parents[2]
 JAVA = ROOT / "src/main/java/at/ioexception/mcaddon"
@@ -53,6 +54,42 @@ class Surface:
 
 def text(path):
     return path.read_text(encoding="utf-8")
+
+
+def lenient(path):
+    """One of Mojang's JSON files, whose comments and trailing commas `json` alone refuses.
+
+    Half of the vanilla entity files carry a `//` comment beside a value or a comma before a
+    closing brace. The game reads them, so a census that skipped them would measure a smaller
+    vocabulary than the one Mojang ships.
+    """
+    body = text(path)
+    out = []
+    index = 0
+    while index < len(body):
+        character = body[index]
+        if character == '"':
+            end = index + 1
+            while end < len(body):
+                if body[end] == "\\":
+                    end += 2
+                    continue
+                if body[end] == '"':
+                    break
+                end += 1
+            out.append(body[index:end + 1])
+            index = end + 1
+        elif body.startswith("//", index):
+            index = body.find("\n", index)
+            if index < 0:
+                break
+        elif body.startswith("/*", index):
+            index = body.find("*/", index) + 2
+        else:
+            out.append(character)
+            index += 1
+
+    return json.loads(re.sub(r",\s*([}\]])", r"\1", "".join(out)))
 
 
 def balanced(body, start):
@@ -174,20 +211,49 @@ def block_doc_names(samples):
 def vanilla_components(samples, directory, root):
     """Every component name the vanilla behaviour pack's own files under `directory` declare.
 
-    The published metadata is not complete: `minecraft:pushable` and `minecraft:entity_spawned` are
-    in no schema and no doc list, and 54 and 82 vanilla entities respectively declare them. Reading
-    the packs is what closes that hole, and it is also the whole vocabulary when the metadata is
-    missing, where it reads as a lower bound: a name no vanilla file happens to use is invisible.
+    The published metadata is not complete: `minecraft:pushable` is in no schema and no doc list
+    and 54 vanilla entities declare it. Reading the packs is what closes that hole, and it is also
+    the whole vocabulary when the metadata is missing, where it reads as a lower bound: a name no
+    vanilla file happens to use is invisible.
     """
     names = set()
     for path in (samples / directory).glob("*.json"):
         try:
-            body = json.loads(text(path))[root]
+            body = lenient(path)[root]
         except (KeyError, json.JSONDecodeError):
             continue
         bodies = [body.get("components", {})] + list(body.get("component_groups", {}).values())
         names.update(key for group in bodies for key in group)
     return names
+
+
+def unreferenced_schema_titles(directory):
+    """Components that have a schema file of their own and are in no master property list.
+
+    `Entity component definitions.json` is the list every other reading of the schemas starts
+    from, and it leaves three of Mojang's own component schemas out. A schema another schema
+    points at with `$ref` is a piece of some component's body rather than a component, so what
+    counts here is a `minecraft_*.json` nothing refers to.
+    """
+    referenced = set()
+
+    def refs(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key == "$ref" and isinstance(value, str):
+                    referenced.add(unquote(value.rsplit("/", 1)[-1]))
+                refs(value)
+        elif isinstance(node, list):
+            for item in node:
+                refs(item)
+
+    schemas = {path: json.loads(text(path)) for path in directory.rglob("*.json")}
+    for path, body in schemas.items():
+        if path.name != "Entity component definitions.json":
+            refs(body)
+    return {body.get("title") for path, body in schemas.items()
+            if path.name.startswith("minecraft_") and path.name not in referenced
+            and str(body.get("title", "")).startswith("minecraft:")}
 
 
 def published_entity_names(samples):
@@ -196,8 +262,9 @@ def published_entity_names(samples):
     if not metadata.is_dir():
         return vanilla, "vanilla behaviour pack entities"
 
-    names = schema_properties(
-        (metadata / "json_schemas/server/entity").glob("*/Entity component definitions.json"))
+    schemas = metadata / "json_schemas/server/entity"
+    names = schema_properties(schemas.glob("*/Entity component definitions.json"))
+    names |= unreferenced_schema_titles(schemas)
     sections = doc_sections(samples)
     for section in ("Components", "AI Goals", "Properties", "Attributes"):
         names |= doc_names(sections.get(section, []))
@@ -226,11 +293,12 @@ def surfaces(samples):
         doc_names(doc_sections(samples)["Filters"]),
         case_labels(JAVA / "bedrock/behaviour/Filter.java", "Boolean evaluate"),
         "the entity filter docs"))
+    queries = JAVA / "bedrock/entity/EntityQueries.java"
     found.append(Surface(
         "molang queries",
         {query["name"].split(".", 1)[1]
          for query in json.loads(text(metadata / "molang_modules/mojang-molang-queries.json"))["queries"]},
-        case_labels(JAVA / "bedrock/entity/EntityQueries.java", "MolangValue query("),
+        case_labels(queries, "MolangValue query(") - literal_set(queries, "CONTEXT = Set.of"),
         "the engine's molang query list"))
     found.append(Surface(
         "molang math",

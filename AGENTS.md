@@ -147,6 +147,13 @@ These are the checks it runs, and what each one catches:
   the ember's own events, runs a command as the ember and plays a clip whose timeline raises a
   second event. Each of the three kinds of statement leaves a mark a game test asks the world about,
   so a reader that stopped running shows up as an assertion rather than as a count.
+  Two more entities are there for what a mob walking about never reaches. One is a projectile with
+  hit boxes wider than the box it collides in; the other shoots it, rides rails, remembers what comes
+  near it and dies the ender dragon's long death. A third file describes `minecraft:player`, which is
+  a definition of an entity the game already has: nothing on it is applied and every component on it
+  is named, which is the only way `minecraft:player.hunger` and the five beside it reach
+  `/mcaddon entities`. `verify.py` leaves a `minecraft:` definition out of both the identifiers it
+  summons and the entity types it counts, for the same reason.
 
   Four of those carry the drawing fields that are only visible in a picture. The sprite's geometry
   declares the extent it is culled against. The ember is drawn through a controller that dims the
@@ -445,6 +452,16 @@ These are the checks it runs, and what each one catches:
   documentation. With `metadata/` absent it falls back to the component names the vanilla behaviour pack's
   own entities use, which is a lower bound rather than the vocabulary. `scratchpad/` is gitignored,
   so the checkout is never committed.
+
+  **Three things Mojang's own material hides, each closed by how it is read.** Half of the vanilla
+  entity and item files carry a `//` comment or a comma before a closing brace, which `json` refuses,
+  so they are read through `lenient`, the same tolerant reader `data.py` uses. `Entity component
+  definitions.json` is the master property list and leaves three of Mojang's own component schemas
+  out of it, so a `minecraft_*.json` schema file no other schema points at with `$ref` counts as a
+  component in its own right; one another schema does point at is a piece of some component's body
+  and does not. And Mojang publishes every `query.` name and no list at all of the `context.` ones,
+  so `AddonQueries.CONTEXT` declares which of that switch's own case labels belong to the second
+  namespace and the query surface leaves them out.
 
   The mod's side is read out of the source: the `IMPLEMENTED` declarations in `AddonEntities`,
   `AddonItems` and `AddonBlocks`, and the `case "..."` labels in `AddonEntity.addGoals`,

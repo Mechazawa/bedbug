@@ -88,6 +88,9 @@ public class AddonEntity extends PathfinderMob
     private Age age;
     private Anger anger;
     private Genetics genetics;
+    private Rails rails;
+    private Memories memories;
+    private Projectiles flight;
     private net.minecraft.server.level.ServerBossEvent bossBar;
     private net.minecraft.world.SimpleContainer carried;
 
@@ -98,6 +101,15 @@ public class AddonEntity extends PathfinderMob
             age = Age.tryFrom(definition);
             anger = Anger.tryFrom(definition);
             genetics = Genetics.tryFrom(definition);
+            rails = Rails.tryFrom(this);
+            memories = Memories.tryFrom(this);
+            flight = Projectiles.tryFrom(this);
+            if (flight != null) {
+                // A projectile's arc is the component's own, so Java's mob physics and its goals
+                // both step aside for it rather than pulling against it every tick.
+                setNoAi(true);
+                setNoGravity(true);
+            }
             addGoals();
             applyMoveControl();
             applyComponents();
@@ -1518,8 +1530,9 @@ public class AddonEntity extends PathfinderMob
     /**
      * Whatever the pack's shooter component names, thrown at what the entity is hunting.
      *
-     * `minecraft:shooter` names the projectile by its entity id, which is enough for Java to build
-     * one and aim it. The arc is Java's own for a bow, so an arrow drops the way a player's does.
+     * `minecraft:shooter` names the projectile by its entity id, which is either one of the game's
+     * own, aimed on Java's arc for a bow, or one the pack declared, which flies on the arc its own
+     * `minecraft:projectile` describes.
      */
     @Override
     public void performRangedAttack(net.minecraft.world.entity.LivingEntity target, float power) {
@@ -1531,6 +1544,10 @@ public class AddonEntity extends PathfinderMob
         net.minecraft.world.entity.EntityType<?> type =
             AddonEntities.typeOf(named == null ? "minecraft:arrow" : named);
         net.minecraft.world.entity.Entity shot = type == null ? null : Platform.createMob(type, level);
+        if (shot instanceof AddonEntity own && own.flight != null) {
+            shootOwn(level, own, target);
+            return;
+        }
         if (!(shot instanceof net.minecraft.world.entity.projectile.Projectile projectile)) return;
 
         Platform.placeAt(projectile, getX(), getEyeY() - 0.1, getZ(), getYRot(), getXRot());
@@ -1544,6 +1561,28 @@ public class AddonEntity extends PathfinderMob
 
         playSound(SoundEvents.SKELETON_SHOOT, 1f, 1f / (random.nextFloat() * 0.4f + 0.8f));
         level.addFreshEntity(projectile);
+    }
+
+    /**
+     * Sends this entity off along an aim, for a pack's own projectile.
+     *
+     * The shooter may be null, which is a projectile nobody fired: it flies and hits like any
+     * other and its damage names no attacker.
+     */
+    public void launchAsProjectile(net.minecraft.world.entity.LivingEntity shooter,
+        net.minecraft.world.phys.Vec3 aim) {
+        if (flight != null) flight.launch(shooter, aim, level().getDifficulty().getId());
+    }
+
+    /** A projectile the pack declared itself, placed at its own anchor and sent along its own arc. */
+    private void shootOwn(net.minecraft.server.level.ServerLevel level, AddonEntity shot,
+        net.minecraft.world.entity.LivingEntity target) {
+        net.minecraft.world.phys.Vec3 from = shot.flight.muzzle(this);
+        Platform.placeAt(shot, from.x, from.y, from.z, getYRot(), getXRot());
+        net.minecraft.world.phys.Vec3 aim = shot.flight.aimsAtTarget()
+            ? target.getEyePosition().subtract(from) : getLookAngle();
+        shot.launchAsProjectile(this, aim);
+        level.addFreshEntity(shot);
     }
 
     private void addGoals() {
@@ -1654,8 +1693,15 @@ public class AddonEntity extends PathfinderMob
                         new AvoidEntityGoal<>(this, Monster.class, 8f, 1.0, 1.2));
                 case "minecraft:behavior.avoid_block" ->
                     goalSelector.addGoal(priority, new AvoidBlockGoal(this, componentBody(behaviour)));
-                case "minecraft:behavior.panic_on_fire" ->
-                    goalSelector.addGoal(priority, new PanicGoal(this, 1.25));
+
+                // Each of these three walks to what a memory sensor wrote down rather than to
+                // anything the goal itself was given, which is why none of them carries a target.
+                case "minecraft:memory_behavior.follow_target" ->
+                    goalSelector.addGoal(priority, MemoryGoal.following(this));
+                case "minecraft:memory_behavior.flee_threat" ->
+                    goalSelector.addGoal(priority, MemoryGoal.fleeing(this));
+                case "minecraft:memory_behavior.move_to_position" ->
+                    goalSelector.addGoal(priority, MemoryGoal.movingToPosition(this));
 
                 case "minecraft:behavior.tempt", "minecraft:behavior.float_tempt" ->
                     goalSelector.addGoal(priority, Platform.temptGoal(this));
@@ -1696,6 +1742,8 @@ public class AddonEntity extends PathfinderMob
                     FollowKinGoal.caravan(this, componentBody(behaviour)));
                 case "minecraft:behavior.follow_target_leader" -> goalSelector.addGoal(priority,
                     FollowKinGoal.leader(this, componentBody(behaviour)));
+                case "minecraft:behavior.follow_target_captain" -> goalSelector.addGoal(priority,
+                    FollowKinGoal.captain(this, componentBody(behaviour)));
 
                 case "minecraft:behavior.move_to_block" -> goalSelector.addGoal(priority,
                     MoveToMatchingBlockGoal.named(this, componentBody(behaviour)));
@@ -2089,6 +2137,7 @@ public class AddonEntity extends PathfinderMob
         }
         if ((tickCount + getId()) % Sensors.INTERVAL_TICKS == 0) {
             Sensors.tick(this, ServerHooks.state());
+            rememberSomethingNearby();
             resupply();
             teleportAbout();
             pickUpNearby();
@@ -2414,6 +2463,51 @@ public class AddonEntity extends PathfinderMob
         if (since <= VIBRATION_MEMORY) setValue("time_since_last_vibration_detection", since);
     }
 
+    /** What a pack's memory sensors wrote, or null for an entity that declared none of them. */
+    public Memories memories() {
+        return memories;
+    }
+
+    /**
+     * `minecraft:memory_sensor.in_range_of_entity` writes down the nearest entity it can see.
+     *
+     * Mojang publishes the name and no fields, so how far it looks is the entity's own follow
+     * range, which is the distance every other component on a Bedrock entity measures sight by.
+     */
+    private void rememberSomethingNearby() {
+        if (memories == null || !declares("minecraft:memory_sensor.in_range_of_entity")) return;
+
+        double range = getAttributeValue(Attributes.FOLLOW_RANGE);
+        level().getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class,
+                getBoundingBox().inflate(range)).stream()
+            .filter(other -> other != this)
+            .min(java.util.Comparator.comparingDouble(this::distanceToSqr))
+            .ifPresent(seen -> memories.remember(seen, tickCount));
+    }
+
+    /**
+     * Offers one game event to every entity near enough to remember where it happened.
+     *
+     * Called for every event anywhere in a world, so the first thing asked is whether any installed
+     * pack declared the sensor at all; with none the whole feed costs a set lookup.
+     */
+    public static void rememberGameEvent(net.minecraft.server.level.ServerLevel level,
+        net.minecraft.world.phys.Vec3 where) {
+        if (!AddonEntities.anyoneDeclares("minecraft:memory_sensor.game_event")) return;
+
+        net.minecraft.world.phys.AABB earshot = net.minecraft.world.phys.AABB.ofSize(where,
+            GAME_EVENT_EARSHOT, GAME_EVENT_EARSHOT, GAME_EVENT_EARSHOT);
+        for (AddonEntity heard : level.getEntitiesOfClass(AddonEntity.class, earshot)) {
+            if (heard.memories != null && heard.declares("minecraft:memory_sensor.game_event")) {
+                heard.memories.remember(net.minecraft.core.BlockPos.containing(where),
+                    heard.tickCount);
+            }
+        }
+    }
+
+    /** How far a game event carries, which is the range Java gives its own sculk sensor. */
+    private static final double GAME_EVENT_EARSHOT = 16;
+
     /** The entity's own age at which it last heard something, or negative while it has heard nothing. */
     private int heardAt = -1;
 
@@ -2462,6 +2556,8 @@ public class AddonEntity extends PathfinderMob
         noticeTheBlockItIsIn();
         celebrateTheKill();
         publishBeingInLove();
+        if (rails != null) rails.tick();
+        if (flight != null) flight.tick();
         if (bossBar != null) bossBar.setProgress(getMaxHealth() <= 0 ? 0 : getHealth() / getMaxHealth());
     }
 
@@ -3513,6 +3609,43 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
+     * `minecraft:behavior.dragondeath` is the long death the ender dragon dies.
+     *
+     * A goal gets no tick at zero health, and the dragon's own death is not a goal either:
+     * `EnderDragon` overrides `LivingEntity.tickDeath`, which every living entity carries. An
+     * entity a pack gave this behaviour rises and spins for the dragon's two hundred ticks,
+     * throwing the same beams, instead of falling over in twenty.
+     */
+    @Override
+    protected void tickDeath() {
+        if (definition == null || !definition.behaviours().contains("minecraft:behavior.dragondeath")) {
+            super.tickDeath();
+            return;
+        }
+
+        deathTime++;
+        setYRot(getYRot() + DRAGON_DEATH_SPIN);
+        setPos(getX(), getY() + DRAGON_DEATH_RISE, getZ());
+        if (level() instanceof net.minecraft.server.level.ServerLevel level
+            && deathTime % DRAGON_DEATH_BEAM_INTERVAL == 0) {
+            level.sendParticles(net.minecraft.core.particles.ParticleTypes.EXPLOSION_EMITTER,
+                getRandomX(1), getRandomY(), getRandomZ(1), 1, 0, 0, 0, 0);
+        }
+        if (deathTime >= DRAGON_DEATH_TICKS) {
+            remove(net.minecraft.world.entity.Entity.RemovalReason.KILLED);
+        }
+    }
+
+    /** How long the ender dragon takes to die, which is ten times what an ordinary mob takes. */
+    private static final int DRAGON_DEATH_TICKS = 200;
+
+    private static final int DRAGON_DEATH_BEAM_INTERVAL = 5;
+
+    private static final float DRAGON_DEATH_SPIN = 20f;
+
+    private static final double DRAGON_DEATH_RISE = 0.03;
+
+    /**
      * What a pack asked for as the entity dies: its own event, what it leaves behind, and the bang.
      *
      * `minecraft:spawn_on_death` and `minecraft:explode` both happen here because both are a thing
@@ -3611,6 +3744,33 @@ public class AddonEntity extends PathfinderMob
         return age == null ? super.getScale() : age.scale();
     }
     *///?}
+
+    /**
+     * `minecraft:custom_hit_test` widens what a melee swing and an arrow may land on.
+     *
+     * Bedrock lists boxes that take hits and leaves the collision box to
+     * `minecraft:collision_box`. Java asks an entity the same question once,
+     * `Entity.getPickRadius`, which `ProjectileUtil.getEntityHitResult` inflates the entity's box
+     * by before the ray is tested, and that is the ray a player's reach and a fired arrow both use.
+     * The answer is therefore how far past the collision box the widest declared hitbox reaches,
+     * so a model hit where it looks hit still walks through a gap its collision box fits.
+     */
+    @Override
+    public float getPickRadius() {
+        if (definition == null || !declares("minecraft:custom_hit_test")) return super.getPickRadius();
+
+        double widest = 0;
+        for (com.google.gson.JsonElement element
+            : at.ioexception.mcaddon.util.Json.list(componentBody("minecraft:custom_hit_test"),
+                "hitboxes")) {
+            if (!element.isJsonObject()) continue;
+
+            com.google.gson.JsonObject box = element.getAsJsonObject();
+            widest = Math.max(widest, at.ioexception.mcaddon.util.Json.number(box, "width", 0) / 2
+                - getBbWidth() / 2);
+        }
+        return (float) Math.max(widest, super.getPickRadius());
+    }
 
     /**
      * Sets the entity alight while the sun is on it, the way a Bedrock undead mob burns.

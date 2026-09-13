@@ -173,7 +173,7 @@ public final class AddonEntities {
             return;
         }
         if (BuiltInRegistries.ENTITY_TYPE.containsKey(id)) {
-            // A pack that changes a vanilla entity rather than adding one: the type already exists.
+            reportOverride(definition);
             return;
         }
 
@@ -192,6 +192,23 @@ public final class AddonEntities {
         readTrades(pack, definition).ifPresent(trades -> TRADES.put(type, trades));
         Registry.register(BuiltInRegistries.ENTITY_TYPE, id, type);
         FabricDefaultAttributeRegistry.register(type, AddonEntity.attributes(definition));
+    }
+
+    /**
+     * Names every component of a definition that redescribes an entity the game already has.
+     *
+     * A pack writing `entities/player.json` or `entities/zombie.json` is replacing a definition
+     * Java holds in code rather than adding one, and this mod keeps the game's. Nothing on such a
+     * definition is applied, so every component on it is a gap whatever this mod does with the same
+     * component on an entity of the pack's own, which is why the implemented set is not consulted.
+     * `minecraft:player.hunger` and the four beside it, and `minecraft:exhaustion_values`, reach
+     * `/mcaddon entities` this way and no other: Bedrock ignores all six on anything but the player.
+     */
+    private static void reportOverride(ServerEntityDefinition definition) {
+        definition.components().keySet().forEach(AddonEntities::unsupported);
+        definition.componentGroups().values().stream()
+            .flatMap(group -> group.keySet().stream())
+            .forEach(AddonEntities::unsupported);
     }
 
     /** Whether this mod does anything about a component, wherever the component was met. */
@@ -250,7 +267,15 @@ public final class AddonEntities {
         "minecraft:spawn_entity", Set.of("spawn_method", "should_leash"),
         "minecraft:drying_out_timer", Set.of("water_bottle_refill_time"),
         "minecraft:damage_sensor", Set.of("damage_modifier", "damage_multiplier",
-            "on_damage_sound_event"));
+            "on_damage_sound_event"),
+        "minecraft:custom_hit_test", Set.of("height", "pivot"),
+        "minecraft:rail_sensor", Set.of("check_block_types", "tick_command_block_on_activate",
+            "tick_command_block_on_deactivate"),
+        "minecraft:projectile", Set.of("arrow_effect", "crit_particle_on_hurt", "destroy_on_hurt",
+            "douse_fire", "hurt_owner", "hit_nearest_passenger", "is_dangerous", "lightning",
+            "multiple_targets", "potion_effect", "reflect_immunity", "reflect_on_hurt",
+            "should_bounce", "spawn_aoe_cloud", "spawn_chance", "splash_range", "stop_on_hurt",
+            "teleport_owner", "thrown_potion_effect", "wind_burst_on_hit"));
 
     private static boolean carries(com.google.gson.JsonElement json, String field) {
         if (json.isJsonObject()) {
@@ -283,7 +308,7 @@ public final class AddonEntities {
         "minecraft:physics", "minecraft:pushable", "minecraft:push_through", "minecraft:despawn",
         "minecraft:nameable", "minecraft:persistent", "minecraft:jump.static",
         "minecraft:can_climb", "minecraft:breathable", "minecraft:conditional_bandwidth_optimization",
-        "minecraft:entity_spawned", "minecraft:follow_range", "minecraft:knockback_resistance",
+        "minecraft:follow_range", "minecraft:knockback_resistance",
         "minecraft:fire_immune", "minecraft:is_hidden_when_invisible", "minecraft:experience_reward",
         "minecraft:behavior.float", "minecraft:behavior.panic", "minecraft:behavior.random_stroll",
         "minecraft:behavior.move_outdoors", "minecraft:behavior.explore_outskirts",
@@ -294,7 +319,7 @@ public final class AddonEntities {
         "minecraft:behavior.move_towards_restriction", "minecraft:behavior.mount_pathing",
         "minecraft:behavior.follow_owner", "minecraft:behavior.stroll_towards_village",
         "minecraft:behavior.avoid_mob_type", "minecraft:behavior.hide",
-        "minecraft:behavior.avoid_block", "minecraft:behavior.panic_on_fire",
+        "minecraft:behavior.avoid_block",
         "minecraft:behavior.open_door", "minecraft:annotation.open_door",
         "minecraft:behavior.melee_attack", "minecraft:behavior.melee_box_attack",
         "minecraft:behavior.nearest_attackable_target", "minecraft:behavior.hurt_by_target",
@@ -353,7 +378,8 @@ public final class AddonEntities {
         "minecraft:rotation_locked_to_vehicle", "minecraft:air_drag_modifier",
         "minecraft:behavior.ranged_attack", "minecraft:behavior.ocelotattack",
         "minecraft:behavior.follow_parent", "minecraft:behavior.follow_caravan",
-        "minecraft:behavior.follow_target_leader", "minecraft:behavior.move_to_block",
+        "minecraft:behavior.follow_target_leader",
+        "minecraft:behavior.follow_target_captain", "minecraft:behavior.move_to_block",
         "minecraft:behavior.move_to_land", "minecraft:behavior.move_to_lava",
         "minecraft:behavior.move_to_random_block", "minecraft:behavior.equip_item",
         "minecraft:behavior.hold_ground", "minecraft:behavior.look_at_target",
@@ -441,7 +467,12 @@ public final class AddonEntities {
         "minecraft:walk_animation_speed", "minecraft:movement_sound_distance_offset",
         "minecraft:game_event_movement_tracking", "minecraft:uses_legacy_friction",
         "minecraft:uses_uniform_air_drag", "minecraft:vibration_listener",
-        "minecraft:suspect_tracking", "minecraft:wither_target_highest_damage");
+        "minecraft:suspect_tracking", "minecraft:wither_target_highest_damage",
+        "minecraft:projectile", "minecraft:custom_hit_test", "minecraft:rail_movement",
+        "minecraft:rail_sensor", "minecraft:behavior.dragondeath",
+        "minecraft:memory_sensor.in_range_of_entity", "minecraft:memory_sensor.game_event",
+        "minecraft:memory_behavior.follow_target", "minecraft:memory_behavior.flee_threat",
+        "minecraft:memory_behavior.move_to_position");
 
     /**
      * The trade table an entity names, read while the pack it came from is still in hand.

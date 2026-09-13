@@ -87,7 +87,6 @@ public final class MolangMath {
             case "ease_in_out_bounce" -> ease(a, b, inOut(progress, 1 - bounceOut(1 - mirrored(progress))));
             case "min_angle" -> minAngle(a);
             case "sign" -> Math.signum(a);
-            case "trunc_towards_zero" -> (long) a;
             // Reading an unknown function as zero keeps one stray expression from breaking a model.
             default -> 0;
         });

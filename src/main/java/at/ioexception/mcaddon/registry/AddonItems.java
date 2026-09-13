@@ -473,9 +473,16 @@ public final class AddonItems {
         };
     }
 
-    /** The enchanted shimmer, which Java has carried as a component of its own since 1.20.5. */
+    /**
+     * The enchanted shimmer, which Java has carried as a component of its own since 1.20.5.
+     *
+     * Bedrock spells it twice over: `minecraft:glint` and the older `minecraft:foil`, which the
+     * vanilla behaviour pack still writes on both golden apples. Either one saying so is enough.
+     */
     private static Item.Properties glint(ItemDefinition definition, Item.Properties properties) {
-        if (!definition.declaredTrue("minecraft:glint")) return properties;
+        if (!definition.declaredTrue("minecraft:glint") && !definition.declaredTrue("minecraft:foil")) {
+            return properties;
+        }
 
         //? if >=1.21 {
         return properties.component(net.minecraft.core.component.DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true);
@@ -909,7 +916,7 @@ public final class AddonItems {
         "minecraft:use_modifiers", "minecraft:durability", "minecraft:max_damage",
         "minecraft:repairable", "minecraft:wearable", "minecraft:armor",
         "minecraft:hand_equipped", "minecraft:rarity", "minecraft:hover_text_color",
-        "minecraft:glint", "minecraft:fire_resistant", "minecraft:fuel",
+        "minecraft:glint", "minecraft:foil", "minecraft:fire_resistant", "minecraft:fuel",
         "minecraft:compostable", "minecraft:damage", "minecraft:weapon",
         "minecraft:digger", "minecraft:can_destroy_in_creative", "minecraft:enchantable",
         "minecraft:cooldown", "minecraft:block", "minecraft:block_placer",

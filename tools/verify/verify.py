@@ -281,7 +281,7 @@ def source_counts(names, read) -> dict:
         "sound events": events,
         "normal sidecars": normals,
         "specular sidecars": speculars,
-        "entity types": len(declared(names, "entities")),
+        "entity types": len(entity_identifiers(names, read)),
         "items": len(declared(names, "items")),
         "blocks": len(declared(names, "blocks")),
     }
@@ -334,12 +334,17 @@ def converted_directories(names, read, root: Path) -> list[Path]:
 
 
 def entity_identifiers(names, read) -> list[str]:
-    """The entity ids a behaviour pack declares, in the spelling the mod registers them under."""
+    """The entity ids a behaviour pack declares, in the spelling the mod registers them under.
+
+    A definition in the `minecraft` namespace redescribes an entity the game already has rather
+    than adding one, which the mod reports and does not register, so counting it here would leave
+    the two sides one apart and summoning it would ask the game for a second player.
+    """
     identifiers = []
     for name in declared(names, "entities"):
         description = json.loads(read(name)).get("minecraft:entity", {}).get("description", {})
         identifier = description.get("identifier")
-        if identifier and ":" in identifier:
+        if identifier and ":" in identifier and not identifier.startswith("minecraft:"):
             namespace, path = identifier.split(":", 1)
             identifiers.append(f"{sanitise(namespace)}:{sanitise(path)}")
     return sorted(identifiers)

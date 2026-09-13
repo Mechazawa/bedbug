@@ -24,33 +24,48 @@ public final class FollowKinGoal extends Goal {
 
     /** Whether walking in line here is a caravan, which a pack's `in_caravan` filter asks about. */
     private final boolean caravan;
+
+    /** Whether the one worth following is the raid captain rather than the nearest of its kind. */
+    private final boolean captain;
     private AddonEntity leader;
     private int untilRecheck;
 
     private FollowKinGoal(AddonEntity mob, JsonObject component, double range, boolean grownOnly,
-        boolean caravan) {
+        boolean caravan, boolean captain) {
 
         this.mob = mob;
         this.speed = number(component, "speed_multiplier", 1);
-        this.range = range;
+        this.range = captain ? number(component, "within_radius", range) : range;
         this.grownOnly = grownOnly;
         this.caravan = caravan;
+        this.captain = captain;
         setFlags(EnumSet.of(Goal.Flag.MOVE));
     }
 
     /** `minecraft:behavior.follow_parent`, which only a young entity acts on and only follows adults. */
     public static FollowKinGoal parent(AddonEntity mob, JsonObject component) {
-        return new FollowKinGoal(mob, component, 16, true, false);
+        return new FollowKinGoal(mob, component, 16, true, false, false);
     }
 
     /** `minecraft:behavior.follow_target_leader`, a shoal keeping up with the one in front. */
     public static FollowKinGoal leader(AddonEntity mob, JsonObject component) {
-        return new FollowKinGoal(mob, component, 12, false, false);
+        return new FollowKinGoal(mob, component, 12, false, false, false);
     }
 
     /** `minecraft:behavior.follow_caravan`, the same walk with the line itself a state of the entity. */
     public static FollowKinGoal caravan(AddonEntity mob, JsonObject component) {
-        return new FollowKinGoal(mob, component, 12, false, true);
+        return new FollowKinGoal(mob, component, 12, false, true, false);
+    }
+
+    /**
+     * `minecraft:behavior.follow_target_captain`, a raider walking behind whoever leads the raid.
+     *
+     * The captain is the one carrying `minecraft:is_illager_captain`, which the pack switches on
+     * through a component group, so what marks it is a value on the entity rather than a type of
+     * its own: two raiders of one type and only one of them a captain is the whole point.
+     */
+    public static FollowKinGoal captain(AddonEntity mob, JsonObject component) {
+        return new FollowKinGoal(mob, component, 64, false, false, true);
     }
 
     @Override
@@ -91,9 +106,14 @@ public final class FollowKinGoal extends Goal {
     private AddonEntity nearest() {
         List<AddonEntity> kin = mob.level().getEntitiesOfClass(AddonEntity.class,
             mob.getBoundingBox().inflate(range),
-            other -> other != mob && other.getType() == mob.getType()
+            other -> other != mob && worthFollowing(other)
                 && (!grownOnly || !other.isBaby()));
         return kin.stream().min(java.util.Comparator.comparingDouble(mob::distanceToSqr)).orElse(null);
+    }
+
+    private boolean worthFollowing(AddonEntity other) {
+        return captain ? Boolean.TRUE.equals(other.value("is_illager_captain"))
+            : other.getType() == mob.getType();
     }
 
     private static double number(JsonObject component, String key, double fallback) {

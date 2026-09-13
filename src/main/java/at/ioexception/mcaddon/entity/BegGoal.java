@@ -18,7 +18,7 @@ import java.util.EnumSet;
  * Stares at whoever is holding food it wants.
  *
  * `minecraft:behavior.beg` names the food and how long the stare lasts. A pack draws the begging
- * off `q.is_begging`, which stands for as long as the player keeps holding something on the list.
+ * off `q.is_interested`, which stands for as long as the player keeps holding something on the list.
  */
 public final class BegGoal extends Goal {
     private final AddonEntity mob;
@@ -58,7 +58,7 @@ public final class BegGoal extends Goal {
     @Override
     public void start() {
         lookingFor = Goals.between(mob.getRandom(), shortestLook, longestLook);
-        mob.setValue("is_begging", true);
+        mob.setValue("is_interested", true);
     }
 
     @Override
@@ -71,7 +71,7 @@ public final class BegGoal extends Goal {
     public void stop() {
         begged = null;
         lookingFor = 0;
-        mob.setValue("is_begging", false);
+        mob.setValue("is_interested", false);
     }
 
     private boolean holdingSomethingLiked(Player player) {
