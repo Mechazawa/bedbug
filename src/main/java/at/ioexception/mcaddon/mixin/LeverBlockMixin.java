@@ -20,13 +20,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(LeverBlock.class)
 public abstract class LeverBlockMixin {
     //? if >=1.21 {
-    @Inject(method = "pull", at = @At("HEAD"), require = 0)
+    @Inject(method = "pull", at = @At("HEAD"))
     private void mcaddon$pulled(BlockState state, Level level, BlockPos position, Player player,
         CallbackInfo info) {
         if (!level.isClientSide()) WorldEvents.leverPulled(level, position, player);
     }
     //?} else {
-    /*@Inject(method = "pull", at = @At("HEAD"), require = 0)
+    /*@Inject(method = "pull", at = @At("HEAD"))
     private void mcaddon$pulled(BlockState state, Level level, BlockPos position,
         org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<BlockState> info) {
         if (!level.isClientSide()) WorldEvents.leverPulled(level, position, null);

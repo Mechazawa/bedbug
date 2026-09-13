@@ -18,6 +18,11 @@ export JAVA_HOME=/opt/homebrew/opt/openjdk@25   # required: the 26.2 target need
 
 Jars land in `versions/<minecraft>/build/libs/`. Gradle downloads the JDKs each version needs.
 
+**A dev run carries other mods.** `companionMods()` in the two buildscripts installs Sodium, Iris,
+Lithium, Ferrite Core and the rest into every `runClient`, `runServer` and `runGameTest`, so what
+starts is a modded game rather than this mod alone. None of them is compiled against and none is in
+the jar. `verify.py companions` is the mode that reads their half of the log back.
+
 Running two `:<version>:compileJava` tasks back to back in one shell hits a Loom cache lock and
 reports a failure that is not real. Use `./gradlew build`, or one version at a time.
 
@@ -254,6 +259,7 @@ These are the checks it runs, and what each one catches:
   python3 tools/verify/verify.py client --version 1.21.1 # a client, one version
   python3 tools/verify/verify.py join --version 26.2     # a client connected to a server
   python3 tools/verify/verify.py convert --source <extracted pack directory>   # no game
+  python3 tools/verify/verify.py companions --version 26.2  # a server and a client beside other mods
   ```
 
   A green `run` proves the mod started, every mixin applied, the packs converted and registered, the
@@ -399,6 +405,52 @@ These are the checks it runs, and what each one catches:
 
   With no `.mcaddon` in `versions/<version>/run/addons/`, every mode reports that there was nothing
   to test and still passes.
+
+  A green `companions` proves this mod behaves beside the mods a player is likely to have. It runs
+  the same server and the same client, and reads three more things out of each log:
+
+  - Every mod the version's `gradle.properties` pins for this side really loaded. A mod whose own
+    manifest says it draws is left out of a server run by Fabric with nothing written about it, so
+    `COMPANION_IDS` in `verify.py` states which side each one belongs to and a run asks only for
+    the mods that side was ever going to load.
+  - No injector lost its target. Mixin logs that at `WARN`, so the error check never sees it, and an
+    injector that found nothing is a feature switched off in silence. One naming this mod's own
+    configuration fails the run. One naming a neighbour fails it too, unless the whole target class
+    is absent, which is what a mod's optional integration with a mod nobody installed looks like.
+  - Fabric resolved the set at all. `Mod resolution failed` means the run proved nothing about
+    anybody.
+
+  The mods themselves are `companionMods()` in `build.remap.gradle.kts` and `build.named.gradle.kts`,
+  each pinned by exact version in `versions/<version>/gradle.properties` and installed only for a dev
+  run. They are chosen for overlap with what this mod touches: Sodium, Iris and Indium replace the
+  renderers, Lithium rewrites the entity, explosion, piston and chest paths this mod injects into,
+  Ferrite Core repacks the block state storage, Entity Texture Features and Entity Model Features
+  both extend the living entity renderer this mod adds a layer to, C2ME moves chunk loading onto
+  other threads, and Lithostitched and Terralith write dynamic registry entries from packs of their
+  own. A version with no build of one leaves the property empty.
+
+  **The two remapped targets carry fewer of them.** Loom remaps a mod for 1.20.1 and 1.21.1 and
+  drops the libraries that mod ships inside itself, so C2ME, Lithostitched and Terralith do not
+  start there and their properties are empty. 26.1.2 and 26.2 need no remapping and carry the
+  whole set, so run `companions` against 26.2 to exercise all of them.
+
+  **What the companions cost.** A 26.2 dev client loads 95 mods with the whole set and a 1.21.1 one
+  loads 63 with the ones that work there, against the handful Fabric API alone brings. The
+  extra mods are downloaded once and cached. Terralith replaces overworld generation, so the first
+  world a version makes takes longer than a vanilla one and every later run opens the world it left.
+  Nothing about the jar changes: none of them is compiled against.
+
+  **`PrimaryLevelDataMixin` masks this.** It reports an experimental world and opens it anyway in a
+  development environment, so a companion writing a dynamic registry entry from a pack with no
+  `KnownPack` shows up as its `ERROR` line rather than as a screen. Read the line; do not read a
+  world that opened as proof the entry was stable.
+
+  **A world the dedicated server made is one a client stops in front of.** `check_client` copies one
+  out of `versions/<version>/run/world` when `saves/` is empty, and that `level.dat` carries
+  `WasModded`, which is a second question `PrimaryLevelDataMixin` does not answer. Such a run reports
+  `the world never opened` whatever else is installed: a 1.21.1 client with every companion property
+  blanked, 57 mods in the game, stops at the same point as one with all of them. Read that line as
+  the world rather than as the mods.
 
 - **`tools/scene/scene.py`** runs a scene inside the game with nobody at the keyboard. `verify.py`
   types into a server console, which reaches everything a server can be asked and nothing a player

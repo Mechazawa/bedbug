@@ -58,6 +58,9 @@ if [ "$quick" -eq 0 ]; then
         python3 tools/testpack/build_blockprobe.py --version "$version" >/dev/null
     done
     step "servers and clients" python3 tools/verify/verify.py all
+    # 26.2 alone, because it is the one target that carries every companion mod: the two remapped
+    # targets lose the ones that ship libraries inside themselves.
+    step "beside other mods" python3 tools/verify/verify.py companions --version 26.2
 fi
 
 if [ "$scenes" -eq 1 ]; then

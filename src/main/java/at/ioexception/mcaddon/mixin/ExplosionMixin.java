@@ -72,6 +72,8 @@ public abstract class ExplosionMixin {
         if (level.isClientSide()) return;
 
         if (WorldEvents.explosionRefused(level, source, getToBlow())) {
+            // This list belongs to the explosion rather than to whoever asked for one, and the
+            // explosion is over, so emptying it is what leaves the blocks standing.
             getToBlow().clear();
             info.cancel();
         }

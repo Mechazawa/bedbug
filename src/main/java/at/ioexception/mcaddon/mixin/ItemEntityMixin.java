@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /** Tells a pack's script who picked something up, which Fabric has no callback for. */
 @Mixin(ItemEntity.class)
 public abstract class ItemEntityMixin {
-    @Inject(method = "playerTouch", at = @At("HEAD"), cancellable = true, require = 0)
+    @Inject(method = "playerTouch", at = @At("HEAD"), cancellable = true)
     private void mcaddon$pickedUp(Player player, CallbackInfo info) {
         ItemEntity self = (ItemEntity) (Object) this;
         if (self.level().isClientSide()) return;

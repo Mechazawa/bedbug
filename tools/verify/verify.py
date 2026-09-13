@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Checks the mod against a real add-on and prints a pass or fail verdict.
 
-Four modes. `run` starts a dev server for one or more versions, types a scripted sequence of console
+Five modes. `run` starts a dev server for one or more versions, types a scripted sequence of console
 commands into it, and reads the output back for the failures that only appear at runtime: a pack's
 JavaScript hitting a missing API, a mixin that did not apply, the script engine entered from a
 second thread, a converted function Java refused, a crash report being written. `client` opens a
@@ -9,7 +9,9 @@ saved world in a dev client, which is the half that draws. `join` puts the two t
 server with the packs installed, and a client that connects to it over 127.0.0.1, which is the only
 way to reach what a server sends a client and what a pack's registry entries cost to send. `convert`
 compares what the converter wrote under a version's run directory against what the source pack
-holds, and needs no game.
+holds, and needs no game. `companions` runs the server and the client again and reads the log back
+for the other mods in the room as well: that every mod a version pins really loaded, and that no
+injector on either side lost its target while the other was there.
 
 The server is always killed on a deadline this script keeps itself. A `stop` typed while the server
 is still starting is discarded, so a run that waited for the process to end on its own would hang.
@@ -123,6 +125,45 @@ LOST_CONNECTION = re.compile(r"lost connection: (.+)")
 # What a client says about an entry the server holds and it does not, naming the registry it looked
 # in. A client that never read the packs writes one of these per entry the packs declare.
 MISSING_ENTRY = re.compile(r"is missing from local registry \((minecraft:[a-z_]+)\)")
+
+# The mods a version's `gradle.properties` pins, under the id Fabric Loader knows each of them by
+# and the half of the game each belongs to. A property is read by its Modrinth slug and a mod names
+# itself something else, so the pairing is written out rather than guessed at. A mod whose own
+# manifest says it draws is left out of a server with nothing said about it, which is why the side
+# is here: a run can only ask for the mods that side was ever going to load.
+COMPANION_IDS = {
+    "sodium": ("sodium", "client"),
+    "iris": ("iris", "client"),
+    "indium": ("indium", "client"),
+    "entitytexturefeatures": ("entity_texture_features", "client"),
+    "entity-model-features": ("entity_model_features", "client"),
+    "modmenu": ("modmenu", "client"),
+    "lithium": ("lithium", "both"),
+    "ferrite-core": ("ferritecore", "both"),
+    "c2me-fabric": ("c2me", "both"),
+    "lithostitched": ("lithostitched", "both"),
+    "terralith": ("terralith", "both"),
+}
+
+# One entry of the list Fabric Loader prints as it starts, which is the only statement of what is
+# really in the room. A nested mod is written under its parent with a rule in front of it.
+MOD_ENTRY = re.compile(r"^[\s|`\\-]*-+\s*([a-z0-9_][a-z0-9_.\-]*)\s+\S")
+
+# Fabric refusing to start because a mod is missing something it depends on, which is a problem with
+# what the companion list pins rather than with anything this mod did.
+RESOLUTION_FAILED = re.compile(r"Mod resolution failed|Incompatible mods found")
+
+# The mixin configuration a failure line names, which says whose mixin it was.
+BLAMED_CONFIG = re.compile(r"([a-z0-9_.\-]+\.mixins\.json)")
+
+# An injector that found nothing, which is how a hook goes off in silence. Mixin logs it at `WARN`,
+# so the error check never sees it.
+NO_INJECTION = re.compile(r"(?:Critical injection failure|Injection validation failed"
+                          r"|@Mixin target \S+ was not found|Could not find any target)")
+
+# A mixin whose whole target class is absent, which every mod that ships an integration with a mod
+# the player has not installed logs on every start. Blamed on its owner rather than on this mod.
+OPTIONAL_INTEGRATION = re.compile(r"@Mixin target \S+ was not found")
 
 # The console's answer to `give`, which says the item exists and was handed to somebody.
 GAVE = re.compile(r"Gave \d+ .* to ")
@@ -798,6 +839,9 @@ def check_server(root: Path, version: str, timeout: float, summons: int, verbose
         return verdict
 
     addons, identifiers, expected = addon_source(root, version, verdict)
+    # A fresh checkout has no `eula.txt`, and a server without one prints a line about it and
+    # stops, which reads as a mod that would not load rather than as a file nobody wrote yet.
+    takeLocalJoins(root, version)
     free_world_lock(root, version)
     script = console_script(identifiers, summons)
     lines, log, outcome = play(root, version, SERVER, SERVER.ready, script, timeout, 0.0, verbose)
@@ -872,6 +916,112 @@ def check_client(root: Path, version: str, timeout: float, hold: float, verbose:
         verdict.notes.append(f"{definitions} add-on entities have a client definition")
 
     return verdict
+
+
+def companions_pinned(root: Path, version: str, side: str) -> dict[str, str]:
+    """The mods this version's properties ask for on one side, as mod id against the version pinned."""
+    settings = root / "versions" / version / "gradle.properties"
+    pinned: dict[str, str] = {}
+    for line in settings.read_text().splitlines():
+        name, _, value = line.partition("=")
+        slug = name.strip().removeprefix("deps.")
+        if not name.strip().startswith("deps.") or slug not in COMPANION_IDS or not value.strip():
+            continue
+        identifier, belongs = COMPANION_IDS[slug]
+        if belongs == "both" or belongs == side:
+            pinned[identifier] = value.strip()
+    return pinned
+
+
+def loaded_mods(lines: list[str]) -> set[str]:
+    """Every mod id Fabric Loader listed as it started."""
+    found = set()
+    for line in lines:
+        match = MOD_ENTRY.match(line)
+        if match:
+            found.add(match.group(1))
+    return found
+
+
+def companions_ran(lines: list[str], pinned: dict[str, str], verdict: Verdict) -> None:
+    """Every mod the properties pin has to have loaded, or the run proves nothing about it."""
+    if not pinned:
+        verdict.notes.append("no companion mod is pinned for this version")
+        return
+
+    for line in lines:
+        if RESOLUTION_FAILED.search(line):
+            verdict.fail("the mod set would not resolve",
+                         "Fabric refused the set of mods, so nothing about them was tested",
+                         [line.strip()])
+            return
+
+    loaded = loaded_mods(lines)
+    missing = sorted(name for name in pinned if name not in loaded)
+    if missing:
+        verdict.fail("a pinned companion never loaded",
+                     "pinned in gradle.properties and absent from the loader's own list: "
+                     + ", ".join(missing))
+    present = sorted(name for name in pinned if name in loaded)
+    verdict.notes.append(f"{len(present)} of {len(pinned)} companion mods this side loaded: "
+                         + ", ".join(present))
+    verdict.notes.append(f"{len(loaded)} mods in the game altogether")
+
+
+def blamed_configs(lines: list[str], verdict: Verdict) -> None:
+    """Which mod's mixins a failure named, so a neighbour breaking is read as loudly as this one.
+
+    A mixin that finds no target is logged at `WARN` and takes a feature off without failing
+    anything, so the line is read here rather than left to the error check.
+
+    A mixin whose whole target class is absent belongs to a mod's own optional integration with a
+    mod nobody installed, so for a neighbour it is a note. Anything naming this mod's own
+    configuration is a failure whichever shape it takes.
+    """
+    ours = "mcaddon"
+    blamed: dict[str, int] = {}
+    for number, line in enumerate(lines, start=1):
+        if not NO_INJECTION.search(line):
+            continue
+        for config in BLAMED_CONFIG.findall(line):
+            owner = config.split(".")[0]
+            blamed[owner] = blamed.get(owner, 0) + 1
+            if owner.startswith(ours):
+                verdict.fail("an injector of this mod found no target",
+                             "the hook is off and nothing else said so", [f"{number}: {line.strip()}"])
+            elif not OPTIONAL_INTEGRATION.search(line):
+                verdict.fail("an injector of another mod found no target",
+                             f"{owner} lost a hook while this mod was in the room",
+                             [f"{number}: {line.strip()}"])
+    if blamed:
+        verdict.notes.append("mixin configurations named in warnings: "
+                             + ", ".join(f"{name} x{count}" for name, count in sorted(blamed.items())))
+
+
+def check_companions(root: Path, version: str, timeout: float, summons: int, hold: float,
+                     verbose: bool) -> list[Verdict]:
+    """Runs a server and a client beside the mods this one is meant to work with.
+
+    The companions are already on the run classpath, so this starts the same two games `run` and
+    `client` do. What it adds is reading the log back for the neighbours as well: that each pinned
+    mod really loaded, and that no injector on either side lost its target while the other was
+    there.
+    """
+    found = [check_server(root, version, timeout, summons, verbose),
+             check_client(root, version, timeout, hold, verbose)]
+
+    for verdict, name in zip(found, ("server", "client")):
+        pinned = companions_pinned(root, version, name)
+        verdict.subject = f"{version} {name} beside {len(pinned)} companion mods"
+        log = root / "build" / "verify" / f"{version}-{name}.log"
+        if not log.is_file():
+            verdict.fail("no log to read the companions out of", f"{log} was never written")
+            continue
+
+        lines = log.read_text(errors="replace").splitlines()
+        companions_ran(lines, pinned, verdict)
+        blamed_configs(lines, verdict)
+    return found
 
 
 def restore(installed: Path, withheld: Path) -> None:
@@ -1121,10 +1271,12 @@ def report(verdicts: list[Verdict], destination: Path) -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=USAGE)
-    parser.add_argument("mode", choices=("run", "client", "join", "convert", "all"),
+    parser.add_argument("mode", choices=("run", "client", "join", "convert", "companions", "all"),
                         help="`run` drives a dev server, `client` a dev client, `join` connects one "
-                             "to the other, `convert` compares a conversion offline, "
-                             "`all` does the four in turn")
+                             "to the other, `convert` compares a conversion offline, `companions` "
+                             "runs a server and a client beside the mods this one is meant to work "
+                             "with and reads their failures back as well as this mod's, "
+                             "`all` does run, client, join and convert in turn")
     parser.add_argument("--version", action="append", choices=VERSIONS,
                         help="a Minecraft version to check; repeatable, all three by default")
     parser.add_argument("--source", type=Path,
@@ -1148,10 +1300,13 @@ def main() -> int:
     # One lock per version, because a server and a client of the same version share a world, and
     # the four versions share nothing: four directories, four ports, four sets of processes. They
     # are checked at the same time, which is most of what a whole run costs.
-    if arguments.mode in ("run", "client", "join", "all"):
+    if arguments.mode in ("run", "client", "join", "companions", "all"):
         def checkVersion(version: str) -> list[Verdict]:
             found = []
             with exclusive(root, arguments.lock_wait, version):
+                if arguments.mode == "companions":
+                    return check_companions(root, version, arguments.timeout, arguments.summons,
+                                            arguments.hold, arguments.verbose)
                 if arguments.mode in ("run", "all"):
                     found.append(check_server(
                         root, version, arguments.timeout, arguments.summons, arguments.verbose))
