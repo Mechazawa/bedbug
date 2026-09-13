@@ -79,6 +79,12 @@ before saying a change is done.
 being checked rather than as what it is. `--quick` stops after the build and the censuses; `--scenes` adds the
 in-game scenes, which open a window.
 
+**A worktree that has been built in costs about a gigabyte and a half.** Four versions of Minecraft,
+their libraries and their run directories are all per checkout, so a handful of worktrees left
+around fills a disk, and everything then fails at once in ways that look like anything but a full
+disk. Remove a worktree as soon as its branch is merged: `git worktree remove --force <path>`, or
+`rm -rf <worktree>/versions/*/build` to keep the checkout and drop only what a build can make again.
+
 These are the checks it runs, and what each one catches:
 
 - **`./gradlew build`** compiles all four versions and runs every test on each of them: the unit
