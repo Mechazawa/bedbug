@@ -12,6 +12,29 @@
       "minecraft:dyeable": {
         "default_color": "#4C8FD1"
       },
+      "minecraft:piercing_weapon": {
+        "reach": {
+          "min": 0,
+          "max": 4
+        },
+        "creative_reach": {
+          "min": 0,
+          "max": 6
+        },
+        "hitbox_margin": 0.125
+      },
+      "minecraft:kinetic_weapon": {
+        "delay": 2,
+        "damage_multiplier": 1.5,
+        "damage_conditions": {
+          "max_duration": -1,
+          "min_relative_speed": 0.2
+        },
+        "knockback_conditions": {
+          "max_duration": 20,
+          "min_speed": 0.1
+        }
+      },
       "minecraft:display_name": {
         "value": "item.tp:shard.name"
       }

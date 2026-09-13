@@ -17,8 +17,8 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * What a pack has stored: world and entity dynamic properties, and the entity properties a behaviour
- * pack declares.
+ * What a pack has stored: the dynamic properties of the world, of an entity and of a single block,
+ * and the entity properties a behaviour pack declares.
  *
  * This lives in a file beside the world rather than in entity NBT, which keeps it out of the way of
  * the save format and lets the same code run on all three Minecraft versions. Entity properties are
@@ -32,6 +32,7 @@ public final class AddonState {
     private final Map<String, Object> world = new LinkedHashMap<>();
     private final Map<UUID, Map<String, Object>> entityDynamic = new HashMap<>();
     private final Map<UUID, Map<String, Object>> entityProperties = new HashMap<>();
+    private final Map<String, Map<String, Object>> blockDynamic = new LinkedHashMap<>();
     private boolean dirty;
 
     private AddonState(Path file) {
@@ -47,6 +48,7 @@ public final class AddonState {
             readInto(root.getAsJsonObject("world"), state.world);
             readEntities(root.getAsJsonObject("entityDynamic"), state.entityDynamic);
             readEntities(root.getAsJsonObject("entityProperties"), state.entityProperties);
+            readBlocks(root.getAsJsonObject("blockDynamic"), state.blockDynamic);
         } catch (IOException | RuntimeException error) {
             McAddon.LOGGER.error("Could not read {}; starting from empty add-on state.", file, error);
         }
@@ -57,8 +59,9 @@ public final class AddonState {
         if (!dirty) return;
         JsonObject root = new JsonObject();
         root.add("world", GSON.toJsonTree(world));
-        root.add("entityDynamic", writeEntities(entityDynamic));
-        root.add("entityProperties", writeEntities(entityProperties));
+        root.add("entityDynamic", writeGroups(entityDynamic));
+        root.add("entityProperties", writeGroups(entityProperties));
+        root.add("blockDynamic", writeGroups(blockDynamic));
 
         try {
             Files.createDirectories(file.getParent());
@@ -111,6 +114,28 @@ public final class AddonState {
         dirty |= entityProperties.remove(entity) != null;
     }
 
+    /** Where one block's own store is filed: the dimension it stands in and the position it holds. */
+    public static String blockKey(String dimension, int x, int y, int z) {
+        return dimension + " " + x + " " + y + " " + z;
+    }
+
+    public Object blockProperty(String block, String name) {
+        return blockDynamic.getOrDefault(block, Map.of()).get(name);
+    }
+
+    public void setBlockProperty(String block, String name, Object value) {
+        put(blockDynamic.computeIfAbsent(block, key -> new LinkedHashMap<>()), name, value);
+    }
+
+    public Set<String> blockPropertyNames(String block) {
+        return blockDynamic.getOrDefault(block, Map.of()).keySet();
+    }
+
+    /** Called when the block standing there is gone, which is where Bedrock ends its store too. */
+    public void forgetBlock(String block) {
+        dirty |= blockDynamic.remove(block) != null;
+    }
+
     public int worldPropertyBytes() {
         return world.entrySet().stream()
             .mapToInt(entry -> entry.getKey().length() + String.valueOf(entry.getValue()).length())
@@ -147,10 +172,20 @@ public final class AddonState {
         }
     }
 
-    private static JsonObject writeEntities(Map<UUID, Map<String, Object>> source) {
+    private static void readBlocks(JsonObject source, Map<String, Map<String, Object>> target) {
+        if (source == null) return;
+        for (Map.Entry<String, JsonElement> entry : source.entrySet()) {
+            if (!entry.getValue().isJsonObject()) continue;
+            Map<String, Object> values = new LinkedHashMap<>();
+            readInto(entry.getValue().getAsJsonObject(), values);
+            target.put(entry.getKey(), values);
+        }
+    }
+
+    private static <K> JsonObject writeGroups(Map<K, Map<String, Object>> source) {
         JsonObject result = new JsonObject();
-        source.forEach((entity, values) -> {
-            if (!values.isEmpty()) result.add(entity.toString(), GSON.toJsonTree(values));
+        source.forEach((owner, values) -> {
+            if (!values.isEmpty()) result.add(String.valueOf(owner), GSON.toJsonTree(values));
         });
         return result;
     }

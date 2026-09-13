@@ -135,7 +135,8 @@ public final class AddonBlocks {
         "minecraft:placement_filter", "minecraft:redstone_producer", "minecraft:redstone_consumer",
         "minecraft:liquid_detection", "minecraft:destruction_particles",
         "minecraft:flower_pottable", "minecraft:unit_cube", "minecraft:item_visual",
-        "minecraft:leashable", "minecraft:custom_components");
+        "minecraft:leashable", "minecraft:custom_components",
+        "minecraft:breathability", "minecraft:embedded_visual", "minecraft:block_entity");
 
     private static Identifier identifier(String bedrock) {
         Names.Identifier split = Names.split(bedrock, "minecraft");

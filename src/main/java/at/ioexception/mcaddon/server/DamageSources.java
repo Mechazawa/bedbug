@@ -58,9 +58,14 @@ public final class DamageSources {
     private DamageSources() {
     }
 
+    /** The name Bedrock's `EntityDamageCause` gives what a Java damage source says did the damage. */
+    public static String causeOf(DamageSource source) {
+        return CAUSES.getOrDefault(source.getMsgId(), "none");
+    }
+
     public static Map<String, Object> describe(DamageSource source) {
         Map<String, Object> described = new LinkedHashMap<>();
-        described.put("cause", CAUSES.getOrDefault(source.getMsgId(), "none"));
+        described.put("cause", causeOf(source));
         if (source.getEntity() != null) {
             described.put("damagingEntity", ScriptHost.EntityHandle.of(source.getEntity()));
         }

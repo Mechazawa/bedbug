@@ -42,6 +42,7 @@ public final class AddonItems {
     private static final List<Item> DYEABLE = new ArrayList<>();
     private static final Set<Item> KEPT = new HashSet<>();
     private static final Map<Item, String> PROJECTILES = new LinkedHashMap<>();
+    private static final Map<Item, Set<String>> ABSORBED = new LinkedHashMap<>();
 
     private AddonItems() {
     }
@@ -122,7 +123,58 @@ public final class AddonItems {
 
         fuel(definition, item);
         compostable(definition, item);
+        absorption(definition, item);
     }
+
+    /**
+     * Remembers what a worn item takes the damage for, where it can spend durability on it.
+     *
+     * `minecraft:damage_absorption` counts the absorbed hit against the item's own durability, so
+     * an item the pack gave none of has nothing to spend and is reported as a gap instead.
+     */
+    private static void absorption(ItemDefinition definition, Item item) {
+        List<String> causes = definition.absorbedCauses();
+        if (causes.isEmpty()) return;
+
+        if (definition.durability() <= 0) {
+            AddonEntities.unsupported("minecraft:damage_absorption without durability");
+            return;
+        }
+        ABSORBED.put(item, Set.copyOf(causes));
+    }
+
+    /**
+     * Spends a worn item's durability instead of hurting whoever wears it.
+     *
+     * Bedrock ignores whatever damage is left over once the item has taken what it can, so a hit an
+     * armour slot absorbs never reaches the wearer at all. The item breaks where the hit costs more
+     * than it has left, which is what spends the last of its durability.
+     */
+    public static boolean absorbed(net.minecraft.world.entity.LivingEntity hurt,
+        net.minecraft.world.damagesource.DamageSource source, float amount) {
+        if (ABSORBED.isEmpty()) return false;
+
+        String cause = at.ioexception.mcaddon.server.DamageSources.causeOf(source);
+        for (EquipmentSlot slot : ARMOUR) {
+            net.minecraft.world.item.ItemStack worn = hurt.getItemBySlot(slot);
+            Set<String> causes = ABSORBED.get(worn.getItem());
+            if (causes == null || !worn.isDamageableItem()) continue;
+            if (!causes.contains(cause) && !causes.contains("all")) continue;
+
+            int spent = worn.getDamageValue() + Math.max(1, (int) Math.ceil(amount));
+            if (spent >= worn.getMaxDamage()) {
+                worn.shrink(1);
+            } else {
+                worn.setDamageValue(spent);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    /** The slots Bedrock takes an absorbing item from, which are the ones armour is worn in. */
+    private static final List<EquipmentSlot> ARMOUR = List.of(EquipmentSlot.HEAD,
+        EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET);
 
     /**
      * Which Java item class this becomes.
@@ -186,6 +238,9 @@ public final class AddonItems {
         properties = cooldown(definition, properties);
         properties = repairable(definition, properties);
         properties = dyeable(definition, properties);
+        properties = piercing(definition, properties);
+        properties = kinetic(definition, properties);
+        properties = reach(definition, properties);
         return weapon(definition, properties);
     }
 
@@ -465,6 +520,87 @@ public final class AddonItems {
     }
 
     /**
+     * A weapon that hits everything standing in a line, which Java carries as a component from 26.
+     *
+     * Bedrock says only how far the line reaches, which is the reach component beside this one.
+     * Whether the hit pushes its targets back and whether it unseats a rider are Java's own, and
+     * are answered the way Java's own piercing weapon answers them.
+     */
+    private static Item.Properties piercing(ItemDefinition definition, Item.Properties properties) {
+        if (!definition.components().containsKey("minecraft:piercing_weapon")) return properties;
+
+        //? if >=26 {
+        return properties.component(net.minecraft.core.component.DataComponents.PIERCING_WEAPON,
+            new net.minecraft.world.item.component.PiercingWeapon(true, false,
+                java.util.Optional.empty(), java.util.Optional.empty()));
+        //?} else {
+        /*return properties;
+        *///?}
+    }
+
+    /**
+     * A weapon whose damage comes from how fast its user and its target close on each other.
+     *
+     * Both editions hold the item to use it and count the damage off the two velocities along the
+     * view vector. `damage_modifier` adds to the scaled result and Java's component has nowhere to
+     * put it, so it is reported rather than silently dropped. The pause before the same target may
+     * be hit again is Java's own, as is how far the held model lunges.
+     */
+    private static Item.Properties kinetic(ItemDefinition definition, Item.Properties properties) {
+        if (!definition.components().containsKey("minecraft:kinetic_weapon")) return properties;
+        if (definition.number("minecraft:kinetic_weapon", "damage_modifier", 0f) != 0f) {
+            AddonEntities.unsupported("minecraft:kinetic_weapon damage_modifier");
+        }
+
+        //? if >=26 {
+        return properties.component(net.minecraft.core.component.DataComponents.KINETIC_WEAPON,
+            new net.minecraft.world.item.component.KineticWeapon(SAME_TARGET_PAUSE,
+                (int) definition.number("minecraft:kinetic_weapon", "delay", 0f),
+                condition(definition, "dismount_conditions"),
+                condition(definition, "knockback_conditions"),
+                condition(definition, "damage_conditions"),
+                0f, definition.number("minecraft:kinetic_weapon", "damage_multiplier", 1f),
+                java.util.Optional.empty(), java.util.Optional.empty()));
+        //?} else {
+        /*return properties;
+        *///?}
+    }
+
+    /** How long a kinetic weapon leaves a target alone after hitting it, in ticks. */
+    private static final int SAME_TARGET_PAUSE = 10;
+
+    //? if >=26 {
+    /** One `*_conditions` block, absent where the pack declared none and the effect never applies. */
+    private static java.util.Optional<net.minecraft.world.item.component.KineticWeapon.Condition>
+        condition(ItemDefinition definition, String field) {
+        ItemDefinition.KineticCondition declared = definition.kineticCondition(field);
+        return declared == null ? java.util.Optional.empty()
+            : java.util.Optional.of(new net.minecraft.world.item.component.KineticWeapon.Condition(
+                declared.durationTicks(), declared.speed(), declared.relativeSpeed()));
+    }
+    //?}
+
+    /**
+     * How far a piercing or kinetic weapon reaches, and how wide a miss it forgives.
+     *
+     * Bedrock states the reach on the weapon component itself and Java carries it separately, so
+     * one component's range becomes the range of every attack made with the item.
+     */
+    private static Item.Properties reach(ItemDefinition definition, Item.Properties properties) {
+        ItemDefinition.Reach declared = definition.reach("minecraft:piercing_weapon");
+        if (declared == null) declared = definition.reach("minecraft:kinetic_weapon");
+        if (declared == null) return properties;
+
+        //? if >=26 {
+        return properties.component(net.minecraft.core.component.DataComponents.ATTACK_RANGE,
+            new net.minecraft.world.item.component.AttackRange(declared.min(), declared.max(),
+                declared.creativeMin(), declared.creativeMax(), declared.margin(), 1f));
+        //?} else {
+        /*return properties;
+        *///?}
+    }
+
+    /**
      * A weapon spends a point of durability on every swing, which is the whole of what Java's own
      * weapon component carries.
      */
@@ -644,7 +780,8 @@ public final class AddonItems {
         "minecraft:seed", "minecraft:entity_placer", "minecraft:throwable",
         "minecraft:projectile", "minecraft:dyeable", "minecraft:should_despawn",
         "minecraft:shooter", "minecraft:storage_item", "minecraft:bundle_interaction",
-        "minecraft:swing_duration", "minecraft:custom_components");
+        "minecraft:swing_duration", "minecraft:custom_components",
+        "minecraft:piercing_weapon", "minecraft:kinetic_weapon", "minecraft:damage_absorption");
 
     private static Identifier identifier(String bedrock) {
         Names.Identifier split = Names.split(bedrock, "minecraft");

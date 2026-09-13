@@ -76,8 +76,10 @@ public final class ServerHooks {
         });
         ServerEntityEvents.ENTITY_UNLOAD.register((entity, level) -> entityRemoved(entity));
         net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents.AFTER.register(
-            (level, player, broken, state, blockEntity) ->
-                at.ioexception.mcaddon.entity.AddonEntity.noticeBlockBroken(level, broken, state));
+            (level, player, broken, was, blockEntity) -> {
+                at.ioexception.mcaddon.entity.AddonEntity.noticeBlockBroken(level, broken, was);
+                forgetBlockStore(level, broken, was);
+            });
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> {
             at.ioexception.mcaddon.entity.AddonEntity.noticeHuntSucceeded(entity);
             Map<String, Object> fields = new LinkedHashMap<>();
@@ -101,6 +103,9 @@ public final class ServerHooks {
         WorldEvents.register();
         ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> {
             damageSensor(entity, source);
+            if (at.ioexception.mcaddon.registry.AddonItems.absorbed(entity, source, amount)) {
+                return false;
+            }
             return !hurtRefused(entity, source, amount);
         });
         Channels.receiveFormResponse((formId, answer) -> {
@@ -113,6 +118,18 @@ public final class ServerHooks {
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> playerLeft(handler.player));
         // A respawn is the other way into the world, and the flag is how a pack tells the two apart.
         ServerPlayerEvents.AFTER_RESPAWN.register((from, to, alive) -> playerSpawned(to, false));
+    }
+
+    /** A block a pack gave a store of its own takes that store with it when it is broken. */
+    private static void forgetBlockStore(net.minecraft.world.level.Level level,
+        net.minecraft.core.BlockPos position, net.minecraft.world.level.block.state.BlockState was) {
+        if (state == null) return;
+        if (!(was.getBlock() instanceof at.ioexception.mcaddon.block.AddonBlock block)) return;
+        if (!block.holdsState()) return;
+
+        state.forgetBlock(at.ioexception.mcaddon.state.AddonState.blockKey(
+            at.ioexception.mcaddon.platform.Platform.idOf(level.dimension()).toString(),
+            position.getX(), position.getY(), position.getZ()));
     }
 
     /** A pack may refuse damage outright, which is what Bedrock's before event is for. */

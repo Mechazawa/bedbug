@@ -47,10 +47,12 @@ import java.util.Map;
  * @param redstone       the signal this block puts out, or null when it puts out none
  * @param placement      what has to be beside the block for it to stay, empty when anything does
  * @param events         the pack's own events, or null when the block names none
+ * @param dynamicProperties whether a script may store values on each block of this kind separately
  */
 public record BlockComponents(VoxelShape collision, VoxelShape selection, int lightDampening,
     Component craftingTitle, int catchChance, int destroyChance, Redstone redstone,
-    List<Placement> placement, BlockEvents events, List<String> scripted) {
+    List<Placement> placement, BlockEvents events, List<String> scripted,
+    boolean dynamicProperties) {
 
     /** The explosion resistance Java gives bedrock, which no blast reaches. */
     private static final float BLAST_PROOF = 3600000f;
@@ -88,7 +90,8 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
             burns ? (int) number(components, "minecraft:flammable", "catch_chance_modifier", 5) : -1,
             (int) number(components, "minecraft:flammable", "destroy_chance_modifier", 20),
             redstone(components), placement(components),
-            BlockEvents.of(definition, properties), scripted(components));
+            BlockEvents.of(definition, properties), scripted(components),
+            flag(components, "minecraft:block_entity", "dynamic_properties"));
     }
 
     /**
@@ -239,6 +242,11 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
             .pushReaction(pushReaction(text(components, "minecraft:movable", "movement_type")))
             .isRedstoneConductor((state, level, position) -> conductor);
 
+        // `minecraft:breathability` of `air` puts a mob standing inside the block in breathable
+        // space, which Java says by not suffocating it there. `solid` is the default in both.
+        if ("air".equals(breathability(components))) {
+            properties = properties.isSuffocating((state, level, position) -> false);
+        }
         if (definition.transparent()) properties = properties.noOcclusion();
         if (components.has("minecraft:replaceable")) properties = properties.replaceable();
         if (components.has("minecraft:random_ticking")) properties = properties.randomTicks();
@@ -258,6 +266,12 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
 
         MapColor colour = mapColour(components);
         return colour == null ? properties : properties.mapColor(colour);
+    }
+
+    /** The component is written either as the bare word or as an object wrapping it under `value`. */
+    private static String breathability(JsonObject components) {
+        String named = text(components, "minecraft:breathability", null);
+        return named != null ? named : text(components, "minecraft:breathability", "value");
     }
 
     /** Fire spreads to and consumes this block at the rates the pack asked for. */
