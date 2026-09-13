@@ -70,7 +70,11 @@ that differs (the entity renderer, the network channels) carries two bodies inst
 
 ## Verifying a change
 
-These are the checks that catch things:
+`tools/checkall.sh` runs all of them in the order that fails fastest, which is what to reach for
+before saying a change is done. `--quick` stops after the build and the censuses; `--scenes` adds the
+in-game scenes, which open a window.
+
+These are the checks it runs, and what each one catches:
 
 - **`./gradlew build`** compiles all four versions and runs every test on each of them: the unit
   tests for the checked-out form, and the game tests for all four. The game test task builds
@@ -326,6 +330,7 @@ tools/verify/verify.py       End to end harness: drives a dev server and checks 
 tools/preview/render.py      Offline model renderer
 tools/molang/MolangCheck.java  Molang conformance harness
 tools/census/components.py   Coverage of Bedrock's published vocabulary, no pack and no game
+tools/checkall.sh            Every check, in the order that fails fastest
 tools/census/script.py       How much of the published script API this mod offers
 tools/scene/scene.py         Scenes run inside the game, with nobody at the keyboard
 
