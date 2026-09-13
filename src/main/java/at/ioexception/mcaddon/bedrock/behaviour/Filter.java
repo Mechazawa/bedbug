@@ -648,9 +648,17 @@ public sealed interface Filter {
             return PALETTE.indexOf(text()) == (stored instanceof Number number ? number.intValue() : 0);
         }
 
+        /**
+         * Whether the entity carries a component at this moment, in its own list or in a live group.
+         *
+         * Bedrock asks this of the entity rather than of its definition, and a pack writes nearly
+         * every switchable component into a component group: of the hundred and eight uses in
+         * Mojang's own behaviour pack, none names a component declared at the top level. Reading the
+         * top level alone therefore answers no to every question a published pack asks.
+         */
         private boolean component(Entity entity) {
-            ServerEntityDefinition definition = AddonEntities.definitionOf(entity.getType());
-            return definition != null && definition.components().containsKey(text());
+            return entity instanceof at.ioexception.mcaddon.entity.AddonEntity addon
+                && addon.declaresNow(text());
         }
     }
 

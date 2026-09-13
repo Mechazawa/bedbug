@@ -133,8 +133,8 @@ public final class EntityEvents {
         addon.activeGroups().addAll(change.add());
         // `q.had_component_group` is how a pack's render controller branches on a group, so the
         // drawing side is told which are on.
-        change.remove().forEach(group -> addon.setValue("group." + group, false));
-        change.add().forEach(group -> addon.setValue("group." + group, true));
+        change.remove().forEach(group -> addon.setValue(AddonEntity.GROUP + group, false));
+        change.add().forEach(group -> addon.setValue(AddonEntity.GROUP + group, true));
         // Whether the entity is still its rider's to steer is decided by the set of groups rather
         // than by any one of them, so it is answered once the whole swap is done.
         if (AddonEntities.anyoneDeclares("minecraft:out_of_control")) {
@@ -148,6 +148,10 @@ public final class EntityEvents {
                 applyComponent(entity, component.getKey(), component.getValue(), other, state);
             }
         }
+        // A marker is a fact about the whole entity rather than about the group that brought it, and
+        // a group leaving takes its markers with it, so they are worked out again over the new set.
+        addon.publishMarkers();
+        addon.refreshAge();
     }
 
     private static void applyComponent(Entity entity, String name, JsonElement body, Entity other,
@@ -171,7 +175,9 @@ public final class EntityEvents {
             case "minecraft:trust" -> {
                 if (entity instanceof AddonEntity addon && other != null) addon.trust(other.getUUID());
             }
-            case "minecraft:is_sheared", "minecraft:is_baby", "minecraft:is_dyeable" ->
+            // The markers beside this one are published over the whole live set once the swap is
+            // done, because each of them has to go false again when its group leaves.
+            case "minecraft:is_baby" ->
                 state.setProperty(entity.getUUID(), name.substring("minecraft:".length()), true);
             // A group can hand the entity a different table, so what it drops belongs to the entity
             // rather than to its type.

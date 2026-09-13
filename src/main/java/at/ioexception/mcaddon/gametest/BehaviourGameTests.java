@@ -4,6 +4,7 @@ import at.ioexception.mcaddon.entity.AddonEntity;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.registry.AddonItems;
+import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -211,6 +212,151 @@ public final class BehaviourGameTests {
 
         helper.assertTrue(spawned instanceof AddonEntity young && young.isBaby(),
             YOUNG_ENTITY + " declares minecraft:is_baby and reads as grown.");
+        helper.succeed();
+    }
+
+    /**
+     * A marker a component group brings in is published while the group is on and not after it.
+     *
+     * Bedrock states nearly every one of these inside a group rather than at the top: a horse is
+     * saddled by its saddled group going on and a sheep is sheared until its sheared group goes off
+     * again. The flag is what a render controller branches on through `query.is_saddled` to hide or
+     * show the saddle, so a flag that never arrives draws a saddled mount bare and one never cleared
+     * leaves a sheep bald after its wool has grown back.
+     */
+    @GameTest()
+    public void aMarkerFollowsTheComponentGroupThatCarriesIt(GameTestHelper helper) {
+        EntityType<?> type = AddonEntities.typeOf(ENTITY);
+        if (type == null) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        Entity spawned = Platform.createMob(type, level);
+        BlockPos at = helper.absolutePos(STAND);
+        Platform.placeAt(spawned, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        level.addFreshEntity(spawned);
+        helper.assertTrue(spawned instanceof AddonEntity, ENTITY + " is not an add-on entity.");
+        AddonEntity ember = (AddonEntity) spawned;
+
+        helper.assertTrue(!Boolean.TRUE.equals(ember.value("is_saddled")),
+            ENTITY + " reads as saddled before its saddled group is on.");
+
+        EntityEvents.trigger(ember, "tp:ember_saddle", null, ServerHooks.state());
+        helper.assertTrue(Boolean.TRUE.equals(ember.value("is_saddled")),
+            ENTITY + " gained minecraft:is_saddled from a group and reads as unsaddled.");
+
+        EntityEvents.trigger(ember, "tp:ember_unsaddle", null, ServerHooks.state());
+        helper.assertTrue(Boolean.FALSE.equals(ember.value("is_saddled")),
+            ENTITY + " lost the group carrying minecraft:is_saddled and still reads as saddled.");
+        helper.succeed();
+    }
+
+    /**
+     * `has_component` answers for a component a live group carries as well as for a declared one.
+     *
+     * A pack asks this to find out which of an entity's groups are on, because a group is the only
+     * way it can put a component on partway through. Every one of the hundred and eight uses in
+     * Mojang's own behaviour pack names a component that lives in a group, so a filter reading the
+     * declared list alone answers no to all of them and every branch behind one takes the wrong
+     * road: a creeper never knows it is charged and a sheep treats itself as grown.
+     */
+    @GameTest()
+    public void hasComponentSeesWhatAGroupBroughtIn(GameTestHelper helper) {
+        EntityType<?> type = AddonEntities.typeOf(ENTITY);
+        if (type == null) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        Entity spawned = Platform.createMob(type, level);
+        BlockPos at = helper.absolutePos(STAND);
+        Platform.placeAt(spawned, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        level.addFreshEntity(spawned);
+        helper.assertTrue(spawned instanceof AddonEntity, ENTITY + " is not an add-on entity.");
+        AddonEntity ember = (AddonEntity) spawned;
+
+        EntityEvents.trigger(ember, "tp:ember_look_for_saddle", null, ServerHooks.state());
+        helper.assertTrue(!Boolean.TRUE.equals(ember.value("tp:saddle_seen")),
+            ENTITY + " passed a has_component filter for a component no group of its had brought in.");
+
+        EntityEvents.trigger(ember, "tp:ember_saddle", null, ServerHooks.state());
+        EntityEvents.trigger(ember, "tp:ember_look_for_saddle", null, ServerHooks.state());
+        helper.assertTrue(Boolean.TRUE.equals(ember.value("tp:saddle_seen")),
+            ENTITY + " failed a has_component filter for a component its live group carries.");
+        helper.succeed();
+    }
+
+    /**
+     * The component groups an entity carries survive it being written out and read back.
+     *
+     * A group is what a pack changed about the entity rather than what it declared, and the set is
+     * held in memory, so a chunk going away and coming back is where it would be lost. Each group is
+     * stored as a property of its own, which is what reading the set again is built from. Without
+     * that, a creeper struck by lightning is uncharged the next time its chunk loads and a mount
+     * loses the saddle it was given.
+     */
+    @GameTest()
+    public void theLiveComponentGroupsSurviveTheEntityBeingReadBack(GameTestHelper helper) {
+        EntityType<?> type = AddonEntities.typeOf(ENTITY);
+        if (type == null) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        Entity spawned = Platform.createMob(type, level);
+        BlockPos at = helper.absolutePos(STAND);
+        Platform.placeAt(spawned, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        level.addFreshEntity(spawned);
+        helper.assertTrue(spawned instanceof AddonEntity, ENTITY + " is not an add-on entity.");
+        AddonEntity ember = (AddonEntity) spawned;
+
+        EntityEvents.trigger(ember, "tp:ember_saddle", null, ServerHooks.state());
+        // What a chunk load leaves behind: the stored properties, and a set built from nothing.
+        ember.activeGroups().clear();
+
+        ember.restoreGroups();
+        helper.assertTrue(ember.declaresNow("minecraft:is_saddled"),
+            ENTITY + " lost the component group it was given when its live set was built again.");
+        helper.succeed();
+    }
+
+    /**
+     * A group carrying `minecraft:ageable` makes the entity young.
+     *
+     * Only a young entity grows up, so Bedrock states the count inside the group that makes it young
+     * rather than on the entity: of the thirty-five vanilla entities that age, one writes it at the
+     * top level. Reading the top level alone leaves a pack's baby with no count at all, which draws
+     * it at the grown proportions and leaves it that size for good.
+     */
+    @GameTest()
+    public void aGroupCarryingTheAgeCountMakesTheEntityYoung(GameTestHelper helper) {
+        EntityType<?> type = AddonEntities.typeOf(ENTITY);
+        if (type == null) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        Entity spawned = Platform.createMob(type, level);
+        BlockPos at = helper.absolutePos(STAND);
+        Platform.placeAt(spawned, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        level.addFreshEntity(spawned);
+        helper.assertTrue(spawned instanceof AddonEntity, ENTITY + " is not an add-on entity.");
+        AddonEntity ember = (AddonEntity) spawned;
+
+        helper.assertTrue(!ember.isBaby(), ENTITY + " reads as young before any group says it is.");
+
+        EntityEvents.trigger(ember, "tp:ember_grow_young", null, ServerHooks.state());
+        helper.assertTrue(ember.isBaby(),
+            ENTITY + " gained minecraft:ageable from a group and still reads as grown.");
+        // The component groups stay on the server, so this property is the client's only way of
+        // knowing, and `query.is_baby` is what a render controller picks the proportions by.
+        helper.assertTrue(Boolean.TRUE.equals(ember.value("is_baby")),
+            ENTITY + " is young and never told the clients drawing it.");
         helper.succeed();
     }
 

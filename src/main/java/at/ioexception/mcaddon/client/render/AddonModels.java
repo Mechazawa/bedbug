@@ -8,6 +8,7 @@ import at.ioexception.mcaddon.bedrock.model.BedrockGeometry;
 import at.ioexception.mcaddon.bedrock.model.ControllerColour;
 import at.ioexception.mcaddon.bedrock.model.GeometryBaker;
 import at.ioexception.mcaddon.bedrock.model.MaterialDefinition;
+import at.ioexception.mcaddon.bedrock.model.PartVisibility;
 import at.ioexception.mcaddon.bedrock.model.RenderController;
 import at.ioexception.mcaddon.bedrock.model.UvShift;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
@@ -36,12 +37,11 @@ import java.util.Set;
  */
 public final class AddonModels {
     /**
-     * One pass: a baked model, the texture to draw it with, the bones it leaves out and its tint.
+     * One pass: a baked model, the texture to draw it with, the bones it draws and its tint.
      *
-     * A hidden entry may be a glob, because a costume hides a whole family of bones at once.
      * `colour` is packed ARGB and multiplies the texture, white leaving it as it is.
      */
-    public record Pass(BakedGeometry geometry, Identifier texture, Set<String> hiddenBones, UvShift shift,
+    public record Pass(BakedGeometry geometry, Identifier texture, PartVisibility visibility, UvShift shift,
         MaterialDefinition material, int colour, boolean ignoresLighting, float lightMultiplier) {
         /**
          * What this pass draws under: the light around the entity, or none of it, scaled by what
@@ -61,16 +61,6 @@ public final class AddonModels {
             return Math.min(FULL_BRIGHT & 0xFFFF, Math.round(channel * lightMultiplier));
         }
 
-        public boolean hides(String bone) {
-            for (String pattern : hiddenBones) {
-                if (pattern.endsWith("*")
-                    ? bone.startsWith(pattern.substring(0, pattern.length() - 1))
-                    : pattern.equals(bone)) {
-                    return true;
-                }
-            }
-            return false;
-        }
     }
 
     /** Both light channels at their maximum, which is how Minecraft says "lit as if by the sun". */
@@ -147,7 +137,7 @@ public final class AddonModels {
                 "{} chose no model from its render controllers; drawing its default.",
                 definition.identifier());
         }
-        return List.of(new Pass(geometry, textureId(texturePath), Set.of(),
+        return List.of(new Pass(geometry, textureId(texturePath), PartVisibility.EVERYTHING,
             UvShift.NONE, null, OPAQUE_WHITE, false, 1f));
     }
 
@@ -174,12 +164,11 @@ public final class AddonModels {
         }
         if (texture == null) return null;
 
-        // Later rules override earlier ones, which is how a costume hides a family of bones at once.
-        Set<String> hidden = new HashSet<>();
+        List<PartVisibility.Rule> visibility = new ArrayList<>();
         for (Map<String, MolangExpression> rule : controller.partVisibility()) {
             for (Map.Entry<String, MolangExpression> bone : rule.entrySet()) {
-                if (bone.getValue().evaluate(environment).truthy()) hidden.remove(bone.getKey());
-                else hidden.add(bone.getKey());
+                visibility.add(new PartVisibility.Rule(bone.getKey(),
+                    bone.getValue().evaluate(environment).truthy()));
             }
         }
         MaterialDefinition material = resolveMaterial(controller, definition, environment);
@@ -190,7 +179,7 @@ public final class AddonModels {
             number(controller.uvOffsetV(), environment, 0f),
             number(controller.uvScaleU(), environment, 1f),
             number(controller.uvScaleV(), environment, 1f));
-        return new Pass(geometry, texture, hidden, shift, material,
+        return new Pass(geometry, texture, new PartVisibility(visibility), shift, material,
             tint(controller, environment), controller.ignoresLighting(),
             number(controller.lightMultiplier(), environment, 1f));
     }
@@ -271,7 +260,7 @@ public final class AddonModels {
         int colon = glow.indexOf(':');
         Identifier texture = Platform.id(glow.substring(0, colon),
             "textures/" + glow.substring(colon + 1) + ".png");
-        return new Pass(pass.geometry(), texture, pass.hiddenBones(), pass.shift(), EMISSIVE,
+        return new Pass(pass.geometry(), texture, pass.visibility(), pass.shift(), EMISSIVE,
             pass.colour(), pass.ignoresLighting(), pass.lightMultiplier());
     }
 

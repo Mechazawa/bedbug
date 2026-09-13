@@ -311,7 +311,11 @@ public final class EntityQueries implements MolangEnvironment.Queries {
             case "is_moving" -> MolangValue.of(entity.position()
                 .distanceToSqr(entity.xOld, entity.yOld, entity.zOld) > 0);
             case "is_sleeping" -> MolangValue.of(entity instanceof LivingEntity living && living.isSleeping());
-            case "is_baby" -> MolangValue.of(entity instanceof LivingEntity living && living.isBaby());
+            // A pack's own entity makes itself young through a component group, which only the
+            // server holds, so the answer travels as a property. Java's own mobs sync their age
+            // themselves and carry no such property.
+            case "is_baby" -> MolangValue.of(flag(properties, "is_baby")
+                || entity instanceof LivingEntity living && living.isBaby());
             case "is_levitating" -> MolangValue.of(entity instanceof LivingEntity living
                 && living.hasEffect(MobEffects.LEVITATION));
             case "is_using_item" -> MolangValue.of(entity instanceof LivingEntity living && living.isUsingItem());

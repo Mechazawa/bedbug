@@ -58,6 +58,11 @@ public final class ServerHooks {
         ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {
             if (state != null) {
                 EntityPropertySync.seed(entity, state);
+                // Which component groups are on is state a pack changed rather than state it
+                // declared, so it is read back before anything asks the entity what it carries.
+                if (entity instanceof at.ioexception.mcaddon.entity.AddonEntity addon) {
+                    addon.restoreGroups();
+                }
                 // Bedrock raises this on every entity as it comes into the world, and a pack's
                 // starting state is usually set from it.
                 EntityEvents.trigger(entity, "minecraft:entity_spawned", null, state);

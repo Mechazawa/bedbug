@@ -1,9 +1,8 @@
 package at.ioexception.mcaddon.client.render;
 
+import at.ioexception.mcaddon.bedrock.model.PartVisibility;
 import at.ioexception.mcaddon.bedrock.model.UvShift;
 import org.junit.jupiter.api.Test;
-
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -40,7 +39,7 @@ class PassLightingTest {
     }
 
     private static AddonModels.Pass pass(boolean ignoresLighting, float multiplier) {
-        return new AddonModels.Pass(null, null, Set.of(), UvShift.NONE, null, 0xFFFFFFFF,
+        return new AddonModels.Pass(null, null, PartVisibility.EVERYTHING, UvShift.NONE, null, 0xFFFFFFFF,
             ignoresLighting, multiplier);
     }
 }
