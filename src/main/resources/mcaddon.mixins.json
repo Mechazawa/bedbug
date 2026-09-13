@@ -11,7 +11,8 @@
     "ItemEntityMixin",
     "ProjectileMixin",
     "ButtonBlockMixin",
-    "LeverBlockMixin"
+    "LeverBlockMixin",
+    "PrimaryLevelDataMixin"
   ],
   "injectors": {
     "defaultRequire": 1
