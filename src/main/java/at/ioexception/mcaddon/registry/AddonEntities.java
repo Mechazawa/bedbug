@@ -306,7 +306,10 @@ public final class AddonEntities {
         "minecraft:behavior.drop_item_for", "minecraft:behavior.offer_flower",
         "minecraft:behavior.inspect_bookshelf", "minecraft:behavior.make_love",
         "minecraft:behavior.receive_love", "minecraft:behavior.nap",
-        "minecraft:behavior.snacking");
+        "minecraft:behavior.snacking",
+        "minecraft:behavior.emerge", "minecraft:behavior.dig",
+        "minecraft:behavior.random_search_and_dig", "minecraft:behavior.random_breach",
+        "minecraft:behavior.find_underwater_treasure", "minecraft:behavior.swim_with_entity");
 
     /**
      * The trade table an entity names, read while the pack it came from is still in hand.

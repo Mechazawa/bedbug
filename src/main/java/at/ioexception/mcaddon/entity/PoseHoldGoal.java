@@ -27,6 +27,8 @@ public final class PoseHoldGoal extends Goal {
     private final Filter conditions;
     private final double noticeRadius;
     private final boolean needsTarget;
+    private final String onStart;
+    private final String onDone;
     private int held;
     private int holdFor;
     private int untilNext;
@@ -43,6 +45,8 @@ public final class PoseHoldGoal extends Goal {
         this.conditions = Goals.filter(component, "filters");
         this.noticeRadius = noticeRadius;
         this.needsTarget = needsTarget;
+        this.onStart = Goals.event(component, "on_start");
+        this.onDone = Goals.event(component, "on_done");
         setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
     }
 
@@ -60,6 +64,21 @@ public final class PoseHoldGoal extends Goal {
     public static PoseHoldGoal sniffing(AddonEntity mob, JsonObject component) {
         return new PoseHoldGoal(mob, component, Pose.SNIFFING, "duration", 1, "cooldown_range",
             Goals.number(component, "sniffing_radius", 5), false);
+    }
+
+    /** `minecraft:behavior.emerge`, which a pack gives to something that arrives out of the ground. */
+    public static PoseHoldGoal emerging(AddonEntity mob, JsonObject component) {
+        return new PoseHoldGoal(mob, component, Pose.EMERGING, "duration", 7, null, 0, false);
+    }
+
+    /**
+     * `minecraft:behavior.dig`, which is the same thing the other way round.
+     *
+     * `idle_time` is how long the entity has to have had nothing to do before it gives up and goes
+     * back under, and the pack states it in seconds.
+     */
+    public static PoseHoldGoal digging(AddonEntity mob, JsonObject component) {
+        return new PoseHoldGoal(mob, component, Pose.DIGGING, "duration", 5.5, "idle_time", 0, false);
     }
 
     @Override
@@ -82,6 +101,7 @@ public final class PoseHoldGoal extends Goal {
         holdFor = Goals.between(mob.getRandom(), durationLow, durationHigh);
         answered = mob.getTarget();
         mob.setPose(pose);
+        fire(onStart);
     }
 
     @Override
@@ -95,6 +115,7 @@ public final class PoseHoldGoal extends Goal {
     public void stop() {
         mob.setPose(Pose.STANDING);
         untilNext = Goals.between(mob.getRandom(), intervalLow, intervalHigh);
+        fire(onDone);
         if (noticeRadius <= 0) return;
 
         mob.level().getEntitiesOfClass(LivingEntity.class, mob.getBoundingBox().inflate(noticeRadius))
@@ -102,5 +123,11 @@ public final class PoseHoldGoal extends Goal {
             .filter(nearby -> nearby != mob)
             .min(Comparator.comparingDouble(mob::distanceToSqr))
             .ifPresent(nearby -> mob.getLookControl().setLookAt(nearby, 30f, 30f));
+    }
+
+    private void fire(String event) {
+        if (event != null) {
+            at.ioexception.mcaddon.server.EntityEvents.trigger(mob, event, null, ServerHooks.state());
+        }
     }
 }

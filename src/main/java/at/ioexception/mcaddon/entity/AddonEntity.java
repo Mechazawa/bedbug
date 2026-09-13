@@ -1539,6 +1539,21 @@ public class AddonEntity extends PathfinderMob
                     PoseHoldGoal.croaking(this, componentBody(behaviour)));
                 case "minecraft:behavior.sniff" -> goalSelector.addGoal(priority,
                     PoseHoldGoal.sniffing(this, componentBody(behaviour)));
+                case "minecraft:behavior.emerge" -> goalSelector.addGoal(priority,
+                    PoseHoldGoal.emerging(this, componentBody(behaviour)));
+                case "minecraft:behavior.dig" -> goalSelector.addGoal(priority,
+                    PoseHoldGoal.digging(this, componentBody(behaviour)));
+                case "minecraft:behavior.random_search_and_dig" -> goalSelector.addGoal(priority,
+                    MoveToMatchingBlockGoal.searchingAndDigging(this, componentBody(behaviour)));
+
+                // What a Bedrock dolphin does that nothing else does.
+                case "minecraft:behavior.random_breach" -> goalSelector.addGoal(priority,
+                    DolphinGoal.breaching(this, componentBody(behaviour)));
+                case "minecraft:behavior.find_underwater_treasure" -> goalSelector.addGoal(priority,
+                    DolphinGoal.seekingTreasure(this, componentBody(behaviour)));
+                case "minecraft:behavior.swim_with_entity" -> goalSelector.addGoal(priority,
+                    DolphinGoal.escorting(this, componentBody(behaviour)));
+
                 case "minecraft:behavior.play_dead" -> goalSelector.addGoal(priority,
                     new PlayDeadGoal(this, componentBody(behaviour)));
                 case "minecraft:behavior.scared" -> goalSelector.addGoal(priority,
