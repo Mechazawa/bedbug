@@ -68,6 +68,16 @@ public class AddonBlock extends Block {
     }
 
     /**
+     * Whether a script may keep values on each block of this kind separately.
+     *
+     * `minecraft:block_entity` is what gives a block that store, and a pack reading or writing on a
+     * block without one is told rather than handed a store nothing keeps.
+     */
+    public boolean holdsState() {
+        return components != null && components.dynamicProperties();
+    }
+
+    /**
      * Builds the Java properties for a pack's states, in declaration order.
      *
      * A boolean state becomes a boolean property and everything else becomes an integer over the

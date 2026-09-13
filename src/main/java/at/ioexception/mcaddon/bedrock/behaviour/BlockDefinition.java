@@ -104,7 +104,7 @@ public record BlockDefinition(String identifier, Map<String, String> faceTexture
     }
 
     /** The geometry is written either as the bare identifier or as an object carrying it. */
-    private static String geometry(JsonObject components) {
+    public static String geometry(JsonObject components) {
         JsonElement value = components.get("minecraft:geometry");
         if (value == null) return null;
         if (value.isJsonPrimitive()) return value.getAsString();

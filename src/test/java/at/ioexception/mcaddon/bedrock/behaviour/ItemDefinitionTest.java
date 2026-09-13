@@ -171,6 +171,44 @@ class ItemDefinitionTest {
         assertFalse(item("{}").declaredTrue("minecraft:glint"));
     }
 
+    /** A weapon that names one reach reaches that far in creative too, which is Bedrock's rule. */
+    @Test
+    void fallsBackToTheOrdinaryReachInCreative() throws IOException {
+        ItemDefinition.Reach reach = item("""
+            {"minecraft:piercing_weapon": {"reach": {"min": 1, "max": 4}, "hitbox_margin": 0.25}}
+            """).reach("minecraft:piercing_weapon");
+
+        assertEquals(1f, reach.min());
+        assertEquals(4f, reach.max());
+        assertEquals(1f, reach.creativeMin());
+        assertEquals(4f, reach.creativeMax());
+        assertEquals(0.25f, reach.margin());
+    }
+
+    @Test
+    void readsTheThreeBlocksAWeaponReachesWhenItNamesNoRange() throws IOException {
+        ItemDefinition.Reach reach =
+            item("{\"minecraft:kinetic_weapon\": {}}").reach("minecraft:kinetic_weapon");
+
+        assertEquals(0f, reach.min());
+        assertEquals(3f, reach.max());
+        assertNull(item("{}").reach("minecraft:kinetic_weapon"));
+    }
+
+    /** An effect whose conditions the pack left out never applies, so absence is not a condition. */
+    @Test
+    void readsOnlyTheKineticConditionsThePackWrote() throws IOException {
+        ItemDefinition item = item("""
+            {"minecraft:kinetic_weapon": {"damage_conditions": {"min_relative_speed": 0.4}}}
+            """);
+
+        ItemDefinition.KineticCondition damage = item.kineticCondition("damage_conditions");
+        assertEquals(-1, damage.durationTicks());
+        assertEquals(0f, damage.speed());
+        assertEquals(0.4f, damage.relativeSpeed());
+        assertNull(item.kineticCondition("knockback_conditions"));
+    }
+
     @Test
     void skipsAFileThatDeclaresNoUsableItem() throws IOException {
         write("items/block.json", "{\"minecraft:block\": {\"description\": {\"identifier\": \"vn:thing\"}}}");

@@ -560,6 +560,59 @@ public final class ScriptBridge {
     }
 
     /**
+     * The store one block keeps of its own, or null where the block was given none.
+     *
+     * `minecraft:block_entity` is what asks for the store, so a pack reading from a block without
+     * that component is answered the way every other unimplemented member is.
+     */
+    private String blockStore(String dimension, int x, int y, int z) {
+        ServerLevel level = level(dimension);
+        if (level == null) return null;
+
+        return level.getBlockState(new BlockPos(x, y, z)).getBlock()
+            instanceof at.ioexception.mcaddon.block.AddonBlock addon && addon.holdsState()
+            ? AddonState.blockKey(dimension, x, y, z) : null;
+    }
+
+    @HostAccess.Export
+    public Object blockDynamicProperty(String dimension, int x, int y, int z, String name) {
+        String store = blockStore(dimension, x, y, z);
+        if (store == null) {
+            coverage.unsupported("Block.getDynamicProperty");
+            return null;
+        }
+        return state.blockProperty(store, name);
+    }
+
+    @HostAccess.Export
+    public void setBlockDynamicProperty(String dimension, int x, int y, int z, String name, Value value) {
+        String store = blockStore(dimension, x, y, z);
+        if (store == null) {
+            coverage.unsupported("Block.setDynamicProperty");
+            return;
+        }
+        state.setBlockProperty(store, name, plain(value));
+    }
+
+    @HostAccess.Export
+    public String[] blockDynamicPropertyIds(String dimension, int x, int y, int z) {
+        String store = blockStore(dimension, x, y, z);
+        return store == null ? new String[0]
+            : state.blockPropertyNames(store).toArray(String[]::new);
+    }
+
+    /** Measured the way the world's own count is, so the two numbers a pack compares mean the same. */
+    @HostAccess.Export
+    public int blockDynamicPropertyBytes(String dimension, int x, int y, int z) {
+        String store = blockStore(dimension, x, y, z);
+        if (store == null) return 0;
+
+        return state.blockPropertyNames(store).stream()
+            .mapToInt(name -> name.length() + String.valueOf(state.blockProperty(store, name)).length())
+            .sum();
+    }
+
+    /**
      * Starts one of the pack's animations on an entity, for everyone watching it.
      *
      * Animations run on the client, so this is a message rather than a change to anything the server

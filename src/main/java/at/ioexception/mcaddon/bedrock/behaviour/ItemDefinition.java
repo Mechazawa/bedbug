@@ -256,6 +256,71 @@ public record ItemDefinition(String identifier, String iconKey, String displayNa
             .toList();
     }
 
+    /** How far along the view vector a weapon component hits, and how wide its raycast is. */
+    public record Reach(float min, float max, float creativeMin, float creativeMax, float margin) {
+    }
+
+    /**
+     * The reach `component` declares, or null where the item carries no such component.
+     *
+     * `creative_reach` falls back to `reach`, and three blocks is what Bedrock reaches when the
+     * component names neither.
+     */
+    public Reach reach(String component) {
+        JsonObject declared = components.get(component);
+        if (declared == null) return null;
+
+        float min = end(declared, "reach", "min", 0f);
+        float max = end(declared, "reach", "max", 3f);
+        return new Reach(min, max, end(declared, "creative_reach", "min", min),
+            end(declared, "creative_reach", "max", max), number(component, "hitbox_margin", 0f));
+    }
+
+    /** One end of a range a component writes as `{"min": a, "max": b}`. */
+    private static float end(JsonObject declared, String field, String side, float fallback) {
+        JsonElement range = declared.get(field);
+        if (range == null || !range.isJsonObject()) return fallback;
+
+        JsonElement value = range.getAsJsonObject().get(side);
+        return value != null && value.isJsonPrimitive() ? value.getAsFloat() : fallback;
+    }
+
+    /** What has to hold before one effect of a kinetic weapon applies. */
+    public record KineticCondition(int durationTicks, float speed, float relativeSpeed) {
+    }
+
+    /**
+     * The named conditions of `minecraft:kinetic_weapon`, or null where the pack declares none.
+     *
+     * An effect whose conditions are absent never applies, which is why the absence is answered
+     * rather than turned into a condition that always holds.
+     */
+    public KineticCondition kineticCondition(String field) {
+        JsonObject kinetic = components.get("minecraft:kinetic_weapon");
+        JsonElement declared = kinetic == null ? null : kinetic.get(field);
+        if (declared == null || !declared.isJsonObject()) return null;
+
+        JsonObject condition = declared.getAsJsonObject();
+        return new KineticCondition((int) field(condition, "max_duration", -1f),
+            field(condition, "min_speed", 0f), field(condition, "min_relative_speed", 0f));
+    }
+
+    private static float field(JsonObject json, String name, float fallback) {
+        JsonElement value = json.get(name);
+        return value != null && value.isJsonPrimitive() ? value.getAsFloat() : fallback;
+    }
+
+    /** The causes `minecraft:damage_absorption` takes for whoever wears this. */
+    public List<String> absorbedCauses() {
+        JsonObject absorption = components.get("minecraft:damage_absorption");
+        if (absorption == null) return List.of();
+
+        return Json.list(absorption, "absorbable_causes").stream()
+            .filter(JsonElement::isJsonPrimitive)
+            .map(JsonElement::getAsString)
+            .toList();
+    }
+
     /** The items `minecraft:repairable` accepts for repairing this one. */
     public List<String> repairItems() {
         JsonObject repairable = components.get("minecraft:repairable");

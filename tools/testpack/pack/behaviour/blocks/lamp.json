@@ -35,6 +35,20 @@
       },
       "minecraft:on_step_on": {
         "event": "tp:brighten"
+      },
+      "minecraft:breathability": "air",
+      "minecraft:block_entity": {
+        "dynamic_properties": true
+      },
+      "minecraft:flower_pottable": {},
+      "minecraft:embedded_visual": {
+        "minecraft:geometry": "geometry.lamp_potted",
+        "minecraft:material_instances": {
+          "*": {
+            "texture": "lamp_on",
+            "render_method": "opaque"
+          }
+        }
       }
     },
     "events": {

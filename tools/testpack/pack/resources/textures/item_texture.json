@@ -16,6 +16,9 @@
     },
     "pouch": {
       "textures": "textures/items/pouch"
+    },
+    "visor": {
+      "textures": "textures/items/visor"
     }
   }
 }

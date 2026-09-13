@@ -786,26 +786,62 @@ public final class PackConverter {
             write(assets.resolve("items").resolve(name + ".json"), definition);
 
             if (block.components().has("minecraft:flower_pottable")) {
-                writePottedModel(assets, namespace, name, faces.values().iterator().next());
+                Map<String, String> embedded = embeddedFaces(block, faces, textureKeys);
+                sprites.addAll(embedded.values());
+                writePottedModel(assets, namespace, name, embedded,
+                    embeddedGeometryOf(block, geometries));
             }
         }
     }
 
     /**
+     * The faces the block wears while it is standing in a pot.
+     *
+     * `minecraft:embedded_visual` may dress the potted form differently from the block itself, and
+     * a pack that names no textures there means the ones the block already wears.
+     */
+    private static Map<String, String> embeddedFaces(BlockDefinition block,
+        Map<String, String> faces, Map<String, String> textureKeys) {
+        Map<String, String> declared = resolveFaces(
+            materialTextures(embedded(block).get("minecraft:material_instances")), textureKeys);
+        return declared.isEmpty() ? faces : declared;
+    }
+
+    /** The body of `minecraft:embedded_visual`, empty where the block declares none. */
+    private static JsonObject embedded(BlockDefinition block) {
+        JsonElement component = block.components().get("minecraft:embedded_visual");
+        return component != null && component.isJsonObject()
+            ? component.getAsJsonObject() : new JsonObject();
+    }
+
+    /** The geometry `minecraft:embedded_visual` draws the potted form from, where it names one. */
+    private static BedrockGeometry embeddedGeometryOf(BlockDefinition block, BedrockAssets geometries) {
+        String named = BlockDefinition.geometry(embedded(block));
+        return named == null ? null : geometries.geometry(named);
+    }
+
+    /**
      * The block as it looks standing in a flower pot, which `minecraft:flower_pottable` asks for.
      *
-     * Java draws whatever is in a pot as two crossed quads above the rim, so the block's own texture
-     * is what the crossed model wears.
+     * `minecraft:embedded_visual` draws that form with a shape of its own. Without one Java's own
+     * two crossed quads above the rim wear the block's texture, which is how every potted plant in
+     * the game is drawn.
      */
-    private static void writePottedModel(Path assets, String namespace, String name, String texture)
-        throws IOException {
-        JsonObject textures = new JsonObject();
-        textures.addProperty("plant", texture);
+    private static void writePottedModel(Path assets, String namespace, String name,
+        Map<String, String> faces, BedrockGeometry geometry) throws IOException {
+        if (faces.isEmpty()) return;
 
-        JsonObject model = new JsonObject();
-        model.addProperty("parent", "minecraft:block/flower_pot_cross");
-        model.add("textures", textures);
-        write(assets.resolve("models/block").resolve("potted_" + name + ".json"), model);
+        if (geometry != null) {
+            writeCubeModel(assets, "potted_" + name, faces, geometry);
+        } else {
+            JsonObject textures = new JsonObject();
+            textures.addProperty("plant", faces.values().iterator().next());
+
+            JsonObject model = new JsonObject();
+            model.addProperty("parent", "minecraft:block/flower_pot_cross");
+            model.add("textures", textures);
+            write(assets.resolve("models/block").resolve("potted_" + name + ".json"), model);
+        }
 
         JsonObject variant = new JsonObject();
         variant.addProperty("model", namespace + ":block/potted_" + name);
@@ -929,19 +965,25 @@ public final class PackConverter {
 
         for (BlockDefinition.Permutation permutation : block.permutations()) {
             if (!MolangParser.parse(permutation.condition()).evaluate(environment).truthy()) continue;
-            JsonElement declared = permutation.components().get("minecraft:material_instances");
-            if (declared == null || !declared.isJsonObject()) continue;
-            JsonObject instances = declared.getAsJsonObject();
 
-            Map<String, String> overrides = new LinkedHashMap<>();
-            for (Map.Entry<String, JsonElement> entry : instances.entrySet()) {
-                if (!entry.getValue().isJsonObject()) continue;
-                String texture = Json.text(entry.getValue().getAsJsonObject(), "texture", null);
-                if (texture != null) overrides.put(entry.getKey(), texture);
-            }
+            Map<String, String> overrides =
+                materialTextures(permutation.components().get("minecraft:material_instances"));
             faces.putAll(resolveFaces(overrides, textureKeys));
         }
         return faces;
+    }
+
+    /** The texture key each face of a `minecraft:material_instances` body names. */
+    private static Map<String, String> materialTextures(JsonElement instances) {
+        Map<String, String> textures = new LinkedHashMap<>();
+        if (instances == null || !instances.isJsonObject()) return textures;
+
+        for (Map.Entry<String, JsonElement> entry : instances.getAsJsonObject().entrySet()) {
+            if (!entry.getValue().isJsonObject()) continue;
+            String texture = Json.text(entry.getValue().getAsJsonObject(), "texture", null);
+            if (texture != null) textures.put(entry.getKey(), texture);
+        }
+        return textures;
     }
 
     private static Map<String, String> resolveFaces(Map<String, String> declared,

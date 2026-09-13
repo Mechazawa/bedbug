@@ -778,6 +778,30 @@ export class Block {
         return this.permutation.matches(type, states);
     }
 
+    getDynamicProperty(name) {
+        return bridge.blockDynamicProperty(...blockAt(this), name);
+    }
+
+    setDynamicProperty(name, value) {
+        bridge.setBlockDynamicProperty(...blockAt(this), name, value === undefined ? null : value);
+    }
+
+    setDynamicProperties(values) {
+        Object.entries(values ?? {}).forEach(([name, value]) => this.setDynamicProperty(name, value));
+    }
+
+    getDynamicPropertyIds() {
+        return list(bridge.blockDynamicPropertyIds(...blockAt(this)));
+    }
+
+    getDynamicPropertyTotalByteCount() {
+        return bridge.blockDynamicPropertyBytes(...blockAt(this));
+    }
+
+    clearDynamicProperties() {
+        for (const name of this.getDynamicPropertyIds()) this.setDynamicProperty(name, undefined);
+    }
+
     getTags() {
         return list(bridge.blocks.tags(this.typeId));
     }

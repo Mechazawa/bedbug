@@ -325,6 +325,9 @@ public final class Platform {
      * data component. Before that only an armour item could be worn, and an armour item needs a
      * material, so the item is built as one with a material that adds no protection and no armour
      * layer of its own: a pack's hat is a costume, and its attachable is what draws it.
+     *
+     * How many of it fit in a slot is whatever the properties already say, because an item carrying
+     * durability is one to a slot already and saying so twice is what the older versions refuse.
      */
     public static Item buildWearable(Item.Properties properties, Identifier id,
         net.minecraft.world.entity.EquipmentSlot slot) {
@@ -335,7 +338,7 @@ public final class Platform {
         /*net.minecraft.world.item.ArmorItem.Type type = armourType(slot);
         if (type == null) return buildItem(properties, id);
 
-        return new net.minecraft.world.item.ArmorItem(costume(), type, properties.stacksTo(1));
+        return new net.minecraft.world.item.ArmorItem(costume(), type, properties);
         *///?}
     }
 
