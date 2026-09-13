@@ -91,14 +91,14 @@ against the names this mod acts on:
 
 | Surface | Answered |
 | --- | --- |
-| Entity components | 81% |
-| Entity AI goals | 86% |
-| Entity filters | 94% |
-| Molang queries | 81% |
+| Entity components | 82% |
+| Entity AI goals | 99% |
+| Entity filters | 100% |
+| Molang queries | 89% |
 | Molang maths | 100% |
-| Block components | 85% |
-| Item components | 74% |
-| `@minecraft/server` and friends | 84% |
+| Block components | 92% |
+| Item components | 80% |
+| `@minecraft/server` and friends | 95% |
 
 Every name in the remaining share is counted and shown by `/mcaddon entities` and `/mcaddon
 scripts`, so a pack relying on one is told rather than left wondering. Run the censuses yourself to
@@ -148,6 +148,13 @@ own stand-in player lives inside its test framework and carries none of that voc
 those members is counted by `/mcaddon scripts` instead of doing nothing in silence. A test that
 spawns mobs, places blocks and asserts against the world runs. Running one test at several rotations
 or several times over is counted the same way: a run places one structure and calls the test once.
+
+**The parts of the script API that draw a Bedrock client.** Aim assist is how a controller and a
+touchscreen pick what a player is pointing at, the primitive shapes are text and boxes drawn over the
+world by the Bedrock renderer, and the locator bar and its waypoints are a Bedrock heads-up display.
+Java has none of the three, so every member of each is answered by `/mcaddon scripts` rather than
+quietly doing nothing. The same holds for `world.getPackSettings`, which reads a screen only Bedrock
+shows.
 
 Surface lighting from a physically based texture set is the one thing that depends on what the
 player has installed: the emissive channel is drawn again at full brightness with or without a
