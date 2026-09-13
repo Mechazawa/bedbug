@@ -65,6 +65,13 @@ public sealed interface EmitterShape {
             return new EntityAabb(EmitterDirection.read(aabb),
                 ParticleJson.flag(aabb, "surface_only", false));
         }
+
+        // A custom shape is a point whose offset the pack works out for itself, one expression per
+        // axis, so the whole shape is already in the offset and there is nothing else to read.
+        JsonObject custom = ParticleJson.object(components, "minecraft:emitter_shape_custom");
+        if (custom != null) {
+            return new Point(ParticleJson.vector(custom, "offset"), EmitterDirection.read(custom));
+        }
         return null;
     }
 

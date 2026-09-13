@@ -43,9 +43,10 @@ public record Billboard(Vector2Expression size, FacingCameraMode facing, Uv uv) 
     private static Uv readUv(JsonObject json) {
         if (json == null) return null;
 
+        // Packs are written with either the name the schema gives these or the older run-together one.
         return new Uv(
-            ParticleJson.number(json, "texture_width", 1),
-            ParticleJson.number(json, "texture_height", 1),
+            ParticleJson.number(json, "texture_width", ParticleJson.number(json, "texturewidth", 1)),
+            ParticleJson.number(json, "texture_height", ParticleJson.number(json, "textureheight", 1)),
             Vector2Expression.read(json, "uv", Vector2Expression.ZERO),
             Vector2Expression.read(json, "uv_size", Vector2Expression.ONE),
             readFlipbook(ParticleJson.object(json, "flipbook")));

@@ -77,9 +77,110 @@ class FunctionsTest {
         "'testforblocks 0 0 0 1 1 1 2 2 2 all', 'execute if blocks 0 0 0 1 1 1 2 2 2 all'",
         "'/say hello', 'say hello'",
         "'say hello', 'say hello'",
+        "'allowlist add Steve', 'whitelist add Steve'",
+        "'difficulty p', 'difficulty peaceful'",
+        "'gamemode 0 @s', 'gamemode survival @s'",
+        "'effect @s speed 30 2', 'effect give @s speed 30 2'",
+        "'effect @s clear', 'effect clear @s'",
+        "'effect @s clear speed', 'effect clear @s speed'",
+        "'xp 40 @s', 'xp add @s 40 points'",
+        "'xp 3L @s', 'xp add @s 3 levels'",
+        "'playsound note.harp @a', 'playsound note.harp master @a'",
+        "'stopsound @a note.harp', 'stopsound @a * note.harp'",
+        "'spreadplayers 0 0 10 40 @a', 'spreadplayers 0 0 10 40 false @a'",
+        "'replaceitem entity @s slot.weapon.mainhand 0 stone', "
+            + "'item replace entity @s weapon.mainhand with stone'",
+        "'replaceitem block ~ ~ ~ slot.container 3 stone 2', "
+            + "'item replace block ~ ~ ~ container.3 with stone 2'",
+        "'ride @s start_riding @e[type=pig]', 'ride @s mount @e[type=minecraft:pig]'",
+        "'ride @s stop_riding', 'ride @s dismount'",
+        "'save hold', 'save-off'",
+        "'tickingarea add 0 0 0 32 0 32 named', 'forceload add 0 0 32 32'",
+        "'tickingarea remove_all', 'forceload remove all'",
+        "'time set sunrise', 'time set 23000'",
+        "'time set day', 'time set day'",
     })
     void rewritesTheCommandsJavaSpellsDifferently(String source, String expected) throws IOException {
         assertEquals(expected, only(source));
+    }
+
+    /**
+     * Bedrock writes a game rule in lower case and Java's parser is case sensitive.
+     *
+     * Which name Java answers to differs between the supported versions, so what is checked is that
+     * both spellings a pack may write reach the same one.
+     */
+    @Test
+    void findsAGameRuleWhateverCaseThePackWroteItIn() throws IOException {
+        assertEquals(only("gamerule doDayLightCycle false"), only("gamerule dodaylightcycle false"));
+    }
+
+    /** Locking the day is Bedrock's way of stopping the clock, which Java states as a rule. */
+    @Test
+    void turnsALockedDayIntoTheRuleThatHoldsTheClock() throws IOException {
+        assertEquals(only("gamerule dodaylightcycle false"), only("daylock true"));
+        assertEquals(only("gamerule dodaylightcycle true"), only("alwaysday false"));
+    }
+
+    /** Bedrock's own text commands take plain text where Java takes a component. */
+    @Test
+    void quotesThePlainTextOfATitle() throws IOException {
+        assertEquals("title @a title \"hello there\"", only("title @a title hello there"));
+    }
+
+    @Test
+    void unwrapsTheRawTextOfATellraw() throws IOException {
+        assertEquals("tellraw @a [{\"text\":\"hi\"}]",
+            only("tellraw @a {\"rawtext\":[{\"text\":\"hi\"}]}"));
+    }
+
+    /** Bedrock ran a command as an entity and at a place by writing both before the command. */
+    @Test
+    void rewritesTheExecuteBedrockHadBeforeTheModernOne() throws IOException {
+        assertEquals("execute as @e[type=minecraft:pig] at @s positioned ~ ~ ~ run say oink",
+            only("execute @e[type=pig] ~ ~ ~ say oink"));
+    }
+
+    @Test
+    void translatesTheCommandBehindAModernExecute() throws IOException {
+        assertEquals("execute as @a run effect give @s speed", only("execute as @a run effect @s speed"));
+    }
+
+    @Test
+    void dropsAnExecuteWhoseOwnCommandJavaHasNoCounterpartFor() throws IOException {
+        assertEquals(List.of(), translate("execute as @a run fog @s push x setting"));
+        assertTrue(problems.contains("command fog"), problems.toString());
+    }
+
+    @Test
+    void dropsACommandNeitherEditionShares() throws IOException {
+        assertEquals(List.of(), translate("aimassist @a set preset"));
+        assertTrue(problems.contains("command aimassist"), problems.toString());
+    }
+
+    @Test
+    void dropsAGameRuleJavaDoesNotHave() throws IOException {
+        assertEquals(List.of(), translate("gamerule showcoordinates true"));
+        assertTrue(problems.contains("game rule showcoordinates"), problems.toString());
+    }
+
+    /** A score list carries commas of its own, which the argument split has to leave alone. */
+    @Test
+    void keepsASelectorWhoseArgumentHasCommasInIt() throws IOException {
+        assertEquals("kill @e[scores={wins=1,losses=0},limit=1]", only("kill @e[scores={wins=1,losses=0},c=1]"));
+    }
+
+    @Test
+    void dropsALineSelectingOnSomethingJavaCannotSelectOn() throws IOException {
+        assertEquals(List.of(), translate("kill @e[hasitem={item=stone}]"));
+        assertTrue(problems.contains("the selector argument hasitem, which Java has no form of"),
+            problems.toString());
+    }
+
+    /** Java rejects a selector naming the same argument twice, so the two halves become one range. */
+    @Test
+    void putsTheTwoHalvesOfARotationRangeTogether() throws IOException {
+        assertEquals("kill @e[x_rotation=-45..45]", only("kill @e[rx=45,rxm=-45]"));
     }
 
     /** Bedrock wraps a text component in an object Java's `title` does not know about. */

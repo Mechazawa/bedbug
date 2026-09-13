@@ -6,12 +6,14 @@ import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.bedrock.particle.Billboard;
 import at.ioexception.mcaddon.bedrock.particle.ParticleDefinition;
+import at.ioexception.mcaddon.bedrock.particle.ParticleEvent;
 import at.ioexception.mcaddon.bedrock.particle.ParticleTint;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.particle.SingleQuadParticle;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
 
 import java.util.List;
@@ -28,6 +30,9 @@ public class AddonParticle extends SingleQuadParticle {
 //?} else {
 /*public class AddonParticle extends net.minecraft.client.particle.TextureSheetParticle {
 *///?}
+
+    /** The packed sky and block light of a particle that carries its own brightness. */
+    private static final int FULL_BRIGHT = 0xF000F0;
 
     private final ParticleDefinition definition;
     private final MolangEnvironment environment;
@@ -77,6 +82,7 @@ public class AddonParticle extends SingleQuadParticle {
         this.gravity = 0f;
 
         apply(0f);
+        raise(particle.events().creation());
     }
 
     @Override
@@ -86,13 +92,18 @@ public class AddonParticle extends SingleQuadParticle {
         zo = z;
         oRoll = roll;
 
+        float was = age;
         age += 1f / 20f;
         if (over()) {
+            raise(definition.particle().events().expiration());
             remove();
             return;
         }
 
         ParticleDefinition.Particle particle = definition.particle();
+        if (particle.initialization() != null) {
+            particle.initialization().perUpdate().evaluate(environment);
+        }
         if (particle.dynamic() != null) accelerate(particle.dynamic());
         if (particle.parametric() != null) follow(particle.parametric());
         else move(xd, yd, zd);
@@ -100,9 +111,33 @@ public class AddonParticle extends SingleQuadParticle {
         spin += spinRate / 20f;
         roll = (float) Math.toRadians(spin);
         apply(age);
+        timeline(was);
 
         if (grounded()) return;
         if (beyondKillPlane() || inWrongBlock()) remove();
+    }
+
+    /** Raises the timeline events this particle passed over during this tick. */
+    private void timeline(float was) {
+        for (ParticleEvent.Moment moment : definition.particle().events().timeline()) {
+            if (moment.at() > was && moment.at() <= age) raise(moment.events());
+        }
+    }
+
+    private void raise(List<String> events) {
+        if (events.isEmpty()) return;
+        AddonEmitters.fire(definition, events, environment, new Vec3(x, y, z), null);
+    }
+
+    /**
+     * Bedrock draws a particle at full brightness unless the effect asks to be lit.
+     *
+     * Java's own particles take the light where they stand, which is what the lighting component
+     * asks for, so the override is the other way round: without it, the particle carries its own.
+     */
+    @Override
+    protected int getLightCoords(float partialTick) {
+        return definition.particle().lit() ? super.getLightCoords(partialTick) : FULL_BRIGHT;
     }
 
     /**
@@ -115,7 +150,14 @@ public class AddonParticle extends SingleQuadParticle {
         ParticleDefinition.Particle.Collision collision = definition.particle().collision();
         if (collision == null || !onGround) return false;
 
+        float speed = (float) Math.sqrt(xd * xd + yd * yd + zd * zd) * 20f;
+        raise(collision.events().stream()
+            .filter(impact -> speed >= impact.minimumSpeed())
+            .map(ParticleDefinition.Particle.Impact::event)
+            .toList());
+
         if (collision.expireOnContact()) {
+            raise(definition.particle().events().expiration());
             remove();
             return true;
         }
@@ -184,6 +226,10 @@ public class AddonParticle extends SingleQuadParticle {
     private void apply(float at) {
         environment.setVariable("particle_age", MolangValue.of(at));
         environment.setVariable("particle_lifetime", MolangValue.of(maxLifetime));
+        AddonEmitters.evaluateCurves(definition, environment);
+
+        ParticleDefinition.Particle.Initialization start = definition.particle().initialization();
+        if (start != null) start.perRender().evaluate(environment);
 
         Billboard billboard = definition.particle().billboard();
         if (billboard != null) {

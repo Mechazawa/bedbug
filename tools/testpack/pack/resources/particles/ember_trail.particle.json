@@ -28,8 +28,14 @@
         "linear_acceleration": [0, 1.6, 0],
         "linear_drag_coefficient": 1.0
       },
+      "minecraft:emitter_lifetime_events": {
+        "creation_event": "puff",
+        "timeline": {
+          "2.0": "puff"
+        }
+      },
       "minecraft:particle_appearance_billboard": {
-        "size": [0.14, 0.14],
+        "size": ["variable.fade * 0.14", 0.14],
         "facing_camera_mode": "rotate_y",
         "uv": {
           "texturewidth": 128,
@@ -56,6 +62,21 @@
         }
       },
       "minecraft:particle_appearance_lighting": {}
+    },
+    "curves": {
+      "variable.fade": {
+        "type": "linear",
+        "input": "variable.particle_age / variable.particle_lifetime",
+        "nodes": [1.0, 0.6, 0.0]
+      }
+    },
+    "events": {
+      "puff": {
+        "particle_effect": {
+          "effect": "tp:burst",
+          "type": "emitter"
+        }
+      }
     }
   }
 }

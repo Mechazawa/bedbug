@@ -33,6 +33,8 @@ stonecutter {
         replace("maxTicks = ", "timeoutTicks = ")
         // 1.21.4 spelled out what the animation belongs to.
         replace("ItemUseAnimation", "UseAnim")
+        // 1.21.2 renamed what a particle answers with its packed sky and block light.
+        replace("getLightCoords(", "getLightColor(")
     }
 }
 
