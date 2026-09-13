@@ -119,14 +119,6 @@ LOST_CONNECTION = re.compile(r"lost connection: (.+)")
 # in. A client that never read the packs writes one of these per entry the packs declare.
 MISSING_ENTRY = re.compile(r"is missing from local registry \((minecraft:[a-z_]+)\)")
 
-# Everything the sync says while turning such a client away, which a run that asked for it reads as
-# the answer rather than as a fault. Fabric renamed the logger partway through this version range,
-# so both names are matched, and so is the message itself for anywhere it is written from.
-MISSING_SYNC = re.compile(r"FabricRegistry\w*|ClientRegistrySyncHandler"
-                          r"|Received unknown remote registry entries"
-                          r"|is missing from local registry"
-                          r"|Registry remapping failed")
-
 # The console's answer to `give`, which says the item exists and was handed to somebody.
 GAVE = re.compile(r"Gave \d+ .* to ")
 
@@ -991,11 +983,15 @@ def check_join(root: Path, version: str, timeout: float, hold: float, verbose: b
 
     scan(served, verdict, (("server reached done", r"Done \("),)
          + (EXPECTED_WITH_ADDON if addons else ()))
-    # A client that was never given the packs has nothing to say about them, so only the server side
-    # is held to reading one, and the entries it reports missing are the point of the run rather
-    # than a failure of it. What it still has to do is refuse in an orderly way, checked below.
-    scan([one for one in seen if not (bare and MISSING_SYNC.search(one))],
-         verdict, EXPECTED_WITH_ADDON if addons and not bare else ())
+    # A client that was never given the packs is meant to fail, so its log is not read for the
+    # signatures that mean something went wrong. Filtering that log line by line was a losing game:
+    # Fabric names this one refusal four different ways across these four versions. What the run
+    # asserts instead is the positive thing, below, plus that the client did not crash on the way.
+    if not bare:
+        scan(seen, verdict, EXPECTED_WITH_ADDON if addons else ())
+    elif any(re.search(r"[Cc]rash report (?:saved to|has been saved)", one) for one in seen):
+        verdict.fail("the client crashed rather than being turned away",
+                     "a crash report was written, so the refusal was not the orderly kind")
     gradle_failed(served, outcome, verdict)
     gradle_failed(seen, client["outcome"], verdict)
 
