@@ -3,6 +3,7 @@ package at.ioexception.mcaddon.bedrock.entity;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import at.ioexception.mcaddon.convert.SpawnEggAppearance;
+import at.ioexception.mcaddon.pack.SemVer;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -21,30 +22,22 @@ import java.util.Set;
 public final class ClientEntityParser {
 
     /**
-     * Description fields that ask a Bedrock client for what Java settles for every entity.
+     * The two description fields about the item an engine puts in an entity's hand.
      *
-     * `min_engine_version` names the engine a pack was written against. `enable_attachables` says
-     * an entity may wear what a pack describes, which each one drawn here may. `hide_armor` hides
-     * the armour Bedrock draws over an entity, and a pack's own entity is drawn from its geometry
-     * and nothing else. `held_item_scale` and `held_item_ignores_lighting` size and light the item
-     * the engine puts in an entity's hand, and the only thing drawn in a hand here is the
-     * attachable a pack describes for it, which carries its own scale and its own material.
+     * `held_item_scale` and `held_item_ignores_lighting` size and light it, and the only thing
+     * drawn in a hand here is the attachable a pack describes for it, which carries its own scale
+     * and its own material.
      */
     private static final List<String> UNREAD = List.of(
-        "min_engine_version", "enable_attachables", "hide_armor",
         "held_item_scale", "held_item_ignores_lighting");
 
     /**
-     * Script fields with nothing to decide here.
+     * A script field with nothing to decide here.
      *
-     * The two offscreen fields ask Bedrock to keep an entity's bones and effects running while it
-     * is out of view; Java answers that for every entity by not drawing one it cannot see.
-     * `hide_held_items` hides the item the engine puts in an entity's hand, which this renderer
-     * never draws.
+     * `hide_held_items` hides the item the engine puts in an entity's hand, and the only thing
+     * drawn in a hand here is the attachable a pack describes for it.
      */
-    private static final List<String> UNREAD_SCRIPTS = List.of(
-        "should_update_effects_offscreen", "should_update_bones_and_effects_offscreen",
-        "hide_held_items");
+    private static final List<String> UNREAD_SCRIPTS = List.of("hide_held_items");
 
     private ClientEntityParser() {
     }
@@ -54,8 +47,18 @@ public final class ClientEntityParser {
         AddonEntities.unsupportedFields("client entity", json, UNREAD);
         AddonEntities.unsupportedFields("client entity", scripts, UNREAD_SCRIPTS);
 
+        // A definition naming no engine is as old as a pack goes, so it yields to any that names one.
+        SemVer engine = SemVer.tryFrom(json.get("min_engine_version"));
+
         return new ClientEntityDefinition(
             name,
+            engine == null ? SemVer.ZERO : engine,
+            json.has("enable_attachables") && json.get("enable_attachables").getAsBoolean(),
+            json.has("hide_armor") && json.get("hide_armor").getAsBoolean(),
+            scripts.has("should_update_effects_offscreen")
+                && scripts.get("should_update_effects_offscreen").getAsBoolean(),
+            scripts.has("should_update_bones_and_effects_offscreen")
+                && scripts.get("should_update_bones_and_effects_offscreen").getAsBoolean(),
             strings(json, "geometry"),
             strings(json, "textures"),
             strings(json, "materials"),

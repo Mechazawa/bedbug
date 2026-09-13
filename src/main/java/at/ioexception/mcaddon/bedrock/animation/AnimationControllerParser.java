@@ -17,8 +17,8 @@ public final class AnimationControllerParser {
     /**
      * Which way round the circle a rotation travels while one state crosses into the next.
      *
-     * The clips of every state a controller reaches are summed at the weight each declares, so no
-     * rotation is ever carried from one value to another and there is no path to pick.
+     * A bone's rotation is the weighted sum of every clip contributing to it, the clips of a state
+     * being crossed out of among them, rather than a pair of angles with a route between them.
      */
     private static final List<String> UNREAD_STATE = List.of("blend_via_shortest_path");
 

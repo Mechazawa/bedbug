@@ -61,10 +61,20 @@ public final class EntityAnimator {
         });
     }
 
-    /** Where one controller currently sits, and how long it has been there. */
+    /** Where one controller currently sits, how long it has been there, and what it is leaving. */
     private static final class ControllerState {
         String state;
         float timeInState;
+
+        /** The state being crossed out of, kept running until its own blend transition is over. */
+        AnimationController.State leaving;
+        float crossFadeSeconds;
+        float crossFadeLength;
+
+        /** How strongly the state being left still applies, which falls to zero over its length. */
+        float weightOfLeaving() {
+            return crossFadeLength <= 0f ? 0f : crossFadeSeconds / crossFadeLength;
+        }
     }
 
     public EntityAnimator(BedrockAssets assets, ClientEntityDefinition definition) {
@@ -123,11 +133,11 @@ public final class EntityAnimator {
         Set<String> wanted = new HashSet<>();
         // A controller named in the definition itself runs on every frame, ahead of the animate list.
         for (String controller : definition.animationControllers().values()) {
-            collect(controller, deltaSeconds, wanted);
+            collect(controller, deltaSeconds, 1f, wanted);
         }
         for (ClientEntityDefinition.Gated entry : definition.animate()) {
             if (entry.condition() != null && !entry.condition().evaluate(environment).truthy()) continue;
-            collect(entry.name(), deltaSeconds, wanted);
+            collect(entry.name(), deltaSeconds, 1f, wanted);
         }
 
         // A clip nobody asked for this frame has been switched off, so it stops rather than lingers.
@@ -138,23 +148,27 @@ public final class EntityAnimator {
         player.tick(deltaSeconds);
     }
 
-    private void collect(String shortName, float deltaSeconds, Set<String> wanted) {
+    private void collect(String shortName, float deltaSeconds, float weight, Set<String> wanted) {
         String resolved = definition.resolveAnimation(shortName);
 
         AnimationController controller = assets.animationController(resolved);
         if (controller == null) {
-            player.ensurePlaying(resolved);
+            player.ensurePlaying(resolved, weight);
             wanted.add(resolved);
             return;
         }
-        runController(controller, deltaSeconds, wanted);
+        runController(controller, deltaSeconds, weight, wanted);
     }
 
     /**
      * Advances one controller: takes the first transition whose condition holds, then asks for the
      * clips its current state names.
+     *
+     * A state declaring a `blend_transition` is crossed out of rather than left, so its clips keep
+     * running at a falling weight while the state it moved to comes up at a rising one.
      */
-    private void runController(AnimationController controller, float deltaSeconds, Set<String> wanted) {
+    private void runController(AnimationController controller, float deltaSeconds, float weight,
+        Set<String> wanted) {
         MolangEnvironment environment = player.environment();
         boolean firstRun = !controllers.containsKey(controller.name());
         ControllerState current = controllers.computeIfAbsent(controller.name(), name -> {
@@ -169,6 +183,7 @@ public final class EntityAnimator {
         if (firstRun) fireStateEffects(state);
 
         current.timeInState += deltaSeconds;
+        current.crossFadeSeconds = Math.max(0f, current.crossFadeSeconds - deltaSeconds);
         environment.setStateTime(current.timeInState);
 
         for (AnimationController.Transition transition : state.transitions()) {
@@ -176,6 +191,9 @@ public final class EntityAnimator {
             if (!controller.states().containsKey(transition.target())) continue;
 
             for (MolangExpression statement : state.onExit()) statement.evaluate(environment);
+            current.leaving = state;
+            current.crossFadeSeconds = state.blendTransition();
+            current.crossFadeLength = state.blendTransition();
             current.state = transition.target();
             current.timeInState = 0f;
             state = controller.states().get(current.state);
@@ -184,9 +202,19 @@ public final class EntityAnimator {
             break;
         }
 
+        float leaving = current.weightOfLeaving();
+        if (leaving <= 0f) current.leaving = null;
+        else playState(current.leaving, deltaSeconds, weight * leaving, wanted);
+        playState(state, deltaSeconds, weight * (1f - leaving), wanted);
+    }
+
+    /** The clips one controller state asks for, each at the weight the state itself carries. */
+    private void playState(AnimationController.State state, float deltaSeconds, float weight,
+        Set<String> wanted) {
+        MolangEnvironment environment = player.environment();
         for (AnimationController.Entry entry : state.animations()) {
             if (entry.weight() != null && !entry.weight().evaluate(environment).truthy()) continue;
-            collect(entry.animation(), deltaSeconds, wanted);
+            collect(entry.animation(), deltaSeconds, weight, wanted);
         }
     }
 

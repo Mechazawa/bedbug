@@ -43,6 +43,9 @@ public final class AnimationPlayer {
         /** Full strength until the clip is on its way out, then down to zero over `blendOutSeconds`. */
         float fade = 1f;
 
+        /** How strongly the controller state asking for this clip currently applies. */
+        float stateWeight = 1f;
+
         Running(BedrockAnimation animation) {
             this.animation = animation;
         }
@@ -145,9 +148,17 @@ public final class AnimationPlayer {
         return running.containsKey(name);
     }
 
-    /** Keeps a looping clip running without restarting it each frame. */
-    public void ensurePlaying(String name) {
+    /**
+     * Keeps a looping clip running without restarting it each frame, at the weight asked for.
+     *
+     * The weight is what a controller crossing out of one state and into another sets on the clips
+     * of each, so the two are lerped rather than swapped.
+     */
+    public void ensurePlaying(String name, float weight) {
         if (!running.containsKey(name)) play(name, null, 0f);
+
+        Running clip = running.get(name);
+        if (clip != null) clip.stateWeight = weight;
     }
 
     public void stopAll() {
@@ -259,7 +270,7 @@ public final class AnimationPlayer {
         if (!clip.animation.hasBones()) return;
 
         float position = clip.position;
-        float weight = clip.fade * (clip.animation.blendWeight() == null
+        float weight = clip.fade * clip.stateWeight * (clip.animation.blendWeight() == null
             ? 1f
             : clip.animation.blendWeight().asFloat(environment));
         if (weight == 0f) return;

@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.client.render;
 
+import at.ioexception.mcaddon.bedrock.entity.ClientEntityDefinition;
 import at.ioexception.mcaddon.bedrock.entity.EntityAnimator;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.registry.AddonEntities;
@@ -46,7 +47,14 @@ public final class Attachables {
         List<Drawn> drawn = new ArrayList<>();
         if (entity == null) return drawn;
 
+        // A pack's own entity wears what it has equipped only where its definition says it may; an
+        // entity Java draws with a model of its own carries no such definition and always wears it.
+        ClientEntityDefinition described = wearer == null ? null : wearer.definition();
+        if (described != null && !described.attachablesEnabled()) return drawn;
+
         for (EquipmentSlot slot : EquipmentSlot.values()) {
+            if (described != null && described.armourHidden() && slot.isArmor()) continue;
+
             ItemStack held = entity.getItemBySlot(slot);
             if (held.isEmpty()) continue;
 

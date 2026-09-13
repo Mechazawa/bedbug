@@ -7,10 +7,12 @@ import at.ioexception.mcaddon.platform.Platform;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import org.joml.Vector3f;
+import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
+import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -85,6 +87,26 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
         return passes;
     }
 
+
+    /**
+     * Whether the entity is near enough and in view to be worth drawing.
+     *
+     * Java asks the frustum about the box the server gave the entity, and a Bedrock model may reach
+     * well past that box, so a geometry that declares its own extent is asked about that as well.
+     * Without it a model wider or taller than its hitbox disappears while part of it is still on the
+     * screen. The distance test stays Java's, which is what bounds how far any mob is drawn.
+     */
+    @Override
+    public boolean shouldRender(AddonEntity entity, Frustum frustum, double cameraX, double cameraY,
+        double cameraZ) {
+        if (super.shouldRender(entity, frustum, cameraX, cameraY, cameraZ)) return true;
+
+        AddonClientAssets.Binding binding = AddonClientAssets.of(identifierOf(entity));
+        AABB declared = binding == null ? null : binding.models().visibleBounds(binding.definition());
+        return declared != null
+            && entity.shouldRender(cameraX, cameraY, cameraZ)
+            && frustum.isVisible(declared.move(entity.getX(), entity.getY(), entity.getZ()));
+    }
 
     /**
      * The render type a pass draws with, taken from the material its pack named.
