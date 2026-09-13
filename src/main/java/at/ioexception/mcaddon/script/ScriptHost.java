@@ -186,7 +186,7 @@ public final class ScriptHost {
      */
     private <T> T enter(String what, Supplier<T> call, T fallback) {
         if (!server.isSameThread()) {
-            McAddon.LOGGER.error("Something asked the scripts to {} off the server thread.", what);
+            McAddon.LOGGER.error("Nothing reached the scripts {}: that came from off the server thread.", what);
             return fallback;
         }
 

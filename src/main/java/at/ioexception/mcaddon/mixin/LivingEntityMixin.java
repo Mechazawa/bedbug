@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.mixin;
 
 import at.ioexception.mcaddon.server.WorldEvents;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.LivingEntity;
 import org.spongepowered.asm.mixin.Mixin;
@@ -62,9 +63,19 @@ public abstract class LivingEntityMixin {
         mcaddonHealthBefore = ((LivingEntity) (Object) this).getHealth();
     }
 
+    /**
+     * The server thread is asked for, because the game sets health outside a tick as well as in one.
+     *
+     * An entity read back off the disk has its health set by the worker thread that loaded the
+     * chunk, before it is in the world at all. A script belongs to the server thread and would
+     * refuse the call, so what Bedrock does not call a health change is not offered as one.
+     */
     @Inject(method = "setHealth", at = @At("RETURN"), require = 0)
     private void mcaddon$afterHealth(float health, CallbackInfo info) {
         LivingEntity self = (LivingEntity) (Object) this;
-        if (!self.level().isClientSide()) WorldEvents.healthChanged(self, mcaddonHealthBefore);
+        MinecraftServer server = self.level().getServer();
+        if (server != null && server.isSameThread()) {
+            WorldEvents.healthChanged(self, mcaddonHealthBefore);
+        }
     }
 }
