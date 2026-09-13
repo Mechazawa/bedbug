@@ -3588,7 +3588,9 @@ function runCustomComponent(registered, name, callback, argumentsJson) {
     };
 
     try {
-        answer(event, { custom_component_parameters: { params: {} } });
+        // The second argument is what the block or item wrote beside the component's name.
+        // Naming one without a body is the shape this reads, so there is nothing to hand over.
+        answer(event, { params: {} });
     } catch (error) {
         bridge.reportError(String(error && error.stack ? error.stack : error));
     }

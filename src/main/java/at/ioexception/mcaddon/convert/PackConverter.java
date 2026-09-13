@@ -153,6 +153,10 @@ public final class PackConverter {
         JsonObject meta = new JsonObject();
         JsonObject section = new JsonObject();
         section.addProperty("pack_format", Platform.resourcePackFormat());
+        // From pack format 82 the game wants the range spelled out as well as the single number, and
+        // reads a pack that gives only the number through a fallback it complains about first.
+        section.addProperty("min_format", Platform.resourcePackFormat());
+        section.addProperty("max_format", Platform.resourcePackFormat());
         section.addProperty("description", pack.displayName());
         meta.add("pack", section);
         Files.writeString(root.resolve("pack.mcmeta"), meta.toString(), StandardCharsets.UTF_8);

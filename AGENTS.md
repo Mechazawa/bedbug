@@ -170,12 +170,22 @@ These are the checks it runs, and what each one catches:
   run where every test silently never started fails the same way as one where a test broke. It
   proves nothing about rendering.
 
+  **Never write into a registry a data pack loads.** Loot tables, recipes, tags and functions are
+  safe. A jukebox song, a worldgen feature and anything else the game reads through its dynamic
+  registries are not: a world whose packs write into one of those is a world the game calls
+  experimental, and it then opens behind a screen asking the player whether to load it at all. That
+  screen waits for a click forever, so a run under this harness stops dead on it, and a player gets
+  the same question every time they open their world.
+
   A green `client` proves what the server half cannot reach: every mixin applied on the drawing side,
   every model a pack's items and blocks name loaded, every texture those models name was stitched,
-  and the mod reported a client definition for more than zero add-on entities. It waits for
-  `N add-on entities have a client definition` rather than for a fixed time, so a slow start costs
-  nothing, then holds the window open briefly and kills it. `1.21.1` also loads Mod Menu, Sodium and
-  Iris, so it takes noticeably longer to reach that line than the other two.
+  and the mod reported a client definition for more than zero add-on entities. It takes a world from
+  the dedicated server's own when the saves directory is empty, so a fresh checkout needs nobody to
+  make one by hand, and then waits for that world's own server to start rather than for a fixed time.
+  Waiting for the world rather than for the drawing is what tells a client that loaded from one
+  stopped on a screen asking the player a question: everything about models and textures has already
+  happened by the time such a screen is up. `1.21.1` also loads Mod Menu, Sodium and Iris, so it takes
+  noticeably longer than the other two.
 
   Failing in either: `ERROR`, `Caused by`, a crash report, a mixin apply failure, `Script error:`,
   `Failed to load function`, `Multi threaded access requested by thread`, `Could not initialize
@@ -211,9 +221,9 @@ These are the checks it runs, and what each one catches:
   the game runs them itself as the world opens. Nothing is typed and no window has to be focused. A
   picture of the window is kept beside the log, and the datapack is removed again afterwards.
 
-  It needs a saved world in `versions/<version>/run/saves/`, and it reads the entity and item names
-  to place out of whatever packs are installed, so a checkout with no add-on still runs and simply
-  places nothing. **Only commands every supported version spells the same way belong in a scene**: 26
+  It takes a world from the dedicated server's own when `versions/<version>/run/saves/` is empty, so
+  `verify.py run` once is all the setup there is, and it reads the entity and item names to place out
+  of whatever packs are installed, so a checkout with no add-on still runs and simply places nothing. **Only commands every supported version spells the same way belong in a scene**: 26
   renamed the game rules, and one command that will not parse takes the whole function with it.
 
   The `items` scene stands one armour stand per add-on item and puts the item on its head, which is

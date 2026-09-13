@@ -48,22 +48,27 @@ READABLE_WIDTH = 1400
 
 # The flat lit stage every scene is set on, well above whatever the world generated.
 FLOOR_Y = 150
-# Only commands every supported version spells the same way. 26 renamed the game rules, so setting
-# one by name here would fail to parse and take the whole function with it.
-STAGE = (
-    f"fill -60 {FLOOR_Y} -115 -20 {FLOOR_Y} -80 minecraft:white_concrete",
-    f"fill -60 {FLOOR_Y + 1} -115 -20 {FLOOR_Y + 12} -80 minecraft:air",
-    "time set noon",
-    "weather clear",
-    # Whatever the player is holding is drawn over the corner of the window the scene is in.
-    "clear @a",
-)
 
 # Where a scene puts what it wants looked at, and where it stands to look: a row along z at a fixed
 # x, with the camera off to the side facing the middle of it.
 ROW_X = -50
 ROW_Z = -108
 CAMERA_X = -38
+
+# Only commands every supported version spells the same way. 26 renamed the game rules, so setting
+# one by name here would fail to parse and take the whole function with it.
+STAGE = (
+    # Creative first and the stage underfoot second: a player left where the world put them falls,
+    # drowns or suffocates, and a picture of a death screen says nothing about what was drawn.
+    "gamemode creative @a",
+    f"fill -60 {FLOOR_Y} -115 -20 {FLOOR_Y} -80 minecraft:white_concrete",
+    f"fill -60 {FLOOR_Y + 1} -115 -20 {FLOOR_Y + 12} -80 minecraft:air",
+    f"tp @a {CAMERA_X} {FLOOR_Y + 4} {ROW_Z}",
+    "time set noon",
+    "weather clear",
+    # Whatever the player is holding is drawn over the corner of the window the scene is in.
+    "clear @a",
+)
 
 # What every scene says when its commands have all run, and what the runner waits for.
 DONE = "SCENE-DONE"
@@ -189,8 +194,15 @@ def datapack(world: pathlib.Path, commands: list[str], format: int) -> pathlib.P
 
     functions = pack / "data" / "mcaddon" / "function"
     functions.mkdir(parents=True, exist_ok=True)
+    # From pack format 82 the game wants the range spelled out as well as the single number, and
+    # reads a pack that gives only the number through a fallback it complains about first.
     (pack / "pack.mcmeta").write_text(json.dumps({
-        "pack": {"pack_format": format, "description": "mcaddon scene"},
+        "pack": {
+            "pack_format": format,
+            "min_format": format,
+            "max_format": format,
+            "description": "mcaddon scene",
+        },
     }), encoding="utf-8")
 
     body = list(STAGE) + list(commands) + [f"say {DONE}"]
@@ -320,6 +332,9 @@ def world_of(version: str) -> pathlib.Path | None:
     copied = saves / "Scene World"
     shutil.copytree(served, copied, dirs_exist_ok=True)
     shutil.rmtree(copied / "datapacks", ignore_errors=True)
+    # A player who died on the server would open this world already dead, behind a
+    # screen waiting to be answered.
+    shutil.rmtree(copied / "players", ignore_errors=True)
     print(f"took a world from the dedicated server's own into {copied.relative_to(ROOT)}")
     return copied
 
