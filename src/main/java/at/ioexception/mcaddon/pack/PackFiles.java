@@ -34,7 +34,9 @@ public final class PackFiles {
     /** The behaviour pack paths a reader opens. */
     private static final Set<String> BEHAVIOUR_READ = Set.of(
         "manifest.json", "pack_icon.png", "blocks", "entities", "functions", "item_catalog", "items",
-        "loot_tables", "recipes", "scripts", "spawn_rules", "structures", "texts", "trading");
+        "loot_tables", "recipes", "scripts", "shapes", "spawn_rules", "structures", "texts",
+        "trading",
+        "texts/language_names.json", "texts/languages.json");
 
     /** Everything Bedrock lets a resource pack ship. */
     private static final Set<String> RESOURCE_DEFINED = Set.of(
@@ -50,11 +52,12 @@ public final class PackFiles {
     /** The resource pack paths a reader opens. */
     private static final Set<String> RESOURCE_READ = Set.of(
         "manifest.json", "pack_icon.png", "animations", "animation_controllers", "attachables",
-        "blocks.json", "entity", "materials", "models", "particles", "render_controllers", "sounds",
-        "sounds.json", "texts", "textures",
+        "blocks.json", "entity", "font", "materials", "models", "particles", "render_controllers",
+        "sounds", "sounds.json", "texts", "textures",
         "sounds/music_definitions.json", "sounds/sound_definitions.json",
         "textures/flipbook_textures.json", "textures/item_texture.json",
-        "textures/terrain_texture.json");
+        "textures/terrain_texture.json",
+        "texts/language_names.json", "texts/languages.json");
 
     /**
      * Names every path the pack ships that Bedrock defines and no reader here opens.

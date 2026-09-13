@@ -1,0 +1,149 @@
+package at.ioexception.mcaddon.bedrock.behaviour;
+
+import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.util.Json;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.storage.loot.LootContext;
+import net.minecraft.world.level.storage.loot.functions.LootItemFunction;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * A Bedrock loot function, run as the loot is rolled rather than rewritten as a Java one.
+ *
+ * `enchant_book_for_trading` names a list of enchantments with a level range each and hands back a
+ * book carrying one of them. Java's own functions enchant either at a stated level or at random out
+ * of a whole set, and neither picks one name out of a list and then rolls its own range, so the
+ * Bedrock object reaches a function of this mod's own type and is answered here. The type goes in
+ * the loot function registry, which the game builds itself rather than reading from a data pack.
+ */
+public final class BedrockFunction implements LootItemFunction {
+
+    /** The function name a converted table writes as this one, each answered by `apply`. */
+    public static final String NAME = McAddon.MOD_ID + ":bedrock";
+
+    /** One entry of an `enchantments` list: which enchantment, and the levels it may land on. */
+    private record Choice(String name, int lowest, int highest) {
+        int roll(RandomSource random) {
+            return lowest >= highest ? lowest : lowest + random.nextInt(highest - lowest + 1);
+        }
+    }
+
+    private final JsonObject bedrock;
+
+    private BedrockFunction(String stated) {
+        JsonObject parsed = null;
+        try {
+            parsed = Json.parse(stated).getAsJsonObject();
+        } catch (RuntimeException error) {
+            McAddon.LOGGER.warn("Could not read a Bedrock loot function: {}", error.toString());
+        }
+        this.bedrock = parsed == null ? new JsonObject() : parsed;
+    }
+
+    private static MapCodec<BedrockFunction> mapCodec() {
+        return RecordCodecBuilder.mapCodec(instance -> instance.group(
+                Codec.STRING.fieldOf("bedrock").forGetter(one -> one.bedrock.toString()))
+            .apply(instance, BedrockFunction::new));
+    }
+
+    //? if >=26 {
+    private static final MapCodec<BedrockFunction> TYPE = mapCodec();
+
+    @Override
+    public MapCodec<? extends LootItemFunction> codec() {
+        return TYPE;
+    }
+    //?} else if >=1.21 {
+    /*private static final net.minecraft.world.level.storage.loot.functions.LootItemFunctionType<BedrockFunction>
+        TYPE = new net.minecraft.world.level.storage.loot.functions.LootItemFunctionType<>(mapCodec());
+
+    @Override
+    public net.minecraft.world.level.storage.loot.functions.LootItemFunctionType<BedrockFunction> getType() {
+        return TYPE;
+    }
+    *///?} else {
+    /*private static final net.minecraft.world.level.storage.loot.functions.LootItemFunctionType
+        TYPE = new net.minecraft.world.level.storage.loot.functions.LootItemFunctionType(
+            new net.minecraft.world.level.storage.loot.Serializer<BedrockFunction>() {
+                @Override
+                public void serialize(JsonObject json, BedrockFunction function,
+                    com.google.gson.JsonSerializationContext context) {
+                    json.addProperty("bedrock", function.bedrock.toString());
+                }
+
+                @Override
+                public BedrockFunction deserialize(JsonObject json,
+                    com.google.gson.JsonDeserializationContext context) {
+                    return new BedrockFunction(Json.text(json, "bedrock", "{}"));
+                }
+            });
+
+    @Override
+    public net.minecraft.world.level.storage.loot.functions.LootItemFunctionType getType() {
+        return TYPE;
+    }
+    *///?}
+
+    public static void register() {
+        Registry.register(BuiltInRegistries.LOOT_FUNCTION_TYPE, McAddon.id("bedrock"), TYPE);
+    }
+
+    @Override
+    public ItemStack apply(ItemStack stack, LootContext context) {
+        return switch (Json.text(bedrock, "function", "").replaceFirst("^minecraft:", "")) {
+            case "enchant_book_for_trading" ->
+                book(stack, context.getRandom(), context.getLevel().registryAccess());
+            default -> stack;
+        };
+    }
+
+    /**
+     * A book carrying one of the enchantments the function listed, at a level out of its own range.
+     *
+     * The costs the same function states beside them price a villager's offer, which a loot roll has
+     * no side to put a price on, so those four fields are named rather than acted on.
+     */
+    private ItemStack book(ItemStack stack, RandomSource random,
+        net.minecraft.core.RegistryAccess registries) {
+        List<Choice> choices = choices();
+        if (choices.isEmpty()) return stack;
+
+        for (String priced : List.of("base_cost", "base_random_cost", "per_level_cost",
+            "per_level_random_cost")) {
+            if (bedrock.has(priced)) {
+                AddonEntities.unsupported("loot function enchant_book_for_trading " + priced);
+            }
+        }
+
+        Choice chosen = choices.get(random.nextInt(choices.size()));
+        return Platform.enchantedBook(stack, registries, chosen.name(), chosen.roll(random));
+    }
+
+    private List<Choice> choices() {
+        List<Choice> choices = new ArrayList<>();
+        for (JsonElement element : Json.list(bedrock, "enchantments")) {
+            if (!element.isJsonObject()) continue;
+
+            JsonObject entry = element.getAsJsonObject();
+            String name = Json.text(entry, "name", null);
+            if (name == null) continue;
+
+            int lowest = Math.max(1, (int) Json.number(entry, "min", 1));
+            choices.add(new Choice(name, lowest,
+                Math.max(lowest, (int) Json.number(entry, "max", lowest))));
+        }
+        return choices;
+    }
+}

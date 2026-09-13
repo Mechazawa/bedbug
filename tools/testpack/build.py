@@ -12,12 +12,14 @@ still works:
     an item icon in each of the three shapes a pack may write it in
     a block with states and permutations, drawn with its own geometry
     a block and an item declaring what only a mixin answers, each with one form that is reported
-    a recipe of each of the five kinds that convert, and the tags deciding what each becomes
+    a recipe of each of the seven kinds that convert, and the tags deciding what each becomes
+    a named voxel shape, and the block that culls its faces against it
     a loot table and a trade table, each using every function and condition that converts
     two entities, one spawn egg naming a texture and one giving two colours
     an animation firing a sound and a particle off its timeline
     three particle definitions in the 1.10.0 format, one of them carrying a curve and events
     a texture set whose emissive channel has pixels in it
+    a page of the pack's own glyphs, and the locale list naming the languages it ships
     a function using the commands and selector arguments that need translating
 
     python3 tools/testpack/build.py                  # build/testpack/test-addon.mcaddon
@@ -186,7 +188,20 @@ def particle_atlas(x: int, y: int) -> tuple[int, int, int, int]:
     return TRANSPARENT
 
 
+def glyph_page(x: int, y: int) -> tuple[int, int, int, int]:
+    """A 128x128 page of 8x8 glyph cells, which is the grid Bedrock paints its own glyphs on.
+
+    Each cell holds a block as wide as its column and as tall as its row, so a glyph taken out of
+    the wrong cell is a different shape rather than the same shape in another place. Every cell has
+    at least the one pixel, because a glyph with no pixels at all has no width to advance by.
+    """
+    if x % 8 > x // 8 or y % 8 > y // 8:
+        return TRANSPARENT
+    return (255, 255, 255, 255)
+
+
 TEXTURES = (
+    ("font/glyph_E1.png", 128, glyph_page),
     ("textures/items/wand.png", 16, wand),
     ("textures/items/shard.png", 16, shard),
     ("textures/items/dust.png", 16, dust),

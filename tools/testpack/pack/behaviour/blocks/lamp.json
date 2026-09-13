@@ -25,7 +25,10 @@
         "explosion_resistance": 2
       },
       "minecraft:light_emission": 0,
-      "minecraft:geometry": "geometry.lamp",
+      "minecraft:geometry": {
+        "identifier": "geometry.lamp",
+        "culling_shape": "tp:lamp_shape"
+      },
       "minecraft:queued_ticking": {
         "interval_range": [5, 5],
         "looping": false,

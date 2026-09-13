@@ -115,12 +115,12 @@ public final class PackConverter {
             if (fresh) {
                 deleteRecursively(root);
                 Files.createDirectories(root);
-                writeMetadata(pack, root);
             }
 
             textures.convert(pack, root, fresh);
             sounds.addAll(new Sounds(namespace).convert(pack, root, fresh));
-            new Texts(namespace).convert(bundle, blocks, root, fresh);
+            Set<String> locales = new Texts(namespace).convert(bundle, blocks, root, fresh);
+            if (fresh) writeMetadata(pack, bundle, locales, root);
             icons.putAll(new Icons(namespace).convert(pack, textures.paths()));
             if (fresh) {
                 Set<String> sprites = new LinkedHashSet<>();
@@ -137,6 +137,7 @@ public final class PackConverter {
                 writeAtlas(root, sprites);
                 writeParticles(pack, root, textures.paths());
                 writeFunctions(bundle, root, namespace);
+                writeFont(pack, root, namespace);
             }
 
             if (fresh) {
@@ -152,7 +153,8 @@ public final class PackConverter {
             icons, List.copyOf(sounds), eggs);
     }
 
-    private static void writeMetadata(BedrockPack pack, Path root) throws IOException {
+    private static void writeMetadata(BedrockPack pack, Bundle bundle, Set<String> locales, Path root)
+        throws IOException {
         JsonObject meta = new JsonObject();
         JsonObject section = new JsonObject();
         section.addProperty("pack_format", Platform.resourcePackFormat());
@@ -162,12 +164,32 @@ public final class PackConverter {
         section.addProperty("max_format", Platform.resourcePackFormat());
         section.addProperty("description", pack.displayName());
         meta.add("pack", section);
+
+        JsonObject languages = languages(bundle, locales);
+        if (languages.size() > 0) meta.add("language", languages);
         Files.writeString(root.resolve("pack.mcmeta"), meta.toString(), StandardCharsets.UTF_8);
 
         Path icon = pack.file("pack_icon.png");
         if (Files.isRegularFile(icon)) {
             Files.copy(icon, root.resolve("pack.png"), StandardCopyOption.REPLACE_EXISTING);
         }
+    }
+
+    /**
+     * The languages the add-on declares, narrowed to the ones it has text for.
+     *
+     * A locale listed with no `.lang` behind it would stand in the language screen with nothing to
+     * say, so a pack that lists more than it ships contributes only what it ships.
+     */
+    private static JsonObject languages(Bundle bundle, Set<String> locales) {
+        List<BedrockPack> everywhere = new ArrayList<>(bundle.behaviours());
+        everywhere.add(bundle.resources());
+
+        JsonObject section = new JsonObject();
+        for (Language language : Language.readAll(everywhere)) {
+            if (locales.contains(language.code())) section.add(language.code(), language.declaration());
+        }
+        return section;
     }
 
     /**
@@ -411,9 +433,9 @@ public final class PackConverter {
          * rather than taken from the resource pack alone. The resource pack is read last, because
          * what a player sees is what it says.
          */
-        void convert(Bundle bundle, List<BlockDefinition> blocks, Path root, boolean write)
+        Set<String> convert(Bundle bundle, List<BlockDefinition> blocks, Path root, boolean write)
             throws IOException {
-            if (!write) return;
+            if (!write) return Set.of();
 
             Map<String, Map<String, String>> byLocale = new LinkedHashMap<>();
             List<BedrockPack> everywhere = new ArrayList<>(bundle.behaviours());
@@ -427,9 +449,11 @@ public final class PackConverter {
                 }
             }
 
+            Set<String> written = new LinkedHashSet<>();
             for (Map.Entry<String, Map<String, String>> locale : byLocale.entrySet()) {
                 if (locale.getValue().isEmpty()) continue;
 
+                written.add(locale.getKey());
                 JsonObject json = new JsonObject();
                 locale.getValue().forEach(json::addProperty);
                 locale.getValue().forEach((key, value) -> {
@@ -443,6 +467,7 @@ public final class PackConverter {
                 Files.createDirectories(target.getParent());
                 Files.writeString(target, json.toString(), StandardCharsets.UTF_8);
             }
+            return written;
         }
 
         /**
@@ -684,7 +709,8 @@ public final class PackConverter {
         "soul_campfire", "minecraft:campfire_cooking");
 
     /** The station tags a converted recipe answers without needing a recipe type of its own. */
-    private static final Set<String> PLAIN_STATIONS = Set.of("crafting_table", "smithing_table");
+    private static final Set<String> PLAIN_STATIONS =
+        Set.of("crafting_table", "smithing_table", "brewing_stand");
 
     /**
      * Crafting recipes, as a data pack the game reads out of the same directory.
@@ -1076,6 +1102,33 @@ public final class PackConverter {
     }
 
     /** Functions come from the behaviour packs, which is where a pack keeps its commands. */
+    /**
+     * A pack's own glyphs, added to the font the game draws ordinary text with.
+     *
+     * The image goes under the pack's own namespace and the definition under Java's, because a font
+     * is named by the game and the providers every pack declares for one name are read together.
+     */
+    private static void writeFont(BedrockPack pack, Path root, String namespace) throws IOException {
+        List<GlyphPage> pages = GlyphPage.readAll(pack);
+        JsonArray providers = new JsonArray();
+
+        for (GlyphPage page : pages) {
+            JsonObject provider = page.provider(namespace);
+            if (provider == null) continue;
+
+            Path target = root.resolve("assets").resolve(namespace).resolve("textures")
+                .resolve(page.texturePath());
+            Files.createDirectories(target.getParent());
+            Files.copy(page.source(), target, StandardCopyOption.REPLACE_EXISTING);
+            providers.add(provider);
+        }
+        if (providers.isEmpty()) return;
+
+        JsonObject font = new JsonObject();
+        font.add("providers", providers);
+        write(root.resolve("assets/minecraft/font/default.json"), font);
+    }
+
     private static void writeFunctions(Bundle bundle, Path root, String namespace) throws IOException {
         Set<String> unsupported = new java.util.LinkedHashSet<>();
         for (BedrockPack behaviour : bundle.behaviours()) {

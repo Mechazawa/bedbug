@@ -100,6 +100,7 @@ public record TradeTable(List<Offer> offers, List<Integer> tierExperience) {
      * `/mcaddon entities` name it: a filter on a trade item is reported rather than asked.
      */
     private static final Set<String> HANDLES = Set.of(
+        "table.format_version",
         "table.tiers", "tier.groups", "tier.trades", "tier.total_exp_required",
         "group.num_to_select", "group.trades",
         "trade.wants", "trade.gives", "trade.max_uses", "trade.trader_exp", "trade.reward_exp",
@@ -200,6 +201,14 @@ public record TradeTable(List<Offer> offers, List<Integer> tierExperience) {
     private static TradeTable readTiers(JsonObject root) {
         List<Offer> offers = new ArrayList<>();
         List<Integer> required = new ArrayList<>();
+
+        // The stamp says which dialect the table is written in. Every published one writes the same
+        // tiers, groups and trades this reads, so a table carrying one is read the same way whatever
+        // it claims, and the version it claims is named rather than acted on.
+        if (root.has("format_version")) {
+            AddonEntities.unsupported("trade table format_version "
+                + Json.text(root, "format_version", ""));
+        }
 
         for (JsonElement element : Json.list(root, "tiers")) {
             if (!element.isJsonObject()) continue;

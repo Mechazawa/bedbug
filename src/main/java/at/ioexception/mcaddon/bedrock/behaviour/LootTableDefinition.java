@@ -247,10 +247,11 @@ public record LootTableDefinition(String path, JsonObject java) {
                 function.addProperty("function", "minecraft:set_stew_effect");
                 function.add("effects", effects);
             }
+            case "enchant_book_for_trading" -> {
+                return answeredHere(bedrock, BedrockFunction.NAME, "function");
+            }
             // set_data, random_aux_value, set_data_from_color_index and random_block_state each pick
             // an item's data value, which Java has not had since blocks and items were flattened.
-            // enchant_book_for_trading prices a book against a villager's level, and a price is
-            // part of a trade rather than anything a loot function states.
             default -> {
                 AddonEntities.unsupported("loot function " + name);
                 return null;
@@ -324,10 +325,20 @@ public record LootTableDefinition(String path, JsonObject java) {
 
     /** A Bedrock condition kept as it stands, for the condition type this mod answers itself. */
     private static JsonObject answeredHere(JsonObject bedrock) {
-        JsonObject condition = new JsonObject();
-        condition.addProperty("condition", BedrockCondition.NAME);
-        condition.addProperty("bedrock", bedrock.toString());
-        return condition;
+        return answeredHere(bedrock, BedrockCondition.NAME, "condition");
+    }
+
+    /**
+     * A Bedrock object kept as it stands, for the loot type this mod answers itself.
+     *
+     * Java names the type of a condition under `condition` and the type of a function under
+     * `function`, and the object either of them carries travels as the text the pack wrote.
+     */
+    private static JsonObject answeredHere(JsonObject bedrock, String type, String key) {
+        JsonObject json = new JsonObject();
+        json.addProperty(key, type);
+        json.addProperty("bedrock", bedrock.toString());
+        return json;
     }
 
     private static void thisEntity(JsonObject condition, JsonObject predicate) {

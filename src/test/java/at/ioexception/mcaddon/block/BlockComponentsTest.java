@@ -117,7 +117,7 @@ class BlockComponentsTest {
     }
 
     private static BlockComponents read(String components) {
-        return BlockComponents.of(definition(components), Map.of());
+        return BlockComponents.of(definition(components), Map.of(), PackShapes.NONE);
     }
 
     private static BlockDefinition definition(String components) {

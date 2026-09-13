@@ -31,7 +31,12 @@ server decides what happens; the client draws it.
   shader pack and costs nothing when there is none.
 - Sounds, with every definition registered as a sound event, and files whose final page claims a
   length no clip has repaired on the way through.
-- Text, with Bedrock's `.lang` rules rather than a properties reader's.
+- Text, with Bedrock's `.lang` rules rather than a properties reader's. The locale list a pack ships
+  beside those files becomes the language list Java's own language screen reads, under the names the
+  pack gave them, so a language the game does not carry itself is one a player can still pick.
+- A pack's own glyphs. Each `font/glyph_<page>.png` is a sixteen by sixteen grid of characters, which
+  is the same grid a Java bitmap font provider is written against, so the page joins the font
+  ordinary text is drawn with and the pack's own icons appear wherever it wrote them.
 - Models, animations, animation controllers and render controllers, drawn through a full Molang
   evaluator, with each pass drawn the way its `.material` asks: alpha tested or blended, culled or
   not, plain or glowing, tinted the colour its controller worked out for it and lit by the light its
@@ -62,7 +67,9 @@ server decides what happens; the client draws it.
   breaking, clicking, standing on and ticking each reach the pack's own callback.
 - Blocks, with the states and permutations a pack declares: each combination gets its own model, the
   permutation conditions are evaluated through the Molang evaluator, and a block drawn with its own
-  geometry keeps it.
+  geometry keeps it. A block naming one of the pack's own `shapes/` under `culling_shape` hides the
+  faces that shape covers, which is what a Bedrock voxel shape is for and what a Java occlusion
+  shape does.
 - The events a block declares, fired the way Bedrock fires them: on its own clock, on a random tick,
   and on the block being placed, broken, clicked, stepped on, stepped off or landed on. Each one runs
   the commands the event queues and writes back the states it sets, with its Molang condition checked
@@ -81,6 +88,10 @@ server decides what happens; the client draws it.
   enchantment, rolls its level and charges the emeralds that level is worth, and one selling an
   explorer map hands over a map pointing at the nearest structure of the kind it names, or is left
   off the screen where the world has none.
+- Brewing. A pack's own brewing stand recipes are added to the list the game builds in code, so a
+  mix turning one potion into another over a reagent, and a container recipe turning one bottle into
+  another, both work at an ordinary brewing stand. A bottle of the pack's own is accepted as a
+  container to brew in.
 - Recipes: shaped, shapeless, furnace, smithing transform and smithing trim. `tags` names the block
   a recipe is made at, so one Bedrock furnace recipe listing a furnace, a blast furnace, a smoker
   and a campfire becomes four Java recipes, a shapeless recipe tagged for the stonecutter becomes a
@@ -93,7 +104,9 @@ server decides what happens; the client draws it.
   the gear a mob spawns in enchanted by the rule Java's own spawning enchants it with. A condition
   Java has a predicate for becomes that predicate; one it has none for is asked by this mod as the
   loot is rolled, which is how an entity's variant, a property a pack declared, the world and the
-  regional difficulty, a kill by a player's pet and a Bedrock biome tag all still decide a drop.
+  regional difficulty, a kill by a player's pet and a Bedrock biome tag all still decide a drop. A
+  function Java has none of is answered the same way: a book drops carrying one of the enchantments
+  the pack listed, at a level out of that enchantment's own range.
 - `.mcfunction` files translated into Java's command dialect with a `tick` function tag.
 - Natural spawning from a pack's `spawn_rules`, with each alternative the rule lists becoming a
   biome spawn entry of its own. The weight, the group size and the biome tags decide which biomes
@@ -147,8 +160,9 @@ filter documentation and the Molang query list out of Mojang's `bedrock-samples`
 `tools/census/commands.py` reads the published command list; `tools/census/particles.py` reads the
 particle schemas and documentation; `tools/census/data.py` reads the vanilla loot tables, recipes and
 trade tables; `tools/census/model.py` reads every shape the vanilla resource pack's geometries and
-animations are written in; and `tools/census/script.py` reads the published `@minecraft/*` type
-definitions. All of them compare what they read against the names this mod acts on:
+animations are written in; `tools/census/packfiles.py` reads the file kinds Mojang's own pack pair
+ships; and `tools/census/script.py` reads the published `@minecraft/*` type definitions. All of them
+compare what they read against the names this mod acts on:
 
 | Surface | Answered |
 | --- | --- |
@@ -165,14 +179,15 @@ definitions. All of them compare what they read against the names this mod acts 
 | Particle components | 100% |
 | Particle component fields | 97% |
 | Particle curves and Molang variables | 100% |
-| Loot table functions | 78% |
+| Loot table functions | 83% |
 | Loot table conditions | 94% |
-| Recipe types | 71% |
-| Recipe fields | 85% |
-| Trade table fields | 95% |
+| Recipe types | 100% |
+| Recipe fields | 100% |
+| Trade table fields | 100% |
 | Trade item functions | 80% |
 | Geometry, animation and controller fields | 93% |
-| `@minecraft/server` and friends | 95% |
+| Pack file kinds | 70% |
+| `@minecraft/server` and friends | 100% |
 
 Every name in the remaining share is counted and shown by `/mcaddon entities` and `/mcaddon
 scripts`, so a pack relying on one is told rather than left wondering. Run the censuses yourself to
@@ -218,9 +233,10 @@ definition names, and the three the component is written with, `attack`, `attack
 `attack.critical`, are none of them. A pack's sound definitions are what this mod registers, so
 there is nothing to name a Java sound with.
 
-**A loot function that prices a trade.** `enchant_book_for_trading` prices a book against a
-villager's level, which is part of how Java builds a trade in its own code rather than anything a
-loot function states.
+**What prices a trade, read out of a loot table.** `enchant_book_for_trading` states four costs
+beside the enchantments it picks between: a base, a base spread, and both again per level. In a trade
+those decide the emeralds the offer charges, and this mod charges them. In a loot table there is no
+other side to put a price on, so the book is enchanted and the four costs are counted.
 
 **One loot condition with nothing to ask.** `entity_killed` asks what the dropping mob itself
 killed, and a Java loot context holds the victim and whoever killed it and no record of what the
@@ -228,10 +244,8 @@ victim did. It is counted by `/mcaddon entities` rather than dropped without a w
 tag with no Java biome carrying the same idea, `sulfur_caves` among them, is named the same way, and
 a `biome_has_tag` asking for one then reads as false.
 
-**Brewing and the material reducer.** `minecraft:recipe_brewing_mix` and
-`minecraft:recipe_brewing_container` describe a brewing stand, whose recipes Java builds in its own
-code rather than reading from a data pack, so a pack cannot add one. `recipe_material_reduction`
-describes the Education Edition material reducer, which the Java game does not have as a block.
+**The material reducer.** `recipe_material_reduction` describes the Education Edition material
+reducer, which the Java game does not have as a block.
 
 **A recipe's priority and its symmetry.** Java offers every recipe that matches rather than the one
 with the highest priority, and mirrors a shaped pattern whatever `assume_symmetry` says. A Bedrock
@@ -260,6 +274,8 @@ names is already the wrong one and there is no number to pick. It is counted ins
 
 **A filter on a trade item.** Bedrock checks it as the trade is offered, out of the filter
 vocabulary. A Java offer is built once and sent to the client, which leaves nothing to ask again.
+The `format_version` a trade table may carry is named the same way: every published one writes the
+same tiers, groups and trades this reads, so the stamp changes nothing about how the table is read.
 
 **Three parts of what a block does to its surroundings.** `minecraft:support` shapes what rests on a
 block like a fence or like a stair, and the stair shape is read off the facing and the half that
@@ -388,6 +404,40 @@ village border that Java's poi map does not hold. Each is counted and named by `
 A Bedrock biome tag with no Java biome carrying the same idea, `sulfur_caves` and the `spawn_*`
 nether tags among them, is named the same way and then left out of the filter, so the rest of the
 rule still decides.
+
+**Whole directories that describe a Bedrock client.** `ui` is Bedrock's own screen language, which
+draws every menu the engine shows and has no counterpart in a Java resource pack. `fogs`,
+`atmospherics`, `lighting`, `color_grading` and `water` are the settings its deferred renderer reads,
+and the resource pack's `biomes` and `biomes_client.json` name one of each per biome; Java decides
+all of it from the dimension and the biome in its own code. `cameras` holds the presets `/camera`
+picks between and `dialogue` holds the screen an NPC opens, and both commands are already reported as
+ones Java has no form of. `textures/texture_list.json` is the index Bedrock keeps of every texture in
+the pack, and the conversion walks the directory itself. Each is named against the pack that shipped
+it, so `/mcaddon entities` says which directory went unread.
+
+**Worldgen a data pack would write.** `biomes`, `features`, `feature_rules` and `dimensions` on the
+behaviour side belong in registries a Java data pack writes into, and a converted pack is a data pack
+the server loads, so the route exists. Three things stand in it.
+
+The first is the lifecycle. An entry read from a pack carrying a `KnownPack` leaves a world stable,
+and a converted pack carries one from 1.21 on. 1.20.1 has no such thing: the game marks every entry
+from a pack that is not vanilla experimental, the world data carries that lifecycle, and a client
+then asks the player whether to load the world at all, every time they open it. One `worldgen/biome`
+written for a pack would do that to every 1.20.1 world the pack is installed in.
+
+The second is placement. A biome in the registry appears in no overworld by itself: the parameter
+list a data pack may write names one of the game's own presets and cannot add a point to it, so a
+pack's biome would reach a world only through a mixin into that preset, and only a world made
+afterwards. A dimension is worse: it is read when a world is created and never again.
+
+The third is that the two formats describe different things. A Bedrock biome states its terrain, the
+surface builder, the height noise type, the mountain parameters and the hills and mutation rules, and
+a Java biome has a field for none of them; a Java biome instead insists on carvers, features,
+spawners and spawn costs, which a Bedrock one never states. A Bedrock dimension states an identifier,
+a generator type name and a height range, where a Java one needs a whole chunk generator with a biome
+source and a noise settings reference behind it. About a dozen of the feature types have a Java
+configured feature behind them and the rest are placement, which Java states on a placed feature, or
+carving, which is a registry of its own.
 
 Surface lighting from a physically based texture set is the one thing that depends on what the
 player has installed: the emissive channel is drawn again at full brightness with or without a

@@ -1,0 +1,14 @@
+## A second locale, so the language list a pack declares has more than one entry to carry.
+pack.name=Test Add-On
+pack.description=Synthetische add-on waar de verify-harness tegenaan draait
+item.tp:wand.name=Teststaf
+item.tp:shard.name=Testscherf
+item.tp:dust.name=Teststof
+item.tp:pouch.name=Testbuidel
+item.tp:visor.name=Testvizier
+item.tp:disc.name=Testplaat
+tile.tp:lamp.name=Testlamp
+entity.tp:sprite.name=Testgeest
+entity.tp:ember.name=Testsintel
+item.spawn_egg.entity.tp:sprite.name=Testgeest oproepen
+item.spawn_egg.entity.tp:ember.name=Testsintel oproepen
