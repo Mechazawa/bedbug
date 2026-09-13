@@ -175,6 +175,7 @@ public final class ServerHooks {
 
     /** The after event names a player who is already gone, so it carries names and not a handle. */
     private static void playerLeft(ServerPlayer player) {
+        WorldEvents.forget(player);
         if (scripts == null) return;
 
         Map<String, Object> leaving = new LinkedHashMap<>();

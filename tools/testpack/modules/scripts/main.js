@@ -6,24 +6,36 @@
 // line per module means each of them answered.
 
 import {
+    AimAssistRegistry,
     BlockContainerClosedAfterEventSignal,
     BlockContainerOpenedAfterEventSignal,
     BlockExplodeAfterEventSignal,
     EntityContainerClosedAfterEventSignal,
     EntityContainerOpenedAfterEventSignal,
     EntityRemoveBeforeEvent,
+    EntityUpgradeAfterEventSignal,
     ExplosionAfterEventSignal,
     ExplosionBeforeEventSignal,
     GameRuleChangeAfterEventSignal,
     ItemStopUseOnAfterEventSignal,
+    LocatorBar,
     PistonActivateAfterEventSignal,
+    PlayerAimAssist,
     PlayerCancelBreakingBlockAfterEventSignal,
+    PlayerEmoteAfterEventSignal,
+    PlayerInputModeChangeAfterEventSignal,
+    PlayerInputPermissionCategoryChangeAfterEventSignal,
     PlayerStartBreakingBlockAfterEventSignal,
     PlayerSwingStartAfterEventSignal,
+    PlayerWaypoint,
     PressurePlatePopAfterEventSignal,
     PressurePlatePushAfterEventSignal,
+    PrimitiveShape,
+    PrimitiveShapesManager,
     TargetBlockHitAfterEventSignal,
+    TextPrimitive,
     TripWireTripAfterEventSignal,
+    Waypoint,
     system,
     world,
 } from "@minecraft/server";
@@ -100,6 +112,15 @@ const RAISED_SIGNALS = {
     tripWireTrip: TripWireTripAfterEventSignal,
 };
 
+// The published events Java has nothing to raise them from. A pack subscribing to one reaches a
+// signal of the class Bedrock names, so keeping and testing it answers; nothing ever arrives on it.
+const UNRAISED_SIGNALS = {
+    entityUpgrade: EntityUpgradeAfterEventSignal,
+    playerEmote: PlayerEmoteAfterEventSignal,
+    playerInputModeChange: PlayerInputModeChangeAfterEventSignal,
+    playerInputPermissionCategoryChange: PlayerInputPermissionCategoryChangeAfterEventSignal,
+};
+
 const arrived = new Set();
 
 function watch(name) {
@@ -128,6 +149,22 @@ system.run(() => {
         report("worldEvents.signalsNamed", named.length + " of " + Object.keys(RAISED_SIGNALS).length);
         report("worldEvents.explosionBeforeNamed",
             world.beforeEvents.explosion instanceof ExplosionBeforeEventSignal);
+
+        const unraised = Object.entries(UNRAISED_SIGNALS)
+            .filter(([name, signal]) => world.afterEvents[name] instanceof signal);
+        report("worldEvents.unraisedNamed",
+            unraised.length + " of " + Object.keys(UNRAISED_SIGNALS).length);
+
+        // What Bedrock draws on a client of its own. Each class links, each answers with the
+        // class the published API names, and each member reports rather than answering wrongly.
+        report("bedrockClient.aimAssist", world.getAimAssist() instanceof AimAssistRegistry);
+        report("bedrockClient.packSettings", typeof world.getPackSettings());
+        report("bedrockClient.primitiveShapes",
+            world.primitiveShapesManager instanceof PrimitiveShapesManager);
+        report("bedrockClient.textPrimitive", TextPrimitive.prototype instanceof PrimitiveShape);
+        report("bedrockClient.playerWaypoint", PlayerWaypoint.prototype instanceof Waypoint);
+        report("bedrockClient.locatorBarMember", typeof new LocatorBar().addWaypoint);
+        report("bedrockClient.aimAssistMember", typeof new PlayerAimAssist().set);
 
         // Two of these the game can be made to raise with nobody playing: a rule written through
         // the module's own setter, and a charge set off beside a block put there to lose. Both wait

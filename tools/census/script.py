@@ -101,6 +101,9 @@ def offered(text: str) -> dict[str, set[str]]:
     A class carries what its own body writes and what it inherits, because a pack calling an
     inherited member reaches it either way. A base class the module keeps to itself counts for the
     subclasses that export it, so it is read here even though it is not exported.
+
+    A member installed on the prototype after the declaration belongs to the class it names, which
+    is how a group of members answering the same way is written without a body per member.
     """
     own: dict[str, set[str]] = {}
     parents: dict[str, str] = {}
@@ -110,6 +113,10 @@ def offered(text: str) -> dict[str, set[str]]:
         own[match.group(1)] = members(body[:closing if closing > 0 else 0])
         if match.group(2):
             parents[match.group(1)] = match.group(2)
+
+    for owner, member in re.findall(r"^(\w+)\.prototype\.(\w+)\s*=", text, re.M):
+        if owner in own:
+            own[owner].add(member)
 
     names: dict[str, set[str]] = {}
     for name in own:

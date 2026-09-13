@@ -115,9 +115,10 @@ server decides what happens; the client draws it.
 - The world events a script subscribes to, raised out of the game rather than out of a pack's own
   data: what a player breaks, places, uses, picks up and swings at, where they go and what they
   hold, the weather turning and a game rule being set, an explosion and each block it takes, a
-  piston going out, a pressure plate, a tripwire, a target block, a button and a lever, and a
-  container opening and closing on a block or on an entity. An explosion is offered first as a
-  before event, so a listener can call one off, and the blocks it names are the ones still standing.
+  piston going out and coming back, a pressure plate, a tripwire, a target block, a button and a
+  lever, and a container opening and closing on a block or on an entity. An explosion is offered
+  first as a before event, so a listener can call one off, and the blocks it names are the ones
+  still standing.
 - The tests a behaviour pack ships through `@minecraft/server-gametest`. `/gametest run <name>`,
   `/gametest runset <tag>` and `/gametest runall` build the structure a test named out of the pack's
   own `.mcstructure`, place it beside you, hand the pack's function a `Test` bound to that area and
@@ -352,11 +353,11 @@ waypoint and shown to a chosen list of players. Nothing in Java carries any of t
 older supported versions have no bar at all, so `Player.locatorBar` and every member of `Waypoint`,
 `EntityWaypoint`, `LocationWaypoint` and `PlayerWaypoint` are counted and named.
 
-**What four errors would carry.** `BookError.reason`, `BookPageContentError.reason`,
-`InvalidEntityError.id` and `InvalidItemStackError.itemType` are data on errors Bedrock raises where
-this mod answers instead: a book is written as far as the pack asks and an entity or an item that has
-gone reads as invalid rather than throwing. The errors are exported, so a pack catching one by name
-still compiles, and the four members are counted.
+**What an error would carry.** `BookError.reason`, `InvalidEntityError.id`,
+`InvalidItemStackError.itemType` and the `reason` of the container, command and namespace errors are
+data on failures Bedrock raises where this mod answers instead: a book is written as far as the pack
+asks, and an entity or an item that has gone reads as invalid rather than throwing. The errors are
+exported, so a pack catching one by name still compiles, and each of their members is counted.
 
 **Four world events nothing in Java raises.** `entityUpgrade` fires when Bedrock migrates an entity
 to a newer version of the definition a pack wrote, which is a step in reading a pack rather than
