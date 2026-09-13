@@ -10,10 +10,7 @@ import org.joml.Vector3f;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.Identifier;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.util.Mth;
-import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -65,31 +62,26 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
      * `minecraft:renders_when_invisible` is a pack asking for the opposite, for something whose
      * shape is the point of it.
      */
-    private static boolean drawn(AddonEntity entity) {
+    private static boolean visible(AddonEntity entity) {
         return !entity.isInvisible() || (entity.definition() != null
             && entity.declares("minecraft:renders_when_invisible"));
     }
 
     /**
-     * The models for whatever the entity is wearing or holding.
+     * Everything drawn on the entity: its own model, then whatever it is wearing or holding.
      *
-     * An attachable names itself after the item it belongs to, so an equipped stack finds its model
-     * by its own identifier. Each one animates on its own clock beside the wearer's.
+     * What it is wearing is collected first, because an attachable writes into the entity's own
+     * variables and its model has to be resolved after that rather than before.
      */
-    private static List<AddonModels.Pass> attachables(AddonEntity entity, float partialTick) {
-        List<AddonModels.Pass> passes = new ArrayList<>();
-        for (EquipmentSlot slot : EquipmentSlot.values()) {
-            ItemStack held = entity.getItemBySlot(slot);
-            if (held.isEmpty()) continue;
+    private static List<Attachables.Drawn> drawn(AddonEntity entity, AddonClientAssets.Binding binding,
+        EntityAnimator animator, float partialTick) {
+        List<Attachables.Drawn> worn = Attachables.on(entity, animator, partialTick);
 
-            String item = BuiltInRegistries.ITEM.getKey(held.getItem()).toString();
-            AddonClientAssets.Binding binding = AddonClientAssets.attachableFor(item);
-            if (binding == null) continue;
-
-            EntityAnimator animator = Animators.of(entity, binding, item, partialTick,
-                entity.tickCount + partialTick);
-            if (animator != null) passes.addAll(binding.models().resolve(animator));
+        List<Attachables.Drawn> passes = new ArrayList<>();
+        for (AddonModels.Pass pass : binding.models().resolve(animator)) {
+            passes.add(new Attachables.Drawn(pass, animator));
         }
+        passes.addAll(worn);
         return passes;
     }
 
@@ -112,7 +104,7 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
     /** What drawing needs, pulled off the entity while the entity is still safe to touch. */
     public static class State extends EntityRenderState {
         EntityAnimator animator;
-        List<AddonModels.Pass> passes = new ArrayList<>();
+        List<Attachables.Drawn> passes = new ArrayList<>();
         float bodyRotation;
         Vector3f scale = new Vector3f(1, 1, 1);
     }
@@ -132,25 +124,25 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
             ? null
             : Animators.of(entity, identifier, partialTick, entity.tickCount + partialTick);
         state.passes = new ArrayList<>();
-        if (!drawn(entity)) return;
+        if (state.animator == null || !visible(entity)) return;
 
-        if (state.animator != null) state.passes.addAll(binding.models().resolve(state.animator));
-        state.passes.addAll(attachables(entity, partialTick));
+        state.passes = drawn(entity, binding, state.animator, partialTick);
         state.bodyRotation = Mth.rotLerp(partialTick, entity.yBodyRotO, entity.yBodyRot);
-        state.scale = state.animator == null ? new Vector3f(1, 1, 1) : state.animator.scale();
+        state.scale = state.animator.scale();
     }
 
     @Override
     public void submit(State state, PoseStack poseStack, SubmitNodeCollector collector, CameraRenderState camera) {
         super.submit(state, poseStack, collector, camera);
-        if (state.animator == null || state.passes.isEmpty()) return;
+        if (state.passes.isEmpty()) return;
 
         poseStack.pushPose();
         applyModelSpace(poseStack, state.bodyRotation, state.scale);
 
-        EntityAnimator animator = state.animator;
         int light = state.lightCoords;
-        for (AddonModels.Pass pass : state.passes) {
+        for (Attachables.Drawn each : state.passes) {
+            AddonModels.Pass pass = each.pass();
+            EntityAnimator animator = each.animator();
             collector.submitCustomGeometry(poseStack, renderTypeOf(pass),
                 (pose, buffer) -> {
                     PoseStack local = new PoseStack();
@@ -174,18 +166,17 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
 
         String identifier = identifierOf(entity);
         AddonClientAssets.Binding binding = AddonClientAssets.of(identifier);
-        if (binding == null || !drawn(entity)) return;
+        if (binding == null || !visible(entity)) return;
 
         EntityAnimator animator = Animators.of(entity, identifier, partialTick, entity.tickCount + partialTick);
         if (animator == null) return;
 
         poseStack.pushPose();
         applyModelSpace(poseStack, Mth.rotLerp(partialTick, entity.yBodyRotO, entity.yBodyRot), animator.scale());
-        List<AddonModels.Pass> passes = new ArrayList<>(binding.models().resolve(animator));
-        passes.addAll(attachables(entity, partialTick));
-        for (AddonModels.Pass pass : passes) {
+        for (Attachables.Drawn each : drawn(entity, binding, animator, partialTick)) {
+            AddonModels.Pass pass = each.pass();
             VertexConsumer buffer = buffers.getBuffer(renderTypeOf(pass));
-            BedrockModelRenderer.render(pass.geometry(), animator, pass::hides, pass.shift(),
+            BedrockModelRenderer.render(pass.geometry(), each.animator(), pass::hides, pass.shift(),
                 poseStack, buffer, pass.light(light), OverlayTexture.NO_OVERLAY, pass.colour());
         }
         poseStack.popPose();

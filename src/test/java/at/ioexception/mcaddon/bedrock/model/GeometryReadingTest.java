@@ -82,23 +82,54 @@ class GeometryReadingTest {
         assertTrue(child.byName().containsKey("hat"));
     }
 
-    /** A bone the child names again replaces the parent's, which is how an armour layer thickens one. */
+    /**
+     * A bone the child names again keeps what the parent gave it, which is how an armour layer
+     * thickens a limb: it writes an `inflate` and nothing else, and means the parent's cubes.
+     */
     @Test
-    void letsTheChildReplaceABoneRatherThanRepeatIt() throws IOException {
+    void letsTheChildAddToABoneRatherThanEmptyIt() throws IOException {
         BedrockGeometry child = legacy("""
             {
               "format_version": "1.8.0",
-              "geometry.child:geometry.parent": {"bones": [{"name": "head", "pivot": [0, 8, 0]}]}
+              "geometry.child:geometry.parent": {"bones": [{"name": "head", "inflate": 1.0}]}
             }
             """, """
             {
               "format_version": "1.8.0",
-              "geometry.parent": {"bones": [{"name": "head", "pivot": [1, 1, 1]}]}
+              "geometry.parent": {"bones": [{"name": "head", "pivot": [1, 1, 1],
+                "cubes": [{"origin": [0, 0, 0], "size": [1, 1, 1], "uv": [0, 0]}]}]}
             }
             """).geometry("geometry.child");
 
         assertEquals(1, child.bones().size());
-        assertEquals(0f, child.bones().get(0).pivot().x);
+        assertEquals(1f, child.bones().get(0).pivot().x);
+        assertEquals(1, child.bones().get(0).cubes().size());
+        assertEquals(1f, child.bones().get(0).cubes().get(0).inflate());
+    }
+
+    /**
+     * `reset` drops what the bone inherited, which is how one armour piece is cut out of the set.
+     *
+     * The helmet geometry extends the whole suit and resets every bone but the head, so what is
+     * drawn is a head with nothing hanging off it.
+     */
+    @Test
+    void emptiesABoneTheChildResets() throws IOException {
+        BedrockGeometry child = legacy("""
+            {
+              "format_version": "1.8.0",
+              "geometry.child:geometry.parent": {"bones": [{"name": "body", "reset": true}]}
+            }
+            """, """
+            {
+              "format_version": "1.8.0",
+              "geometry.parent": {"bones": [{"name": "body",
+                "cubes": [{"origin": [0, 0, 0], "size": [1, 1, 1], "uv": [0, 0]}]}]}
+            }
+            """).geometry("geometry.child");
+
+        assertEquals(1, child.bones().size());
+        assertTrue(child.bones().get(0).cubes().isEmpty());
     }
 
     @Test

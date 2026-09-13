@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.bedrock.animation;
 
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
+import at.ioexception.mcaddon.registry.AddonEntities;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
@@ -12,6 +13,14 @@ import java.util.Map;
 
 /** Reads one animation controller out of a pack's `animation_controllers` JSON. */
 public final class AnimationControllerParser {
+
+    /**
+     * Which way round the circle a rotation travels while one state crosses into the next.
+     *
+     * The clips of every state a controller reaches are summed at the weight each declares, so no
+     * rotation is ever carried from one value to another and there is no path to pick.
+     */
+    private static final List<String> UNREAD_STATE = List.of("blend_via_shortest_path");
 
     private AnimationControllerParser() {
     }
@@ -29,6 +38,8 @@ public final class AnimationControllerParser {
     }
 
     private static AnimationController.State readState(JsonObject json) {
+        AddonEntities.unsupportedFields("animation controller", json, UNREAD_STATE);
+
         List<AnimationController.Entry> animations = new ArrayList<>();
         if (json.has("animations")) {
             for (JsonElement entry : json.getAsJsonArray("animations")) {

@@ -94,7 +94,9 @@ server decides what happens; the client draws it.
   surface and underwater and lava markers and the blocks it may stand on are asked again of the
   spot the game is trying, so a mob that a pack said belongs on sand at night stays there.
 - Attachables: what any entity wears or holds, players and vanilla mobs included, animating on its
-  own clock.
+  own clock. A pack picks between several models for one item on a condition of its own, and what an
+  attachable writes into whoever carries it reaches that entity's variables, so the layer it stands
+  in for switches off.
 - The sounds and particles an animation, an animation controller state or an entity's own definition
   fires, played at the bone the pack anchored them to.
 - Particle effects a pack describes itself: the emitter runs on its own clock at the rate and
@@ -159,7 +161,7 @@ definitions. All of them compare what they read against the names this mod acts 
 | Recipe fields | 85% |
 | Trade table fields | 95% |
 | Trade item functions | 80% |
-| Geometry, animation and controller fields | 77% |
+| Geometry, animation and controller fields | 82% |
 | `@minecraft/server` and friends | 95% |
 
 Every name in the remaining share is counted and shown by `/mcaddon entities` and `/mcaddon
@@ -273,6 +275,11 @@ play anything in. The dragon's other seven phases are flown, and `/mcaddon entit
 **Two ways of building a bone.** `texture_meshes` builds geometry out of a texture's opaque pixels,
 and `binding` hangs a bone off the skeleton of whatever entity is carrying the model. Java's
 renderer has no form of either, so a bone written that way is drawn as the boxes it also declares.
+
+**The item an engine puts in a hand.** `held_item_scale`, `held_item_ignores_lighting` and
+`hide_held_items` size, light and hide what Bedrock draws in an entity's hand by itself. The only
+thing drawn in an add-on entity's hand here is the attachable a pack describes for that item, which
+carries its own scale and its own material, so all three are counted and named.
 
 **What a Molang value can be.** A value is a number or a string, which is what every expression in a
 pack computes with. Two queries answer with neither: `bone_orientation_matrix` gives a matrix and

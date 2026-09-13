@@ -5,6 +5,7 @@ import at.ioexception.mcaddon.convert.SpawnEggAppearance;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A Bedrock client entity: everything about how one entity is drawn.
@@ -25,10 +26,17 @@ public record ClientEntityDefinition(
     Map<String, String> animationControllers,
     Map<String, String> soundEffects,
     Map<String, String> particleEffects,
+    Map<String, String> particleEmitters,
+    /** Which items an attachable is drawn for, each against the test that has to hold. */
+    Map<String, MolangExpression> items,
     List<Gated> animate,
     List<Gated> renderControllers,
     List<MolangExpression> initialize,
     List<MolangExpression> preAnimation,
+    /** What an attachable writes into whoever is carrying it, run in that entity's own scope. */
+    List<MolangExpression> parentSetup,
+    /** The variables whatever this entity carries may read back through `c.owning_entity->v.name`. */
+    Set<String> publishedVariables,
     MolangExpression scale,
     /** Per axis scale, which a pack uses on top of `scale` to squash a jumping slime. */
     MolangExpression scaleX,
@@ -49,7 +57,15 @@ public record ClientEntityDefinition(
         return soundEffects.getOrDefault(shortName, shortName);
     }
 
+    /**
+     * The effect a short name stands for.
+     *
+     * A pack names its effects in either of two maps, and an animation writing a short name means
+     * whichever of the two carries it: `particle_effects` for the ones fired off a timeline and
+     * `particle_emitters` for the ones the entity keeps running.
+     */
     public String resolveParticle(String shortName) {
-        return particleEffects.getOrDefault(shortName, shortName);
+        return particleEffects.getOrDefault(shortName,
+            particleEmitters.getOrDefault(shortName, shortName));
     }
 }

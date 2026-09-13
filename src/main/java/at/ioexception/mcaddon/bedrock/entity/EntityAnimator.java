@@ -37,6 +37,7 @@ public final class EntityAnimator {
     private final Set<String> direct = new HashSet<>();
 
     private boolean initialised;
+    private MolangEnvironment published;
     private AnimationPlayer.EffectSink listener = AnimationPlayer.EffectSink.NONE;
 
     /**
@@ -87,6 +88,17 @@ public final class EntityAnimator {
 
     public MolangEnvironment environment() {
         return player.environment();
+    }
+
+    /**
+     * This entity's scope as whatever it is carrying may read it.
+     *
+     * Built once, because a link is followed on every frame and the view behind it holds no state
+     * of its own.
+     */
+    public MolangEnvironment published() {
+        if (published == null) published = environment().publishedAs(definition.publishedVariables());
+        return published;
     }
 
     public AnimationPlayer player() {

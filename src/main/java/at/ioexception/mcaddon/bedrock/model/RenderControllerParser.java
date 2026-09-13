@@ -3,6 +3,7 @@ package at.ioexception.mcaddon.bedrock.model;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import at.ioexception.mcaddon.bedrock.molang.MolangValue;
+import at.ioexception.mcaddon.registry.AddonEntities;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
@@ -15,10 +16,24 @@ import java.util.Map;
 /** Reads one render controller out of a pack's `render_controllers` JSON. */
 public final class RenderControllerParser {
 
+    /**
+     * How Bedrock's own renderer schedules and lights a pass.
+     *
+     * `rebuild_animation_matrices` asks it to pose the skeleton again before this pass,
+     * `filter_lighting` puts the pass through its lighting filter and `light_color_multiplier`
+     * tints the light reaching it. Java lights an entity per vertex from the light at its block and
+     * poses it once, so none of the three has a counterpart. `ignore_lighting` does: full
+     * brightness, which the render type carries.
+     */
+    private static final List<String> UNREAD = List.of(
+        "rebuild_animation_matrices", "filter_lighting", "light_color_multiplier");
+
     private RenderControllerParser() {
     }
 
     public static RenderController read(String name, JsonObject json) {
+        AddonEntities.unsupportedFields("render controller", json, UNREAD);
+
         List<MolangExpression> textures = new ArrayList<>();
         if (json.has("textures")) {
             for (JsonElement texture : json.getAsJsonArray("textures")) {

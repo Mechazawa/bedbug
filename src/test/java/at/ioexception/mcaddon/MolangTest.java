@@ -9,6 +9,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -146,6 +147,21 @@ class MolangTest {
     @Test
     void readsThroughAnArrow() {
         assertEquals(0, evaluate("c.owning_entity->v.anything"), 1e-6);
+    }
+
+    /** An attachable sees the variables its wearer published and nothing else it holds. */
+    @Test
+    void readsOnlyThePublishedVariablesOfALinkedEntity() {
+        MolangEnvironment wearer = new MolangEnvironment();
+        wearer.setVariable("attack_time", MolangValue.of(3));
+        wearer.setVariable("secret", MolangValue.of(7));
+
+        MolangEnvironment attachable = new MolangEnvironment();
+        attachable.setLink("owning_entity", wearer.publishedAs(Set.of("attack_time")));
+
+        assertEquals(3, MolangParser.parse("c.owning_entity->v.attack_time")
+            .asFloat(attachable), 1e-6);
+        assertEquals(0, MolangParser.parse("c.owning_entity->v.secret").asFloat(attachable), 1e-6);
     }
 
     @Test

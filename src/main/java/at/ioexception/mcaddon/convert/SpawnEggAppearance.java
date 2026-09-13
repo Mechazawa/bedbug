@@ -11,11 +11,13 @@ import com.google.gson.JsonObject;
  * has to survive conversion.
  *
  * @param textureKey a key into `item_texture.json`, or null when the pack gave colours instead
+ * @param textureIndex which of that key's textures to take, for a key naming a list of them
  */
-public record SpawnEggAppearance(String identifier, String textureKey, int baseColour, int overlayColour) {
+public record SpawnEggAppearance(String identifier, String textureKey, int textureIndex,
+    int baseColour, int overlayColour) {
     /** Bedrock's own colours for an egg whose pack named none, so an egg always has some. */
     public static final SpawnEggAppearance DEFAULT =
-        new SpawnEggAppearance("", null, 0x4C6B32, 0xA0A0A0);
+        new SpawnEggAppearance("", null, 0, 0x4C6B32, 0xA0A0A0);
 
     /** Null for an entity whose pack gave it no egg, which is most of them. */
     public static SpawnEggAppearance tryFrom(String identifier, JsonObject description) {
@@ -24,8 +26,21 @@ public record SpawnEggAppearance(String identifier, String textureKey, int baseC
 
         return new SpawnEggAppearance(identifier,
             Json.text(egg, "texture", null),
+            (int) Json.number(egg, "texture_index", 0),
             colour(Json.text(egg, "base_color", null), DEFAULT.baseColour()),
             colour(Json.text(egg, "overlay_color", null), DEFAULT.overlayColour()));
+    }
+
+    /**
+     * The name the converted icons are indexed under, which carries the index where there is one.
+     *
+     * One `item_texture.json` key may name a whole list of textures, which is how every vanilla
+     * spawn egg shares the key `spawn_egg` and picks its own by number.
+     */
+    public String iconKey() {
+        if (textureKey == null) return null;
+
+        return textureIndex == 0 ? textureKey : textureKey + "#" + textureIndex;
     }
 
     private static int colour(String hex, int fallback) {

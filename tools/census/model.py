@@ -279,7 +279,10 @@ def surfaces(samples):
                                   (ASSETS, "void readGeometries", "description")],
                                  "models, the 1.12 shape"),
         "geometry body": ([(ASSETS, "literals:JsonObject legacyGeometry")], "models, the 1.8 shape"),
-        "geometry bone": ([(GEOMETRY, "BedrockBone readBone")], "the bones of both shapes"),
+        # A bone of the 1.8 shape is also read where one geometry is folded into the one it extends,
+        # which is the only place a field about what a bone inherits means anything.
+        "geometry bone": ([(GEOMETRY, "BedrockBone readBone"),
+                           (ASSETS, "JsonArray mergeBones")], "the bones of both shapes"),
         "geometry cube": ([(GEOMETRY, "BedrockCube readCube")], "the cubes of both shapes"),
         "cube face uv": ([(GEOMETRY, "CubeUv readUv")], "per face textured cubes"),
         "animation": ([(ANIMATION, "BedrockAnimation readAnimation")], "animations"),

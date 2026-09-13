@@ -13,6 +13,7 @@ import at.ioexception.mcaddon.bedrock.model.MaterialDefinition;
 import at.ioexception.mcaddon.bedrock.model.RenderController;
 import at.ioexception.mcaddon.bedrock.model.RenderControllerParser;
 import at.ioexception.mcaddon.pack.BedrockPack;
+import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -148,6 +149,9 @@ public final class BedrockAssets {
             String identifier = colon < 0 ? entry.getKey() : entry.getKey().substring(0, colon);
             JsonObject body = colon < 0 ? entry.getValue()
                 : inherit(entry.getValue(), entry.getKey().substring(colon + 1), legacy);
+            // The 1.8 shape keeps the description fields beside the bones rather than in one of
+            // their own, so the wrapper the parser reads carries none of them to report.
+            AddonEntities.unsupportedFields("geometry", body, GeometryParser.UNREAD_DESCRIPTION);
             geometries.put(identifier, GeometryParser.readGeometry(identifier, legacyGeometry(body)));
         }
     }
@@ -180,17 +184,42 @@ public final class BedrockAssets {
         return merged;
     }
 
+    /**
+     * The parent's bones with the child's laid over them.
+     *
+     * A bone the child names again adds its own fields to the one it inherited, which is how
+     * `geometry.humanoid.armor1` inflates every limb of the body it extends and keeps their cubes.
+     * A bone carrying `reset` drops what it inherited instead, which is how the helmet geometry
+     * empties the arms and legs it took from the whole armour set and keeps only the head.
+     */
     private static JsonArray mergeBones(JsonArray parent, JsonArray child) {
         Map<String, JsonElement> bones = new LinkedHashMap<>();
-        for (JsonArray source : new JsonArray[] {parent, child}) {
-            if (source == null) continue;
-            for (JsonElement bone : source) {
-                bones.put(Json.text(bone.getAsJsonObject(), "name", ""), bone);
-            }
+        for (JsonElement bone : parent == null ? new JsonArray() : parent) {
+            bones.put(nameOf(bone), bone);
         }
+        for (JsonElement element : child == null ? new JsonArray() : child) {
+            JsonObject bone = element.getAsJsonObject();
+            JsonElement inherited = bones.get(nameOf(element));
+            bones.put(nameOf(element),
+                inherited == null || bone.has("reset") ? bone : overlay(inherited.getAsJsonObject(), bone));
+        }
+
         JsonArray merged = new JsonArray();
         bones.values().forEach(merged::add);
         return merged;
+    }
+
+    /** The inherited bone with the child's own fields written over it. */
+    private static JsonObject overlay(JsonObject inherited, JsonObject bone) {
+        JsonObject merged = inherited.deepCopy();
+        for (Map.Entry<String, JsonElement> field : bone.entrySet()) {
+            merged.add(field.getKey(), field.getValue());
+        }
+        return merged;
+    }
+
+    private static String nameOf(JsonElement bone) {
+        return Json.text(bone.getAsJsonObject(), "name", "");
     }
 
     /**
