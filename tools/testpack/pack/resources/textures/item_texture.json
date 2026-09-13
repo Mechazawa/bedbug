@@ -19,6 +19,9 @@
     },
     "visor": {
       "textures": "textures/items/visor"
+    },
+    "record": {
+      "textures": "textures/items/record"
     }
   }
 }

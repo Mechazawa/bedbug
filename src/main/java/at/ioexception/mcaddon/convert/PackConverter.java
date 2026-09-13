@@ -129,6 +129,7 @@ public final class PackConverter {
                 writeLootTables(root, loot, namespace);
                 writeBlockData(root, blocks, loot);
                 writeItemTags(root, items);
+                writeJukeboxSongs(root, items, namespace, sounds);
                 writeDyeRecipes(root, items);
                 writeBlockModels(root, icons, blocks, assets, sprites);
                 writeAtlas(root, sprites);
@@ -1347,6 +1348,46 @@ public final class PackConverter {
     }
 
     /**
+     * One `jukebox_song` entry per record a pack declares, named after the record itself.
+     *
+     * The entry holds what Bedrock writes on the item: the sound event to play, how long it runs
+     * and what a comparator beside the jukebox reads. The description is the item's own name, which
+     * is what a jukebox shows the player while the record turns.
+     *
+     * Nothing is written on the versions with no such registry. A record is the whole item there,
+     * and `AddonItems` builds it as one.
+     */
+    private static void writeJukeboxSongs(Path root, List<ItemDefinition> items, String namespace,
+        List<String> soundEvents) throws IOException {
+        if (!Platform.jukeboxSongsAreARegistry()) return;
+
+        for (ItemDefinition item : items) {
+            String sound = item.text("minecraft:record", "sound_event");
+            if (sound == null) continue;
+
+            Names.Identifier event = Names.soundEvent(sound, namespace);
+            String plays = event.namespace() + ":" + event.path();
+            // Every field of the entry is required and the game refuses one naming a sound event it
+            // has not got, so a record the pack wrote no music for gets no entry at all.
+            if (!soundEvents.contains(plays)) continue;
+
+            Names.Identifier id = Names.split(item.identifier(), "minecraft");
+            JsonObject description = new JsonObject();
+            description.addProperty("translate", "item." + id.namespace() + "." + id.path());
+
+            JsonObject song = new JsonObject();
+            song.addProperty("sound_event", plays);
+            song.add("description", description);
+            song.addProperty("length_in_seconds",
+                Math.max(0.1f, item.number("minecraft:record", "duration", 1f)));
+            song.addProperty("comparator_output", Math.clamp(
+                (int) item.number("minecraft:record", "comparator_signal", 1f), 0, 15));
+            write(root.resolve("data").resolve(id.namespace()).resolve("jukebox_song")
+                .resolve(id.path() + ".json"), song);
+        }
+    }
+
+    /**
      * Every tag one item names, from either spelling.
      *
      * A pack writes `minecraft:tags` with a `tags` array, and older packs write the array straight
@@ -1361,6 +1402,10 @@ public final class PackConverter {
             tags.add(Platform.dyeingIsARecipe()
                 ? "minecraft:cauldron_can_remove_dye" : "minecraft:dyeable");
         }
+
+        // What a jukebox will take is read off this tag, which is the whole of the check before the
+        // song registry existed and is still what says an item belongs in the slot.
+        if (item.components().containsKey("minecraft:record")) tags.add("minecraft:music_discs");
 
         JsonObject component = item.components().get("minecraft:tags");
         if (component == null) return tags;

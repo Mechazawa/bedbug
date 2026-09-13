@@ -137,7 +137,7 @@ public final class AddonItems {
             if (!IMPLEMENTED.contains(component)) AddonEntities.unsupported(component);
         }
 
-        Item item = build(definition, properties(definition), id);
+        Item item = build(definition, properties(definition, id), id);
         Registry.register(BuiltInRegistries.ITEM, id, item);
         BY_IDENTIFIER.put(definition.identifier(), item);
         COMPONENTS.put(item, Set.copyOf(definition.components().keySet()));
@@ -235,6 +235,13 @@ public final class AddonItems {
             if (egg != null) return egg;
         }
 
+        if (definition.components().containsKey("minecraft:record")) {
+            Item disc = Platform.buildRecord(properties, recordSound(definition, id),
+                (int) definition.number("minecraft:record", "comparator_signal", 1f),
+                Math.round(definition.number("minecraft:record", "duration", 0f)));
+            if (disc != null) return disc;
+        }
+
         // Bedrock splits the bag from the way it is clicked. Java keeps both in one class, so either
         // component alone is enough to mean a bundle.
         if (definition.components().containsKey("minecraft:storage_item")
@@ -258,8 +265,30 @@ public final class AddonItems {
             : Platform.buildWearable(properties, id, wornSlot(definition));
     }
 
+    /**
+     * The sound event a record names, or null when this game has none under that name.
+     *
+     * Under a stable format version a record names one of the engine's own sound events, and a pack
+     * gives it music of its own by writing that same name in its `sound_definitions.json`. The
+     * definition is what the converter turns into a sound event, so a record naming an engine sound
+     * the pack never defined has nothing to play and is reported rather than left silent.
+     *
+     * A name carrying no namespace of its own belongs to the pack that wrote it, and an item's own
+     * namespace is that pack's, because a converted pack takes the namespace its declarations use.
+     */
+    private static Identifier recordSound(ItemDefinition definition, Identifier id) {
+        String named = definition.text("minecraft:record", "sound_event");
+        if (named == null) return null;
+
+        Names.Identifier sound = Names.soundEvent(named, id.getNamespace());
+        if (sound.namespace().isEmpty() || sound.path().isEmpty()) return null;
+
+        Identifier event = Platform.id(sound.namespace(), sound.path());
+        return BuiltInRegistries.SOUND_EVENT.containsKey(event) ? event : null;
+    }
+
     /** Everything a component can say about an ordinary item, gathered into one set of properties. */
-    private static Item.Properties properties(ItemDefinition definition) {
+    private static Item.Properties properties(ItemDefinition definition, Identifier id) {
         Item.Properties properties = new Item.Properties().stacksTo(definition.maxStackSize());
 
         int durability = definition.durability();
@@ -282,6 +311,17 @@ public final class AddonItems {
         properties = piercing(definition, properties);
         properties = kinetic(definition, properties);
         properties = reach(definition, properties);
+        // A record's song is named rather than held, and the entry that name points at is a file the
+        // converter writes, so the name is all an item registered this early can carry. A record
+        // with no sound to play gets no song, because the entry would name an event that is not
+        // there and the game throws rather than shrugging when it looks one up.
+        if (definition.components().containsKey("minecraft:record")) {
+            if (recordSound(definition, id) == null) {
+                AddonEntities.unsupported("minecraft:record");
+            } else {
+                properties = Platform.jukeboxPlayable(properties, id);
+            }
+        }
         return weapon(definition, properties);
     }
 
@@ -808,14 +848,13 @@ public final class AddonItems {
      * `minecraft:armor` and `minecraft:weapon` are not in the schemas Mojang publishes today. Packs
      * written against the older format versions still ship them, and both are read.
      *
-     * `minecraft:record` is deliberately absent. What a jukebox plays is a jukebox song, and a song
-     * only exists as an entry in a registry a data pack writes into. A world whose data packs write
-     * into one of those registries is a world the game calls experimental, and every world with the
-     * add-on installed then opens behind a screen asking the player whether to load it at all. One
-     * item component is not worth that, so a record stays a plain item and is counted as a gap.
+     * `minecraft:record` reaches a jukebox two ways. From 1.21 the song is an entry in a registry a
+     * data pack writes into, which the converter writes as a file and the item names; before that
+     * the item is a `RecordItem` carrying the sound itself and joins the tag a jukebox accepts.
      */
     private static final List<String> IMPLEMENTED = List.of(
         "minecraft:icon", "minecraft:display_name", "minecraft:max_stack_size", "minecraft:tags",
+        "minecraft:record",
         "minecraft:food", "minecraft:use_animation", "minecraft:use_duration",
         "minecraft:use_modifiers", "minecraft:durability", "minecraft:max_damage",
         "minecraft:repairable", "minecraft:wearable", "minecraft:armor",

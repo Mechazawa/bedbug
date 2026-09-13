@@ -78,10 +78,33 @@ public final class AddonPacks {
             ConvertedPack pack = converted.get(index);
             try {
                 consumer.accept(Platform.directoryPack(
-                    McAddon.MOD_ID + "/" + pack.namespace(), pack.displayName(), pack.root(), type));
+                    McAddon.MOD_ID + "/" + pack.namespace(), pack.displayName(), pack.root(), type,
+                    knownAs(pack), knownVersion(pack)));
             } catch (RuntimeException error) {
                 McAddon.LOGGER.error("Could not offer {} to the game.", pack.displayName(), error);
             }
         }
+    }
+
+    /**
+     * What one installation of an add-on calls itself to another.
+     *
+     * The uuid in a pack's own manifest header is the one thing two installations of the same
+     * add-on share and two different add-ons never do, so it is what a server and a client match on.
+     */
+    private static String knownAs(ConvertedPack pack) {
+        return pack.pack().manifest().uuid().toString();
+    }
+
+    /**
+     * The version two installations have to agree on before either leaves content out of a sync.
+     *
+     * The pack's own version separates two releases of one add-on. The mod's version is here because
+     * the bytes in a converted pack are a function of the converter as much as of the pack: a client
+     * converting the same add-on with a different build of this mod holds different entries, and
+     * saying so costs a sync that sends everything instead of one that sends the wrong thing.
+     */
+    private static String knownVersion(ConvertedPack pack) {
+        return pack.pack().manifest().version() + "+" + McAddon.VERSION;
     }
 }

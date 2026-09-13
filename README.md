@@ -43,6 +43,11 @@ server decides what happens; the client draws it.
 - Items, including edible and wearable ones, spawn eggs, and a creative tab per add-on. A dyeable
   item takes the colour the pack painted it and the one a player dyes it. A bow draws and fires
   whatever the pack loads it with. A bag holds other items. A drop the pack asks to keep lies there.
+- Records. A record a pack ships goes into a jukebox and plays, for the length the pack stated, with
+  the comparator reading it asked for. Bedrock lets a pack give a record music of its own by writing
+  one of the engine's own record sound names in its `sound_definitions.json`, which is the only way
+  it can name one, and that definition is the sound the jukebox plays. A record naming a sound the
+  pack never defined has nothing to play and is reported rather than registered silent.
 - The custom components a pack registers from its own script, on its own blocks and items: placing,
   breaking, clicking, standing on and ticking each reach the pack's own callback.
 - Blocks, with the states and permutations a pack declares: each combination gets its own model, the
@@ -160,13 +165,6 @@ Aim assist, pack settings and the device memory tiers describe a Bedrock client 
 mob. `minecraft:custom_hit_test` gives an entity hit boxes apart from the one it collides in, and Java
 has the one box for both. Each is counted and named rather than silently doing nothing.
 
-**A record plays nothing.** `minecraft:record` needs a jukebox song, and a song only exists as an
-entry in one of the registries a data pack writes into. An entry read from a pack the game has no
-`KnownPack` for is marked experimental, and a world holding one experimental entry opens behind a
-screen asking whether to load it at all, every time. A converted add-on pack is such a pack, so the
-song would have to come from one, and one item component does not pay for that. A record is
-registered as a plain item and counted as a gap.
-
 **An item's data value.** `set_data`, `random_aux_value`, `set_data_from_color_index` and
 `random_block_state` all pick one of the things a Bedrock id stands for by number. Java gave every
 one of those its own id when it flattened blocks and items, so there is no number left to set, and
@@ -195,11 +193,17 @@ recipe writing either keeps everything else and the field is reported. An unlock
 instead of an item is reported the same way: Java unlocks a recipe from an advancement, and no
 advancement trigger waits on a player standing in water or filling their inventory.
 
-**A smithing trim a pack invents.** From 26 the trim a smithing table applies is named on the recipe
-rather than carried by the template item, and a trim pattern is an entry in a registry a data pack
-writes into. An entry from a converted pack is one the game marks experimental, so the patterns
-available are the ones the game already ships and the name is read back out of a template called
-`<pattern>_armor_trim_smithing_template`. A recipe naming any other template is reported instead.
+**A smithing trim a pack invents.** A Java trim pattern names an asset, and the armour overlays for
+that asset are textures a resource pack ships under `textures/trims/`. A Bedrock pack has nothing to
+build one out of. Its own eighteen patterns are drawn out of a directory the engine reads by name,
+no file in a pack points at that directory, there is no schema for a pattern or a material, and
+which pattern a worn piece shows is decided by a Molang variable the engine sets rather than by
+anything a pack can write. `minecraft:recipe_smithing_trim` names no pattern either: it names the
+template, the base and the material, and Bedrock reads the pattern off whichever template item was
+placed. From 26 the Java side wants the pattern named on the recipe, so it is read back out of a
+template called `<pattern>_armor_trim_smithing_template`, which makes the patterns a converted
+recipe can apply the ones the game already ships. A recipe naming any other template is reported
+instead.
 
 **What a trade runs over the item it hands over.** `enchant_with_levels` and `enchant_randomly`
 enchant it, `set_count` counts it, `random_dye` paints it one of the sixteen dyes,

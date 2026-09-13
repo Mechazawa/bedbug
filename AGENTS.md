@@ -197,9 +197,10 @@ These are the checks it runs, and what each one catches:
 
   ```bash
   export JAVA_HOME=/opt/homebrew/opt/openjdk@25
-  python3 tools/verify/verify.py all                     # conversion, server and client per version
+  python3 tools/verify/verify.py all                     # conversion, server, client and join per version
   python3 tools/verify/verify.py run --version 26.2      # a server, one version
   python3 tools/verify/verify.py client --version 1.21.1 # a client, one version
+  python3 tools/verify/verify.py join --version 26.2     # a client connected to a server
   python3 tools/verify/verify.py convert --source <extracted pack directory>   # no game
   ```
 
@@ -210,28 +211,53 @@ These are the checks it runs, and what each one catches:
   run where every test silently never started fails the same way as one where a test broke. It
   proves nothing about rendering.
 
-  **A dynamic registry entry is safe from the mod's own data and unsafe from a converted pack.**
-  What decides it is the pack the entry was read from rather than the registry it went into. The
-  game gives an entry `Lifecycle.experimental()` when the pack carries no `KnownPack`, and a world
-  holding one experimental entry opens behind a screen asking the player whether to load it at all.
-  That screen waits for a click forever, so a run under this harness stops dead on it, and a player
-  gets the same question every time they open their world.
+  **A dynamic registry entry is safe from any pack that names itself.** What decides it is the pack
+  the entry was read from rather than the registry it went into.
+  `ResourceManagerRegistryLoadTask.REGISTRATION_INFO_CACHE`, `RegistryDataLoader` before 26, reads
+  the pack's `KnownPack`: `optional.map(KnownPack::isVanilla).map(ignored -> stable())
+  .orElse(experimental())`, so any `KnownPack` at all gives `Lifecycle.stable()` and the namespace
+  does not have to be `minecraft`. With none, the entry is experimental, the lifecycle
+  `LevelStorageSource.getLevelDataAndDimensions` folds into the level data is experimental with it,
+  and a client puts a screen in front of the world asking whether to load it at all. The game works
+  that out again on every open and keeps no record of having been answered, so it is a question the
+  player gets every time rather than one they can settle once.
 
-  Three kinds of pack, measured on 26.2 by opening a world with a client and reading the log back
-  for the integrated server:
+  **Read it off the log line, not off the world failing to open.** `PrimaryLevelDataMixin` opens such
+  a world anyway in a development environment and says so at `ERROR`, naming a pack with no
+  `KnownPack`. So the check in both directions is that line: a run that should be stable has to not
+  carry it, and a run that should be experimental has to carry it. A missing
+  `Starting integrated minecraft server` line proves only that the world did not open, which a hang
+  or a crash gives just as readily.
+
+  Three kinds of pack, measured on 26.2 with a client and the mod's own line read back:
 
   - **The mod's own `src/main/resources/data/mcaddon/`** is safe. Fabric gives every mod pack a
     `KnownPack`, so a `jukebox_song`, a `test_instance` and a `test_environment` shipped there all
     leave the world stable.
+  - **A converted add-on pack** is safe too, because `Platform.directoryPack` gives it a name of its
+    own: `KnownPack("mcaddon", <the manifest header uuid>, <the pack version> + "+" +
+    McAddon.VERSION)`. The uuid is what two installations of one add-on share; the version separates
+    two releases, and carries the mod's version because the bytes in a converted pack are a function
+    of the converter as much as of the pack. Built with that `KnownPack` taken out again, one
+    converted `jukebox_song` is enough to make the world experimental.
   - **A data pack in the world's own `datapacks/`** is not. One `test_instance` plus one
-    `test_environment` written there stops a client on the screen exactly as one `jukebox_song`
+    `test_environment` written there marks a world exactly as one `jukebox_song` from an unnamed pack
     does, which is what `tools/scene/scene.py` would hit if a scene ever wrote one.
-  - **A converted add-on pack** is not either. `Platform.directoryPack` builds its
-    `PackLocationInfo` with an empty `KnownPack`, which is the whole of why a record from a pack
-    cannot have its song.
 
-  Loot tables, recipes, advancements, tags and functions are safe from any of the three, because
-  none of them is a registry the world's lifecycle is read from.
+  **A dedicated server never asks.** The screen is `WorldOpenFlows`, which is client code. A server
+  loaded the same experimental pack, started, ran the console script and stopped with nothing said
+  about it, so this is a thing a player meets and a server operator does not.
+
+  **What a name costs a server that has one.** `RegistrySynchronization.packRegistry` leaves an
+  entry's content out of what it sends when the client acknowledged that entry's `KnownPack`, and
+  sends the whole of it encoded otherwise; the entry's id goes over either way. A client acknowledges
+  only what its own repository holds, and `PackRepositoryMixin` puts this mod's converted packs in
+  that repository, so a client with the same add-on installed reads the entry out of its own copy and
+  a client without one is sent everything. Getting the version string wrong therefore costs a bigger
+  packet rather than a client short of content.
+
+  Loot tables, recipes, advancements, tags and functions are safe from any of these, because none of
+  them is a registry the world's lifecycle is read from.
 
   The built-in registries are a different thing again, and this mod does write into them at startup,
   which is where its entity types, items, blocks and its own loot condition type go. Fabric keeps
@@ -254,6 +280,28 @@ These are the checks it runs, and what each one catches:
   went unread for so long. Filtered as normal in a dev environment: `No data fixer registered for`,
   the Realms authorisation failure, `Failed to retrieve profile key pair`, and Sodium force-disabling
   the mixins Iris replaces.
+
+  A green `join` proves what neither half alone can: a client entered a *dedicated server's* world.
+  It starts the server, waits for `Done (`, launches a client with `--quickPlayMultiplayer
+  127.0.0.1:<port>`, and then reads three things back, none of which a client that merely launched
+  can produce:
+
+  - The server wrote `logged in with entity id` and `<name> joined the game`, which it writes only
+    after a client finished logging in and spawned into the level.
+  - `list` typed into the server console answered with somebody on it, so the client was still
+    standing there and not already gone.
+  - A message typed into the server console came back out of the *client's* log. Only the server can
+    send it and only a client in that server's world prints it, so this is the whole round trip. The
+    text is unique per run, which is what stops a line left in an older log passing for this one.
+
+  It also types `give @a <an item the packs declare>` and fails when the server refuses it, and it
+  fails when the two halves report different numbers of entity types, items or blocks, because the
+  registry sync insists those agree and a bare disconnect reason does not say which registry broke.
+
+  `-PjoinServer=<host>:<port>` in `gradle/mod.gradle.kts` is what passes the address, next to the
+  `-PquickPlay=<world>` the single player half uses. The server is given `online-mode=false` and
+  `enforce-secure-profile=false`, because a dev client has a made-up name and no session and is
+  refused before any of this mod's code is reached otherwise.
 
   A green `convert` proves the output under `versions/<version>/run/.mcaddon/converted/` holds one
   texture per texture the pack ships, one sound event per definition, and an `_n` and `_s` sidecar
