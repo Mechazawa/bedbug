@@ -67,6 +67,22 @@ public final class Animators {
         });
     }
 
+    /**
+     * The animator drawing the entity itself, which is what Bedrock calls the root model.
+     *
+     * Null for an entity Java draws with its own model, because then nothing an add-on described is
+     * underneath whatever is worn on it.
+     */
+    public static EntityAnimator rootOf(int entityId) {
+        return ANIMATORS.entrySet().stream()
+            .filter(entry -> entry.getKey().startsWith(entityId + "/"))
+            .map(Map.Entry::getValue)
+            .filter(entry -> !entry.queries().attached())
+            .map(Entry::animator)
+            .findFirst()
+            .orElse(null);
+    }
+
     public static void forget(int entityId) {
         ANIMATORS.keySet().removeIf(key -> key.startsWith(entityId + "/"));
     }

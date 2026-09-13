@@ -19,7 +19,7 @@ import java.util.concurrent.ThreadLocalRandom;
  * Bedrock nests trades in tiers and groups, and a group offers only some of what it lists. Java has
  * no tiers, so every tier's picks are flattened into one list at the point the entity first trades.
  */
-public record TradeTable(List<Offer> offers) {
+public record TradeTable(List<Offer> offers, int tiers) {
     /** One trade: what it takes, what it gives back, and how often it can be used. */
     public record Offer(String costItem, int costCount, String secondCostItem, int secondCostCount,
         String resultItem, int resultCount, int maxUses, int experience) {
@@ -29,14 +29,15 @@ public record TradeTable(List<Offer> offers) {
         Path file = pack.file(path);
         if (!Files.isRegularFile(file)) {
             McAddon.LOGGER.warn("{} names a trade table it does not ship: {}", pack.displayName(), path);
-            return new TradeTable(List.of());
+            return new TradeTable(List.of(), 0);
         }
 
         try {
-            return new TradeTable(readTiers(Json.parseObject(file)));
+            JsonObject root = Json.parseObject(file);
+            return new TradeTable(readTiers(root), Json.list(root, "tiers").size());
         } catch (IOException | RuntimeException error) {
             McAddon.LOGGER.warn("Could not read {}: {}", path, error.toString());
-            return new TradeTable(List.of());
+            return new TradeTable(List.of(), 0);
         }
     }
 

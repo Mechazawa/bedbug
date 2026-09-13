@@ -4,6 +4,7 @@ import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.animation.BonePose;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
 import at.ioexception.mcaddon.bedrock.entity.EntityAnimator;
+import at.ioexception.mcaddon.bedrock.model.BedrockBone;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.registry.AddonEntities;
@@ -31,10 +32,22 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.OwnableEntity;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.TamableAnimal;
+import net.minecraft.world.entity.animal.allay.Allay;
+import net.minecraft.world.entity.animal.fox.Fox;
+import net.minecraft.world.entity.animal.panda.Panda;
+import net.minecraft.world.entity.animal.parrot.Parrot;
+import net.minecraft.world.entity.animal.wolf.Wolf;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
+import net.minecraft.world.entity.boss.wither.WitherBoss;
 import net.minecraft.world.entity.monster.Creeper;
+import net.minecraft.world.entity.monster.ElderGuardian;
 import net.minecraft.world.entity.monster.EnderMan;
+import net.minecraft.world.entity.monster.Ravager;
+import net.minecraft.world.entity.monster.piglin.Piglin;
+import net.minecraft.world.entity.monster.warden.Warden;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
+import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.biome.Biome;
@@ -43,6 +56,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Vector3f;
 
 import java.util.HashSet;
 import java.util.List;
@@ -153,6 +167,35 @@ public final class AddonQueries implements MolangEnvironment.Queries {
                 && crystal.showsBottom());
             case "texture_frame_index" -> MolangValue.of(entity instanceof ExperienceOrb orb
                 ? orb.getIcon() : 0);
+            case "is_elder" -> MolangValue.of(entity instanceof ElderGuardian);
+            case "is_dancing" -> MolangValue.of((entity instanceof Allay allay && allay.isDancing())
+                || (entity instanceof Parrot parrot && parrot.isPartyParrot()));
+            case "is_celebrating_special" -> MolangValue.of(entity instanceof Piglin piglin
+                && piglin.isDancing());
+            case "is_shield_powered" -> MolangValue.of(entity instanceof WitherBoss wither
+                && wither.isPowered());
+            case "is_delayed_attacking" -> MolangValue.of(entity instanceof Ravager ravager
+                && ravager.getAttackTick() > 0);
+            case "is_sonic_boom" -> MolangValue.of(entity instanceof Warden warden
+                && warden.sonicBoomAnimationState.isStarted());
+            case "is_interested" -> MolangValue.of((entity instanceof Wolf wolf && wolf.isInterested())
+                || (entity instanceof Fox fox && fox.isInterested()));
+            case "roll_counter" -> MolangValue.of(entity instanceof Panda panda ? panda.rollCounter : 0);
+            case "sneeze_counter" -> MolangValue.of(entity instanceof Panda panda
+                ? panda.getSneezeCounter() : 0);
+            case "shake_time" -> MolangValue.of(entity instanceof AbstractArrow arrow ? arrow.shakeTime : 0);
+            // How battered a minecart is. Both editions rock it by that much and let it settle back.
+            case "structural_integrity" -> MolangValue.of(entity instanceof AbstractMinecart cart
+                ? cart.getDamage() : 0);
+
+            // The wolf's two angles are radians in Java and degrees in Molang. Its shade is full while
+            // it is dry and dips for as long as the shake runs, which is what the query asks about.
+            case "head_roll_angle" -> MolangValue.of(entity instanceof Wolf wolf
+                ? Math.toDegrees(wolf.getHeadRollAngle(partialTick)) : 0);
+            case "tail_angle" -> MolangValue.of(entity instanceof Wolf wolf
+                ? Math.toDegrees(wolf.getTailAngle()) : 0);
+            case "is_shaking_wetness" -> MolangValue.of(entity instanceof Wolf wolf
+                && wolf.getWetShade(partialTick) < 1);
 
             case "is_invisible" -> MolangValue.of(entity.isInvisible());
             case "is_silent" -> MolangValue.of(entity.isSilent());
@@ -255,6 +298,7 @@ public final class AddonQueries implements MolangEnvironment.Queries {
             case "has_target" -> MolangValue.of(flag(properties, "has_target"));
             case "last_hit_by_player" -> MolangValue.of(flag(properties, "last_hit_by_player"));
             case "trade_tier" -> MolangValue.of(number(properties.get("trade_tier")));
+            case "max_trade_tier" -> MolangValue.of(number(properties.get("max_trade_tier")));
             case "death_ticks" -> MolangValue.of(entity instanceof LivingEntity living
                 ? living.deathTime : 0);
 
@@ -263,6 +307,14 @@ public final class AddonQueries implements MolangEnvironment.Queries {
             case "is_charged", "is_chested", "is_ignited", "is_illager_captain", "is_pregnant",
                 "is_saddled", "is_shaking", "is_stackable", "is_stunned", "is_tamed",
                 "can_climb", "can_fly", "can_power_jump" -> MolangValue.of(flag(properties, name));
+
+            // Which ways the entity can move, and whether standing against it hurts. Each is decided
+            // by the components the behaviour pack declared, which the client does not have.
+            case "can_swim", "can_walk", "can_damage_nearby_mobs" -> MolangValue.of(flag(properties, name));
+
+            // Bedrock publishes this one as answering whether `behavior.timer_flag_2` is running, and
+            // that goal already sets the flag it names.
+            case "is_feeling_happy" -> MolangValue.of(flag(properties, "timer_flag_2"));
 
             case "block_state", "block_property" -> MolangValue.of(number(properties.get(text(arguments, 0))));
             case "has_block_state", "has_block_property" -> MolangValue.of(!arguments.isEmpty()
@@ -293,6 +345,9 @@ public final class AddonQueries implements MolangEnvironment.Queries {
 
             case "get_animation_frame" -> MolangValue.of(environment.animTime());
             case "bone_orientation_trs", "bone_origin" -> boneOrigin(arguments);
+            case "get_default_bone_pivot" -> MolangValue.of(bonePivot(arguments));
+            case "get_locator_offset" -> MolangValue.of(locatorOffset(animator, arguments));
+            case "get_root_locator_offset" -> MolangValue.of(locatorOffset(rootModel(), arguments));
 
             case "item_slot" -> MolangValue.of(number(properties.get("item_slot")));
             case "item_slot_to_bone_name" -> MolangValue.of(boneForSlot(text(arguments, 0)));
@@ -389,6 +444,8 @@ public final class AddonQueries implements MolangEnvironment.Queries {
             case "fuse_time" -> MolangValue.of(number(properties.get("fuse_time")));
 
             case "actor_count" -> MolangValue.of(actorCount());
+            case "total_emitter_count" -> MolangValue.of(AddonEmitters.running());
+            case "scoreboard" -> MolangValue.of(Platform.score(entity, text(arguments, 0)));
             case "all_tags" -> MolangValue.of(families(properties, arguments, true));
             case "any_tag" -> MolangValue.of(families(properties, arguments, false));
             case "has_biome_tag" -> MolangValue.of(biomeTags(arguments, false));
@@ -755,10 +812,35 @@ public final class AddonQueries implements MolangEnvironment.Queries {
      */
     private MolangValue boneOrigin(List<MolangValue> arguments) {
         BonePose pose = animator.poseOf(text(arguments, 0));
-        if (pose == null) return MolangValue.ZERO;
+        return pose == null ? MolangValue.ZERO : MolangValue.of(alongAxis(pose.position, arguments));
+    }
 
-        return MolangValue.of(axis(new Vec3(pose.position.x(), pose.position.y(), pose.position.z()),
-            arguments.subList(Math.min(1, arguments.size()), arguments.size())));
+    /** Whether this animator is drawing something worn or held rather than the entity itself. */
+    boolean attached() {
+        return attached;
+    }
+
+    /** The model this one is drawn on top of, which for anything but an attachable is this one. */
+    private EntityAnimator rootModel() {
+        return attached ? Animators.rootOf(entity.getId()) : animator;
+    }
+
+    /** The axis of a bone's own pivot, taken from the model rather than from the current pose. */
+    private double bonePivot(List<MolangValue> arguments) {
+        BedrockBone bone = animator.bone(text(arguments, 0));
+        return bone == null ? 0 : alongAxis(bone.pivot(), arguments);
+    }
+
+    /** The axis of a named locator's offset, which is how a pack hangs one model off another. */
+    private static double locatorOffset(EntityAnimator model, List<MolangValue> arguments) {
+        Vector3f offset = model == null ? null : model.locator(text(arguments, 0));
+        return offset == null ? 0 : alongAxis(offset, arguments);
+    }
+
+    /** Bedrock names the bone or locator first and the axis second, numbered x, y, z. */
+    private static double alongAxis(Vector3f vector, List<MolangValue> arguments) {
+        return axis(new Vec3(vector.x(), vector.y(), vector.z()),
+            arguments.subList(Math.min(1, arguments.size()), arguments.size()));
     }
 
     /** The use-animation enum carries a different name per version. Its constants do not. */
