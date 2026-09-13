@@ -40,6 +40,10 @@ public record EntityEvent(String name, List<Action> actions) {
         }
     }
 
+    /** `minecraft:first_valid` runs the first of its entries whose own filters hold, and stops. */
+    public record FirstValid(Filter condition, List<EntityEvent> options) implements Action {
+    }
+
     public record Sequence(Filter condition, List<EntityEvent> steps) implements Action {
     }
 
@@ -110,8 +114,30 @@ public record EntityEvent(String name, List<Action> actions) {
             if (!steps.isEmpty()) actions.add(new Sequence(condition, steps));
         }
 
+        if (body.has("first_valid") && body.get("first_valid").isJsonArray()) {
+            List<EntityEvent> options = new ArrayList<>();
+            for (JsonElement option : body.getAsJsonArray("first_valid")) {
+                if (option.isJsonObject()) options.add(read(name, option.getAsJsonObject()));
+            }
+            if (!options.isEmpty()) actions.add(new FirstValid(condition, options));
+        }
+
+        // A response nobody here reads is a gap in this mod rather than a mistake in the pack, and
+        // an event that quietly does part of what it says is worse than one that says what it
+        // skipped. `filters` is the condition every response above is already read against.
+        for (String key : body.keySet()) {
+            if (!READ.contains(key)) {
+                at.ioexception.mcaddon.registry.AddonEntities.unsupported("event response " + key);
+            }
+        }
+
         return new EntityEvent(name, List.copyOf(actions));
     }
+
+    /** Every key an event body may carry that something above acts on. */
+    private static final java.util.Set<String> READ = java.util.Set.of(
+        "filters", "add", "remove", "set_property", "queue_command", "trigger",
+        "randomize", "sequence", "first_valid", "weight");
 
     /** `add` and `remove` wrap their list under `component_groups`. */
     private static List<String> groups(JsonElement json) {

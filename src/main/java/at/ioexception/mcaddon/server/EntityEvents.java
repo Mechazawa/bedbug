@@ -98,8 +98,25 @@ public final class EntityEvents {
                     run(entity, definition, step, other, state, depth + 1);
                 }
             }
+            // The first entry whose own filters hold, and nothing after it. An entry carrying no
+            // filters of its own always holds, which is how a pack writes the last resort.
+            case EntityEvent.FirstValid first -> {
+                Filter.Context context =
+                    new Filter.Context(entity, other == null ? entity : other, null, state);
+                for (EntityEvent option : first.options()) {
+                    if (!holds(option, context)) continue;
+
+                    run(entity, definition, option, other, state, depth + 1);
+                    break;
+                }
+            }
             default -> { }
         }
+    }
+
+    /** Whether any of an option's own responses would run, which is what makes it the valid one. */
+    private static boolean holds(EntityEvent option, Filter.Context context) {
+        return option.actions().stream().anyMatch(action -> action.condition().matches(context));
     }
 
     /**
