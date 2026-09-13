@@ -33,6 +33,19 @@ stonecutter {
         replace("maxTicks = ", "timeoutTicks = ")
         // 1.21.4 spelled out what the animation belongs to.
         replace("ItemUseAnimation", "UseAnim")
+        // 26 gave several entities a package of their own. The classes kept their names.
+        replace("import net.minecraft.world.entity.animal.fox.Fox;",
+            "import net.minecraft.world.entity.animal.Fox;")
+        replace("import net.minecraft.world.entity.animal.panda.Panda;",
+            "import net.minecraft.world.entity.animal.Panda;")
+        replace("import net.minecraft.world.entity.animal.parrot.Parrot;",
+            "import net.minecraft.world.entity.animal.Parrot;")
+        replace("import net.minecraft.world.entity.animal.wolf.Wolf;",
+            "import net.minecraft.world.entity.animal.Wolf;")
+        replace("import net.minecraft.world.entity.projectile.arrow.AbstractArrow;",
+            "import net.minecraft.world.entity.projectile.AbstractArrow;")
+        replace("import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;",
+            "import net.minecraft.world.entity.vehicle.AbstractMinecart;")
     }
 }
 

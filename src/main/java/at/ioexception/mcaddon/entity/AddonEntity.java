@@ -1701,6 +1701,15 @@ public class AddonEntity extends PathfinderMob
             || declares("minecraft:navigation.generic"));
         setValue("can_power_jump", declares("minecraft:can_power_jump"));
 
+        // `minecraft:area_attack` is the whole of hurting whatever stands against the entity, so
+        // declaring it is what makes the entity able to damage the mobs around it.
+        if (declares("minecraft:area_attack")) setValue("can_damage_nearby_mobs", true);
+
+        // Java's merchant screen has one list of offers, so how many tiers the table was written in
+        // survives only as the number a pack's own controllers read back.
+        TradeTable trades = AddonEntities.tradesOf(getType());
+        if (trades != null) setValue("max_trade_tier", (double) trades.tiers());
+
         if (declares("minecraft:heartbeat")) {
             setValue("heartbeat_interval", number(definition, "minecraft:heartbeat", "interval", 2));
         }

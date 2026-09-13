@@ -865,6 +865,27 @@ public final class Platform {
     }
 
     /**
+     * An entity's score under one objective, or zero while it has none.
+     *
+     * 1.21 gave a score holder an identity of its own, where before a score was filed under the name
+     * the entity goes by on the scoreboard.
+     */
+    public static double score(Entity entity, String objective) {
+        net.minecraft.world.scores.Scoreboard scoreboard = entity.level().getScoreboard();
+        net.minecraft.world.scores.Objective named = scoreboard.getObjective(objective);
+        if (named == null) return 0;
+
+        //? if >=1.21 {
+        net.minecraft.world.scores.ReadOnlyScoreInfo score = scoreboard.getPlayerScoreInfo(entity, named);
+        return score == null ? 0 : score.value();
+        //?} else {
+        /*String holder = entity.getScoreboardName();
+        return scoreboard.hasPlayerScore(holder, named)
+            ? scoreboard.getOrCreatePlayerScore(holder, named).getScore() : 0;
+        *///?}
+    }
+
+    /**
      * Paints a pack's dyeable items in the colour they carry.
      *
      * From 1.21.4 the colour is a tint named in the item's own definition file, which the converter

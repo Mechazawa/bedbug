@@ -85,6 +85,16 @@ public final class AddonEmitters {
         RUNNING.clear();
     }
 
+    /**
+     * How many effects are in flight.
+     *
+     * Java has no emitter of its own: everything it draws is a particle placed one at a time, so
+     * what is running here is every emitter in the world.
+     */
+    public static int running() {
+        return RUNNING.size();
+    }
+
     /** Whether the effect is still going after this tick. */
     private static boolean advance(Running effect) {
         effect.age += 1f / 20f;
