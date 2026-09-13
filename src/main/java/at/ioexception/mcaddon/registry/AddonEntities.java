@@ -330,7 +330,9 @@ public final class AddonEntities {
         "minecraft:behavior.find_underwater_treasure", "minecraft:behavior.swim_with_entity",
         "minecraft:movement.dolphin", "minecraft:movement.sway", "minecraft:movement.jump",
         "minecraft:movement.skip", "minecraft:heartbeat", "minecraft:ground_offset",
-        "minecraft:inside_block_notifier", "minecraft:block_sensor", "minecraft:celebrate_hunt");
+        "minecraft:inside_block_notifier", "minecraft:block_sensor", "minecraft:celebrate_hunt",
+        "minecraft:friction_modifier", "minecraft:rotation_axis_aligned",
+        "minecraft:flocking", "minecraft:boostable", "minecraft:vibration_damper");
 
     /**
      * The trade table an entity names, read while the pack it came from is still in hand.

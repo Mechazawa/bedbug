@@ -69,6 +69,7 @@ public class AddonEntity extends PathfinderMob
     private int admireUntilTick = -1;
     private String lastBlockInside;
     private int celebrateUntilTick = -1;
+    private int boostedUntilTick = -1;
     private Player tradingPlayer;
     private MerchantOffers offers;
     private int tradeExperience;
@@ -1902,6 +1903,10 @@ public class AddonEntity extends PathfinderMob
         bounce();
         swimAtItsOwnSpeed();
         dragThroughAir();
+        rubAlongTheGround();
+        faceTheGrid();
+        flock();
+        beBoosted();
         faceTheVehicle();
         breatheForRider();
         tickTheWorldAround();
@@ -2201,6 +2206,147 @@ public class AddonEntity extends PathfinderMob
         double kept = number(definition, "minecraft:air_drag_modifier", "value", 1);
         setDeltaMovement(getDeltaMovement().multiply(kept, 1, kept));
     }
+
+    /**
+     * `minecraft:friction_modifier` is how much of the ground's grip this entity feels.
+     *
+     * Java takes friction from the block rather than from whatever is standing on it, so what the
+     * modifier changes here is the speed the entity keeps between two ticks: above one it stops
+     * sooner than the ground alone would stop it, and below one it slides further.
+     */
+    private void rubAlongTheGround() {
+        if (!declares("minecraft:friction_modifier") || !onGround()) return;
+
+        double modifier = number(definition, "minecraft:friction_modifier", "value", 1);
+        if (modifier == 1 || modifier < 0) return;
+
+        double kept = Math.max(0, Math.min(1, 1 - (modifier - 1) * FRICTION_PER_STEP));
+        setDeltaMovement(getDeltaMovement().multiply(kept, 1, kept));
+    }
+
+    /** How much of its speed an entity loses per tick for each point of friction above one. */
+    private static final double FRICTION_PER_STEP = 0.2;
+
+    /** `minecraft:rotation_axis_aligned` keeps the entity square to the world rather than turning freely. */
+    private void faceTheGrid() {
+        if (!declares("minecraft:rotation_axis_aligned")) return;
+
+        float square = Math.round(getYRot() / 90f) * 90f;
+        setYRot(square);
+        setYBodyRot(square);
+        setYHeadRot(square);
+    }
+
+    /**
+     * `minecraft:flocking` steers the entity towards the others of its kind swimming around it.
+     *
+     * Bedrock states a dozen weights for how tightly a school holds together. What carries across is
+     * the school itself: an entity outside the distance the pack allows is pulled back towards the
+     * middle of whatever it can see.
+     */
+    private void flock() {
+        if (!declares("minecraft:flocking")) return;
+
+        double influence = number(definition, "minecraft:flocking", "influence_radius", 3);
+        double innerRadius = number(definition, "minecraft:flocking", "inner_cohesion_radius", 0.5);
+        java.util.List<AddonEntity> school = level().getEntitiesOfClass(AddonEntity.class,
+            getBoundingBox().inflate(influence),
+            other -> other != this && other.getType() == getType());
+        if (school.isEmpty()) return;
+
+        net.minecraft.world.phys.Vec3 middle = net.minecraft.world.phys.Vec3.ZERO;
+        for (AddonEntity other : school) middle = middle.add(other.position());
+        middle = middle.scale(1d / school.size());
+
+        net.minecraft.world.phys.Vec3 towards = middle.subtract(position());
+        double apart = towards.length();
+        if (apart < innerRadius) return;
+
+        double pull = number(definition, "minecraft:flocking", "goal_weight", 0.4) * FLOCK_PULL;
+        setDeltaMovement(getDeltaMovement().add(towards.normalize().scale(pull)));
+    }
+
+    /** How hard one tick of schooling pulls, at the weight a pack states as one. */
+    private static final double FLOCK_PULL = 0.01;
+
+    /**
+     * `minecraft:boostable` lets whoever is riding spend an item to go faster for a while.
+     *
+     * The item is the rider's own and the speed is the mount's, so the two only meet while somebody
+     * is aboard. Bedrock spends durability off the item and can swap it for another; both are what
+     * a carrot on a stick does in Java as well.
+     */
+    private void beBoosted() {
+        if (!declares("minecraft:boostable")) return;
+
+        if (boostedUntilTick > tickCount) {
+            double faster = number(definition, "minecraft:boostable", "speed_multiplier", 1.35) - 1;
+            setDeltaMovement(getDeltaMovement().multiply(1 + faster, 1, 1 + faster));
+            return;
+        }
+        if (!(getControllingPassenger() instanceof Player rider)) return;
+
+        for (com.google.gson.JsonElement element : at.ioexception.mcaddon.util.Json.list(
+            componentBody("minecraft:boostable"), "boost_items")) {
+            if (!element.isJsonObject()) continue;
+            if (!spendBoost(rider, element.getAsJsonObject())) continue;
+
+            boostedUntilTick = tickCount
+                + (int) (number(definition, "minecraft:boostable", "duration", 3)
+                    * Goals.TICKS_PER_SECOND);
+            return;
+        }
+    }
+
+    /** Whether the rider was holding this boost item, and has now paid for the boost with it. */
+    private boolean spendBoost(Player rider, com.google.gson.JsonObject entry) {
+        net.minecraft.world.item.Item wanted =
+            itemNamed(at.ioexception.mcaddon.util.Json.text(entry, "item", null));
+        net.minecraft.world.item.ItemStack held = rider.getMainHandItem();
+        if (wanted == null || held.getItem() != wanted) return false;
+
+        net.minecraft.world.item.Item becomes =
+            itemNamed(at.ioexception.mcaddon.util.Json.text(entry, "replace_item", null));
+        if (becomes != null) {
+            rider.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND,
+                new net.minecraft.world.item.ItemStack(becomes));
+        } else {
+            held.shrink(1);
+        }
+        return true;
+    }
+
+    /** A Bedrock item name, which is as often written without its namespace as with it. */
+    private static net.minecraft.world.item.Item itemNamed(String bedrock) {
+        if (bedrock == null) return null;
+
+        return at.ioexception.mcaddon.registry.AddonItems.named(
+            bedrock.contains(":") ? bedrock : "minecraft:" + bedrock);
+    }
+
+    /**
+     * `minecraft:vibration_damper` is an entity nothing hears.
+     *
+     * Java raises a game event for everything an entity does, and sculk and a warden both listen to
+     * those, so an entity that raises none is one that makes no vibration.
+     */
+    //? if >=1.21 {
+    @Override
+    public void gameEvent(net.minecraft.core.Holder<net.minecraft.world.level.gameevent.GameEvent> event,
+        net.minecraft.world.entity.Entity cause) {
+        if (definition != null && declares("minecraft:vibration_damper")) return;
+
+        super.gameEvent(event, cause);
+    }
+    //?} else {
+    /*@Override
+    public void gameEvent(net.minecraft.world.level.gameevent.GameEvent event,
+        net.minecraft.world.entity.Entity cause) {
+        if (definition != null && declares("minecraft:vibration_damper")) return;
+
+        super.gameEvent(event, cause);
+    }
+    *///?}
 
     /** `minecraft:rotation_locked_to_vehicle` keeps a rider facing wherever it is being carried. */
     private void faceTheVehicle() {
