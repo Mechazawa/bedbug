@@ -9,7 +9,10 @@
     },
     "components": {
       "minecraft:type_family": {
-        "family": ["tp_ember", "mob"]
+        "family": [
+          "tp_ember",
+          "mob"
+        ]
       },
       "minecraft:collision_box": {
         "width": 0.4,
@@ -30,6 +33,21 @@
       "minecraft:behavior.random_stroll": {
         "priority": 5,
         "speed_multiplier": 1.2
+      },
+      "minecraft:equipment": {
+        "table": "loot_tables/entities/ember_equipment.json",
+        "slot_drop_chance": [
+          {
+            "slot": "slot.armor.head",
+            "drop_chance": 1.0
+          }
+        ]
+      },
+      "minecraft:variable_max_auto_step": {
+        "base_value": 1.0
+      },
+      "minecraft:flying_speed": {
+        "value": 0.25
       }
     },
     "events": {}

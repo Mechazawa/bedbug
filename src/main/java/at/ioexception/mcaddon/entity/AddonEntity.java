@@ -162,12 +162,21 @@ public class AddonEntity extends PathfinderMob
             .add(Attributes.FOLLOW_RANGE, number(definition, "minecraft:follow_range", "value", 16))
             .add(Attributes.KNOCKBACK_RESISTANCE,
                 number(definition, "minecraft:knockback_resistance", "value", 0))
-            .add(Attributes.ATTACK_DAMAGE, attackDamage(definition));
+            .add(Attributes.ATTACK_DAMAGE, attackDamage(definition))
+            .add(Attributes.FLYING_SPEED, number(definition, "minecraft:flying_speed", "value", 0.4))
+            .add(Attributes.LUCK, number(definition, "minecraft:luck", "value", 0))
+            .add(Attributes.JUMP_STRENGTH,
+                number(definition, "minecraft:horse.jump_strength", "value", 0.42));
 
         // 26 moved how far food tempts a mob out of the goal and onto the mob itself, and a goal
         // reading an attribute the type never declared fails the tick it runs in.
         //? if >=26 {
         built = built.add(Attributes.TEMPT_RANGE, 10);
+        //?}
+        // From 1.21 how high a mob steps is an attribute; before that it is a field on the entity.
+        //? if >=1.21 {
+        built = built.add(Attributes.STEP_HEIGHT,
+            number(definition, "minecraft:variable_max_auto_step", "base_value", 0.6));
         //?}
         return built;
     }
@@ -193,10 +202,23 @@ public class AddonEntity extends PathfinderMob
     }
 
     /** A number a component carries, or the fallback when the pack declared neither. */
+    /**
+     * The number a component holds under one field.
+     *
+     * Bedrock writes a field that varies per entity as a range rather than a number, and Java fixes
+     * one value on the type, so the middle of the range is what every entity of that type gets.
+     */
     private static double number(ServerEntityDefinition definition, String component, String field,
         double fallback) {
         com.google.gson.JsonObject body = definition.components().get(component);
-        return body == null || !body.has(field) ? fallback : body.get(field).getAsDouble();
+        com.google.gson.JsonElement value = body == null ? null : body.get(field);
+        if (value == null) return fallback;
+        if (value.isJsonPrimitive()) return value.getAsDouble();
+        if (!value.isJsonObject()) return fallback;
+
+        com.google.gson.JsonObject range = value.getAsJsonObject();
+        if (!range.has("range_min") || !range.has("range_max")) return fallback;
+        return (range.get("range_min").getAsDouble() + range.get("range_max").getAsDouble()) / 2;
     }
 
     /**
@@ -261,7 +283,19 @@ public class AddonEntity extends PathfinderMob
         if (declares("minecraft:inventory")) {
             carried = new net.minecraft.world.SimpleContainer(
                 Math.max(1, (int) number(definition, "minecraft:inventory", "inventory_size", 5)));
+        } else if (declares("minecraft:strength")) {
+            // A llama's strength is how much it carries, three slots per point in both editions.
+            carried = new net.minecraft.world.SimpleContainer(
+                Math.max(1, (int) number(definition, "minecraft:strength", "value", 1) * 3));
         }
+
+        //? if <1.21 {
+        /*if (declares("minecraft:variable_max_auto_step")) {
+            setMaxUpStep((float) number(definition, "minecraft:variable_max_auto_step", "base_value", 0.6));
+        }
+        *///?}
+
+        wearWhatThePackRolled();
         if (declares("minecraft:boss")) {
             bossBar = Platform.bossBar(getDisplayName());
             bossBar.setDarkenScreen(number(definition, "minecraft:boss", "should_darken_sky", 0) != 0);
@@ -1292,6 +1326,17 @@ public class AddonEntity extends PathfinderMob
                     goalSelector.addGoal(priority, SquidGoal.leavingGround(this));
                 case "minecraft:behavior.squid_out_of_water" ->
                     goalSelector.addGoal(priority, SquidGoal.flopping(this));
+                // A slime turns, hops, floats and closes on a target, and Bedrock names each of the
+                // four separately.
+                case "minecraft:behavior.slime_random_direction" ->
+                    goalSelector.addGoal(priority, SlimeGoal.turning(this, componentBody(behaviour)));
+                case "minecraft:behavior.slime_keep_on_jumping" ->
+                    goalSelector.addGoal(priority, SlimeGoal.hopping(this, componentBody(behaviour)));
+                case "minecraft:behavior.slime_float" ->
+                    goalSelector.addGoal(priority, SlimeGoal.floating(this, componentBody(behaviour)));
+                case "minecraft:behavior.slime_attack" ->
+                    goalSelector.addGoal(priority, SlimeGoal.attacking(this, componentBody(behaviour)));
+
                 case "minecraft:behavior.random_stroll", "minecraft:behavior.move_outdoors",
                      "minecraft:behavior.explore_outskirts" ->
                     goalSelector.addGoal(priority, new WaterAvoidingRandomStrollGoal(this, 0.6));
@@ -1414,8 +1459,8 @@ public class AddonEntity extends PathfinderMob
                 case "minecraft:behavior.move_to_random_block" -> goalSelector.addGoal(priority,
                     MoveToMatchingBlockGoal.anywhere(this, componentBody(behaviour)));
 
-                case "minecraft:behavior.equip_item" ->
-                    goalSelector.addGoal(priority, new EquipItemGoal(this));
+                case "minecraft:behavior.equip_item" -> goalSelector.addGoal(priority,
+                    new EquipItemGoal(this, definition.components().get("minecraft:equip_item")));
                 case "minecraft:behavior.hold_ground" ->
                     goalSelector.addGoal(priority, HoldGroundGoal.standing(this));
                 case "minecraft:behavior.look_at_target" ->
@@ -1546,6 +1591,37 @@ public class AddonEntity extends PathfinderMob
                     if (!AddonEntities.implemented(behaviour)) AddonEntities.unsupported(behaviour);
                 }
             }
+        }
+    }
+
+    /**
+     * Puts on whatever `minecraft:equipment` rolls, and sets how likely each piece is to drop.
+     *
+     * The component names a loot table rather than the items, so what the entity wears is decided
+     * once as it comes into the world. Which slot a piece belongs in is Java's own answer, so a
+     * table handing out a helmet and a sword dresses the entity in both.
+     */
+    private void wearWhatThePackRolled() {
+        String table = text("minecraft:equipment", "table");
+        if (table == null || !(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
+
+        Identifier named = AddonEntities.lootTable(getType(), table);
+        if (named == null) return;
+
+        for (net.minecraft.world.item.ItemStack rolled : Platform.rollLoot(level, named, this)) {
+            if (rolled.isEmpty()) continue;
+            setItemSlot(getEquipmentSlotForItem(rolled), rolled);
+        }
+        for (com.google.gson.JsonElement element : at.ioexception.mcaddon.util.Json.list(
+            componentBody("minecraft:equipment"), "slot_drop_chance")) {
+            if (!element.isJsonObject()) continue;
+
+            com.google.gson.JsonObject entry = element.getAsJsonObject();
+            net.minecraft.world.entity.EquipmentSlot slot =
+                equipmentSlot(at.ioexception.mcaddon.util.Json.text(entry, "slot", null));
+            if (slot == null || !entry.has("drop_chance")) continue;
+
+            setDropChance(slot, entry.get("drop_chance").getAsFloat());
         }
     }
 

@@ -293,7 +293,12 @@ public final class AddonEntities {
         "minecraft:is_ignited", "minecraft:is_illager_captain", "minecraft:is_pregnant",
         "minecraft:is_shaking", "minecraft:is_stackable", "minecraft:is_stunned",
         "minecraft:is_tamed", "minecraft:absorption", "minecraft:transient",
-        "minecraft:mob_effect_immunity");
+        "minecraft:mob_effect_immunity",
+        "minecraft:behavior.slime_random_direction", "minecraft:behavior.slime_keep_on_jumping",
+        "minecraft:behavior.slime_float", "minecraft:behavior.slime_attack",
+        "minecraft:flying_speed", "minecraft:luck", "minecraft:horse.jump_strength",
+        "minecraft:variable_max_auto_step", "minecraft:strength", "minecraft:equipment",
+        "minecraft:equip_item");
 
     /**
      * The trade table an entity names, read while the pack it came from is still in hand.

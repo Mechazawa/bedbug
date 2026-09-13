@@ -1,13 +1,18 @@
 package at.ioexception.mcaddon.entity;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.EnumSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Walks to a dropped item and puts it on, which is what `minecraft:behavior.equip_item` describes.
@@ -21,11 +26,37 @@ public final class EquipItemGoal extends Goal {
     private static final double REACH = 8;
 
     private final Mob mob;
+    private final Set<Item> excluded;
     private ItemEntity wanted;
 
-    public EquipItemGoal(Mob mob) {
+    /**
+     * `minecraft:equip_item` is the component beside this goal, and its `excluded_items` is the list
+     * of things the entity leaves alone however well they would fit.
+     */
+    public EquipItemGoal(Mob mob, JsonObject component) {
         this.mob = mob;
+        this.excluded = excluded(component);
         setFlags(EnumSet.of(Goal.Flag.MOVE));
+    }
+
+    private static Set<Item> excluded(JsonObject component) {
+        Set<Item> named = new LinkedHashSet<>();
+        if (component == null) return named;
+
+        for (JsonElement element : at.ioexception.mcaddon.util.Json.list(component, "excluded_items")) {
+            String name = element.isJsonPrimitive() ? element.getAsString()
+                : element.isJsonObject()
+                    ? at.ioexception.mcaddon.util.Json.text(element.getAsJsonObject(), "item", null)
+                    : null;
+            // A Bedrock item name may carry the data value it was written with, which Java has none of.
+            if (name == null) continue;
+
+            int aux = name.indexOf(':', name.indexOf(':') + 1);
+            Item found = at.ioexception.mcaddon.registry.AddonItems.named(
+                aux < 0 ? name : name.substring(0, aux));
+            if (found != null) named.add(found);
+        }
+        return named;
     }
 
     @Override
@@ -84,6 +115,7 @@ public final class EquipItemGoal extends Goal {
         List<ItemEntity> dropped = mob.level().getEntitiesOfClass(ItemEntity.class,
             mob.getBoundingBox().inflate(REACH),
             item -> item.isAlive() && !item.hasPickUpDelay()
+                && !excluded.contains(item.getItem().getItem())
                 && slotFor(item.getItem()) != EquipmentSlot.MAINHAND
                 && mob.getItemBySlot(slotFor(item.getItem())).isEmpty());
         return dropped.stream().min(java.util.Comparator.comparingDouble(mob::distanceToSqr)).orElse(null);

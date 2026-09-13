@@ -137,6 +137,33 @@ public final class BehaviourGameTests {
     }
 
     /**
+     * An entity arrives wearing what its equipment table rolled.
+     *
+     * The table is named the Bedrock way and looked up the Java way, and where that lookup lives
+     * moved between versions, so the dressing can silently come out empty on one of them.
+     */
+    @GameTest()
+    public void anEntityWearsWhatItsTableRolled(GameTestHelper helper) {
+        EntityType<?> type = AddonEntities.typeOf(ENTITY);
+        if (type == null || AddonEntities.definitionOf(type) == null
+            || !AddonEntities.definitionOf(type).components().containsKey("minecraft:equipment")) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        Entity spawned = Platform.createMob(type, level);
+        BlockPos at = helper.absolutePos(STAND);
+        Platform.placeAt(spawned, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        level.addFreshEntity(spawned);
+
+        helper.assertTrue(spawned instanceof net.minecraft.world.entity.Mob dressed
+                && !dressed.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.HEAD).isEmpty(),
+            ENTITY + " names an equipment table and arrived wearing nothing.");
+        helper.succeed();
+    }
+
+    /**
      * A bow a pack declared fires its ammunition when it is drawn and let go.
      *
      * Drawing runs through the game's own use timer rather than through a call, so what is checked
