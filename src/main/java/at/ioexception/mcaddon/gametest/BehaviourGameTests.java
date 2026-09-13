@@ -201,6 +201,56 @@ public final class BehaviourGameTests {
         helper.succeed();
     }
 
+    /**
+     * What a merchant's offers come out as once every item function has run over them.
+     *
+     * The book the pack sells is enchanted and priced as the offers are built, which is the one path
+     * where a Bedrock item function reaches the other side of the trade it sits on. A trade whose
+     * result is a map of somewhere this world holds none of is left out instead of reaching the
+     * screen as an offer of nothing, and one whose function this mod only reports keeps its item.
+     */
+    @GameTest()
+    public void aMerchantsOffersCarryWhatItsItemFunctionsDid(GameTestHelper helper) {
+        EntityType<?> type = AddonEntities.typeOf(ENTITY);
+        if (type == null) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        Entity spawned = Platform.createMob(type, level);
+        BlockPos at = helper.absolutePos(STAND);
+        Platform.placeAt(spawned, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        level.addFreshEntity(spawned);
+
+        List<ItemStack> results = new java.util.ArrayList<>();
+        ItemStack book = ItemStack.EMPTY;
+        int paidForBook = 0;
+        for (net.minecraft.world.item.trading.MerchantOffer offer
+            : ((AddonEntity) spawned).getOffers()) {
+            results.add(offer.getResult());
+            if (offer.getResult().is(net.minecraft.world.item.Items.ENCHANTED_BOOK)) {
+                book = offer.getResult();
+                paidForBook = offer.getBaseCostA().getCount();
+            }
+        }
+
+        helper.assertTrue(results.stream().noneMatch(ItemStack::isEmpty),
+            ENTITY + " offers a trade that hands over nothing.");
+        helper.assertTrue(results.stream().anyMatch(stack ->
+                stack.is(net.minecraft.world.item.Items.LEATHER_HELMET)),
+            ENTITY + " lost the trade whose result is painted and whose data value is reported.");
+        helper.assertTrue(!book.isEmpty(), ENTITY + " offers no enchanted book.");
+        helper.assertTrue(Platform.storedEnchantmentCount(book) > 0,
+            "the book " + ENTITY + " sells carries no enchantment.");
+        helper.assertTrue(paidForBook >= BOOK_FLOOR,
+            "the book " + ENTITY + " sells costs " + paidForBook + ", under the priced floor.");
+        helper.succeed();
+    }
+
+    /** The base cost and one level of the per-level cost the pack's book trade states. */
+    private static final int BOOK_FLOOR = 5;
+
     /** Longer than the second the synthetic pack's bow takes to draw fully. */
     private static final int FULL_DRAW = 25;
 

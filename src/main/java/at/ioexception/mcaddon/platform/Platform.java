@@ -759,6 +759,108 @@ public final class Platform {
     }
 
     /**
+     * The map a trade hands over, pointing at the nearest structure the named tag holds.
+     *
+     * Empty when the world has none to point at, which is the answer Java's own cartographer gives
+     * to the same question. The search is the one `minecraft:exploration_map` makes, with the radius,
+     * the zoom and the skip flag that function defaults to: it reads saved chunk data and the
+     * generator's own placement rule rather than generating terrain to look in, and it passes over a
+     * structure whose chunk already references it, which is how Java keeps an explorer map off
+     * somewhere the player has been.
+     */
+    public static net.minecraft.world.item.ItemStack explorerMap(
+        net.minecraft.world.item.ItemStack stack, Entity trader, String tag) {
+        if (!(trader.level() instanceof ServerLevel level)) return net.minecraft.world.item.ItemStack.EMPTY;
+
+        at.ioexception.mcaddon.convert.Names.Identifier name =
+            at.ioexception.mcaddon.convert.Names.split(tag, "minecraft");
+        net.minecraft.core.BlockPos found = level.findNearestMapStructure(
+            net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.STRUCTURE,
+                id(name.namespace(), name.path())),
+            trader.blockPosition(), MAP_SEARCH_CHUNKS, true);
+        if (found == null) return net.minecraft.world.item.ItemStack.EMPTY;
+
+        net.minecraft.world.item.ItemStack map = net.minecraft.world.item.MapItem.create(level,
+            found.getX(), found.getZ(), (byte) 2, true, true);
+        net.minecraft.world.item.MapItem.renderBiomePreviewMap(level, map);
+        //? if >=1.21 {
+        net.minecraft.world.level.saveddata.maps.MapItemSavedData.addTargetDecoration(map, found, "+",
+            net.minecraft.world.level.saveddata.maps.MapDecorationTypes.RED_X);
+        //?} else {
+        /*net.minecraft.world.level.saveddata.maps.MapItemSavedData.addTargetDecoration(map, found, "+",
+            net.minecraft.world.level.saveddata.maps.MapDecoration.Type.RED_X);
+        *///?}
+        map.setCount(Math.max(1, stack.getCount()));
+        return map;
+    }
+
+    /** How far out a map looks, in chunks, which is the radius the loot function defaults to. */
+    private static final int MAP_SEARCH_CHUNKS = 50;
+
+    /**
+     * Makes the stack an enchanted book carrying one enchantment a villager may trade, and answers
+     * the level it landed on, which is what prices the trade. Zero when nothing could be picked.
+     *
+     * 1.21 made enchantments data-driven and named the tradeable ones in a tag of their own, where
+     * 1.20.1 asks each enchantment whether it may be traded and writes a book's enchantment through
+     * the item class rather than onto the stack.
+     */
+    public static int enchantBook(net.minecraft.util.RandomSource random,
+        net.minecraft.world.item.ItemStack stack, net.minecraft.core.RegistryAccess registries) {
+        //? if >=26 {
+        net.minecraft.core.Registry<net.minecraft.world.item.enchantment.Enchantment> registry =
+            registries.lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT);
+        //?} else {
+        /*net.minecraft.core.Registry<net.minecraft.world.item.enchantment.Enchantment> registry =
+            registries.registryOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT);
+        *///?}
+
+        //? if >=1.21 {
+        List<net.minecraft.core.Holder<net.minecraft.world.item.enchantment.Enchantment>> tradeable =
+            new java.util.ArrayList<>();
+        registry.getTagOrEmpty(net.minecraft.tags.EnchantmentTags.TRADEABLE).forEach(tradeable::add);
+        if (tradeable.isEmpty()) return 0;
+
+        net.minecraft.core.Holder<net.minecraft.world.item.enchantment.Enchantment> chosen =
+            tradeable.get(random.nextInt(tradeable.size()));
+        int level = levelWithin(random, chosen.value());
+        stack.enchant(chosen, level);
+        //?} else {
+        /*List<net.minecraft.world.item.enchantment.Enchantment> tradeable = registry.stream()
+            .filter(net.minecraft.world.item.enchantment.Enchantment::isTradeable).toList();
+        if (tradeable.isEmpty()) return 0;
+
+        net.minecraft.world.item.enchantment.Enchantment chosen =
+            tradeable.get(random.nextInt(tradeable.size()));
+        int level = levelWithin(random, chosen);
+        net.minecraft.world.item.EnchantedBookItem.addEnchantment(stack,
+            new net.minecraft.world.item.enchantment.EnchantmentInstance(chosen, level));
+        *///?}
+        return level;
+    }
+
+    /**
+     * How many enchantments a book is holding for whoever reads it.
+     *
+     * 1.20.5 moved them out of the item's own NBT list and onto a component beside every other one.
+     */
+    public static int storedEnchantmentCount(net.minecraft.world.item.ItemStack stack) {
+        //? if >=1.21 {
+        net.minecraft.world.item.enchantment.ItemEnchantments stored =
+            stack.get(net.minecraft.core.component.DataComponents.STORED_ENCHANTMENTS);
+        return stored == null ? 0 : stored.size();
+        //?} else {
+        /*return net.minecraft.world.item.EnchantedBookItem.getEnchantments(stack).size();
+        *///?}
+    }
+
+    private static int levelWithin(net.minecraft.util.RandomSource random,
+        net.minecraft.world.item.enchantment.Enchantment enchantment) {
+        int lowest = enchantment.getMinLevel();
+        return lowest + random.nextInt(Math.max(1, enchantment.getMaxLevel() - lowest + 1));
+    }
+
+    /**
      * Paints a stack one of the sixteen dye colours, which is what a trade's `random_dye` asks for.
      *
      * 1.20.5 moved the colour off the item's display tag and onto a component of its own, and 26

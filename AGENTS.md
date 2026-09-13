@@ -119,26 +119,6 @@ These are the checks it runs, and what each one catches:
   `FunctionGameTestInstance` straight into the `test_instance` registry as that registry loads,
   behind the `fabric-api.gametest` property. 1.20.1 and 1.21.1 have neither registry and neither
   class, so those two targets run the annotation framework Mojang shipped before 1.21.5.
-- **`/test run mcaddon:<name>`** runs one test instance this repository writes itself, which is the
-  same machinery reached without the annotation. Two halves:
-  `src/main/resources/data/mcaddon/test_instance/<name>.json` says which structure to build, which
-  environment to build it in and how long the test may run, and
-  `src/main/java/at/ioexception/mcaddon/gametest/TestInstances.java` registers the body it names.
-  Both registries arrived with the test instances, so the registration is written for 26 and up.
-
-  ```bash
-  ./gradlew :26.2:runServer      # then type: test run mcaddon:bedrock_commands_parse
-  ```
-
-  A pass reads `All required tests passed :)`. A failure names the test, the block it stood at, the
-  message the assertion raised and the tick it raised it on, at `ERROR`, which `verify.py` already
-  reads as a failure:
-
-  ```
-  [Server thread/ERROR] mcaddon:bedrock_commands_parse failed at -304, -64, 147! \
-      /playanimationx @e animation.walk does not parse. on tick 0
-  [Server thread/INFO] 1 required test(s) failed :(
-  ```
 - **`tools/testpack/build.py`** builds a small add-on to check the mod against, so a clean checkout
   has something to verify itself with. Put it where the game reads packs from:
 
@@ -167,9 +147,9 @@ These are the checks it runs, and what each one catches:
   table, its equipment table and its trade table are the other three: between them they use each
   loot function and condition that converts, both entry types, a pool condition and an entry
   condition, a payment with two items to choose between, two tiers with the second behind an
-  experience threshold, and a trade whose result is enchanted and one whose result is dyed. Each
-  also names something this mod reports rather than converts, so a run says both halves of the
-  reporting path still work.
+  experience threshold, a trade whose result is enchanted, one whose result is dyed, one selling an
+  enchanted book priced by its own result and one selling an explorer map. Each also names something
+  this mod reports rather than converts, so a run says both halves of the reporting path still work.
 - **`tools/testpack/build_modules.py`** builds a second add-on, whose script imports every
   `@minecraft/*` module the mod provides and calls one thing from each. Its sources are a manifest
   and one script under `tools/testpack/modules/`.

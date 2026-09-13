@@ -11,6 +11,7 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 
 import java.io.IOException;
@@ -33,25 +34,62 @@ public record TradeTable(List<Offer> offers, List<Integer> tierExperience) {
     /** One trade: what it takes, what it gives back, and how often it can be used. */
     public record Offer(TradeItem cost, TradeItem secondCost, TradeItem result, int maxUses,
         int experience, boolean rewardExperience, float priceMultiplier, int tier) {
+
+        /**
+         * The stacks the merchant screen shows, or null when the world cannot supply one of them.
+         *
+         * A trade whose result prices itself settles what it costs as it is built, because a Bedrock
+         * function that names a price sits on the item handed over while the price it decides is on
+         * the other side of the trade.
+         */
+        public Stacks build(RandomSource random, Entity trader) {
+            Built given = result.build(random, trader);
+            if (given.stack().isEmpty()) return null;
+
+            ItemStack paid = cost.build(random, trader).stack();
+            if (paid.isEmpty()) return null;
+            if (given.price() > 0) paid.setCount(Math.min(given.price(), paid.getMaxStackSize()));
+
+            ItemStack second = secondCost == null ? ItemStack.EMPTY
+                : secondCost.build(random, trader).stack();
+            return new Stacks(paid, second, given.stack());
+        }
+    }
+
+    /** What one trade puts on the merchant screen. */
+    public record Stacks(ItemStack cost, ItemStack secondCost, ItemStack result) {
+    }
+
+    /**
+     * A trade item as its functions have left it: the stack, and a price one of them settled.
+     *
+     * Most Bedrock item functions change only the stack. `enchant_book_for_trading` decides what the
+     * trade costs as well, so the price travels back out beside the stack it was worked out from.
+     */
+    public record Built(ItemStack stack, int price) {
+
+        Built holding(ItemStack replacement) {
+            return new Built(replacement, price);
+        }
     }
 
     /** One side of a trade: which item, how many, and what is run over the stack it becomes. */
     public record TradeItem(String item, int count, List<JsonElement> functions) {
 
         /** The stack this describes, with every function it names run over it. */
-        public ItemStack stack(RandomSource random, RegistryAccess registries) {
+        public Built build(RandomSource random, Entity trader) {
             Identifier id = item == null ? null : Identifier.tryParse(item);
-            ItemStack stack = id == null ? ItemStack.EMPTY
+            Built built = new Built(id == null ? ItemStack.EMPTY
                 : BuiltInRegistries.ITEM.getOptional(id)
                     .map(found -> new ItemStack(found, Math.max(1, count)))
-                    .orElse(ItemStack.EMPTY);
+                    .orElse(ItemStack.EMPTY), 0);
 
             for (JsonElement element : functions) {
                 if (element.isJsonObject()) {
-                    stack = applyFunction(element.getAsJsonObject(), stack, random, registries);
+                    built = applyFunction(element.getAsJsonObject(), built, random, trader);
                 }
             }
-            return stack;
+            return built;
         }
     }
 
@@ -69,35 +107,66 @@ public record TradeTable(List<Offer> offers, List<Integer> tierExperience) {
         "item.price_multiplier", "item.filters");
 
     /**
-     * Runs one function over the stack a trade is about to offer.
+     * Runs one function over the trade item a merchant is about to offer.
      *
      * `random_aux_value` picks one of the things a Bedrock id stands for by number, and Java gave
      * each of those an id of its own when it flattened items, so the stack the trade names is
-     * already the wrong one. `exploration_map` needs a structure searched for as the trade is made
-     * and `enchant_book_for_trading` prices a book against the villager's own level, which is a cost
-     * on the other side of the trade from the item this runs over.
+     * already the wrong one.
      */
-    private static ItemStack applyFunction(JsonObject function, ItemStack stack, RandomSource random,
-        RegistryAccess registries) {
+    private static Built applyFunction(JsonObject function, Built built, RandomSource random,
+        Entity trader) {
+        RegistryAccess registries = trader.level().registryAccess();
+        ItemStack stack = built.stack();
+
         String name = Json.text(function, "function", "");
         int colon = name.indexOf(':');
         return switch (colon < 0 ? name : name.substring(colon + 1)) {
             case "set_count" -> {
                 stack.setCount(Math.max(1, (int) Json.number(function, "count", stack.getCount())));
-                yield stack;
+                yield built;
             }
-            case "enchant_with_levels" -> Platform.enchant(random, stack,
+            case "enchant_with_levels" -> built.holding(Platform.enchant(random, stack,
                 (int) between(function.get("levels")), Json.bool(function, "treasure", false),
-                registries);
-            case "enchant_randomly" -> Platform.enchant(random, stack, 5 + random.nextInt(26),
-                false, registries);
-            case "random_dye" -> Platform.dyed(stack,
-                net.minecraft.world.item.DyeColor.byId(random.nextInt(16)));
+                registries));
+            case "enchant_randomly" -> built.holding(Platform.enchant(random, stack,
+                5 + random.nextInt(26), false, registries));
+            case "random_dye" -> built.holding(Platform.dyed(stack,
+                net.minecraft.world.item.DyeColor.byId(random.nextInt(16))));
+            case "exploration_map" -> {
+                String tag = LootTableDefinition.mapDestination(
+                    Json.text(function, "destination", "buriedtreasure"));
+                // No tag and no structure both leave no map, which leaves no trade, and is the
+                // answer Java's own cartographer gives when it can find nowhere to point at.
+                yield built.holding(tag == null ? ItemStack.EMPTY
+                    : Platform.explorerMap(stack, trader, tag));
+            }
+            case "enchant_book_for_trading" -> book(function, built, random, registries);
             default -> {
                 AddonEntities.unsupported("trade function " + name);
-                yield stack;
+                yield built;
             }
         };
+    }
+
+    /**
+     * An enchanted book and what a villager charges for it.
+     *
+     * Bedrock states the price as a base, a base spread, and both again per level of whatever
+     * enchantment the book landed on, which is the same arithmetic Java's own librarian trade does
+     * in code. A book that could not be enchanted is priced at nothing and keeps the trade's own
+     * quantity.
+     */
+    private static Built book(JsonObject function, Built built, RandomSource random,
+        RegistryAccess registries) {
+        int level = Platform.enchantBook(random, built.stack(), registries);
+        if (level <= 0) return built;
+
+        int spread = (int) Json.number(function, "base_random_cost", 0)
+            + level * (int) Json.number(function, "per_level_random_cost", 0);
+        int price = (int) Json.number(function, "base_cost", 0)
+            + (spread > 0 ? random.nextInt(spread) : 0)
+            + level * (int) Json.number(function, "per_level_cost", 0);
+        return new Built(built.stack(), Math.max(1, price));
     }
 
     public static TradeTable read(BedrockPack pack, String path) {

@@ -58,7 +58,10 @@ server decides what happens; the client draws it.
   few trades it was told to pick weighted the way it weighted them, a payment listing several items
   becomes one offer per item, and `max_uses`, `trader_exp`, `reward_exp` and `price_multiplier` all
   reach the merchant screen. A trade that enchants what it hands over hands over an enchanted item,
-  and one that dyes it hands over a dyed one.
+  and one that dyes it hands over a dyed one. A trade selling an enchanted book picks the
+  enchantment, rolls its level and charges the emeralds that level is worth, and one selling an
+  explorer map hands over a map pointing at the nearest structure of the kind it names, or is left
+  off the screen where the world has none.
 - Recipes: shaped, shapeless, furnace, smithing transform and smithing trim. `tags` names the block
   a recipe is made at, so one Bedrock furnace recipe listing a furnace, a blast furnace, a smoker
   and a campfire becomes four Java recipes, a shapeless recipe tagged for the stonecutter becomes a
@@ -137,7 +140,7 @@ definitions. All of them compare what they read against the names this mod acts 
 | Recipe types | 71% |
 | Recipe fields | 85% |
 | Trade table fields | 95% |
-| Trade item functions | 40% |
+| Trade item functions | 80% |
 | Geometry, animation and controller fields | 77% |
 | `@minecraft/server` and friends | 95% |
 
@@ -199,11 +202,11 @@ available are the ones the game already ships and the name is read back out of a
 `<pattern>_armor_trim_smithing_template`. A recipe naming any other template is reported instead.
 
 **What a trade runs over the item it hands over.** `enchant_with_levels` and `enchant_randomly`
-enchant it, `set_count` counts it and `random_dye` paints it one of the sixteen dyes. The aux value
-functions pick one of the things a Bedrock id stands for by number, which Java has not had since it
-flattened items. `exploration_map` needs a structure searched for as the trade is made and
-`enchant_book_for_trading` prices a book against the villager's own level; Java builds each of those
-two in the code that makes that trade rather than from a table, so both are counted instead.
+enchant it, `set_count` counts it, `random_dye` paints it one of the sixteen dyes,
+`enchant_book_for_trading` makes it an enchanted book and prices the trade, and `exploration_map`
+points it at a structure. `random_aux_value` is the one left: it picks one of the things a Bedrock
+id stands for by number, which Java has not had since it flattened items, so the item the trade
+names is already the wrong one and there is no number to pick. It is counted instead.
 
 **A filter on a trade item.** Bedrock checks it as the trade is offered, out of the filter
 vocabulary. A Java offer is built once and sent to the client, which leaves nothing to ask again.

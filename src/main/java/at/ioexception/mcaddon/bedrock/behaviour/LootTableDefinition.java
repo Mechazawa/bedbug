@@ -44,6 +44,21 @@ public record LootTableDefinition(String path, JsonObject java) {
     private static final List<String> ALWAYS_MAPPED = List.of("buriedtreasure", "mansion", "monument");
 
     /**
+     * The Java structure tag a Bedrock explorer map points at, or null for one it cannot.
+     *
+     * A destination this reads as null is reported as it is read, so the loot function and the trade
+     * function that both ask for a map say the same thing about a destination neither can supply.
+     */
+    static String mapDestination(String destination) {
+        String tag = MAP_DESTINATIONS.get(destination);
+        if (tag == null || (!ALWAYS_MAPPED.contains(destination) && !Platform.everyExplorerMapTag())) {
+            AddonEntities.unsupported("exploration map destination " + destination);
+            return null;
+        }
+        return tag;
+    }
+
+    /**
      * The path inside a data pack that a Bedrock table path is written to.
      *
      * An entity's `minecraft:loot` names the file by the same pack-relative string the table itself
@@ -175,12 +190,8 @@ public record LootTableDefinition(String path, JsonObject java) {
                 function.add("enchantments", enchantments(bedrock));
             }
             case "exploration_map" -> {
-                String destination = Json.text(bedrock, "destination", "buriedtreasure");
-                String tag = MAP_DESTINATIONS.get(destination);
-                if (tag == null || (!ALWAYS_MAPPED.contains(destination) && !Platform.everyExplorerMapTag())) {
-                    AddonEntities.unsupported("loot function exploration_map " + destination);
-                    return null;
-                }
+                String tag = mapDestination(Json.text(bedrock, "destination", "buriedtreasure"));
+                if (tag == null) return null;
                 function.addProperty("function", "minecraft:exploration_map");
                 function.addProperty("destination", tag);
             }

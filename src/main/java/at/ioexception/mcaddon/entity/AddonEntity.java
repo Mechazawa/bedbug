@@ -3835,15 +3835,12 @@ public class AddonEntity extends PathfinderMob
     }
 
     private void add(TradeTable.Offer offer) {
-        net.minecraft.util.RandomSource random = level().getRandom();
-        ItemStack cost = offer.cost().stack(random, level().registryAccess());
-        ItemStack result = offer.result().stack(random, level().registryAccess());
-        if (cost.isEmpty() || result.isEmpty()) return;
+        TradeTable.Stacks stacks = offer.build(level().getRandom(), this);
+        if (stacks == null) return;
 
-        ItemStack second = offer.secondCost() == null ? ItemStack.EMPTY
-            : offer.secondCost().stack(random, level().registryAccess());
-        offers.add(Platform.offer(cost, second, result, offer.maxUses(),
-            offer.rewardExperience() ? offer.experience() : 0, offer.priceMultiplier()));
+        offers.add(Platform.offer(stacks.cost(), stacks.secondCost(), stacks.result(),
+            offer.maxUses(), offer.rewardExperience() ? offer.experience() : 0,
+            offer.priceMultiplier()));
         shown.add(offer);
     }
 

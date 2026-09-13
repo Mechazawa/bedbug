@@ -217,7 +217,7 @@ def surfaces(samples):
                 literal_set(BEHAVIOUR / "TradeTable.java", "HANDLES = Set.of"),
                 "the trade schemas and the vanilla trade tables"),
         Surface("trade item functions", trade_functions,
-                case_labels(BEHAVIOUR / "TradeTable.java", "ItemStack applyFunction("),
+                case_labels(BEHAVIOUR / "TradeTable.java", "Built applyFunction("),
                 "the vanilla trade tables"),
     ]
 
