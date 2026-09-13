@@ -70,6 +70,7 @@ public class AddonEntity extends PathfinderMob
     private String lastBlockInside;
     private int celebrateUntilTick = -1;
     private int boostedUntilTick = -1;
+    private boolean boosting;
     private Player tradingPlayer;
     private MerchantOffers offers;
     private int tradeExperience;
@@ -2279,11 +2280,15 @@ public class AddonEntity extends PathfinderMob
     private void beBoosted() {
         if (!declares("minecraft:boostable")) return;
 
-        if (boostedUntilTick > tickCount) {
-            double faster = number(definition, "minecraft:boostable", "speed_multiplier", 1.35) - 1;
-            setDeltaMovement(getDeltaMovement().multiply(1 + faster, 1, 1 + faster));
-            return;
+        boolean boosted = boostedUntilTick > tickCount;
+        if (boosted != boosting) {
+            boosting = boosted;
+            // The speed itself rather than the movement it produced: scaling a velocity that the
+            // next tick builds on again makes a mount that never stops getting faster.
+            Platform.scaleSpeed(this, boosted
+                ? number(definition, "minecraft:boostable", "speed_multiplier", 1.35) : 1);
         }
+        if (boosted) return;
         if (!(getControllingPassenger() instanceof Player rider)) return;
 
         for (com.google.gson.JsonElement element : at.ioexception.mcaddon.util.Json.list(

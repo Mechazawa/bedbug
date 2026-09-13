@@ -34,6 +34,7 @@ import signal
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from threading import Thread
 
@@ -253,15 +254,34 @@ HIDE_HUD = 122
 SCREENSHOT = 120
 
 
-def press(code: int) -> None:
-    """Sends one key to the game, which is the only interaction this tool has with it."""
+def gamePid(version: str) -> int | None:
+    """The game this version is running, picked out from however many are up at once.
+
+    Four versions are photographed at the same time, so a key sent to whichever java process came
+    first would reach the wrong window. Each game carries its own version in the paths it was
+    started with, which is what tells them apart.
+    """
+    found = subprocess.run(["pgrep", "-f", "fabric.dli.env=client"],
+                           check=False, capture_output=True, text=True)
+    for line in found.stdout.split():
+        if not line.isdigit():
+            continue
+        command = subprocess.run(["ps", "-o", "command=", "-p", line],
+                                 check=False, capture_output=True, text=True).stdout
+        if f"versions/{version}/" in command:
+            return int(line)
+    return None
+
+
+def press(pid: int, code: int) -> None:
+    """Sends one key to one game, which is the only interaction this tool has with it."""
     subprocess.run(["osascript", "-e",
-                    'tell application "System Events" to set frontmost of '
-                    '(first process whose name is "java") to true'], check=False)
+                    "tell application \"System Events\" to set frontmost of "
+                    f"(first process whose unix id is {pid}) to true"], check=False)
     time.sleep(0.6)
     subprocess.run(["osascript", "-e",
-                    'tell application "System Events" to tell (first process whose name is "java") '
-                    f"to key code {code}"], check=False)
+                    "tell application \"System Events\" to tell "
+                    f"(first process whose unix id is {pid}) to key code {code}"], check=False)
     time.sleep(0.8)
 
 
@@ -275,8 +295,11 @@ def capture(version: str, target: pathlib.Path) -> None:
     shots = ROOT / "versions" / version / "run" / "screenshots"
     before = set(shots.glob("*.png")) if shots.is_dir() else set()
 
-    press(HIDE_HUD)
-    press(SCREENSHOT)
+    pid = gamePid(version)
+    if pid is None:
+        return
+    press(pid, HIDE_HUD)
+    press(pid, SCREENSHOT)
     time.sleep(1.5)
 
     taken = sorted(set(shots.glob("*.png")) - before) if shots.is_dir() else []
@@ -298,12 +321,12 @@ def capture(version: str, target: pathlib.Path) -> None:
 
 
 @contextmanager
-def exclusive(wait: float):
-    """Holds the scene lock, so two runs cannot fight over the world and the screenshot.
+def exclusive(wait: float, version: str):
+    """Holds this version's scene lock, so two runs cannot fight over its world and its pictures.
 
     One saved world takes one game at a time, and both runs would write their picture over the
-    other's. The lock lives under `scratchpad/`, which git ignores, and is released when the process
-    ends however it ends.
+    other's. One lock per version, because the versions share neither. The lock lives under
+    `scratchpad/`, which git ignores, and is released when the process ends however it ends.
     """
     scratchpad = ROOT / "scratchpad"
     scratchpad.mkdir(exist_ok=True)
@@ -311,7 +334,7 @@ def exclusive(wait: float):
     if not ignore.exists():
         ignore.write_text("*\n", encoding="utf-8")
 
-    handle = (scratchpad / "scene.lock").open("a+")
+    handle = (scratchpad / f"scene-{version}.lock").open("a+")
     deadline = time.monotonic() + wait
     announced = False
     while True:
@@ -443,29 +466,46 @@ def runOne(version: str, one: dict, timeout: float, keep: bool) -> bool:
     return passed
 
 
+def runVersion(version: str, arguments: argparse.Namespace) -> tuple[int, int]:
+    """Every chosen scene for one version, in turn, and how many of them passed.
+
+    One version at a time inside itself, because its scenes share one saved world, and the versions
+    themselves know nothing of each other.
+    """
+    chosen = [one for one in scenes(version)
+              if not arguments.scene or one["name"] in arguments.scene]
+    if not chosen:
+        return (0, 0)
+
+    with exclusive(arguments.wait, version):
+        passed = [one for one in chosen
+                  if runOne(version, one, arguments.timeout, arguments.keep)]
+    return (len(passed), len(chosen))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Runs scenes inside the game with nobody watching.")
-    parser.add_argument("--version", default="26.2", help="which version to open")
+    parser.add_argument("--version", action="append", default=[],
+                        help="which version to open; repeatable, and all four are run together")
     parser.add_argument("--scene", action="append", default=[], help="run only these, repeatable")
     parser.add_argument("--timeout", type=float, default=420.0, help="seconds one scene may take")
     parser.add_argument("--keep", action="store_true", help="leave the last game open")
     parser.add_argument("--wait", type=float, default=900.0,
                         help="seconds to wait for another scene run to finish")
     arguments = parser.parse_args()
+    versions = arguments.version or ["26.2"]
 
-    chosen = [one for one in scenes(arguments.version)
-              if not arguments.scene or one["name"] in arguments.scene]
-    if not chosen:
+    with ThreadPoolExecutor(max_workers=len(versions)) as together:
+        counted = list(together.map(lambda version: runVersion(version, arguments), versions))
+
+    passed = sum(one for one, _ in counted)
+    chosen = sum(one for _, one in counted)
+    if chosen == 0:
         print("no scene by that name", file=sys.stderr)
         return 2
 
-    with exclusive(arguments.wait):
-        passed = [one["name"] for one in chosen
-                  if runOne(arguments.version, one, arguments.timeout, arguments.keep)]
-
-    verdict = "PASS" if len(passed) == len(chosen) else "FAIL"
-    print(f"{verdict}  {len(passed)} of {len(chosen)} scenes")
-    return 0 if len(passed) == len(chosen) else 1
+    print(f"{'PASS' if passed == chosen else 'FAIL'}  {passed} of {chosen} scenes")
+    return 0 if passed == chosen else 1
 
 
 if __name__ == "__main__":

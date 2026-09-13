@@ -946,6 +946,36 @@ public final class Platform {
         *///?}
     }
 
+    /**
+     * Multiplies how fast a mob moves, or puts it back when the multiplier is one.
+     *
+     * A modifier rather than a new base value, so whatever else changed the speed keeps its say.
+     * 1.21 took the string name off a modifier and gave it a registry id instead.
+     */
+    public static void scaleSpeed(net.minecraft.world.entity.Mob mob, double multiplier) {
+        net.minecraft.world.entity.ai.attributes.AttributeInstance speed =
+            mob.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED);
+        if (speed == null) return;
+
+        //? if >=1.21 {
+        Identifier id = id("mcaddon", "boost");
+        speed.removeModifier(id);
+        if (multiplier != 1) {
+            speed.addTransientModifier(new net.minecraft.world.entity.ai.attributes.AttributeModifier(
+                id, multiplier - 1,
+                net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_MULTIPLIED_BASE));
+        }
+        //?} else {
+        /*java.util.UUID id = java.util.UUID.fromString("7f3d1c90-2d9a-4a1e-9a1f-0b5f2c8d6e41");
+        speed.removeModifier(id);
+        if (multiplier != 1) {
+            speed.addTransientModifier(new net.minecraft.world.entity.ai.attributes.AttributeModifier(
+                id, "mcaddon boost", multiplier - 1,
+                net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.MULTIPLY_BASE));
+        }
+        *///?}
+    }
+
     /** Where a mob was told it belongs, or null when it was told nothing. 26 renamed both calls. */
     public static net.minecraft.core.BlockPos home(net.minecraft.world.entity.Mob mob) {
         //? if >=26 {
