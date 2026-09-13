@@ -324,12 +324,30 @@ def dontPauseOnLostFocus(version: str) -> None:
 PHOTOGRAPHING = Lock()
 
 
+@contextmanager
+def photographing():
+    """The front of the screen, held against every scene run on this machine rather than only ours.
+
+    A run started from another checkout brings its own window forward, and a picture taken while it
+    does is of that game. The file lock reaches those runs; the thread lock is what orders the four
+    versions inside one run.
+    """
+    with PHOTOGRAPHING:
+        handle = (lockDirectory() / "mcaddon-scene-screen.lock").open("a+")
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+            handle.close()
+
+
 def gamePid(version: str) -> int | None:
     """The game this version is running, picked out from however many are up at once.
 
     Four versions are photographed at the same time, so a key sent to whichever java process came
-    first would reach the wrong window. Each game carries its own version in the paths it was
-    started with, which is what tells them apart.
+    first would reach the wrong window. Each game carries the directory it was started from in the
+    paths it was given, which tells apart both the versions and the checkouts.
     """
     found = subprocess.run(["pgrep", "-f", "fabric.dli.env=client"],
                            check=False, capture_output=True, text=True)
@@ -338,7 +356,7 @@ def gamePid(version: str) -> int | None:
             continue
         command = subprocess.run(["ps", "-o", "command=", "-p", line],
                                  check=False, capture_output=True, text=True).stdout
-        if f"versions/{version}/" in command:
+        if f"{ROOT}/versions/{version}/" in command:
             return int(line)
     return None
 
@@ -365,7 +383,7 @@ def capture(version: str, target: pathlib.Path) -> None:
     shots = ROOT / "versions" / version / "run" / "screenshots"
     before = set(shots.glob("*.png")) if shots.is_dir() else set()
 
-    with PHOTOGRAPHING:
+    with photographing():
         pid = gamePid(version)
         if pid is None:
             return
@@ -391,21 +409,33 @@ def capture(version: str, target: pathlib.Path) -> None:
         scaled.save(target)
 
 
+def lockDirectory() -> pathlib.Path:
+    """Where the locks live, which is one place for every checkout of this repository.
+
+    A worktree is a checkout of its own with a `scratchpad/` of its own, so a lock kept there locks
+    nothing against a run started from somewhere else, and a picture is taken by bringing a window
+    to the front, which every game on the machine shares. Git's common directory is the same path
+    from every worktree.
+    """
+    try:
+        common = subprocess.run(["git", "rev-parse", "--git-common-dir"], cwd=ROOT,
+                                capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        common = ""
+
+    shared = (ROOT / common).resolve() if common else ROOT / "scratchpad"
+    shared.mkdir(parents=True, exist_ok=True)
+    return shared
+
+
 @contextmanager
 def exclusive(wait: float, version: str):
     """Holds this version's scene lock, so two runs cannot fight over its world and its pictures.
 
     One saved world takes one game at a time, and both runs would write their picture over the
-    other's. One lock per version, because the versions share neither. The lock lives under
-    `scratchpad/`, which git ignores, and is released when the process ends however it ends.
+    other's. One lock per version, because the versions share neither.
     """
-    scratchpad = ROOT / "scratchpad"
-    scratchpad.mkdir(exist_ok=True)
-    ignore = scratchpad / ".gitignore"
-    if not ignore.exists():
-        ignore.write_text("*\n", encoding="utf-8")
-
-    handle = (scratchpad / f"scene-{version}.lock").open("a+")
+    handle = (lockDirectory() / f"mcaddon-scene-{version}.lock").open("a+")
     deadline = time.monotonic() + wait
     announced = False
     while True:

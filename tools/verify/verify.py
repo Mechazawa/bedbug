@@ -359,22 +359,34 @@ def commandOf(pid: int) -> str:
     return found.stdout
 
 
+def lockDirectory(root: Path) -> Path:
+    """Where the locks live, which is one place for every checkout of this repository.
+
+    A worktree is a checkout of its own with a `scratchpad/` of its own, so a lock kept there locks
+    nothing against a run started from somewhere else. This harness refuses to start beside any dev
+    game on the machine, whichever directory started it, so the lock has to reach as far as that
+    refusal does. Git's common directory is the same path from every worktree.
+    """
+    try:
+        common = subprocess.run(["git", "rev-parse", "--git-common-dir"], cwd=root,
+                                capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        common = ""
+
+    shared = (root / common).resolve() if common else root / "scratchpad"
+    shared.mkdir(parents=True, exist_ok=True)
+    return shared
+
+
 @contextmanager
 def exclusive(root: Path, wait: float, version: str):
     """Holds this version's harness lock, so two runs cannot fight over its world and its port.
 
     One lock per version rather than one for the whole harness: the four versions run out of four
     directories on four ports, so only two runs of the same version have anything to fight over.
-    The lock lives under `scratchpad/`, which git ignores, and is released when the process ends
-    however it ends.
+    The lock is released when the process ends however it ends.
     """
-    scratchpad = root / "scratchpad"
-    scratchpad.mkdir(exist_ok=True)
-    ignore = scratchpad / ".gitignore"
-    if not ignore.exists():
-        ignore.write_text("*\n")
-
-    path = scratchpad / f"verify-{version}.lock"
+    path = lockDirectory(root) / f"mcaddon-verify-{version}.lock"
     # Append mode, so waiting for the lock does not blank the pid of whoever holds it.
     handle = path.open("a+")
     deadline = time.monotonic() + wait
