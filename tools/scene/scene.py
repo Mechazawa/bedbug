@@ -187,6 +187,22 @@ def windowBounds() -> tuple[int, int, int, int] | None:
     return (left, top, across, down)
 
 
+def hideHud() -> None:
+    """Takes the chat, the hotbar and the crosshair off the screen, which is what F1 does.
+
+    The game keeps no setting for this, so the key is sent once. It is the only key this tool
+    presses, and the scene itself still runs without one.
+    """
+    pressing = ('tell application "System Events" to tell (first process whose name is "java") '
+                'to key code 122')
+    subprocess.run(["osascript", "-e",
+                    'tell application "System Events" to set frontmost of '
+                    '(first process whose name is "java") to true'], check=False)
+    time.sleep(0.8)
+    subprocess.run(["osascript", "-e", pressing], check=False)
+    time.sleep(0.8)
+
+
 def capture(target: pathlib.Path) -> None:
     """Photographs the game's window and leaves one picture that is ready to look at.
 
@@ -194,6 +210,7 @@ def capture(target: pathlib.Path) -> None:
     two pixels per point comes back at twice the size it was asked for. Taking the window's own
     rectangle and scaling the result down means the file can be opened and read as it is.
     """
+    hideHud()
     bounds = windowBounds()
     region = ["-R", ",".join(str(one) for one in bounds)] if bounds else []
     subprocess.run(["screencapture", "-x", "-o", *region, str(target)], check=False)
