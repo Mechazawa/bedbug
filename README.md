@@ -37,9 +37,9 @@ server decides what happens; the client draws it.
   not, plain or glowing.
 - Entities a behaviour pack declares, with their properties, events, component groups, filters,
   breeding, riding, leashing, home ranges, navigation and item pickup, and the sensors that fire
-  their events: environment, entity, timer, scheduler, damage, interact and
-  hurt-on-condition. Their properties reach every client, so a model looks the same in multiplayer
-  as it does alone.
+  their events: environment, entity, target-nearby, block, timer, scheduler, drying-out, damage,
+  interact, spawn-entity and hurt-on-condition. Their properties reach every client, so a model
+  looks the same in multiplayer as it does alone.
 - Items, including edible and wearable ones, spawn eggs, and a creative tab per add-on. A dyeable
   item takes the colour the pack painted it and the one a player dyes it. A bow draws and fires
   whatever the pack loads it with. A bag holds other items. A drop the pack asks to keep lies there.
@@ -55,8 +55,13 @@ server decides what happens; the client draws it.
   a placement filter only survives where the filter allows, one that produces redstone powers what it
   touches, and one a pack marks pottable gets the second block a flower pot needs.
 - Trading, with Bedrock's tiers and groups flattened into Java's merchant screen.
-- Recipes, loot tables, natural spawning, and `.mcfunction` files translated into Java's command
-  dialect with a `tick` function tag.
+- Recipes, loot tables, and `.mcfunction` files translated into Java's command dialect with a `tick`
+  function tag.
+- Natural spawning from a pack's `spawn_rules`, with each alternative the rule lists becoming a
+  biome spawn entry of its own. The weight, the group size and the biome tags decide which biomes
+  it is offered in; the brightness, height, difficulty, world age, distance, density, delay, the
+  surface and underwater and lava markers and the blocks it may stand on are asked again of the
+  spot the game is trying, so a mob that a pack said belongs on sand at night stays there.
 - Attachables: what any entity wears or holds, players and vanilla mobs included, animating on its
   own clock.
 - The sounds and particles an animation, an animation controller state or an entity's own definition
@@ -155,6 +160,15 @@ world by the Bedrock renderer, and the locator bar and its waypoints are a Bedro
 Java has none of the three, so every member of each is answered by `/mcaddon scripts` rather than
 quietly doing nothing. The same holds for `world.getPackSettings`, which reads a screen only Bedrock
 shows.
+
+**Four spawn rule conditions with nothing to ask in Java.** `minecraft:permute_type` swaps the
+entity that spawns for another one after the biome list has already chosen a type.
+`minecraft:mob_event_filter` waits on one of Bedrock's own world events, `minecraft:is_experimental`
+on a toggle Java has no form of, and `minecraft:player_in_village_filter` measures a distance to a
+village border that Java's poi map does not hold. Each is counted and named by `/mcaddon entities`.
+A Bedrock biome tag with no Java biome carrying the same idea, `sulfur_caves` and the `spawn_*`
+nether tags among them, is named the same way and then left out of the filter, so the rest of the
+rule still decides.
 
 Surface lighting from a physically based texture set is the one thing that depends on what the
 player has installed: the emissive channel is drawn again at full brightness with or without a

@@ -79,9 +79,13 @@ SETTLE_TICKS = 60
 DONE = "SCENE-DONE"
 
 
-def scene(name: str, commands: list[str], wants: list[str]) -> dict:
-    """One scene: what to run, and the log lines that have to appear for it to have worked."""
-    return {"name": name, "commands": commands, "wants": wants}
+def scene(name: str, commands: list[str], wants: list[str], checks: list[str] | None = None) -> dict:
+    """One scene: what to run, what to ask a second later, and the log lines that have to appear.
+
+    A check runs a second after the commands because a selector answers on the world as the game
+    last saw it, so a summon and a question about what was summoned do not belong in one tick.
+    """
+    return {"name": name, "commands": commands, "wants": wants, "checks": checks or []}
 
 
 def declared(version: str, directory: str, key: str) -> list[str]:
@@ -157,15 +161,7 @@ def scenes(version: str) -> list[dict]:
         f"tp @a {CAMERA_X} {FLOOR_Y + 4} {middle}",
         f"tp @a {CAMERA_X} {FLOOR_Y + 4} {middle} facing {ROW_X} {FLOOR_Y + 2} {middle}",
     ]
-    # The count is asked for again afterwards rather than assumed, because a picture of an empty
-    # stage is what a scene looks like when every name it was given turned out not to exist. It is
-    # read as "at least one" instead of as the number placed, since a pack's own despawn rule may
-    # take one of them away and that is the pack working rather than the scene failing.
-    counting = [
-        "execute store result score #placed mcaddon run execute if entity @e[type=!player]",
-        "execute if score #placed mcaddon matches 1.. run say COUNTED entities",
-        f"say PLACED {len(entities)} kinds",
-    ]
+    counting = [f"say PLACED {len(entities)} kinds"]
 
     # An item is only drawn once something is holding it, and a stand wears whatever is put on its
     # head whether or not it is armour. That is what shows an icon, a tint and a model all at once.
@@ -179,9 +175,6 @@ def scenes(version: str) -> list[dict]:
     atItems = [
         f"tp @a {CAMERA_X} {FLOOR_Y + 3} {itemMiddle}",
         f"tp @a {CAMERA_X} {FLOOR_Y + 3} {itemMiddle} facing {ROW_X} {FLOOR_Y + 2} {itemMiddle}",
-        "execute store result score #stands mcaddon run execute if entity "
-        "@e[type=minecraft:armor_stand]",
-        "execute if score #stands mcaddon matches 1.. run say COUNTED stands",
     ]
 
     return [
@@ -190,11 +183,15 @@ def scenes(version: str) -> list[dict]:
             "entities",
             ["kill @e[type=!player]"] + placing + looking + counting + ["say ENTITIES-PLACED"],
             ["ENTITIES-PLACED"] + (["COUNTED entities"] if entities else []),
+            # Read as "at least one is standing there" rather than as the number summoned, because a
+            # pack's own despawn rule may take one away and that is the pack working.
+            ["execute if entity @e[type=!player,limit=1] run say COUNTED entities"],
         ),
         scene(
             "items",
             ["kill @e[type=!player]"] + holding + atItems + [f"say SHOWN {len(items)} items"],
             [f"SHOWN {len(items)} items"] + (["COUNTED stands"] if items else []),
+            ["execute if entity @e[type=minecraft:armor_stand,limit=1] run say COUNTED stands"],
         ),
         scene(
             "player",
@@ -228,7 +225,7 @@ def packFormat(version: str) -> int:
     return 15
 
 
-def datapack(world: pathlib.Path, commands: list[str], format: int) -> pathlib.Path:
+def datapack(world: pathlib.Path, commands: list[str], checks: list[str], format: int) -> pathlib.Path:
     """Writes the commands into the world as a function the game runs once a player is in it.
 
     A world loads before anybody joins it, so a scene run off `minecraft:load` would aim every one
@@ -269,8 +266,12 @@ def datapack(world: pathlib.Path, commands: list[str], format: int) -> pathlib.P
                   "scoreboard players set #ran mcaddon 0",
                   "scoreboard players set #wait mcaddon 0"],
         "watch": waiting,
+        # A second between the two, so what the checks ask about is a world the game has ticked
+        # since it was built. The marker the runner waits for is said by the checks, which is what
+        # keeps the picture from being taken before they have answered.
         "scene": ["scoreboard players set #ran mcaddon 1"]
-        + list(STAGE) + list(commands) + [f"say {DONE}"],
+        + list(STAGE) + list(commands) + ["schedule function mcaddon:checked 20t"],
+        "checked": list(checks) + [f"say {DONE}"],
     }
 
     # Both spellings of the directory, because the game renamed it and reads only the one it wants.
@@ -458,7 +459,7 @@ def run(version: str, one: dict, timeout: float, keep: bool) -> tuple[bool, list
         return (False, [f"{version} has no saved world to open"])
 
     dontPauseOnLostFocus(version)
-    datapack(world, one["commands"], packFormat(version))
+    datapack(world, one["commands"], one["checks"], packFormat(version))
     logs = ROOT / "build" / "scene"
     logs.mkdir(parents=True, exist_ok=True)
     log = logs / f"{version}-{one['name']}.log"

@@ -2,9 +2,11 @@ package at.ioexception.mcaddon.entity;
 
 import at.ioexception.mcaddon.bedrock.behaviour.Filter;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
+import at.ioexception.mcaddon.bedrock.behaviour.SpawnRuleDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.TradeTable;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.registry.AddonSpawns;
 import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.Sensors;
 import at.ioexception.mcaddon.server.ServerHooks;
@@ -65,12 +67,17 @@ public class AddonEntity extends PathfinderMob
         net.minecraft.world.entity.OwnableEntity {
     private final ServerEntityDefinition definition;
     private final java.util.Set<String> activeGroups = new java.util.LinkedHashSet<>();
+    private final java.util.Map<String, Integer> sensorReady = new java.util.HashMap<>();
+    private final java.util.Set<String> spent = new java.util.HashSet<>();
     private int timerDueTick = -1;
     private int admireUntilTick = -1;
     private String lastBlockInside;
     private int celebrateUntilTick = -1;
     private int boostedUntilTick = -1;
     private boolean boosting;
+    private int dryTicks;
+    private int schedulerDueTick = -1;
+    private String spawnRuleEvent;
     private Player tradingPlayer;
     private MerchantOffers offers;
     private int tradeExperience;
@@ -152,6 +159,43 @@ public class AddonEntity extends PathfinderMob
 
     public void setTimerDueTick(int tick) {
         timerDueTick = tick;
+    }
+
+    /** When `minecraft:scheduler` may run again, which is how its delay fields are kept. */
+    public int schedulerDueTick() {
+        return schedulerDueTick;
+    }
+
+    public void setSchedulerDueTick(int tick) {
+        schedulerDueTick = tick;
+    }
+
+    /** How long this entity has been out of water, for `minecraft:drying_out_timer`. */
+    public int dryTicks() {
+        return dryTicks;
+    }
+
+    public void setDryTicks(int ticks) {
+        dryTicks = ticks;
+    }
+
+    /** True the first time a `single_use` sensor asks, and false for every ask after it. */
+    public boolean spend(String key) {
+        return spent.add(key);
+    }
+
+    /**
+     * Whether a sensor carrying a cooldown may fire, and takes the cooldown when it may.
+     *
+     * Bedrock counts the cooldown per subsensor rather than per entity, so the key names which one
+     * is asking. A subsensor with no cooldown never reaches here.
+     */
+    public boolean sensorReady(String key, double seconds) {
+        Integer due = sensorReady.get(key);
+        if (due != null && tickCount < due) return false;
+
+        sensorReady.put(key, tickCount + Math.max(1, (int) (seconds * 20)));
+        return true;
     }
 
     /**
@@ -1748,6 +1792,43 @@ public class AddonEntity extends PathfinderMob
         }
     }
 
+    // A spawn rule describes natural spawning, so a spawner block and a spawn egg are left alone.
+    // The reason a spawn carries was renamed on the way to 26; the question asked of it is the same.
+    //? if >=1.21.2 {
+    @Override
+    public boolean checkSpawnRules(net.minecraft.world.level.LevelAccessor level,
+        net.minecraft.world.entity.EntitySpawnReason reason) {
+        return super.checkSpawnRules(level, reason)
+            && (reason != net.minecraft.world.entity.EntitySpawnReason.NATURAL || spawnRuleAllows());
+    }
+    //?} else {
+    /*@Override
+    public boolean checkSpawnRules(net.minecraft.world.level.LevelAccessor level,
+        net.minecraft.world.entity.MobSpawnType reason) {
+        return super.checkSpawnRules(level, reason)
+            && (reason != net.minecraft.world.entity.MobSpawnType.NATURAL || spawnRuleAllows());
+    }
+    *///?}
+
+    /**
+     * Whether the pack's own spawn rule allows the spot the game is trying.
+     *
+     * The conditions a rule lists are alternatives, so the first one that holds decides, and the
+     * event and the persistence it asks for come from that one. The event waits for the first tick:
+     * an entity the game then refuses for want of room never ticks, and nothing is written for it.
+     */
+    private boolean spawnRuleAllows() {
+        java.util.List<SpawnRuleDefinition.Condition> conditions = AddonSpawns.conditionsOf(getType());
+        for (SpawnRuleDefinition.Condition condition : conditions) {
+            if (!condition.allows(level(), blockPosition(), getType())) continue;
+
+            spawnRuleEvent = condition.spawnEvent();
+            if (condition.persistent()) setPersistenceRequired();
+            return true;
+        }
+        return conditions.isEmpty();
+    }
+
     /**
      * Sends the drawing side the facts about this entity that never change while it lives.
      *
@@ -1829,6 +1910,11 @@ public class AddonEntity extends PathfinderMob
         if (definition == null || !(level() instanceof net.minecraft.server.level.ServerLevel)) return;
 
         everyTick();
+        if (spawnRuleEvent != null) {
+            String event = spawnRuleEvent;
+            spawnRuleEvent = null;
+            EntityEvents.trigger(this, event, null, ServerHooks.state());
+        }
         if ((tickCount + getId()) % Sensors.INTERVAL_TICKS == 0) {
             Sensors.tick(this, ServerHooks.state());
             resupply();

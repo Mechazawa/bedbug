@@ -13,17 +13,29 @@ import net.fabricmc.fabric.api.biome.v1.ModificationPhase;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Predicate;
 
 /**
  * Natural spawning for the entities a behaviour pack declares.
  *
- * Bedrock's spawn rules are far more specific than Java's biome spawn lists, so what survives is the
- * weight, the herd size and which of the three worlds the biome filter pointed at. A pack that
- * expected to spawn only on grass at night will spawn more widely than it meant to.
+ * A Bedrock rule lists alternatives and Java's biome spawn list holds only a weight and a group
+ * size, so each alternative becomes an entry of its own, selected by the biomes its filter names.
+ * What the entry cannot carry, the light level and the block below and everything else measured at
+ * a single position, is asked of the same conditions again when the game tries a spot.
  */
 public final class AddonSpawns {
+    private static final Map<EntityType<?>, List<SpawnRuleDefinition.Condition>> CONDITIONS =
+        new LinkedHashMap<>();
+
     private AddonSpawns() {
+    }
+
+    /** Empty for an entity no pack wrote a spawn rule for, which is every vanilla one. */
+    public static List<SpawnRuleDefinition.Condition> conditionsOf(EntityType<?> type) {
+        return CONDITIONS.getOrDefault(type, List.of());
     }
 
     public static void register(PackSet packs) {
@@ -39,21 +51,34 @@ public final class AddonSpawns {
 
     private static boolean add(SpawnRuleDefinition rule) {
         EntityType<?> type = AddonEntities.typeOf(rule.identifier());
-        if (type == null) return false;
+        if (type == null || rule.conditions().isEmpty()) return false;
 
-        BiomeModifications.create(McAddon.id("spawn_" + Math.abs(rule.identifier().hashCode())))
-            .add(ModificationPhase.ADDITIONS, selector(rule.world()), context ->
-                Platform.addSpawn(context, category(rule.category()), type, rule.weight(),
-                    rule.minimumHerd(), rule.maximumHerd()));
+        int index = 0;
+        for (SpawnRuleDefinition.Condition condition : rule.conditions()) {
+            BiomeModifications
+                .create(McAddon.id("spawn_" + Math.abs(rule.identifier().hashCode()) + "_" + index++))
+                .add(ModificationPhase.ADDITIONS, selector(condition), context ->
+                    Platform.addSpawn(context, category(rule.category()), type, condition.weight(),
+                        condition.minimumHerd(), condition.maximumHerd()));
+        }
+        CONDITIONS.put(type, rule.conditions());
         return true;
     }
 
-    private static Predicate<BiomeSelectionContext> selector(String world) {
-        return switch (world) {
+    /**
+     * The biomes one alternative allows.
+     *
+     * The world comes first because Java holds the three of them apart with selectors of its own,
+     * and the tags are then matched against the id of each biome in that world.
+     */
+    private static Predicate<BiomeSelectionContext> selector(SpawnRuleDefinition.Condition condition) {
+        Predicate<BiomeSelectionContext> world = switch (condition.world()) {
             case "nether" -> BiomeSelectors.foundInTheNether();
             case "end" -> BiomeSelectors.foundInTheEnd();
             default -> BiomeSelectors.foundInOverworld();
         };
+        return context -> world.test(context)
+            && condition.biomes().matches(Platform.idOf(context.getBiomeKey()).getPath());
     }
 
     /** Bedrock's population control names line up with Java's spawn categories. */
