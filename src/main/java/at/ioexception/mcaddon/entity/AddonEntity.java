@@ -1276,6 +1276,22 @@ public class AddonEntity extends PathfinderMob
             switch (behaviour) {
                 case "minecraft:behavior.float" -> goalSelector.addGoal(priority, new FloatGoal(this));
                 case "minecraft:behavior.panic" -> goalSelector.addGoal(priority, new PanicGoal(this, 1.25));
+                case "minecraft:behavior.swell" ->
+                    goalSelector.addGoal(priority, new SwellGoal(this, componentBody(behaviour)));
+                case "minecraft:behavior.beg" ->
+                    goalSelector.addGoal(priority, new BegGoal(this, componentBody(behaviour)));
+
+                // One squid moves five ways, and Bedrock names each of them separately.
+                case "minecraft:behavior.squid_idle" ->
+                    goalSelector.addGoal(priority, SquidGoal.idling(this));
+                case "minecraft:behavior.squid_dive" ->
+                    goalSelector.addGoal(priority, SquidGoal.diving(this));
+                case "minecraft:behavior.squid_flee" ->
+                    goalSelector.addGoal(priority, SquidGoal.fleeing(this));
+                case "minecraft:behavior.squid_move_away_from_ground" ->
+                    goalSelector.addGoal(priority, SquidGoal.leavingGround(this));
+                case "minecraft:behavior.squid_out_of_water" ->
+                    goalSelector.addGoal(priority, SquidGoal.flopping(this));
                 case "minecraft:behavior.random_stroll", "minecraft:behavior.move_outdoors",
                      "minecraft:behavior.explore_outskirts" ->
                     goalSelector.addGoal(priority, new WaterAvoidingRandomStrollGoal(this, 0.6));
@@ -2195,6 +2211,13 @@ public class AddonEntity extends PathfinderMob
      * Bedrock describes the fuse as well as the power, and a fuse only matters while the entity is
      * still alive to count it; what a pack uses this for is the blast, which is what happens here.
      */
+    void detonate() {
+        if (level() instanceof net.minecraft.server.level.ServerLevel level) {
+            explode(level);
+            discard();
+        }
+    }
+
     private void explode(net.minecraft.server.level.ServerLevel level) {
         if (!declares("minecraft:explode")) return;
 
