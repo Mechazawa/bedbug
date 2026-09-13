@@ -5,7 +5,7 @@
 // caught by the imports below: reaching the first MODULEPROBE line means every module linked, and a
 // line per module means each of them answered.
 
-import { system, world } from "@minecraft/server";
+import { EntityRemoveBeforeEvent, system, world } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 import { NumberRange } from "@minecraft/common";
 import { Vector3Builder, Vector3Utils, VECTOR3_UP, clampNumber } from "@minecraft/math";
@@ -21,6 +21,22 @@ import { Tags, register } from "@minecraft/server-gametest";
 function report(label, value) {
     world.sendMessage("MODULEPROBE " + label + "=" + value);
 }
+
+// A before event is the one a pack writes back to. The class it arrives as declares every member
+// the API publishes, and a member the server does not send reads as a report rather than as data,
+// so writing `cancel` has to keep working against that. Cancelling is refused here: the point is
+// that the write lands and the event is the class it says it is.
+let reportedCancelling = false;
+
+world.beforeEvents.entityRemove.subscribe(event => {
+    const named = event instanceof EntityRemoveBeforeEvent;
+    event.cancel = false;
+    if (!reportedCancelling) {
+        reportedCancelling = true;
+        report("beforeEvent.isPublishedClass", named);
+        report("beforeEvent.acceptsCancel", event.cancel === false);
+    }
+});
 
 system.run(() => {
     try {

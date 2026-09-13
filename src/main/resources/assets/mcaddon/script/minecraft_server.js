@@ -3547,7 +3547,8 @@ class EventSignal {
     }
 
     emit(event) {
-        const ready = this.shape ? this.shape(shapeFields(event)) : shapeFields(event);
+        const shaped = this.shape ? this.shape(shapeFields(event)) : shapeFields(event);
+        const ready = this.payload ? asPayload(this.payload, shaped) : shaped;
         for (const listener of this.#listeners.slice()) {
             try {
                 listener.callback(ready);
@@ -3629,7 +3630,79 @@ const EVENT_SHAPES = {
  * the pack's own code runs on, but an unreported one would look like an implemented event that
  * simply never happened, which is what made the coverage report say everything was covered.
  */
-function eventGroup(raised) {
+
+/**
+ * The class each raised event is published as, against the name a pack subscribes under.
+ *
+ * A listener is handed an instance of that class rather than a plain object carrying the same
+ * fields, so a pack testing `event instanceof PlayerJoinAfterEvent` is answered the way Bedrock
+ * answers it. An event with no published class of its own is handed over as it arrives.
+ */
+
+/**
+ * The event the server sent, made an instance of the class it is published as.
+ *
+ * The object itself is kept rather than copied onto a new one. A pack cancels a before-event by
+ * writing `cancel` back, and the Java side reads that field off the very object it handed over, so
+ * a copy would take the cancellation with it. Giving the original the class as its prototype leaves
+ * every field where it is: what the server sent stays the event's own, which is what shadows the
+ * getter the class declares for a member the server did not send.
+ */
+function asPayload(kind, event) {
+    Object.setPrototypeOf(event, kind.prototype);
+    return event;
+}
+
+let payloadClasses;
+
+/**
+ * The published classes for one group of events, worked out the first time a group is asked for.
+ *
+ * Built on demand rather than at module scope: the classes are declared further down the file, and
+ * a table naming them while the module is still being evaluated reaches them before they exist.
+ */
+function payloadsFor(group) {
+    payloadClasses ??= {
+    worldAfter: {
+        dataDrivenEntityTrigger: DataDrivenEntityTriggerAfterEvent,
+        entityDie: EntityDieAfterEvent, entityHitEntity: EntityHitEntityAfterEvent,
+        entityHurt: EntityHurtAfterEvent, entityItemDrop: EntityItemDropAfterEvent,
+        entityLoad: EntityLoadAfterEvent, entityRemove: EntityRemoveAfterEvent,
+        entitySpawn: EntitySpawnAfterEvent, itemCompleteUse: ItemCompleteUseAfterEvent,
+        itemReleaseUse: ItemReleaseUseAfterEvent, itemStartUse: ItemStartUseAfterEvent,
+        itemStartUseOn: ItemStartUseOnAfterEvent, itemStopUse: ItemStopUseAfterEvent,
+        itemUse: ItemUseAfterEvent, playerBreakBlock: PlayerBreakBlockAfterEvent,
+        playerDimensionChange: PlayerDimensionChangeAfterEvent,
+        playerGameModeChange: PlayerGameModeChangeAfterEvent,
+        playerInteractWithBlock: PlayerInteractWithBlockAfterEvent,
+        playerInteractWithEntity: PlayerInteractWithEntityAfterEvent,
+        playerInventoryItemChange: PlayerInventoryItemChangeAfterEvent,
+        playerJoin: PlayerJoinAfterEvent, playerLeave: PlayerLeaveAfterEvent,
+        playerPlaceBlock: PlayerPlaceBlockAfterEvent, playerSpawn: PlayerSpawnAfterEvent,
+        worldLoad: WorldLoadAfterEvent, effectAdd: EffectAddAfterEvent,
+        entityItemPickup: EntityItemPickupAfterEvent, buttonPush: ButtonPushAfterEvent,
+        projectileHitEntity: ProjectileHitEntityAfterEvent,
+        projectileHitBlock: ProjectileHitBlockAfterEvent,
+    },
+    worldBefore: {
+        entityHurt: EntityHurtBeforeEvent, entityRemove: EntityRemoveBeforeEvent,
+        itemUse: ItemUseBeforeEvent, playerBreakBlock: PlayerBreakBlockBeforeEvent,
+        playerInteractWithBlock: PlayerInteractWithBlockBeforeEvent,
+        playerInteractWithEntity: PlayerInteractWithEntityBeforeEvent,
+        playerLeave: PlayerLeaveBeforeEvent, effectAdd: EffectAddBeforeEvent,
+        entityItemPickup: EntityItemPickupBeforeEvent,
+    },
+    systemAfter: {
+        scriptEventReceive: ScriptEventCommandMessageAfterEvent,
+    },
+    systemBefore: {
+        startup: StartupEvent, shutdown: ShutdownEvent,
+    },
+};
+    return payloadClasses[group];
+}
+
+function eventGroup(raised, group) {
     return new Proxy({}, {
         get(target, name) {
             if (typeof name !== "string") return undefined;
@@ -3638,6 +3711,7 @@ function eventGroup(raised) {
                 if (build === undefined) bridge.unsupported(name + " (event)");
                 target[name] = new (build ?? EventSignal)();
                 target[name].shape = EVENT_SHAPES[name];
+                target[name].payload = payloadsFor(group)[name];
             }
             return target[name];
         },
@@ -3773,8 +3847,8 @@ GAME_RULE_FLAGS.forEach(name => defineGameRule(name, answer => answer === "true"
 GAME_RULE_COUNTS.forEach(name => defineGameRule(name, Number));
 
 export class World {
-    #afterEvents = eventGroup(RAISED.worldAfter);
-    #beforeEvents = eventGroup(RAISED.worldBefore);
+    #afterEvents = eventGroup(RAISED.worldAfter, "worldAfter");
+    #beforeEvents = eventGroup(RAISED.worldBefore, "worldBefore");
     #gameRules = new GameRules();
 
     get afterEvents() {
@@ -4315,8 +4389,8 @@ export class System {
     #next = 1;
     #runs = new Map();
     #jobs = new Map();
-    #afterEvents = eventGroup(RAISED.systemAfter);
-    #beforeEvents = eventGroup(RAISED.systemBefore);
+    #afterEvents = eventGroup(RAISED.systemAfter, "systemAfter");
+    #beforeEvents = eventGroup(RAISED.systemBefore, "systemBefore");
 
     get currentTick() {
         return bridge.currentTick();
@@ -4617,7 +4691,19 @@ export class BlockExplodeAfterEventSignal {}
 export class BlockFluidContainerComponent { static componentId = "minecraft:fluid_container"; }
 export class BlockPrecipitationInteractionsComponent { static componentId = "minecraft:precipitation_interactions"; }
 export class BlockRecordPlayerComponent { static componentId = "minecraft:record_player"; }
-export class ButtonPushAfterEvent {}
+export class ButtonPushAfterEvent {
+    get block() {
+        return unsupported("ButtonPushAfterEvent.block");
+    }
+
+    get dimension() {
+        return unsupported("ButtonPushAfterEvent.dimension");
+    }
+
+    get source() {
+        return unsupported("ButtonPushAfterEvent.source");
+    }
+}
 export class CatmullRomSpline {}
 export class CommandResult {}
 export class Component {}
@@ -4625,9 +4711,45 @@ export class CustomCommandOrigin {}
 export class CustomCommandRegistry {}
 export class CustomComponentParameters {}
 export class DamagedByEntityCondition {}
-export class DataDrivenEntityTriggerAfterEvent {}
-export class EffectAddAfterEvent {}
-export class EffectAddBeforeEvent {}
+export class DataDrivenEntityTriggerAfterEvent {
+    get entity() {
+        return unsupported("DataDrivenEntityTriggerAfterEvent.entity");
+    }
+
+    get eventId() {
+        return unsupported("DataDrivenEntityTriggerAfterEvent.eventId");
+    }
+
+    getModifiers() {
+        return unsupported("DataDrivenEntityTriggerAfterEvent.getModifiers");
+    }
+}
+export class EffectAddAfterEvent {
+    get effect() {
+        return unsupported("EffectAddAfterEvent.effect");
+    }
+
+    get entity() {
+        return unsupported("EffectAddAfterEvent.entity");
+    }
+}
+export class EffectAddBeforeEvent {
+    get cancel() {
+        return unsupported("EffectAddBeforeEvent.cancel");
+    }
+
+    get duration() {
+        return unsupported("EffectAddBeforeEvent.duration");
+    }
+
+    get effectType() {
+        return unsupported("EffectAddBeforeEvent.effectType");
+    }
+
+    get entity() {
+        return unsupported("EffectAddBeforeEvent.entity");
+    }
+}
 export class EmptyLootItem {}
 export class EnchantInfo {}
 export class EnchantRandomEquipmentFunction {}
@@ -4638,7 +4760,15 @@ export class EntityCanFlyComponent {}
 export class EntityCanPowerJumpComponent {}
 export class EntityColor2Component {}
 export class EntityColorComponent {}
-export class EntityDieAfterEvent {}
+export class EntityDieAfterEvent {
+    get damageSource() {
+        return unsupported("EntityDieAfterEvent.damageSource");
+    }
+
+    get deadEntity() {
+        return unsupported("EntityDieAfterEvent.deadEntity");
+    }
+}
 export class EntityExhaustionComponent {}
 export class EntityFireImmuneComponent {}
 export class EntityFloatsInLiquidComponent {}
@@ -4655,9 +4785,45 @@ export class EntityHealthChangedAfterEvent {}
 export class EntityHealthChangedAfterEventSignal {}
 export class EntityHitBlockAfterEvent {}
 export class EntityHitBlockAfterEventSignal {}
-export class EntityHitEntityAfterEvent {}
-export class EntityHurtAfterEvent {}
-export class EntityHurtBeforeEvent {}
+export class EntityHitEntityAfterEvent {
+    get damagingEntity() {
+        return unsupported("EntityHitEntityAfterEvent.damagingEntity");
+    }
+
+    get hitEntity() {
+        return unsupported("EntityHitEntityAfterEvent.hitEntity");
+    }
+}
+export class EntityHurtAfterEvent {
+    get damage() {
+        return unsupported("EntityHurtAfterEvent.damage");
+    }
+
+    get damageSource() {
+        return unsupported("EntityHurtAfterEvent.damageSource");
+    }
+
+    get hurtEntity() {
+        return unsupported("EntityHurtAfterEvent.hurtEntity");
+    }
+}
+export class EntityHurtBeforeEvent {
+    get cancel() {
+        return unsupported("EntityHurtBeforeEvent.cancel");
+    }
+
+    get damage() {
+        return unsupported("EntityHurtBeforeEvent.damage");
+    }
+
+    get damageSource() {
+        return unsupported("EntityHurtBeforeEvent.damageSource");
+    }
+
+    get hurtEntity() {
+        return unsupported("EntityHurtBeforeEvent.hurtEntity");
+    }
+}
 export class EntityIsChargedComponent {}
 export class EntityIsChestedComponent {}
 export class EntityIsDyeableComponent {}
@@ -4670,17 +4836,69 @@ export class EntityIsShearedComponent {}
 export class EntityIsStackableComponent {}
 export class EntityIsStunnedComponent {}
 export class EntityIsTamedComponent {}
-export class EntityItemDropAfterEvent {}
-export class EntityItemPickupAfterEvent {}
-export class EntityItemPickupBeforeEvent {}
+export class EntityItemDropAfterEvent {
+    get entity() {
+        return unsupported("EntityItemDropAfterEvent.entity");
+    }
+
+    get items() {
+        return unsupported("EntityItemDropAfterEvent.items");
+    }
+}
+export class EntityItemPickupAfterEvent {
+    get entity() {
+        return unsupported("EntityItemPickupAfterEvent.entity");
+    }
+
+    get items() {
+        return unsupported("EntityItemPickupAfterEvent.items");
+    }
+}
+export class EntityItemPickupBeforeEvent {
+    get cancel() {
+        return unsupported("EntityItemPickupBeforeEvent.cancel");
+    }
+
+    get entity() {
+        return unsupported("EntityItemPickupBeforeEvent.entity");
+    }
+
+    get item() {
+        return unsupported("EntityItemPickupBeforeEvent.item");
+    }
+}
 export class EntityKilledCondition {}
 export class EntityLavaMovementComponent {}
-export class EntityLoadAfterEvent {}
+export class EntityLoadAfterEvent {
+    get entity() {
+        return unsupported("EntityLoadAfterEvent.entity");
+    }
+}
 export class EntityPushThroughComponent {}
-export class EntityRemoveAfterEvent {}
-export class EntityRemoveBeforeEvent {}
+export class EntityRemoveAfterEvent {
+    get removedEntityId() {
+        return unsupported("EntityRemoveAfterEvent.removedEntityId");
+    }
+
+    get typeId() {
+        return unsupported("EntityRemoveAfterEvent.typeId");
+    }
+}
+export class EntityRemoveBeforeEvent {
+    get removedEntity() {
+        return unsupported("EntityRemoveBeforeEvent.removedEntity");
+    }
+}
 export class EntityScaleComponent {}
-export class EntitySpawnAfterEvent {}
+export class EntitySpawnAfterEvent {
+    get cause() {
+        return unsupported("EntitySpawnAfterEvent.cause");
+    }
+
+    get entity() {
+        return unsupported("EntitySpawnAfterEvent.entity");
+    }
+}
 export class EntityUnderwaterMovementComponent {}
 export class EntityWantsJockeyComponent {}
 export class ExplorationMapFunction {}
@@ -4694,7 +4912,19 @@ export class FluidContainer {}
 export class GameRuleChangeAfterEvent {}
 export class GameRuleChangeAfterEventSignal {}
 export class IsBabyCondition {}
-export class ItemCompleteUseAfterEvent {}
+export class ItemCompleteUseAfterEvent {
+    get itemStack() {
+        return unsupported("ItemCompleteUseAfterEvent.itemStack");
+    }
+
+    get source() {
+        return unsupported("ItemCompleteUseAfterEvent.source");
+    }
+
+    get useDuration() {
+        return unsupported("ItemCompleteUseAfterEvent.useDuration");
+    }
+}
 export class ItemCompleteUseEvent {}
 export class ItemComponentBeforeDurabilityDamageEvent {}
 export class ItemComponentCompleteUseEvent {}
@@ -4706,14 +4936,86 @@ export class ItemComponentUseEvent {}
 export class ItemComponentUseOnEvent {}
 export class ItemCustomComponentInstance {}
 export class ItemInventoryComponent {}
-export class ItemReleaseUseAfterEvent {}
-export class ItemStartUseAfterEvent {}
-export class ItemStartUseOnAfterEvent {}
-export class ItemStopUseAfterEvent {}
+export class ItemReleaseUseAfterEvent {
+    get itemStack() {
+        return unsupported("ItemReleaseUseAfterEvent.itemStack");
+    }
+
+    get source() {
+        return unsupported("ItemReleaseUseAfterEvent.source");
+    }
+
+    get useDuration() {
+        return unsupported("ItemReleaseUseAfterEvent.useDuration");
+    }
+}
+export class ItemStartUseAfterEvent {
+    get itemStack() {
+        return unsupported("ItemStartUseAfterEvent.itemStack");
+    }
+
+    get source() {
+        return unsupported("ItemStartUseAfterEvent.source");
+    }
+
+    get useDuration() {
+        return unsupported("ItemStartUseAfterEvent.useDuration");
+    }
+}
+export class ItemStartUseOnAfterEvent {
+    get block() {
+        return unsupported("ItemStartUseOnAfterEvent.block");
+    }
+
+    get blockFace() {
+        return unsupported("ItemStartUseOnAfterEvent.blockFace");
+    }
+
+    get itemStack() {
+        return unsupported("ItemStartUseOnAfterEvent.itemStack");
+    }
+
+    get source() {
+        return unsupported("ItemStartUseOnAfterEvent.source");
+    }
+}
+export class ItemStopUseAfterEvent {
+    get itemStack() {
+        return unsupported("ItemStopUseAfterEvent.itemStack");
+    }
+
+    get source() {
+        return unsupported("ItemStopUseAfterEvent.source");
+    }
+
+    get useDuration() {
+        return unsupported("ItemStopUseAfterEvent.useDuration");
+    }
+}
 export class ItemStopUseOnAfterEvent {}
 export class ItemStopUseOnAfterEventSignal {}
-export class ItemUseAfterEvent {}
-export class ItemUseBeforeEvent {}
+export class ItemUseAfterEvent {
+    get itemStack() {
+        return unsupported("ItemUseAfterEvent.itemStack");
+    }
+
+    get source() {
+        return unsupported("ItemUseAfterEvent.source");
+    }
+}
+export class ItemUseBeforeEvent {
+    get cancel() {
+        return unsupported("ItemUseBeforeEvent.cancel");
+    }
+
+    get itemStack() {
+        return unsupported("ItemUseBeforeEvent.itemStack");
+    }
+
+    get source() {
+        return unsupported("ItemUseBeforeEvent.source");
+    }
+}
 export class ItemUseOnEvent {}
 export class KilledByEntityCondition {}
 export class KilledByPlayerCondition {}
@@ -4735,15 +5037,91 @@ export class MatchToolCondition {}
 export class PassengerOfEntityCondition {}
 export class PistonActivateAfterEvent {}
 export class PistonActivateAfterEventSignal {}
-export class PlayerBreakBlockAfterEvent {}
-export class PlayerBreakBlockBeforeEvent {}
+export class PlayerBreakBlockAfterEvent {
+    get block() {
+        return unsupported("PlayerBreakBlockAfterEvent.block");
+    }
+
+    get brokenBlockPermutation() {
+        return unsupported("PlayerBreakBlockAfterEvent.brokenBlockPermutation");
+    }
+
+    get dimension() {
+        return unsupported("PlayerBreakBlockAfterEvent.dimension");
+    }
+
+    get itemStackAfterBreak() {
+        return unsupported("PlayerBreakBlockAfterEvent.itemStackAfterBreak");
+    }
+
+    get itemStackBeforeBreak() {
+        return unsupported("PlayerBreakBlockAfterEvent.itemStackBeforeBreak");
+    }
+
+    get player() {
+        return unsupported("PlayerBreakBlockAfterEvent.player");
+    }
+}
+export class PlayerBreakBlockBeforeEvent {
+    get block() {
+        return unsupported("PlayerBreakBlockBeforeEvent.block");
+    }
+
+    get cancel() {
+        return unsupported("PlayerBreakBlockBeforeEvent.cancel");
+    }
+
+    get dimension() {
+        return unsupported("PlayerBreakBlockBeforeEvent.dimension");
+    }
+
+    get itemStack() {
+        return unsupported("PlayerBreakBlockBeforeEvent.itemStack");
+    }
+
+    get player() {
+        return unsupported("PlayerBreakBlockBeforeEvent.player");
+    }
+}
 export class PlayerButtonInputAfterEvent {}
 export class PlayerButtonInputAfterEventSignal {}
 export class PlayerCursorInventoryComponent {}
-export class PlayerDimensionChangeAfterEvent {}
+export class PlayerDimensionChangeAfterEvent {
+    get fromDimension() {
+        return unsupported("PlayerDimensionChangeAfterEvent.fromDimension");
+    }
+
+    get fromLocation() {
+        return unsupported("PlayerDimensionChangeAfterEvent.fromLocation");
+    }
+
+    get player() {
+        return unsupported("PlayerDimensionChangeAfterEvent.player");
+    }
+
+    get toDimension() {
+        return unsupported("PlayerDimensionChangeAfterEvent.toDimension");
+    }
+
+    get toLocation() {
+        return unsupported("PlayerDimensionChangeAfterEvent.toLocation");
+    }
+}
 export class PlayerEmoteAfterEvent {}
 export class PlayerEmoteAfterEventSignal {}
-export class PlayerGameModeChangeAfterEvent {}
+export class PlayerGameModeChangeAfterEvent {
+    get fromGameMode() {
+        return unsupported("PlayerGameModeChangeAfterEvent.fromGameMode");
+    }
+
+    get player() {
+        return unsupported("PlayerGameModeChangeAfterEvent.player");
+    }
+
+    get toGameMode() {
+        return unsupported("PlayerGameModeChangeAfterEvent.toGameMode");
+    }
+}
 export class PlayerGameModeChangeBeforeEvent {}
 export class PlayerGameModeChangeBeforeEventSignal {}
 export class PlayerHotbarSelectedSlotChangeAfterEvent {}
@@ -4752,24 +5130,220 @@ export class PlayerInputModeChangeAfterEvent {}
 export class PlayerInputModeChangeAfterEventSignal {}
 export class PlayerInputPermissionCategoryChangeAfterEvent {}
 export class PlayerInputPermissionCategoryChangeAfterEventSignal {}
-export class PlayerInteractWithBlockAfterEvent {}
-export class PlayerInteractWithBlockBeforeEvent {}
-export class PlayerInteractWithEntityAfterEvent {}
-export class PlayerInteractWithEntityBeforeEvent {}
-export class PlayerInventoryItemChangeAfterEvent {}
-export class PlayerJoinAfterEvent {}
-export class PlayerLeaveAfterEvent {}
-export class PlayerLeaveBeforeEvent {}
-export class PlayerPlaceBlockAfterEvent {}
-export class PlayerSpawnAfterEvent {}
+export class PlayerInteractWithBlockAfterEvent {
+    get beforeItemStack() {
+        return unsupported("PlayerInteractWithBlockAfterEvent.beforeItemStack");
+    }
+
+    get block() {
+        return unsupported("PlayerInteractWithBlockAfterEvent.block");
+    }
+
+    get blockFace() {
+        return unsupported("PlayerInteractWithBlockAfterEvent.blockFace");
+    }
+
+    get faceLocation() {
+        return unsupported("PlayerInteractWithBlockAfterEvent.faceLocation");
+    }
+
+    get isFirstEvent() {
+        return unsupported("PlayerInteractWithBlockAfterEvent.isFirstEvent");
+    }
+
+    get itemStack() {
+        return unsupported("PlayerInteractWithBlockAfterEvent.itemStack");
+    }
+
+    get player() {
+        return unsupported("PlayerInteractWithBlockAfterEvent.player");
+    }
+}
+export class PlayerInteractWithBlockBeforeEvent {
+    get block() {
+        return unsupported("PlayerInteractWithBlockBeforeEvent.block");
+    }
+
+    get blockFace() {
+        return unsupported("PlayerInteractWithBlockBeforeEvent.blockFace");
+    }
+
+    get cancel() {
+        return unsupported("PlayerInteractWithBlockBeforeEvent.cancel");
+    }
+
+    get faceLocation() {
+        return unsupported("PlayerInteractWithBlockBeforeEvent.faceLocation");
+    }
+
+    get isFirstEvent() {
+        return unsupported("PlayerInteractWithBlockBeforeEvent.isFirstEvent");
+    }
+
+    get itemStack() {
+        return unsupported("PlayerInteractWithBlockBeforeEvent.itemStack");
+    }
+
+    get player() {
+        return unsupported("PlayerInteractWithBlockBeforeEvent.player");
+    }
+}
+export class PlayerInteractWithEntityAfterEvent {
+    get beforeItemStack() {
+        return unsupported("PlayerInteractWithEntityAfterEvent.beforeItemStack");
+    }
+
+    get itemStack() {
+        return unsupported("PlayerInteractWithEntityAfterEvent.itemStack");
+    }
+
+    get player() {
+        return unsupported("PlayerInteractWithEntityAfterEvent.player");
+    }
+
+    get target() {
+        return unsupported("PlayerInteractWithEntityAfterEvent.target");
+    }
+}
+export class PlayerInteractWithEntityBeforeEvent {
+    get cancel() {
+        return unsupported("PlayerInteractWithEntityBeforeEvent.cancel");
+    }
+
+    get itemStack() {
+        return unsupported("PlayerInteractWithEntityBeforeEvent.itemStack");
+    }
+
+    get player() {
+        return unsupported("PlayerInteractWithEntityBeforeEvent.player");
+    }
+
+    get target() {
+        return unsupported("PlayerInteractWithEntityBeforeEvent.target");
+    }
+}
+export class PlayerInventoryItemChangeAfterEvent {
+    get beforeItemStack() {
+        return unsupported("PlayerInventoryItemChangeAfterEvent.beforeItemStack");
+    }
+
+    get inventoryType() {
+        return unsupported("PlayerInventoryItemChangeAfterEvent.inventoryType");
+    }
+
+    get itemStack() {
+        return unsupported("PlayerInventoryItemChangeAfterEvent.itemStack");
+    }
+
+    get player() {
+        return unsupported("PlayerInventoryItemChangeAfterEvent.player");
+    }
+
+    get slot() {
+        return unsupported("PlayerInventoryItemChangeAfterEvent.slot");
+    }
+}
+export class PlayerJoinAfterEvent {
+    get playerId() {
+        return unsupported("PlayerJoinAfterEvent.playerId");
+    }
+
+    get playerName() {
+        return unsupported("PlayerJoinAfterEvent.playerName");
+    }
+}
+export class PlayerLeaveAfterEvent {
+    get playerId() {
+        return unsupported("PlayerLeaveAfterEvent.playerId");
+    }
+
+    get playerName() {
+        return unsupported("PlayerLeaveAfterEvent.playerName");
+    }
+}
+export class PlayerLeaveBeforeEvent {
+    get player() {
+        return unsupported("PlayerLeaveBeforeEvent.player");
+    }
+}
+export class PlayerPlaceBlockAfterEvent {
+    get block() {
+        return unsupported("PlayerPlaceBlockAfterEvent.block");
+    }
+
+    get dimension() {
+        return unsupported("PlayerPlaceBlockAfterEvent.dimension");
+    }
+
+    get player() {
+        return unsupported("PlayerPlaceBlockAfterEvent.player");
+    }
+}
+export class PlayerSpawnAfterEvent {
+    get initialSpawn() {
+        return unsupported("PlayerSpawnAfterEvent.initialSpawn");
+    }
+
+    get player() {
+        return unsupported("PlayerSpawnAfterEvent.player");
+    }
+}
 export class PlayerSwingStartAfterEvent {}
 export class PlayerSwingStartAfterEventSignal {}
 export class PressurePlatePopAfterEvent {}
 export class PressurePlatePopAfterEventSignal {}
 export class PressurePlatePushAfterEvent {}
 export class PressurePlatePushAfterEventSignal {}
-export class ProjectileHitBlockAfterEvent {}
-export class ProjectileHitEntityAfterEvent {}
+export class ProjectileHitBlockAfterEvent {
+    get dimension() {
+        return unsupported("ProjectileHitBlockAfterEvent.dimension");
+    }
+
+    get hitVector() {
+        return unsupported("ProjectileHitBlockAfterEvent.hitVector");
+    }
+
+    get location() {
+        return unsupported("ProjectileHitBlockAfterEvent.location");
+    }
+
+    get projectile() {
+        return unsupported("ProjectileHitBlockAfterEvent.projectile");
+    }
+
+    get source() {
+        return unsupported("ProjectileHitBlockAfterEvent.source");
+    }
+
+    getBlockHit() {
+        return unsupported("ProjectileHitBlockAfterEvent.getBlockHit");
+    }
+}
+export class ProjectileHitEntityAfterEvent {
+    get dimension() {
+        return unsupported("ProjectileHitEntityAfterEvent.dimension");
+    }
+
+    get hitVector() {
+        return unsupported("ProjectileHitEntityAfterEvent.hitVector");
+    }
+
+    get location() {
+        return unsupported("ProjectileHitEntityAfterEvent.location");
+    }
+
+    get projectile() {
+        return unsupported("ProjectileHitEntityAfterEvent.projectile");
+    }
+
+    get source() {
+        return unsupported("ProjectileHitEntityAfterEvent.source");
+    }
+
+    getEntityHit() {
+        return unsupported("ProjectileHitEntityAfterEvent.getEntityHit");
+    }
+}
 export class RandomAuxValueFunction {}
 export class RandomBlockStateFunction {}
 export class RandomChanceCondition {}
@@ -4777,7 +5351,31 @@ export class RandomChanceWithLootingCondition {}
 export class RandomDifficultyChanceCondition {}
 export class RandomDyeFunction {}
 export class RandomRegionalDifficultyChanceCondition {}
-export class ScriptEventCommandMessageAfterEvent {}
+export class ScriptEventCommandMessageAfterEvent {
+    get id() {
+        return unsupported("ScriptEventCommandMessageAfterEvent.id");
+    }
+
+    get initiator() {
+        return unsupported("ScriptEventCommandMessageAfterEvent.initiator");
+    }
+
+    get message() {
+        return unsupported("ScriptEventCommandMessageAfterEvent.message");
+    }
+
+    get sourceBlock() {
+        return unsupported("ScriptEventCommandMessageAfterEvent.sourceBlock");
+    }
+
+    get sourceEntity() {
+        return unsupported("ScriptEventCommandMessageAfterEvent.sourceEntity");
+    }
+
+    get sourceType() {
+        return unsupported("ScriptEventCommandMessageAfterEvent.sourceType");
+    }
+}
 export class SetArmorTrimFunction {}
 export class SetBannerDetailsFunction {}
 export class SetBookContentsFunction {}
@@ -4794,7 +5392,23 @@ export class SetStewEffectFunction {}
 export class ShutdownEvent {}
 export class SmeltItemFunction {}
 export class SpecificEnchantFunction {}
-export class StartupEvent {}
+export class StartupEvent {
+    get blockComponentRegistry() {
+        return unsupported("StartupEvent.blockComponentRegistry");
+    }
+
+    get customCommandRegistry() {
+        return unsupported("StartupEvent.customCommandRegistry");
+    }
+
+    get dimensionRegistry() {
+        return unsupported("StartupEvent.dimensionRegistry");
+    }
+
+    get itemComponentRegistry() {
+        return unsupported("StartupEvent.itemComponentRegistry");
+    }
+}
 export class SystemAfterEvents {}
 export class SystemBeforeEvents {}
 export class TargetBlockHitAfterEvent {}
