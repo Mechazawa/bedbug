@@ -1,7 +1,9 @@
 package at.ioexception.mcaddon.server;
 
+import at.ioexception.mcaddon.mixin.JumpingAccessor;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.script.ScriptHost;
+import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
@@ -25,6 +27,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.LeverBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.phys.BlockHitResult;
@@ -59,6 +62,12 @@ public final class WorldEvents {
 
     private static final Map<UUID, PlayerWatch> WATCHED = new HashMap<>();
 
+    /** The weather each dimension carried at the end of the last tick. */
+    private static final Map<ResourceKey<Level>, String> WEATHER = new HashMap<>();
+
+    /** How long Bedrock says a weather change lasts when nothing asked for a length. */
+    private static final int WEATHER_TICKS = 6000;
+
     private WorldEvents() {
     }
 
@@ -70,6 +79,7 @@ public final class WorldEvents {
         UseBlockCallback.EVENT.register(WorldEvents::usedBlock);
         UseEntityCallback.EVENT.register(WorldEvents::usedEntity);
         AttackEntityCallback.EVENT.register(WorldEvents::attacked);
+        AttackBlockCallback.EVENT.register(WorldEvents::attackedBlock);
         // Fabric's use-item callback answers with the stack it leaves behind; from 26 on it answers
         // with the outcome alone.
         //? if >=26 {
@@ -86,7 +96,50 @@ public final class WorldEvents {
     public static void endTick(MinecraftServer server) {
         confirmPlacements(server);
         pollPlayers(server);
+        pollWeather(server);
         BlockEvents.endTick(server);
+    }
+
+    /**
+     * The weather turning, found by comparing each dimension against the tick before.
+     *
+     * Java raises nothing when the weather turns, and it turns for four reasons: the cycle running
+     * out, a command, a sleep and a trident. Reading the state itself catches every one of them.
+     *
+     * The before event is raised on the tick the change is already in, and a listener refusing it is
+     * honoured by putting the old weather back, so what a player sees is weather that did not change.
+     */
+    private static void pollWeather(MinecraftServer server) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null) {
+            WEATHER.clear();
+            return;
+        }
+
+        for (ServerLevel level : server.getAllLevels()) {
+            String now = weatherOf(level);
+            String before = WEATHER.put(level.dimension(), now);
+            if (before == null || before.equals(now)) continue;
+
+            Map<String, Object> fields = new LinkedHashMap<>();
+            fields.put("dimension", Platform.idOf(level.dimension()).toString());
+            fields.put("previousWeather", before);
+            fields.put("newWeather", now);
+            fields.put("duration", WEATHER_TICKS);
+
+            if (scripts.raiseCancellable("weatherChange", fields)) {
+                Platform.setWeather(level, !"Clear".equals(before), "Thunder".equals(before),
+                    WEATHER_TICKS);
+                WEATHER.put(level.dimension(), before);
+                continue;
+            }
+            scripts.raiseWorldEvent("weatherChange", fields);
+        }
+    }
+
+    private static String weatherOf(ServerLevel level) {
+        if (level.isThundering()) return "Thunder";
+        return level.isRaining() ? "Rain" : "Clear";
     }
 
     /** An item entity coming into the world with an owner is what somebody threw. */
@@ -206,10 +259,78 @@ public final class WorldEvents {
         scripts.raiseWorldEvent("buttonPush", fields);
     }
 
+    /** A lever going over, reported with the side it lands on and whoever put it there. */
+    public static void leverPulled(Level level, BlockPos position, Player player) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null) return;
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("block", block(level, position));
+        fields.put("dimension", Platform.idOf(level.dimension()).toString());
+        fields.put("isPowered", !level.getBlockState(position).getValue(LeverBlock.POWERED));
+        if (player != null) fields.put("player", ScriptHost.EntityHandle.of(player));
+        scripts.raiseWorldEvent("leverAction", fields);
+    }
+
+    /** Somebody swinging at a block, which is the punch rather than the break that may follow. */
+    private static InteractionResult attackedBlock(Player player, Level level, InteractionHand hand,
+        BlockPos position, Direction face) {
+
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null || !(player instanceof ServerPlayer) || hand != InteractionHand.MAIN_HAND) {
+            return InteractionResult.PASS;
+        }
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("damagingEntity", ScriptHost.EntityHandle.of(player));
+        fields.put("hitBlock", block(level, position));
+        fields.put("hitBlockPermutation", permutation(level.getBlockState(position)));
+        fields.put("blockFace", capitalised(face.getName()));
+        scripts.raiseWorldEvent("entityHitBlock", fields);
+        return InteractionResult.PASS;
+    }
+
+    /**
+     * Healing, which a pack may refuse before it lands.
+     *
+     * Java says how much and to whom, and nothing about why, so every heal carries Bedrock's plain
+     * cause. Naming regeneration or a potion here would be a guess.
+     */
+    public static boolean healRefused(net.minecraft.world.entity.LivingEntity entity, float amount) {
+        ScriptHost scripts = ServerHooks.scripts();
+        return scripts != null && scripts.raiseCancellable("entityHeal", heal(entity, amount));
+    }
+
+    public static void healed(net.minecraft.world.entity.LivingEntity entity, float amount) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts != null) scripts.raiseWorldEvent("entityHeal", heal(entity, amount));
+    }
+
+    private static Map<String, Object> heal(net.minecraft.world.entity.LivingEntity entity, float amount) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("healedEntity", ScriptHost.EntityHandle.of(entity));
+        fields.put("healing", amount);
+        fields.put("healSource", Map.of("cause", "Heal"));
+        return fields;
+    }
+
+    /** Health moving for any reason at all, which is what Bedrock reports here. */
+    public static void healthChanged(net.minecraft.world.entity.LivingEntity entity, float before) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null || before == entity.getHealth()) return;
+
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("entity", ScriptHost.EntityHandle.of(entity));
+        fields.put("oldValue", before);
+        fields.put("newValue", entity.getHealth());
+        scripts.raiseWorldEvent("entityHealthChanged", fields);
+    }
+
     public static void forget() {
         BREAKING_WITH.clear();
         PLACEMENTS.clear();
         WATCHED.clear();
+        WEATHER.clear();
         BlockEvents.forget();
     }
 
@@ -468,11 +589,17 @@ public final class WorldEvents {
         private Vec3 location;
         private ItemStack using = ItemStack.EMPTY;
         private int useDuration;
+        private int hotbarSlot;
+        private boolean sneaking;
+        private boolean jumping;
 
         private PlayerWatch(ServerPlayer player) {
             gameMode = Platform.gameMode(player);
             dimension = player.level().dimension();
             location = player.position();
+            hotbarSlot = Platform.selectedSlot(player);
+            sneaking = player.isShiftKeyDown();
+            jumping = ((JumpingAccessor) player).mcaddon$jumping();
             snapshot(player);
         }
 
@@ -481,7 +608,47 @@ public final class WorldEvents {
             dimensionChanged(player, scripts);
             inventoryChanged(player, scripts);
             itemUseChanged(player, scripts);
+            hotbarChanged(player, scripts);
+            buttonsChanged(player, scripts);
             location = player.position();
+        }
+
+        private void hotbarChanged(ServerPlayer player, ScriptHost scripts) {
+            int current = Platform.selectedSlot(player);
+            if (current == hotbarSlot) return;
+
+            Map<String, Object> fields = new LinkedHashMap<>();
+            fields.put("player", ScriptHost.EntityHandle.of(player));
+            fields.put("previousSlotSelected", hotbarSlot);
+            fields.put("newSlotSelected", current);
+            fields.put("itemStack", item(player.getInventory().getItem(current)));
+            hotbarSlot = current;
+            scripts.raiseWorldEvent("playerHotbarSelectedSlotChange", fields);
+        }
+
+        /**
+         * The two buttons Bedrock reports, each raised on the tick it goes down or comes up.
+         *
+         * Bedrock reads the key itself and Java reads the state the key put the player in, so a jump
+         * is reported for as long as the player is off the ground under their own power.
+         */
+        private void buttonsChanged(ServerPlayer player, ScriptHost scripts) {
+            boolean held = ((JumpingAccessor) player).mcaddon$jumping();
+            sneaking = buttonChanged(player, scripts, "Sneak", sneaking, player.isShiftKeyDown());
+            jumping = buttonChanged(player, scripts, "Jump", jumping, held);
+        }
+
+        private boolean buttonChanged(ServerPlayer player, ScriptHost scripts, String button,
+            boolean before, boolean now) {
+
+            if (before == now) return now;
+
+            Map<String, Object> fields = new LinkedHashMap<>();
+            fields.put("player", ScriptHost.EntityHandle.of(player));
+            fields.put("button", button);
+            fields.put("newButtonState", now ? "Pressed" : "Released");
+            scripts.raiseWorldEvent("playerButtonInput", fields);
+            return now;
         }
 
         private void gameModeChanged(ServerPlayer player, ScriptHost scripts) {

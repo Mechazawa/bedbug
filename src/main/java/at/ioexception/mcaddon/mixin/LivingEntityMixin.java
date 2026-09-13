@@ -4,19 +4,25 @@ import at.ioexception.mcaddon.server.WorldEvents;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.LivingEntity;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Tells a pack's script when an effect lands on something.
+ * Tells a pack's script when an effect lands on something, and when health moves.
  *
- * Fabric has a callback for this only from 26.2, and the mod runs on four versions, so the effect is
- * watched here instead. A pack refusing the effect is honoured by stopping the call before the game
- * applies it.
+ * Fabric has a callback for the effect only from 26.2, and none at all for healing, and the mod runs
+ * on four versions, so both are watched here. A pack refusing either is honoured by stopping the call
+ * before the game carries it out.
  */
 @Mixin(LivingEntity.class)
 public abstract class LivingEntityMixin {
+    /** The health the entity carried when `setHealth` was entered, which is gone by the time it ends. */
+    @Unique
+    private float mcaddonHealthBefore;
+
     @Inject(method = "addEffect(Lnet/minecraft/world/effect/MobEffectInstance;Lnet/minecraft/world/entity/Entity;)Z",
         at = @At("HEAD"), cancellable = true, require = 0)
     private void mcaddon$beforeEffect(MobEffectInstance effect, net.minecraft.world.entity.Entity source,
@@ -35,5 +41,30 @@ public abstract class LivingEntityMixin {
         if (self.level().isClientSide() || !Boolean.TRUE.equals(info.getReturnValue())) return;
 
         WorldEvents.effectAdded(self, effect);
+    }
+
+    @Inject(method = "heal", at = @At("HEAD"), cancellable = true, require = 0)
+    private void mcaddon$beforeHeal(float amount, CallbackInfo info) {
+        LivingEntity self = (LivingEntity) (Object) this;
+        if (self.level().isClientSide()) return;
+
+        if (WorldEvents.healRefused(self, amount)) info.cancel();
+    }
+
+    @Inject(method = "heal", at = @At("RETURN"), require = 0)
+    private void mcaddon$afterHeal(float amount, CallbackInfo info) {
+        LivingEntity self = (LivingEntity) (Object) this;
+        if (!self.level().isClientSide()) WorldEvents.healed(self, amount);
+    }
+
+    @Inject(method = "setHealth", at = @At("HEAD"), require = 0)
+    private void mcaddon$beforeHealth(float health, CallbackInfo info) {
+        mcaddonHealthBefore = ((LivingEntity) (Object) this).getHealth();
+    }
+
+    @Inject(method = "setHealth", at = @At("RETURN"), require = 0)
+    private void mcaddon$afterHealth(float health, CallbackInfo info) {
+        LivingEntity self = (LivingEntity) (Object) this;
+        if (!self.level().isClientSide()) WorldEvents.healthChanged(self, mcaddonHealthBefore);
     }
 }

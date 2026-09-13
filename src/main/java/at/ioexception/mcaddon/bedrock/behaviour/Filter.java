@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.bedrock.behaviour;
 
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.state.AddonState;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -225,6 +226,14 @@ public sealed interface Filter {
                     flag(entity instanceof Mob mob && mob.getNavigation().isInProgress());
                 case "is_persistent" -> flag(entity instanceof Mob mob && mob.isPersistenceRequired());
                 case "is_raider" -> flag(entity instanceof Raider);
+                // Fleeing and walking in line are both states Java writes nowhere, so the goal doing
+                // them keeps the answer where a filter can read it back.
+                case "is_avoiding_mobs" -> flag(kept(entity, context, "is_avoiding_mobs"));
+                case "in_caravan" -> flag(kept(entity, context, "in_caravan"));
+                // Java counts the same unattended time in ticks and despawns a mob on it.
+                case "inactivity_timer" -> entity instanceof LivingEntity idle
+                    ? reached(idle.getNoActionTime() / 20d) : null;
+                case "is_bound_to_creaking_heart" -> creakingHeart(entity);
                 case "has_nametag" -> flag(entity.hasCustomName());
                 case "is_missing_health" -> flag(entity instanceof LivingEntity living
                     && living.getHealth() < living.getMaxHealth());
@@ -250,6 +259,7 @@ public sealed interface Filter {
                 case "is_leashed_to" ->
                     flag(entity instanceof Mob mob && mob.getLeashHolder() == context.self());
                 case "is_owner" -> flag(ownerOf(context.self()) == entity);
+                case "trusts" -> flag(trusts(entity, context));
                 case "owner_distance" -> distanceTo(entity, ownerOf(entity));
                 case "target_distance" -> distanceTo(context.self(), targetOf(context.self()));
                 case "home_distance" -> homeDistance(entity);
@@ -285,6 +295,7 @@ public sealed interface Filter {
                     && merchant.getOffers().stream().anyMatch(offer -> !offer.isOutOfStock()));
                 case "has_silk_touch" -> flag(entity instanceof LivingEntity living
                     && Platform.enchantmentsOf(living.getMainHandItem()).contains("silk_touch"));
+                case "has_item_with_component" -> carriesComponent(entity);
                 case "actor_has_item_with_enchantment_in_slot" -> enchantedSlot(entity);
                 case "has_ability" -> ability(entity);
                 case "has_damage" -> damageCause(entity);
@@ -306,7 +317,7 @@ public sealed interface Filter {
         }
 
         private boolean compare(double actual) {
-            double expected = value != null && value.isJsonPrimitive() ? value.getAsDouble() : 0;
+            double expected = expected();
             return switch (operator == null ? "==" : operator) {
                 case "<" -> actual < expected;
                 case "<=", "=<" -> actual <= expected;
@@ -315,6 +326,22 @@ public sealed interface Filter {
                 // `!=` is handled by negation, so an equality test is what is left.
                 default -> actual == expected;
             };
+        }
+
+        /**
+         * A count running up to the value, where Bedrock reads plain equality as having got there.
+         *
+         * `compare` reads `==` as landing on the number exactly, which a timer counting past it
+         * does for one tick and then never again.
+         */
+        private boolean reached(double actual) {
+            boolean exact = operator == null || "==".equals(operator) || "=".equals(operator)
+                || "equals".equals(operator);
+            return exact ? actual >= expected() : compare(actual);
+        }
+
+        private double expected() {
+            return value != null && value.isJsonPrimitive() ? value.getAsDouble() : 0;
         }
 
         /**
@@ -327,6 +354,40 @@ public sealed interface Filter {
 
         private String text() {
             return value != null && value.isJsonPrimitive() ? value.getAsString() : "";
+        }
+
+        /** A flag a goal keeps on the entity for a behaviour Java runs without recording it. */
+        private static boolean kept(Entity entity, Context context, String key) {
+            return context.state() != null
+                && Boolean.TRUE.equals(context.state().property(entity.getUUID(), key));
+        }
+
+        private Boolean creakingHeart(Entity entity) {
+            Boolean bound = Platform.boundToCreakingHeart(entity);
+            return bound == null ? null : flag(bound);
+        }
+
+        /**
+         * Whether the entity being tested has come to accept the other one.
+         *
+         * `minecraft:trusting` is fed the same way taming is and stores whoever fed it, so trust and
+         * ownership are the one fact under two names.
+         */
+        private static boolean trusts(Entity entity, Context context) {
+            if (context.other() == null || context.state() == null) return false;
+
+            Object stored = context.state().property(entity.getUUID(), "owner");
+            return stored instanceof String held && held.equals(context.other().getStringUUID());
+        }
+
+        /** Whether any of the slots asked about holds an item a pack gave the named component. */
+        private Boolean carriesComponent(Entity entity) {
+            List<EquipmentSlot> wanted = slots(domain == null ? "hand" : domain);
+            if (wanted.isEmpty()) return null;
+            if (!(entity instanceof LivingEntity living)) return false;
+
+            return flag(wanted.stream().anyMatch(slot -> AddonItems
+                .componentsOf(living.getItemBySlot(slot).getItem()).contains(text())));
         }
 
         private Object property(Entity entity, Context context) {

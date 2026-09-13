@@ -21,29 +21,36 @@ public final class FollowKinGoal extends Goal {
     private final double speed;
     private final double range;
     private final boolean grownOnly;
+
+    /** Whether walking in line here is a caravan, which a pack's `in_caravan` filter asks about. */
+    private final boolean caravan;
     private AddonEntity leader;
     private int untilRecheck;
 
-    private FollowKinGoal(AddonEntity mob, JsonObject component, double range, boolean grownOnly) {
+    private FollowKinGoal(AddonEntity mob, JsonObject component, double range, boolean grownOnly,
+        boolean caravan) {
+
         this.mob = mob;
         this.speed = number(component, "speed_multiplier", 1);
         this.range = range;
         this.grownOnly = grownOnly;
+        this.caravan = caravan;
         setFlags(EnumSet.of(Goal.Flag.MOVE));
     }
 
     /** `minecraft:behavior.follow_parent`, which only a young entity acts on and only follows adults. */
     public static FollowKinGoal parent(AddonEntity mob, JsonObject component) {
-        return new FollowKinGoal(mob, component, 16, true);
+        return new FollowKinGoal(mob, component, 16, true, false);
     }
 
-    /**
-     * `minecraft:behavior.follow_caravan` and `minecraft:behavior.follow_target_leader`.
-     *
-     * Both name an entity of the same kind up ahead, and neither cares how old it is.
-     */
+    /** `minecraft:behavior.follow_target_leader`, a shoal keeping up with the one in front. */
     public static FollowKinGoal leader(AddonEntity mob, JsonObject component) {
-        return new FollowKinGoal(mob, component, 12, false);
+        return new FollowKinGoal(mob, component, 12, false, false);
+    }
+
+    /** `minecraft:behavior.follow_caravan`, the same walk with the line itself a state of the entity. */
+    public static FollowKinGoal caravan(AddonEntity mob, JsonObject component) {
+        return new FollowKinGoal(mob, component, 12, false, true);
     }
 
     @Override
@@ -62,9 +69,15 @@ public final class FollowKinGoal extends Goal {
     }
 
     @Override
+    public void start() {
+        if (caravan) mob.setValue("in_caravan", true);
+    }
+
+    @Override
     public void stop() {
         leader = null;
         mob.getNavigation().stop();
+        if (caravan) mob.setValue("in_caravan", false);
     }
 
     @Override

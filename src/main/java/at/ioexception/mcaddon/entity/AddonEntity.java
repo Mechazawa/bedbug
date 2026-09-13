@@ -1441,10 +1441,11 @@ public class AddonEntity extends PathfinderMob
                      "minecraft:behavior.play", "minecraft:behavior.stroll_towards_village" ->
                     goalSelector.addGoal(priority, new WaterAvoidingRandomStrollGoal(this, 0.6));
 
+                case "minecraft:behavior.avoid_mob_type" ->
+                    goalSelector.addGoal(priority, new AvoidMobsGoal(this));
                 // Hiding and playing are both a Bedrock villager moving somewhere for a reason Java
                 // writes into its own villager. What carries across is the moving.
-                case "minecraft:behavior.avoid_mob_type", "minecraft:behavior.hide",
-                     "minecraft:behavior.avoid_block" ->
+                case "minecraft:behavior.hide", "minecraft:behavior.avoid_block" ->
                     goalSelector.addGoal(priority,
                         new AvoidEntityGoal<>(this, Monster.class, 8f, 1.0, 1.2));
                 case "minecraft:behavior.panic_on_fire" ->
@@ -1485,8 +1486,9 @@ public class AddonEntity extends PathfinderMob
 
                 case "minecraft:behavior.follow_parent" -> goalSelector.addGoal(priority,
                     FollowKinGoal.parent(this, componentBody(behaviour)));
-                case "minecraft:behavior.follow_caravan",
-                     "minecraft:behavior.follow_target_leader" -> goalSelector.addGoal(priority,
+                case "minecraft:behavior.follow_caravan" -> goalSelector.addGoal(priority,
+                    FollowKinGoal.caravan(this, componentBody(behaviour)));
+                case "minecraft:behavior.follow_target_leader" -> goalSelector.addGoal(priority,
                     FollowKinGoal.leader(this, componentBody(behaviour)));
 
                 case "minecraft:behavior.move_to_block" -> goalSelector.addGoal(priority,

@@ -1107,6 +1107,24 @@ public final class Platform {
         *///?}
     }
 
+    /**
+     * Sets the weather outright and how long it lasts, in ticks.
+     *
+     * The level held the four numbers itself until 26 moved them into saved data of their own.
+     */
+    public static void setWeather(ServerLevel level, boolean raining, boolean thundering, int duration) {
+        //? if >=26 {
+        net.minecraft.world.level.saveddata.WeatherData weather = level.getWeatherData();
+        weather.setRaining(raining);
+        weather.setThundering(thundering);
+        weather.setRainTime(raining ? duration : 0);
+        weather.setThunderTime(thundering ? duration : 0);
+        weather.setClearWeatherTime(raining ? 0 : duration);
+        //?} else {
+        /*level.setWeatherParameters(raining ? 0 : duration, duration, raining, thundering);
+        *///?}
+    }
+
     /** The buildable height range, lowest block and one past the highest. */
     public static int[] heightRange(ServerLevel level) {
         //? if >=26 {
@@ -1122,6 +1140,21 @@ public final class Platform {
         return animal.getOwnerReference() == null ? null : animal.getOwnerReference().getUUID();
         //?} else {
         /*return animal.getOwnerUUID();
+        *///?}
+    }
+
+    /**
+     * Whether a creaking still has the heart that put it there, and null where the game has neither.
+     *
+     * The creaking and its heart arrived in 1.21.4, so the two older versions have no entity this
+     * can be asked about and a pack asking is told the answer is not available rather than no.
+     */
+    public static Boolean boundToCreakingHeart(Entity entity) {
+        //? if >=1.21.4 {
+        return entity instanceof net.minecraft.world.entity.monster.creaking.Creaking creaking
+            ? creaking.isHeartBound() : null;
+        //?} else {
+        /*return null;
         *///?}
     }
 

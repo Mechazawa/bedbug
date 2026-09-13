@@ -42,6 +42,7 @@ public final class AddonItems {
     private static final List<Item> DYEABLE = new ArrayList<>();
     private static final Set<Item> KEPT = new HashSet<>();
     private static final Map<Item, String> PROJECTILES = new LinkedHashMap<>();
+    private static final Map<Item, Set<String>> COMPONENTS = new LinkedHashMap<>();
 
     private AddonItems() {
     }
@@ -67,6 +68,17 @@ public final class AddonItems {
      * `minecraft:projectile` on the ammunition says what flies. Ammunition with no such component is
      * one of the game's own, where the entity carries the item's name: an arrow fires an arrow.
      */
+    /**
+     * The component names a pack wrote on an item, which its filters ask about by name.
+     *
+     * Java keeps no such list on an item, and only the components this mod acts on leave any trace
+     * on the registered one, so what the pack declared is kept whole beside it. An item of the
+     * game's own has none.
+     */
+    public static Set<String> componentsOf(Item item) {
+        return COMPONENTS.getOrDefault(item, Set.of());
+    }
+
     public static String projectileOf(Item ammunition) {
         String declared = PROJECTILES.get(ammunition);
         return declared != null ? declared : BuiltInRegistries.ITEM.getKey(ammunition).toString();
@@ -111,6 +123,7 @@ public final class AddonItems {
         Item item = build(definition, properties(definition), id);
         Registry.register(BuiltInRegistries.ITEM, id, item);
         BY_IDENTIFIER.put(definition.identifier(), item);
+        COMPONENTS.put(item, Set.copyOf(definition.components().keySet()));
         if (definition.dyeColour() >= 0) DYEABLE.add(item);
         if (definition.components().containsKey("minecraft:should_despawn")
             && !definition.declaredTrue("minecraft:should_despawn")) {
