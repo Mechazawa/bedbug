@@ -67,6 +67,8 @@ public class AddonEntity extends PathfinderMob
     private final java.util.Set<String> activeGroups = new java.util.LinkedHashSet<>();
     private int timerDueTick = -1;
     private int admireUntilTick = -1;
+    private String lastBlockInside;
+    private int celebrateUntilTick = -1;
     private Player tradingPlayer;
     private MerchantOffers offers;
     private int tradeExperience;
@@ -415,9 +417,21 @@ public class AddonEntity extends PathfinderMob
      */
     private void applyMoveControl() {
         boolean hovers = declares("minecraft:movement.hover");
-        if (!hovers && !declares("minecraft:movement.fly") && !declares("minecraft:movement.glide")) return;
+        if (hovers || declares("minecraft:movement.fly") || declares("minecraft:movement.glide")) {
+            moveControl = new net.minecraft.world.entity.ai.control.FlyingMoveControl(this, 20, hovers);
+            return;
+        }
 
-        moveControl = new net.minecraft.world.entity.ai.control.FlyingMoveControl(this, 20, hovers);
+        // Swimming that banks into its turns, which is what Bedrock's dolphin and its sway both are.
+        if (declares("minecraft:movement.dolphin") || declares("minecraft:movement.sway")) {
+            moveControl = new net.minecraft.world.entity.ai.control.SmoothSwimmingMoveControl(
+                this, 85, 10, 0.02f, 0.1f, true);
+            return;
+        }
+
+        if (declares("minecraft:movement.jump") || declares("minecraft:movement.skip")) {
+            moveControl = new HopMoveControl(this);
+        }
     }
 
     /**
@@ -1853,7 +1867,182 @@ public class AddonEntity extends PathfinderMob
         breatheForRider();
         tickTheWorldAround();
         noticeEquipmentChanging();
+        beat();
+        hover();
+        noticeTheBlockItIsIn();
+        celebrateTheKill();
         if (bossBar != null) bossBar.setProgress(getMaxHealth() <= 0 ? 0 : getHealth() / getMaxHealth());
+    }
+
+    /**
+     * `minecraft:heartbeat` is a sound the entity makes on its own clock.
+     *
+     * The interval is a Molang expression on the warden, because its heart quickens as it gets
+     * angrier. A pack that wrote a plain number gets that number; one that wrote an expression gets
+     * the two seconds Bedrock's own default is, because the expression is answered on the drawing
+     * side and there is no drawing here.
+     */
+    private void beat() {
+        if (!declares("minecraft:heartbeat")) return;
+
+        int interval = (int) (number(definition, "minecraft:heartbeat", "interval", 2)
+            * Goals.TICKS_PER_SECOND);
+        if (interval <= 0 || tickCount % interval != 0) return;
+
+        playSound(sound(text("minecraft:heartbeat", "sound_event"), SoundEvents.WARDEN_HEARTBEAT),
+            getSoundVolume(), getVoicePitch());
+    }
+
+    /** `minecraft:ground_offset` is how far above the ground the entity is meant to sit. */
+    private void hover() {
+        if (!declares("minecraft:ground_offset") || !onGround()) return;
+
+        double offset = number(definition, "minecraft:ground_offset", "value", 0);
+        if (offset <= 0) return;
+
+        setPos(getX(), getY() + offset, getZ());
+    }
+
+    /**
+     * `minecraft:inside_block_notifier` fires an event while the entity stands inside a named block.
+     *
+     * Bedrock lists each block with the event for entering it and the event for leaving it, so what
+     * is remembered between ticks is which of them the entity was in last.
+     */
+    private void noticeTheBlockItIsIn() {
+        if (!declares("minecraft:inside_block_notifier")) return;
+
+        String inside = net.minecraft.core.registries.BuiltInRegistries.BLOCK
+            .getKey(level().getBlockState(blockPosition()).getBlock()).toString();
+        if (inside.equals(lastBlockInside)) return;
+
+        for (com.google.gson.JsonElement element : at.ioexception.mcaddon.util.Json.list(
+            componentBody("minecraft:inside_block_notifier"), "block_list")) {
+            if (!element.isJsonObject()) continue;
+
+            com.google.gson.JsonObject entry = element.getAsJsonObject();
+            String named = blockNameOf(entry);
+            if (named == null) continue;
+
+            if (named.equals(inside)) fire(Goals.event(entry, "entered_block_event"));
+            if (named.equals(lastBlockInside)) fire(Goals.event(entry, "exited_block_event"));
+        }
+        lastBlockInside = inside;
+    }
+
+    /**
+     * Tells the hunters nearby that something they were after has died.
+     *
+     * `minecraft:celebrate_hunt` is what makes a piglin cheer over a hoglin. `broadcast` says the
+     * cheer spreads to its own kind within the radius, which is why every entity in range is asked
+     * rather than only whatever landed the kill.
+     */
+    public static void noticeHuntSucceeded(net.minecraft.world.entity.LivingEntity quarry) {
+        if (quarry.level().isClientSide()) return;
+
+        for (AddonEntity hunter : quarry.level().getEntitiesOfClass(AddonEntity.class,
+            quarry.getBoundingBox().inflate(CELEBRATION_RANGE))) {
+            hunter.celebrateTheHunt(quarry);
+        }
+    }
+
+    /** The widest radius `minecraft:celebrate_hunt` is given, which bounds the search for hunters. */
+    private static final double CELEBRATION_RANGE = 32;
+
+    private void celebrateTheHunt(net.minecraft.world.entity.LivingEntity quarry) {
+        if (definition == null || quarry == this || !declares("minecraft:celebrate_hunt")) return;
+
+        double radius = number(definition, "minecraft:celebrate_hunt", "radius", 16);
+        if (distanceToSqr(quarry) > radius * radius) return;
+
+        Filter celebrated = Filter.parse(componentBody("minecraft:celebrate_hunt")
+            .get("celebration_targets"));
+        if (!celebrated.matches(new Filter.Context(this, quarry, quarry, ServerHooks.state()))) return;
+
+        celebrateUntilTick = tickCount
+            + (int) (number(definition, "minecraft:celebrate_hunt", "duration", 4)
+                * Goals.TICKS_PER_SECOND);
+        ServerHooks.state().setProperty(getUUID(), "is_celebrating", true);
+    }
+
+    /** Cheers for as long as the hunt's celebration lasts, and stops cheering when it is over. */
+    private void celebrateTheKill() {
+        if (celebrateUntilTick < 0) return;
+
+        if (tickCount >= celebrateUntilTick) {
+            celebrateUntilTick = -1;
+            ServerHooks.state().setProperty(getUUID(), "is_celebrating", false);
+            return;
+        }
+        if (tickCount % Goals.TICKS_PER_SECOND != 0) return;
+
+        playSound(sound(text("minecraft:celebrate_hunt", "celebrate_sound"),
+            SoundEvents.VILLAGER_CELEBRATE), getSoundVolume(), getVoicePitch());
+    }
+
+    /**
+     * Tells every entity watching for it that one of the blocks it cares about was broken.
+     *
+     * `minecraft:block_sensor` is how a Bedrock piglin knows somebody opened a chest near it. Java
+     * raises breaking once, from the block rather than from anything watching, so the entities in
+     * range are found from the block's own position instead.
+     */
+    public static void noticeBlockBroken(net.minecraft.world.level.Level level,
+        net.minecraft.core.BlockPos broken, net.minecraft.world.level.block.state.BlockState state) {
+        if (level.isClientSide()) return;
+
+        String name = net.minecraft.core.registries.BuiltInRegistries.BLOCK
+            .getKey(state.getBlock()).toString();
+        for (AddonEntity nearby : level.getEntitiesOfClass(AddonEntity.class,
+            new net.minecraft.world.phys.AABB(broken).inflate(BLOCK_SENSOR_RANGE))) {
+            nearby.noticeBrokenBlock(broken, name);
+        }
+    }
+
+    /** The widest radius `minecraft:block_sensor` is given, which bounds the search for watchers. */
+    private static final double BLOCK_SENSOR_RANGE = 32;
+
+    /** Fires whatever this entity's sensor names for the block that was broken, if it is in range. */
+    private void noticeBrokenBlock(net.minecraft.core.BlockPos broken, String name) {
+        if (definition == null || !declares("minecraft:block_sensor")) return;
+
+        double radius = number(definition, "minecraft:block_sensor", "sensor_radius", 16);
+        if (blockPosition().distSqr(broken) > radius * radius) return;
+
+        for (com.google.gson.JsonElement element : at.ioexception.mcaddon.util.Json.list(
+            componentBody("minecraft:block_sensor"), "on_break")) {
+            if (!element.isJsonObject()) continue;
+
+            com.google.gson.JsonObject entry = element.getAsJsonObject();
+            boolean listed = at.ioexception.mcaddon.util.Json.list(entry, "block_list").stream()
+                .filter(com.google.gson.JsonElement::isJsonPrimitive)
+                .map(com.google.gson.JsonElement::getAsString)
+                .anyMatch(listedName -> (listedName.contains(":")
+                    ? listedName : "minecraft:" + listedName).equals(name));
+            if (listed) fire(Goals.event(entry, "on_block_broken"));
+        }
+    }
+
+    /** A block descriptor names itself either bare or under `name`, in both shapes a pack writes. */
+    private static String blockNameOf(com.google.gson.JsonObject entry) {
+        com.google.gson.JsonElement block = entry.get("block");
+        String named = block == null ? null
+            : block.isJsonPrimitive() ? block.getAsString()
+            : block.isJsonObject()
+                ? at.ioexception.mcaddon.util.Json.text(block.getAsJsonObject(), "name", null) : null;
+        if (named == null) return null;
+
+        return named.contains(":") ? named : "minecraft:" + named;
+    }
+
+    /** The sound a pack named, or the one the game already plays for this when it named none. */
+    private static net.minecraft.sounds.SoundEvent sound(String named,
+        net.minecraft.sounds.SoundEvent fallback) {
+        Identifier id = named == null ? null
+            : Identifier.tryParse(named.contains(":") ? named : "minecraft:" + named);
+        return id == null ? fallback
+            : net.minecraft.core.registries.BuiltInRegistries.SOUND_EVENT.getOptional(id)
+                .orElse(fallback);
     }
 
     /**

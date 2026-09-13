@@ -309,7 +309,10 @@ public final class AddonEntities {
         "minecraft:behavior.snacking",
         "minecraft:behavior.emerge", "minecraft:behavior.dig",
         "minecraft:behavior.random_search_and_dig", "minecraft:behavior.random_breach",
-        "minecraft:behavior.find_underwater_treasure", "minecraft:behavior.swim_with_entity");
+        "minecraft:behavior.find_underwater_treasure", "minecraft:behavior.swim_with_entity",
+        "minecraft:movement.dolphin", "minecraft:movement.sway", "minecraft:movement.jump",
+        "minecraft:movement.skip", "minecraft:heartbeat", "minecraft:ground_offset",
+        "minecraft:inside_block_notifier", "minecraft:block_sensor", "minecraft:celebrate_hunt");
 
     /**
      * The trade table an entity names, read while the pack it came from is still in hand.

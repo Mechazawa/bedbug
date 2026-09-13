@@ -75,7 +75,11 @@ public final class ServerHooks {
             if (state != null) EntityPropertySync.sendTo(player, entity, state);
         });
         ServerEntityEvents.ENTITY_UNLOAD.register((entity, level) -> entityRemoved(entity));
+        net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents.AFTER.register(
+            (level, player, broken, state, blockEntity) ->
+                at.ioexception.mcaddon.entity.AddonEntity.noticeBlockBroken(level, broken, state));
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> {
+            at.ioexception.mcaddon.entity.AddonEntity.noticeHuntSucceeded(entity);
             Map<String, Object> fields = new LinkedHashMap<>();
             fields.put("deadEntity", ScriptHost.EntityHandle.of(entity));
             fields.put("damageSource", DamageSources.describe(source));
