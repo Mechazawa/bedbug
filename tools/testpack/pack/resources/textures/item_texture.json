@@ -13,6 +13,9 @@
     },
     "sprite_egg": {
       "textures": "textures/items/sprite_egg"
+    },
+    "pouch": {
+      "textures": "textures/items/pouch"
     }
   }
 }

@@ -189,6 +189,10 @@ These are the checks it runs, and what each one catches:
   texture per texture the pack ships, one sound event per definition, and an `_n` and `_s` sidecar
   per texture set that asks for one. A stale cache shows up here as a count that moved.
 
+  It reads what a game wrote rather than converting anything itself, which is why `all` runs it last.
+  A pack is converted again as soon as anything in it changes, so `convert` on its own after an edit
+  reports on the conversion before that edit until a game has opened the pack.
+
   With no `.mcaddon` in `versions/<version>/run/addons/`, every mode reports that there was nothing
   to test and still passes.
 

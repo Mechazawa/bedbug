@@ -91,6 +91,14 @@ def dust(x: int, y: int) -> tuple[int, int, int, int]:
     return (214, 168, 255, 255) if (x * 7 + y * 3) % 11 < 3 else TRANSPARENT
 
 
+def pouch(x: int, y: int) -> tuple[int, int, int, int]:
+    if y < 4:
+        return (168, 128, 84, 255) if 5 <= x <= 10 else TRANSPARENT
+    if not 2 <= x <= 13:
+        return TRANSPARENT
+    return (206, 164, 108, 255) if y < 6 else (150, 110, 70, 255)
+
+
 def sprite_egg(x: int, y: int) -> tuple[int, int, int, int]:
     if ((x - 7.5) / 4.5) ** 2 + ((y - 8.0) / 6.0) ** 2 > 1.0:
         return TRANSPARENT
@@ -161,6 +169,7 @@ TEXTURES = (
     ("textures/items/wand.png", 16, wand),
     ("textures/items/shard.png", 16, shard),
     ("textures/items/dust.png", 16, dust),
+    ("textures/items/pouch.png", 16, pouch),
     ("textures/items/sprite_egg.png", 16, sprite_egg),
     ("textures/blocks/lamp_off.png", 16, lamp_off),
     ("textures/blocks/lamp_on.png", 16, lamp_on),

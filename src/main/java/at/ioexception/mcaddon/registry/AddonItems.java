@@ -141,6 +141,13 @@ public final class AddonItems {
             if (egg != null) return egg;
         }
 
+        // Bedrock splits the bag from the way it is clicked. Java keeps both in one class, so either
+        // component alone is enough to mean a bundle.
+        if (definition.components().containsKey("minecraft:storage_item")
+            || definition.components().containsKey("minecraft:bundle_interaction")) {
+            return Platform.buildStorage(properties, id);
+        }
+
         Item shooter = shooter(definition, properties, id);
         if (shooter != null) return shooter;
 
@@ -612,7 +619,7 @@ public final class AddonItems {
         "minecraft:cooldown", "minecraft:block", "minecraft:block_placer",
         "minecraft:seed", "minecraft:entity_placer", "minecraft:throwable",
         "minecraft:projectile", "minecraft:dyeable", "minecraft:should_despawn",
-        "minecraft:shooter");
+        "minecraft:shooter", "minecraft:storage_item", "minecraft:bundle_interaction");
 
     private static Identifier identifier(String bedrock) {
         Names.Identifier split = Names.split(bedrock, "minecraft");

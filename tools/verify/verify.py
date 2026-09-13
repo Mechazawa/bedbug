@@ -791,15 +791,6 @@ def main() -> int:
     destination = arguments.report or root / "build" / "verify" / "verdict.json"
     verdicts: list[Verdict] = []
 
-    if arguments.mode in ("convert", "all"):
-        found = {one.name: one for version in versions
-                 for one in addons_in(root / "versions" / version / "run" / "addons")}
-        sources = [arguments.source] if arguments.source else list(found.values())
-        if not sources:
-            print("No add-on to compare a conversion against, nothing to test.")
-        verdicts += [check_conversion(root, source, version)
-                     for version in versions for source in sources]
-
     # One lock for the whole run, because a server and a client of the same version share a world.
     if arguments.mode in ("run", "client", "all"):
         with exclusive(root, arguments.lock_wait):
@@ -810,6 +801,18 @@ def main() -> int:
                 if arguments.mode in ("client", "all"):
                     verdicts.append(check_client(
                         root, version, arguments.timeout, arguments.hold, arguments.verbose))
+
+    # After the games, because the conversion is what one of them wrote. A pack is converted again
+    # once anything in it changes, so reading the cache before a game has run reads the last build's
+    # answer to the previous question.
+    if arguments.mode in ("convert", "all"):
+        found = {one.name: one for version in versions
+                 for one in addons_in(root / "versions" / version / "run" / "addons")}
+        sources = [arguments.source] if arguments.source else list(found.values())
+        if not sources:
+            print("No add-on to compare a conversion against, nothing to test.")
+        verdicts += [check_conversion(root, source, version)
+                     for version in versions for source in sources]
 
     return 0 if report(verdicts, destination) else 1
 

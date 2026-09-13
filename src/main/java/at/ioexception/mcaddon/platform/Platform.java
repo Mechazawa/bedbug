@@ -448,6 +448,28 @@ public final class Platform {
     }
 
     /**
+     * A bag that holds other items, which is what Bedrock's `minecraft:storage_item` describes.
+     *
+     * Java keeps the picking up and putting back in `BundleItem` rather than in a component, and
+     * from 1.20.5 the contents are a component the item has to carry from the start.
+     */
+    public static Item buildStorage(Item.Properties properties, Identifier id) {
+        Item.Properties bag = properties.stacksTo(1);
+        //? if >=1.21.2 {
+        return new net.minecraft.world.item.BundleItem(bag
+            .setId(ResourceKey.create(net.minecraft.core.registries.Registries.ITEM, id))
+            .component(net.minecraft.core.component.DataComponents.BUNDLE_CONTENTS,
+                net.minecraft.world.item.component.BundleContents.EMPTY));
+        //?} else if >=1.21 {
+        /*return new net.minecraft.world.item.BundleItem(bag.component(
+            net.minecraft.core.component.DataComponents.BUNDLE_CONTENTS,
+            net.minecraft.world.item.component.BundleContents.EMPTY));
+        *///?} else {
+        /*return new net.minecraft.world.item.BundleItem(bag);
+        *///?}
+    }
+
+    /**
      * A spawn egg for an entity type.
      *
      * From 1.21.2 the entity moved into a data component, but the behaviour still lives in
