@@ -40,7 +40,11 @@ server decides what happens; the client draws it.
   their events: environment, entity, timer, scheduler, damage, interact and
   hurt-on-condition. Their properties reach every client, so a model looks the same in multiplayer
   as it does alone.
-- Items, including edible and wearable ones, spawn eggs, and a creative tab per add-on.
+- Items, including edible and wearable ones, spawn eggs, and a creative tab per add-on. A dyeable
+  item takes the colour the pack painted it and the one a player dyes it. A bow draws and fires
+  whatever the pack loads it with. A bag holds other items. A drop the pack asks to keep lies there.
+- The custom components a pack registers from its own script, on its own blocks and items: placing,
+  breaking, clicking, standing on and ticking each reach the pack's own callback.
 - Blocks, with the states and permutations a pack declares: each combination gets its own model, the
   permutation conditions are evaluated through the Molang evaluator, and a block drawn with its own
   geometry keeps it.
@@ -77,13 +81,43 @@ server decides what happens; the client draws it.
 `/mcaddon packs` lists what loaded. `/mcaddon entities` and `/mcaddon scripts` list what a pack asked
 for that this mod does not implement yet, which answers "will my pack work" with evidence.
 
+## How much of Bedrock this is
+
+Measured against Mojang's own published vocabulary rather than against whatever pack happens to be
+installed. `tools/census/components.py` reads the entity, block and item component schemas, the
+filter documentation and the Molang query list out of Mojang's `bedrock-samples`, and
+`tools/census/script.py` reads the published `@minecraft/*` type definitions. Both compare them
+against the names this mod acts on:
+
+| Surface | Answered |
+| --- | --- |
+| Entity components | 81% |
+| Entity AI goals | 86% |
+| Entity filters | 94% |
+| Molang queries | 81% |
+| Molang maths | 100% |
+| Block components | 85% |
+| Item components | 74% |
+| `@minecraft/server` and friends | 84% |
+
+Every name in the remaining share is counted and shown by `/mcaddon entities` and `/mcaddon
+scripts`, so a pack relying on one is told rather than left wondering. Run the censuses yourself to
+get the current figures; the ones above are a snapshot.
+
 ## What does not work
 
-**Four entity components with no Java counterpart.** `balloonable` describes an item Java does not
-have. `managed_wandering_trader` describes how Bedrock runs its own trader. `behavior.take_flower`
-and `behavior.celebrate_survive` are two moments Java writes into its villager's own brain, with no
-general form a pack's entity could be given. Each is counted and named by `/mcaddon entities`, so a
-pack relying on one is told rather than left wondering.
+**Components with no Java counterpart.** `balloonable` describes an item Java does not have.
+`managed_wandering_trader` describes how Bedrock runs its own trader. `behavior.take_flower` and
+`behavior.celebrate_survive` are two moments Java writes into its villager's own brain, with no
+general form a pack's entity could be given. The player components describe a player, which an
+add-on cannot replace. Aim assist, pack settings and the device memory tiers describe a Bedrock
+client. Each is counted and named rather than silently doing nothing.
+
+**A record plays nothing.** `minecraft:record` needs a jukebox song, and a song only exists as an
+entry in a registry a data pack writes into. A world holding such a pack is one the game calls
+experimental, and it then opens behind a screen asking whether to load it at all, every time. One
+item component does not pay for that, so a record is registered as a plain item and counted as a
+gap.
 
 **Most of what a block event can answer with.** `run_command`, `set_block_state` and `die` have a
 Java form and run. The rest, which play a sound or a particle, deal damage, add or remove an effect,
@@ -114,8 +148,9 @@ player has installed: the emissive channel is drawn again at full brightness wit
 shader pack, while normal, roughness, metalness and subsurface need Iris or OptiFine with a labPBR
 shader pack, because a forward renderer lit per vertex has nothing to feed them to.
 
-Nothing else in a pack is deliberately left out. What a pack asks for that this mod cannot do is
-counted and shown by `/mcaddon entities` and `/mcaddon scripts`.
+Nothing else in a pack is deliberately left out, and what is left is a matter of how far the work
+has got rather than of what was decided. What a pack asks for that this mod cannot do is counted and
+shown by `/mcaddon entities` and `/mcaddon scripts`.
 
 ## Supported versions
 
