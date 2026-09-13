@@ -57,6 +57,19 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
     }
 
     /**
+     * Whether the entity's model is drawn at all.
+     *
+     * An invisible entity is drawn by nothing in either edition, which is what a potion of
+     * invisibility and `minecraft:is_hidden_when_invisible` both ask for.
+     * `minecraft:renders_when_invisible` is a pack asking for the opposite, for something whose
+     * shape is the point of it.
+     */
+    private static boolean drawn(AddonEntity entity) {
+        return !entity.isInvisible() || (entity.definition() != null
+            && entity.declares("minecraft:renders_when_invisible"));
+    }
+
+    /**
      * The models for whatever the entity is wearing or holding.
      *
      * An attachable names itself after the item it belongs to, so an equipped stack finds its model
@@ -118,6 +131,8 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
             ? null
             : Animators.of(entity, identifier, partialTick, entity.tickCount + partialTick);
         state.passes = new ArrayList<>();
+        if (!drawn(entity)) return;
+
         if (state.animator != null) state.passes.addAll(binding.models().resolve(state.animator));
         state.passes.addAll(attachables(entity, partialTick));
         state.bodyRotation = Mth.rotLerp(partialTick, entity.yBodyRotO, entity.yBodyRot);
@@ -158,7 +173,7 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
 
         String identifier = identifierOf(entity);
         AddonClientAssets.Binding binding = AddonClientAssets.of(identifier);
-        if (binding == null) return;
+        if (binding == null || !drawn(entity)) return;
 
         EntityAnimator animator = Animators.of(entity, identifier, partialTick, entity.tickCount + partialTick);
         if (animator == null) return;

@@ -13,8 +13,11 @@ public final class HopMoveControl extends MoveControl {
     /** How close counts as arrived, so the entity stops hopping instead of overshooting. */
     private static final double ARRIVED = 0.5;
 
+    private final AddonEntity hopper;
+
     public HopMoveControl(AddonEntity mob) {
         super(mob);
+        this.hopper = mob;
     }
 
     @Override
@@ -33,6 +36,6 @@ public final class HopMoveControl extends MoveControl {
         mob.yBodyRot = mob.getYRot();
         mob.yHeadRot = mob.getYRot();
 
-        Goals.hop(mob, speedModifier);
+        hopper.hop(speedModifier);
     }
 }

@@ -21,6 +21,7 @@ public final class OwnerTargetGoal extends Goal {
     private final AddonEntity mob;
     private final boolean avenging;
     private final boolean copying;
+    private final boolean defending;
     private final double withinRadius;
     private final boolean mustSee;
     private final String startEvent;
@@ -37,6 +38,7 @@ public final class OwnerTargetGoal extends Goal {
         this.mob = mob;
         this.avenging = avenging;
         this.copying = copying;
+        this.defending = defending;
         this.withinRadius = defending ? Goals.number(component, "within_radius", 0) : 0;
         this.mustSee = defending && Goals.flag(component, "must_see", false);
         this.startEvent = defending ? Goals.event(component, "on_defend_start") : null;
@@ -66,7 +68,9 @@ public final class OwnerTargetGoal extends Goal {
 
     @Override
     public boolean canUse() {
-        LivingEntity owner = mob.getOwner();
+        // Defending reaches whoever `minecraft:trust` has added as well as the one owner, which is
+        // what lets a pack's entity take the side of any of several players.
+        LivingEntity owner = defending ? mob.guarded(withinRadius) : mob.getOwner();
         if (owner == null) return false;
 
         found = copying ? whoTheOwnerIsAfter(owner)

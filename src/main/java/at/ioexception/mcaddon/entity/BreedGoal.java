@@ -78,7 +78,10 @@ public final class BreedGoal extends Goal {
         if (child == null) return;
 
         Platform.placeAt(child, mob.getX(), mob.getY(), mob.getZ(), mob.getYRot(), 0f);
-        if (child instanceof AddonEntity young) young.setYoung();
+        if (child instanceof AddonEntity young) {
+            young.setYoung();
+            young.inherit(mob, mate);
+        }
         level.addFreshEntity(child);
         for (int i = 0; i < 7; i++) {
             level.sendParticles(ParticleTypes.HEART, mob.getRandomX(1), mob.getRandomY() + 0.5,

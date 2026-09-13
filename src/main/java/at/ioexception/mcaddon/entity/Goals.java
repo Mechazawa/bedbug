@@ -39,10 +39,15 @@ final class Goals {
      * this: turn, then push off. Nothing happens while the entity is already in the air.
      */
     static void hop(net.minecraft.world.entity.Mob mob, double speed) {
+        hop(mob, speed, HOP_HEIGHT);
+    }
+
+    /** The same hop, at the height `minecraft:jump.dynamic` gives the speed the entity is moving at. */
+    static void hop(net.minecraft.world.entity.Mob mob, double speed, double height) {
         if (!mob.onGround()) return;
 
         double facing = Math.toRadians(mob.getYRot());
-        mob.setDeltaMovement(-Math.sin(facing) * HOP_REACH * speed, HOP_HEIGHT,
+        mob.setDeltaMovement(-Math.sin(facing) * HOP_REACH * speed, height,
             Math.cos(facing) * HOP_REACH * speed);
     }
 

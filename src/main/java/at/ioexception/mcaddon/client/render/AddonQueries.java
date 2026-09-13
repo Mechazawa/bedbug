@@ -243,7 +243,11 @@ public final class AddonQueries implements MolangEnvironment.Queries {
             case "rider_head_y_rotation" -> MolangValue.of(headYaw(rider(arguments)));
 
             case "ground_speed" -> MolangValue.of(horizontalSpeed());
-            case "modified_move_speed" -> MolangValue.of(Math.min(1, horizontalSpeed() / 0.22));
+            // `minecraft:walk_animation_speed` is a pack scaling how fast its own walk runs, and
+            // this is the number that walk is played against.
+            case "modified_move_speed" -> MolangValue.of(Math.min(1, horizontalSpeed() / 0.22
+                * (properties.containsKey("walk_animation_speed")
+                    ? number(properties.get("walk_animation_speed")) : 1)));
             case "vertical_speed" -> MolangValue.of(entity.getDeltaMovement().y * 20);
             case "position" -> MolangValue.of(axis(entity.position(), arguments));
             case "position_delta" -> MolangValue.of(axis(entity.getDeltaMovement(), arguments));
@@ -399,6 +403,16 @@ public final class AddonQueries implements MolangEnvironment.Queries {
                 "is_searching", "is_sneezing", "is_stalking", "timer_flag_1", "timer_flag_2",
                 "timer_flag_3" -> MolangValue.of(flag(properties, name));
             case "anger_level" -> MolangValue.of(number(properties.get("anger_level")));
+
+            // Each of these is a component the server acts on and keeps the state of, published
+            // under the name Bedrock gives the query that reads it back.
+            case "is_bribed", "out_of_control", "can_dash" -> MolangValue.of(flag(properties, name));
+            case "has_dash_cooldown" ->
+                MolangValue.of(properties.containsKey("can_dash") && !flag(properties, "can_dash"));
+            case "dash_cooldown_progress" ->
+                MolangValue.of(number(properties.get("dash_cooldown_progress")));
+            case "time_since_last_vibration_detection" ->
+                MolangValue.of(number(properties.get("time_since_last_vibration_detection")));
 
             // The pose is the game's own, and it reaches the drawing side without this mod sending
             // anything, so these read it rather than a property.
