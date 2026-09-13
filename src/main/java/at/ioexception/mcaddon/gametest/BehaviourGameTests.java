@@ -201,6 +201,40 @@ public final class BehaviourGameTests {
         helper.succeed();
     }
 
+    /**
+     * A record a pack declared goes into a jukebox and plays.
+     *
+     * What the jukebox plays is a song the world loads from the converted data pack, so this covers
+     * the whole path: the song was written, the world read it, and the record found it. 1.20.1 keeps
+     * all of that inside the record's own Java class, which a data-driven item has none of.
+     */
+    @GameTest()
+    public void aRecordGoesIntoAJukebox(GameTestHelper helper) {
+        Item record = AddonItems.all().get(RECORD_ITEM);
+        if (record == null || !Platform.jukeboxSongsAreData()) {
+            helper.succeed();
+            return;
+        }
+
+        helper.setBlock(STAND, net.minecraft.world.level.block.Blocks.JUKEBOX);
+        BlockPos jukebox = helper.absolutePos(STAND);
+
+        Player listener = Platform.mockPlayer(helper);
+        listener.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(record));
+        record.useOn(new net.minecraft.world.item.context.UseOnContext(listener,
+            InteractionHand.MAIN_HAND, new net.minecraft.world.phys.BlockHitResult(
+                net.minecraft.world.phys.Vec3.atCenterOf(jukebox),
+                net.minecraft.core.Direction.UP, jukebox, false)));
+
+        helper.assertTrue(helper.getLevel().getBlockState(jukebox)
+                .getValue(net.minecraft.world.level.block.JukeboxBlock.HAS_RECORD),
+            RECORD_ITEM + " was put into a jukebox and the jukebox stayed empty.");
+        helper.succeed();
+    }
+
+    /** The item the synthetic pack declares a record. */
+    private static final String RECORD_ITEM = "tp:disc";
+
     /** Longer than the second the synthetic pack's bow takes to draw fully. */
     private static final int FULL_DRAW = 25;
 

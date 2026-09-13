@@ -526,6 +526,21 @@ public final class Platform {
     }
 
     /**
+     * Whether what a jukebox plays is a registry a data pack writes into.
+     *
+     * 1.21 took the sound, the length and the comparator reading out of the record item's own class
+     * and made them a jukebox song the world loads. Before that a record is a class and nothing a
+     * pack writes can become one.
+     */
+    public static boolean jukeboxSongsAreData() {
+        //? if >=1.21 {
+        return true;
+        //?} else {
+        /*return false;
+        *///?}
+    }
+
+    /**
      * Whether dyeing an item is stated as a recipe naming it.
      *
      * Up to 1.21 anything in `#minecraft:dyeable` could be dyed and washed. 26 dropped that tag for
@@ -844,6 +859,62 @@ public final class Platform {
         if (emissive) return RenderTypes.entityTranslucentEmissive(texture);
         if (blend) return RenderTypes.entityTranslucent(texture);
         return cull ? RenderTypes.entityCutoutCull(texture) : RenderTypes.entityCutout(texture);
+    }
+
+    /**
+     * Puts a jukebox song on a copy of a stack, or hands back the stack where there is no such song.
+     *
+     * The songs are a registry the world loads rather than one the game is built with, so the one a
+     * pack wrote can only be looked up once a world is open. 1.20.1 has no such registry at all.
+     */
+    public static net.minecraft.world.item.ItemStack playable(Level level,
+        net.minecraft.world.item.ItemStack stack, Identifier song) {
+        //? if >=1.21 {
+        ResourceKey<net.minecraft.world.item.JukeboxSong> key =
+            ResourceKey.create(net.minecraft.core.registries.Registries.JUKEBOX_SONG, song);
+        //? if >=26 {
+        java.util.Optional<net.minecraft.core.Holder.Reference<net.minecraft.world.item.JukeboxSong>>
+            found = level.registryAccess()
+                .lookupOrThrow(net.minecraft.core.registries.Registries.JUKEBOX_SONG).get(key);
+        if (found.isEmpty()) return stack;
+
+        net.minecraft.world.item.ItemStack playable = stack.copy();
+        playable.set(net.minecraft.core.component.DataComponents.JUKEBOX_PLAYABLE,
+            new net.minecraft.world.item.JukeboxPlayable(found.get()));
+        //?} else {
+        /*java.util.Optional<net.minecraft.core.Holder.Reference<net.minecraft.world.item.JukeboxSong>>
+            found = level.registryAccess()
+                .registryOrThrow(net.minecraft.core.registries.Registries.JUKEBOX_SONG).getHolder(key);
+        if (found.isEmpty()) return stack;
+
+        net.minecraft.world.item.ItemStack playable = stack.copy();
+        playable.set(net.minecraft.core.component.DataComponents.JUKEBOX_PLAYABLE,
+            new net.minecraft.world.item.JukeboxPlayable(
+                new net.minecraft.world.item.EitherHolder<>(found.get()), true));
+        *///?}
+        return playable;
+        //?} else {
+        /*return stack;
+        *///?}
+    }
+
+    /**
+     * Puts a record into the jukebox at a position, and says whether it went in.
+     *
+     * What the insertion answers with was renamed in 1.21.2, and the question a use answers with
+     * was not, so the two have to be joined here.
+     */
+    public static net.minecraft.world.InteractionResult insertIntoJukebox(Level level,
+        net.minecraft.core.BlockPos at, net.minecraft.world.item.ItemStack record,
+        net.minecraft.world.entity.player.Player player) {
+        //? if >=1.21.2 {
+        return net.minecraft.world.item.JukeboxPlayable.tryInsertIntoJukebox(level, at, record, player);
+        //?} else if >=1.21 {
+        /*return net.minecraft.world.item.JukeboxPlayable
+            .tryInsertIntoJukebox(level, at, record, player).result();
+        *///?} else {
+        /*return net.minecraft.world.InteractionResult.PASS;
+        *///?}
     }
 
     /**

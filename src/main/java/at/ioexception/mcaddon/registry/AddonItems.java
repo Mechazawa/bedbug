@@ -5,6 +5,7 @@ import at.ioexception.mcaddon.bedrock.behaviour.ItemDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
 import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.convert.SpawnEggAppearance;
+import at.ioexception.mcaddon.item.AddonRecordItem;
 import at.ioexception.mcaddon.item.AddonShooterItem;
 import at.ioexception.mcaddon.item.AddonThrowableItem;
 import at.ioexception.mcaddon.pack.BedrockPack;
@@ -146,6 +147,10 @@ public final class AddonItems {
         if (definition.components().containsKey("minecraft:storage_item")
             || definition.components().containsKey("minecraft:bundle_interaction")) {
             return Platform.buildStorage(properties, id);
+        }
+
+        if (definition.components().containsKey("minecraft:record")) {
+            return AddonRecordItem.build(properties.stacksTo(1), id, id);
         }
 
         Item shooter = shooter(definition, properties, id);
@@ -305,7 +310,8 @@ public final class AddonItems {
     private static Item.Properties attributes(ItemDefinition definition, Item.Properties properties) {
         float damage = definition.number("minecraft:damage", "value", 0f) - 1f;
         float protection = definition.protection();
-        if (damage <= 0f && protection <= 0f) return properties;
+        float swingSeconds = definition.number("minecraft:swing_duration", "value", 0f);
+        if (damage <= 0f && protection <= 0f && swingSeconds <= 0f) return properties;
 
         //? if >=1.21 {
         net.minecraft.world.item.component.ItemAttributeModifiers.Builder modifiers =
@@ -322,11 +328,23 @@ public final class AddonItems {
                     protection, net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE),
                 net.minecraft.world.entity.EquipmentSlotGroup.bySlot(wornSlot(definition)));
         }
+        // Bedrock says how long one swing takes and Java says how many fit in a second, and what an
+        // item carries is what to add to the four an empty hand is worth.
+        if (swingSeconds > 0f) {
+            modifiers.add(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_SPEED,
+                new net.minecraft.world.entity.ai.attributes.AttributeModifier(McAddon.id("item_swing"),
+                    1f / swingSeconds - BARE_HAND_SWINGS,
+                    net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE),
+                net.minecraft.world.entity.EquipmentSlotGroup.MAINHAND);
+        }
         return properties.attributes(modifiers.build());
         //?} else {
         /*return properties;
         *///?}
     }
+
+    /** How many times a second an empty hand swings, which every item's own speed is stated against. */
+    private static final float BARE_HAND_SWINGS = 4f;
 
     /**
      * Mining speed per block, from the speeds `minecraft:digger` lists.
@@ -619,7 +637,8 @@ public final class AddonItems {
         "minecraft:cooldown", "minecraft:block", "minecraft:block_placer",
         "minecraft:seed", "minecraft:entity_placer", "minecraft:throwable",
         "minecraft:projectile", "minecraft:dyeable", "minecraft:should_despawn",
-        "minecraft:shooter", "minecraft:storage_item", "minecraft:bundle_interaction");
+        "minecraft:shooter", "minecraft:storage_item", "minecraft:bundle_interaction",
+        "minecraft:swing_duration", "minecraft:record");
 
     private static Identifier identifier(String bedrock) {
         Names.Identifier split = Names.split(bedrock, "minecraft");
