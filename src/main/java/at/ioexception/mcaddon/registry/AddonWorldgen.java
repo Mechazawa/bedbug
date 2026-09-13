@@ -34,9 +34,9 @@ import java.util.function.Predicate;
  * rule's Bedrock biome filter becomes that predicate, which is the same shape a spawn rule already
  * takes here.
  *
- * A biome a pack adds reaches the nether and the end through the same API. The overworld has no such
- * call, so a pack's overworld biomes are written into the overworld's own biome source as a
- * `dimension` entry instead.
+ * A biome a pack adds reaches the nether and the end through calls of the same kind, each of which
+ * puts one more entry in the list that world already searches. The overworld has no such call and no
+ * such list, so an overworld biome is registered and then reported.
  */
 public final class AddonWorldgen {
     /** The weight an end biome is offered at, which Bedrock states nowhere. */

@@ -331,16 +331,15 @@ public class AddonEntity extends PathfinderMob
         for (String named : new String[] {"minecraft:color", "minecraft:color2"}) {
             if (!declares(named)) continue;
 
-            ServerHooks.state().setProperty(getUUID(),
-                named.substring("minecraft:".length()), number(definition, named, "value", 0));
+            setInitialValue(named.substring("minecraft:".length()),
+                number(definition, named, "value", 0));
         }
         if (declares("minecraft:is_hidden_when_invisible")) setInvisible(isInvisible());
 
         for (String marker : MARKERS) {
             if (!declares(marker)) continue;
 
-            ServerHooks.state().setProperty(getUUID(),
-                marker.substring("minecraft:".length()), true);
+            setInitialValue(marker.substring("minecraft:".length()), true);
         }
 
         // Bedrock names the kind of pathfinding; Java asks whether the navigator may take each route.
@@ -382,7 +381,7 @@ public class AddonEntity extends PathfinderMob
             bossBar.setDarkenScreen(number(definition, "minecraft:boss", "should_darken_sky", 0) != 0);
         }
         // What a pack's render controller branches on, so a young entity is drawn as one.
-        if (age != null && age.baby()) ServerHooks.state().setProperty(getUUID(), "is_baby", true);
+        if (age != null && age.baby()) setInitialValue("is_baby", true);
 
         if (declares("minecraft:default_look_angle")) {
             float angle = (float) number(definition, "minecraft:default_look_angle", "value", 0);
@@ -419,7 +418,7 @@ public class AddonEntity extends PathfinderMob
         com.google.gson.JsonElement chosen = skins.get(random.nextInt(skins.size()));
         double variant = chosen.isJsonObject()
             ? Goals.number(chosen.getAsJsonObject(), "variant", 0) : 0;
-        ServerHooks.state().setProperty(getUUID(), "variant", variant);
+        setInitialValue("variant", variant);
     }
 
     /**
@@ -1113,6 +1112,21 @@ public class AddonEntity extends PathfinderMob
 
         ServerHooks.state().setProperty(getUUID(), name, value);
         at.ioexception.mcaddon.server.EntityPropertySync.broadcast(this, ServerHooks.state());
+    }
+
+    /**
+     * Writes one of the entity's own values while the entity is still being built.
+     *
+     * `setValue` is the wrong call there twice over. It tells every client watching, and nothing is
+     * watching an entity that is still in its constructor; and the state store belongs to a running
+     * server, which a client joining a dedicated one has none of, while that client builds this same
+     * entity out of the packet the server sent it. What a client should hold arrives over the
+     * property sync instead, so here the write is simply left out.
+     */
+    private void setInitialValue(String name, Object value) {
+        if (isClientSide() || ServerHooks.state() == null) return;
+
+        ServerHooks.state().setProperty(getUUID(), name, value);
     }
 
     /** One of those values as it stands, or null when nothing has set it. */

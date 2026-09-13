@@ -134,16 +134,15 @@ server decides what happens; the client draws it.
   spot the game is trying, so a mob that a pack said belongs on sand at night stays there.
 - The world a behaviour pack describes: the biomes it declares, the features it builds and the rules
   that place them. A Bedrock biome states the climate a player feels and a list of tags, and both
-  become the band of Java's own climate space the biome is searched for in, so it generates in an
-  ordinary world instead of only sitting in a registry: in the nether and the end through the calls
-  Fabric offers for those two, and in the overworld by writing the overworld's own biome source out
-  again with the pack's bands beside the game's. The colours the resource pack paints that biome with
-  go into it as well. A feature becomes a Java configured feature, and a feature rule becomes the
+  become the band of Java's own climate space the biome is searched for in. A biome the pack's tags
+  put in the nether or the end is added to the list that world already searches, so it generates in
+  an ordinary world; one in the overworld is converted and registered and then reported, because
+  Java's overworld has no such list to add to. The colours the resource pack paints a biome with go
+  into it either way. A feature becomes a Java configured feature, and a feature rule becomes the
   placed feature and the generation step beside it, hung at world load on every biome whose tags the
   rule's own filter accepts. That last part is the direction Bedrock attaches from and the one a Java
   biome cannot, because a Java biome lists the features it carries and nothing a data pack writes
-  reaches one from the other side. A `dimension` entry is read on every world load and a data pack's
-  copy of one wins, so a world that already exists gets a pack's biomes the next time it opens.
+  reaches one from the other side.
 - Attachables: what any entity wears or holds, players and vanilla mobs included, animating on its
   own clock. A pack picks between several models for one item on a condition of its own, and what an
   attachable writes into whoever carries it reaches that entity's variables, so the layer it stands
@@ -500,16 +499,18 @@ it, a `spawn_rules/` file puts mobs in it, and a biome from a pack that ships ne
 bare terrain. Java's own carvers belong to the dimension rather than to anything a data pack adds, so
 a converted biome has no caves of its own.
 
-**What replacing the overworld's biome source costs.** An overworld biome can only reach the world
-through the `dimension` registry, because `MultiNoiseBiomeSource`'s codec takes either the name of a
-preset the game holds in code or an explicit list of climate bands, and only the second can carry a
-biome the game does not ship. Writing `dimension/overworld.json` therefore states the overworld's
-whole generator, including which noise settings it uses, and a world created as amplified or as large
-biomes reads the default ones instead while such a pack is installed. It is read on every world load
-and the data pack's copy wins over the one the level data stored, so a world that already exists gets
-the pack's biomes the next time it opens; `/reload` reaches neither, because `reloadResources`
-rebuilds the server resources and never runs `RegistryDataLoader` again, so what a change costs a
-player is a restart rather than a new world.
+**A biome in the overworld.** The limit here is Java's overworld biome source rather than anything
+about the pack. The nether and the end each hold a list of the biomes they search and a mod may add
+one to it, which is what a pack's nether or end biome does: the game's own entries stay exactly as
+they were and the pack's is one more beside them. The overworld has no such list to add to. Its biome
+source names a preset the game holds in code, and `MultiNoiseBiomeSource`'s codec takes either that
+name or an explicit list of every climate band in the world, so the only way to add one biome is to
+write all of them out again as a `dimension` entry. Doing that states the overworld's whole
+generator, the noise settings included, so a world created as amplified or as large biomes would read
+the default ones instead for as long as the pack was installed, and terrain made before the pack
+arrived would disagree with terrain made after. Rewriting the game's own biome list to add one entry
+to it is not a thing a pack should be able to do to somebody's world, so it is not done. An overworld
+biome is read, converted and registered, and `/mcaddon entities` says it will not generate.
 
 **Half of Bedrock's feature types.** Of the twenty-eight, three become a Java configured feature that
 takes the same fields and builds the same thing: `ore_feature` becomes `minecraft:ore`,

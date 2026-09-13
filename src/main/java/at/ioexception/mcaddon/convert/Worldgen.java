@@ -414,7 +414,10 @@ public final class Worldgen {
                 heightmap.addProperty("heightmap", "OCEAN_FLOOR_WG");
                 placement.add(heightmap);
             }
-            default -> AddonEntities.unsupported("feature " + feature.type());
+            // The three left state a position Java decides inside the feature rather than before
+            // it. Each is named where every other feature type is, and the rest of the chain still
+            // places what it wraps.
+            default -> { }
         }
     }
 

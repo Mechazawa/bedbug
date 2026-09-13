@@ -109,18 +109,31 @@ public record FeatureDefinition(String identifier, String type, JsonObject body)
         return field == null ? null : Json.text(body, field, null);
     }
 
-    /** Whether anything in Java can be built out of this type. */
-    public boolean answerable() {
-        return CONFIGURED.contains(type) || PLACEMENT.contains(type);
-    }
+    /**
+     * The types this mod builds something out of, which is where the taxonomy stops being a plan.
+     *
+     * Three state a thing to build and have a Java feature that takes the same fields and builds the
+     * same thing; three state a position and have a Java placement modifier that asks the same
+     * question. Everything else is named against the pack.
+     */
+    public static final Set<String> CONVERTED = Set.of(
+        "minecraft:ore_feature", "minecraft:single_block_feature",
+        "minecraft:weighted_random_feature", "minecraft:scatter_feature",
+        "minecraft:snap_to_surface_feature", "minecraft:surface_relative_threshold_feature");
 
-    /** Names the type against the pack when Java has nothing to build it out of. */
+    /** Names the type against the pack when nothing here builds it, and says which kind of gap it is. */
     public void report() {
+        if (CONVERTED.contains(type)) return;
+
         if (CARVING.contains(type)) {
             // A Java carver belongs to a registry of its own rather than to any of the eleven
             // decoration steps, and the biomes it runs in are fixed when the dimension is made.
-            AddonEntities.unsupported("feature " + type + " (a Java carver, not a feature)");
-        } else if (!answerable()) {
+            AddonEntities.unsupported("feature " + type + ", which in Java is a carver");
+        } else if (CONFIGURED.contains(type) || PLACEMENT.contains(type)) {
+            // Java has a feature of roughly this kind and states it out of other fields, so what a
+            // converted entry held would be a guess at the pack's intent rather than what it wrote.
+            AddonEntities.unsupported("feature " + type + ", which no Java feature takes the fields of");
+        } else {
             AddonEntities.unsupported("feature " + type);
         }
     }
