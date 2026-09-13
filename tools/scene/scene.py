@@ -373,12 +373,15 @@ def press(pid: int, code: int) -> None:
     time.sleep(0.8)
 
 
-def capture(version: str, target: pathlib.Path) -> None:
+def capture(version: str, target: pathlib.Path) -> str | None:
     """Has the game photograph itself, and leaves one picture that is ready to look at.
 
     The game's own screenshot holds what it drew and nothing else: no title bar, no cursor, and no
     doubling from a display that draws two pixels per point. It also does not care whether the window
     is in front, which photographing the screen does.
+
+    Answers why there is no picture, or nothing when there is one. A scene whose whole purpose is to
+    be looked at has not run if nobody can look at it, so the caller fails on what comes back.
     """
     shots = ROOT / "versions" / version / "run" / "screenshots"
     before = set(shots.glob("*.png")) if shots.is_dir() else set()
@@ -386,24 +389,24 @@ def capture(version: str, target: pathlib.Path) -> None:
     with photographing():
         pid = gamePid(version)
         if pid is None:
-            return
+            return "no game of this version was running to photograph"
         press(pid, HIDE_HUD)
         press(pid, SCREENSHOT)
         time.sleep(1.5)
 
     taken = sorted(set(shots.glob("*.png")) - before) if shots.is_dir() else []
     if not taken:
-        return
+        return "the game wrote no screenshot, so the key never reached it"
     shutil.move(str(taken[-1]), target)
 
     try:
         from PIL import Image
     except ImportError:
-        return
+        return None
 
     with Image.open(target) as picture:
         if picture.width <= READABLE_WIDTH:
-            return
+            return None
         scaled = picture.convert("RGB").resize(
             (READABLE_WIDTH, round(picture.height * READABLE_WIDTH / picture.width)))
         scaled.save(target)
@@ -544,10 +547,11 @@ def run(version: str, one: dict, timeout: float, keep: bool) -> tuple[bool, list
         time.sleep(0.5)
     reading = False
 
+    unphotographed = None
     if finished:
         # The window is up and the scene has run, so what is drawn is worth keeping.
         time.sleep(2.5)
-        capture(version, logs / f"{version}-{one['name']}.png")
+        unphotographed = capture(version, logs / f"{version}-{one['name']}.png")
 
     if not keep:
         for stop in (signal.SIGTERM, signal.SIGKILL):
@@ -564,6 +568,10 @@ def run(version: str, one: dict, timeout: float, keep: bool) -> tuple[bool, list
     problems = [] if finished else [f"{one['name']} never reached {DONE}"]
     problems += [f"{one['name']} never said {want}" for want in one["wants"] if want not in text]
     problems += [f"{one['name']}: {found}" for found in set(re.findall(r"Script error: .*", text))]
+    # A scene exists to be looked at, so one that left no picture has not done its job however
+    # cleanly its commands ran.
+    if finished and unphotographed:
+        problems.append(f"{one['name']} left no picture: {unphotographed}")
     return (not problems, problems)
 
 
