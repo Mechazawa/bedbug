@@ -120,8 +120,12 @@ LOST_CONNECTION = re.compile(r"lost connection: (.+)")
 MISSING_ENTRY = re.compile(r"is missing from local registry \((minecraft:[a-z_]+)\)")
 
 # Everything the sync says while turning such a client away, which a run that asked for it reads as
-# the answer rather than as a fault.
-MISSING_SYNC = re.compile(r"ClientRegistrySyncHandler|Received unknown remote registry entries")
+# the answer rather than as a fault. Fabric renamed the logger partway through this version range,
+# so both names are matched, and so is the message itself for anywhere it is written from.
+MISSING_SYNC = re.compile(r"FabricRegistry\w*|ClientRegistrySyncHandler"
+                          r"|Received unknown remote registry entries"
+                          r"|is missing from local registry"
+                          r"|Registry remapping failed")
 
 # The console's answer to `give`, which says the item exists and was handed to somebody.
 GAVE = re.compile(r"Gave \d+ .* to ")
@@ -863,6 +867,17 @@ def check_client(root: Path, version: str, timeout: float, hold: float, verbose:
     return verdict
 
 
+def restore(installed: Path, withheld: Path) -> None:
+    """Puts back the packs a run took away from a client, whether or not that run ended tidily."""
+    if not withheld.is_dir():
+        return
+
+    installed.mkdir(parents=True, exist_ok=True)
+    for addon in sorted(withheld.iterdir()):
+        addon.rename(installed / addon.name)
+    withheld.rmdir()
+
+
 def refused(verdict: Verdict, seen: list[str]) -> Verdict:
     """What a client joining without the add-on has to do, which is be turned away and told why.
 
@@ -922,6 +937,9 @@ def check_join(root: Path, version: str, timeout: float, hold: float, verbose: b
     client: dict = {"lines": [], "outcome": "never started", "log": None}
     installed = root / "versions" / version / "run" / "addons"
     withheld = root / "versions" / version / "run" / "addons-withheld"
+    # A run killed part way through leaves its packs here, and the directory it took them from is
+    # what every other mode reads, so they go back before anything else looks at either.
+    restore(installed, withheld)
     if bare:
         withheld.mkdir(parents=True, exist_ok=True)
 
@@ -944,8 +962,12 @@ def check_join(root: Path, version: str, timeout: float, hold: float, verbose: b
 
         talking = Thread(target=talk, daemon=True)
         talking.start()
+        # A client that was given no packs is going to be turned away, so the refusal is what this
+        # run waits for. Waiting for the round trip instead would sit on the disconnect screen until
+        # the deadline and then report the same thing several minutes later.
         client["lines"], client["log"], client["outcome"] = play(
-            root, version, replace(CLIENT, name="join-client"), heard, [], timeout, hold, verbose,
+            root, version, replace(CLIENT, name="join-client"),
+            MISSING_ENTRY if bare else heard, [], timeout, 0.0 if bare else hold, verbose,
             join=f"127.0.0.1:{port}")
         talking.join(timeout=10)
 
@@ -956,10 +978,7 @@ def check_join(root: Path, version: str, timeout: float, hold: float, verbose: b
     finally:
         # However the run ended, the packs go back where they were: a later run reading an addons
         # directory this one emptied would report on a checkout nobody has.
-        if bare and withheld.is_dir():
-            for addon in sorted(withheld.iterdir()):
-                addon.rename(installed / addon.name)
-            withheld.rmdir()
+        restore(installed, withheld)
 
     seen = client["lines"]
     verdict.notes.append(f"server {outcome}, {len(served)} lines in {log.relative_to(root)}")
