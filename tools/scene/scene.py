@@ -361,16 +361,39 @@ def gamePid(version: str) -> int | None:
     return None
 
 
-def press(pid: int, code: int) -> None:
-    """Sends one key to one game, which is the only interaction this tool has with it."""
+def frontmost(pid: int, wait: float = 5.0) -> bool:
+    """Brings one game to the front and waits until it really is there.
+
+    Four games are up at once and a key reaches whichever window has the focus, so sending one
+    after a fixed sleep hands it to whatever happened to be in front. Asking the system which
+    process is frontmost is the only answer that cannot be raced.
+    """
     subprocess.run(["osascript", "-e",
                     "tell application \"System Events\" to set frontmost of "
                     f"(first process whose unix id is {pid}) to true"], check=False)
-    time.sleep(0.6)
+
+    deadline = time.monotonic() + wait
+    while time.monotonic() < deadline:
+        answer = subprocess.run(
+            ["osascript", "-e", "tell application \"System Events\" to get unix id of "
+             "(first process whose frontmost is true)"],
+            check=False, capture_output=True, text=True).stdout.strip()
+        if answer == str(pid):
+            return True
+        time.sleep(0.2)
+    return False
+
+
+def press(pid: int, code: int) -> bool:
+    """Sends one key to one game, which is the only interaction this tool has with it."""
+    if not frontmost(pid):
+        return False
+
     subprocess.run(["osascript", "-e",
                     "tell application \"System Events\" to tell "
                     f"(first process whose unix id is {pid}) to key code {code}"], check=False)
     time.sleep(0.8)
+    return True
 
 
 def capture(version: str, target: pathlib.Path) -> str | None:
@@ -390,8 +413,8 @@ def capture(version: str, target: pathlib.Path) -> str | None:
         pid = gamePid(version)
         if pid is None:
             return "no game of this version was running to photograph"
-        press(pid, HIDE_HUD)
-        press(pid, SCREENSHOT)
+        if not press(pid, HIDE_HUD) or not press(pid, SCREENSHOT):
+            return "the game would not come to the front, so no key could reach it"
         time.sleep(1.5)
 
     taken = sorted(set(shots.glob("*.png")) - before) if shots.is_dir() else []
