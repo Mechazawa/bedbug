@@ -1,0 +1,13 @@
+{
+  "format_version": "1.20.0",
+  "minecraft:recipe_furnace": {
+    "description": {
+      "identifier": "tp:shard_cooked"
+    },
+    "tags": ["furnace", "blast_furnace", "smoker", "campfire", "soul_campfire"],
+    "input": {
+      "item": "tp:dust"
+    },
+    "output": "tp:shard"
+  }
+}

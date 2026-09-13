@@ -652,61 +652,167 @@ public final class PackConverter {
         return tints;
     }
 
+    /** What a Bedrock crafting station tag names, as the Java recipe type made there. */
+    private static final Map<String, String> COOKERS = Map.of(
+        "furnace", "minecraft:smelting",
+        "blast_furnace", "minecraft:blasting",
+        "smoker", "minecraft:smoking",
+        "campfire", "minecraft:campfire_cooking",
+        "soul_campfire", "minecraft:campfire_cooking");
+
+    /** The station tags a converted recipe answers without needing a recipe type of its own. */
+    private static final Set<String> PLAIN_STATIONS = Set.of("crafting_table", "smithing_table");
+
     /**
      * Crafting recipes, as a data pack the game reads out of the same directory.
      *
      * Bedrock's shaped recipes carry a pattern and a key map exactly as Java's do, so the conversion
-     * is a rename. Furnace recipes and anything with a Bedrock-only tag are left out and reported.
+     * is a rename. `tags` names the block the recipe is made at, and one Bedrock furnace recipe
+     * listing four cookers becomes one Java recipe per cooker, because a Java cooking recipe names
+     * the one block it belongs to.
      */
     private static void writeRecipes(Path root, List<RecipeDefinition> recipes) throws IOException {
-        boolean bareIngredients = Platform.bareRecipeIngredients();
-        String directory = dataDirectory("recipe");
-
         for (RecipeDefinition recipe : recipes) {
-            JsonObject json = new JsonObject();
             switch (recipe.kind()) {
-                case SHAPED -> {
-                    json.addProperty("type", "minecraft:crafting_shaped");
-                    JsonArray pattern = new JsonArray();
-                    recipe.pattern().forEach(pattern::add);
-                    json.add("pattern", pattern);
-
-                    JsonObject key = new JsonObject();
-                    recipe.key().forEach((symbol, item) -> key.add(symbol, ingredient(item, bareIngredients)));
-                    json.add("key", key);
-                }
-                case SHAPELESS -> {
-                    json.addProperty("type", "minecraft:crafting_shapeless");
-                    JsonArray ingredients = new JsonArray();
-                    for (RecipeDefinition.Ingredient ingredient : recipe.ingredients()) {
-                        for (int i = 0; i < Math.max(1, ingredient.count()); i++) {
-                            ingredients.add(ingredient(ingredient.item(), bareIngredients));
-                        }
-                    }
-                    json.add("ingredients", ingredients);
-                }
+                case SHAPED -> writeRecipe(root, recipe, "", shaped(recipe));
+                case SHAPELESS -> writeRecipe(root, recipe, "",
+                    recipe.tags().contains("stonecutter") ? stonecutting(recipe) : shapeless(recipe));
                 case FURNACE -> {
-                    json.addProperty("type", "minecraft:smelting");
-                    json.add("ingredient", ingredient(recipe.ingredients().isEmpty()
-                        ? "minecraft:air" : recipe.ingredients().get(0).item(), bareIngredients));
-                    json.addProperty("cookingtime", 200);
-                    json.addProperty("experience", 0.1);
+                    for (Map.Entry<String, String> cooker : cookers(recipe).entrySet()) {
+                        writeRecipe(root, recipe, cooker.getKey(), cooking(recipe, cooker.getValue()));
+                    }
+                }
+                case SMITHING_TRANSFORM -> writeRecipe(root, recipe, "", smithingTransform(recipe));
+                case SMITHING_TRIM -> {
+                    JsonObject json = smithingTrim(recipe);
+                    if (json != null) writeRecipe(root, recipe, "", json);
                 }
                 default -> { }
             }
-
-            JsonObject result = new JsonObject();
-            result.addProperty(Platform.recipeResultKey(), recipe.result());
-            result.addProperty("count", Math.max(1, recipe.resultCount()));
-            json.add("result", result);
-
-            int colon = recipe.identifier().indexOf(':');
-            String namespace = Names.sanitise(colon > 0
-                ? recipe.identifier().substring(0, colon) : "minecraft");
-            String name = Names.sanitise(colon > 0
-                ? recipe.identifier().substring(colon + 1) : recipe.identifier());
-            write(root.resolve("data").resolve(namespace).resolve(directory).resolve(name + ".json"), json);
+            reportStations(recipe);
         }
+    }
+
+    private static void writeRecipe(Path root, RecipeDefinition recipe, String suffix, JsonObject json)
+        throws IOException {
+        if (recipe.group() != null) json.addProperty("group", recipe.group());
+
+        Names.Identifier id = Names.split(recipe.identifier(), "minecraft");
+        write(root.resolve("data").resolve(id.namespace()).resolve(dataDirectory("recipe"))
+            .resolve(id.path() + suffix + ".json"), json);
+    }
+
+    private static JsonObject shaped(RecipeDefinition recipe) {
+        boolean bare = Platform.bareRecipeIngredients();
+        JsonObject json = new JsonObject();
+        json.addProperty("type", "minecraft:crafting_shaped");
+
+        JsonArray pattern = new JsonArray();
+        recipe.pattern().forEach(pattern::add);
+        json.add("pattern", pattern);
+
+        JsonObject key = new JsonObject();
+        recipe.key().forEach((symbol, item) -> key.add(symbol, ingredient(item, bare)));
+        json.add("key", key);
+        return craftingResult(json, recipe);
+    }
+
+    private static JsonObject shapeless(RecipeDefinition recipe) {
+        boolean bare = Platform.bareRecipeIngredients();
+        JsonObject json = new JsonObject();
+        json.addProperty("type", "minecraft:crafting_shapeless");
+
+        JsonArray ingredients = new JsonArray();
+        for (RecipeDefinition.Ingredient ingredient : recipe.ingredients()) {
+            for (int i = 0; i < Math.max(1, ingredient.count()); i++) {
+                ingredients.add(ingredient(ingredient.item(), bare));
+            }
+        }
+        json.add("ingredients", ingredients);
+        return craftingResult(json, recipe);
+    }
+
+    private static JsonObject cooking(RecipeDefinition recipe, String type) {
+        JsonObject json = new JsonObject();
+        json.addProperty("type", type);
+        json.add("ingredient", ingredient(firstIngredient(recipe), Platform.bareRecipeIngredients()));
+        json.addProperty("experience", 0.1);
+        Platform.simpleResult(json, recipe.result(), 1);
+        return json;
+    }
+
+    private static JsonObject stonecutting(RecipeDefinition recipe) {
+        JsonObject json = new JsonObject();
+        json.addProperty("type", "minecraft:stonecutting");
+        json.add("ingredient", ingredient(firstIngredient(recipe), Platform.bareRecipeIngredients()));
+        Platform.simpleResult(json, recipe.result(), Math.max(1, recipe.resultCount()));
+        return json;
+    }
+
+    private static JsonObject smithingTransform(RecipeDefinition recipe) {
+        boolean bare = Platform.bareRecipeIngredients();
+        JsonObject json = new JsonObject();
+        json.addProperty("type", "minecraft:smithing_transform");
+        json.add("template", ingredient(recipe.smithing().template(), bare));
+        json.add("base", ingredient(recipe.smithing().base(), bare));
+        if (recipe.smithing().addition() != null) {
+            json.add("addition", ingredient(recipe.smithing().addition(), bare));
+        }
+        return craftingResult(json, recipe);
+    }
+
+    /** Null when the running version wants a trim pattern the template does not name. */
+    private static JsonObject smithingTrim(RecipeDefinition recipe) {
+        boolean bare = Platform.bareRecipeIngredients();
+        JsonObject json = new JsonObject();
+        json.addProperty("type", "minecraft:smithing_trim");
+        json.add("template", ingredient(recipe.smithing().template(), bare));
+        json.add("base", ingredient(recipe.smithing().base(), bare));
+        if (recipe.smithing().addition() != null) {
+            json.add("addition", ingredient(recipe.smithing().addition(), bare));
+        }
+        return Platform.smithingTrimPattern(json, recipe.smithing().template()) ? json : null;
+    }
+
+    private static JsonObject craftingResult(JsonObject json, RecipeDefinition recipe) {
+        JsonObject result = new JsonObject();
+        result.addProperty(Platform.recipeResultKey(), recipe.result());
+        result.addProperty("count", Math.max(1, recipe.resultCount()));
+        json.add("result", result);
+        return json;
+    }
+
+    private static String firstIngredient(RecipeDefinition recipe) {
+        return recipe.ingredients().isEmpty() ? "minecraft:air" : recipe.ingredients().get(0).item();
+    }
+
+    /**
+     * The Java recipe type and file suffix for each cooker a furnace recipe names.
+     *
+     * A recipe naming both a campfire and a soul campfire is one Java recipe, because both read the
+     * same type. A recipe naming no cooker this knows is written for a furnace, which is where a
+     * Bedrock furnace recipe without tags is made.
+     */
+    private static Map<String, String> cookers(RecipeDefinition recipe) {
+        Map<String, String> found = new LinkedHashMap<>();
+        for (String tag : recipe.tags()) {
+            String type = COOKERS.get(tag);
+            if (type != null) found.putIfAbsent(suffixOf(type), type);
+        }
+        if (found.isEmpty()) found.put("", "minecraft:smelting");
+        return found;
+    }
+
+    private static String suffixOf(String type) {
+        return "minecraft:smelting".equals(type) ? "" : "_" + type.substring("minecraft:".length());
+    }
+
+    /** A station whose recipe type Java has none of is named rather than left doing nothing. */
+    private static void reportStations(RecipeDefinition recipe) {
+        recipe.tags().stream()
+            .filter(tag -> !PLAIN_STATIONS.contains(tag) && !COOKERS.containsKey(tag)
+                && !"stonecutter".equals(tag))
+            .forEach(tag -> AddonEntities.unsupported("recipe station " + tag));
     }
 
     /**
@@ -1232,10 +1338,17 @@ public final class PackConverter {
         return Platform.singularDataDirectories() ? singular : singular + "s";
     }
 
+    /**
+     * One ingredient, as the running version writes one.
+     *
+     * A name opening with `#` is a tag, which the object form states under its own key and the bare
+     * form states with the marker left where it is.
+     */
     private static JsonElement ingredient(String item, boolean bare) {
         if (bare) return new com.google.gson.JsonPrimitive(item);
         JsonObject wrapped = new JsonObject();
-        wrapped.addProperty("item", item);
+        wrapped.addProperty(item.startsWith("#") ? "tag" : "item",
+            item.startsWith("#") ? item.substring(1) : item);
         return wrapped;
     }
 

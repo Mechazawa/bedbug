@@ -122,10 +122,20 @@ These are the checks it runs, and what each one catches:
 
   It carries one of everything the mod has a reader for, so a reader that stops working shows up as
   a count that dropped: an item icon in each of the three shapes a pack may write it in, a block with
-  states and permutations drawn with its own geometry, a shaped and a shapeless recipe, two entities
-  whose spawn eggs take each of the two forms, an animation firing a sound and a particle off its
-  timeline, three `particles/*.json` in the 1.10.0 format, a texture set whose emissive channel has
-  pixels in it, and a function using the commands and selector arguments that need translating.
+  states and permutations drawn with its own geometry, a recipe of each kind that converts, two
+  entities whose spawn eggs take each of the two forms, an animation firing a sound and a particle
+  off its timeline, three `particles/*.json` in the 1.10.0 format, a texture set whose emissive
+  channel has pixels in it, and a function using the commands and selector arguments that need
+  translating.
+
+  The recipes cover the five kinds and the fields that decide what each becomes: a furnace recipe
+  naming four cookers, a shapeless one tagged for the stonecutter, a shaped one keyed on an item tag
+  and carrying a `group` and a `priority`, a smithing transform and a smithing trim. The ember's own
+  loot table and trade table are the other two: between them they use each loot function and
+  condition that converts, both entry types, a pool condition and an entry condition, a payment with
+  two items to choose between, two tiers with the second behind an experience threshold, and a trade
+  whose result is enchanted. Each also names one thing this mod reports rather than converts, so a
+  run says both halves of the reporting path still work.
 - **`tools/testpack/build_modules.py`** builds a second add-on, whose script imports every
   `@minecraft/*` module the mod provides and calls one thing from each. Its sources are a manifest
   and one script under `tools/testpack/modules/`.
@@ -336,6 +346,28 @@ These are the checks it runs, and what each one catches:
   not contain are stale or misspelt. Names an `IMPLEMENTED` declaration carries with no reader of
   their own are either a component Java does for every mob anyway, which is why the declaration
   names it, or a coverage claim nothing backs; each declaration's docblock says which it allows.
+- **`tools/census/data.py`** is the same measurement for the three vocabularies a behaviour pack
+  writes as files of their own: loot tables, recipes and trade tables. It shares `components.py`'s
+  helpers, so both read the mod's side out of the Java source the same way.
+
+  ```bash
+  python3 tools/census/data.py            # prints the table and the gaps
+  python3 tools/census/data.py --strict   # exits non-zero while anything is missing
+  ```
+
+  The published side is the vanilla behaviour pack itself: every `function` and `condition` name its
+  loot tables use, every `minecraft:recipe_*` key its recipes carry and every field inside each of
+  them, and every level and field its `trading/*.json` write, widened by the recipe documentation
+  module and the `Trade*` JSON schemas under `metadata/`. Several of Mojang's own files carry `//`
+  comments and a trailing comma, which `json` refuses, so the reader strips both; a census that
+  skipped those files would report a smaller vocabulary than the one Mojang ships.
+
+  The mod's side is the `case "..."` labels in `LootTableDefinition.function`,
+  `LootTableDefinition.condition` and `TradeTable.applyFunction`, and the `CONVERTED` and `HANDLES`
+  declarations in `RecipeDefinition` and `TradeTable`. A field name is qualified by the level that
+  carries it, so `shaped.key.tag` and `trade.max_uses` say which of the two `tag` fields and which
+  `max_uses` is meant. The run ends by naming any declared field whose own literal appears nowhere
+  else in the source, which is a claim with no reader behind it.
 
 ## Conventions
 
@@ -380,6 +412,7 @@ tools/verify/verify.py       End to end harness: drives a dev server and checks 
 tools/preview/render.py      Offline model renderer
 tools/molang/MolangCheck.java  Molang conformance harness
 tools/census/components.py   Coverage of Bedrock's published vocabulary, no pack and no game
+tools/census/data.py         The same, for loot tables, recipes and trade tables
 tools/checkall.sh            Every check, in the order that fails fastest
 tools/census/script.py       How much of the published script API this mod offers
 tools/scene/scene.py         Scenes run inside the game, with nobody at the keyboard

@@ -54,9 +54,19 @@ server decides what happens; the client draws it.
   against the block standing in the world. A block that says it holds water is waterlogged, one with
   a placement filter only survives where the filter allows, one that produces redstone powers what it
   touches, and one a pack marks pottable gets the second block a flower pot needs.
-- Trading, with Bedrock's tiers and groups flattened into Java's merchant screen.
-- Recipes, loot tables, natural spawning, and `.mcfunction` files translated into Java's command
-  dialect with a `tick` function tag.
+- Trading. A tier opens once its trader has earned the experience it asks for, a group offers the
+  few trades it was told to pick weighted the way it weighted them, a payment listing several items
+  becomes one offer per item, and `max_uses`, `trader_exp`, `reward_exp` and `price_multiplier` all
+  reach the merchant screen. A trade that enchants what it hands over hands over an enchanted item.
+- Recipes: shaped, shapeless, furnace, smithing transform and smithing trim. `tags` names the block
+  a recipe is made at, so one Bedrock furnace recipe listing a furnace, a blast furnace, a smoker
+  and a campfire becomes four Java recipes, a shapeless recipe tagged for the stonecutter becomes a
+  stonecutting one, an ingredient naming a tag stays a tag, and a `group` keeps its group.
+- Loot tables, with the pool and entry conditions Java can ask the same question of, and the
+  functions that set a count, a damage, a potion, a named enchantment, a random enchantment at a
+  level, an explorer map, an ominous bottle's amplifier and a drop that grows with looting.
+- Natural spawning, and `.mcfunction` files translated into Java's command dialect with a `tick`
+  function tag.
 - Attachables: what any entity wears or holds, players and vanilla mobs included, animating on its
   own clock.
 - The sounds and particles an animation, an animation controller state or an entity's own definition
@@ -85,9 +95,10 @@ for that this mod does not implement yet, which answers "will my pack work" with
 
 Measured against Mojang's own published vocabulary rather than against whatever pack happens to be
 installed. `tools/census/components.py` reads the entity, block and item component schemas, the
-filter documentation and the Molang query list out of Mojang's `bedrock-samples`, and
-`tools/census/script.py` reads the published `@minecraft/*` type definitions. Both compare them
-against the names this mod acts on:
+filter documentation and the Molang query list out of Mojang's `bedrock-samples`,
+`tools/census/data.py` reads the vanilla loot tables, recipes and trade tables out of the same
+checkout, and `tools/census/script.py` reads the published `@minecraft/*` type definitions. All
+three compare what they read against the names this mod acts on:
 
 | Surface | Answered |
 | --- | --- |
@@ -98,6 +109,12 @@ against the names this mod acts on:
 | Molang maths | 100% |
 | Block components | 92% |
 | Item components | 80% |
+| Loot table functions | 56% |
+| Loot table conditions | 44% |
+| Recipe types | 71% |
+| Recipe fields | 57% |
+| Trade table fields | 89% |
+| Trade item functions | 20% |
 | `@minecraft/server` and friends | 95% |
 
 Every name in the remaining share is counted and shown by `/mcaddon entities` and `/mcaddon
@@ -118,6 +135,50 @@ entry in a registry a data pack writes into. A world holding such a pack is one 
 experimental, and it then opens behind a screen asking whether to load it at all, every time. One
 item component does not pay for that, so a record is registered as a plain item and counted as a
 gap.
+
+**An item's data value.** `set_data`, `random_aux_value`, `set_data_from_color_index` and
+`random_block_state` all pick one of the things a Bedrock id stands for by number. Java gave every
+one of those its own id when it flattened blocks and items, so there is no number left to set. The
+same is why a recipe's `data` beside an item, and a result naming one, are read and reported.
+
+**Two loot functions that describe something other than a drop.** `enchant_random_gear` enchants the
+mob's own equipment as it spawns, and a Java loot table describes what the mob drops rather than
+what it wears. `enchant_book_for_trading` prices a book against a villager's level, which is part of
+how Java builds a trade in its own code rather than anything a loot function states.
+
+**What a Bedrock loot condition asks that a Java predicate cannot.** `has_variant`,
+`has_mark_variant` and `bool_property` read Bedrock entity data and a pack's own entity properties,
+and a Java entity predicate has no field naming either. `entity_properties` carries a whole Bedrock
+filter, which is a separate vocabulary from the predicate Java would check. `entity_killed` asks
+what the dropping mob itself killed, and a Java loot context holds only the victim and the killer.
+`killed_by_player_or_pets` widens that killer to anything the player tamed. The two difficulty
+chances read the world difficulty, which no Java loot condition can. `biome_has_tag` names a
+Bedrock biome tag. Each is counted by `/mcaddon entities` rather than dropped without a word.
+
+**Brewing and the material reducer.** `minecraft:recipe_brewing_mix` and
+`minecraft:recipe_brewing_container` describe a brewing stand, whose recipes Java builds in its own
+code rather than reading from a data pack, so a pack cannot add one. `recipe_material_reduction`
+describes the Education Edition material reducer, which the Java game does not have as a block.
+
+**A recipe's priority, its unlock and its symmetry.** Java offers every recipe that matches rather
+than the one with the highest priority, decides what a player has unlocked from an advancement
+rather than from the recipe, and mirrors a shaped pattern whatever `assume_symmetry` says. A Bedrock
+recipe writing one of the three keeps everything else and the field is reported.
+
+**A smithing trim a pack invents.** From 26 the trim a smithing table applies is named on the recipe
+rather than carried by the template item, and a trim pattern is an entry in a registry a data pack
+writes into. A world holding such a pack is one the game calls experimental, so the patterns
+available are the ones the game already ships and the name is read back out of a template called
+`<pattern>_armor_trim_smithing_template`. A recipe naming any other template is reported instead.
+
+**What a trade runs over the item it hands over.** `enchant_with_levels` and `enchant_randomly`
+enchant it and `set_count` counts it. `random_dye` and the aux value functions paint a data value
+Java has none of, `exploration_map` needs a structure searched for as the trade is made, and
+`enchant_book_for_trading` prices a book against the villager's own level; Java builds each of those
+three in its own code rather than from a table, so all three are counted instead.
+
+**A filter on a trade item.** Bedrock checks it as the trade is offered, out of the filter
+vocabulary. A Java offer is built once and sent to the client, which leaves nothing to ask again.
 
 **The cause a block event names for its damage.** Bedrock picks from its own list of damage causes
 and Java builds a damage source out of what dealt the blow, so a block that hurts whoever set it off

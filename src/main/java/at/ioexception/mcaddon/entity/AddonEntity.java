@@ -73,6 +73,9 @@ public class AddonEntity extends PathfinderMob
     private boolean boosting;
     private Player tradingPlayer;
     private MerchantOffers offers;
+    private java.util.List<TradeTable.Offer> shown = new java.util.ArrayList<>();
+    private int offeredTiers = -1;
+    private boolean offersOverridden;
     private int tradeExperience;
     private Identifier lootTable;
     private Age age;
@@ -3138,44 +3141,58 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
-     * Built once per entity, because a Bedrock group picks a random few of the trades it lists and
-     * rebuilding would hand the player a different shop each time they opened it.
+     * Built once per tier the trader has reached, because a Bedrock group picks a random few of the
+     * trades it lists and rebuilding would hand the player a different shop each time they opened it.
+     *
+     * A tier states the experience its trader needs before it trades at all, so the shop grows as
+     * the trader earns it.
      */
     @Override
     public MerchantOffers getOffers() {
-        if (offers == null) {
-            offers = new MerchantOffers();
-            TradeTable trades = AddonEntities.tradesOf(getType());
-            if (trades != null) trades.offers().forEach(offer -> add(offers, offer));
+        TradeTable trades = AddonEntities.tradesOf(getType());
+        int reached = trades == null ? 0 : trades.reached(tradeExperience);
+        if (offers != null && (offersOverridden || reached == offeredTiers)) return offers;
+
+        offeredTiers = reached;
+        offers = new MerchantOffers();
+        shown = new java.util.ArrayList<>();
+        if (trades != null) {
+            trades.offers().stream().filter(offer -> offer.tier() < reached).forEach(this::add);
         }
         return offers;
     }
 
-    private static void add(MerchantOffers into, TradeTable.Offer offer) {
-        ItemStack cost = stack(offer.costItem(), offer.costCount());
-        ItemStack result = stack(offer.resultItem(), offer.resultCount());
+    private void add(TradeTable.Offer offer) {
+        net.minecraft.util.RandomSource random = level().getRandom();
+        ItemStack cost = offer.cost().stack(random, level().registryAccess());
+        ItemStack result = offer.result().stack(random, level().registryAccess());
         if (cost.isEmpty() || result.isEmpty()) return;
 
-        into.add(Platform.offer(cost, stack(offer.secondCostItem(), offer.secondCostCount()),
-            result, offer.maxUses(), offer.experience()));
-    }
-
-    private static ItemStack stack(String item, int count) {
-        Identifier id = item == null ? null : Identifier.tryParse(item);
-        return id == null ? ItemStack.EMPTY : BuiltInRegistries.ITEM.getOptional(id)
-            .map(found -> new ItemStack(found, Math.max(1, count)))
-            .orElse(ItemStack.EMPTY);
+        ItemStack second = offer.secondCost() == null ? ItemStack.EMPTY
+            : offer.secondCost().stack(random, level().registryAccess());
+        offers.add(Platform.offer(cost, second, result, offer.maxUses(),
+            offer.rewardExperience() ? offer.experience() : 0, offer.priceMultiplier()));
+        shown.add(offer);
     }
 
     @Override
     public void overrideOffers(MerchantOffers replacement) {
         offers = replacement;
+        offersOverridden = true;
     }
 
+    /**
+     * A trade's `trader_exp` counts towards the next tier whether or not the player was rewarded.
+     *
+     * `reward_exp` decides only whether the player gets orbs, which is what the offer's own value
+     * holds, so the amount the trader earns is read back off the Bedrock trade instead.
+     */
     @Override
     public void notifyTrade(MerchantOffer offer) {
         offer.increaseUses();
-        tradeExperience += offer.getXp();
+        int index = offers == null ? -1 : offers.indexOf(offer);
+        tradeExperience += index >= 0 && index < shown.size()
+            ? shown.get(index).experience() : offer.getXp();
     }
 
     @Override

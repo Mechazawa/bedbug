@@ -43,6 +43,7 @@ step "script modules link" python3 tools/modules/check.py
 step "build, four versions" ./gradlew build --console=plain -q
 step "script surface census" python3 tools/census/script.py
 step "component census" python3 tools/census/components.py
+step "data census" python3 tools/census/data.py
 
 if [ "$quick" -eq 0 ]; then
     # The packs this repository owns, rebuilt so a stale archive cannot pass for a fresh one.

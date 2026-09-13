@@ -241,9 +241,9 @@ def surfaces(samples):
 
 # --- output --------------------------------------------------------------------------------------
 
-def print_table(found):
+def print_table(found, title="Coverage of the published Bedrock vocabulary"):
     width = max(len(surface.title) for surface in found)
-    print("Coverage of the published Bedrock vocabulary")
+    print(title)
     print()
     for surface in found:
         print(f"  {surface.title:<{width}}  {len(surface.covered):>3}/{len(surface.published):<3}"

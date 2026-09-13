@@ -11,7 +11,8 @@ still works:
 
     an item icon in each of the three shapes a pack may write it in
     a block with states and permutations, drawn with its own geometry
-    a shaped and a shapeless recipe
+    a recipe of each of the five kinds that convert, and the tags deciding what each becomes
+    a loot table and a trade table, each using every function and condition that converts
     two entities, one spawn egg naming a texture and one giving two colours
     an animation firing a sound and a particle off its timeline
     three particle definitions in the 1.10.0 format
