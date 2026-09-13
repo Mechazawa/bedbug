@@ -49,6 +49,15 @@ public final class Json {
         }
     }
 
+    /** A pack file whose whole body is an array, which is how a flipbook index is written. */
+    public static com.google.gson.JsonArray parseArray(Path file) throws IOException {
+        try (InputStream stream = Files.newInputStream(file)) {
+            JsonElement parsed = parse(stream);
+            if (!parsed.isJsonArray()) throw new IOException(file + " is not a JSON array");
+            return parsed.getAsJsonArray();
+        }
+    }
+
     public static String text(JsonObject json, String key, String fallback) {
         JsonElement value = json.get(key);
         return value == null || !value.isJsonPrimitive() ? fallback : value.getAsString();

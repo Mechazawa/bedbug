@@ -5,6 +5,7 @@ import at.ioexception.mcaddon.convert.ConvertedPack;
 import at.ioexception.mcaddon.convert.PackConverter;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.McAddonPaths;
+import at.ioexception.mcaddon.pack.PackFiles;
 import at.ioexception.mcaddon.pack.PackRole;
 import at.ioexception.mcaddon.pack.PackSet;
 import at.ioexception.mcaddon.platform.Platform;
@@ -47,6 +48,7 @@ public final class AddonPacks {
     public static void convert(PackSet packs) {
         Map<String, List<BedrockPack>> behavioursByOrigin = new LinkedHashMap<>();
         for (BedrockPack pack : packs.packs()) {
+            PackFiles.report(pack);
             if (pack.role() == PackRole.BEHAVIOUR) {
                 behavioursByOrigin.computeIfAbsent(pack.origin(), origin -> new ArrayList<>()).add(pack);
             }

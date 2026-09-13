@@ -73,7 +73,7 @@ public final class McAddon implements ModInitializer {
         // same register as the components an entity declares.
         AddonEntities.report().forEach(LOGGER::info);
         AddonParticles.register(AddonPacks.all());
-        AddonCreativeTab.register();
+        AddonCreativeTab.register(packs);
         Channels.register();
         ServerHooks.register();
     }

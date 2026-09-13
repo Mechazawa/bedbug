@@ -1,10 +1,12 @@
 package at.ioexception.mcaddon.registry;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.ClientBlockDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.BlockDefinition;
 import at.ioexception.mcaddon.block.AddonBlock;
 import at.ioexception.mcaddon.block.AddonWaterloggedBlock;
 import at.ioexception.mcaddon.block.BlockComponents;
+import at.ioexception.mcaddon.block.BlockSounds;
 import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.PackRole;
@@ -18,6 +20,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.FlowerPotBlock;
+import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.material.PushReaction;
@@ -46,17 +49,21 @@ public final class AddonBlocks {
 
     public static void register(PackSet packs) {
         List<BlockDefinition> definitions = new ArrayList<>();
+        Map<String, ClientBlockDefinition> appearance = new LinkedHashMap<>();
         for (BedrockPack pack : packs.packs()) {
             if (pack.role() == PackRole.BEHAVIOUR) definitions.addAll(BlockDefinition.readAll(pack));
+            if (pack.role() == PackRole.RESOURCE) appearance.putAll(ClientBlockDefinition.readAll(pack));
         }
 
-        for (BlockDefinition definition : definitions) register(definition);
+        for (BlockDefinition definition : definitions) {
+            register(definition, ClientBlockDefinition.of(appearance, definition.identifier()));
+        }
         if (!BY_IDENTIFIER.isEmpty()) {
             McAddon.LOGGER.info("Registered {} blocks from add-ons.", BY_IDENTIFIER.size());
         }
     }
 
-    private static void register(BlockDefinition definition) {
+    private static void register(BlockDefinition definition, ClientBlockDefinition appearance) {
         Identifier id = identifier(definition.identifier());
         if (id == null || BuiltInRegistries.BLOCK.containsKey(id)) return;
 
@@ -74,7 +81,7 @@ public final class AddonBlocks {
 
         Map<String, Property<?>> states = AddonBlock.propertiesOf(definition);
         BlockComponents components = BlockComponents.of(definition, states);
-        BlockBehaviour.Properties properties = BlockComponents.settings(definition);
+        BlockBehaviour.Properties properties = BlockComponents.settings(definition, appearance);
         List<Property<?>> declared = new ArrayList<>(states.values());
 
         Block block = AddonBlock.carrying(components, () -> BlockComponents.waterlogged(definition)

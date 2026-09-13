@@ -1,14 +1,20 @@
 package at.ioexception.mcaddon.registry;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.MusicDefinitions;
 import at.ioexception.mcaddon.convert.ConvertedPack;
+import at.ioexception.mcaddon.convert.Names;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.core.Holder;
+import net.minecraft.sounds.Music;
 import net.minecraft.sounds.SoundEvent;
 
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -18,7 +24,15 @@ import java.util.Set;
  * exist before it can tell a client to play one.
  */
 public final class AddonSounds {
+    /** The track a pack asked for in each biome, by the name Bedrock and Java both give the biome. */
+    private static final Map<String, Music> MUSIC = new LinkedHashMap<>();
+
     private AddonSounds() {
+    }
+
+    /** What a pack wants playing in the named biome, or null where no pack named that biome. */
+    public static Music musicIn(String biome) {
+        return MUSIC.get(biome);
     }
 
     public static void register(List<ConvertedPack> packs) {
@@ -40,5 +54,27 @@ public final class AddonSounds {
             }
         }
         if (registered > 0) McAddon.LOGGER.info("Registered {} sound events from add-ons.", registered);
+        for (ConvertedPack pack : packs) readMusic(pack);
+    }
+
+    /**
+     * The music a pack chose per biome, against the sound events it just registered.
+     *
+     * A definition naming an event the pack does not define plays nothing, so it is left out and
+     * the biome keeps whatever the game already plays there.
+     */
+    private static void readMusic(ConvertedPack pack) {
+        MusicDefinitions.readAll(pack.pack()).forEach((biome, music) -> {
+            Names.Identifier named = Names.soundEvent(music.event(), pack.namespace());
+            Identifier id = Identifier.tryParse(named.namespace() + ":" + named.path());
+            SoundEvent event = id == null ? null
+                : BuiltInRegistries.SOUND_EVENT.getOptional(id).orElse(null);
+            if (event == null) {
+                AddonEntities.unsupported("music_definitions naming " + music.event());
+                return;
+            }
+            MUSIC.put(biome, new Music(Holder.direct(event),
+                music.minDelay(), music.maxDelay(), false));
+        });
     }
 }

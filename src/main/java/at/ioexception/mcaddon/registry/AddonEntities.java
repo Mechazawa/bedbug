@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.registry;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.EntitySounds;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
 import com.google.gson.JsonObject;
 import at.ioexception.mcaddon.bedrock.behaviour.TradeTable;
@@ -39,6 +40,7 @@ public final class AddonEntities {
     private static final Map<String, AtomicInteger> UNSUPPORTED = new TreeMap<>();
     private static final Map<EntityType<?>, TradeTable> TRADES = new LinkedHashMap<>();
     private static final Map<EntityType<?>, String> NAMESPACES = new LinkedHashMap<>();
+    private static final Map<EntityType<?>, EntitySounds> SOUNDS = new LinkedHashMap<>();
 
     private AddonEntities() {
     }
@@ -62,6 +64,11 @@ public final class AddonEntities {
     }
 
     /** Null when the entity does not trade. */
+    /** What `sounds.json` says this entity makes, or null where no resource pack named it. */
+    public static EntitySounds soundsOf(EntityType<?> type) {
+        return SOUNDS.get(type);
+    }
+
     public static TradeTable tradesOf(EntityType<?> type) {
         return TRADES.get(type);
     }
@@ -113,10 +120,15 @@ public final class AddonEntities {
     private static final Set<String> DECLARED = new HashSet<>();
 
     public static void register(PackSet packs) {
+        Map<String, EntitySounds> sounds = new LinkedHashMap<>();
+        for (BedrockPack pack : packs.packs()) {
+            if (pack.role() == PackRole.RESOURCE) sounds.putAll(EntitySounds.readAll(pack));
+        }
+
         for (BedrockPack pack : packs.packs()) {
             if (pack.role() != PackRole.BEHAVIOUR) continue;
             for (ServerEntityDefinition definition : ServerEntityDefinition.readAll(pack)) {
-                register(pack, definition);
+                register(pack, definition, sounds);
                 DECLARED.addAll(definition.components().keySet());
                 definition.componentGroups().values()
                     .forEach(group -> DECLARED.addAll(group.keySet()));
@@ -127,7 +139,8 @@ public final class AddonEntities {
         }
     }
 
-    private static void register(BedrockPack pack, ServerEntityDefinition definition) {
+    private static void register(BedrockPack pack, ServerEntityDefinition definition,
+        Map<String, EntitySounds> sounds) {
         Identifier id = identifier(definition.identifier());
         if (id == null) {
             McAddon.LOGGER.warn("{} declares {}, which is not a usable identifier.",
@@ -148,6 +161,8 @@ public final class AddonEntities {
         DEFINITIONS.put(type, definition);
         BY_IDENTIFIER.put(definition.identifier(), type);
         namespaceOf(pack).ifPresent(namespace -> NAMESPACES.put(type, namespace));
+        EntitySounds noises = EntitySounds.of(sounds, definition.identifier());
+        if (noises != null) SOUNDS.put(type, noises);
         readTrades(pack, definition).ifPresent(trades -> TRADES.put(type, trades));
         Registry.register(BuiltInRegistries.ENTITY_TYPE, id, type);
         FabricDefaultAttributeRegistry.register(type, AddonEntity.attributes(definition));

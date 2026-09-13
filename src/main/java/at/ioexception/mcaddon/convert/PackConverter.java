@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.convert;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.BedrockAssets;
+import at.ioexception.mcaddon.bedrock.ClientBlockDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.BlockDefinition;
 import at.ioexception.mcaddon.bedrock.model.BedrockGeometry;
 import at.ioexception.mcaddon.bedrock.behaviour.ItemDefinition;
@@ -130,7 +131,8 @@ public final class PackConverter {
                 writeBlockData(root, blocks, loot);
                 writeItemTags(root, items);
                 writeDyeRecipes(root, items);
-                writeBlockModels(root, icons, blocks, assets, sprites);
+                writeBlockModels(root, icons, blocks, assets, sprites,
+                    ClientBlockDefinition.readAll(pack));
                 writeAtlas(root, sprites);
                 writeParticles(pack, root, textures.paths());
                 writeFunctions(bundle, root, namespace);
@@ -199,6 +201,7 @@ public final class PackConverter {
 
         void convert(BedrockPack pack, Path root, boolean write) throws IOException {
             List<TextureSet> sets = TextureSet.readAll(pack);
+            Map<String, Flipbook> flipbooks = Flipbook.readAll(pack);
             Set<String> auxiliary = new HashSet<>();
             for (TextureSet set : sets) auxiliary.addAll(set.auxiliary());
 
@@ -224,6 +227,8 @@ public final class PackConverter {
                     } else {
                         Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
                     }
+                    Flipbook flipbook = flipbooks.get(withoutExtension(relative));
+                    if (flipbook != null) flipbook.write(destination);
                     written++;
                 } catch (IOException | RuntimeException error) {
                     paths.remove(withoutExtension(relative));
@@ -906,9 +911,10 @@ public final class PackConverter {
      * them, and the texture it names is a key resolved the same way an item's icon is.
      */
     private static void writeBlockModels(Path root, Map<String, String> textureKeys,
-        List<BlockDefinition> blocks, BedrockAssets geometries, Set<String> sprites) throws IOException {
+        List<BlockDefinition> blocks, BedrockAssets geometries, Set<String> sprites,
+        Map<String, ClientBlockDefinition> appearance) throws IOException {
         for (BlockDefinition block : blocks) {
-            Map<String, String> faces = resolveFaces(block.faceTextures(), textureKeys);
+            Map<String, String> faces = resolveFaces(declaredFaces(block, appearance), textureKeys);
             if (faces.isEmpty()) continue;
 
             sprites.addAll(faces.values());
@@ -923,7 +929,7 @@ public final class PackConverter {
 
             JsonObject blockstate = new JsonObject();
             blockstate.add("variants",
-                variants(block, namespace, name, textureKeys, assets, geometries, sprites));
+                variants(block, namespace, name, textureKeys, assets, geometries, sprites, appearance));
             write(assets.resolve("blockstates").resolve(name + ".json"), blockstate);
 
             // `minecraft:item_visual` gives the block's item a shape of its own, which Java reaches
@@ -1068,8 +1074,8 @@ public final class PackConverter {
      * Bedrock applies them in.
      */
     private static JsonObject variants(BlockDefinition block, String namespace, String name,
-        Map<String, String> textureKeys, Path assets, BedrockAssets geometries, Set<String> sprites)
-        throws IOException {
+        Map<String, String> textureKeys, Path assets, BedrockAssets geometries, Set<String> sprites,
+        Map<String, ClientBlockDefinition> appearance) throws IOException {
         JsonObject variants = new JsonObject();
         int[] rotation = BlockComponents.rotation(block);
         if (block.states().isEmpty()) {
@@ -1099,7 +1105,7 @@ public final class PackConverter {
 
             // A permutation may name a texture the block's own faces never do, and a sprite nothing
             // names is never stitched, so the ones a variant reaches are collected here too.
-            Map<String, String> faces = facesFor(block, chosen, textureKeys);
+            Map<String, String> faces = facesFor(block, chosen, textureKeys, appearance);
             sprites.addAll(faces.values());
 
             String variantName = name + "_" + combination;
@@ -1109,10 +1115,25 @@ public final class PackConverter {
         return variants;
     }
 
+    /**
+     * The texture key each face of the block names, from whichever half of the add-on states them.
+     *
+     * `minecraft:material_instances` on the behaviour side is the newer form and wins where a block
+     * carries one. A pack written before that component existed states the same thing in the
+     * resource pack's `blocks.json`, and without reading that its blocks have no model at all.
+     */
+    private static Map<String, String> declaredFaces(BlockDefinition block,
+        Map<String, ClientBlockDefinition> appearance) {
+        if (!block.faceTextures().isEmpty()) return block.faceTextures();
+
+        ClientBlockDefinition drawn = ClientBlockDefinition.of(appearance, block.identifier());
+        return drawn == null ? block.faceTextures() : drawn.faceTextures();
+    }
+
     /** The textures that apply once the permutations whose conditions hold have been applied. */
     private static Map<String, String> facesFor(BlockDefinition block, Map<String, JsonElement> states,
-        Map<String, String> textureKeys) {
-        Map<String, String> faces = resolveFaces(block.faceTextures(), textureKeys);
+        Map<String, String> textureKeys, Map<String, ClientBlockDefinition> appearance) {
+        Map<String, String> faces = resolveFaces(declaredFaces(block, appearance), textureKeys);
 
         MolangEnvironment environment = new MolangEnvironment();
         environment.setQueries((query, arguments) -> {
