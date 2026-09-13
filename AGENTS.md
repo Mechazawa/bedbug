@@ -71,7 +71,12 @@ that differs (the entity renderer, the network channels) carries two bodies inst
 ## Verifying a change
 
 `tools/checkall.sh` runs all of them in the order that fails fastest, which is what to reach for
-before saying a change is done. `--quick` stops after the build and the censuses; `--scenes` adds the
+before saying a change is done.
+
+**Do not build while a game is running.** A dev client and a dev server read their classes out of
+`versions/<version>/build/`, and a build that replaces those underneath a running game gives it a
+`NoClassDefFoundError` the moment it next needs one of them. That reads as a failure of whatever was
+being checked rather than as what it is. `--quick` stops after the build and the censuses; `--scenes` adds the
 in-game scenes, which open a window.
 
 These are the checks it runs, and what each one catches:
@@ -225,7 +230,13 @@ These are the checks it runs, and what each one catches:
   ```bash
   python3 tools/scene/scene.py --version 26.2            # every scene
   python3 tools/scene/scene.py --version 26.2 --scene entities
+  python3 tools/scene/scene.py --version 26.2 --version 1.21.1   # both at once
   ```
+
+  **The versions run at the same time and the scenes of one version run in turn**, because a version's
+  scenes share one saved world. Each version's client is told not to pause when it loses the focus,
+  because a picture is taken by bringing one window to the front and a paused game draws its menu
+  instead of the world, and only one picture is taken at a time.
 
   A scene is a list of commands and the lines that have to appear afterwards. The commands are
   written into a datapack in the world's own `datapacks/`, in a function tagged `minecraft:load`, so
