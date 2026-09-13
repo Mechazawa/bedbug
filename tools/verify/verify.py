@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """Checks the mod against a real add-on and prints a pass or fail verdict.
 
-Two modes. `run` starts a dev server for one or more versions, types a scripted sequence of console
+Four modes. `run` starts a dev server for one or more versions, types a scripted sequence of console
 commands into it, and reads the output back for the failures that only appear at runtime: a pack's
 JavaScript hitting a missing API, a mixin that did not apply, the script engine entered from a
-second thread, a converted function Java refused, a crash report being written. `convert` compares
-what the converter wrote under a version's run directory against what the source pack holds, and
-needs no game.
+second thread, a converted function Java refused, a crash report being written. `client` opens a
+saved world in a dev client, which is the half that draws. `join` puts the two together: a dedicated
+server with the packs installed, and a client that connects to it over 127.0.0.1, which is the only
+way to reach what a server sends a client and what a pack's registry entries cost to send. `convert`
+compares what the converter wrote under a version's run directory against what the source pack
+holds, and needs no game.
 
 The server is always killed on a deadline this script keeps itself. A `stop` typed while the server
 is still starting is discarded, so a run that waited for the process to end on its own would hang.
@@ -31,7 +34,7 @@ import sys
 import time
 import zipfile
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from threading import Thread
@@ -102,6 +105,21 @@ CLIENT_DEFINITIONS = re.compile(r"(\d+) add-on entities have a client definition
 # once the world is really open. A client stopped on a screen asking the player a question loads
 # every model and texture first, so nothing earlier than this tells the two apart.
 CLIENT_IN_WORLD = re.compile(r"Starting integrated minecraft server|Preparing spawn area")
+
+# What a dedicated server writes about a client that reached it. Both are written by the server
+# after the client has finished logging in, so neither can be produced by a client that only
+# launched: the first names the connection it came in on, the second the world it spawned into.
+LOGGED_IN = re.compile(r"logged in with entity id \d+")
+JOINED = re.compile(r"(\S+) joined the game")
+
+# Why a client left, which is the line carrying a registry the two halves disagreed about.
+LOST_CONNECTION = re.compile(r"lost connection: (.+)")
+
+# The console's answer to `give`, which says the item exists and was handed to somebody.
+GAVE = re.compile(r"Gave \d+ .* to ")
+
+# The console's answer to `list`, counting who is standing in the world at the moment it is asked.
+PLAYERS_ONLINE = re.compile(r"There are (\d+) of a max of")
 
 # Gradle's own failure, which ends a wait: nothing more is coming.
 BUILD_FAILED = re.compile(r"FAILURE: Build failed|BUILD FAILED")
@@ -318,6 +336,18 @@ def entity_identifiers(names, read) -> list[str]:
     return sorted(identifiers)
 
 
+def item_identifiers(names, read) -> list[str]:
+    """The item ids a behaviour pack declares, in the spelling the mod registers them under."""
+    identifiers = []
+    for name in declared(names, "items"):
+        description = json.loads(read(name)).get("minecraft:item", {}).get("description", {})
+        identifier = description.get("identifier")
+        if identifier and ":" in identifier:
+            namespace, path = identifier.split(":", 1)
+            identifiers.append(f"{sanitise(namespace)}:{sanitise(path)}")
+    return sorted(identifiers)
+
+
 def addons_in(directory: Path) -> list[Path]:
     if not directory.is_dir():
         return []
@@ -414,21 +444,44 @@ def exclusive(root: Path, wait: float, version: str):
         handle.close()
 
 
-def givePort(root: Path, version: str) -> None:
+def givePort(root: Path, version: str) -> int:
     """Gives this version's server a port of its own, so four of them can be up at once.
 
-    A dedicated server binds one port and refuses to start when it is taken, and nothing here needs
-    a particular number: the harness never connects to it.
+    A dedicated server binds one port and refuses to start when it is taken. `run` never connects to
+    the port it hands out; `join` does, which is why the number is returned.
     """
-    properties = root / "versions" / version / "run" / "server.properties"
     port = 25565 + VERSIONS.index(version)
+    serverSettings(root, version, {"server-port": str(port)})
+    return port
+
+
+def serverSettings(root: Path, version: str, values: dict[str, str]) -> None:
+    """Writes the settings named into this version's `server.properties`, leaving the rest alone."""
+    properties = root / "versions" / version / "run" / "server.properties"
     lines = []
     if properties.is_file():
         lines = [one for one in properties.read_text(encoding="utf-8").splitlines()
-                 if not one.startswith("server-port=")]
-    lines.append(f"server-port={port}")
+                 if one.split("=", 1)[0] not in values]
+    lines += [f"{key}={value}" for key, value in values.items()]
     properties.parent.mkdir(parents=True, exist_ok=True)
     properties.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def takeLocalJoins(root: Path, version: str) -> None:
+    """Sets a dev server up to accept the dev client, which has no account to authenticate with.
+
+    A dev client is launched with a made-up name and no session, so a server left in online mode
+    refuses it before any of this mod's code is reached, and one enforcing secure profiles refuses
+    the chat this run reads back.
+    """
+    serverSettings(root, version, {
+        "online-mode": "false",
+        "enforce-secure-profile": "false",
+        "pause-when-empty-seconds": "0",
+    })
+    eula = root / "versions" / version / "run" / "eula.txt"
+    eula.parent.mkdir(parents=True, exist_ok=True)
+    eula.write_text("eula=true\n", encoding="utf-8")
 
 
 def free_world_lock(root: Path, version: str) -> None:
@@ -486,11 +539,15 @@ def world(root: Path, version: str) -> str | None:
 
 def play(root: Path, version: str, launch: Launch, ready: re.Pattern,
          script: list[tuple[float, str]], timeout: float, hold: float,
-         verbose: bool, quick_play: str | None = None) -> tuple[list[str], Path, str]:
+         verbose: bool, quick_play: str | None = None, join: str | None = None,
+         while_loaded=None) -> tuple[list[str], Path, str]:
     """Starts one game, waits for it to load, and always ends it by the deadline.
 
     A server is asked to stop and killed if it will not; a client has nothing to ask, so it is held
     open for a moment once the mod has loaded and then killed.
+
+    `while_loaded` is called with this game's process and its lines once it has loaded and before
+    anything is typed into it, which is what lets a second game run against a server that is up.
     """
     log = root / "build" / "verify" / f"{version}-{launch.name}.log"
     log.parent.mkdir(parents=True, exist_ok=True)
@@ -503,6 +560,8 @@ def play(root: Path, version: str, launch: Launch, ready: re.Pattern,
     command = ["./gradlew", f":{version}:{launch.task}", "--console=plain"]
     if quick_play:
         command.append(f"-PquickPlay={quick_play}")
+    if join:
+        command.append(f"-PjoinServer={join}")
     process = subprocess.Popen(
         command,
         cwd=root, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -526,6 +585,8 @@ def play(root: Path, version: str, launch: Launch, ready: re.Pattern,
 
     loaded = wait_for(process, lines, ready, deadline)
     outcome = "loaded"
+    if loaded and while_loaded is not None:
+        while_loaded(process, lines)
     if not loaded:
         outcome = "ended before loading" if process.poll() is not None else "never finished loading"
     elif launch.takes_commands:
@@ -794,6 +855,115 @@ def check_client(root: Path, version: str, timeout: float, hold: float, verbose:
     return verdict
 
 
+def check_join(root: Path, version: str, timeout: float, hold: float, verbose: bool) -> Verdict:
+    """Starts a dedicated server and connects a client to it, which is what a multiplayer world is.
+
+    Everything the other two modes reach happens inside one process, where the two halves share
+    every registry. What only happens between two processes is the sync: the server decides what of
+    its registries to send, the client says what it already holds, and a converted pack's entries
+    are what the two have to agree about. The answer is read back off both logs.
+
+    Three things have to line up for this to pass, and a client that merely launched satisfies none
+    of them: the server says a client logged in and spawned, the server's own player list says
+    somebody is standing in the world, and a message typed into the server console comes back out of
+    the client's log. The last one is the whole round trip, because only the server can send it and
+    only a client in that server's world can print it.
+    """
+    verdict = Verdict(f"{version} join")
+    if occupied(SERVER, verdict, version) or occupied(CLIENT, verdict, version):
+        return verdict
+
+    addons, _, expected = addon_source(root, version, verdict)
+    items = [one for addon in addons for one in item_identifiers(*open_source(addon))]
+    free_world_lock(root, version)
+    port = givePort(root, version)
+    takeLocalJoins(root, version)
+
+    # Unique per run, so a line left in an older log cannot pass for this run's round trip.
+    marker = f"MCADDONHEARD{os.getpid()}{int(time.time())}"
+    heard = re.compile(re.escape(marker))
+    client: dict = {"lines": [], "outcome": "never started", "log": None}
+
+    def connect(server: subprocess.Popen, served: list[str]) -> None:
+        """Runs a client against the server that is up, and talks to it from the server console."""
+        deadline = time.monotonic() + timeout
+
+        def talk() -> None:
+            if not wait_for(server, served, JOINED, deadline):
+                return
+            spoken = ["list"] + [f"give @a {one}" for one in items[:1]] + [f"say {marker}"]
+            for command in spoken:
+                time.sleep(1.5)
+                type_into(server, command)
+
+        talking = Thread(target=talk, daemon=True)
+        talking.start()
+        client["lines"], client["log"], client["outcome"] = play(
+            root, version, replace(CLIENT, name="join-client"), heard, [], timeout, hold, verbose,
+            join=f"127.0.0.1:{port}")
+        talking.join(timeout=10)
+
+    served, log, outcome = play(root, version, replace(SERVER, name="join-server"), SERVER.ready,
+                                [(1.0, "mcaddon packs")], timeout, 0.0, verbose, while_loaded=connect)
+
+    seen = client["lines"]
+    verdict.notes.append(f"server {outcome}, {len(served)} lines in {log.relative_to(root)}")
+    verdict.notes.append(f"client {client['outcome']}, {len(seen)} lines in "
+                         + (str(client["log"].relative_to(root)) if client["log"] else "no log"))
+    for line in served:
+        left = LOST_CONNECTION.search(line)
+        if left:
+            verdict.notes.append(f"the client left saying: {left.group(1).strip()}")
+
+    scan(served, verdict, (("server reached done", r"Done \("),)
+         + (EXPECTED_WITH_ADDON if addons else ()))
+    scan(seen, verdict, EXPECTED_WITH_ADDON if addons else ())
+    gradle_failed(served, outcome, verdict)
+    gradle_failed(seen, client["outcome"], verdict)
+
+    if not any(LOGGED_IN.search(one) for one in served):
+        verdict.fail("no client logged in",
+                     "the server never wrote a login, so nothing connected to it")
+    joined = {match.group(1) for match in (JOINED.search(one) for one in served) if match}
+    if not joined:
+        verdict.fail("the client never entered the world",
+                     "the server never wrote a join, so the client got no further than connecting")
+    else:
+        verdict.notes.append(f"the server put {', '.join(sorted(joined))} in its world")
+
+    standing = [int(match.group(1)) for match in
+                (PLAYERS_ONLINE.search(one) for one in served) if match]
+    if not standing:
+        verdict.fail("the server was never asked who was on it",
+                     "no answer to `list`, so nothing says the client was still there")
+    elif max(standing) == 0:
+        verdict.fail("nobody was on the server",
+                     "`list` answered with an empty world while a client was meant to be in it")
+
+    if not any(heard.search(one) for one in seen):
+        verdict.fail("the client never heard the server",
+                     f"{marker} was typed into the server console and never reached the client, "
+                     "so nothing proves the client was in that server's world")
+
+    if items and not any(GAVE.search(one) for one in served):
+        verdict.fail("an add-on item would not reach the player",
+                     f"`give @a {items[0]}` was refused, so the item the packs declare is not "
+                     "something the server can hand to somebody standing in it")
+
+    # Both halves register an add-on's items themselves and the sync then insists the two lists
+    # agree, so a count that differs names the cause of a disconnect the reason alone does not.
+    byServer = reported_counts(served)
+    byClient = reported_counts(seen)
+    for key in ("entity types", "items", "blocks"):
+        if key in byServer and key in byClient and byServer[key] != byClient[key]:
+            verdict.fail("the two halves registered different content",
+                         f"the server has {byServer[key]} {key} and the client {byClient[key]}")
+
+    verdict.counts = {"source": expected, "reported by the server": byServer,
+                      "reported by the client": byClient}
+    return verdict
+
+
 def check_conversion(root: Path, source: Path, version: str) -> Verdict:
     verdict = Verdict(f"{version} conversion of {source.name}")
     names, read = open_source(source)
@@ -842,9 +1012,10 @@ def report(verdicts: list[Verdict], destination: Path) -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=USAGE)
-    parser.add_argument("mode", choices=("run", "client", "convert", "all"),
-                        help="`run` drives a dev server, `client` a dev client, "
-                             "`convert` compares a conversion offline, `all` does the three in turn")
+    parser.add_argument("mode", choices=("run", "client", "join", "convert", "all"),
+                        help="`run` drives a dev server, `client` a dev client, `join` connects one "
+                             "to the other, `convert` compares a conversion offline, "
+                             "`all` does the four in turn")
     parser.add_argument("--version", action="append", choices=VERSIONS,
                         help="a Minecraft version to check; repeatable, all three by default")
     parser.add_argument("--source", type=Path,
@@ -868,7 +1039,7 @@ def main() -> int:
     # One lock per version, because a server and a client of the same version share a world, and
     # the four versions share nothing: four directories, four ports, four sets of processes. They
     # are checked at the same time, which is most of what a whole run costs.
-    if arguments.mode in ("run", "client", "all"):
+    if arguments.mode in ("run", "client", "join", "all"):
         def checkVersion(version: str) -> list[Verdict]:
             found = []
             with exclusive(root, arguments.lock_wait, version):
@@ -877,6 +1048,9 @@ def main() -> int:
                         root, version, arguments.timeout, arguments.summons, arguments.verbose))
                 if arguments.mode in ("client", "all"):
                     found.append(check_client(
+                        root, version, arguments.timeout, arguments.hold, arguments.verbose))
+                if arguments.mode in ("join", "all"):
+                    found.append(check_join(
                         root, version, arguments.timeout, arguments.hold, arguments.verbose))
             return found
 

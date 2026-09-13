@@ -230,14 +230,18 @@ project.tasks.named<Jar>("jar") {
  *
  * A client stopped at the title screen has nobody playing, so everything a pack does with a player
  * goes untouched: the whole `Player` surface, the forms a pack opens, and every event carrying
- * somebody who used something. `-PquickPlay=<world>` hands the game a save to load on startup.
+ * somebody who used something. `-PquickPlay=<world>` hands the game a save to load on startup, and
+ * `-PjoinServer=<host>:<port>` sends it to a server instead, which is the half a saved world cannot
+ * reach: the registries the server sends and what a pack's content costs to send them.
  */
 val quickPlayWorld = project.findProperty("quickPlay") as String?
+val joinServer = project.findProperty("joinServer") as String?
 val windowSize = project.findProperty("windowSize") as String?
 
 /** What the game is told on startup, beyond what Loom already passes it. */
 val clientArgs = buildList {
     if (!quickPlayWorld.isNullOrBlank()) addAll(listOf("--quickPlaySingleplayer", quickPlayWorld))
+    if (!joinServer.isNullOrBlank()) addAll(listOf("--quickPlayMultiplayer", joinServer))
     // A window the size of a postage stamp makes a captured scene unreadable.
     if (!windowSize.isNullOrBlank()) {
         val across = windowSize.split("x")

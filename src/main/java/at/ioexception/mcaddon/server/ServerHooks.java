@@ -119,7 +119,12 @@ public final class ServerHooks {
             Channels.sendPacks(handler.player, PackList.of(McAddon.packs()).encode());
             playerJoined(handler.player);
         });
-        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> playerLeft(handler.player));
+        // A connection is dropped on the thread reading it, and a script belongs to the server
+        // thread, so the event is handed over rather than raised where the drop was noticed.
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+            ServerPlayer left = handler.player;
+            server.execute(() -> playerLeft(left));
+        });
         // A respawn is the other way into the world, and the flag is how a pack tells the two apart.
         ServerPlayerEvents.AFTER_RESPAWN.register((from, to, alive) -> playerSpawned(to, false));
     }

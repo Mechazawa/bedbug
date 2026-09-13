@@ -11,6 +11,17 @@
           "weight": 1
         }
       ]
+    },
+    "record.13": {
+      "category": "record",
+      "sounds": [
+        {
+          "name": "sounds/tp/chime",
+          "volume": 1.0,
+          "pitch": 1.0,
+          "weight": 1
+        }
+      ]
     }
   }
 }

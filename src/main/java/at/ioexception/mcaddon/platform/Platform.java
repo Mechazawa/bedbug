@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.platform;
 
+import at.ioexception.mcaddon.McAddon;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.commands.CommandSourceStack;
@@ -216,11 +217,20 @@ public final class Platform {
      * The metadata is supplied here rather than read back off disk so the pack is always reported as
      * compatible: one converted directory is contributed to both the resource and the data pack
      * repository, and a single `pack.mcmeta` cannot carry the right format number for both.
+     *
+     * `knownAs` is what one installation of an add-on calls itself to another. A pack that names
+     * itself is a pack the game registers entries from as stable, which is what keeps a world
+     * holding a converted registry entry from opening behind a screen asking whether to load it.
+     * The same name on two machines is what lets a server leave the content of those entries out of
+     * what it sends, and a name nothing on the far side answers to costs only the saving.
      */
-    public static Pack directoryPack(String id, String title, Path directory, PackType type) {
+    public static Pack directoryPack(String id, String title, Path directory, PackType type,
+        String knownAs, String knownVersion) {
         Component name = Component.literal(title);
         //? if >=1.21 {
-        PackLocationInfo location = new PackLocationInfo(id, name, PackSource.BUILT_IN, Optional.empty());
+        Optional<net.minecraft.server.packs.repository.KnownPack> known = Optional.of(
+            new net.minecraft.server.packs.repository.KnownPack(McAddon.MOD_ID, knownAs, knownVersion));
+        PackLocationInfo location = new PackLocationInfo(id, name, PackSource.BUILT_IN, known);
         Pack.ResourcesSupplier resources = new Pack.ResourcesSupplier() {
             @Override
             public PackResources openPrimary(PackLocationInfo info) {
@@ -460,6 +470,56 @@ public final class Platform {
             properties.setId(ResourceKey.create(net.minecraft.core.registries.Registries.ITEM, id)));
         //?} else {
         /*return new net.minecraft.world.item.BlockItem(block, properties);
+        *///?}
+    }
+
+    /**
+     * Whether a jukebox reads what it plays out of a registry a data pack writes into.
+     *
+     * 1.21 moved a record's sound, length and comparator reading out of the item class and into a
+     * `jukebox_song` entry, which the converter writes as a file. Before that a record carries all
+     * three itself and there is no such registry to write to.
+     */
+    public static boolean jukeboxSongsAreARegistry() {
+        //? if >=1.21 {
+        return true;
+        //?} else {
+        /*return false;
+        *///?}
+    }
+
+    /**
+     * Names the song a record plays, which from 1.21 is all the item itself says about it.
+     *
+     * The song is named rather than held, so the entry it names is looked up when a jukebox needs
+     * it and not while items are being registered, which is before any data pack has been read.
+     */
+    public static Item.Properties jukeboxPlayable(Item.Properties properties, Identifier song) {
+        //? if >=1.21 {
+        return properties.jukeboxPlayable(ResourceKey.create(
+            net.minecraft.core.registries.Registries.JUKEBOX_SONG, song));
+        //?} else {
+        /*return properties;
+        *///?}
+    }
+
+    /**
+     * The class a record is before 1.21, or null on the versions where a plain item is one.
+     *
+     * A 1.20.1 jukebox tells its client which record is playing by the item's numeric id, and the
+     * client asks the `RecordItem` at that id for the sound to play, so a record that is not one of
+     * those plays nothing however it is described.
+     */
+    public static Item buildRecord(Item.Properties properties, Identifier sound,
+        int comparatorOutput, int lengthInSeconds) {
+        //? if >=1.21 {
+        return null;
+        //?} else {
+        /*net.minecraft.sounds.SoundEvent event = BuiltInRegistries.SOUND_EVENT.get(sound);
+        if (event == null) return null;
+        // The constructor is protected, and a record is meant to be one of the game's own.
+        return new net.minecraft.world.item.RecordItem(comparatorOutput, event, properties, lengthInSeconds) {
+        };
         *///?}
     }
 
