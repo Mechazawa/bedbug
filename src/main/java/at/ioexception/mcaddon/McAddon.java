@@ -50,6 +50,9 @@ public final class McAddon implements ModInitializer {
         AddonItems.register(packs);
         AddonBlocks.register(packs);
         AddonSpawns.register(packs);
+        // Logged after the spawn rules are read, because the conditions they drop belong in the
+        // same register as the components an entity declares.
+        AddonEntities.report().forEach(LOGGER::info);
         AddonParticles.register(AddonPacks.all());
         AddonCreativeTab.register();
         Channels.register();

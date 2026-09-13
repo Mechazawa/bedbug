@@ -94,10 +94,14 @@ public final class ServerHooks {
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> state = null);
         CommandRegistrationCallback.EVENT.register(ServerHooks::registerCommands);
         WorldEvents.register();
+        // Both sides are asked whatever the other answers: a pack's script watches for the attempt
+        // and not only for the damage that lands.
         ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> {
-            damageSensor(entity, source);
-            return !hurtRefused(entity, source, amount);
+            boolean lands = damageSensor(entity, source);
+            return !hurtRefused(entity, source, amount) && lands;
         });
+        net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents.AFTER.register(
+            (level, player, pos, broken, blockEntity) -> Sensors.blockBroken(level, player, pos, broken));
         Channels.receiveFormResponse((formId, answer) -> {
             if (scripts != null) scripts.formResponse(formId, answer);
         });
@@ -160,16 +164,19 @@ public final class ServerHooks {
      * `minecraft:damage_sensor` is how a pack reacts to its entity being hurt.
      *
      * The sensor's own filters run against the damage's source, so a pack can tell a fall from a
-     * player's sword without the damage itself carrying that meaning.
+     * player's sword without the damage itself carrying that meaning. False when a matching trigger
+     * says the damage does not land, which is how a pack makes its entity immune to one kind of
+     * harm without making it immune to everything.
      */
-    private static void damageSensor(net.minecraft.world.entity.LivingEntity entity,
+    private static boolean damageSensor(net.minecraft.world.entity.LivingEntity entity,
         net.minecraft.world.damagesource.DamageSource source) {
-        if (state == null || !(entity instanceof at.ioexception.mcaddon.entity.AddonEntity addon)) return;
-        if (addon.definition() == null) return;
+        if (state == null || !(entity instanceof at.ioexception.mcaddon.entity.AddonEntity addon)) return true;
+        if (addon.definition() == null) return true;
 
         com.google.gson.JsonObject sensor = addon.definition().components().get("minecraft:damage_sensor");
-        if (sensor == null) return;
+        if (sensor == null) return true;
 
+        boolean lands = true;
         for (com.google.gson.JsonElement element
             : at.ioexception.mcaddon.util.Json.list(sensor, "triggers")) {
             if (!element.isJsonObject()) continue;
@@ -179,18 +186,28 @@ public final class ServerHooks {
             if (cause != null && !cause.equals("any") && !cause.equals(source.getMsgId())) continue;
 
             com.google.gson.JsonObject onDamage = trigger.getAsJsonObject("on_damage");
-            String event = onDamage == null
-                ? null : at.ioexception.mcaddon.util.Json.text(onDamage, "event", null);
-            if (event == null) continue;
-
             at.ioexception.mcaddon.bedrock.behaviour.Filter filter =
-                at.ioexception.mcaddon.bedrock.behaviour.Filter.parse(onDamage.get("filters"));
+                at.ioexception.mcaddon.bedrock.behaviour.Filter.parse(
+                    onDamage == null ? null : onDamage.get("filters"));
             if (!filter.matches(new at.ioexception.mcaddon.bedrock.behaviour.Filter.Context(
                 entity, source.getEntity() == null ? entity : source.getEntity(), null, state))) {
                 continue;
             }
-            EntityEvents.trigger(entity, event, source.getEntity(), state);
+
+            if (trigger.has("deals_damage") && !dealsDamage(trigger.get("deals_damage"))) lands = false;
+
+            String event = onDamage == null
+                ? null : at.ioexception.mcaddon.util.Json.text(onDamage, "event", null);
+            if (event != null) EntityEvents.trigger(entity, event, source.getEntity(), state);
         }
+        return lands;
+    }
+
+    /** Bedrock writes this as a boolean, or as one of `yes`, `no` and `no_but_side_effects`. */
+    private static boolean dealsDamage(com.google.gson.JsonElement value) {
+        if (!value.isJsonPrimitive()) return true;
+        if (value.getAsJsonPrimitive().isBoolean()) return value.getAsBoolean();
+        return !value.getAsString().startsWith("no");
     }
 
     private static void start(MinecraftServer server) {

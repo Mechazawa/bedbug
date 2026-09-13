@@ -78,7 +78,7 @@ public final class AddonEntities {
     public static List<String> report() {
         List<String> lines = new ArrayList<>();
         UNSUPPORTED.forEach((component, uses) -> lines.add("    " + component + " x" + uses.get()));
-        if (!lines.isEmpty()) lines.add(0, "Entity components the packs used and this mod does not implement:");
+        if (!lines.isEmpty()) lines.add(0, "What the packs asked of their entities and this mod does not implement:");
         return lines;
     }
 
@@ -91,7 +91,6 @@ public final class AddonEntities {
         }
         if (!DEFINITIONS.isEmpty()) {
             McAddon.LOGGER.info("Registered {} entity types from add-ons.", DEFINITIONS.size());
-            report().forEach(McAddon.LOGGER::info);
         }
     }
 
@@ -120,6 +119,14 @@ public final class AddonEntities {
         FabricDefaultAttributeRegistry.register(type, AddonEntity.attributes(definition));
     }
 
+    /** Whether any loaded entity declares the component, on itself or in a group it can switch on. */
+    public static boolean anyDeclares(String component) {
+        return DEFINITIONS.values().stream().anyMatch(definition ->
+            definition.components().containsKey(component)
+                || definition.componentGroups().values().stream()
+                    .anyMatch(group -> group.has(component)));
+    }
+
     /**
      * Counts the components an entity declares that nothing here acts on.
      *
@@ -130,14 +137,49 @@ public final class AddonEntities {
      * as the ones declared at the top.
      */
     private static void count(ServerEntityDefinition definition) {
-        for (String component : definition.components().keySet()) {
-            if (!IMPLEMENTED.contains(component)) unsupported(component);
-        }
+        definition.components().forEach(AddonEntities::count);
         for (JsonObject group : definition.componentGroups().values()) {
-            for (String component : group.keySet()) {
-                if (!IMPLEMENTED.contains(component)) unsupported(component);
+            for (Map.Entry<String, com.google.gson.JsonElement> component : group.entrySet()) {
+                if (component.getValue().isJsonObject()) {
+                    count(component.getKey(), component.getValue().getAsJsonObject());
+                } else if (!IMPLEMENTED.contains(component.getKey())) {
+                    unsupported(component.getKey());
+                }
             }
         }
+    }
+
+    private static void count(String component, JsonObject body) {
+        if (!IMPLEMENTED.contains(component)) {
+            unsupported(component);
+            return;
+        }
+        for (String field : UNREAD_FIELDS.getOrDefault(component, Set.of())) {
+            if (carries(body, field)) unsupported(component + " " + field);
+        }
+    }
+
+    /**
+     * Fields of a component that is otherwise implemented, and that nothing here acts on.
+     *
+     * A component this mod reads is never reported, so without these a pack would see the component
+     * working and the field it leaned on go missing without a word. The search is by name anywhere
+     * inside the component, because Bedrock nests most of them one list deep.
+     */
+    private static final Map<String, Set<String>> UNREAD_FIELDS = Map.of(
+        "minecraft:spawn_entity", Set.of("spawn_method", "should_leash"),
+        "minecraft:drying_out_timer", Set.of("water_bottle_refill_time"),
+        "minecraft:damage_sensor", Set.of("damage_modifier", "damage_multiplier",
+            "on_damage_sound_event"));
+
+    private static boolean carries(com.google.gson.JsonElement json, String field) {
+        if (json.isJsonObject()) {
+            JsonObject body = json.getAsJsonObject();
+            return body.has(field)
+                || body.entrySet().stream().anyMatch(entry -> carries(entry.getValue(), field));
+        }
+        return json.isJsonArray()
+            && json.getAsJsonArray().asList().stream().anyMatch(part -> carries(part, field));
     }
 
     /**
@@ -189,7 +231,7 @@ public final class AddonEntities {
         "minecraft:behavior.breed", "minecraft:behavior.follow_parent", "minecraft:behavior.sleep",
         "minecraft:behavior.drink_milk", "minecraft:behavior.drink_potion",
         "minecraft:behavior.share_items", "minecraft:dimension_bound", "minecraft:hide",
-        "minecraft:behavior.play");
+        "minecraft:behavior.play", "minecraft:block_sensor", "minecraft:drying_out_timer");
 
     /**
      * The trade table an entity names, read while the pack it came from is still in hand.
