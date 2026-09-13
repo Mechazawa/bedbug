@@ -293,8 +293,10 @@ public final class ServerHooks {
         CommandBuildContext context, Commands.CommandSelection selection) {
         BedrockCommands.register(dispatcher);
 
+        // A script event id carries the namespace of the pack that declared it, and Brigadier reads
+        // a colon only inside quotes, which is how the translated form of the command writes it.
         dispatcher.register(Commands.literal("scriptevent")
-            .then(Commands.argument("id", StringArgumentType.word())
+            .then(Commands.argument("id", StringArgumentType.string())
                 .then(Commands.argument("message", StringArgumentType.greedyString())
                     .executes(command -> scriptEvent(command.getSource(),
                         StringArgumentType.getString(command, "id"),

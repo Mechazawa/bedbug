@@ -24,18 +24,27 @@ Java's parser is case sensitive.
 A name counts as translated when this mod rewrites it, registers a command of its own for it, or
 declares that Java's parser reads the Bedrock line under the same name or under another one. That
 last group is a claim rather than a measurement, the same kind `AddonEntities.IMPLEMENTED` makes, so
-the commands resting on it are listed at the end for a reader to audit. Every keyword of such a
-command counts with it, the line reaching Java whole. A keyword of a command this mod rewrites or
-registers counts only when the source spells the literal, which makes that figure a floor: a rewrite
-that changes the front of a line and passes the rest through reads here as though it did not.
+the commands resting on it are listed at the end for a reader to audit.
 
-Nothing else counts. A command in neither group is dropped by the translator and named through
-`AddonEntities.unsupported`, and the report ends with the check that says so: a published command
-that is missing and is not listed as having no Java counterpart would be a gap nobody decided on.
+Every keyword is sorted into the same three groups the selector arguments are, and the first two are
+what the percentage counts:
+
+* **passed through**: the whole Bedrock line reaches Java's own parser, or the rewrite names the
+  front of the line only and leaves the rest as the pack wrote it. `Functions.TAIL_REACHES_JAVA`
+  declares the second kind, because such a keyword is answered by Java without its literal appearing
+  anywhere in the translation.
+* **rewritten**: the translation spells the literal out and decides what to do with it.
+* **dropped**: its command is named in `Functions.BEDROCK_ONLY`, so the keyword goes with it, or
+  `Functions.BEDROCK_ONLY_KEYWORDS` names this one form of a command that otherwise translates. The
+  line carrying one is left out and the form is reported through `AddonEntities.unsupported`. A
+  dropped keyword never counts as covered, whatever literals the source happens to carry.
+
+Nothing else counts. The report ends with the check that says so, for names and for keywords alike:
+one that is missing and is not named as having no Java counterpart would be a gap nobody decided on.
 
 Selector arguments have no surface of their own because the command metadata names none: a selector
 is one parameter type there and its contents are never spelled out. They are listed from the source
-instead, in the three groups the translator sorts them into.
+instead, in the same three groups.
 """
 
 import argparse
@@ -207,24 +216,49 @@ def published_game_rules(document):
 
 # --- the two sides put together ------------------------------------------------------------------
 
+def keyword_groups(document):
+    """Every published `<command> <keyword>` pair, by what the translation does with it."""
+    mod = mod_commands()
+    names = mod["shared"] | mod["renamed"] | mod["registered"] | mod["rewritten"]
+    whole = mod["shared"] | mod["renamed"]
+    tail = literal_set(FUNCTIONS, "TAIL_REACHES_JAVA =")
+    dropped = literal_set(FUNCTIONS, "BEDROCK_ONLY_KEYWORDS = Set.of")
+    spelled = mod_keywords()
+
+    bedrock_only = literal_set(FUNCTIONS, "BEDROCK_ONLY = Set.of")
+
+    groups = {kind: set() for kind in ("rewritten", "passed through", "dropped", "missing")}
+    for pair in published_keywords(document):
+        command, keyword = pair.split(" ", 1)
+        if pair in dropped or command in bedrock_only:
+            kind = "dropped"
+        elif command not in names:
+            kind = "missing"
+        elif command in whole:
+            kind = "passed through"
+        elif keyword.lower() in spelled:
+            kind = "rewritten"
+        elif command in tail:
+            kind = "passed through"
+        else:
+            kind = "missing"
+        groups[kind].add(pair)
+    return groups
+
+
 def surfaces(samples):
     document = commands_document(samples)
     mod = mod_commands()
     names = mod["shared"] | mod["renamed"] | mod["registered"] | mod["rewritten"]
-    whole = mod["shared"] | mod["renamed"]
-
-    keywords = mod_keywords()
-    reachable = set()
-    for pair in published_keywords(document):
-        command, keyword = pair.split(" ", 1)
-        if command in names and (command in whole or keyword.lower() in keywords):
-            reachable.add(pair)
-
-    rules = {name.lower() for name in literal_set(FUNCTIONS, "RULES_JAVA_SHARES = Set.of")}
+    groups = keyword_groups(document)
+    rules = {name.lower() for name in
+             literal_set(FUNCTIONS, "RULES_JAVA_SHARES = Set.of")
+             | literal_set(FUNCTIONS, "RULES_NEWER_JAVA_HAS = Set.of")}
 
     return [
         Surface("command names", published_names(document), names, "the command metadata"),
-        Surface("command keywords", published_keywords(document), reachable,
+        Surface("command keywords", published_keywords(document),
+                groups["rewritten"] | groups["passed through"],
                 "the enums the command metadata gives each overload"),
         Surface("game rules", published_game_rules(document), rules,
                 "the two game rule enums"),
@@ -272,13 +306,23 @@ def main():
         return 2
 
     found = surfaces(arguments.samples)
+    groups = keyword_groups(commands_document(arguments.samples))
     print_table(found)
+
+    print()
+    print("Command keywords, by what the translation does with each:")
+    for kind in ("rewritten", "passed through", "dropped", "missing"):
+        print(f"    {kind:<14}  {len(groups[kind]):>3}")
+
     for surface in found:
-        print_names(f"Missing, {surface.title}", surface.missing)
+        print_names(f"Missing, {surface.title}", groups["missing"]
+                    if surface.title == "command keywords" else surface.missing)
 
     mod = mod_commands()
     named = literal_set(FUNCTIONS, "BEDROCK_ONLY = Set.of")
     print_names("Dropped and named as having no Java counterpart", named)
+    print_names("Dropped and named as a form of a translated command Java has no way to say",
+                groups["dropped"] & literal_set(FUNCTIONS, "BEDROCK_ONLY_KEYWORDS = Set.of"))
     print_names("Missing from the published commands but named in the source",
                 (named | mod["shared"] | mod["renamed"] | mod["registered"]) - found[0].published)
     print_names("Translated by a claim that Java's parser reads the line, with nothing to check it",
@@ -291,7 +335,7 @@ def main():
     for kind, names in selector_arguments().items():
         print(f"    {kind:<14}  {', '.join(sorted(names))}")
 
-    unnamed = found[0].missing - named
+    unnamed = (found[0].missing - named) | groups["missing"]
     print_names("Missing and not named, so dropped without anybody deciding to", unnamed)
 
     return 1 if arguments.strict and (unnamed or any(s.missing for s in found)) else 0

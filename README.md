@@ -119,8 +119,9 @@ definitions. All of them compare what they read against the names this mod acts 
 | Molang maths | 100% |
 | Block components | 92% |
 | Item components | 80% |
-| Command names | 74% |
-| Game rules | 65% |
+| Command names | 75% |
+| Command keywords | 60% |
+| Game rules | 78% |
 | Particle components | 100% |
 | Particle component fields | 97% |
 | Particle curves and Molang variables | 100% |
@@ -226,20 +227,31 @@ emitter's transform have no Java form, so they fall back to facing the camera, a
 settings those modes read are not used.
 
 **A quarter of Bedrock's commands.** `fog`, `camera`, `camerashake`, `hud`, `dialogue`,
-`inputpermission`, `aimassist`, `controlscheme`, `project` and the rest of the twenty-four name a
+`inputpermission`, `aimassist`, `controlscheme`, `project` and the rest of the twenty-three name a
 renderer feature Java has none of, a marketplace or a server Java does not speak to, or a word both
 editions use for different things: Bedrock's `schedule` waits for an area to load and Java's delays
 a function. A function using one keeps its other lines and the dropped command is reported, and so
 is a line whose selector asks for something Java cannot select on, such as `hasitem`.
 
+**One form of a command the rest of which translates.** A `ride` that summons what it mounts or
+empties a vehicle, a `music` that loops, a `structure` mirrored on both axes or placed a block at a
+time, a `summon` that turns or aims what it summons, a `gametest` that lays out a test area, the
+ender dragon's mob event, `replaceitem` into the slot a Bedrock equippable component fills,
+`tickingarea` picked out by name or as a circle, `save query`, `place featurerule` and the setting
+that says whether cheats are allowed: each is a form Java has no way to say. The line goes and the
+form is named, rather than being handed to a parser that would refuse it and take the file with it.
+
 Everything else is translated or registered. `effect`, `xp`, `playsound`, `stopsound`,
 `spreadplayers`, `replaceitem`, `ride`, `tickingarea`, `save`, `gamerule`, `gamemode`, `difficulty`,
-`title`, `tellraw`, `titleraw`, `daylock`, `allowlist`, `testfor`, `testforblock`, `testforblocks`
-and both forms of `execute` are rewritten into what Java reads, including the command behind
-`execute ... run`. `playanimation`, `event`, `scriptevent`, `music`, `toggledownfall`, `structure`,
-`mobevent`, `particle` and `gametest` are registered by this mod. Of Bedrock's thirty-seven game
-rules, the twenty-four every supported version of Java has are set under the name that version knows
-them by, which 26 changed; the others are reported.
+`changesetting`, `damage`, `locate`, `loot`, `place`, `summon`, `title`, `tellraw`, `titleraw`,
+`daylock`, `allowlist`, `testfor`, `testforblock`, `testforblocks` and both forms of `execute` are
+rewritten into what Java reads, including the command behind `execute ... run` and the dimension
+Bedrock calls the nether. `playanimation`, `event`, `scriptevent`, `music`, `toggledownfall`,
+`structure`, `mobevent`, `particle` and `gametest` are registered by this mod, and a line using one
+is written out in the form the command built here reads. Of Bedrock's thirty-seven game rules, the
+twenty-five every supported version of Java has are set under the name that version knows them by,
+which 26 changed, and four more reach a rule only the newer versions hold. The remaining eight name
+a Bedrock heads-up display or a limit Java keeps no rule for, and are reported.
 
 **The player a test drives itself.** `Test.spawnSimulatedPlayer` and every member of the
 `SimulatedPlayer` it answers with describe a player the game walks, attacks and builds with. Java's

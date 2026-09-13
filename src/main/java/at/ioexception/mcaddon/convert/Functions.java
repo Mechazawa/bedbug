@@ -23,6 +23,7 @@ import java.util.Set;
 import java.util.function.UnaryOperator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 /**
  * Bedrock `.mcfunction` files, rewritten into the dialect Java's parser reads.
@@ -45,10 +46,9 @@ public final class Functions {
      * accepts, so the line is passed through whole. `tp`, `w` and `msg` are aliases Java has too.
      */
     private static final Set<String> SHARED_WITH_JAVA = Set.of(
-        "clear", "clone", "damage", "deop", "enchant", "fill", "function", "give", "help", "kick",
-        "kill", "list", "locate", "loot", "me", "op", "place", "recipe", "reload", "say",
-        "scoreboard", "setblock", "setworldspawn", "spawnpoint", "stop", "tag", "teleport", "tp",
-        "tell", "w", "msg", "weather");
+        "clear", "clone", "deop", "enchant", "fill", "function", "give", "help", "kick", "kill",
+        "list", "me", "msg", "op", "recipe", "reload", "say", "scoreboard", "setblock",
+        "setworldspawn", "spawnpoint", "stop", "tag", "teleport", "tell", "tp", "w", "weather");
 
     /**
      * Commands Bedrock has that this mod registers itself, so a function may use them.
@@ -61,6 +61,15 @@ public final class Functions {
         "particle", "gametest");
 
     /**
+     * The registered commands whose Bedrock line the command built here reads as it stands.
+     *
+     * The other six are rewritten, because a Bedrock form the command built here cannot read is a
+     * line Java's parser rejects, and one of those costs the whole function.
+     */
+    private static final Set<String> REGISTERED_WHOLE_LINE =
+        Set.of("playanimation", "event", "toggledownfall");
+
+    /**
      * Commands Bedrock has and Java has no counterpart for.
      *
      * Most name a renderer feature Java has none of, or a server Java does not speak to. `schedule`
@@ -69,11 +78,46 @@ public final class Functions {
      * Java's own commands do not carry.
      */
     private static final Set<String> BEDROCK_ONLY = Set.of(
-        "aimassist", "camera", "camerashake", "changesetting", "clearspawnpoint", "connect",
+        "aimassist", "camera", "camerashake", "clearspawnpoint", "connect",
         "controlscheme", "dialogue", "editor-allowlist", "fog", "hud", "immutableworld",
         "inputpermission", "packstack", "permission", "ops", "project", "reloadconfig",
         "reloadpacketlimitconfig", "schedule", "script", "sendshowstoreoffer", "setmaxplayers",
         "transfer", "wsserver");
+
+    /**
+     * Commands whose rewrite changes the front of a line and leaves the rest as the pack wrote it.
+     *
+     * Java's own parser reads every word further along, so which of those forms survive is its
+     * answer rather than anything spelled out here: `effect ... infinite`, `execute if blocks ...
+     * masked`, `loot spawn`, `time query gametime` and `title @a times` all reach it as written.
+     */
+    private static final Set<String> TAIL_REACHES_JAVA =
+        Set.of("effect", "execute", "locate", "loot", "time", "title", "titleraw");
+
+    /**
+     * Forms of a command this mod does translate that Java has no way to say.
+     *
+     * Each is written `<command> <keyword>`, which is how the published command metadata names one.
+     * A line carrying one is left out and the form is reported, because handing it to Java would
+     * give its parser something it rejects and cost the whole function.
+     */
+    private static final Set<String> BEDROCK_ONLY_KEYWORDS = Set.of(
+        "changesetting allow-cheats", "changesetting false", "changesetting true",
+        "gamerule functioncommandlimit",
+        "gametest create", "gametest pos", "gametest runsetuntilfail", "gametest runthese",
+        "gametest runthis",
+        "loot slot.equippable",
+        "mobevent minecraft:ender_dragon_event",
+        "music loop", "music volume",
+        "place apply_waterlogging", "place featurerule", "place ignore_waterlogging",
+        "replaceitem keep", "replaceitem slot.equippable",
+        "ride evict_riders", "ride if_group_fits", "ride no_ride_change", "ride reassign_rides",
+        "ride skip_riders", "ride summon_ride", "ride summon_rider", "ride teleport_ride",
+        "ride until_full",
+        "save query",
+        "structure block_by_block", "structure layer_by_layer", "structure memory", "structure xz",
+        "summon facing",
+        "tickingarea all-dimensions", "tickingarea circle", "tickingarea preload");
 
     /**
      * Commands Java says the same thing with under another name, and nothing else.
@@ -112,14 +156,25 @@ public final class Functions {
      * here. Every rule listed exists on all four, so a function carrying one loads everywhere.
      */
     private static final Set<String> RULES_JAVA_SHARES = Set.of(
-        "commandBlockOutput", "doDayLightCycle", "doEntityDrops", "doImmediateRespawn",
+        "commandBlockOutput", "doDayLightCycle", "doEntityDrops", "doFireTick", "doImmediateRespawn",
         "doInsomnia", "doLimitedCrafting", "doMobLoot", "doMobSpawning", "doTileDrops",
         "doWeatherCycle", "drowningDamage", "fallDamage", "fireDamage", "freezeDamage",
         "keepInventory", "maxCommandChainLength", "mobGriefing", "naturalRegeneration",
         "playersSleepingPercentage", "randomTickSpeed", "sendCommandFeedback", "showDeathMessages",
         "spawnRadius", "tntExplosionDropDecay");
 
-    private static final Map<String, String> GAME_RULES = lowerCased(RULES_JAVA_SHARES);
+    /**
+     * Rules only the newer supported versions of Java have.
+     *
+     * `Platform` answers with a name or with nothing, so a function setting one of these translates
+     * where the rule exists and loses that line, named, where it does not.
+     */
+    private static final Set<String> RULES_NEWER_JAVA_HAS = Set.of(
+        "commandBlocksEnabled", "playerWaypoints", "projectilesCanBreakBlocks", "pvp",
+        "tntExplodes");
+
+    private static final Map<String, String> GAME_RULES = lowerCased(RULES_JAVA_SHARES,
+        RULES_NEWER_JAVA_HAS);
 
     /** The words a modern `execute` starts a clause with, which tell it apart from the old form. */
     private static final Set<String> EXECUTE_CLAUSES = Set.of(
@@ -127,29 +182,59 @@ public final class Functions {
         "store", "summon", "unless");
 
     /**
-     * The Java slot a Bedrock equipment slot names, for the slots Java has one for.
+     * The Java slot a Bedrock equipment slot names, for the slots Java spells the same on all four.
      *
-     * `slot.armor.body`, `slot.armor`, `slot.chest`, `slot.equippable` and `slot.saddle` are absent:
-     * they name a slot Java either has no id for or spells differently from one version to the next.
+     * `slot.armor` counts the four armour places by index, and `slot.saddle` and `slot.armor.body`
+     * are spelled differently from one version to the next, so those three are looked up instead.
+     * `slot.equippable` has no Java slot: it holds whatever a Bedrock entity's own equippable
+     * component puts there, which Java spreads over the armour and the saddle.
      */
-    private static final Map<String, String> EQUIPMENT_SLOTS = Map.of(
-        "slot.weapon.mainhand", "weapon.mainhand",
-        "slot.weapon.offhand", "weapon.offhand",
-        "slot.armor.head", "armor.head",
-        "slot.armor.chest", "armor.chest",
-        "slot.armor.legs", "armor.legs",
-        "slot.armor.feet", "armor.feet",
-        "slot.container", "container",
-        "slot.hotbar", "hotbar",
-        "slot.inventory", "inventory",
-        "slot.enderchest", "enderchest");
+    private static final Map<String, String> EQUIPMENT_SLOTS = Map.ofEntries(
+        Map.entry("slot.weapon.mainhand", "weapon.mainhand"),
+        Map.entry("slot.weapon.offhand", "weapon.offhand"),
+        Map.entry("slot.armor.head", "armor.head"),
+        Map.entry("slot.armor.chest", "armor.chest"),
+        Map.entry("slot.armor.legs", "armor.legs"),
+        Map.entry("slot.armor.feet", "armor.feet"),
+        Map.entry("slot.chest", "horse.chest"),
+        Map.entry("slot.container", "container"),
+        Map.entry("slot.hotbar", "hotbar"),
+        Map.entry("slot.inventory", "inventory"),
+        Map.entry("slot.enderchest", "enderchest"));
+
+    /** The four armour places in the order a Bedrock `slot.armor` index counts them. */
+    private static final List<String> ARMOUR_SLOTS =
+        List.of("armor.head", "armor.chest", "armor.legs", "armor.feet");
 
     /** The Java slots numbered one per place, which take the Bedrock slot index after a dot. */
     private static final Set<String> NUMBERED_SLOTS =
         Set.of("container", "hotbar", "inventory", "enderchest");
 
+    /** The Java rotation a Bedrock structure rotation names. */
+    private static final Map<String, String> STRUCTURE_ROTATIONS = Map.of(
+        "0_degrees", "none",
+        "90_degrees", "clockwise_90",
+        "180_degrees", "180",
+        "270_degrees", "counterclockwise_90");
+
+    /**
+     * The Java mirror a Bedrock structure mirror names.
+     *
+     * Java names the pair of faces a mirror swaps where Bedrock names the axis it runs along, so
+     * mirroring x swaps east for west and mirroring z swaps north for south. Bedrock's `xz` mirrors
+     * both at once, which Java has no single mirror for.
+     */
+    private static final Map<String, String> STRUCTURE_MIRRORS = Map.of(
+        "none", "none",
+        "x", "front_back",
+        "z", "left_right");
+
     private static final Pattern SELECTOR = Pattern.compile("@[aeprsn]\\[");
     private static final Pattern SPACE = Pattern.compile("\\s+");
+
+    /** Bedrock's own name for the dimension, as an `execute` clause writes it. */
+    private static final Pattern NETHER_CLAUSE =
+        Pattern.compile("\\bin\\s+(?:minecraft:)?nether\\b");
 
     private Functions() {
     }
@@ -206,7 +291,7 @@ public final class Functions {
             return null;
         }
         String renamed = RENAMED.getOrDefault(name, SHARED_WITH_JAVA.contains(name)
-            || REGISTERED_HERE.contains(name) ? name : null);
+            || REGISTERED_WHOLE_LINE.contains(name) ? name : null);
         if (renamed != null) return rest.isEmpty() ? renamed : renamed + " " + rest;
 
         return rewrite(name, rest, unsupported);
@@ -223,6 +308,10 @@ public final class Functions {
         return switch (name) {
             case "summon" -> summon(rest, unsupported);
             case "execute" -> execute(rest, unsupported);
+            case "damage" -> damage(rest, unsupported);
+            case "locate" -> locate(rest, unsupported);
+            case "loot" -> loot(rest, unsupported);
+            case "place" -> place(rest, unsupported);
             case "titleraw" -> "title " + rawText(rest);
             case "tellraw" -> "tellraw " + rawText(rest);
             case "title" -> title(rest);
@@ -241,6 +330,13 @@ public final class Functions {
             case "save" -> save(rest, unsupported);
             case "tickingarea" -> tickingArea(rest, unsupported);
             case "time" -> time(rest);
+            case "changesetting" -> changeSetting(rest, unsupported);
+            case "music" -> music(rest, unsupported);
+            case "structure" -> structure(rest, unsupported);
+            case "mobevent" -> mobEvent(rest, unsupported);
+            case "gametest" -> gameTest(rest, unsupported);
+            case "particle" -> "particle " + quotedName(rest);
+            case "scriptevent" -> "scriptevent " + quotedName(rest);
             default -> {
                 unsupported.add("command " + name);
                 yield null;
@@ -248,15 +344,103 @@ public final class Functions {
         };
     }
 
-    /** Null when the summoned entity is one Java has none of, which costs the line. */
+    /**
+     * `summon <type> [position]`, which is as much of Bedrock's own form as Java's takes.
+     *
+     * Bedrock turns the entity, names it, fires an event on it and aims it at something as it
+     * summons it. Java reads the block of data an entity is built from instead, which a line of a
+     * function has no room to assemble, so a summon writing any of the four loses its line.
+     */
     private static String summon(String rest, Set<String> unsupported) {
-        String[] arguments = SPACE.split(rest, 2);
+        String[] arguments = SPACE.split(rest);
         String type = BedrockEntityNames.java(arguments[0]);
         if (type == null) {
             unsupported.add("command summon, which names an entity Java does not have");
             return null;
         }
-        return "summon " + type + (arguments.length > 1 ? " " + arguments[1] : "");
+        if (arguments.length == 1) return "summon " + type;
+        if (arguments.length >= 5 && arguments[4].equalsIgnoreCase("facing")) {
+            return dropped("summon", arguments[4], unsupported);
+        }
+        if (arguments.length != 4) {
+            unsupported.add("command summon with a rotation, an event or a name, which Java reads "
+                + "as the entity's own data instead");
+            return null;
+        }
+        return "summon " + type + " " + String.join(" ", Arrays.copyOfRange(arguments, 1, 4));
+    }
+
+    /**
+     * `damage <target> <amount> [cause] [entity <damager>]`.
+     *
+     * Bedrock names a cause out of its own list and Java names a damage type out of a registry, so
+     * a blow lands for the amount the pack asked for by a source that names no cause. Java asks for
+     * that type before it will take the entity that dealt the blow.
+     */
+    private static String damage(String rest, Set<String> unsupported) {
+        String[] parts = SPACE.split(rest);
+        if (parts.length < 3) return "damage " + rest;
+
+        unsupported.add("command damage with a cause, which Java has no damage type for");
+        if (parts.length < 5 || !parts[3].equalsIgnoreCase("entity")) {
+            return "damage " + parts[0] + " " + parts[1];
+        }
+        return "damage " + parts[0] + " " + parts[1] + " minecraft:generic by " + parts[4];
+    }
+
+    /** Bedrock searches only the chunks it has yet to generate, which Java has no form of. */
+    private static String locate(String rest, Set<String> unsupported) {
+        String[] parts = SPACE.split(rest);
+        if (parts.length <= 2) return "locate " + rest;
+
+        unsupported.add("command locate in new chunks only, which Java searches every chunk for");
+        return null;
+    }
+
+    /**
+     * `loot`, whose one difference is the slot a replacement goes into.
+     *
+     * Bedrock names the slot and its index apart where Java writes them as one, the same way
+     * `replaceitem` does. Every other form of the command is spelled alike in both.
+     */
+    private static String loot(String rest, Set<String> unsupported) {
+        String[] parts = SPACE.split(rest);
+        if (!parts[0].equalsIgnoreCase("replace")) return "loot " + rest;
+
+        int slotAt = parts.length > 1 && parts[1].equalsIgnoreCase("block") ? 5 : 3;
+        if (parts.length <= slotAt + 2) {
+            unsupported.add("command loot replace with nothing to put in the slot");
+            return null;
+        }
+
+        String slot = javaSlot(parts[slotAt].toLowerCase(Locale.ROOT), parts[slotAt + 1]);
+        if (slot == null) return dropped("loot", parts[slotAt], unsupported);
+
+        return "loot " + String.join(" ", Arrays.copyOfRange(parts, 0, slotAt)) + " " + slot + " "
+            + String.join(" ", Arrays.copyOfRange(parts, slotAt + 2, parts.length));
+    }
+
+    /**
+     * `place`, of whose four kinds Java has three.
+     *
+     * A feature rule is Bedrock's own table of where a feature may appear, which Java reads from
+     * worldgen rather than from a command. What Bedrock writes after the position says how a
+     * structure or a jigsaw is built, and Java's own command decides each of those for itself.
+     */
+    private static String place(String rest, Set<String> unsupported) {
+        String[] parts = SPACE.split(rest);
+        String kind = parts[0].toLowerCase(Locale.ROOT);
+        int most = switch (kind) {
+            case "feature", "structure" -> 5;
+            case "jigsaw" -> 7;
+            default -> 0;
+        };
+
+        if (most == 0) return dropped("place", kind, unsupported);
+        if (parts.length <= most) return "place " + rest;
+
+        unsupported.add("command place " + kind + " with a placement Java builds for itself");
+        return null;
     }
 
     /**
@@ -276,10 +460,20 @@ public final class Functions {
         }
 
         int run = rest.indexOf(" run ");
-        if (run < 0) return "execute " + rest;
+        if (run < 0) return "execute " + dimensions(rest);
 
         String inner = translate(rest.substring(run + " run ".length()), unsupported);
-        return inner == null ? null : "execute " + rest.substring(0, run) + " run " + inner;
+        return inner == null ? null : "execute " + dimensions(rest.substring(0, run)) + " run " + inner;
+    }
+
+    /**
+     * The clauses of an `execute` with the one dimension the two editions name differently renamed.
+     *
+     * Java's parser reads a dimension as a resource location and finds nothing under `nether`, so a
+     * line naming it would run and do nothing. The overworld and the end are spelled the same.
+     */
+    private static String dimensions(String clauses) {
+        return NETHER_CLAUSE.matcher(clauses).replaceAll("in the_nether");
     }
 
     /**
@@ -373,13 +567,41 @@ public final class Functions {
     /** `gamerule <rule> [value]`, under the name this version of Java knows the rule by. */
     private static String gameRule(String rest, Set<String> unsupported) {
         String[] parts = SPACE.split(rest, 2);
-        String shared = GAME_RULES.get(parts[0].toLowerCase(Locale.ROOT));
-        String java = shared == null ? null : Platform.gameRuleName(shared);
+        String bedrock = GAME_RULES.get(parts[0].toLowerCase(Locale.ROOT));
+        String java = bedrock == null ? null : Platform.gameRuleName(bedrock);
         if (java == null) {
             unsupported.add("game rule " + parts[0]);
             return null;
         }
-        return "gamerule " + java + (parts.length > 1 ? " " + parts[1] : "");
+        if (parts.length < 2) return "gamerule " + java;
+
+        String value = gameRuleValue(bedrock, parts[1]);
+        if (value == null) {
+            unsupported.add("game rule " + parts[0] + " " + parts[1]);
+            return null;
+        }
+        return "gamerule " + java + " " + value;
+    }
+
+    /**
+     * What Java's own rule is set to for what a Bedrock rule was set to.
+     *
+     * Two rules read a word Java's does not. Bedrock names who sees a player's waypoint where Java
+     * asks whether the bar is there at all, and Bedrock switches fire spreading where Java from 26
+     * measures how far from a player fire spreads.
+     */
+    private static String gameRuleValue(String bedrock, String value) {
+        if (bedrock.equals("playerWaypoints")) {
+            return switch (value.toLowerCase(Locale.ROOT)) {
+                case "everyone" -> "true";
+                case "off" -> "false";
+                default -> null;
+            };
+        }
+
+        Integer radius = bedrock.equals("doFireTick")
+            ? Platform.fireSpreadRadius(Boolean.parseBoolean(value)) : null;
+        return radius == null ? value : String.valueOf(radius);
     }
 
     /**
@@ -448,12 +670,8 @@ public final class Functions {
             return null;
         }
 
-        String slot = EQUIPMENT_SLOTS.get(parts[named].toLowerCase(Locale.ROOT));
-        if (slot == null) {
-            unsupported.add("command replaceitem into " + parts[named]);
-            return null;
-        }
-        if (NUMBERED_SLOTS.contains(slot)) slot = slot + "." + parts[named + 1];
+        String slot = javaSlot(parts[named].toLowerCase(Locale.ROOT), parts[named + 1]);
+        if (slot == null) return dropped("replaceitem", parts[named], unsupported);
 
         int item = named + 2;
         if (parts[item].equalsIgnoreCase("keep")) {
@@ -471,7 +689,41 @@ public final class Functions {
         return "item replace " + where + " " + slot + " with " + what;
     }
 
-    /** Bedrock rides through five modes and Java has the two that move a rider on and off. */
+    /**
+     * The Java slot a Bedrock slot and its index name, or null when Java holds no such place.
+     *
+     * A Bedrock `slot.armor` index counts the four armour places the way Java names them one by
+     * one, and the numbered slots take the index after a dot.
+     */
+    private static String javaSlot(String bedrock, String index) {
+        String named = EQUIPMENT_SLOTS.get(bedrock);
+        if (named != null) return NUMBERED_SLOTS.contains(named) ? named + "." + index : named;
+
+        return switch (bedrock) {
+            case "slot.armor" -> armourSlot(index);
+            case "slot.saddle" -> Platform.saddleSlot();
+            case "slot.armor.body" -> Platform.bodyArmourSlot();
+            default -> null;
+        };
+    }
+
+    /** Null for an index outside the four armour places, which Java would have nowhere to put. */
+    private static String armourSlot(String index) {
+        try {
+            int place = Integer.parseInt(index);
+            return place >= 0 && place < ARMOUR_SLOTS.size() ? ARMOUR_SLOTS.get(place) : null;
+        } catch (NumberFormatException unreadable) {
+            return null;
+        }
+    }
+
+    /**
+     * Bedrock rides through five modes and Java has the two that move a rider on and off.
+     *
+     * The three left over summon the other half of the pair as they mount it, and empty a vehicle
+     * of riders Java's selectors have no way to name. Bedrock names as many riders as its selector
+     * matches where Java's command takes one, so the riders are stepped through one at a time.
+     */
     private static String ride(String rest, Set<String> unsupported) {
         String[] parts = SPACE.split(rest, 3);
         if (parts.length < 2) {
@@ -480,19 +732,45 @@ public final class Functions {
         }
 
         return switch (parts[1].toLowerCase(Locale.ROOT)) {
-            case "stop_riding" -> "ride " + parts[0] + " dismount";
-            case "start_riding" -> {
-                if (parts.length < 3) {
-                    unsupported.add("command ride start_riding with nothing to ride");
-                    yield null;
-                }
-                yield "ride " + parts[0] + " mount " + SPACE.split(parts[2], 2)[0];
-            }
-            default -> {
-                unsupported.add("command ride " + parts[1]);
-                yield null;
-            }
+            case "stop_riding" -> "execute as " + parts[0] + " run ride @s dismount";
+            case "start_riding" -> startRiding(parts, unsupported);
+            default -> dropped("ride", parts[1], unsupported);
         };
+    }
+
+    /**
+     * `ride <riders> start_riding <ride> [teleportRules] [howToFill]`.
+     *
+     * Java moves the rider to what it mounts, which is what `teleport_rider` asks for. Moving the
+     * ride instead, and either of the two ways of filling a vehicle that has room for several, are
+     * decisions Java's own command does not offer.
+     */
+    private static String startRiding(String[] parts, Set<String> unsupported) {
+        if (parts.length < 3) {
+            unsupported.add("command ride start_riding with nothing to ride");
+            return null;
+        }
+
+        String[] following = SPACE.split(parts[2]);
+        for (String rule : Arrays.copyOfRange(following, 1, following.length)) {
+            if (rule.equalsIgnoreCase("teleport_rider")) continue;
+            return dropped("ride", rule, unsupported);
+        }
+        return "execute as " + parts[0] + " at @s run ride @s mount " + nearest(following[0]);
+    }
+
+    /**
+     * A selector Java will take where it wants one entity, which is the nearest one that matches.
+     *
+     * `@s`, `@p` and `@r` already stand for one entity and Java rejects a count on them. The other
+     * two match as many as they find, which is what Bedrock hands a rider and Java will not.
+     */
+    private static String nearest(String selector) {
+        if (!selector.startsWith("@e") && !selector.startsWith("@a")) return selector;
+        if (selector.contains("c=")) return selector;
+
+        return selector.endsWith("]")
+            ? selector.substring(0, selector.length() - 1) + ",c=1]" : selector + "[c=1]";
     }
 
     /** Bedrock holds and resumes the world write; Java turns the same write off and on. */
@@ -500,30 +778,181 @@ public final class Functions {
         return switch (rest.toLowerCase(Locale.ROOT)) {
             case "hold" -> "save-off";
             case "resume" -> "save-on";
-            default -> {
-                unsupported.add("command save " + rest);
-                yield null;
-            }
+            default -> dropped("save", rest, unsupported);
         };
     }
 
     /**
      * A Bedrock ticking area is Java's forceload, which works in whole chunks.
      *
-     * Java's takes the two corners as columns, so the heights are left out. A circular area and a
-     * named one have no Java form, and neither does a preload.
+     * Java's takes the two corners as columns, so the heights are left out. A circular area and one
+     * picked out by the name it was added under have no Java form, and neither does a preload: Java
+     * loads a forced chunk as soon as it is named, with nothing to ask again later.
      */
     private static String tickingArea(String rest, Set<String> unsupported) {
         String[] parts = SPACE.split(rest);
         String mode = parts[0].toLowerCase(Locale.ROOT);
 
         if (mode.equals("remove_all")) return "forceload remove all";
-        if (mode.equals("list")) return "forceload query";
-        if (mode.equals("add") && parts.length >= 7 && !parts[1].equalsIgnoreCase("circle")) {
-            return "forceload add " + parts[1] + " " + parts[3] + " " + parts[4] + " " + parts[6];
+        if (mode.equals("list")) {
+            if (parts.length == 1) return "forceload query";
+            return dropped("tickingarea", parts[1], unsupported);
         }
-        unsupported.add("command tickingarea " + mode);
-        return null;
+        if (mode.equals("remove") && parts.length >= 4) {
+            return "forceload remove " + parts[1] + " " + parts[3];
+        }
+        if (mode.equals("add")) {
+            if (parts.length > 1 && parts[1].equalsIgnoreCase("circle")) {
+                return dropped("tickingarea", parts[1], unsupported);
+            }
+            if (parts.length >= 7) {
+                return "forceload add " + parts[1] + " " + parts[3] + " " + parts[4] + " " + parts[6];
+            }
+        }
+        return dropped("tickingarea", mode, unsupported);
+    }
+
+    /**
+     * The line with its first argument quoted, which is how a name carrying a colon reaches Java.
+     *
+     * Brigadier reads letters, digits and a few marks as an unquoted string and stops at a colon, so
+     * a pack's own `vn:song` would end the argument halfway and take the whole function with it.
+     */
+    private static String quotedName(String rest) {
+        String[] parts = SPACE.split(rest, 2);
+        return new JsonPrimitive(parts[0]) + (parts.length > 1 ? " " + parts[1] : "");
+    }
+
+    /**
+     * `changesetting <setting> <value>`, of whose two settings Java has a command for one.
+     *
+     * Whether cheats are allowed is a property of the world a Java server reads at startup, with no
+     * command to move it while the server runs.
+     */
+    private static String changeSetting(String rest, Set<String> unsupported) {
+        String[] parts = SPACE.split(rest, 2);
+        if (parts.length < 2 || !parts[0].equalsIgnoreCase("difficulty")) {
+            return dropped("changesetting", parts[0], unsupported);
+        }
+        return "difficulty " + difficulty(parts[1]);
+    }
+
+    /**
+     * `music play|queue <track> [volume] [fade] [repeat]`, `music stop [fade]` and `music volume`.
+     *
+     * A track is played as a sound in the music category, which fades in and out on its own and
+     * plays through once. A repeating track and a mixer level have no command behind them.
+     */
+    private static String music(String rest, Set<String> unsupported) {
+        String[] parts = SPACE.split(rest);
+        String action = parts[0].toLowerCase(Locale.ROOT);
+        if (action.equals("stop")) return "music stop";
+        if (parts.length < 2 || !action.equals("play") && !action.equals("queue")) {
+            return dropped("music", action, unsupported);
+        }
+
+        String repeat = parts.length > 4 ? parts[4].toLowerCase(Locale.ROOT) : "play_once";
+        if (!repeat.equals("play_once")) return dropped("music", repeat, unsupported);
+        return "music " + action + " " + new JsonPrimitive(parts[1])
+            + (parts.length > 2 ? " " + parts[2] : "");
+    }
+
+    /** Bedrock saves a region under a name, places it again and forgets it. */
+    private static String structure(String rest, Set<String> unsupported) {
+        String[] parts = SPACE.split(rest);
+        return switch (parts[0].toLowerCase(Locale.ROOT)) {
+            case "save" -> saveStructure(parts, unsupported);
+            case "load" -> loadStructure(parts, unsupported);
+            case "delete" -> {
+                if (parts.length < 2) {
+                    unsupported.add("command structure delete with no name");
+                    yield null;
+                }
+                yield "structure delete " + new JsonPrimitive(parts[1]);
+            }
+            default -> dropped("structure", parts[0], unsupported);
+        };
+    }
+
+    /**
+     * `structure save <name> <from> <to> [includeEntities] [saveMode] [includeBlocks]`.
+     *
+     * A Java template holds the blocks and the entities of the region either way and is written as
+     * a file, which is what `disk` asks for. `memory` asks for one the world never keeps.
+     */
+    private static String saveStructure(String[] parts, Set<String> unsupported) {
+        if (parts.length < 8) {
+            unsupported.add("command structure save with no region to save");
+            return null;
+        }
+        for (String option : Arrays.copyOfRange(parts, 8, parts.length)) {
+            String word = option.toLowerCase(Locale.ROOT);
+            if (word.equals("disk") || word.equals("true") || word.equals("false")) continue;
+            return dropped("structure", word, unsupported);
+        }
+        return "structure save " + new JsonPrimitive(parts[1]) + " "
+            + String.join(" ", Arrays.copyOfRange(parts, 2, 8));
+    }
+
+    /**
+     * `structure load <name> <to> [rotation] [mirror] ...`, which Java places as a template.
+     *
+     * Java's own `place template` turns and mirrors a template as it places it, and takes the name
+     * as a resource location, so the line goes to it rather than to the command registered here.
+     * Everything Bedrock writes after the mirror describes a placement Java builds in its own code:
+     * an animation it plays none of, and the entity, block and waterlogging choices it makes itself.
+     */
+    private static String loadStructure(String[] parts, Set<String> unsupported) {
+        if (parts.length < 5) {
+            unsupported.add("command structure load with nowhere to put it");
+            return null;
+        }
+        StringBuilder placement = new StringBuilder("place template " + parts[1] + " "
+            + String.join(" ", Arrays.copyOfRange(parts, 2, 5)));
+
+        for (int at = 5; at < parts.length; at++) {
+            String word = parts[at].toLowerCase(Locale.ROOT);
+            String java = switch (at) {
+                case 5 -> STRUCTURE_ROTATIONS.get(word);
+                case 6 -> STRUCTURE_MIRRORS.get(word);
+                default -> null;
+            };
+            if (java == null) return dropped("structure", word, unsupported);
+            placement.append(' ').append(java);
+        }
+        return placement.toString();
+    }
+
+    /**
+     * `mobevent <event> [enabled]`, of whose four events three reach a Java game rule.
+     *
+     * `events_enabled` names every event at once. The ender dragon's is whether the fight may be
+     * started again, which Java decides from the state of the end itself.
+     */
+    private static String mobEvent(String rest, Set<String> unsupported) {
+        String[] parts = SPACE.split(rest, 2);
+        String event = parts[0].toLowerCase(Locale.ROOT);
+        if (!event.equals("minecraft:pillager_patrols_event")
+            && !event.equals("minecraft:wandering_trader_event") && !event.equals("events_enabled")) {
+            return dropped("mobevent", event, unsupported);
+        }
+        return "mobevent " + event + (parts.length > 1 ? " " + parts[1] : "");
+    }
+
+    /**
+     * The test modes the `/gametest` registered here builds.
+     *
+     * The rest describe the Bedrock test editor: laying out a new test area, reading a position
+     * inside one, running the tests around the player, and repeating a set until one fails.
+     */
+    private static String gameTest(String rest, Set<String> unsupported) {
+        String[] parts = SPACE.split(rest, 2);
+        String mode = parts[0].toLowerCase(Locale.ROOT);
+        return switch (mode) {
+            case "run", "runset", "runall", "clearall", "stopall" ->
+                "gametest " + mode + (parts.length > 1 ? " " + parts[1] : "");
+            default -> dropped("gametest", mode, unsupported);
+        };
     }
 
     /** Java's clock has no word for the two moments either side of the day. */
@@ -684,10 +1113,24 @@ public final class Functions {
         };
     }
 
-    private static Map<String, String> lowerCased(Set<String> names) {
+    private static Map<String, String> lowerCased(Set<String> shared, Set<String> newer) {
         Map<String, String> byLowerCase = new LinkedHashMap<>();
-        names.forEach(name -> byLowerCase.put(name.toLowerCase(Locale.ROOT), name));
+        Stream.concat(shared.stream(), newer.stream())
+            .forEach(name -> byLowerCase.put(name.toLowerCase(Locale.ROOT), name));
         return Map.copyOf(byLowerCase);
+    }
+
+    /**
+     * Reports a form of a translated command that Java has no way to say, and drops the line.
+     *
+     * A form named as one Java has nothing for is reported as such, and any other form as the form
+     * it is, which is how a selector argument Java cannot read is reported too.
+     */
+    private static String dropped(String command, String keyword, Set<String> unsupported) {
+        String form = command + " " + keyword.toLowerCase(Locale.ROOT);
+        unsupported.add(BEDROCK_ONLY_KEYWORDS.contains(form)
+            ? "command " + form + ", which Java has no form of" : "command " + form);
+        return null;
     }
 
     /**

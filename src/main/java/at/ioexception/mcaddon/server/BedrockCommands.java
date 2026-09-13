@@ -11,6 +11,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
@@ -98,12 +99,14 @@ public final class BedrockCommands {
                 .then(Commands.argument("name", StringArgumentType.string())
                     .executes(BedrockCommands::deleteStructure))));
 
-        // A mob event switches a kind of spawning on or off, which Java states as a game rule.
+        // A mob event switches a kind of spawning on or off, which Java states as a game rule. Each
+        // event is a literal because its Bedrock name carries a colon, which an unquoted string
+        // argument stops at, and because only these three reach a rule at all.
         dispatcher.register(Commands.literal("mobevent")
             .requires(source -> Platform.allowedAt(source, 1))
-            .then(Commands.argument("event", StringArgumentType.string())
-                .then(Commands.argument("enabled", BoolArgumentType.bool())
-                    .executes(BedrockCommands::mobEvent))));
+            .then(mobEvent("minecraft:pillager_patrols_event"))
+            .then(mobEvent("minecraft:wandering_trader_event"))
+            .then(mobEvent("events_enabled")));
 
         // Java's own `/particle` knows nothing of a pack's effects, which are emitters rather than
         // single particles, so the mod answers for those and hands the rest to the game.
@@ -132,11 +135,14 @@ public final class BedrockCommands {
                     .suggests(BedrockCommands::testNames)
                     .executes(command -> runTests(command.getSource(),
                         named(StringArgumentType.getString(command, "name"))))))
+            // Bedrock runs the set a test carries by default when the line names no tag.
             .then(Commands.literal("runset")
+                .executes(command -> runTests(command.getSource(), tagged("suite:default")))
                 .then(Commands.argument("tag", StringArgumentType.greedyString())
                     .executes(command -> runTests(command.getSource(),
                         tagged(StringArgumentType.getString(command, "tag"))))))
             .then(Commands.literal("runall").executes(command -> runTests(command.getSource(), test -> true)))
+            .then(Commands.literal("stopall").executes(command -> stopTests(command.getSource())))
             .then(Commands.literal("clearall").executes(command -> clearTests(command.getSource()))));
     }
 
@@ -185,6 +191,19 @@ public final class BedrockCommands {
         int running = started;
         source.sendSuccess(() -> Component.literal("Started " + running + " test(s)."), false);
         return started;
+    }
+
+    /** Ends every running test and leaves the areas standing, which is what a clear takes back. */
+    private static int stopTests(CommandSourceStack source) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null) {
+            source.sendFailure(Component.literal("No pack scripts are running."));
+            return 0;
+        }
+
+        scripts.stopGameTests();
+        source.sendSuccess(() -> Component.literal("Stopped every running test."), false);
+        return 1;
     }
 
     private static int clearTests(CommandSourceStack source) {
@@ -277,28 +296,32 @@ public final class BedrockCommands {
     }
 
     /**
-     * Switches one kind of spawning on or off.
+     * One mob event, which Bedrock reads without a value and writes with one.
      *
-     * Bedrock names the event and Java names the rule, and only the two that Java has a rule for can
-     * be answered. `events_enabled` names every event at once, so it sets both. The rest are
-     * reported rather than silently accepted.
+     * Bedrock names the event and Java names the rule, and `events_enabled` names every event at
+     * once, so it reads and writes both.
      */
-    private static int mobEvent(CommandContext<CommandSourceStack> command) {
-        boolean enabled = BoolArgumentType.getBool(command, "enabled");
-        List<String> rules = switch (StringArgumentType.getString(command, "event")) {
+    private static LiteralArgumentBuilder<CommandSourceStack> mobEvent(String event) {
+        List<String> rules = switch (event) {
             case "minecraft:pillager_patrols_event" -> List.of(Platform.patrolSpawningRule());
             case "minecraft:wandering_trader_event" -> List.of(Platform.traderSpawningRule());
-            case "events_enabled" ->
-                List.of(Platform.patrolSpawningRule(), Platform.traderSpawningRule());
-            default -> List.of();
+            default -> List.of(Platform.patrolSpawningRule(), Platform.traderSpawningRule());
         };
-        if (rules.isEmpty()) {
-            command.getSource().sendFailure(
-                Component.literal("Java has no rule for that mob event."));
-            return 0;
-        }
-        rules.forEach(rule -> run(command.getSource(), "gamerule " + rule + " " + enabled));
-        return 1;
+
+        return Commands.literal(event)
+            .executes(command -> mobEvent(command.getSource(), rules, null))
+            .then(Commands.argument("enabled", BoolArgumentType.bool())
+                .executes(command -> mobEvent(command.getSource(), rules,
+                    BoolArgumentType.getBool(command, "enabled"))));
+    }
+
+    /** Reads the rules behind an event, or writes them all when the caller gave a value. */
+    private static int mobEvent(CommandSourceStack source, List<String> rules, Boolean enabled) {
+        // A read is asked for its answer, so it keeps the output a write has no use for.
+        rules.forEach(rule -> source.getServer().getCommands().performPrefixedCommand(
+            enabled == null ? source : source.withSuppressedOutput(),
+            "gamerule " + rule + (enabled == null ? "" : " " + enabled)));
+        return rules.size();
     }
 
     /** A pack's own effect starts an emitter; anything else is Java's own particle command. */

@@ -789,6 +789,9 @@ public final class Platform {
      */
     public static String gameRuleName(String bedrock) {
         //? if >=26 {
+        if (bedrock.equals("doFireTick")) return GameRules.FIRE_SPREAD_RADIUS_AROUND_PLAYER.id();
+        if (bedrock.equals("playerWaypoints")) return GameRules.LOCATOR_BAR.id();
+
         GameRule<?> rule = rule(bedrock);
         return rule == null ? null : rule.id();
         //?} else {
@@ -799,6 +802,38 @@ public final class Platform {
         net.minecraft.world.level.GameRules.Key<net.minecraft.world.level.GameRules.IntegerValue> count =
             countRule(bedrock);
         return count == null ? null : count.getId();
+        *///?}
+    }
+
+    /**
+     * The radius Java's own fire rule takes for a Bedrock fire flag, or null where it holds a flag.
+     *
+     * 26 replaced the rule that switched fire spreading with one naming how far from a player fire
+     * spreads at all, so the flag becomes the distance the game ships or none of it.
+     */
+    public static Integer fireSpreadRadius(boolean spreading) {
+        //? if >=26 {
+        return spreading ? GameRules.FIRE_SPREAD_RADIUS_AROUND_PLAYER.defaultValue() : 0;
+        //?} else {
+        /*return null;
+        *///?}
+    }
+
+    /** The Java slot a saddle sits in, which 26 moved off the horse and onto every entity. */
+    public static String saddleSlot() {
+        //? if >=26 {
+        return "saddle";
+        //?} else {
+        /*return "horse.saddle";
+        *///?}
+    }
+
+    /** The Java slot body armour sits in, or null on a version with no slot for it. */
+    public static String bodyArmourSlot() {
+        //? if >=1.21 {
+        return "armor.body";
+        //?} else {
+        /*return null;
         *///?}
     }
 

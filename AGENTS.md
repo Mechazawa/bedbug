@@ -414,11 +414,30 @@ Four of the standing drops are deliberate, and the census will keep naming them:
   named, and the report ends with the check for that: a published command that is missing and is not
   in `BEDROCK_ONLY` would be a gap nobody decided on.
 
-  Two things the numbers do not say. A keyword of a rewritten command counts only when the source
-  spells the literal, so a rewrite that changes the front of a line and passes the rest through
-  reads as though it did not; the keyword figure is a floor. And the command metadata names no
-  selector arguments at all, so those are listed from the source instead, in three groups: rewritten,
-  passed through, and dropped.
+  **What the keyword number counts.** Every published keyword goes into one of three groups, the
+  same three the selector arguments use, and the first two are what the percentage is of:
+
+  - **passed through**: the whole line reaches Java, because the command is shared or renamed, or
+    the rewrite names the front of the line and leaves the rest alone. `TAIL_REACHES_JAVA` declares
+    the second kind. Such a keyword is answered by Java's own parser with no literal for it anywhere
+    in the translation, which is why it has to be declared rather than measured.
+  - **rewritten**: the source spells the literal and decides what to do with it.
+  - **dropped**: the command is named in `BEDROCK_ONLY`, so the keyword goes with it, or
+    `BEDROCK_ONLY_KEYWORDS` names this one form of a command that otherwise translates. A keyword in
+    that declaration never counts as covered, whatever literals the source happens to carry, which
+    is what keeps a form the translator reports from reading as one it handles.
+
+  Two things the number still does not say. A keyword matches on the literal alone rather than on
+  the literal under that command, so a word two commands share counts for both. And the metadata
+  writes a boolean argument as an enum of `true` and `false`, which puts a value in a surface that
+  is otherwise grammar; both halves of the count carry it.
+
+  The keyword figure is read against the newest supported version, which is the form committed to
+  git. A form `Platform` answers for on 26 and not before, such as the slot body armour sits in,
+  counts here and is dropped and reported on the version that has no such thing.
+
+  The command metadata names no selector arguments at all, so those are listed from the source
+  instead, in the same three groups.
 - **`tools/census/particles.py`** measures the effects a pack describes itself.
 
   ```bash
