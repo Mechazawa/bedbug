@@ -70,6 +70,9 @@ STAGE = (
     "clear @a",
 )
 
+# How long the world is given to load the chunks the stage is built in before anything is built.
+SETTLE_TICKS = 60
+
 # What every scene says when its commands have all run, and what the runner waits for.
 DONE = "SCENE-DONE"
 
@@ -187,13 +190,18 @@ def packFormat(version: str) -> int:
 
 
 def datapack(world: pathlib.Path, commands: list[str], format: int) -> pathlib.Path:
-    """Writes the commands into the world as a function the game runs when it loads it."""
+    """Writes the commands into the world as a function the game runs once a player is in it.
+
+    A world loads before anybody joins it, so a scene run off `minecraft:load` would aim every one
+    of its commands at a player who is not there yet: the stage gets built and nobody is ever put on
+    it. The body is run off `minecraft:tick` instead, behind a score that says it has already run,
+    so it happens exactly once and not before there is somebody to happen to.
+    """
     pack = world / "datapacks" / "mcaddon-scene"
     if pack.exists():
         shutil.rmtree(pack)
+    pack.mkdir(parents=True)
 
-    functions = pack / "data" / "mcaddon" / "function"
-    functions.mkdir(parents=True, exist_ok=True)
     # From pack format 82 the game wants the range spelled out as well as the single number, and
     # reads a pack that gives only the number through a fallback it complains about first.
     (pack / "pack.mcmeta").write_text(json.dumps({
@@ -205,19 +213,37 @@ def datapack(world: pathlib.Path, commands: list[str], format: int) -> pathlib.P
         },
     }), encoding="utf-8")
 
-    body = list(STAGE) + list(commands) + [f"say {DONE}"]
-    (functions / "scene.mcfunction").write_text("\n".join(body) + "\n", encoding="utf-8")
+    # Held over the stage while the chunks under it load: a fill reaches only what is loaded, and a
+    # player put down a moment too early falls through a floor that is not there yet.
+    waiting = [
+        "execute unless score #ran mcaddon matches 1 run scoreboard players add #wait mcaddon 1",
+        f"execute unless score #ran mcaddon matches 1 if entity @a run gamemode creative @a",
+        f"execute unless score #ran mcaddon matches 1 if entity @a run "
+        f"tp @a {CAMERA_X} {FLOOR_Y + 4} {ROW_Z}",
+        f"execute if entity @a if score #wait mcaddon matches {SETTLE_TICKS}.. "
+        "unless score #ran mcaddon matches 1 run function mcaddon:scene",
+    ]
+    bodies = {
+        "ready": ["scoreboard objectives add mcaddon dummy",
+                  "scoreboard players set #ran mcaddon 0",
+                  "scoreboard players set #wait mcaddon 0"],
+        "watch": waiting,
+        "scene": ["scoreboard players set #ran mcaddon 1"]
+        + list(STAGE) + list(commands) + [f"say {DONE}"],
+    }
 
     # Both spellings of the directory, because the game renamed it and reads only the one it wants.
     for spelling in ("function", "functions"):
         target = pack / "data" / "mcaddon" / spelling
         target.mkdir(parents=True, exist_ok=True)
-        (target / "scene.mcfunction").write_text("\n".join(body) + "\n", encoding="utf-8")
+        for name, body in bodies.items():
+            (target / f"{name}.mcfunction").write_text("\n".join(body) + "\n", encoding="utf-8")
 
     for spelling in ("tags/function", "tags/functions"):
         tags = pack / "data" / "minecraft" / spelling
         tags.mkdir(parents=True, exist_ok=True)
-        (tags / "load.json").write_text(json.dumps({"values": ["mcaddon:scene"]}), encoding="utf-8")
+        (tags / "load.json").write_text(json.dumps({"values": ["mcaddon:ready"]}), encoding="utf-8")
+        (tags / "tick.json").write_text(json.dumps({"values": ["mcaddon:watch"]}), encoding="utf-8")
 
     return pack
 
