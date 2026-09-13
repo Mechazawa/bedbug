@@ -5,7 +5,6 @@ import at.ioexception.mcaddon.bedrock.behaviour.ItemDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
 import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.convert.SpawnEggAppearance;
-import at.ioexception.mcaddon.item.AddonRecordItem;
 import at.ioexception.mcaddon.item.AddonScriptedItem;
 import at.ioexception.mcaddon.item.AddonShooterItem;
 import at.ioexception.mcaddon.item.AddonThrowableItem;
@@ -148,10 +147,6 @@ public final class AddonItems {
         if (definition.components().containsKey("minecraft:storage_item")
             || definition.components().containsKey("minecraft:bundle_interaction")) {
             return Platform.buildStorage(properties, id);
-        }
-
-        if (definition.components().containsKey("minecraft:record")) {
-            return AddonRecordItem.build(properties.stacksTo(1), id, id);
         }
 
         Item shooter = shooter(definition, properties, id);
@@ -629,6 +624,12 @@ public final class AddonItems {
      *
      * `minecraft:armor` and `minecraft:weapon` are not in the schemas Mojang publishes today. Packs
      * written against the older format versions still ship them, and both are read.
+     *
+     * `minecraft:record` is deliberately absent. What a jukebox plays is a jukebox song, and a song
+     * only exists as an entry in a registry a data pack writes into. A world whose data packs write
+     * into one of those registries is a world the game calls experimental, and every world with the
+     * add-on installed then opens behind a screen asking the player whether to load it at all. One
+     * item component is not worth that, so a record stays a plain item and is counted as a gap.
      */
     private static final List<String> IMPLEMENTED = List.of(
         "minecraft:icon", "minecraft:display_name", "minecraft:max_stack_size", "minecraft:tags",
@@ -643,7 +644,7 @@ public final class AddonItems {
         "minecraft:seed", "minecraft:entity_placer", "minecraft:throwable",
         "minecraft:projectile", "minecraft:dyeable", "minecraft:should_despawn",
         "minecraft:shooter", "minecraft:storage_item", "minecraft:bundle_interaction",
-        "minecraft:swing_duration", "minecraft:record", "minecraft:custom_components");
+        "minecraft:swing_duration", "minecraft:custom_components");
 
     private static Identifier identifier(String bedrock) {
         Names.Identifier split = Names.split(bedrock, "minecraft");

@@ -91,15 +91,6 @@ def dust(x: int, y: int) -> tuple[int, int, int, int]:
     return (214, 168, 255, 255) if (x * 7 + y * 3) % 11 < 3 else TRANSPARENT
 
 
-def disc_item(x: int, y: int) -> tuple[int, int, int, int]:
-    span = (x - 7.5) ** 2 + (y - 7.5) ** 2
-    if span > 49:
-        return TRANSPARENT
-    if span < 3:
-        return (228, 228, 228, 255)
-    return (48, 44, 56, 255) if span > 12 else (120, 96, 168, 255)
-
-
 def pouch(x: int, y: int) -> tuple[int, int, int, int]:
     if y < 4:
         return (168, 128, 84, 255) if 5 <= x <= 10 else TRANSPARENT
@@ -179,7 +170,6 @@ TEXTURES = (
     ("textures/items/shard.png", 16, shard),
     ("textures/items/dust.png", 16, dust),
     ("textures/items/pouch.png", 16, pouch),
-    ("textures/items/disc.png", 16, disc_item),
     ("textures/items/sprite_egg.png", 16, sprite_egg),
     ("textures/blocks/lamp_off.png", 16, lamp_off),
     ("textures/blocks/lamp_on.png", 16, lamp_on),

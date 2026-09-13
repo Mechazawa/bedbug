@@ -6,7 +6,6 @@ item.tp:wand.name=Test Wand
 item.tp:shard.name=Test Shard
 item.tp:dust.name=Test Dust
 item.tp:pouch.name=Test Pouch
-item.tp:disc.name=Test Disc
 tile.tp:lamp.name=Test Lamp
 entity.tp:sprite.name=Test Sprite
 entity.tp:ember.name=Test Ember

@@ -130,7 +130,6 @@ public final class PackConverter {
                 writeBlockData(root, blocks, loot);
                 writeItemTags(root, items);
                 writeDyeRecipes(root, items);
-                writeJukeboxSongs(root, items);
                 writeBlockModels(root, icons, blocks, assets, sprites);
                 writeAtlas(root, sprites);
                 writeParticles(pack, root, textures.paths());
@@ -703,41 +702,6 @@ public final class PackConverter {
             String name = Names.sanitise(colon > 0
                 ? recipe.identifier().substring(colon + 1) : recipe.identifier());
             write(root.resolve("data").resolve(namespace).resolve(directory).resolve(name + ".json"), json);
-        }
-    }
-
-    /**
-     * A jukebox song per item a pack declared a record, for the versions that have such a registry.
-     *
-     * `minecraft:record` states the sound, the length and what a comparator reads, which is exactly
-     * what a Java song holds. 1.20.1 keeps all three inside the item's own class instead, so there
-     * is nothing to write there.
-     */
-    private static void writeJukeboxSongs(Path root, List<ItemDefinition> items) throws IOException {
-        if (!Platform.jukeboxSongsAreData()) return;
-
-        for (ItemDefinition item : items) {
-            JsonObject record = item.components().get("minecraft:record");
-            if (record == null) continue;
-
-            Names.Identifier id = Names.split(item.identifier(), "minecraft");
-            String sound = Json.text(record, "sound_event", null);
-            if (sound == null) continue;
-
-            JsonObject description = new JsonObject();
-            description.addProperty("translate", "item." + id.namespace() + ":" + id.path() + ".name");
-
-            JsonObject song = new JsonObject();
-            song.addProperty("sound_event",
-                sound.contains(":") ? sound : id.namespace() + ":" + sound);
-            song.add("description", description);
-            song.addProperty("length_in_seconds",
-                record.has("duration") ? record.get("duration").getAsFloat() : 1f);
-            song.addProperty("comparator_output",
-                record.has("comparator_signal") ? record.get("comparator_signal").getAsInt() : 1);
-
-            write(root.resolve("data").resolve(id.namespace()).resolve("jukebox_song")
-                .resolve(id.path() + ".json"), song);
         }
     }
 

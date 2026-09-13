@@ -16,9 +16,6 @@
     },
     "pouch": {
       "textures": "textures/items/pouch"
-    },
-    "disc": {
-      "textures": "textures/items/disc"
     }
   }
 }
