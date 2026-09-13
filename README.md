@@ -44,6 +44,12 @@ server decides what happens; the client draws it.
 - Blocks, with the states and permutations a pack declares: each combination gets its own model, the
   permutation conditions are evaluated through the Molang evaluator, and a block drawn with its own
   geometry keeps it.
+- The events a block declares, fired the way Bedrock fires them: on its own clock, on a random tick,
+  and on the block being placed, broken, clicked, stepped on, stepped off or landed on. Each one runs
+  the commands the event queues and writes back the states it sets, with its Molang condition checked
+  against the block standing in the world. A block that says it holds water is waterlogged, one with
+  a placement filter only survives where the filter allows, one that produces redstone powers what it
+  touches, and one a pack marks pottable gets the second block a flower pot needs.
 - Trading, with Bedrock's tiers and groups flattened into Java's merchant screen.
 - Recipes, loot tables, natural spawning, and `.mcfunction` files translated into Java's command
   dialect with a `tick` function tag.
@@ -78,6 +84,11 @@ have. `managed_wandering_trader` describes how Bedrock runs its own trader. `beh
 and `behavior.celebrate_survive` are two moments Java writes into its villager's own brain, with no
 general form a pack's entity could be given. Each is counted and named by `/mcaddon entities`, so a
 pack relying on one is told rather than left wondering.
+
+**Most of what a block event can answer with.** `run_command`, `set_block_state` and `die` have a
+Java form and run. The rest, which play a sound or a particle, deal damage, add or remove an effect,
+teleport, swing, spawn loot, or replace the block or the held item, are counted and named by
+`/mcaddon entities` instead, so a pack using one is told which response was dropped.
 
 **Stencil-masked material passes.** A material's alpha testing, blending, culling and emissiveness
 all become the render type the pass is drawn with. What cannot follow is the stencil buffer itself:

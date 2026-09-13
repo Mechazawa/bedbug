@@ -26,7 +26,7 @@ import java.util.Map;
  */
 public record BlockDefinition(String identifier, Map<String, String> faceTextures, String geometry,
     boolean transparent, JsonObject components, Map<String, List<JsonElement>> states,
-    List<Permutation> permutations) {
+    List<Permutation> permutations, JsonObject events) {
 
     /** One `permutations` entry: the components that apply while its Molang condition holds. */
     public record Permutation(String condition, JsonObject components) {
@@ -94,7 +94,7 @@ public record BlockDefinition(String identifier, Map<String, String> faceTexture
         }
 
         return new BlockDefinition(identifier, faces, geometry(components), transparent,
-            components, states, permutations);
+            components, states, permutations, object(body, "events"));
     }
 
     /** The named member, or an empty object when the pack left it out or wrote something else. */

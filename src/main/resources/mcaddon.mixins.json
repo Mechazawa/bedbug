@@ -6,6 +6,7 @@
   "mixins": [
     "PackRepositoryMixin",
     "LivingEntityMixin",
+    "JumpingAccessor",
     "ItemEntityMixin",
     "ProjectileMixin",
     "ButtonBlockMixin"

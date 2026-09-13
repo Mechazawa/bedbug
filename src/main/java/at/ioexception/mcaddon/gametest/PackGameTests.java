@@ -15,6 +15,9 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.state.properties.BooleanProperty;
+import net.minecraft.world.level.block.state.properties.IntegerProperty;
+import net.minecraft.world.level.block.state.properties.Property;
 
 /**
  * What an add-on does once it is loaded into a world.
@@ -175,6 +178,57 @@ public final class PackGameTests {
             BLOCK + " could not be placed.");
         helper.assertBlockPresent(block, STAND);
         helper.succeed();
+    }
+
+    /**
+     * A pack's block runs the event its own clock asks for.
+     *
+     * `minecraft:queued_ticking` names an interval and an event, and none of that chain exists
+     * outside a running world: placing the block schedules the tick, the tick runs the event, and
+     * the event writes one of the pack's own states back onto the block.
+     */
+    @GameTest()
+    public void aPackBlockRunsItsScheduledEvent(GameTestHelper helper) {
+        net.minecraft.world.level.block.Block block = BuiltInRegistries.BLOCK
+            .getOptional(Platform.id("tp", "lamp")).orElse(null);
+        Property<?> declared = block == null ? null : block.getStateDefinition().getProperty("tp_lit");
+        if (!(declared instanceof BooleanProperty lit)) {
+            helper.succeed();
+            return;
+        }
+
+        BlockPos at = helper.absolutePos(STAND);
+        helper.getLevel().setBlockAndUpdate(at, block.defaultBlockState().setValue(lit, false));
+        helper.succeedWhen(() -> helper.assertTrue(helper.getBlockState(STAND).getValue(lit),
+            BLOCK + " never ran the event its clock schedules."));
+    }
+
+    /**
+     * A pack's block runs the event it names for whoever stands on it.
+     *
+     * Java calls `stepOn` from the entity's own movement, so a mob that lands on the block is what
+     * fires `minecraft:on_step_on` and what the event then writes into the block's states.
+     */
+    @GameTest()
+    public void aPackBlockRunsItsStepOnEvent(GameTestHelper helper) {
+        net.minecraft.world.level.block.Block block = BuiltInRegistries.BLOCK
+            .getOptional(Platform.id("tp", "lamp")).orElse(null);
+        Property<?> declared = block == null ? null : block.getStateDefinition().getProperty("tp_level");
+        if (!(declared instanceof IntegerProperty steps)) {
+            helper.succeed();
+            return;
+        }
+
+        helper.getLevel().setBlockAndUpdate(helper.absolutePos(STAND),
+            block.defaultBlockState().setValue(steps, 0));
+        // 26.2 moved the vanilla entity types out of the class that builds them.
+        //? if >=26.2 {
+        helper.spawnWithNoFreeWill(net.minecraft.world.entity.EntityTypes.PIG, STAND.above());
+        //?} else {
+        /*helper.spawnWithNoFreeWill(EntityType.PIG, STAND.above());
+        *///?}
+        helper.succeedWhen(() -> helper.assertTrue(helper.getBlockState(STAND).getValue(steps) == 2,
+            BLOCK + " never ran the event it names for whoever steps on it."));
     }
 
     /**

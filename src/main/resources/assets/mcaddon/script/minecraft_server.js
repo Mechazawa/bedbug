@@ -187,6 +187,41 @@ export class BlockVolume extends BlockVolumeBase {
         this.from = moved(this.from, delta);
         this.to = moved(this.to, delta);
     }
+
+    /** Disjoint, contained whole, or overlapping, which is the three Bedrock reports. */
+    intersects(other) {
+        const min = this.getMin();
+        const max = this.getMax();
+        const otherMin = other.getMin();
+        const otherMax = other.getMax();
+        if (otherMin.x > max.x || otherMax.x < min.x || otherMin.y > max.y || otherMax.y < min.y
+            || otherMin.z > max.z || otherMax.z < min.z) {
+            return BlockVolumeIntersection.Disjoint;
+        }
+        return this.isInside(otherMin) && this.isInside(otherMax)
+            ? BlockVolumeIntersection.Contains : BlockVolumeIntersection.Intersects;
+    }
+
+    /** A position inside the volume and on one of its outer planes rather than in the middle. */
+    doesLocationTouchFaces(location) {
+        const at = blockPosition(location);
+        const min = this.getMin();
+        const max = this.getMax();
+        return this.isInside(at) && (at.x === min.x || at.x === max.x || at.y === min.y
+            || at.y === max.y || at.z === min.z || at.z === max.z);
+    }
+
+    /** Overlapping without sitting clear of every outer plane, which is what touching a face is. */
+    doesVolumeTouchFaces(other) {
+        if (this.intersects(other) === BlockVolumeIntersection.Disjoint) return false;
+
+        const min = this.getMin();
+        const max = this.getMax();
+        const otherMin = other.getMin();
+        const otherMax = other.getMax();
+        return otherMin.x <= min.x || otherMax.x >= max.x || otherMin.y <= min.y
+            || otherMax.y >= max.y || otherMin.z <= min.z || otherMax.z >= max.z;
+    }
 }
 
 /** The positions a fill or a search touched, which is how Bedrock hands a scattered region back. */
@@ -267,10 +302,18 @@ function positionsIn(flat) {
 const blockTypeCache = new Map();
 
 /** A block type, which is its id and the key its name is translated under. */
+export class BlockType {
+    constructor(id) {
+        this.id = id;
+        this.localizationKey = bridge.blocks.localizationKey(id) ?? id;
+        Object.freeze(this);
+    }
+}
+
 function blockType(id) {
     let type = blockTypeCache.get(id);
     if (type === undefined) {
-        type = Object.freeze({ id, localizationKey: bridge.blocks.localizationKey(id) ?? id });
+        type = new BlockType(id);
         blockTypeCache.set(id, type);
     }
     return type;
@@ -362,29 +405,42 @@ export class BlockPermutation {
     }
 }
 
-export const BlockTypes = Object.freeze({
-    get(typeName) {
+export class BlockTypes {
+    static get(typeName) {
         const id = bridge.blocks.canonicalId(typeName);
         return id === null ? undefined : blockType(id);
-    },
-    getAll() {
+    }
+
+    static getAll() {
         return list(bridge.blocks.typeIds()).map(id => blockType(id));
-    },
-});
+    }
+}
+
+/** One state name a block may carry, against every value the game accepts for it. */
+export class BlockStateType {
+    constructor(fields) {
+        this.id = fields.id;
+        this.validValues = fields.validValues;
+        Object.freeze(this);
+    }
+}
 
 // The catalogue is the same for as long as the game runs, and building it reads every block there
 // is, so it is read once and handed out as a copy.
 let blockStateTypes;
 
-export const BlockStates = Object.freeze({
-    get(stateName) {
+export class BlockStates {
+    static get(stateName) {
         return BlockStates.getAll().find(state => state.id === stateName);
-    },
-    getAll() {
-        if (blockStateTypes === undefined) blockStateTypes = JSON.parse(bridge.blocks.stateTypes());
+    }
+
+    static getAll() {
+        if (blockStateTypes === undefined) {
+            blockStateTypes = JSON.parse(bridge.blocks.stateTypes()).map(one => new BlockStateType(one));
+        }
         return blockStateTypes.slice();
-    },
-});
+    }
+}
 
 // A kind of item is the same for as long as the game runs, so what the game says about one is read
 // once and handed back frozen, which also keeps one ItemType object per id for a pack to compare.
@@ -396,27 +452,35 @@ function namespaced(name) {
     return id !== undefined && id !== null && !id.includes(":") ? "minecraft:" + id : id;
 }
 
+export class ItemType {
+    constructor(fields) {
+        this.id = fields.id;
+        this.localizationKey = fields.localizationKey;
+        Object.freeze(this);
+    }
+}
+
 /** What the game knows about a kind of item, with no fields at all for an id nothing registers. */
 function itemInfo(typeId) {
     let info = itemTypeCache.get(typeId);
     if (info === undefined) {
         info = JSON.parse(bridge.items.describe(typeId ?? ""));
-        info.type = info.id === undefined ? undefined
-            : Object.freeze({ id: info.id, localizationKey: info.localizationKey });
+        info.type = info.id === undefined ? undefined : new ItemType(info);
         Object.freeze(info);
         itemTypeCache.set(typeId, info);
     }
     return info;
 }
 
-export const ItemTypes = Object.freeze({
-    get(itemId) {
+export class ItemTypes {
+    static get(itemId) {
         return itemInfo(namespaced(itemId)).type;
-    },
-    getAll() {
+    }
+
+    static getAll() {
         return list(bridge.items.all()).map(id => itemInfo(id).type);
-    },
-});
+    }
+}
 
 /** An enchantment type is its id and the highest level the game gives it. Undefined for a bad id. */
 function enchantmentType(type) {
@@ -467,12 +531,6 @@ function sameItem(one, other) {
 }
 
 // The components a kind of item can carry here, which is what getComponents() offers a pack.
-const itemComponents = Object.freeze([
-    ItemComponentTypes.Durability, ItemComponentTypes.Food, ItemComponentTypes.Cooldown,
-    ItemComponentTypes.Enchantable, ItemComponentTypes.Dyeable, ItemComponentTypes.Potion,
-    ItemComponentTypes.Compostable, ItemComponentTypes.Book,
-]);
-
 // The two items that carry pages. Every other item answers that it has no book.
 const bookItems = Object.freeze(["minecraft:writable_book", "minecraft:written_book"]);
 
@@ -582,140 +640,15 @@ export class ItemStack {
 
     getComponent(component) {
         const name = normaliseComponent(component);
-        const info = itemInfo(this.typeId);
-        switch (name) {
-            case ItemComponentTypes.Book:
-                return bookItems.includes(this.typeId) ? new ItemBookComponent(this) : undefined;
-            case ItemComponentTypes.Durability:
-                return this.#durability(name);
-            case ItemComponentTypes.Food:
-                return info.food === undefined ? undefined : { typeId: name, ...info.food };
-            case ItemComponentTypes.Compostable:
-                return info.compostable === undefined ? undefined : { typeId: name, ...info.compostable };
-            case ItemComponentTypes.Cooldown:
-                return this.#cooldown(name, info.cooldown);
-            case ItemComponentTypes.Enchantable:
-                return this.#enchantable(name, info.enchantable);
-            case ItemComponentTypes.Dyeable:
-                return this.#dyeable(name, info.dyeable);
-            case ItemComponentTypes.Potion:
-                return this.#potion(name, info.potion);
-            default:
-                return unsupported("ItemStack.getComponent(" + name + ")");
-        }
-    }
+        const build = ITEM_COMPONENTS[name];
+        if (build === undefined) return unsupported("ItemStack.getComponent(" + name + ")");
 
-    #durability(name) {
-        const max = this.maxDurability ?? bridge.itemMaxDurability(this.typeId);
-        if (max <= 0) return undefined;
-
-        const stack = this;
-        return {
-            typeId: name,
-            maxDurability: max,
-            get damage() {
-                return stack.damage ?? 0;
-            },
-            set damage(value) {
-                stack.damage = value;
-            },
-            get unbreakable() {
-                return stack.unbreakable ?? false;
-            },
-            set unbreakable(value) {
-                stack.unbreakable = value;
-                if (value) unsupported("ItemDurabilityComponent.unbreakable");
-            },
-            getDamageChance: () => 100,
-            getDamageChanceRange: () => ({ min: 100, max: 100 }),
-        };
-    }
-
-    /** A cooldown is read from a player, because it is the player and not the item that holds one. */
-    #cooldown(name, cooldown) {
-        if (cooldown === undefined) return undefined;
-
-        const typeId = this.typeId;
-        return {
-            typeId: name,
-            cooldownCategory: cooldown.cooldownCategory,
-            cooldownTicks: cooldown.cooldownTicks,
-            isCooldownCategory: category => category === cooldown.cooldownCategory,
-            getCooldownTicksRemaining: player => bridge.items.cooldownRemaining(player.id, typeId),
-            startCooldown: player => {
-                bridge.items.startCooldown(player.id, typeId, cooldown.cooldownTicks);
-            },
-        };
-    }
-
-    /**
-     * An enchantment a pack adds is kept on the stack and answered back. Nothing carries it onto the
-     * item the world holds, so adding one is reported.
-     */
-    #enchantable(name, enchantable) {
-        if (enchantable === undefined) return undefined;
-
-        const stack = this;
-        const held = () => stack.enchantments ?? [];
-        const add = enchantment => {
-            const added = enchantmentOf(enchantment);
-            stack.enchantments = [...held().filter(on => on.type.id !== added.type.id), added];
-            unsupported("ItemEnchantableComponent.addEnchantment");
-        };
-        return {
-            typeId: name,
-            slots: [...enchantable.slots],
-            getEnchantments: () => held().slice(),
-            getEnchantment: type => held().find(on => on.type.id === namespaced(type)),
-            hasEnchantment: type => held().some(on => on.type.id === namespaced(type)),
-            canAddEnchantment: enchantment => {
-                const asked = enchantmentOf(enchantment);
-                return !held().some(on => on.type.id === asked.type.id);
-            },
-            addEnchantment: add,
-            addEnchantments: enchantments => (enchantments ?? []).forEach(add),
-            removeEnchantment: type => {
-                stack.enchantments = held().filter(on => on.type.id !== namespaced(type));
-            },
-            removeAllEnchantments: () => {
-                stack.enchantments = [];
-            },
-        };
-    }
-
-    /** A colour a pack dyes the stack is answered back, and nothing carries it into the world. */
-    #dyeable(name, dyeable) {
-        if (dyeable === undefined) return undefined;
-
-        const stack = this;
-        return {
-            typeId: name,
-            defaultColor: { ...dyeable.defaultColor },
-            get color() {
-                return stack.dyeColor ?? { ...dyeable.defaultColor };
-            },
-            set color(value) {
-                stack.dyeColor = value;
-                unsupported("ItemDyeableComponent.color");
-            },
-        };
-    }
-
-    /** Which effect the potion carries is written on the stack in the world, not on its type. */
-    #potion(name, potion) {
-        if (potion === undefined) return undefined;
-
-        return {
-            typeId: name,
-            potionDeliveryType: Object.freeze({ id: potion.potionDeliveryType }),
-            get potionEffectType() {
-                return unsupported("ItemPotionComponent.potionEffectType");
-            },
-        };
+        const declared = build.declaredOn(this);
+        return declared === undefined ? undefined : new build(this, name, declared);
     }
 
     getComponents() {
-        return itemComponents
+        return Object.keys(ITEM_COMPONENTS)
             .map(name => this.getComponent(name))
             .filter(component => component !== undefined);
     }
@@ -944,24 +877,25 @@ export class Block {
     /** Undefined for a block that has no such component; one this mod cannot build is reported. */
     getComponent(component) {
         const name = normaliseComponent(component);
-        const build = BLOCK_COMPONENTS[name];
-        return build === undefined ? unsupported("Block.getComponent(" + name + ")") : build(this);
+        if (BLOCK_COMPONENTS[name] === undefined) {
+            return unsupported("Block.getComponent(" + name + ")");
+        }
+        return blockComponentFor(this, name);
     }
 
     getComponents() {
-        return Object.values(BLOCK_COMPONENTS)
-            .map(build => build(this))
+        return Object.keys(BLOCK_COMPONENTS)
+            .map(name => blockComponentFor(this, name))
             .filter(component => component !== undefined);
     }
 
     hasComponent(component) {
         const name = normaliseComponent(component);
-        const build = BLOCK_COMPONENTS[name];
-        if (build === undefined) {
+        if (BLOCK_COMPONENTS[name] === undefined) {
             unsupported("Block.hasComponent(" + name + ")");
             return false;
         }
-        return build(this) !== undefined;
+        return blockComponentFor(this, name) !== undefined;
     }
 }
 
@@ -975,163 +909,181 @@ function blockComponent(state) {
     return state === null ? undefined : JSON.parse(state);
 }
 
-function movableComponent(block) {
-    const movement = blockComponent(bridge.blocks.movement(...blockAt(block)));
-    return { typeId: "minecraft:movable", block, ...movement };
+/** What every block component carries: the block it was read off, and the name it was asked for. */
+export class BlockComponent {
+    constructor(block, typeId) {
+        this.block = block;
+        this.typeId = typeId;
+    }
+
+    get isValid() {
+        return bridge.blocks.exists(...blockAt(this.block));
+    }
+
+    /** The component reads the block again for every answer, so nothing here is a stale copy. */
+    read() {
+        const reader = COMPONENT_READERS[this.typeId];
+        return reader === undefined
+            ? undefined : blockComponent(bridge.blocks[reader](...blockAt(this.block)));
+    }
+
+    /** Whether this block carries the component at all, which decides what `getComponent` hands back. */
+    present() {
+        return this.read() !== undefined;
+    }
 }
 
-/**
- * The sign a pack writes to, reading the block again for every answer.
- *
- * A pack holds a component and expects it to follow the sign, so nothing here is a copy taken when
- * the component was handed out. A side is the front unless the back was asked for by name.
- */
-function signComponent(block) {
-    const read = () => blockComponent(bridge.blocks.sign(...blockAt(block)));
-    if (read() === undefined) return undefined;
-
-    const isFront = side => side !== SignSide.Back;
-    const text = side => read()?.[isFront(side) ? "front" : "back"];
-    return {
-        typeId: "minecraft:sign",
-        block,
-        get isWaxed() {
-            return read()?.isWaxed === true;
-        },
-        getText: side => text(side)?.text,
-        getRawText: side => ({ rawtext: [{ text: text(side)?.text ?? "" }] }),
-        getTextDyeColor: side => text(side)?.color,
-        setText: (message, side) =>
-            bridge.blocks.setSignText(...blockAt(block), isFront(side), rawText(message)),
-        setTextDyeColor: (color, side) =>
-            bridge.blocks.setSignDye(...blockAt(block), isFront(side), color ?? null),
-        setWaxed: waxed => bridge.blocks.setSignWaxed(...blockAt(block), waxed === true),
-    };
+/** The component the block carries under that name, or undefined when it carries none. */
+function blockComponentFor(block, name) {
+    const component = new BLOCK_COMPONENTS[name](block, name);
+    return component.present() ? component : undefined;
 }
 
-/** The container a chest, a hopper or a furnace holds, read again on every call like the rest. */
-function inventoryComponent(block) {
-    const read = () => containerAt(...blockAt(block));
-    if (read() === undefined) return undefined;
+/** The bridge call each block component reads itself from. */
+const COMPONENT_READERS = Object.freeze({
+    "minecraft:movable": "movement",
+    "minecraft:sign": "sign",
+    "minecraft:piston": "piston",
+    "minecraft:map_color": "mapColour",
+    "minecraft:redstone_producer": "redstoneProducer",
+});
 
-    return {
-        typeId: "minecraft:inventory",
-        block,
-        get container() {
-            return read();
-        },
-    };
+/** Every block answers how a piston moves it, so this one is carried by all of them. */
+export class BlockMovableComponent extends BlockComponent {
+    static componentId = "minecraft:movable";
+
+    present() {
+        return true;
+    }
+
+    get movementType() {
+        return this.read()?.movementType;
+    }
+
+    get stickyType() {
+        return this.read()?.stickyType;
+    }
 }
 
-function pistonComponent(block) {
-    const read = () => blockComponent(bridge.blocks.piston(...blockAt(block)));
-    if (read() === undefined) return undefined;
+export class BlockPistonComponent extends BlockComponent {
+    static componentId = "minecraft:piston";
 
-    const attached = () => (read()?.attached ?? []).map(vector);
-    return {
-        typeId: "minecraft:piston",
-        block,
-        get isMoving() {
-            return read()?.isMoving === true;
-        },
-        get state() {
-            return read()?.state;
-        },
-        getAttachedBlocksLocations: attached,
-        getAttachedBlocks: () => attached().map(location => block.dimension.getBlock(location))
-            .filter(found => found !== undefined),
-    };
+    get isMoving() {
+        return this.read()?.isMoving === true;
+    }
+
+    get state() {
+        return this.read()?.state;
+    }
+
+    getAttachedBlocksLocations() {
+        return (this.read()?.attached ?? []).map(vector);
+    }
+
+    getAttachedBlocks() {
+        return this.getAttachedBlocksLocations()
+            .map(location => this.block.dimension.getBlock(location))
+            .filter(found => found !== undefined);
+    }
 }
 
 /** Java gives a block one map colour, so the tinted colour is that same colour untouched. */
-function mapColorComponent(block) {
-    const colour = blockComponent(bridge.blocks.mapColour(...blockAt(block)));
-    if (colour === undefined) return undefined;
+export class BlockMapColorComponent extends BlockComponent {
+    static componentId = "minecraft:map_color";
 
-    return {
-        typeId: "minecraft:map_color",
-        block,
-        color: colour,
-        tintedColor: colour,
-        tintMethod: TintMethod.None,
-    };
+    tintMethod = TintMethod.None;
+
+    get color() {
+        return this.read();
+    }
+
+    get tintedColor() {
+        return this.read();
+    }
 }
 
-function redstoneProducerComponent(block) {
-    const read = () => blockComponent(bridge.blocks.redstoneProducer(...blockAt(block)));
-    if (read() === undefined) return undefined;
+export class BlockRedstoneProducerComponent extends BlockComponent {
+    static componentId = "minecraft:redstone_producer";
 
-    return {
-        typeId: "minecraft:redstone_producer",
-        block,
-        get power() {
-            return read()?.power ?? 0;
-        },
-        getConnectedFaces: () => read()?.connectedFaces ?? [],
-        getStronglyPoweredFace: () => read()?.stronglyPoweredFace ?? undefined,
-    };
+    get power() {
+        return this.read()?.power ?? 0;
+    }
+
+    getConnectedFaces() {
+        return this.read()?.connectedFaces ?? [];
+    }
+
+    getStronglyPoweredFace() {
+        return this.read()?.stronglyPoweredFace ?? undefined;
+    }
 }
 
-// Every component this mod answers for a block, by the name a pack asks for it under. A builder
-// hands back undefined for a block that does not carry its component, which is what Bedrock does.
-const BLOCK_COMPONENTS = {
-    "minecraft:inventory": inventoryComponent,
-    "minecraft:movable": movableComponent,
-    "minecraft:sign": signComponent,
-    "minecraft:piston": pistonComponent,
-    "minecraft:map_color": mapColorComponent,
-    "minecraft:redstone_producer": redstoneProducerComponent,
-};
-
-// Component classes. A pack imports these to name a type, and the objects `getComponent` hands back
-// are plain objects, so these exist to satisfy the import and any `instanceof` written against them.
-export class EntityComponent {
-}
-
-export class EntityHealthComponent extends EntityComponent {
-}
-
-export class EntityEquippableComponent extends EntityComponent {
-}
-
-export class EntityInventoryComponent extends EntityComponent {
+/** The container a chest, a hopper or a furnace holds, read again on every call like the rest. */
+export class BlockInventoryComponent extends BlockComponent {
     static componentId = "minecraft:inventory";
+
+    present() {
+        return this.container !== undefined;
+    }
+
+    get container() {
+        return containerAt(...blockAt(this.block));
+    }
 }
 
-export class EntityRidingComponent extends EntityComponent {
+/** A side is the front unless the back was asked for by name, which is how Bedrock reads one. */
+export class BlockSignComponent extends BlockComponent {
+    static componentId = "minecraft:sign";
+
+    get isWaxed() {
+        return this.read()?.isWaxed === true;
+    }
+
+    #text(side) {
+        return this.read()?.[side === SignSide.Back ? "back" : "front"];
+    }
+
+    getText(side) {
+        return this.#text(side)?.text;
+    }
+
+    getRawText(side) {
+        return { rawtext: [{ text: this.#text(side)?.text ?? "" }] };
+    }
+
+    getTextDyeColor(side) {
+        return this.#text(side)?.color;
+    }
+
+    setText(message, side) {
+        bridge.blocks.setSignText(...blockAt(this.block), side !== SignSide.Back, rawText(message));
+    }
+
+    setTextDyeColor(color, side) {
+        bridge.blocks.setSignDye(...blockAt(this.block), side !== SignSide.Back, color ?? null);
+    }
+
+    setWaxed(waxed) {
+        bridge.blocks.setSignWaxed(...blockAt(this.block), waxed === true);
+    }
 }
 
-export class EntityVariantComponent extends EntityComponent {
-}
+const BLOCK_COMPONENTS = Object.freeze({
+    "minecraft:inventory": BlockInventoryComponent,
+    "minecraft:movable": BlockMovableComponent,
+    "minecraft:sign": BlockSignComponent,
+    "minecraft:piston": BlockPistonComponent,
+    "minecraft:map_color": BlockMapColorComponent,
+    "minecraft:redstone_producer": BlockRedstoneProducerComponent,
+});
 
-export class EntityMarkVariantComponent extends EntityComponent {
-}
-
-export class EntitySkinIdComponent extends EntityComponent {
-}
-
-export class EntityTypeFamilyComponent extends EntityComponent {
-}
-
-export class EntityIsBabyComponent extends EntityComponent {
-}
-
-export class EntityItemComponent extends EntityComponent {
-}
-
-/**
- * A component answered from what the pack declared for the entity rather than from the live game.
- *
- * Java holds none of this. Its pathfinding keeps no record of whether a mob may open a door and its
- * arrows carry no bounce flag, so the behaviour pack is the only place the answer exists. The pack
- * is read on every access, and a field the pack left out falls back to Bedrock's own default for it.
- */
-class DeclaredComponent extends EntityComponent {
+// Component classes. A pack imports one to name a type, and `getComponent` hands back an instance of
+// whichever of these matches the name it asked for.
+export class EntityComponent {
     #entity;
     #typeId;
 
     constructor(entity, typeId) {
-        super();
         this.#entity = entity;
         this.#typeId = typeId;
     }
@@ -1147,9 +1099,189 @@ class DeclaredComponent extends EntityComponent {
     get isValid() {
         return bridge.entityIsValid(this.#entity.id);
     }
+}
 
+/**
+ * One number the game keeps about an entity, which Bedrock hands out as a component per number.
+ *
+ * Java holds these in one attribute map plus a few fields beside it, so the component id says which
+ * to read. A Bedrock attribute this game has no counterpart for answers nothing and reports itself.
+ */
+export class EntityAttributeComponent extends EntityComponent {
+    #read(field) {
+        const found = bridge.entityMembers.attribute(this.entity.id, this.typeId);
+        return found === null
+            ? unsupported("EntityAttributeComponent(" + this.typeId + ")") : JSON.parse(found)[field];
+    }
+
+    get currentValue() {
+        return this.#read("current");
+    }
+
+    get defaultValue() {
+        return this.#read("default");
+    }
+
+    get effectiveMax() {
+        return this.#read("max");
+    }
+
+    get effectiveMin() {
+        return this.#read("min");
+    }
+
+    setCurrentValue(value) {
+        const set = bridge.entityMembers.setAttribute(this.entity.id, this.typeId, value);
+        if (!set) unsupported("EntityAttributeComponent(" + this.typeId + ")");
+        return set;
+    }
+
+    resetToDefaultValue() {
+        this.setCurrentValue(this.defaultValue);
+    }
+
+    resetToMaxValue() {
+        this.setCurrentValue(this.effectiveMax);
+    }
+
+    resetToMinValue() {
+        this.setCurrentValue(this.effectiveMin);
+    }
+}
+
+export class EntityHealthComponent extends EntityAttributeComponent {
+    static componentId = "minecraft:health";
+}
+
+export class EntityMovementComponent extends EntityAttributeComponent {
+    static componentId = "minecraft:movement";
+}
+
+export class EntityHungerComponent extends EntityAttributeComponent {
+    static componentId = "minecraft:player.hunger";
+}
+
+export class EntitySaturationComponent extends EntityAttributeComponent {
+    static componentId = "minecraft:player.saturation";
+}
+
+export class EntityOnFireComponent extends EntityComponent {
+    static componentId = "minecraft:onfire";
+
+    get onFireTicksRemaining() {
+        return bridge.entityMembers.fireTicks(this.entity.id);
+    }
+}
+
+export class EntityEquippableComponent extends EntityComponent {
+    static componentId = "minecraft:equippable";
+
+    getEquipment(slot) {
+        const item = bridge.equipment(this.entity.id, slot);
+        return item === null ? undefined : itemFrom(JSON.parse(item));
+    }
+
+    setEquipment(slot, item) {
+        return bridge.setEquipment(this.entity.id, slot, item?.typeId ?? null, item?.amount ?? 1);
+    }
+
+    // A slot is a handle into a container the guest can hold on to, which an equipment slot on a
+    // Java entity is not: armour and held items sit in fields rather than in the inventory.
+    getEquipmentSlot() {
+        return unsupported("EntityEquippableComponent.getEquipmentSlot");
+    }
+
+    get totalArmor() {
+        return bridge.entityMembers.armour(this.entity.id);
+    }
+
+    get totalToughness() {
+        return bridge.entityMembers.armourToughness(this.entity.id);
+    }
+}
+
+export class EntityInventoryComponent extends EntityComponent {
+    static componentId = "minecraft:inventory";
+
+    additionalSlotsPerStrength = 0;
+    canBeSiphonedFrom = false;
+    private = false;
+    restrictToOwner = false;
+
+    /** The pack says what kind of container its entity carries; Java has one kind of inventory. */
+    get containerType() {
+        const declared = bridge.entityMembers.packComponent(this.entity.id, EntityInventoryComponent.componentId);
+        return declared === null ? "inventory" : (JSON.parse(declared).container_type ?? "inventory");
+    }
+
+    get container() {
+        const handle = bridge.containers.ofEntity(this.entity.id);
+        return handle === null ? undefined : new Container(handle);
+    }
+
+    get inventorySize() {
+        return this.container?.size ?? 0;
+    }
+}
+
+export class EntityRidingComponent extends EntityComponent {
+    static componentId = "minecraft:riding";
+
+    get entityRidingOn() {
+        const vehicle = bridge.entityVehicle(this.entity.id);
+        return vehicle === null ? undefined : entityFor(vehicle);
+    }
+}
+
+/** The entity properties Bedrock reads as a component, each one number the pack or the game set. */
+class PropertyComponent extends EntityComponent {
+    get value() {
+        return bridge.entityProperty(this.entity.id, this.typeId.slice("minecraft:".length)) ?? 0;
+    }
+}
+
+export class EntityVariantComponent extends PropertyComponent {
+    static componentId = "minecraft:variant";
+}
+
+export class EntityMarkVariantComponent extends PropertyComponent {
+    static componentId = "minecraft:mark_variant";
+}
+
+export class EntitySkinIdComponent extends PropertyComponent {
+    static componentId = "minecraft:skin_id";
+}
+
+export class EntityTypeFamilyComponent extends EntityComponent {
+    static componentId = "minecraft:type_family";
+
+    getTypeFamilies() {
+        return list(bridge.entityFamilies(this.entity.id));
+    }
+
+    hasTypeFamily(family) {
+        return this.getTypeFamilies().includes(family);
+    }
+}
+
+export class EntityIsBabyComponent extends EntityComponent {
+    static componentId = "minecraft:is_baby";
+}
+
+export class EntityItemComponent extends EntityComponent {
+    static componentId = "minecraft:item";
+}
+
+/**
+ * A component answered from what the pack declared for the entity rather than from the live game.
+ *
+ * Java holds none of this. Its pathfinding keeps no record of whether a mob may open a door and its
+ * arrows carry no bounce flag, so the behaviour pack is the only place the answer exists. The pack
+ * is read on every access, and a field the pack left out falls back to Bedrock's own default for it.
+ */
+class DeclaredComponent extends EntityComponent {
     field(name, fallback) {
-        const body = bridge.entityMembers.packComponent(this.#entity.id, this.#typeId);
+        const body = bridge.entityMembers.packComponent(this.entity.id, this.typeId);
         const declared = body === null ? undefined : JSON.parse(body)[name];
         return declared === undefined ? fallback : declared;
     }
@@ -1372,6 +1504,207 @@ export class EntityNavigationWalkComponent extends EntityNavigationComponent {
     static componentId = "minecraft:navigation.walk";
 }
 
+/** How fast a mob turns while it moves, which every one of Bedrock's movement kinds carries. */
+export class EntityBaseMovementComponent extends DeclaredComponent {
+}
+
+declaredFields(EntityBaseMovementComponent, [["maxTurn", "max_turn", 30]]);
+
+export class EntityMovementAmphibiousComponent extends EntityBaseMovementComponent {
+    static componentId = "minecraft:movement.amphibious";
+}
+
+export class EntityMovementBasicComponent extends EntityBaseMovementComponent {
+    static componentId = "minecraft:movement.basic";
+}
+
+export class EntityMovementFlyComponent extends EntityBaseMovementComponent {
+    static componentId = "minecraft:movement.fly";
+}
+
+export class EntityMovementGenericComponent extends EntityBaseMovementComponent {
+    static componentId = "minecraft:movement.generic";
+}
+
+export class EntityMovementGlideComponent extends EntityBaseMovementComponent {
+    static componentId = "minecraft:movement.glide";
+}
+
+declaredFields(EntityMovementGlideComponent, [
+    ["speedWhenTurning", "speed_when_turning", 0.2],
+    ["startSpeed", "start_speed", 0.1],
+]);
+
+export class EntityMovementHoverComponent extends EntityBaseMovementComponent {
+    static componentId = "minecraft:movement.hover";
+}
+
+export class EntityMovementJumpComponent extends EntityBaseMovementComponent {
+    static componentId = "minecraft:movement.jump";
+}
+
+export class EntityMovementSkipComponent extends EntityBaseMovementComponent {
+    static componentId = "minecraft:movement.skip";
+}
+
+export class EntityMovementSwayComponent extends EntityBaseMovementComponent {
+    static componentId = "minecraft:movement.sway";
+}
+
+declaredFields(EntityMovementSwayComponent, [
+    ["swayAmplitude", "sway_amplitude", 0.05],
+    ["swayFrequency", "sway_frequency", 0.5],
+]);
+
+export class EntityStrengthComponent extends DeclaredComponent {
+    static componentId = "minecraft:strength";
+}
+
+declaredFields(EntityStrengthComponent, [["max", "max", 5], ["value", "value", 1]]);
+
+export class EntityAddRiderComponent extends DeclaredComponent {
+    static componentId = "minecraft:addrider";
+}
+
+declaredFields(EntityAddRiderComponent, [
+    ["entityType", "entity_type", ""],
+    ["spawnEvent", "spawn_event", ""],
+]);
+
+/** An event the pack names on a component, which is all a `Trigger` is. */
+export class Trigger {
+    constructor(declared) {
+        this.eventName = typeof declared === "string" ? declared : (declared?.event ?? "");
+    }
+}
+
+/** One item a young entity is fed, and how much of its growing up that feeding is worth. */
+export class EntityDefinitionFeedItem {
+    constructor(declared) {
+        this.item = typeof declared === "string" ? declared : declared.item;
+        this.growth = typeof declared === "string" ? 0 : (declared.growth ?? 0);
+        this.resultItem = typeof declared === "string" ? undefined : declared.result_item;
+    }
+}
+
+export class EntityAgeableComponent extends DeclaredComponent {
+    static componentId = "minecraft:ageable";
+
+    get growUp() {
+        return new Trigger(this.field("grow_up", ""));
+    }
+
+    getDropItems() {
+        return this.field("drop_items", []);
+    }
+
+    getFeedItems() {
+        return this.field("feed_items", []).map(item => new EntityDefinitionFeedItem(item));
+    }
+}
+
+declaredFields(EntityAgeableComponent, [
+    ["duration", "duration", 1200],
+    ["transformToItem", "transform_to_item", ""],
+]);
+
+/** One effect a feeding puts on the entity, as the healable component writes it. */
+export class FeedItemEffect {
+    constructor(declared) {
+        this.name = declared.name;
+        this.amplifier = declared.amplifier ?? 0;
+        this.chance = declared.chance ?? 1;
+        this.duration = declared.duration ?? 0;
+    }
+}
+
+export class FeedItem {
+    constructor(declared) {
+        this.item = typeof declared === "string" ? declared : declared.item;
+        this.healAmount = typeof declared === "string" ? 1 : (declared.heal_amount ?? 1);
+        this.resultItem = typeof declared === "string" ? undefined : declared.replace_item;
+        this.#effects = typeof declared === "string" ? [] : (declared.effects ?? []);
+    }
+
+    #effects;
+
+    getEffects() {
+        return this.#effects.map(effect => new FeedItemEffect(effect));
+    }
+}
+
+export class EntityHealableComponent extends DeclaredComponent {
+    static componentId = "minecraft:healable";
+
+    getFeedItems() {
+        return this.field("items", []).map(item => new FeedItem(item));
+    }
+}
+
+declaredFields(EntityHealableComponent, [["forceUse", "force_use", false]]);
+
+export class EntityTameableComponent extends DeclaredComponent {
+    static componentId = "minecraft:tameable";
+
+    /** Published as a property rather than as a call, which is how Bedrock spells this one. */
+    get getTameItems() {
+        return this.field("tame_items", []).map(item => new ItemStack(namespaced(item), 1));
+    }
+
+    get isTamed() {
+        return bridge.entityMembers.owner(this.entity.id) !== null;
+    }
+
+    get tamedToPlayerId() {
+        return bridge.entityMembers.owner(this.entity.id) ?? undefined;
+    }
+
+    get tamedToPlayer() {
+        return entityFor(bridge.entityMembers.owner(this.entity.id));
+    }
+
+    tame(player) {
+        return bridge.entityMembers.tame(this.entity.id, player?.id);
+    }
+}
+
+declaredFields(EntityTameableComponent, [["probability", "probability", 1]]);
+
+/**
+ * A mount a player tames by riding it.
+ *
+ * Java keeps a horse's temper and its owner on the horse class itself rather than on the tameable
+ * mixin every other tamed mob uses, so none of the live state here has a reader and each of these
+ * says so. What the pack declared about the mount is read the same way as every other component.
+ */
+export class EntityTameMountComponent extends DeclaredComponent {
+    static componentId = "minecraft:tamemount";
+
+    get isTamed() {
+        return unsupported("EntityTameMountComponent.isTamed");
+    }
+
+    get isTamedToPlayer() {
+        return unsupported("EntityTameMountComponent.isTamedToPlayer");
+    }
+
+    get tamedToPlayer() {
+        return unsupported("EntityTameMountComponent.tamedToPlayer");
+    }
+
+    get tamedToPlayerId() {
+        return unsupported("EntityTameMountComponent.tamedToPlayerId");
+    }
+
+    tame() {
+        unsupported("EntityTameMountComponent.tame");
+    }
+
+    tameToPlayer() {
+        return unsupported("EntityTameMountComponent.tameToPlayer");
+    }
+}
+
 // Every component this mod builds from the pack's own definition, against the class that reads it.
 const DECLARED_COMPONENTS = Object.freeze({
     "minecraft:breathable": EntityBreathableComponent,
@@ -1384,15 +1717,261 @@ const DECLARED_COMPONENTS = Object.freeze({
     "minecraft:navigation.generic": EntityNavigationGenericComponent,
     "minecraft:navigation.hover": EntityNavigationHoverComponent,
     "minecraft:navigation.walk": EntityNavigationWalkComponent,
+    "minecraft:movement.amphibious": EntityMovementAmphibiousComponent,
+    "minecraft:movement.basic": EntityMovementBasicComponent,
+    "minecraft:movement.fly": EntityMovementFlyComponent,
+    "minecraft:movement.generic": EntityMovementGenericComponent,
+    "minecraft:movement.glide": EntityMovementGlideComponent,
+    "minecraft:movement.hover": EntityMovementHoverComponent,
+    "minecraft:movement.jump": EntityMovementJumpComponent,
+    "minecraft:movement.skip": EntityMovementSkipComponent,
+    "minecraft:movement.sway": EntityMovementSwayComponent,
+    "minecraft:strength": EntityStrengthComponent,
+    "minecraft:addrider": EntityAddRiderComponent,
+    "minecraft:ageable": EntityAgeableComponent,
+    "minecraft:healable": EntityHealableComponent,
+    "minecraft:tameable": EntityTameableComponent,
+    "minecraft:tamemount": EntityTameMountComponent,
 });
 
+/**
+ * What every item component carries.
+ *
+ * A component is handed out per call rather than kept, so each one holds the stack it was read off
+ * and what the game says about that kind of item. The two accessors are this mod's own: Bedrock
+ * publishes neither, and the components that write a value back need both.
+ */
 export class ItemComponent {
+    #stack;
+    #declared;
+
+    constructor(stack, typeId, declared) {
+        this.#stack = stack;
+        this.typeId = typeId;
+        this.#declared = declared;
+    }
+
+    /** A stack here is a plain object a pack holds, so it is valid for as long as the pack has it. */
+    get isValid() {
+        return true;
+    }
+
+    stack() {
+        return this.#stack;
+    }
+
+    declared() {
+        return this.#declared;
+    }
+
+    /** What `getComponent` reads to decide whether this kind of item carries the component at all. */
+    static declaredOn() {
+        return {};
+    }
 }
 
 export class ItemDurabilityComponent extends ItemComponent {
+    static componentId = "minecraft:durability";
+
+    static declaredOn(stack) {
+        const max = stack.maxDurability ?? bridge.itemMaxDurability(stack.typeId);
+        return max > 0 ? { maxDurability: max } : undefined;
+    }
+
+    constructor(stack, typeId, declared) {
+        super(stack, typeId, declared);
+        this.maxDurability = declared.maxDurability;
+    }
+
+    get damage() {
+        return this.stack().damage ?? 0;
+    }
+
+    set damage(value) {
+        this.stack().damage = value;
+    }
+
+    /** Kept on the stack and answered back; nothing carries the flag onto the item in the world. */
+    get unbreakable() {
+        return this.stack().unbreakable ?? false;
+    }
+
+    set unbreakable(value) {
+        this.stack().unbreakable = value;
+        if (value) unsupported("ItemDurabilityComponent.unbreakable");
+    }
+
+    /** Java damages a tool on every use, so the chance of it is the whole range at once. */
+    getDamageChance() {
+        return 100;
+    }
+
+    getDamageChanceRange() {
+        return { min: 100, max: 100 };
+    }
 }
 
+export class ItemFoodComponent extends ItemComponent {
+    static componentId = "minecraft:food";
+
+    static declaredOn(stack) {
+        return itemInfo(stack.typeId).food;
+    }
+
+    constructor(stack, typeId, declared) {
+        super(stack, typeId, declared);
+        this.canAlwaysEat = declared.canAlwaysEat;
+        this.nutrition = declared.nutrition;
+        this.saturationModifier = declared.saturationModifier;
+        this.usingConvertsTo = declared.usingConvertsTo;
+    }
+}
+
+export class ItemCompostableComponent extends ItemComponent {
+    static componentId = "minecraft:compostable";
+
+    static declaredOn(stack) {
+        return itemInfo(stack.typeId).compostable;
+    }
+
+    constructor(stack, typeId, declared) {
+        super(stack, typeId, declared);
+        this.compostingChance = declared.compostingChance;
+    }
+}
+
+/** A cooldown is read from a player, because it is the player and not the item that holds one. */
+export class ItemCooldownComponent extends ItemComponent {
+    static componentId = "minecraft:cooldown";
+
+    static declaredOn(stack) {
+        return itemInfo(stack.typeId).cooldown;
+    }
+
+    constructor(stack, typeId, declared) {
+        super(stack, typeId, declared);
+        this.cooldownCategory = declared.cooldownCategory;
+        this.cooldownTicks = declared.cooldownTicks;
+    }
+
+    isCooldownCategory(category) {
+        return category === this.cooldownCategory;
+    }
+
+    getCooldownTicksRemaining(player) {
+        return bridge.items.cooldownRemaining(player.id, this.stack().typeId);
+    }
+
+    startCooldown(player) {
+        bridge.items.startCooldown(player.id, this.stack().typeId, this.cooldownTicks);
+    }
+}
+
+/**
+ * An enchantment a pack adds is kept on the stack and answered back. Nothing carries it onto the
+ * item the world holds, so adding one is reported.
+ */
 export class ItemEnchantableComponent extends ItemComponent {
+    static componentId = "minecraft:enchantable";
+
+    static declaredOn(stack) {
+        return itemInfo(stack.typeId).enchantable;
+    }
+
+    constructor(stack, typeId, declared) {
+        super(stack, typeId, declared);
+        this.slots = [...declared.slots];
+    }
+
+    #held() {
+        return this.stack().enchantments ?? [];
+    }
+
+    getEnchantments() {
+        return this.#held().slice();
+    }
+
+    getEnchantment(type) {
+        return this.#held().find(on => on.type.id === namespaced(type));
+    }
+
+    hasEnchantment(type) {
+        return this.#held().some(on => on.type.id === namespaced(type));
+    }
+
+    canAddEnchantment(enchantment) {
+        const asked = enchantmentOf(enchantment);
+        return !this.#held().some(on => on.type.id === asked.type.id);
+    }
+
+    addEnchantment(enchantment) {
+        const added = enchantmentOf(enchantment);
+        this.stack().enchantments = [
+            ...this.#held().filter(on => on.type.id !== added.type.id), added,
+        ];
+        unsupported("ItemEnchantableComponent.addEnchantment");
+    }
+
+    addEnchantments(enchantments) {
+        (enchantments ?? []).forEach(enchantment => this.addEnchantment(enchantment));
+    }
+
+    removeEnchantment(type) {
+        this.stack().enchantments = this.#held().filter(on => on.type.id !== namespaced(type));
+    }
+
+    removeAllEnchantments() {
+        this.stack().enchantments = [];
+    }
+}
+
+/** A colour a pack dyes the stack is answered back, and nothing carries it into the world. */
+export class ItemDyeableComponent extends ItemComponent {
+    static componentId = "minecraft:dyeable";
+
+    static declaredOn(stack) {
+        return itemInfo(stack.typeId).dyeable;
+    }
+
+    constructor(stack, typeId, declared) {
+        super(stack, typeId, declared);
+        this.defaultColor = { ...declared.defaultColor };
+    }
+
+    get color() {
+        return this.stack().dyeColor ?? { ...this.defaultColor };
+    }
+
+    set color(value) {
+        this.stack().dyeColor = value;
+        unsupported("ItemDyeableComponent.color");
+    }
+}
+
+/** The shape a potion is thrown in, which Bedrock names apart from the effect it carries. */
+export class PotionDeliveryType {
+    constructor(id) {
+        this.id = id;
+        Object.freeze(this);
+    }
+}
+
+/** Which effect the potion carries is written on the stack in the world, not on its type. */
+export class ItemPotionComponent extends ItemComponent {
+    static componentId = "minecraft:potion";
+
+    static declaredOn(stack) {
+        return itemInfo(stack.typeId).potion;
+    }
+
+    constructor(stack, typeId, declared) {
+        super(stack, typeId, declared);
+        this.potionDeliveryType = new PotionDeliveryType(declared.potionDeliveryType);
+    }
+
+    get potionEffectType() {
+        return unsupported("ItemPotionComponent.potionEffectType");
+    }
 }
 
 /**
@@ -1404,17 +1983,13 @@ export class ItemEnchantableComponent extends ItemComponent {
 export class ItemBookComponent extends ItemComponent {
     static componentId = "minecraft:book";
 
-    #stack;
-
-    constructor(stack) {
-        super();
-        this.#stack = stack;
-        this.typeId = ItemBookComponent.componentId;
+    static declaredOn(stack) {
+        return bookItems.includes(stack.typeId) ? {} : undefined;
     }
 
     #book() {
-        this.#stack.book = this.#stack.book ?? { signed: false, pages: [] };
-        return this.#stack.book;
+        this.stack().book = this.stack().book ?? { signed: false, pages: [] };
+        return this.stack().book;
     }
 
     /** Bedrock raises rather than growing the book when a pack names a page that is not there. */
@@ -1422,7 +1997,7 @@ export class ItemBookComponent extends ItemComponent {
         const pages = this.#book().pages;
         if (!(pageIndex >= 0 && pageIndex < pages.length)) {
             throw new BookPageContentError(
-                "No page " + pageIndex + " in a book of " + pages.length);
+                "No page " + pageIndex + " in a book of " + pages.length, pageIndex);
         }
         return pages;
     }
@@ -1482,15 +2057,22 @@ export class ItemBookComponent extends ItemComponent {
         book.signed = true;
         book.title = title;
         book.author = author;
-        this.#stack.typeId = "minecraft:written_book";
+        this.stack().typeId = "minecraft:written_book";
     }
 }
 
-export class ItemFoodComponent extends ItemComponent {
-}
-
-export class ItemCooldownComponent extends ItemComponent {
-}
+// Every component this mod answers for a stack, by the name a pack asks for it under. Each class
+// says for itself whether the kind of item carries it, and undefined means it does not.
+const ITEM_COMPONENTS = Object.freeze({
+    "minecraft:book": ItemBookComponent,
+    "minecraft:compostable": ItemCompostableComponent,
+    "minecraft:cooldown": ItemCooldownComponent,
+    "minecraft:durability": ItemDurabilityComponent,
+    "minecraft:dyeable": ItemDyeableComponent,
+    "minecraft:enchantable": ItemEnchantableComponent,
+    "minecraft:food": ItemFoodComponent,
+    "minecraft:potion": ItemPotionComponent,
+});
 
 /**
  * One slot of a container, held as the container it belongs to and the index in it.
@@ -1765,7 +2347,15 @@ export function containerAt(dimensionId, x, y, z) {
     return handle === null ? undefined : new Container(handle);
 }
 
+/** One effect an entity is under, read at the moment the pack asked for it. */
 export class Effect {
+    constructor(fields) {
+        this.typeId = fields.typeId;
+        this.amplifier = fields.amplifier;
+        this.displayName = fields.displayName;
+        this.duration = fields.duration;
+        this.isValid = true;
+    }
 }
 
 export class EffectType {
@@ -1783,16 +2373,16 @@ export class EffectType {
 // what this game has. Bedrock writes a vanilla id without its namespace, and every id handed back
 // carries one.
 
-export const EffectTypes = Object.freeze({
-    get(identifier) {
+export class EffectTypes {
+    static get(identifier) {
         return bridge.registries.hasEffectType(identifier)
             ? new EffectType(namespaced(identifier)) : undefined;
-    },
+    }
 
-    getAll() {
+    static getAll() {
         return list(bridge.registries.effectTypes()).map(id => new EffectType(id));
-    },
-});
+    }
+}
 
 export class EntityType {
     constructor(fields) {
@@ -1801,16 +2391,16 @@ export class EntityType {
     }
 }
 
-export const EntityTypes = Object.freeze({
-    get(identifier) {
+export class EntityTypes {
+    static get(identifier) {
         const found = bridge.registries.entityType(identifier);
         return found === null ? undefined : new EntityType(JSON.parse(found));
-    },
+    }
 
-    getAll() {
+    static getAll() {
         return JSON.parse(bridge.registries.entityTypes()).map(fields => new EntityType(fields));
-    },
-});
+    }
+}
 
 /** A pack may build one of these itself, which is why an id nothing answers to is an error here. */
 export class EnchantmentType {
@@ -1826,16 +2416,16 @@ export class EnchantmentType {
     }
 }
 
-export const EnchantmentTypes = Object.freeze({
-    get(enchantmentId) {
+export class EnchantmentTypes {
+    static get(enchantmentId) {
         return bridge.registries.enchantment(enchantmentId) === null
             ? undefined : new EnchantmentType(enchantmentId);
-    },
+    }
 
-    getAll() {
+    static getAll() {
         return JSON.parse(bridge.registries.enchantments()).map(fields => new EnchantmentType(fields.id));
-    },
-});
+    }
+}
 
 /** An instant effect has no duration, so `durationTicks` is absent on one instead of zero. */
 export class PotionEffectType {
@@ -1845,46 +2435,56 @@ export class PotionEffectType {
     }
 }
 
-export const Potions = Object.freeze({
-    getEffectType(potionEffectId) {
+export class Potions {
+    static getEffectType(potionEffectId) {
         const found = bridge.registries.potionEffectType(potionEffectId);
         return found === null ? undefined : new PotionEffectType(JSON.parse(found));
-    },
+    }
 
-    getAllEffectTypes() {
+    static getAllEffectTypes() {
         return JSON.parse(bridge.registries.potionEffectTypes()).map(fields => new PotionEffectType(fields));
-    },
+    }
 
     // Java has no registry of potion delivery shapes: a drunk, splash or lingering potion is three
     // items. That leaves nothing to answer a delivery type with, and nothing for `resolve` to build.
-    getDeliveryType() {
+
+    static getDeliveryType() {
         return unsupported("Potions.getDeliveryType");
-    },
+    }
 
-    getAllDeliveryTypes() {
+    static getAllDeliveryTypes() {
         return unsupported("Potions.getAllDeliveryTypes");
-    },
+    }
 
-    resolve() {
+    static resolve() {
         return unsupported("Potions.resolve");
-    },
-});
+    }
+}
 
 export class BiomeType {
     constructor(id) {
         this.id = id;
     }
+
+    getTags() {
+        return list(bridge.registries.biomeTags(this.id));
+    }
+
+    hasTags(tags) {
+        const carried = this.getTags();
+        return tags.every(tag => carried.includes(namespaced(tag)));
+    }
 }
 
-export const BiomeTypes = Object.freeze({
-    get(typeName) {
+export class BiomeTypes {
+    static get(typeName) {
         return bridge.registries.hasBiomeType(typeName) ? new BiomeType(namespaced(typeName)) : undefined;
-    },
+    }
 
-    getAll() {
+    static getAll() {
         return list(bridge.registries.biomeTypes()).map(id => new BiomeType(id));
-    },
-});
+    }
+}
 
 export class EntityQueryOptions {
 }
@@ -2164,7 +2764,7 @@ export class Entity {
     }
 
     getEffects() {
-        return JSON.parse(bridge.entityEffects(this.id)).map(effect => ({ ...effect, isValid: true }));
+        return JSON.parse(bridge.entityEffects(this.id)).map(fields => new Effect(fields));
     }
 
     getEffect(type) {
@@ -2257,50 +2857,12 @@ export class Player extends Entity {
         return bridge.players.playerPermissionLevel(this.id);
     }
 
-    // What follows describes the Bedrock client itself: the camera it draws through, the device it
-    // runs on, the buttons held on it and the parts of its heads-up display. Java Edition's server
-    // is told none of it, so each of these reports itself rather than answering something made up.
-    //
-    // The three that Bedrock hands back as an object are answered with one whose every member
-    // reports, because a pack reaching through `player.camera.setCamera(...)` for a feature Java has
-    // none of should cost that call and not the tick a TypeError would end.
-
     get camera() {
-        return {
-            isValid: true,
-            attachToEntity() {
-                unsupported("Camera.attachToEntity");
-            },
-            clear() {
-                unsupported("Camera.clear");
-            },
-            fade() {
-                unsupported("Camera.fade");
-            },
-            playAnimation() {
-                unsupported("Camera.playAnimation");
-            },
-            setCamera() {
-                unsupported("Camera.setCamera");
-            },
-            setDefaultCamera() {
-                unsupported("Camera.setDefaultCamera");
-            },
-            setFov() {
-                unsupported("Camera.setFov");
-            },
-        };
+        return new Camera(this.id);
     }
 
     get clientSystemInfo() {
-        return {
-            get maxRenderDistance() {
-                return unsupported("ClientSystemInfo.maxRenderDistance");
-            },
-            get platformType() {
-                return unsupported("ClientSystemInfo.platformType");
-            },
-        };
+        return new ClientSystemInfo(this.id);
     }
 
     get graphicsMode() {
@@ -2308,33 +2870,11 @@ export class Player extends Entity {
     }
 
     get inputInfo() {
-        return {
-            get lastInputModeUsed() {
-                return unsupported("InputInfo.lastInputModeUsed");
-            },
-            get touchOnlyAffectsHotbar() {
-                return unsupported("InputInfo.touchOnlyAffectsHotbar");
-            },
-            getButtonState() {
-                return unsupported("InputInfo.getButtonState");
-            },
-            getMovementVector() {
-                unsupported("InputInfo.getMovementVector");
-                return { x: 0, y: 0 };
-            },
-        };
+        return new InputInfo();
     }
 
     get inputPermissions() {
-        return {
-            isPermissionCategoryEnabled() {
-                unsupported("PlayerInputPermissions.isPermissionCategoryEnabled");
-                return true;
-            },
-            setPermissionCategory() {
-                unsupported("PlayerInputPermissions.setPermissionCategory");
-            },
-        };
+        return new PlayerInputPermissions();
     }
 
     get isEmoting() {
@@ -2504,6 +3044,147 @@ export class ScreenDisplay {
     }
 }
 
+/**
+ * The camera one player sees through.
+ *
+ * Java has one camera control, the one spectator mode rides on: the view moves to another entity and
+ * comes back. Bedrock's presets, splines, fades and field of view are drawn by its client off a
+ * packet Java has no counterpart for, so each of those reports itself rather than doing nothing.
+ */
+export class Camera {
+    #playerId;
+
+    constructor(playerId) {
+        this.#playerId = playerId;
+    }
+
+    get isValid() {
+        return bridge.entityIsValid(this.#playerId);
+    }
+
+    attachToEntity(options) {
+        const target = options?.entity?.id;
+        if (options?.locator !== undefined) unsupported("CameraAttachOptions.locator");
+        if (target !== undefined) bridge.players.attachCamera(this.#playerId, target);
+    }
+
+    clear() {
+        bridge.players.attachCamera(this.#playerId, this.#playerId);
+    }
+
+    fade() {
+        unsupported("Camera.fade");
+    }
+
+    playAnimation() {
+        unsupported("Camera.playAnimation");
+    }
+
+    setCamera() {
+        unsupported("Camera.setCamera");
+    }
+
+    setDefaultCamera() {
+        unsupported("Camera.setDefaultCamera");
+    }
+
+    setFov() {
+        unsupported("Camera.setFov");
+    }
+}
+
+/**
+ * The device one player is on.
+ *
+ * A Java client tells the server its language and its render distance and nothing else about itself,
+ * so the memory and graphics tiers Bedrock publishes have no answer here.
+ */
+export class ClientSystemInfo {
+    #playerId;
+
+    constructor(playerId) {
+        this.#playerId = playerId;
+    }
+
+    get locale() {
+        return bridge.players.locale(this.#playerId) ?? unsupported("ClientSystemInfo.locale");
+    }
+
+    get maxRenderDistance() {
+        return bridge.players.renderDistance(this.#playerId)
+            ?? unsupported("ClientSystemInfo.maxRenderDistance");
+    }
+
+    get memoryTier() {
+        return unsupported("ClientSystemInfo.memoryTier");
+    }
+
+    get platformType() {
+        return unsupported("ClientSystemInfo.platformType");
+    }
+}
+
+/** What a Bedrock client reports about the controls being held, which a Java client never sends. */
+export class InputInfo {
+    get lastInputModeUsed() {
+        return unsupported("InputInfo.lastInputModeUsed");
+    }
+
+    get touchOnlyAffectsHotbar() {
+        return unsupported("InputInfo.touchOnlyAffectsHotbar");
+    }
+
+    getButtonState() {
+        return unsupported("InputInfo.getButtonState");
+    }
+
+    getMovementVector() {
+        unsupported("InputInfo.getMovementVector");
+        return { x: 0, y: 0 };
+    }
+}
+
+/**
+ * The Molang variables a pack hands to a particle it spawns.
+ *
+ * A Bedrock particle reads these out of the emitter it is drawn from. Java's particles carry no
+ * expressions at all, so nothing downstream could read a value that was stored here and each of
+ * these says so instead.
+ */
+export class MolangVariableMap {
+    setColorRGB() {
+        unsupported("MolangVariableMap.setColorRGB");
+    }
+
+    setColorRGBA() {
+        unsupported("MolangVariableMap.setColorRGBA");
+    }
+
+    setFloat() {
+        unsupported("MolangVariableMap.setFloat");
+    }
+
+    setSpeedAndDirection() {
+        unsupported("MolangVariableMap.setSpeedAndDirection");
+    }
+
+    setVector3() {
+        unsupported("MolangVariableMap.setVector3");
+    }
+}
+
+/** Bedrock locks a player out of one kind of input at a time; Java has no packet that does this. */
+export class PlayerInputPermissions {
+    isPermissionCategoryEnabled() {
+        unsupported("PlayerInputPermissions.isPermissionCategoryEnabled");
+        return true;
+    }
+
+    setPermissionCategory() {
+        unsupported("PlayerInputPermissions.setPermissionCategory");
+    }
+}
+
 function normaliseComponent(component) {
     const name = typeof component === "string" ? component : String(component);
     return name.includes(":") ? name : "minecraft:" + name;
@@ -2528,90 +3209,33 @@ function declaredComponents(entity) {
         .filter(name => DECLARED_COMPONENTS[name] !== undefined);
 }
 
-/** Only the components real packs read are modelled; the rest report themselves as unsupported. */
-function componentFor(entity, name) {
-    const declared = DECLARED_COMPONENTS[name];
-    if (declared !== undefined) return new declared(entity, name);
+/**
+ * The component class each name is answered with.
+ *
+ * A name with no entry here is answered with the base class, which carries the entity, the name and
+ * whether it is still valid. That is everything Bedrock's own component carries for the ones that
+ * are a flag rather than a value.
+ */
+const COMPONENT_CLASSES = Object.freeze({
+    "minecraft:health": EntityHealthComponent,
+    "minecraft:movement": EntityMovementComponent,
+    "minecraft:player.hunger": EntityHungerComponent,
+    "minecraft:player.saturation": EntitySaturationComponent,
+    "minecraft:inventory": EntityInventoryComponent,
+    "minecraft:equippable": EntityEquippableComponent,
+    "minecraft:type_family": EntityTypeFamilyComponent,
+    "minecraft:riding": EntityRidingComponent,
+    "minecraft:is_baby": EntityIsBabyComponent,
+    "minecraft:item": EntityItemComponent,
+    "minecraft:onfire": EntityOnFireComponent,
+    "minecraft:variant": EntityVariantComponent,
+    "minecraft:mark_variant": EntityMarkVariantComponent,
+    "minecraft:skin_id": EntitySkinIdComponent,
+});
 
-    switch (name) {
-        case "minecraft:inventory":
-            return {
-                typeId: name, entity,
-                get containerType() {
-                    // The pack says what kind of container its entity carries; Java has one kind of
-                    // inventory, so the name comes back from the pack rather than from the game.
-                    const declared = bridge.entityMembers.packComponent(entity.id, "minecraft:inventory");
-                    return declared === null
-                        ? "inventory" : (JSON.parse(declared).container_type ?? "inventory");
-                },
-                additionalSlotsPerStrength: 0,
-                canBeSiphonedFrom: false,
-                private: false,
-                restrictToOwner: false,
-                get container() {
-                    const handle = bridge.containers.ofEntity(entity.id);
-                    return handle === null ? undefined : new Container(handle);
-                },
-                get inventorySize() {
-                    return this.container?.size ?? 0;
-                },
-            };
-        case "minecraft:health":
-            return {
-                typeId: name, entity,
-                get currentValue() {
-                    return bridge.entityHealth(entity.id);
-                },
-                get effectiveMax() {
-                    return bridge.entityMaxHealth(entity.id);
-                },
-                setCurrentValue(value) {
-                    bridge.setEntityHealth(entity.id, value);
-                },
-                resetToMaxValue() {
-                    bridge.setEntityHealth(entity.id, bridge.entityMaxHealth(entity.id));
-                },
-            };
-        case "minecraft:is_baby":
-        case "minecraft:is_sheared":
-        case "minecraft:is_tamed":
-        case "minecraft:is_angry":
-            return { typeId: name, entity };
-        case "minecraft:variant":
-            return { typeId: name, entity, value: bridge.entityProperty(entity.id, "variant") ?? 0 };
-        case "minecraft:mark_variant":
-            return { typeId: name, entity, value: bridge.entityProperty(entity.id, "mark_variant") ?? 0 };
-        case "minecraft:skin_id":
-            return { typeId: name, entity, value: bridge.entityProperty(entity.id, "skin_id") ?? 0 };
-        case "minecraft:type_family":
-            return {
-                typeId: name, entity,
-                getTypeFamilies() {
-                    return list(bridge.entityFamilies(entity.id));
-                },
-                hasTypeFamily(family) {
-                    return list(bridge.entityFamilies(entity.id)).includes(family);
-                },
-            };
-        case "minecraft:riding":
-            return { typeId: name, entity, get entity() {
-                const vehicle = bridge.entityVehicle(entity.id);
-                return vehicle === null ? undefined : entityFor(vehicle);
-            } };
-        case "minecraft:equippable":
-            return {
-                typeId: name, entity,
-                getEquipment(slot) {
-                    const item = bridge.equipment(entity.id, slot);
-                    return item === null ? undefined : itemFrom(JSON.parse(item));
-                },
-                setEquipment(slot, item) {
-                    return bridge.setEquipment(entity.id, slot, item?.typeId ?? null, item?.amount ?? 1);
-                },
-            };
-        default:
-            return { typeId: name, entity };
-    }
+function componentFor(entity, name) {
+    const build = DECLARED_COMPONENTS[name] ?? COMPONENT_CLASSES[name] ?? EntityComponent;
+    return new build(entity, name);
 }
 
 function itemFrom(handle) {
@@ -2888,14 +3512,22 @@ function dimensionOf(id) {
     return dimension;
 }
 
-export const DimensionTypes = Object.freeze({
-    get(id) {
-        return list(bridge.dimensionIds()).includes(id) ? { typeId: id } : undefined;
-    },
-    getAll() {
-        return list(bridge.dimensionIds()).map(id => ({ typeId: id }));
-    },
-});
+export class DimensionType {
+    constructor(typeId) {
+        this.typeId = typeId;
+        Object.freeze(this);
+    }
+}
+
+export class DimensionTypes {
+    static get(id) {
+        return list(bridge.dimensionIds()).includes(id) ? new DimensionType(id) : undefined;
+    }
+
+    static getAll() {
+        return list(bridge.dimensionIds()).map(id => new DimensionType(id));
+    }
+}
 
 class EventSignal {
     #listeners = [];
@@ -3002,8 +3634,9 @@ function eventGroup(raised) {
         get(target, name) {
             if (typeof name !== "string") return undefined;
             if (target[name] === undefined) {
-                if (!raised.includes(name)) bridge.unsupported(name + " (event)");
-                target[name] = new EventSignal();
+                const build = Object.hasOwn(raised, name) ? raised[name] : undefined;
+                if (build === undefined) bridge.unsupported(name + " (event)");
+                target[name] = new (build ?? EventSignal)();
                 target[name].shape = EVENT_SHAPES[name];
             }
             return target[name];
@@ -3012,22 +3645,91 @@ function eventGroup(raised) {
 }
 
 /** Every event name this mod actually raises, by the group it belongs to. */
+/*
+ * A signal per event this mod raises, so a pack holding one of these holds the class Bedrock names.
+ * Every other published signal is a name in the block further down: subscribing to one reaches a
+ * signal that works and an event that is reported as never raised.
+ */
+export class ButtonPushAfterEventSignal extends EventSignal {}
+export class DataDrivenEntityTriggerAfterEventSignal extends EventSignal {}
+export class EffectAddAfterEventSignal extends EventSignal {}
+export class EffectAddBeforeEventSignal extends EventSignal {}
+export class EntityDieAfterEventSignal extends EventSignal {}
+export class EntityHitEntityAfterEventSignal extends EventSignal {}
+export class EntityHurtAfterEventSignal extends EventSignal {}
+export class EntityHurtBeforeEventSignal extends EventSignal {}
+export class EntityItemDropAfterEventSignal extends EventSignal {}
+export class EntityItemPickupAfterEventSignal extends EventSignal {}
+export class EntityItemPickupBeforeEventSignal extends EventSignal {}
+export class EntityLoadAfterEventSignal extends EventSignal {}
+export class EntityRemoveAfterEventSignal extends EventSignal {}
+export class EntityRemoveBeforeEventSignal extends EventSignal {}
+export class EntitySpawnAfterEventSignal extends EventSignal {}
+export class ItemCompleteUseAfterEventSignal extends EventSignal {}
+export class ItemReleaseUseAfterEventSignal extends EventSignal {}
+export class ItemStartUseAfterEventSignal extends EventSignal {}
+export class ItemStartUseOnAfterEventSignal extends EventSignal {}
+export class ItemStopUseAfterEventSignal extends EventSignal {}
+export class ItemUseAfterEventSignal extends EventSignal {}
+export class ItemUseBeforeEventSignal extends EventSignal {}
+export class PlayerBreakBlockAfterEventSignal extends EventSignal {}
+export class PlayerBreakBlockBeforeEventSignal extends EventSignal {}
+export class PlayerDimensionChangeAfterEventSignal extends EventSignal {}
+export class PlayerGameModeChangeAfterEventSignal extends EventSignal {}
+export class PlayerInteractWithBlockAfterEventSignal extends EventSignal {}
+export class PlayerInteractWithBlockBeforeEventSignal extends EventSignal {}
+export class PlayerInteractWithEntityAfterEventSignal extends EventSignal {}
+export class PlayerInteractWithEntityBeforeEventSignal extends EventSignal {}
+export class PlayerInventoryItemChangeAfterEventSignal extends EventSignal {}
+export class PlayerJoinAfterEventSignal extends EventSignal {}
+export class PlayerLeaveAfterEventSignal extends EventSignal {}
+export class PlayerLeaveBeforeEventSignal extends EventSignal {}
+export class PlayerPlaceBlockAfterEventSignal extends EventSignal {}
+export class PlayerSpawnAfterEventSignal extends EventSignal {}
+export class ProjectileHitBlockAfterEventSignal extends EventSignal {}
+export class ProjectileHitEntityAfterEventSignal extends EventSignal {}
+export class ScriptEventCommandMessageAfterEventSignal extends EventSignal {}
+export class ShutdownBeforeEventSignal extends EventSignal {}
+export class StartupBeforeEventSignal extends EventSignal {}
+export class WorldLoadAfterEventSignal extends EventSignal {}
+
 const RAISED = {
-    worldAfter: [
-        "dataDrivenEntityTrigger", "entityDie", "entityHitEntity", "entityHurt", "entityItemDrop",
-        "entityLoad", "entityRemove", "entitySpawn", "itemCompleteUse", "itemReleaseUse",
-        "itemStartUse", "itemStartUseOn", "itemStopUse", "itemUse", "playerBreakBlock",
-        "playerDimensionChange", "playerGameModeChange", "playerInteractWithBlock",
-        "playerInteractWithEntity", "playerInventoryItemChange", "playerJoin", "playerLeave",
-        "playerPlaceBlock", "playerSpawn", "worldLoad", "effectAdd", "entityItemPickup",
-        "buttonPush", "projectileHitEntity", "projectileHitBlock",
-    ],
-    worldBefore: [
-        "entityHurt", "entityRemove", "itemUse", "playerBreakBlock", "playerInteractWithBlock",
-        "playerInteractWithEntity", "playerLeave", "effectAdd", "entityItemPickup",
-    ],
-    systemAfter: ["scriptEventReceive"],
-    systemBefore: ["startup", "shutdown"],
+    worldAfter: {
+        dataDrivenEntityTrigger: DataDrivenEntityTriggerAfterEventSignal,
+        entityDie: EntityDieAfterEventSignal, entityHitEntity: EntityHitEntityAfterEventSignal,
+        entityHurt: EntityHurtAfterEventSignal, entityItemDrop: EntityItemDropAfterEventSignal,
+        entityLoad: EntityLoadAfterEventSignal, entityRemove: EntityRemoveAfterEventSignal,
+        entitySpawn: EntitySpawnAfterEventSignal, itemCompleteUse: ItemCompleteUseAfterEventSignal,
+        itemReleaseUse: ItemReleaseUseAfterEventSignal, itemStartUse: ItemStartUseAfterEventSignal,
+        itemStartUseOn: ItemStartUseOnAfterEventSignal, itemStopUse: ItemStopUseAfterEventSignal,
+        itemUse: ItemUseAfterEventSignal, playerBreakBlock: PlayerBreakBlockAfterEventSignal,
+        playerDimensionChange: PlayerDimensionChangeAfterEventSignal,
+        playerGameModeChange: PlayerGameModeChangeAfterEventSignal,
+        playerInteractWithBlock: PlayerInteractWithBlockAfterEventSignal,
+        playerInteractWithEntity: PlayerInteractWithEntityAfterEventSignal,
+        playerInventoryItemChange: PlayerInventoryItemChangeAfterEventSignal,
+        playerJoin: PlayerJoinAfterEventSignal, playerLeave: PlayerLeaveAfterEventSignal,
+        playerPlaceBlock: PlayerPlaceBlockAfterEventSignal,
+        playerSpawn: PlayerSpawnAfterEventSignal, worldLoad: WorldLoadAfterEventSignal,
+        effectAdd: EffectAddAfterEventSignal, entityItemPickup: EntityItemPickupAfterEventSignal,
+        buttonPush: ButtonPushAfterEventSignal,
+        projectileHitEntity: ProjectileHitEntityAfterEventSignal,
+        projectileHitBlock: ProjectileHitBlockAfterEventSignal,
+    },
+    worldBefore: {
+        entityHurt: EntityHurtBeforeEventSignal, entityRemove: EntityRemoveBeforeEventSignal,
+        itemUse: ItemUseBeforeEventSignal, playerBreakBlock: PlayerBreakBlockBeforeEventSignal,
+        playerInteractWithBlock: PlayerInteractWithBlockBeforeEventSignal,
+        playerInteractWithEntity: PlayerInteractWithEntityBeforeEventSignal,
+        playerLeave: PlayerLeaveBeforeEventSignal, effectAdd: EffectAddBeforeEventSignal,
+        entityItemPickup: EntityItemPickupBeforeEventSignal,
+    },
+    systemAfter: {
+        scriptEventReceive: ScriptEventCommandMessageAfterEventSignal,
+    },
+    systemBefore: {
+        startup: StartupBeforeEventSignal, shutdown: ShutdownBeforeEventSignal,
+    },
 };
 
 /**
@@ -3096,7 +3798,7 @@ export class World {
     }
 
     get tickingAreaManager() {
-        return unsupported("World.tickingAreaManager");
+        return tickingAreaManager;
     }
 
     getDimension(id) {
@@ -3181,7 +3883,7 @@ export class World {
     }
 
     getLootTableManager() {
-        return unsupported("World.getLootTableManager");
+        return lootTableManager;
     }
 
     getDynamicProperty(name) {
@@ -3360,9 +4062,8 @@ export class ScoreboardObjective {
     }
 
     getScores() {
-        return this.getParticipants().map(participant => ({
-            participant, score: this.getScore(participant) ?? 0,
-        }));
+        return this.getParticipants()
+            .map(participant => new ScoreboardScoreInfo(participant, this.getScore(participant) ?? 0));
     }
 }
 
@@ -3410,45 +4111,196 @@ function nameOf(participant) {
     return String(participant?.displayName ?? participant);
 }
 
-const scoreboard = {
+/** One participant's score on an objective, which is what a pack reads off `getScores`. */
+export class ScoreboardScoreInfo {
+    constructor(participant, score) {
+        this.participant = participant;
+        this.score = score;
+        Object.freeze(this);
+    }
+}
+
+export class Scoreboard {
     getObjective(id) {
         return bridge.scoreboardHasObjective(id) ? new ScoreboardObjective(id) : undefined;
-    },
+    }
 
     getObjectives() {
         return list(bridge.scoreboardObjectives()).map(id => new ScoreboardObjective(id));
-    },
+    }
 
     addObjective(id, displayName) {
         bridge.addObjective(id, displayName ?? id);
         return new ScoreboardObjective(id);
-    },
+    }
 
     removeObjective(objective) {
-        bridge.removeObjective(typeof objective === "string" ? objective : objective.id);
+        bridge.removeObjective(idOfObjective(objective));
         return true;
-    },
+    }
 
     getParticipants() {
         return list(bridge.scoreboardParticipants()).map(identityFor);
-    },
+    }
 
-    getObjectiveAtDisplaySlot() {
-        return unsupported("Scoreboard.getObjectiveAtDisplaySlot");
-    },
+    // Bedrock carries a sort order alongside the objective. Java draws a slot in one fixed order, so
+    // a pack asking for the other one is told; the display itself is set either way.
+    getObjectiveAtDisplaySlot(slot) {
+        const shown = bridge.objectiveAtDisplaySlot(slot);
+        return shown === null ? undefined : { objective: new ScoreboardObjective(shown) };
+    }
 
     setObjectiveAtDisplaySlot(slot, options) {
+        if (options?.sortOrder !== undefined) {
+            unsupported("ScoreboardObjectiveDisplayOptions.sortOrder");
+        }
+
         const objective = options?.objective;
-        bridge.setDisplaySlot(slot, typeof objective === "string" ? objective : objective?.id);
-        return objective === undefined ? undefined : scoreboard.getObjective(
-            typeof objective === "string" ? objective : objective.id);
-    },
+        bridge.setDisplaySlot(slot, idOfObjective(objective));
+        return objective === undefined ? undefined : this.getObjective(idOfObjective(objective));
+    }
 
     clearObjectiveAtDisplaySlot(slot) {
+        const shown = this.getObjectiveAtDisplaySlot(slot)?.objective;
         bridge.setDisplaySlot(slot, "");
-        return undefined;
-    },
-};
+        return shown;
+    }
+}
+
+/** A pack names an objective either by its id or by handing back one it was given. */
+function idOfObjective(objective) {
+    return typeof objective === "string" ? objective : objective?.id;
+}
+
+const scoreboard = new Scoreboard();
+
+/** One area the game is keeping loaded and ticking, as the manager last described it. */
+function tickingArea(fields) {
+    return {
+        identifier: fields.identifier,
+        dimension: dimensionOf(fields.dimension),
+        chunkCount: fields.chunkCount,
+        isFullyLoaded: fields.isFullyLoaded,
+        boundingBox: { min: fields.min, max: fields.max },
+    };
+}
+
+/** A pack names an area either by its identifier or by handing back one it was given. */
+function idOfArea(area) {
+    return typeof area === "string" ? area : area?.identifier;
+}
+
+export class TickingAreaManager {
+    get chunkCount() {
+        return bridge.tickingAreas.chunkCount();
+    }
+
+    get maxChunkCount() {
+        return bridge.tickingAreas.maxChunkCount();
+    }
+
+    /**
+     * Adds an area and answers once it is held.
+     *
+     * Bedrock hands back a promise because its own areas load on a background thread. Here the
+     * ticket is placed before this returns, so the promise is already settled by the time a pack
+     * awaits it.
+     */
+    createTickingArea(identifier, options) {
+        const from = options?.from ?? {};
+        const to = options?.to ?? {};
+        const refused = bridge.tickingAreas.createTickingArea(identifier, options?.dimension?.id,
+            Math.floor(from.x), Math.floor(from.y), Math.floor(from.z),
+            Math.floor(to.x), Math.floor(to.y), Math.floor(to.z));
+        if (refused !== null) return Promise.reject(tickingAreaError(refused, identifier));
+        return Promise.resolve();
+    }
+
+    getAllTickingAreas() {
+        return JSON.parse(bridge.tickingAreas.tickingAreas()).map(tickingArea);
+    }
+
+    getTickingArea(identifier) {
+        const found = bridge.tickingAreas.tickingArea(idOfArea(identifier));
+        return found === null ? undefined : tickingArea(JSON.parse(found));
+    }
+
+    hasCapacity(options) {
+        const from = options?.from ?? {};
+        const to = options?.to ?? {};
+        return bridge.tickingAreas.hasCapacity(Math.floor(from.x), Math.floor(from.z),
+            Math.floor(to.x), Math.floor(to.z));
+    }
+
+    hasTickingArea(identifier) {
+        return bridge.tickingAreas.hasTickingArea(identifier);
+    }
+
+    removeAllTickingAreas() {
+        bridge.tickingAreas.removeAllTickingAreas();
+    }
+
+    removeTickingArea(identifier) {
+        const name = idOfArea(identifier);
+        if (!bridge.tickingAreas.removeTickingArea(name)) {
+            throw tickingAreaError("UnknownIdentifier", name);
+        }
+    }
+}
+
+function tickingAreaError(reason, identifier) {
+    return new TickingAreaError("Ticking area " + identifier + ": " + reason, reason);
+}
+
+const tickingAreaManager = new TickingAreaManager();
+
+/**
+ * What the game would drop, asked for without anything being broken or killed.
+ *
+ * Java rolls a block's loot through the block itself, which is why the three block members are real
+ * and answer with the tool in hand counted. An entity's table and a table named by path are reached
+ * through an internal registry whose entries carry none of the fields Bedrock publishes on a
+ * `LootTable`, so those members say so rather than handing back an empty table.
+ */
+export class LootTableManager {
+    generateLootFromBlock(block, tool) {
+        const dropped = bridge.blocks.dropsAt(block.dimension.id, block.x, block.y, block.z,
+            tool?.typeId ?? null);
+        return dropped === null ? undefined : JSON.parse(dropped).map(itemFrom);
+    }
+
+    generateLootFromBlockPermutation(permutation, tool) {
+        return dropsOfPermutation(permutation, tool);
+    }
+
+    generateLootFromBlockType(blockType, tool) {
+        return dropsOfPermutation(BlockPermutation.resolve(typeIdOf(blockType)), tool);
+    }
+
+    generateLootFromEntity() {
+        return unsupported("LootTableManager.generateLootFromEntity");
+    }
+
+    generateLootFromEntityType() {
+        return unsupported("LootTableManager.generateLootFromEntityType");
+    }
+
+    generateLootFromTable() {
+        return unsupported("LootTableManager.generateLootFromTable");
+    }
+
+    getLootTable() {
+        return unsupported("LootTableManager.getLootTable");
+    }
+}
+
+function dropsOfPermutation(permutation, tool) {
+    const dropped = bridge.blocks.dropsOf(permutation.type.id,
+        JSON.stringify(permutation.getAllStates()), tool?.typeId ?? null);
+    return dropped === null ? undefined : JSON.parse(dropped).map(itemFrom);
+}
+
+const lootTableManager = new LootTableManager();
 
 export const world = new World();
 
@@ -3745,7 +4597,6 @@ export const TicksPerDay = 24000;
 export const TicksPerSecond = 20;
 
 /** Named so a pack can import one to describe a value; the game answers what they describe. */
-export class BlockComponent {}
 export class BlockComponentBlockBreakEvent {}
 export class BlockComponentEntityEvent {}
 export class BlockComponentEntityFallOnEvent {}
@@ -3764,21 +4615,10 @@ export class BlockEvent {}
 export class BlockExplodeAfterEvent {}
 export class BlockExplodeAfterEventSignal {}
 export class BlockFluidContainerComponent { static componentId = "minecraft:fluid_container"; }
-export class BlockInventoryComponent { static componentId = "minecraft:inventory"; }
-export class BlockMapColorComponent { static componentId = "minecraft:map_color"; }
-export class BlockMovableComponent { static componentId = "minecraft:movable"; }
-export class BlockPistonComponent { static componentId = "minecraft:piston"; }
 export class BlockPrecipitationInteractionsComponent { static componentId = "minecraft:precipitation_interactions"; }
 export class BlockRecordPlayerComponent { static componentId = "minecraft:record_player"; }
-export class BlockRedstoneProducerComponent { static componentId = "minecraft:redstone_producer"; }
-export class BlockSignComponent { static componentId = "minecraft:sign"; }
-export class BlockStateType {}
-export class BlockType {}
 export class ButtonPushAfterEvent {}
-export class ButtonPushAfterEventSignal {}
-export class Camera {}
 export class CatmullRomSpline {}
-export class ClientSystemInfo {}
 export class CommandResult {}
 export class Component {}
 export class CustomCommandOrigin {}
@@ -3786,29 +4626,19 @@ export class CustomCommandRegistry {}
 export class CustomComponentParameters {}
 export class DamagedByEntityCondition {}
 export class DataDrivenEntityTriggerAfterEvent {}
-export class DataDrivenEntityTriggerAfterEventSignal {}
-export class DimensionType {}
 export class EffectAddAfterEvent {}
-export class EffectAddAfterEventSignal {}
 export class EffectAddBeforeEvent {}
-export class EffectAddBeforeEventSignal {}
 export class EmptyLootItem {}
 export class EnchantInfo {}
 export class EnchantRandomEquipmentFunction {}
 export class EnchantRandomlyFunction {}
 export class EnchantWithLevelsFunction {}
-export class EntityAddRiderComponent {}
-export class EntityAgeableComponent {}
-export class EntityAttributeComponent {}
-export class EntityBaseMovementComponent {}
 export class EntityCanClimbComponent {}
 export class EntityCanFlyComponent {}
 export class EntityCanPowerJumpComponent {}
 export class EntityColor2Component {}
 export class EntityColorComponent {}
-export class EntityDefinitionFeedItem {}
 export class EntityDieAfterEvent {}
-export class EntityDieAfterEventSignal {}
 export class EntityExhaustionComponent {}
 export class EntityFireImmuneComponent {}
 export class EntityFloatsInLiquidComponent {}
@@ -3821,18 +4651,13 @@ export class EntityHealAfterEventSignal {}
 export class EntityHealBeforeEvent {}
 export class EntityHealBeforeEventSignal {}
 export class EntityHealSource {}
-export class EntityHealableComponent {}
 export class EntityHealthChangedAfterEvent {}
 export class EntityHealthChangedAfterEventSignal {}
 export class EntityHitBlockAfterEvent {}
 export class EntityHitBlockAfterEventSignal {}
 export class EntityHitEntityAfterEvent {}
-export class EntityHitEntityAfterEventSignal {}
-export class EntityHungerComponent {}
 export class EntityHurtAfterEvent {}
-export class EntityHurtAfterEventSignal {}
 export class EntityHurtBeforeEvent {}
-export class EntityHurtBeforeEventSignal {}
 export class EntityIsChargedComponent {}
 export class EntityIsChestedComponent {}
 export class EntityIsDyeableComponent {}
@@ -3846,38 +4671,16 @@ export class EntityIsStackableComponent {}
 export class EntityIsStunnedComponent {}
 export class EntityIsTamedComponent {}
 export class EntityItemDropAfterEvent {}
-export class EntityItemDropAfterEventSignal {}
 export class EntityItemPickupAfterEvent {}
-export class EntityItemPickupAfterEventSignal {}
 export class EntityItemPickupBeforeEvent {}
-export class EntityItemPickupBeforeEventSignal {}
 export class EntityKilledCondition {}
 export class EntityLavaMovementComponent {}
 export class EntityLoadAfterEvent {}
-export class EntityLoadAfterEventSignal {}
-export class EntityMovementAmphibiousComponent {}
-export class EntityMovementBasicComponent {}
-export class EntityMovementComponent {}
-export class EntityMovementFlyComponent {}
-export class EntityMovementGenericComponent {}
-export class EntityMovementGlideComponent {}
-export class EntityMovementHoverComponent {}
-export class EntityMovementJumpComponent {}
-export class EntityMovementSkipComponent {}
-export class EntityMovementSwayComponent {}
-export class EntityOnFireComponent {}
 export class EntityPushThroughComponent {}
 export class EntityRemoveAfterEvent {}
-export class EntityRemoveAfterEventSignal {}
 export class EntityRemoveBeforeEvent {}
-export class EntityRemoveBeforeEventSignal {}
-export class EntitySaturationComponent {}
 export class EntityScaleComponent {}
 export class EntitySpawnAfterEvent {}
-export class EntitySpawnAfterEventSignal {}
-export class EntityStrengthComponent {}
-export class EntityTameMountComponent {}
-export class EntityTameableComponent {}
 export class EntityUnderwaterMovementComponent {}
 export class EntityWantsJockeyComponent {}
 export class ExplorationMapFunction {}
@@ -3886,16 +4689,12 @@ export class ExplosionAfterEventSignal {}
 export class ExplosionBeforeEvent {}
 export class ExplosionBeforeEventSignal {}
 export class ExplosionDecayFunction {}
-export class FeedItem {}
-export class FeedItemEffect {}
 export class FillContainerFunction {}
 export class FluidContainer {}
 export class GameRuleChangeAfterEvent {}
 export class GameRuleChangeAfterEventSignal {}
-export class InputInfo {}
 export class IsBabyCondition {}
 export class ItemCompleteUseAfterEvent {}
-export class ItemCompleteUseAfterEventSignal {}
 export class ItemCompleteUseEvent {}
 export class ItemComponentBeforeDurabilityDamageEvent {}
 export class ItemComponentCompleteUseEvent {}
@@ -3905,26 +4704,16 @@ export class ItemComponentMineBlockEvent {}
 export class ItemComponentRegistry {}
 export class ItemComponentUseEvent {}
 export class ItemComponentUseOnEvent {}
-export class ItemCompostableComponent {}
 export class ItemCustomComponentInstance {}
-export class ItemDyeableComponent {}
 export class ItemInventoryComponent {}
-export class ItemPotionComponent {}
 export class ItemReleaseUseAfterEvent {}
-export class ItemReleaseUseAfterEventSignal {}
 export class ItemStartUseAfterEvent {}
-export class ItemStartUseAfterEventSignal {}
 export class ItemStartUseOnAfterEvent {}
-export class ItemStartUseOnAfterEventSignal {}
 export class ItemStopUseAfterEvent {}
-export class ItemStopUseAfterEventSignal {}
 export class ItemStopUseOnAfterEvent {}
 export class ItemStopUseOnAfterEventSignal {}
-export class ItemType {}
 export class ItemUseAfterEvent {}
-export class ItemUseAfterEventSignal {}
 export class ItemUseBeforeEvent {}
-export class ItemUseBeforeEventSignal {}
 export class ItemUseOnEvent {}
 export class KilledByEntityCondition {}
 export class KilledByPlayerCondition {}
@@ -3940,27 +4729,21 @@ export class LootPoolEntry {}
 export class LootPoolTiers {}
 export class LootTable {}
 export class LootTableEntry {}
-export class LootTableManager {}
 export class LootTableReference {}
 export class LootingEnchantFunction {}
 export class MatchToolCondition {}
-export class MolangVariableMap {}
 export class PassengerOfEntityCondition {}
 export class PistonActivateAfterEvent {}
 export class PistonActivateAfterEventSignal {}
 export class PlayerBreakBlockAfterEvent {}
-export class PlayerBreakBlockAfterEventSignal {}
 export class PlayerBreakBlockBeforeEvent {}
-export class PlayerBreakBlockBeforeEventSignal {}
 export class PlayerButtonInputAfterEvent {}
 export class PlayerButtonInputAfterEventSignal {}
 export class PlayerCursorInventoryComponent {}
 export class PlayerDimensionChangeAfterEvent {}
-export class PlayerDimensionChangeAfterEventSignal {}
 export class PlayerEmoteAfterEvent {}
 export class PlayerEmoteAfterEventSignal {}
 export class PlayerGameModeChangeAfterEvent {}
-export class PlayerGameModeChangeAfterEventSignal {}
 export class PlayerGameModeChangeBeforeEvent {}
 export class PlayerGameModeChangeBeforeEventSignal {}
 export class PlayerHotbarSelectedSlotChangeAfterEvent {}
@@ -3969,38 +4752,24 @@ export class PlayerInputModeChangeAfterEvent {}
 export class PlayerInputModeChangeAfterEventSignal {}
 export class PlayerInputPermissionCategoryChangeAfterEvent {}
 export class PlayerInputPermissionCategoryChangeAfterEventSignal {}
-export class PlayerInputPermissions {}
 export class PlayerInteractWithBlockAfterEvent {}
-export class PlayerInteractWithBlockAfterEventSignal {}
 export class PlayerInteractWithBlockBeforeEvent {}
-export class PlayerInteractWithBlockBeforeEventSignal {}
 export class PlayerInteractWithEntityAfterEvent {}
-export class PlayerInteractWithEntityAfterEventSignal {}
 export class PlayerInteractWithEntityBeforeEvent {}
-export class PlayerInteractWithEntityBeforeEventSignal {}
 export class PlayerInventoryItemChangeAfterEvent {}
-export class PlayerInventoryItemChangeAfterEventSignal {}
 export class PlayerJoinAfterEvent {}
-export class PlayerJoinAfterEventSignal {}
 export class PlayerLeaveAfterEvent {}
-export class PlayerLeaveAfterEventSignal {}
 export class PlayerLeaveBeforeEvent {}
-export class PlayerLeaveBeforeEventSignal {}
 export class PlayerPlaceBlockAfterEvent {}
-export class PlayerPlaceBlockAfterEventSignal {}
 export class PlayerSpawnAfterEvent {}
-export class PlayerSpawnAfterEventSignal {}
 export class PlayerSwingStartAfterEvent {}
 export class PlayerSwingStartAfterEventSignal {}
-export class PotionDeliveryType {}
 export class PressurePlatePopAfterEvent {}
 export class PressurePlatePopAfterEventSignal {}
 export class PressurePlatePushAfterEvent {}
 export class PressurePlatePushAfterEventSignal {}
 export class ProjectileHitBlockAfterEvent {}
-export class ProjectileHitBlockAfterEventSignal {}
 export class ProjectileHitEntityAfterEvent {}
-export class ProjectileHitEntityAfterEventSignal {}
 export class RandomAuxValueFunction {}
 export class RandomBlockStateFunction {}
 export class RandomChanceCondition {}
@@ -4008,10 +4777,7 @@ export class RandomChanceWithLootingCondition {}
 export class RandomDifficultyChanceCondition {}
 export class RandomDyeFunction {}
 export class RandomRegionalDifficultyChanceCondition {}
-export class Scoreboard {}
-export class ScoreboardScoreInfo {}
 export class ScriptEventCommandMessageAfterEvent {}
-export class ScriptEventCommandMessageAfterEventSignal {}
 export class SetArmorTrimFunction {}
 export class SetBannerDetailsFunction {}
 export class SetBookContentsFunction {}
@@ -4025,18 +4791,14 @@ export class SetOminousBottleFunction {}
 export class SetPotionFunction {}
 export class SetSpawnEggFunction {}
 export class SetStewEffectFunction {}
-export class ShutdownBeforeEventSignal {}
 export class ShutdownEvent {}
 export class SmeltItemFunction {}
 export class SpecificEnchantFunction {}
-export class StartupBeforeEventSignal {}
 export class StartupEvent {}
 export class SystemAfterEvents {}
 export class SystemBeforeEvents {}
 export class TargetBlockHitAfterEvent {}
 export class TargetBlockHitAfterEventSignal {}
-export class TickingAreaManager {}
-export class Trigger {}
 export class TripWireTripAfterEvent {}
 export class TripWireTripAfterEventSignal {}
 export class WeatherChangeAfterEvent {}
@@ -4046,7 +4808,6 @@ export class WeatherChangeBeforeEventSignal {}
 export class WorldAfterEvents {}
 export class WorldBeforeEvents {}
 export class WorldLoadAfterEvent {}
-export class WorldLoadAfterEventSignal {}
 
 // Names the newest API adds that this mod has nothing behind yet. A module is linked before any of
 // it runs, so a pack importing one of these would lose its whole script over a name rather than
@@ -4109,7 +4870,12 @@ export class BlockCustomComponentReloadNewComponentError extends Error {}
 export class BlockCustomComponentReloadNewEventError extends Error {}
 export class BlockCustomComponentReloadVersionError extends Error {}
 export class BookError extends Error {}
-export class BookPageContentError extends Error {}
+export class BookPageContentError extends Error {
+    constructor(message, pageIndex) {
+        super(message);
+        this.pageIndex = pageIndex;
+    }
+}
 export class CommandError extends Error {}
 export class ContainerRulesError extends Error {}
 export class CustomCommandError extends Error {}
@@ -4137,5 +4903,10 @@ export class LocationOutOfWorldBoundariesError extends Error {}
 export class NamespaceNameError extends Error {}
 export class PlaceJigsawError extends Error {}
 export class RawMessageError extends Error {}
-export class TickingAreaError extends Error {}
+export class TickingAreaError extends Error {
+    constructor(message, reason) {
+        super(message);
+        this.reason = reason;
+    }
+}
 export class UnloadedChunksError extends Error {}

@@ -10,6 +10,7 @@ import at.ioexception.mcaddon.script.surface.GameTests;
 import at.ioexception.mcaddon.script.surface.Items;
 import at.ioexception.mcaddon.script.surface.Players;
 import at.ioexception.mcaddon.script.surface.Registries;
+import at.ioexception.mcaddon.script.surface.TickingAreas;
 import at.ioexception.mcaddon.script.surface.Worlds;
 import at.ioexception.mcaddon.server.DamageSources;
 import at.ioexception.mcaddon.state.AddonState;
@@ -38,6 +39,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
@@ -103,6 +105,9 @@ public final class ScriptBridge {
     @HostAccess.Export
     public final GameTests gametests;
 
+    @HostAccess.Export
+    public final TickingAreas tickingAreas;
+
     ScriptBridge(MinecraftServer server, AddonState state, ScriptCoverage coverage) {
         this.server = server;
         this.state = state;
@@ -115,6 +120,7 @@ public final class ScriptBridge {
         this.entityMembers = new EntityMembers(server, coverage, state);
         this.worlds = new Worlds(server, coverage);
         this.gametests = new GameTests(server, coverage);
+        this.tickingAreas = new TickingAreas(server, coverage);
     }
 
     void beginTick(long budgetNanos) {
@@ -577,7 +583,11 @@ public final class ScriptBridge {
         Entity entity = entity(id);
         if (entity == null) return false;
         return switch (component) {
-            case "minecraft:health", "minecraft:equippable" -> entity instanceof LivingEntity;
+            case "minecraft:health", "minecraft:equippable", "minecraft:movement" ->
+                entity instanceof LivingEntity;
+            case "minecraft:player.hunger", "minecraft:player.saturation" ->
+                entity instanceof Player;
+            case "minecraft:onfire" -> entity.isOnFire();
             case "minecraft:riding" -> entity.isPassenger();
             case "minecraft:rideable" -> !entity.getPassengers().isEmpty();
             case "minecraft:type_family" -> true;
@@ -591,7 +601,9 @@ public final class ScriptBridge {
     public String[] entityComponents(String id) {
         List<String> present = new ArrayList<>();
         for (String component : List.of("minecraft:health", "minecraft:equippable", "minecraft:riding",
-            "minecraft:rideable", "minecraft:type_family", "minecraft:is_baby", "minecraft:item")) {
+            "minecraft:rideable", "minecraft:type_family", "minecraft:is_baby", "minecraft:item",
+            "minecraft:movement", "minecraft:onfire", "minecraft:player.hunger",
+            "minecraft:player.saturation")) {
             if (entityHasComponent(id, component)) present.add(component);
         }
         return present.toArray(String[]::new);
@@ -1058,12 +1070,7 @@ public final class ScriptBridge {
      */
     @HostAccess.Export
     public void setDisplaySlot(String slot, String objective) {
-        String java = switch (slot == null ? "" : slot.toLowerCase(Locale.ROOT)) {
-            case "list" -> "list";
-            case "belowname" -> "below_name";
-            case "sidebar" -> "sidebar";
-            default -> null;
-        };
+        String java = javaDisplaySlot(slot);
         if (java == null) {
             unsupported("Scoreboard display slot " + slot);
             return;
@@ -1071,6 +1078,39 @@ public final class ScriptBridge {
         run(server.createCommandSourceStack(), objective == null || objective.isBlank()
             ? "scoreboard objectives setdisplay " + java
             : "scoreboard objectives setdisplay " + java + " " + objective);
+    }
+
+    /** The objective a slot currently shows, or null when the slot names nothing or is empty. */
+    @HostAccess.Export
+    public String objectiveAtDisplaySlot(String slot) {
+        String java = javaDisplaySlot(slot);
+        if (java == null) {
+            unsupported("Scoreboard display slot " + slot);
+            return null;
+        }
+        Objective shown = displayedObjective(java);
+        return shown == null ? null : shown.getName();
+    }
+
+    /** A display slot became an enum of its own in 1.21; before that it was an index. */
+    private Objective displayedObjective(String java) {
+        //? if >=1.21 {
+        net.minecraft.world.scores.DisplaySlot slot =
+            net.minecraft.world.scores.DisplaySlot.CODEC.byName(java);
+        return slot == null ? null : server.getScoreboard().getDisplayObjective(slot);
+        //?} else {
+        /*int slot = net.minecraft.world.scores.Scoreboard.getDisplaySlotByName(java);
+        return slot < 0 ? null : server.getScoreboard().getDisplayObjective(slot);
+        *///?}
+    }
+
+    private static String javaDisplaySlot(String slot) {
+        return switch (slot == null ? "" : slot.toLowerCase(Locale.ROOT)) {
+            case "list" -> "list";
+            case "belowname" -> "below_name";
+            case "sidebar" -> "sidebar";
+            default -> null;
+        };
     }
 
     private static String javaRotation(String bedrock) {

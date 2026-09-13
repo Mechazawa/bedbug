@@ -24,6 +24,7 @@ same way the game tests are, because no pack content belongs in this repository.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import pathlib
@@ -33,6 +34,7 @@ import signal
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
 from threading import Thread
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -224,6 +226,46 @@ def capture(version: str, target: pathlib.Path) -> None:
         scaled.save(target)
 
 
+@contextmanager
+def exclusive(wait: float):
+    """Holds the scene lock, so two runs cannot fight over the world and the screenshot.
+
+    One saved world takes one game at a time, and both runs would write their picture over the
+    other's. The lock lives under `scratchpad/`, which git ignores, and is released when the process
+    ends however it ends.
+    """
+    scratchpad = ROOT / "scratchpad"
+    scratchpad.mkdir(exist_ok=True)
+    ignore = scratchpad / ".gitignore"
+    if not ignore.exists():
+        ignore.write_text("*\n", encoding="utf-8")
+
+    handle = (scratchpad / "scene.lock").open("a+")
+    deadline = time.monotonic() + wait
+    announced = False
+    while True:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            break
+        except OSError:
+            if time.monotonic() > deadline:
+                handle.close()
+                raise SystemExit(f"another scene run holds the lock after {wait:.0f}s of waiting")
+            if not announced:
+                print("another scene run holds the lock, waiting")
+                announced = True
+            time.sleep(5)
+
+    handle.truncate(0)
+    handle.write(f"{os.getpid()}\n")
+    handle.flush()
+    try:
+        yield
+    finally:
+        fcntl.flock(handle, fcntl.LOCK_UN)
+        handle.close()
+
+
 def world_of(version: str) -> pathlib.Path | None:
     """The saved world a scene can be run in, or None when this version has none."""
     saves = ROOT / "versions" / version / "run" / "saves"
@@ -301,12 +343,24 @@ def run(version: str, one: dict, timeout: float, keep: bool) -> tuple[bool, list
     return (not problems, problems)
 
 
+def runOne(version: str, one: dict, timeout: float, keep: bool, failed: list) -> bool:
+    """Runs one scene and prints its verdict, collecting what went wrong."""
+    passed, problems = run(version, one, timeout, keep)
+    print(f"{'PASS' if passed else 'FAIL'}  {version} {one['name']}")
+    for problem in problems:
+        print(f"      {problem}")
+    failed += problems
+    return passed
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Runs scenes inside the game with nobody watching.")
     parser.add_argument("--version", default="26.2", help="which version to open")
     parser.add_argument("--scene", action="append", default=[], help="run only these, repeatable")
     parser.add_argument("--timeout", type=float, default=420.0, help="seconds one scene may take")
     parser.add_argument("--keep", action="store_true", help="leave the last game open")
+    parser.add_argument("--wait", type=float, default=900.0,
+                        help="seconds to wait for another scene run to finish")
     arguments = parser.parse_args()
 
     chosen = [one for one in scenes(arguments.version)
@@ -316,12 +370,9 @@ def main() -> int:
         return 2
 
     failed = []
-    for one in chosen:
-        passed, problems = run(arguments.version, one, arguments.timeout, arguments.keep)
-        print(f"{'PASS' if passed else 'FAIL'}  {arguments.version} {one['name']}")
-        for problem in problems:
-            print(f"      {problem}")
-        failed += problems
+    with exclusive(arguments.wait):
+        for one in chosen:
+            passed, problems = runOne(arguments.version, one, arguments.timeout, arguments.keep, failed)
 
     print(f"{'PASS' if not failed else 'FAIL'}  {len(chosen) - len(set(failed))} of {len(chosen)} scenes")
     return 1 if failed else 0

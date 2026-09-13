@@ -374,7 +374,16 @@ public final class AddonQueries implements MolangEnvironment.Queries {
     }
 
     /** Whoever the entity belongs to, which the two versions keep under different names. */
+    /**
+     * Whether somebody has tamed this entity.
+     *
+     * A client holds no owner for a pack's own entity: taming writes the owner on the server, and
+     * what reaches the client is the property the server syncs. The interface is asked first because
+     * a vanilla mob does carry the owner across, and a pack drawing one reads it that way.
+     */
     private boolean hasOwner() {
+        if (EntityProperties.of(entity.getId()).get("owner") != null) return true;
+
         //? if >=26 {
         return entity instanceof OwnableEntity ownable && ownable.getOwnerReference() != null;
         //?} else {

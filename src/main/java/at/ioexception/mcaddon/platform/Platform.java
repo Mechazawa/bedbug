@@ -934,41 +934,41 @@ public final class Platform {
     }
 
     /**
-     * The reason a chunk stays loaded while a test runs inside it.
+     * The reason a chunk stays loaded and ticking while this mod is holding it.
      *
      * Deliberately not the one `/forceload` uses: that one is written into the saved world, so a
-     * server that stopped between a test and its cleanup would keep the chunk loaded for good, with
-     * nothing left in the game able to say why. This one is forgotten when the server stops.
+     * server that stopped while a chunk was held would keep it loaded for good, with nothing left in
+     * the game able to say why. This one is forgotten when the server stops.
      */
     //? if >=26 {
-    private static final net.minecraft.server.level.TicketType GAME_TEST =
+    private static final net.minecraft.server.level.TicketType HELD =
         new net.minecraft.server.level.TicketType(net.minecraft.server.level.TicketType.NO_TIMEOUT,
             net.minecraft.server.level.TicketType.FLAG_LOADING
                 | net.minecraft.server.level.TicketType.FLAG_SIMULATION);
     //?} else {
     /*private static final net.minecraft.server.level.TicketType<net.minecraft.world.level.ChunkPos>
-        GAME_TEST = net.minecraft.server.level.TicketType.create("mcaddon_gametest",
+        HELD = net.minecraft.server.level.TicketType.create("mcaddon_held",
             java.util.Comparator.comparingLong(net.minecraft.world.level.ChunkPos::toLong));
     *///?}
 
     /** Chunks a ticket covers around the one it names, matching what a forced chunk gets. */
-    private static final int TEST_RADIUS = 2;
+    private static final int HELD_RADIUS = 2;
 
     /** Keeps one chunk loaded and ticking until it is let go of again. */
     public static void holdChunk(ServerLevel level, net.minecraft.world.level.ChunkPos at) {
         //? if >=26 {
-        level.getChunkSource().addTicketWithRadius(GAME_TEST, at, TEST_RADIUS);
+        level.getChunkSource().addTicketWithRadius(HELD, at, HELD_RADIUS);
         //?} else {
-        /*level.getChunkSource().addRegionTicket(GAME_TEST, at, TEST_RADIUS, at);
+        /*level.getChunkSource().addRegionTicket(HELD, at, HELD_RADIUS, at);
         *///?}
     }
 
-    /** Lets go of a chunk held for a test, which loads on its own terms again. */
+    /** Lets go of a held chunk, which loads and ticks on its own terms again. */
     public static void releaseChunk(ServerLevel level, net.minecraft.world.level.ChunkPos at) {
         //? if >=26 {
-        level.getChunkSource().removeTicketWithRadius(GAME_TEST, at, TEST_RADIUS);
+        level.getChunkSource().removeTicketWithRadius(HELD, at, HELD_RADIUS);
         //?} else {
-        /*level.getChunkSource().removeRegionTicket(GAME_TEST, at, TEST_RADIUS, at);
+        /*level.getChunkSource().removeRegionTicket(HELD, at, HELD_RADIUS, at);
         *///?}
     }
 
@@ -1086,6 +1086,61 @@ public final class Platform {
         return ResourceKey.create(net.minecraft.core.registries.Registries.LOOT_TABLE, table);
     }
     //?}
+
+    /** The stand-in player a game test acts through. 1.21 made it say which mode it is playing in. */
+    public static net.minecraft.world.entity.player.Player mockPlayer(
+        net.minecraft.gametest.framework.GameTestHelper helper) {
+        //? if >=1.21 {
+        return helper.makeMockPlayer(GameType.SURVIVAL);
+        //?} else {
+        /*return helper.makeMockPlayer();
+        *///?}
+    }
+
+    /**
+     * Whether mobs are allowed to change the world around them.
+     *
+     * A Bedrock behaviour that takes or places a block says whether it obeys this rule, so a goal
+     * doing either has to ask. 26 moved the rules into their own package and typed them by value.
+     */
+    public static boolean mobGriefing(ServerLevel level) {
+        //? if >=26 {
+        return level.getGameRules().get(GameRules.MOB_GRIEFING);
+        //?} else {
+        /*return level.getGameRules().getBoolean(net.minecraft.world.level.GameRules.RULE_MOBGRIEFING);
+        *///?}
+    }
+
+    /**
+     * What a loot table hands out, rolled without anything having to die for it.
+     *
+     * Bedrock names a table on a behaviour as readily as on a death, which is how a sneeze drops an
+     * item and a swallowed mob leaves one behind. The table is still an entity's, so it is rolled
+     * with what an entity table asks for: who it is about, where it stands and what hurt it. 1.21
+     * moved the tables out of their own manager and into the reloadable registries, and started
+     * naming them by registry key.
+     */
+    public static java.util.List<net.minecraft.world.item.ItemStack> rollLoot(ServerLevel level,
+        Identifier table, Entity about) {
+        //? if >=1.21 {
+        net.minecraft.world.level.storage.loot.LootTable found =
+            level.getServer().reloadableRegistries().getLootTable(lootTableKey(table));
+        //?} else {
+        /*net.minecraft.world.level.storage.loot.LootTable found =
+            level.getServer().getLootData().getLootTable(table);
+        *///?}
+        net.minecraft.world.level.storage.loot.LootParams asked =
+            new net.minecraft.world.level.storage.loot.LootParams.Builder(level)
+                .withParameter(net.minecraft.world.level.storage.loot.parameters
+                    .LootContextParams.THIS_ENTITY, about)
+                .withParameter(net.minecraft.world.level.storage.loot.parameters
+                    .LootContextParams.ORIGIN, about.position())
+                .withParameter(net.minecraft.world.level.storage.loot.parameters
+                    .LootContextParams.DAMAGE_SOURCE, level.damageSources().generic())
+                .create(net.minecraft.world.level.storage.loot.parameters
+                    .LootContextParamSets.ENTITY);
+        return java.util.List.copyOf(found.getRandomItems(asked));
+    }
 
     /** A boss bar the server draws. 26 gave it the id every other bar already carried. */
     public static net.minecraft.server.level.ServerBossEvent bossBar(Component name) {

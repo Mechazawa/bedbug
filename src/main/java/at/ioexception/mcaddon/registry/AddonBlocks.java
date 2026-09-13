@@ -3,6 +3,7 @@ package at.ioexception.mcaddon.registry;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.behaviour.BlockDefinition;
 import at.ioexception.mcaddon.block.AddonBlock;
+import at.ioexception.mcaddon.block.AddonWaterloggedBlock;
 import at.ioexception.mcaddon.block.BlockComponents;
 import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.pack.BedrockPack;
@@ -11,11 +12,15 @@ import at.ioexception.mcaddon.pack.PackSet;
 import at.ioexception.mcaddon.platform.Platform;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.FlowerPotBlock;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.world.level.material.PushReaction;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -67,12 +72,14 @@ public final class AddonBlocks {
             AddonEntities.unsupported("minecraft:transformation " + part);
         }
 
-        BlockComponents components = BlockComponents.of(definition);
-        BlockBehaviour.Properties properties = BlockComponents.settings(definition);
         Map<String, Property<?>> states = AddonBlock.propertiesOf(definition);
+        BlockComponents components = BlockComponents.of(definition, states);
+        BlockBehaviour.Properties properties = BlockComponents.settings(definition);
+        List<Property<?>> declared = new ArrayList<>(states.values());
 
-        Block block = AddonBlock.carrying(components,
-            () -> Platform.buildStatefulBlock(properties, id, new ArrayList<>(states.values())));
+        Block block = AddonBlock.carrying(components, () -> BlockComponents.waterlogged(definition)
+            ? AddonWaterloggedBlock.build(properties, id, declared)
+            : Platform.buildStatefulBlock(properties, id, declared));
         Registry.register(BuiltInRegistries.BLOCK, id, block);
         BY_IDENTIFIER.put(definition.identifier(), block);
         components.registerFlammability(block);
@@ -82,6 +89,27 @@ public final class AddonBlocks {
             Registry.register(BuiltInRegistries.ITEM, id, item);
             AddonItems.all().put(definition.identifier(), item);
         }
+        if (definition.components().has("minecraft:flower_pottable")) registerPotted(id, block);
+    }
+
+    /**
+     * A second block for the block sitting in a flower pot, which is how Java draws a potted plant.
+     *
+     * Java's empty pot only accepts what a `FlowerPotBlock` was built around, and building one is
+     * what puts this block on that list.
+     */
+    private static void registerPotted(Identifier id, Block block) {
+        Identifier potted = Platform.id(id.getNamespace(), "potted_" + id.getPath());
+        if (BuiltInRegistries.BLOCK.containsKey(potted)) return;
+
+        BlockBehaviour.Properties properties = BlockBehaviour.Properties.of()
+            .instabreak()
+            .noOcclusion()
+            .pushReaction(PushReaction.DESTROY);
+        //? if >=1.21.2 {
+        properties = properties.setId(ResourceKey.create(Registries.BLOCK, potted));
+        //?}
+        Registry.register(BuiltInRegistries.BLOCK, potted, new FlowerPotBlock(block, properties));
     }
 
     /**
@@ -99,7 +127,14 @@ public final class AddonBlocks {
         "minecraft:collision_box", "minecraft:selection_box", "minecraft:movable",
         "minecraft:redstone_conductivity", "minecraft:crafting_table", "minecraft:display_name",
         "minecraft:loot", "minecraft:tags", "minecraft:transformation",
-        "minecraft:instrument_sound", "minecraft:random_offset");
+        "minecraft:instrument_sound", "minecraft:random_offset",
+        "minecraft:tick", "minecraft:queued_ticking", "minecraft:random_ticking",
+        "minecraft:on_placed", "minecraft:on_player_placing", "minecraft:on_player_destroyed",
+        "minecraft:on_interact", "minecraft:on_step_on", "minecraft:on_step_off",
+        "minecraft:on_fall_on", "minecraft:entity_fall_on",
+        "minecraft:placement_filter", "minecraft:redstone_producer", "minecraft:redstone_consumer",
+        "minecraft:liquid_detection", "minecraft:destruction_particles",
+        "minecraft:flower_pottable");
 
     private static Identifier identifier(String bedrock) {
         Names.Identifier split = Names.split(bedrock, "minecraft");

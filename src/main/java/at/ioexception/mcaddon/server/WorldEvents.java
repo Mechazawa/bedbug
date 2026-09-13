@@ -86,6 +86,7 @@ public final class WorldEvents {
     public static void endTick(MinecraftServer server) {
         confirmPlacements(server);
         pollPlayers(server);
+        BlockEvents.endTick(server);
     }
 
     /** An item entity coming into the world with an owner is what somebody threw. */
@@ -209,6 +210,7 @@ public final class WorldEvents {
         BREAKING_WITH.clear();
         PLACEMENTS.clear();
         WATCHED.clear();
+        BlockEvents.forget();
     }
 
     private static boolean breakRefused(Level level, Player player, BlockPos position) {

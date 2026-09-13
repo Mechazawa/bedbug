@@ -308,6 +308,46 @@ public final class Players extends Surface {
         return Character.toUpperCase(name.charAt(0)) + name.substring(1);
     }
 
+    // The client
+
+    /**
+     * Puts the player behind another entity's eyes, which is the view spectator mode rides on.
+     *
+     * Naming the player themselves is how the view comes back, and is what `Camera.clear` does.
+     */
+    @HostAccess.Export
+    public void attachCamera(String id, String target) {
+        ServerPlayer player = player(id);
+        net.minecraft.world.entity.Entity seen = entity(target);
+        if (player != null && seen != null) player.setCamera(seen);
+    }
+
+    /** The language the client asked for, which a 1.20.1 server is sent but keeps to itself. */
+    @HostAccess.Export
+    public String locale(String id) {
+        ServerPlayer player = player(id);
+        if (player == null) return null;
+
+        //? if >=1.21 {
+        return player.clientInformation().language();
+        //?} else {
+        /*return null;
+        *///?}
+    }
+
+    /** The client's own render distance, which the server keeps only from 1.21 on. */
+    @HostAccess.Export
+    public Integer renderDistance(String id) {
+        ServerPlayer player = player(id);
+        if (player == null) return null;
+
+        //? if >=1.21 {
+        return player.requestedViewDistance();
+        //?} else {
+        /*return null;
+        *///?}
+    }
+
     // Helpers, not exported
 
     private ServerPlayer player(String id) {

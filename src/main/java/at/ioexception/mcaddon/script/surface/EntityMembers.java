@@ -19,6 +19,14 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.TamableAnimal;
+import net.minecraft.world.entity.ai.attributes.Attribute;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.ai.attributes.RangedAttribute;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.food.FoodData;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -45,6 +53,9 @@ import java.util.stream.Collectors;
 public final class EntityMembers extends Surface {
     /** How many blocks a filtered ray may reject before it gives up rather than walking the world. */
     private static final int FILTER_STEPS = 16;
+
+    /** Both halves of the food bar run to this, which is the ceiling Bedrock reports for either. */
+    private static final int FULL_FOOD_BAR = 20;
 
     private final AddonState state;
 
@@ -431,5 +442,138 @@ public final class EntityMembers extends Surface {
     public boolean unleash(String id) {
         Entity entity = entity(id);
         return entity != null && Platform.unleash(entity);
+    }
+
+    // Attributes
+
+    /**
+     * The four numbers behind one of Bedrock's attribute components, as JSON.
+     *
+     * Bedrock gives every such number a component of its own. Java keeps most of them in the
+     * attribute map, health on the entity and hunger in a food bar beside it, so the component name
+     * says where to read. Null when this game holds no number for the name, which the script side
+     * reports rather than answering with one that is made up.
+     */
+    @HostAccess.Export
+    public String attribute(String id, String component) {
+        if (!(entity(id) instanceof LivingEntity living)) return null;
+
+        FoodData food = living instanceof Player player ? player.getFoodData() : null;
+        return switch (component) {
+            case "minecraft:health" ->
+                attributeJson(living.getHealth(), living.getMaxHealth(), 0, living.getMaxHealth());
+            case "minecraft:player.hunger" -> food == null ? null
+                : attributeJson(food.getFoodLevel(), FULL_FOOD_BAR, 0, FULL_FOOD_BAR);
+            case "minecraft:player.saturation" -> food == null ? null
+                : attributeJson(food.getSaturationLevel(), FULL_FOOD_BAR, 0, FULL_FOOD_BAR);
+            default -> {
+                AttributeInstance instance = attributeOf(living, component);
+                yield instance == null ? null : attributeJson(instance);
+            }
+        };
+    }
+
+    /** False when the component names nothing this game holds, so the script side can report it. */
+    @HostAccess.Export
+    public boolean setAttribute(String id, String component, double value) {
+        if (!(entity(id) instanceof LivingEntity living)) return false;
+
+        FoodData food = living instanceof Player player ? player.getFoodData() : null;
+        switch (component) {
+            case "minecraft:health" -> living.setHealth((float) value);
+            case "minecraft:player.hunger" -> {
+                if (food == null) return false;
+                food.setFoodLevel((int) value);
+            }
+            case "minecraft:player.saturation" -> {
+                if (food == null) return false;
+                food.setSaturation((float) value);
+            }
+            default -> {
+                AttributeInstance instance = attributeOf(living, component);
+                if (instance == null) return false;
+                instance.setBaseValue(value);
+            }
+        }
+        return true;
+    }
+
+    /**
+     * The attribute a Bedrock component name reads.
+     *
+     * Named through {@link Attributes} rather than looked up by id, because the constants carry the
+     * type this version's {@code getAttribute} takes and a lookup by id does not.
+     */
+    private static AttributeInstance attributeOf(LivingEntity living, String component) {
+        return switch (component) {
+            case "minecraft:movement" -> living.getAttribute(Attributes.MOVEMENT_SPEED);
+            case "minecraft:flying_speed" -> living.getAttribute(Attributes.FLYING_SPEED);
+            default -> null;
+        };
+    }
+
+    /** An attribute with no declared range is unbounded, which is what Bedrock reports for one. */
+    private static String attributeJson(AttributeInstance instance) {
+        Attribute attribute = definitionOf(instance);
+        RangedAttribute ranged = attribute instanceof RangedAttribute found ? found : null;
+        return attributeJson(instance.getValue(), attribute.getDefaultValue(),
+            ranged == null ? -Double.MAX_VALUE : ranged.getMinValue(),
+            ranged == null ? Double.MAX_VALUE : ranged.getMaxValue());
+    }
+
+    /** An attribute map holds the attribute itself before 1.21 and a registry holder from then on. */
+    private static Attribute definitionOf(AttributeInstance instance) {
+        //? if >=1.21 {
+        return instance.getAttribute().value();
+        //?} else {
+        /*return instance.getAttribute();
+        *///?}
+    }
+
+    private static String attributeJson(double current, double fallback, double min, double max) {
+        JsonObject values = new JsonObject();
+        values.addProperty("current", current);
+        values.addProperty("default", fallback);
+        values.addProperty("min", min);
+        values.addProperty("max", max);
+        return values.toString();
+    }
+
+    @HostAccess.Export
+    public double armour(String id) {
+        return entity(id) instanceof LivingEntity living ? living.getArmorValue() : 0;
+    }
+
+    @HostAccess.Export
+    public double armourToughness(String id) {
+        return entity(id) instanceof LivingEntity living
+            ? living.getAttributeValue(Attributes.ARMOR_TOUGHNESS) : 0;
+    }
+
+    @HostAccess.Export
+    public int fireTicks(String id) {
+        Entity found = entity(id);
+        return found == null ? 0 : found.getRemainingFireTicks();
+    }
+
+    // Taming
+
+    /** Who a tamed animal belongs to, or null when nothing tamed it or it cannot be tamed at all. */
+    @HostAccess.Export
+    public String owner(String id) {
+        if (!(entity(id) instanceof TamableAnimal animal) || !animal.isTame()) return null;
+
+        UUID tamer = Platform.ownerOf(animal);
+        return tamer == null ? null : tamer.toString();
+    }
+
+    /** False when this is not the kind of animal a player tames, which is what Bedrock reports. */
+    @HostAccess.Export
+    public boolean tame(String id, String playerId) {
+        if (!(entity(id) instanceof TamableAnimal animal)) return false;
+        if (!(entity(playerId) instanceof ServerPlayer player)) return false;
+
+        animal.tame(player);
+        return true;
     }
 }

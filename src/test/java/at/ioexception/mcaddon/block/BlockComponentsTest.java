@@ -117,12 +117,12 @@ class BlockComponentsTest {
     }
 
     private static BlockComponents read(String components) {
-        return BlockComponents.of(definition(components));
+        return BlockComponents.of(definition(components), Map.of());
     }
 
     private static BlockDefinition definition(String components) {
         return new BlockDefinition("test:block", Map.of(), null, false, object(components),
-            Map.of(), List.of());
+            Map.of(), List.of(), new JsonObject());
     }
 
     private static JsonObject object(String json) {

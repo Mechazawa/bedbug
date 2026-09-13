@@ -699,7 +699,36 @@ public final class PackConverter {
             JsonObject definition = new JsonObject();
             definition.add("model", reference);
             write(assets.resolve("items").resolve(name + ".json"), definition);
+
+            if (block.components().has("minecraft:flower_pottable")) {
+                writePottedModel(assets, namespace, name, faces.values().iterator().next());
+            }
         }
+    }
+
+    /**
+     * The block as it looks standing in a flower pot, which `minecraft:flower_pottable` asks for.
+     *
+     * Java draws whatever is in a pot as two crossed quads above the rim, so the block's own texture
+     * is what the crossed model wears.
+     */
+    private static void writePottedModel(Path assets, String namespace, String name, String texture)
+        throws IOException {
+        JsonObject textures = new JsonObject();
+        textures.addProperty("plant", texture);
+
+        JsonObject model = new JsonObject();
+        model.addProperty("parent", "minecraft:block/flower_pot_cross");
+        model.add("textures", textures);
+        write(assets.resolve("models/block").resolve("potted_" + name + ".json"), model);
+
+        JsonObject variant = new JsonObject();
+        variant.addProperty("model", namespace + ":block/potted_" + name);
+        JsonObject variants = new JsonObject();
+        variants.add("", variant);
+        JsonObject blockstate = new JsonObject();
+        blockstate.add("variants", variants);
+        write(assets.resolve("blockstates").resolve("potted_" + name + ".json"), blockstate);
     }
 
     /**
