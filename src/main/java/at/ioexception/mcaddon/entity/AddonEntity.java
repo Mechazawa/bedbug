@@ -411,6 +411,25 @@ public class AddonEntity extends PathfinderMob implements Merchant {
     }
 
     /**
+     * Going away again because the pack said this entity may.
+     *
+     * `minecraft:despawn` names the conditions under which an entity is allowed to disappear, and a
+     * pack leans on it to keep a crowd from growing without bound. An entity a player asked to stay
+     * keeps its place, which is what persistence means on both editions.
+     */
+    private void despawn() {
+        if (!has("minecraft:despawn") || isPersistenceRequired()) return;
+        if (!(level() instanceof net.minecraft.server.level.ServerLevel)) return;
+
+        com.google.gson.JsonObject body = definition.components().get("minecraft:despawn");
+        Filter filter = body.has("filters") ? Filter.parse(body.get("filters")) : null;
+        if (filter == null || !filter.matches(new Filter.Context(this, null, null, ServerHooks.state()))) {
+            return;
+        }
+        discard();
+    }
+
+    /**
      * Drinking away what is hurting it, which both drinking behaviours amount to.
      *
      * Bedrock's milk clears every effect and its potion drinking picks one to apply; what a pack
@@ -667,6 +686,7 @@ public class AddonEntity extends PathfinderMob implements Merchant {
             celebrate();
             rise();
             manageAsTrader();
+            despawn();
         }
     }
 

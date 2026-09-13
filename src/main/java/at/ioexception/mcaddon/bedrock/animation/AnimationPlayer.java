@@ -19,6 +19,9 @@ import java.util.Map;
  * weight each clip declares.
  */
 public final class AnimationPlayer {
+    /** Clip names already reported as missing, so the log names each of them once. */
+    private static final java.util.Set<String> MISSING = new java.util.HashSet<>();
+
     private static final float TICKS_PER_SECOND = 20f;
 
     /** One clip in flight, with its own clock. */
@@ -97,7 +100,14 @@ public final class AnimationPlayer {
      */
     public void play(String name, MolangExpression stopExpression, float blendOutSeconds) {
         BedrockAnimation animation = assets.animation(name);
-        if (animation == null) return;
+        if (animation == null) {
+            // A model whose pose comes from a clip is authored wherever the clip puts it, so a clip
+            // that never plays leaves those bones wherever the geometry left them.
+            if (MISSING.add(name)) {
+                at.ioexception.mcaddon.McAddon.LOGGER.warn("No animation named {}.", name);
+            }
+            return;
+        }
 
         Running clip = new Running(animation);
         clip.stopExpression = stopExpression;

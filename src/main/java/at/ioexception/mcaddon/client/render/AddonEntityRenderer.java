@@ -52,7 +52,7 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
         super(context);
     }
 
-    private static String identifierOf(AddonEntity entity) {
+    static String identifierOf(AddonEntity entity) {
         return entity.definition() == null ? "" : entity.definition().identifier();
     }
 
@@ -182,7 +182,7 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
      * A scale turns about the model origin rather than the feet, so it has to be compensated, or the
      * entity floats above or sinks into the hitbox it can still be hit in.
      */
-    private static void applyModelSpace(PoseStack poseStack, float bodyRotation, float scale) {
+    static void applyModelSpace(PoseStack poseStack, float bodyRotation, float scale) {
         poseStack.mulPose(Axis.YP.rotationDegrees(180f - bodyRotation));
         poseStack.scale(-1f, -1f, 1f);
         poseStack.scale(scale, scale, scale);

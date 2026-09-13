@@ -51,6 +51,26 @@ public class AttachableLayer<S extends LivingEntityRenderState, M extends Entity
 
 
     /**
+     * Puts the pose into the space a pack's own entity is drawn in, and says whether it did.
+     *
+     * A vanilla renderer has already flipped and dropped the pose by the time its layers run, so a
+     * hat worn by a player lands on the player's head. A pack's own entity has no vanilla model to
+     * do that, and its renderer applies the transform around its own drawing instead, which a layer
+     * is not inside. Without this the hat is drawn a model's height above the head it belongs on.
+     */
+    private static boolean intoModelSpace(PoseStack poseStack, LivingEntity entity, float partialTick) {
+        if (!(entity instanceof at.ioexception.mcaddon.entity.AddonEntity addon)) return false;
+
+        EntityAnimator animator = Animators.of(addon, AddonEntityRenderer.identifierOf(addon),
+            partialTick, addon.tickCount + partialTick);
+        poseStack.pushPose();
+        AddonEntityRenderer.applyModelSpace(poseStack,
+            net.minecraft.util.Mth.rotLerp(partialTick, addon.yBodyRotO, addon.yBodyRot),
+            animator == null ? 1 : animator.scale());
+        return true;
+    }
+
+    /**
      * The render type a pass draws with, taken from the material its pack named.
      *
      * Without a material the pack meant Bedrock's default for an entity, which is an alpha test with
@@ -99,7 +119,11 @@ public class AttachableLayer<S extends LivingEntityRenderState, M extends Entity
         LivingEntity entity = RenderStates.of(state);
         if (entity == null) return;
 
-        for (Worn each : worn(entity, 0)) {
+        List<Worn> worn = worn(entity, 0);
+        if (worn.isEmpty()) return;
+
+        boolean pushed = intoModelSpace(poseStack, entity, 0);
+        for (Worn each : worn) {
             AddonModels.Pass pass = each.pass();
             collector.submitCustomGeometry(poseStack, renderTypeOf(pass),
                 (pose, buffer) -> {
@@ -109,18 +133,24 @@ public class AttachableLayer<S extends LivingEntityRenderState, M extends Entity
                         pass.shift(), local, buffer, light, OverlayTexture.NO_OVERLAY, -1);
                 });
         }
+        if (pushed) poseStack.popPose();
     }
     //?} else {
     /*@Override
     public void render(PoseStack poseStack, MultiBufferSource buffers, int light, T entity,
         float limbSwing, float limbSwingAmount, float partialTick,
         float ageInTicks, float netHeadYaw, float headPitch) {
-        for (Worn each : worn(entity, partialTick)) {
+        List<Worn> worn = worn(entity, partialTick);
+        if (worn.isEmpty()) return;
+
+        boolean pushed = intoModelSpace(poseStack, entity, partialTick);
+        for (Worn each : worn) {
             AddonModels.Pass pass = each.pass();
             VertexConsumer buffer = buffers.getBuffer(renderTypeOf(pass));
             BedrockModelRenderer.render(pass.geometry(), each.animator(), pass::hides, pass.shift(),
                 poseStack, buffer, light, OverlayTexture.NO_OVERLAY, -1);
         }
+        if (pushed) poseStack.popPose();
     }
     *///?}
 }
