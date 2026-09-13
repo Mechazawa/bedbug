@@ -84,8 +84,11 @@ def scene(name: str, commands: list[str], wants: list[str], checks: list[str] | 
 
     A check runs a second after the commands because a selector answers on the world as the game
     last saw it, so a summon and a question about what was summoned do not belong in one tick.
+
+    Every scene is photographed, so every scene wants a player who is alive to photograph it with.
     """
-    return {"name": name, "commands": commands, "wants": wants, "checks": checks or []}
+    return {"name": name, "commands": commands, "wants": list(wants) + ["ALIVE"],
+            "checks": checks or []}
 
 
 def declared(version: str, directory: str, key: str) -> list[str]:
@@ -263,6 +266,7 @@ def datapack(world: pathlib.Path, commands: list[str], checks: list[str], format
     ]
     bodies = {
         "ready": ["scoreboard objectives add mcaddon dummy",
+                  "scoreboard objectives add mcaddonhp health",
                   "scoreboard players set #ran mcaddon 0",
                   "scoreboard players set #wait mcaddon 0"],
         "watch": waiting,
@@ -271,7 +275,10 @@ def datapack(world: pathlib.Path, commands: list[str], checks: list[str], format
         # keeps the picture from being taken before they have answered.
         "scene": ["scoreboard players set #ran mcaddon 1"]
         + list(STAGE) + list(commands) + ["schedule function mcaddon:checked 20t"],
-        "checked": list(checks) + [f"say {DONE}"],
+        # A dead player is behind a screen the game draws over everything, so a picture taken then
+        # says nothing about what the world looks like. Every scene asks.
+        "checked": list(checks)
+        + ["execute if score @p mcaddonhp matches 1.. run say ALIVE", f"say {DONE}"],
     }
 
     # Both spellings of the directory, because the game renamed it and reads only the one it wants.
@@ -425,30 +432,38 @@ def exclusive(wait: float, version: str):
 
 
 def world_of(version: str) -> pathlib.Path | None:
-    """The saved world a scene can be run in, or None when this version has none to run in.
+    """The saved world a scene runs in, or None when this version has none to run in.
 
     A world is a fixture rather than something anybody made by hand, so one is taken from the
-    dedicated server's own when the saves directory is empty. `verify.py run` leaves one behind, and
-    a server writes a world nobody has to answer a question about before it opens.
+    dedicated server's own. `verify.py run` leaves one behind, and a server writes a world nobody has
+    to answer a question about before it opens.
+
+    A fresh copy is taken for every scene. A client writes its player into `level.dat` as it leaves,
+    so a scene whose player died leaves a world that opens behind a death screen, and every picture
+    taken from then on is of that screen. Copying again is what keeps one run from deciding what the
+    next one sees.
     """
     saves = ROOT / "versions" / version / "run" / "saves"
     saves.mkdir(parents=True, exist_ok=True)
+    served = ROOT / "versions" / version / "run" / "world"
+    copied = saves / "Scene World"
 
-    existing = next((one for one in sorted(saves.iterdir()) if (one / "level.dat").is_file()), None)
-    if existing is not None:
+    if not (served / "level.dat").is_file():
+        existing = next((one for one in sorted(saves.iterdir()) if (one / "level.dat").is_file()), None)
         return existing
 
-    served = ROOT / "versions" / version / "run" / "world"
-    if not (served / "level.dat").is_file():
-        return None
-
-    copied = saves / "Scene World"
+    # The game before this one may still be writing as it closes, so the old copy is asked to go
+    # several times before the new one is written over whatever is left.
+    for attempt in range(10):
+        shutil.rmtree(copied, ignore_errors=attempt < 9)
+        if not copied.exists():
+            break
+        time.sleep(0.5)
     shutil.copytree(served, copied, dirs_exist_ok=True)
     shutil.rmtree(copied / "datapacks", ignore_errors=True)
     # A player who died on the server would open this world already dead, behind a
     # screen waiting to be answered.
     shutil.rmtree(copied / "players", ignore_errors=True)
-    print(f"took a world from the dedicated server's own into {copied.relative_to(ROOT)}")
     return copied
 
 
