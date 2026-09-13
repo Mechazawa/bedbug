@@ -39,8 +39,9 @@ import java.util.UUID;
  *
  * A block event is a named list of responses, the same shape an entity event has. An entity event
  * swaps component groups in and out, and a block carries none while the game runs, so a block event
- * works with what is left: the commands it queues, the states it sets on itself, and destroying the
- * block. Every other response Bedrock allows is counted by {@link AddonEntities#unsupported}.
+ * works with what is left: what it does to the world around it, to whoever set it off, and to
+ * itself. A response Bedrock allows and this cannot carry out is counted by
+ * {@link AddonEntities#unsupported}.
  */
 public final class BlockEvents {
     /** The components that name an event directly. */
@@ -62,11 +63,16 @@ public final class BlockEvents {
     private final Map<String, List<JsonElement>> values;
     private final Clock clock;
 
+    /** The namespace the block's own identifier carries, which is where its loot tables were filed. */
+    private final String namespace;
+
     private BlockEvents(Map<String, Trigger> triggers, Map<String, List<Response>> events,
-        Map<String, Property<?>> properties, Map<String, List<JsonElement>> values, Clock clock) {
+        Map<String, Property<?>> properties, Map<String, List<JsonElement>> values, Clock clock,
+        String namespace) {
         this.triggers = triggers;
         this.events = events;
         this.properties = properties;
+        this.namespace = namespace;
         this.values = values;
         this.clock = clock;
     }
@@ -94,7 +100,11 @@ public final class BlockEvents {
                 events.put(entry.getKey(), responses(entry.getValue().getAsJsonObject()));
             }
         }
-        return new BlockEvents(triggers, events, properties, definition.states(), clock(components));
+        int colon = definition.identifier().indexOf(':');
+        String namespace = at.ioexception.mcaddon.convert.Names.sanitise(
+            colon > 0 ? definition.identifier().substring(0, colon) : "minecraft");
+        return new BlockEvents(triggers, events, properties, definition.states(), clock(components),
+            namespace);
     }
 
     /** Runs what the named component asks for, when the Molang it carries holds. */
@@ -169,6 +179,15 @@ public final class BlockEvents {
                 case RunCommands commands -> runCommands(commands, level, position, actor);
                 case SetStates states -> setStates(states, level, position);
                 case Die() -> level.destroyBlock(position, true);
+                case PlaySound sound -> playSound(sound, level, position);
+                case PlayEffect effect -> playEffect(effect, level, position);
+                case Damage hurt -> damage(hurt, level, position, actor);
+                case ChangeEffect effect -> changeEffect(effect, actor);
+                case SpendHeld spend -> spendHeld(spend, actor);
+                case Swing() -> swing(actor);
+                case Teleport away -> teleport(away, level, actor);
+                case SpawnLoot loot -> spawnLoot(loot, level, position, actor);
+                case SetBlock placed -> setBlock(placed, level, position);
             }
         }
     }
@@ -189,6 +208,135 @@ public final class BlockEvents {
                 McAddon.LOGGER.debug("A block event ran a command that did not parse: {}", trimmed);
             }
         }
+    }
+
+    /** `play_sound` names a sound event, which is registered under the same name the pack gave it. */
+    private static void playSound(PlaySound response, ServerLevel level, BlockPos position) {
+        net.minecraft.core.registries.BuiltInRegistries.SOUND_EVENT
+            .getOptional(response.sound())
+            .ifPresentOrElse(
+                event -> level.playSound(null, position, event,
+                    net.minecraft.sounds.SoundSource.BLOCKS, 1f, 1f),
+                () -> AddonEntities.unsupported("block event play_sound " + response.sound()));
+    }
+
+    /**
+     * `play_effect` names a particle effect and how many of it to make.
+     *
+     * A pack's own effect is registered by this mod under the name the pack gave it, and a Bedrock
+     * name for one of the game's own is translated the same way a particle command is.
+     */
+    private static void playEffect(PlayEffect response, ServerLevel level, BlockPos position) {
+        net.minecraft.core.registries.BuiltInRegistries.PARTICLE_TYPE
+            .getOptional(response.effect())
+            .ifPresentOrElse(type -> {
+                if (!(type instanceof net.minecraft.core.particles.ParticleOptions options)) return;
+
+                Vec3 at = Vec3.atCenterOf(position);
+                level.sendParticles(options, at.x, at.y, at.z, response.count(), 0.25, 0.25, 0.25, 0);
+            }, () -> AddonEntities.unsupported("block event play_effect " + response.effect()));
+    }
+
+    /** `damage` hurts whoever set the event off, which is the only target a block can reach. */
+    private static void damage(Damage response, ServerLevel level, BlockPos position, Entity actor) {
+        if (actor == null || response.amount() <= 0) return;
+
+        Platform.hurt(actor, level, level.damageSources().generic(), (float) response.amount());
+    }
+
+    /** `add_mob_effect` and `remove_mob_effect` both act on whoever set the event off. */
+    private static void changeEffect(ChangeEffect response, Entity actor) {
+        if (!(actor instanceof net.minecraft.world.entity.LivingEntity living)) return;
+
+        if (response.adding()) {
+            Platform.addEffect(living, response.effect(),
+                (int) (response.seconds() * 20), response.amplifier(), true);
+        } else {
+            Platform.removeEffect(living, response.effect());
+        }
+    }
+
+    /**
+     * `decrement_stack` spends one of what is held, and `transform_item` swaps it for another.
+     *
+     * Both are how a Bedrock block takes payment for what it just did, and both act on the hand that
+     * set the event off rather than on the block.
+     */
+    private static void spendHeld(SpendHeld response, Entity actor) {
+        if (!(actor instanceof net.minecraft.world.entity.player.Player player)) return;
+
+        net.minecraft.world.item.ItemStack held = player.getMainHandItem();
+        if (held.isEmpty()) return;
+
+        if (response.becomes() == null) {
+            if (!player.getAbilities().instabuild) held.shrink(1);
+            return;
+        }
+        net.minecraft.world.item.Item into =
+            at.ioexception.mcaddon.registry.AddonItems.named(response.becomes());
+        if (into == null) {
+            AddonEntities.unsupported("block event transform_item " + response.becomes());
+            return;
+        }
+        player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND,
+            new net.minecraft.world.item.ItemStack(into));
+    }
+
+    /** `swing` is the arm swing of whoever set the event off. */
+    private static void swing(Entity actor) {
+        if (actor instanceof net.minecraft.world.entity.LivingEntity living) {
+            living.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+        }
+    }
+
+    /** `teleport` moves whoever set the event off, somewhere inside the range the pack allowed. */
+    private static void teleport(Teleport response, ServerLevel level, Entity actor) {
+        if (actor == null) return;
+
+        RandomSource random = level.getRandom();
+        for (int attempt = 0; attempt < TELEPORT_ATTEMPTS; attempt++) {
+            double x = actor.getX() + (random.nextDouble() - 0.5) * 2 * response.range();
+            double z = actor.getZ() + (random.nextDouble() - 0.5) * 2 * response.range();
+            double y = actor.getY() + (random.nextDouble() - 0.5) * 2 * response.range();
+            BlockPos landing = BlockPos.containing(x, y, z);
+
+            if (!level.getBlockState(landing).isAir()) continue;
+            if (response.avoidWater() && !level.getFluidState(landing).isEmpty()) continue;
+            if (response.landOnBlock() && level.getBlockState(landing.below()).isAir()) continue;
+
+            Platform.placeAt(actor, x, y, z, actor.getYRot(), actor.getXRot());
+            return;
+        }
+    }
+
+    /** How many places a teleport tries before giving up and leaving the entity where it was. */
+    private static final int TELEPORT_ATTEMPTS = 16;
+
+    /** `spawn_loot` rolls a table and drops what it gives at the block. */
+    private void spawnLoot(SpawnLoot response, ServerLevel level, BlockPos position, Entity actor) {
+        Entity about = actor == null ? level.getRandomPlayer() : actor;
+        if (about == null || level.getServer() == null) return;
+
+        net.minecraft.resources.Identifier table = Platform.id(namespace,
+            at.ioexception.mcaddon.bedrock.behaviour.LootTableDefinition.javaPath(response.table()));
+        Vec3 at = Vec3.atCenterOf(position);
+        for (net.minecraft.world.item.ItemStack stack : Platform.rollLoot(level, table, about)) {
+            if (stack.isEmpty()) continue;
+
+            level.addFreshEntity(new net.minecraft.world.entity.item.ItemEntity(
+                level, at.x, at.y, at.z, stack));
+        }
+    }
+
+    /** `set_block` and `set_block_at_pos` both replace a block with one the pack named. */
+    private static void setBlock(SetBlock response, ServerLevel level, BlockPos position) {
+        Block block = net.minecraft.core.registries.BuiltInRegistries.BLOCK
+            .getOptional(response.block()).orElse(null);
+        if (block == null) {
+            AddonEntities.unsupported("block event set_block " + response.block());
+            return;
+        }
+        level.setBlockAndUpdate(position.offset(response.offset()), block.defaultBlockState());
     }
 
     /** `set_block_state` writes Molang into the pack's own states, which are Java properties here. */
@@ -308,8 +456,65 @@ public final class BlockEvents {
                 "other".equals(Json.text(body, "target", "self")));
             case "set_block_state" -> new SetStates(states(body));
             case "die" -> new Die();
+            case "play_sound" -> named(body, "sound") == null ? null
+                : new PlaySound(named(body, "sound"));
+            case "play_effect" -> named(body, "effect") == null ? null
+                : new PlayEffect(named(body, "effect"),
+                    Math.max(1, (int) number(body, "particle_count")));
+            case "damage" -> new Damage(number(body, "amount"));
+            case "add_mob_effect" -> named(body, "effect") == null ? null
+                : new ChangeEffect(named(body, "effect"), true,
+                    number(body, "duration"), (int) number(body, "amplifier"));
+            case "remove_mob_effect" -> named(body, "effect") == null ? null
+                : new ChangeEffect(named(body, "effect"), false, 0, 0);
+            case "decrement_stack" -> new SpendHeld(null);
+            case "transform_item" -> new SpendHeld(Json.text(body, "transform", null));
+            case "swing" -> new Swing();
+            case "teleport" -> new Teleport(number(body, "max_range") <= 0 ? 8
+                : number(body, "max_range"), flag(body, "avoid_water"), flag(body, "land_on_block"));
+            case "spawn_loot" -> Json.text(body, "table", null) == null ? null
+                : new SpawnLoot(Json.text(body, "table", null));
+            case "set_block" -> blockNamed(body) == null ? null
+                : new SetBlock(blockNamed(body), net.minecraft.core.Vec3i.ZERO);
+            case "set_block_at_pos" -> blockNamed(body) == null ? null
+                : new SetBlock(blockNamed(body), offset(body));
             default -> null;
         };
+    }
+
+    /** A flag a pack wrote, which Bedrock defaults to true for both of the ones read here. */
+    private static boolean flag(JsonObject body, String key) {
+        JsonElement value = body.get(key);
+        return value == null || !value.isJsonPrimitive() || value.getAsBoolean();
+    }
+
+    /** A Bedrock name, which is as often written without its namespace as with it. */
+    private static net.minecraft.resources.Identifier named(JsonObject body, String key) {
+        String text = Json.text(body, key, null);
+        return text == null ? null
+            : net.minecraft.resources.Identifier.tryParse(
+                text.contains(":") ? text : "minecraft:" + text);
+    }
+
+    /** The block a `set_block` names, which a pack writes as an object carrying its name. */
+    private static net.minecraft.resources.Identifier blockNamed(JsonObject body) {
+        JsonElement declared = body.get("block_type");
+        if (declared == null) return null;
+        if (declared.isJsonPrimitive()) {
+            String text = declared.getAsString();
+            return net.minecraft.resources.Identifier.tryParse(
+                text.contains(":") ? text : "minecraft:" + text);
+        }
+        return declared.isJsonObject() ? named(declared.getAsJsonObject(), "name") : null;
+    }
+
+    /** How far from the block a `set_block_at_pos` reaches, which a pack writes as three numbers. */
+    private static net.minecraft.core.Vec3i offset(JsonObject body) {
+        List<JsonElement> written = Json.list(body, "block_offset");
+        if (written.size() < 3) return net.minecraft.core.Vec3i.ZERO;
+
+        return new net.minecraft.core.Vec3i(written.get(0).getAsInt(),
+            written.get(1).getAsInt(), written.get(2).getAsInt());
     }
 
     /** A state is written as Molang in a string, and a pack may write the bare value instead. */
@@ -354,6 +559,38 @@ public final class BlockEvents {
     }
 
     private record Die() implements Response {
+    }
+
+    private record PlaySound(net.minecraft.resources.Identifier sound) implements Response {
+    }
+
+    private record PlayEffect(net.minecraft.resources.Identifier effect, int count)
+        implements Response {
+    }
+
+    private record Damage(double amount) implements Response {
+    }
+
+    private record ChangeEffect(net.minecraft.resources.Identifier effect, boolean adding,
+        double seconds, int amplifier) implements Response {
+    }
+
+    /** A null replacement means the held stack is spent rather than swapped. */
+    private record SpendHeld(String becomes) implements Response {
+    }
+
+    private record Swing() implements Response {
+    }
+
+    private record Teleport(double range, boolean avoidWater, boolean landOnBlock)
+        implements Response {
+    }
+
+    private record SpawnLoot(String table) implements Response {
+    }
+
+    private record SetBlock(net.minecraft.resources.Identifier block, net.minecraft.core.Vec3i offset)
+        implements Response {
     }
 
     private record Standing(BlockEvents events, ResourceKey<Level> dimension, BlockPos position,

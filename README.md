@@ -119,10 +119,12 @@ experimental, and it then opens behind a screen asking whether to load it at all
 item component does not pay for that, so a record is registered as a plain item and counted as a
 gap.
 
-**Most of what a block event can answer with.** `run_command`, `set_block_state` and `die` have a
-Java form and run. The rest, which play a sound or a particle, deal damage, add or remove an effect,
-teleport, swing, spawn loot, or replace the block or the held item, are counted and named by
-`/mcaddon entities` instead, so a pack using one is told which response was dropped.
+**The cause a block event names for its damage.** Bedrock picks from its own list of damage causes
+and Java builds a damage source out of what dealt the blow, so a block that hurts whoever set it off
+hurts them for the right amount by a source that names no cause. Every other response a block event
+can give runs: a command, a block state, dying, a sound, a particle, an effect added or taken away,
+a teleport, a swing, a loot table, a spent or swapped held item, and a block replaced here or one
+step away.
 
 **Stencil-masked material passes.** A material's alpha testing, blending, culling and emissiveness
 all become the render type the pass is drawn with. What cannot follow is the stencil buffer itself:
