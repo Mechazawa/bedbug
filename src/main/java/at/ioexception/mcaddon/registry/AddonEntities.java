@@ -332,7 +332,8 @@ public final class AddonEntities {
         "minecraft:movement.skip", "minecraft:heartbeat", "minecraft:ground_offset",
         "minecraft:inside_block_notifier", "minecraft:block_sensor", "minecraft:celebrate_hunt",
         "minecraft:friction_modifier", "minecraft:rotation_axis_aligned",
-        "minecraft:flocking", "minecraft:boostable", "minecraft:vibration_damper");
+        "minecraft:flocking", "minecraft:boostable", "minecraft:vibration_damper",
+        "minecraft:hide");
 
     /**
      * The trade table an entity names, read while the pack it came from is still in hand.

@@ -160,6 +160,7 @@ public final class EntityEvents {
                     living.setHealth(values.get("value").getAsFloat());
                 }
             }
+            case "minecraft:hide" -> hide(entity);
             case "minecraft:is_sheared", "minecraft:is_baby", "minecraft:is_dyeable" ->
                 state.setProperty(entity.getUUID(), name.substring("minecraft:".length()), true);
             // A group can hand the entity a different table, so what it drops belongs to the entity
@@ -178,6 +179,26 @@ public final class EntityEvents {
                 if (!AddonEntities.implemented(name)) AddonEntities.unsupported(name);
             }
         }
+    }
+
+    /**
+     * `minecraft:hide` sends the entity to whatever it calls home and leaves it there.
+     *
+     * Bedrock brings this in through a component group when a raid starts rather than declaring it
+     * on the entity, which is why it acts the moment the group arrives instead of every tick. An
+     * entity with nowhere to call home stops what it was doing and stays where it is.
+     */
+    private static void hide(Entity entity) {
+        if (!(entity instanceof AddonEntity addon)) return;
+
+        addon.setTarget(null);
+        addon.setValue("is_hiding", true);
+        net.minecraft.core.BlockPos home = Platform.home(addon);
+        if (home == null) {
+            addon.getNavigation().stop();
+            return;
+        }
+        addon.getNavigation().moveTo(home.getX() + 0.5, home.getY(), home.getZ() + 0.5, 1);
     }
 
     /**
