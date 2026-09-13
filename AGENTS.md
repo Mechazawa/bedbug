@@ -146,6 +146,17 @@ These are the checks it runs, and what each one catches:
   test only advances while the server ticks, so a server left empty past its
   `pause-when-empty-seconds` reaches no verdict at all; set it to `0` to work at that pace by hand.
   `verify.py` runs its tests well inside the default minute.
+- **`tools/testpack/build_blockprobe.py`** builds a fourth add-on, which asks a script everything the
+  block half of `@minecraft/server` offers and prints a `BLOCKPROBE` line per answer. Its sources are
+  a manifest, one script and one block under `tools/testpack/blockprobe/`.
+
+  ```bash
+  python3 tools/testpack/build_blockprobe.py --version 26.2
+  ```
+
+  The block it ships names a custom component, which the script registers as the world starts up, so
+  `BLOCKPROBE customComponentPlaced=bp:scripted` in a run is the whole path answering: the pack
+  registered a component, a block of its own named it, and placing that block reached the pack again.
 - **`tools/verify/verify.py`** does those game runs without a human watching the log. It starts the
   game, reads the output back for the failures that only appear at runtime, writes
   `build/verify/verdict.json` and a log per run under `build/verify/`, and exits non-zero when
@@ -353,7 +364,7 @@ build.named.gradle.kts       26.2, which Mojang ships unobfuscated
 gradle/mod.gradle.kts        Shared build logic: toolchain, GraalJS bundling, checkstyle, checkTools
 config/checkstyle/           Lint rules and the Stonecutter suppressions
 
-tools/testpack/              The three add-ons the harness checks against, and the scripts building them
+tools/testpack/              The four add-ons the harness checks against, and the scripts building them
 tools/verify/verify.py       End to end harness: drives a dev server and checks a conversion
 tools/preview/render.py      Offline model renderer
 tools/molang/MolangCheck.java  Molang conformance harness

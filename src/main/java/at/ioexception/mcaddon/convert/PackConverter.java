@@ -948,7 +948,7 @@ public final class PackConverter {
         Map<String, String> textureKeys) {
         Map<String, String> faces = new TreeMap<>();
         declared.forEach((face, key) -> {
-            String texture = textureKeys.get(key);
+            String texture = textureKeys.getOrDefault(key, vanillaTexture(key));
             if (texture == null) return;
             switch (face) {
                 case "*" -> FACES.forEach(name -> faces.put(name, texture));
@@ -957,6 +957,26 @@ public final class PackConverter {
             }
         });
         return faces;
+    }
+
+    /**
+     * The game's own texture of that name, for a key no loaded pack answers.
+     *
+     * Bedrock looks a texture key up in the pack's index and then in the game's own, so a behaviour
+     * pack naming `stone` without shipping one means the stone everybody already has. Without this
+     * such a block has no model at all and the game logs a missing one every time it is drawn.
+     */
+    private static String vanillaTexture(String key) {
+        if (key == null || key.contains(":") || key.contains("/")) return null;
+
+        // A block of that name is the evidence the texture exists: the game draws every one of its
+        // own blocks from `block/<name>`, and naming a texture nothing has would only move the
+        // complaint from the model to the atlas.
+        String sanitised = Names.sanitise(key);
+        net.minecraft.resources.Identifier id =
+            net.minecraft.resources.Identifier.tryParse("minecraft:" + sanitised);
+        return id != null && net.minecraft.core.registries.BuiltInRegistries.BLOCK.containsKey(id)
+            ? "minecraft:block/" + sanitised : null;
     }
 
     /**

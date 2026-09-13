@@ -50,6 +50,7 @@ if [ "$quick" -eq 0 ]; then
         python3 tools/testpack/build.py --version "$version" >/dev/null
         python3 tools/testpack/build_modules.py --version "$version" >/dev/null
         python3 tools/testpack/build_gametests.py --version "$version" >/dev/null
+        python3 tools/testpack/build_blockprobe.py --version "$version" >/dev/null
     done
     step "servers and clients" python3 tools/verify/verify.py all
 fi

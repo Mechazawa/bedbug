@@ -1,0 +1,27 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "Block Probe",
+    "description": "throwaway",
+    "uuid": "3c81f0a2-6d94-4e17-b35a-98f2c40d7e51",
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 20, 0]
+  },
+  "modules": [
+    {
+      "type": "data",
+      "uuid": "b7e4d915-2f60-4c83-a91d-6e0b5a3c18f4",
+      "version": [1, 0, 0]
+    },
+    {
+      "type": "script",
+      "language": "javascript",
+      "uuid": "5d0a63c7-8e41-42b9-97f5-1c8de62b04a3",
+      "version": [1, 0, 0],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    { "module_name": "@minecraft/server", "version": "2.6.0" }
+  ]
+}

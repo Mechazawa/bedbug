@@ -39,6 +39,10 @@ public final class AddonPacks {
      *
      * An item is declared in a behaviour pack and drawn from a texture the resource pack ships, and
      * the same holds for a block, so the two halves are paired before either is converted.
+     *
+     * An add-on that ships only a behaviour pack is converted as well, with itself standing in for
+     * the half it has not got. Its items and blocks are registered either way, and without the
+     * conversion each of them is a model the game looks for and never finds.
      */
     public static void convert(PackSet packs) {
         Map<String, List<BedrockPack>> behavioursByOrigin = new LinkedHashMap<>();
@@ -50,9 +54,15 @@ public final class AddonPacks {
 
         List<ConvertedPack> results = new ArrayList<>();
         for (BedrockPack pack : packs.packs()) {
-            if (pack.role() != PackRole.RESOURCE) continue;
-            results.add(PackConverter.convert(new PackConverter.Bundle(pack,
-                behavioursByOrigin.getOrDefault(pack.origin(), List.of())), McAddonPaths.cache()));
+            if (pack.role() == PackRole.RESOURCE) {
+                List<BedrockPack> behaviours = behavioursByOrigin.remove(pack.origin());
+                results.add(PackConverter.convert(new PackConverter.Bundle(pack,
+                    behaviours == null ? List.of() : behaviours), McAddonPaths.cache()));
+            }
+        }
+        for (List<BedrockPack> alone : behavioursByOrigin.values()) {
+            results.add(PackConverter.convert(
+                new PackConverter.Bundle(alone.get(0), alone), McAddonPaths.cache()));
         }
         converted = List.copyOf(results);
     }
