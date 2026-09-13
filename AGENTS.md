@@ -245,8 +245,12 @@ These are the checks it runs, and what each one catches:
 
   It takes a world from the dedicated server's own when `versions/<version>/run/saves/` is empty, so
   `verify.py run` once is all the setup there is, and it reads the entity and item names to place out
-  of whatever packs are installed, so a checkout with no add-on still runs and simply places nothing. **Only commands every supported version spells the same way belong in a scene**: 26
-  renamed the game rules, and one command that will not parse takes the whole function with it.
+  of the archives in `addons/` themselves, so a checkout with no add-on still runs and simply places
+  nothing. Reading them out of the mod's own cache instead places whatever an earlier run left there.
+  **Only commands every supported version spells the same way belong in a scene**: 26 renamed the
+  game rules, and one command that will not parse takes the whole function with it, which is what a
+  name no longer in any pack is. Each scene asks the world how much of what it placed is standing
+  there and says so, so a picture of an empty stage cannot pass.
 
   The `items` scene stands one armour stand per add-on item and puts the item on its head, which is
   what draws an item icon, its tint and its model in the world. The heads-up display is off while
