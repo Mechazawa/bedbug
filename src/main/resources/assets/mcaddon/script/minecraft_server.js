@@ -144,6 +144,19 @@ export class BlockLocationIterator {
 
 /** What every volume answers, worked out from the two corners its own shape reports. */
 export class BlockVolumeBase {
+    /** The three a shape supplies. A base volume carries no positions, so it has no corners. */
+    getMin() {
+        return unsupported("BlockVolumeBase.getMin");
+    }
+
+    getMax() {
+        return unsupported("BlockVolumeBase.getMax");
+    }
+
+    translate() {
+        return unsupported("BlockVolumeBase.translate");
+    }
+
     getSpan() {
         const min = this.getMin();
         const max = this.getMax();
@@ -818,6 +831,16 @@ export class Block {
 
     getRedstonePower() {
         return bridge.blocks.redstonePower(this.dimension.id, this.x, this.y, this.z) ?? undefined;
+    }
+
+    /**
+     * Bedrock's multi-block pieces.
+     *
+     * Java writes a bed or a door as two blocks that know nothing of each other, so there is no
+     * list of parts to hand back.
+     */
+    getParts() {
+        return unsupported("Block.getParts");
     }
 
     getLightLevel() {
@@ -2289,6 +2312,11 @@ export class Container {
         return bridge.containers.size(this.#handle);
     }
 
+    /** Bedrock's weight and item rules belong to a container kind Java has nothing that matches. */
+    get containerRules() {
+        return unsupported("Container.containerRules");
+    }
+
     get emptySlotsCount() {
         return bridge.containers.emptySlots(this.#handle);
     }
@@ -2544,6 +2572,17 @@ export class Entity {
         bridge.setEntityNameTag(this.id, value ?? "");
     }
 
+    // How the name over an entity is drawn. Java draws every one of them the same way, through the
+    // renderer rather than off the entity, so neither can be asked nor set per entity.
+
+    get nameplateDepthTested() {
+        return unsupported("Entity.nameplateDepthTested");
+    }
+
+    get nameplateRenderDistance() {
+        return unsupported("Entity.nameplateRenderDistance");
+    }
+
     get isSneaking() {
         return bridge.entityFlag(this.id, "sneaking");
     }
@@ -2785,6 +2824,16 @@ export class Entity {
         if (hasComponent(this, "minecraft:inventory")) names.add("minecraft:inventory");
         declaredComponents(this).forEach(name => names.add(name));
         return [...names].map(name => componentFor(this, name));
+    }
+
+    /**
+     * Puts a stack into whatever the entity carries, and answers with what would not fit.
+     *
+     * An entity with no inventory of its own holds nothing, so the whole stack comes back.
+     */
+    addItem(itemStack) {
+        const container = this.getComponent(EntityInventoryComponent.componentId)?.container;
+        return container === undefined ? itemStack : container.addItem(itemStack);
     }
 
     getEffects() {
@@ -3443,6 +3492,10 @@ export class Dimension {
         return id === null ? undefined : new BiomeType(id);
     }
 
+    calculateClosestBiomeFromSeed() {
+        return unsupported("Dimension.calculateClosestBiomeFromSeed");
+    }
+
     getLightLevel(location) {
         return bridge.worlds.lightLevel(this.id, Math.floor(location.x), Math.floor(location.y),
             Math.floor(location.z));
@@ -3638,6 +3691,8 @@ const FIELD_SHAPES = {
     brokenBlockPermutation: permutationFrom,
     dimension: dimensionOf,
     fromDimension: dimensionOf,
+    hitBlock: blockFrom,
+    hitBlockPermutation: permutationFrom,
     itemStack: itemFrom,
     itemStackAfterBreak: itemFrom,
     itemStackBeforeBreak: itemFrom,
@@ -3675,6 +3730,12 @@ const EVENT_SHAPES = {
         // Bedrock hands over a list, and one throw drops one stack.
         event.items = [event.item];
         delete event.item;
+        return event;
+    },
+
+    weatherChange(event) {
+        // The one event that names its dimension by id rather than handing the dimension over.
+        event.dimension = event.dimension?.id ?? event.dimension;
         return event;
     },
 };
@@ -3740,6 +3801,11 @@ function payloadsFor(group) {
         entityItemPickup: EntityItemPickupAfterEvent, buttonPush: ButtonPushAfterEvent,
         projectileHitEntity: ProjectileHitEntityAfterEvent,
         projectileHitBlock: ProjectileHitBlockAfterEvent,
+        leverAction: LeverActionAfterEvent, entityHitBlock: EntityHitBlockAfterEvent,
+        entityHeal: EntityHealAfterEvent, entityHealthChanged: EntityHealthChangedAfterEvent,
+        weatherChange: WeatherChangeAfterEvent,
+        playerHotbarSelectedSlotChange: PlayerHotbarSelectedSlotChangeAfterEvent,
+        playerButtonInput: PlayerButtonInputAfterEvent,
     },
     worldBefore: {
         entityHurt: EntityHurtBeforeEvent, entityRemove: EntityRemoveBeforeEvent,
@@ -3747,7 +3813,8 @@ function payloadsFor(group) {
         playerInteractWithBlock: PlayerInteractWithBlockBeforeEvent,
         playerInteractWithEntity: PlayerInteractWithEntityBeforeEvent,
         playerLeave: PlayerLeaveBeforeEvent, effectAdd: EffectAddBeforeEvent,
-        entityItemPickup: EntityItemPickupBeforeEvent,
+        entityItemPickup: EntityItemPickupBeforeEvent, entityHeal: EntityHealBeforeEvent,
+        weatherChange: WeatherChangeBeforeEvent,
     },
     systemAfter: {
         scriptEventReceive: ScriptEventCommandMessageAfterEvent,
@@ -3759,13 +3826,58 @@ function payloadsFor(group) {
     return payloadClasses[group];
 }
 
+let unraisedSignals;
+
+/**
+ * The signal class each published event this mod does not raise is handed back as.
+ *
+ * Built on demand for the same reason the payload table is: the classes are declared further down.
+ * Subscribing to one of these reaches a signal of the class Bedrock names, so a pack keeping and
+ * testing it is answered correctly; nothing ever arrives on it, which is what the report says.
+ */
+function unraisedFor(group) {
+    unraisedSignals ??= {
+    worldAfter: {
+        blockContainerClosed: BlockContainerClosedAfterEventSignal,
+        blockContainerOpened: BlockContainerOpenedAfterEventSignal,
+        blockExplode: BlockExplodeAfterEventSignal,
+        entityContainerClosed: EntityContainerClosedAfterEventSignal,
+        entityContainerOpened: EntityContainerOpenedAfterEventSignal,
+        entityUpgrade: EntityUpgradeAfterEventSignal, explosion: ExplosionAfterEventSignal,
+        gameRuleChange: GameRuleChangeAfterEventSignal,
+        itemStopUseOn: ItemStopUseOnAfterEventSignal,
+        pistonActivate: PistonActivateAfterEventSignal,
+        playerCancelBreakingBlock: PlayerCancelBreakingBlockAfterEventSignal,
+        playerEmote: PlayerEmoteAfterEventSignal,
+        playerInputModeChange: PlayerInputModeChangeAfterEventSignal,
+        playerInputPermissionCategoryChange: PlayerInputPermissionCategoryChangeAfterEventSignal,
+        playerStartBreakingBlock: PlayerStartBreakingBlockAfterEventSignal,
+        playerSwingStart: PlayerSwingStartAfterEventSignal,
+        pressurePlatePop: PressurePlatePopAfterEventSignal,
+        pressurePlatePush: PressurePlatePushAfterEventSignal,
+        targetBlockHit: TargetBlockHitAfterEventSignal,
+        tripWireTrip: TripWireTripAfterEventSignal,
+    },
+    worldBefore: {
+        explosion: ExplosionBeforeEventSignal,
+        playerGameModeChange: PlayerGameModeChangeBeforeEventSignal,
+    },
+    systemAfter: {},
+    systemBefore: {},
+};
+    return unraisedSignals[group];
+}
+
 function eventGroup(raised, group) {
     return new Proxy({}, {
         get(target, name) {
             if (typeof name !== "string") return undefined;
             if (target[name] === undefined) {
-                const build = Object.hasOwn(raised, name) ? raised[name] : undefined;
-                if (build === undefined) bridge.unsupported(name + " (event)");
+                const known = unraisedFor(group)[name];
+                const build = Object.hasOwn(raised, name) ? raised[name] : known;
+                if (!Object.hasOwn(raised, name)) {
+                    bridge.unsupported(name + (known ? " (event, never raised)" : " (event)"));
+                }
                 target[name] = new (build ?? EventSignal)();
                 target[name].shape = EVENT_SHAPES[name];
                 target[name].payload = payloadsFor(group)[name];
@@ -3823,6 +3935,15 @@ export class ScriptEventCommandMessageAfterEventSignal extends EventSignal {}
 export class ShutdownBeforeEventSignal extends EventSignal {}
 export class StartupBeforeEventSignal extends EventSignal {}
 export class WorldLoadAfterEventSignal extends EventSignal {}
+export class LeverActionAfterEventSignal extends EventSignal {}
+export class EntityHitBlockAfterEventSignal extends EventSignal {}
+export class EntityHealAfterEventSignal extends EventSignal {}
+export class EntityHealBeforeEventSignal extends EventSignal {}
+export class EntityHealthChangedAfterEventSignal extends EventSignal {}
+export class WeatherChangeAfterEventSignal extends EventSignal {}
+export class WeatherChangeBeforeEventSignal extends EventSignal {}
+export class PlayerHotbarSelectedSlotChangeAfterEventSignal extends EventSignal {}
+export class PlayerButtonInputAfterEventSignal extends EventSignal {}
 
 const RAISED = {
     worldAfter: {
@@ -3846,6 +3967,12 @@ const RAISED = {
         buttonPush: ButtonPushAfterEventSignal,
         projectileHitEntity: ProjectileHitEntityAfterEventSignal,
         projectileHitBlock: ProjectileHitBlockAfterEventSignal,
+        leverAction: LeverActionAfterEventSignal, entityHitBlock: EntityHitBlockAfterEventSignal,
+        entityHeal: EntityHealAfterEventSignal,
+        entityHealthChanged: EntityHealthChangedAfterEventSignal,
+        weatherChange: WeatherChangeAfterEventSignal,
+        playerHotbarSelectedSlotChange: PlayerHotbarSelectedSlotChangeAfterEventSignal,
+        playerButtonInput: PlayerButtonInputAfterEventSignal,
     },
     worldBefore: {
         entityHurt: EntityHurtBeforeEventSignal, entityRemove: EntityRemoveBeforeEventSignal,
@@ -3854,6 +3981,7 @@ const RAISED = {
         playerInteractWithEntity: PlayerInteractWithEntityBeforeEventSignal,
         playerLeave: PlayerLeaveBeforeEventSignal, effectAdd: EffectAddBeforeEventSignal,
         entityItemPickup: EntityItemPickupBeforeEventSignal,
+        entityHeal: EntityHealBeforeEventSignal, weatherChange: WeatherChangeBeforeEventSignal,
     },
     systemAfter: {
         scriptEventReceive: ScriptEventCommandMessageAfterEventSignal,
@@ -4604,24 +4732,9 @@ globalThis.__mcaddon_runtime__ = {
     /** Raises the startup event and returns what the pack registered on it, as JSON for Java. */
     startup() {
         const event = {
-            customCommandRegistry: {
-                registerEnum(name, values) {
-                    customEnums.set(name, Array.from(values ?? []));
-                },
-                registerCommand(spec, callback) {
-                    customCommands.push({ spec, callback });
-                },
-            },
-            blockComponentRegistry: {
-                registerCustomComponent(name, component) {
-                    customBlockComponents.set(name, component ?? {});
-                },
-            },
-            itemComponentRegistry: {
-                registerCustomComponent(name, component) {
-                    customItemComponents.set(name, component ?? {});
-                },
-            },
+            customCommandRegistry: new CustomCommandRegistry(),
+            blockComponentRegistry: new BlockComponentRegistry(),
+            itemComponentRegistry: new ItemComponentRegistry(),
         };
         system.beforeEvents.startup.emit(event);
 
@@ -4752,26 +4865,204 @@ export const TicksPerDay = 24000;
 export const TicksPerSecond = 20;
 
 /** Named so a pack can import one to describe a value; the game answers what they describe. */
-export class BlockComponentBlockBreakEvent {}
-export class BlockComponentEntityEvent {}
-export class BlockComponentEntityFallOnEvent {}
-export class BlockComponentOnPlaceEvent {}
-export class BlockComponentPlayerBreakEvent {}
-export class BlockComponentPlayerInteractEvent {}
-export class BlockComponentPlayerPlaceBeforeEvent {}
+export class BlockComponentBlockBreakEvent {
+    get blockDestructionSource() {
+        return unsupported("BlockComponentBlockBreakEvent.blockDestructionSource");
+    }
+
+    get brokenBlockPermutation() {
+        return unsupported("BlockComponentBlockBreakEvent.brokenBlockPermutation");
+    }
+
+    get entitySource() {
+        return unsupported("BlockComponentBlockBreakEvent.entitySource");
+    }
+}
+export class BlockComponentEntityEvent {
+    get blockPermutation() {
+        return unsupported("BlockComponentEntityEvent.blockPermutation");
+    }
+
+    get entitySource() {
+        return unsupported("BlockComponentEntityEvent.entitySource");
+    }
+
+    get name() {
+        return unsupported("BlockComponentEntityEvent.name");
+    }
+}
+export class BlockComponentEntityFallOnEvent {
+    get entity() {
+        return unsupported("BlockComponentEntityFallOnEvent.entity");
+    }
+
+    get fallDistance() {
+        return unsupported("BlockComponentEntityFallOnEvent.fallDistance");
+    }
+}
+export class BlockComponentOnPlaceEvent {
+    get previousBlock() {
+        return unsupported("BlockComponentOnPlaceEvent.previousBlock");
+    }
+}
+export class BlockComponentPlayerBreakEvent {
+    get brokenBlockPermutation() {
+        return unsupported("BlockComponentPlayerBreakEvent.brokenBlockPermutation");
+    }
+
+    get player() {
+        return unsupported("BlockComponentPlayerBreakEvent.player");
+    }
+}
+export class BlockComponentPlayerInteractEvent {
+    get face() {
+        return unsupported("BlockComponentPlayerInteractEvent.face");
+    }
+
+    get faceLocation() {
+        return unsupported("BlockComponentPlayerInteractEvent.faceLocation");
+    }
+
+    get player() {
+        return unsupported("BlockComponentPlayerInteractEvent.player");
+    }
+}
+export class BlockComponentPlayerPlaceBeforeEvent {
+    get cancel() {
+        return unsupported("BlockComponentPlayerPlaceBeforeEvent.cancel");
+    }
+
+    get face() {
+        return unsupported("BlockComponentPlayerPlaceBeforeEvent.face");
+    }
+
+    get permutationToPlace() {
+        return unsupported("BlockComponentPlayerPlaceBeforeEvent.permutationToPlace");
+    }
+
+    get player() {
+        return unsupported("BlockComponentPlayerPlaceBeforeEvent.player");
+    }
+}
 export class BlockComponentRandomTickEvent {}
-export class BlockComponentRedstoneUpdateEvent {}
-export class BlockComponentRegistry {}
-export class BlockComponentStepOffEvent {}
-export class BlockComponentStepOnEvent {}
+export class BlockComponentRedstoneUpdateEvent {
+    get powerLevel() {
+        return unsupported("BlockComponentRedstoneUpdateEvent.powerLevel");
+    }
+
+    get previousPowerLevel() {
+        return unsupported("BlockComponentRedstoneUpdateEvent.previousPowerLevel");
+    }
+}
+export class BlockComponentRegistry {
+    registerCustomComponent(name, component) {
+        customBlockComponents.set(name, component ?? {});
+    }
+}
+export class BlockComponentStepOffEvent {
+    get entity() {
+        return unsupported("BlockComponentStepOffEvent.entity");
+    }
+}
+export class BlockComponentStepOnEvent {
+    get entity() {
+        return unsupported("BlockComponentStepOnEvent.entity");
+    }
+}
 export class BlockComponentTickEvent {}
-export class BlockCustomComponentInstance {}
-export class BlockEvent {}
-export class BlockExplodeAfterEvent {}
-export class BlockExplodeAfterEventSignal {}
-export class BlockFluidContainerComponent { static componentId = "minecraft:fluid_container"; }
-export class BlockPrecipitationInteractionsComponent { static componentId = "minecraft:precipitation_interactions"; }
-export class BlockRecordPlayerComponent { static componentId = "minecraft:record_player"; }
+export class BlockCustomComponentInstance extends BlockComponent {
+    get customComponentParameters() {
+        return unsupported("BlockCustomComponentInstance.customComponentParameters");
+    }
+}
+export class BlockEvent {
+    get block() {
+        return unsupported("BlockEvent.block");
+    }
+
+    get dimension() {
+        return unsupported("BlockEvent.dimension");
+    }
+}
+export class BlockExplodeAfterEvent extends BlockEvent {
+    get explodedBlockPermutation() {
+        return unsupported("BlockExplodeAfterEvent.explodedBlockPermutation");
+    }
+
+    get source() {
+        return unsupported("BlockExplodeAfterEvent.source");
+    }
+}
+export class BlockExplodeAfterEventSignal extends EventSignal {}
+export class BlockFluidContainerComponent extends BlockComponent {
+    static componentId = "minecraft:fluid_container";
+
+    get fillLevel() {
+        return unsupported("BlockFluidContainerComponent.fillLevel");
+    }
+
+    get fluidColor() {
+        return unsupported("BlockFluidContainerComponent.fluidColor");
+    }
+
+    addDye() {
+        return unsupported("BlockFluidContainerComponent.addDye");
+    }
+
+    getFluidType() {
+        return unsupported("BlockFluidContainerComponent.getFluidType");
+    }
+
+    setFluidType() {
+        return unsupported("BlockFluidContainerComponent.setFluidType");
+    }
+
+    setPotion() {
+        return unsupported("BlockFluidContainerComponent.setPotion");
+    }
+}
+export class BlockPrecipitationInteractionsComponent extends BlockComponent {
+    static componentId = "minecraft:precipitation_interactions";
+
+    accumulatesSnow() {
+        return unsupported("BlockPrecipitationInteractionsComponent.accumulatesSnow");
+    }
+
+    isSnowLoggable() {
+        return unsupported("BlockPrecipitationInteractionsComponent.isSnowLoggable");
+    }
+
+    obstructsRain() {
+        return unsupported("BlockPrecipitationInteractionsComponent.obstructsRain");
+    }
+}
+export class BlockRecordPlayerComponent extends BlockComponent {
+    static componentId = "minecraft:record_player";
+
+    ejectRecord() {
+        return unsupported("BlockRecordPlayerComponent.ejectRecord");
+    }
+
+    getRecord() {
+        return unsupported("BlockRecordPlayerComponent.getRecord");
+    }
+
+    isPlaying() {
+        return unsupported("BlockRecordPlayerComponent.isPlaying");
+    }
+
+    pauseRecord() {
+        return unsupported("BlockRecordPlayerComponent.pauseRecord");
+    }
+
+    playRecord() {
+        return unsupported("BlockRecordPlayerComponent.playRecord");
+    }
+
+    setRecord() {
+        return unsupported("BlockRecordPlayerComponent.setRecord");
+    }
+}
 export class ButtonPushAfterEvent {
     get block() {
         return unsupported("ButtonPushAfterEvent.block");
@@ -4785,13 +5076,62 @@ export class ButtonPushAfterEvent {
         return unsupported("ButtonPushAfterEvent.source");
     }
 }
-export class CatmullRomSpline {}
-export class CommandResult {}
-export class Component {}
-export class CustomCommandOrigin {}
-export class CustomCommandRegistry {}
-export class CustomComponentParameters {}
-export class DamagedByEntityCondition {}
+export class CatmullRomSpline {
+    get controlPoints() {
+        return unsupported("CatmullRomSpline.controlPoints");
+    }
+}
+export class CommandResult {
+    get successCount() {
+        return unsupported("CommandResult.successCount");
+    }
+}
+export class Component {
+    get isValid() {
+        return unsupported("Component.isValid");
+    }
+
+    get typeId() {
+        return unsupported("Component.typeId");
+    }
+}
+export class CustomCommandOrigin {
+    get initiator() {
+        return unsupported("CustomCommandOrigin.initiator");
+    }
+
+    get sourceBlock() {
+        return unsupported("CustomCommandOrigin.sourceBlock");
+    }
+
+    get sourceEntity() {
+        return unsupported("CustomCommandOrigin.sourceEntity");
+    }
+
+    get sourceType() {
+        return unsupported("CustomCommandOrigin.sourceType");
+    }
+}
+/** What a pack registers its own commands on, handed to it by the startup event. */
+export class CustomCommandRegistry {
+    registerCommand(spec, callback) {
+        customCommands.push({ spec, callback });
+    }
+
+    registerEnum(name, values) {
+        customEnums.set(name, Array.from(values ?? []));
+    }
+}
+export class CustomComponentParameters {
+    get params() {
+        return unsupported("CustomComponentParameters.params");
+    }
+}
+export class DamagedByEntityCondition {
+    get entityType() {
+        return unsupported("DamagedByEntityCondition.entityType");
+    }
+}
 export class DataDrivenEntityTriggerAfterEvent {
     get entity() {
         return unsupported("DataDrivenEntityTriggerAfterEvent.entity");
@@ -4832,15 +5172,47 @@ export class EffectAddBeforeEvent {
     }
 }
 export class EmptyLootItem {}
-export class EnchantInfo {}
-export class EnchantRandomEquipmentFunction {}
-export class EnchantRandomlyFunction {}
-export class EnchantWithLevelsFunction {}
+export class EnchantInfo {
+    get enchantment() {
+        return unsupported("EnchantInfo.enchantment");
+    }
+
+    get range() {
+        return unsupported("EnchantInfo.range");
+    }
+}
+export class EnchantRandomEquipmentFunction {
+    get chance() {
+        return unsupported("EnchantRandomEquipmentFunction.chance");
+    }
+}
+export class EnchantRandomlyFunction {
+    get treasure() {
+        return unsupported("EnchantRandomlyFunction.treasure");
+    }
+}
+export class EnchantWithLevelsFunction {
+    get levels() {
+        return unsupported("EnchantWithLevelsFunction.levels");
+    }
+
+    get treasure() {
+        return unsupported("EnchantWithLevelsFunction.treasure");
+    }
+}
 export class EntityCanClimbComponent {}
 export class EntityCanFlyComponent {}
 export class EntityCanPowerJumpComponent {}
-export class EntityColor2Component {}
-export class EntityColorComponent {}
+export class EntityColor2Component extends EntityComponent {
+    get value() {
+        return unsupported("EntityColor2Component.value");
+    }
+}
+export class EntityColorComponent extends EntityComponent {
+    get value() {
+        return unsupported("EntityColorComponent.value");
+    }
+}
 export class EntityDieAfterEvent {
     get damageSource() {
         return unsupported("EntityDieAfterEvent.damageSource");
@@ -4853,19 +5225,91 @@ export class EntityDieAfterEvent {
 export class EntityExhaustionComponent {}
 export class EntityFireImmuneComponent {}
 export class EntityFloatsInLiquidComponent {}
-export class EntityFlyingSpeedComponent {}
-export class EntityFrictionModifierComponent {}
-export class EntityHasMarkVariantCondition {}
-export class EntityHasVariantCondition {}
-export class EntityHealAfterEvent {}
-export class EntityHealAfterEventSignal {}
-export class EntityHealBeforeEvent {}
-export class EntityHealBeforeEventSignal {}
-export class EntityHealSource {}
-export class EntityHealthChangedAfterEvent {}
-export class EntityHealthChangedAfterEventSignal {}
-export class EntityHitBlockAfterEvent {}
-export class EntityHitBlockAfterEventSignal {}
+export class EntityFlyingSpeedComponent extends EntityComponent {
+    get value() {
+        return unsupported("EntityFlyingSpeedComponent.value");
+    }
+}
+export class EntityFrictionModifierComponent extends EntityComponent {
+    get value() {
+        return unsupported("EntityFrictionModifierComponent.value");
+    }
+}
+export class EntityHasMarkVariantCondition {
+    get value() {
+        return unsupported("EntityHasMarkVariantCondition.value");
+    }
+}
+export class EntityHasVariantCondition {
+    get value() {
+        return unsupported("EntityHasVariantCondition.value");
+    }
+}
+export class EntityHealAfterEvent {
+    get healedEntity() {
+        return unsupported("EntityHealAfterEvent.healedEntity");
+    }
+
+    get healing() {
+        return unsupported("EntityHealAfterEvent.healing");
+    }
+
+    get healSource() {
+        return unsupported("EntityHealAfterEvent.healSource");
+    }
+}
+export class EntityHealBeforeEvent {
+    get cancel() {
+        return unsupported("EntityHealBeforeEvent.cancel");
+    }
+
+    get healedEntity() {
+        return unsupported("EntityHealBeforeEvent.healedEntity");
+    }
+
+    get healing() {
+        return unsupported("EntityHealBeforeEvent.healing");
+    }
+
+    get healSource() {
+        return unsupported("EntityHealBeforeEvent.healSource");
+    }
+}
+export class EntityHealSource {
+    get cause() {
+        return unsupported("EntityHealSource.cause");
+    }
+}
+export class EntityHealthChangedAfterEvent {
+    get entity() {
+        return unsupported("EntityHealthChangedAfterEvent.entity");
+    }
+
+    get newValue() {
+        return unsupported("EntityHealthChangedAfterEvent.newValue");
+    }
+
+    get oldValue() {
+        return unsupported("EntityHealthChangedAfterEvent.oldValue");
+    }
+}
+export class EntityHitBlockAfterEvent {
+    get blockFace() {
+        return unsupported("EntityHitBlockAfterEvent.blockFace");
+    }
+
+    get damagingEntity() {
+        return unsupported("EntityHitBlockAfterEvent.damagingEntity");
+    }
+
+    get hitBlock() {
+        return unsupported("EntityHitBlockAfterEvent.hitBlock");
+    }
+
+    get hitBlockPermutation() {
+        return unsupported("EntityHitBlockAfterEvent.hitBlockPermutation");
+    }
+}
 export class EntityHitEntityAfterEvent {
     get damagingEntity() {
         return unsupported("EntityHitEntityAfterEvent.damagingEntity");
@@ -4948,14 +5392,22 @@ export class EntityItemPickupBeforeEvent {
         return unsupported("EntityItemPickupBeforeEvent.item");
     }
 }
-export class EntityKilledCondition {}
+export class EntityKilledCondition {
+    get entityType() {
+        return unsupported("EntityKilledCondition.entityType");
+    }
+}
 export class EntityLavaMovementComponent {}
 export class EntityLoadAfterEvent {
     get entity() {
         return unsupported("EntityLoadAfterEvent.entity");
     }
 }
-export class EntityPushThroughComponent {}
+export class EntityPushThroughComponent extends EntityComponent {
+    get value() {
+        return unsupported("EntityPushThroughComponent.value");
+    }
+}
 export class EntityRemoveAfterEvent {
     get removedEntityId() {
         return unsupported("EntityRemoveAfterEvent.removedEntityId");
@@ -4970,7 +5422,11 @@ export class EntityRemoveBeforeEvent {
         return unsupported("EntityRemoveBeforeEvent.removedEntity");
     }
 }
-export class EntityScaleComponent {}
+export class EntityScaleComponent extends EntityComponent {
+    get value() {
+        return unsupported("EntityScaleComponent.value");
+    }
+}
 export class EntitySpawnAfterEvent {
     get cause() {
         return unsupported("EntitySpawnAfterEvent.cause");
@@ -4982,16 +5438,52 @@ export class EntitySpawnAfterEvent {
 }
 export class EntityUnderwaterMovementComponent {}
 export class EntityWantsJockeyComponent {}
-export class ExplorationMapFunction {}
-export class ExplosionAfterEvent {}
-export class ExplosionAfterEventSignal {}
-export class ExplosionBeforeEvent {}
-export class ExplosionBeforeEventSignal {}
+export class ExplorationMapFunction {
+    get destination() {
+        return unsupported("ExplorationMapFunction.destination");
+    }
+}
+export class ExplosionAfterEvent {
+    get dimension() {
+        return unsupported("ExplosionAfterEvent.dimension");
+    }
+
+    get source() {
+        return unsupported("ExplosionAfterEvent.source");
+    }
+
+    getImpactedBlocks() {
+        return unsupported("ExplosionAfterEvent.getImpactedBlocks");
+    }
+}
+export class ExplosionAfterEventSignal extends EventSignal {}
+export class ExplosionBeforeEvent extends ExplosionAfterEvent {
+    get cancel() {
+        return unsupported("ExplosionBeforeEvent.cancel");
+    }
+
+    setImpactedBlocks() {
+        return unsupported("ExplosionBeforeEvent.setImpactedBlocks");
+    }
+}
+export class ExplosionBeforeEventSignal extends EventSignal {}
 export class ExplosionDecayFunction {}
-export class FillContainerFunction {}
+export class FillContainerFunction {
+    get lootTable() {
+        return unsupported("FillContainerFunction.lootTable");
+    }
+}
 export class FluidContainer {}
-export class GameRuleChangeAfterEvent {}
-export class GameRuleChangeAfterEventSignal {}
+export class GameRuleChangeAfterEvent {
+    get rule() {
+        return unsupported("GameRuleChangeAfterEvent.rule");
+    }
+
+    get value() {
+        return unsupported("GameRuleChangeAfterEvent.value");
+    }
+}
+export class GameRuleChangeAfterEventSignal extends EventSignal {}
 export class IsBabyCondition {}
 export class ItemCompleteUseAfterEvent {
     get itemStack() {
@@ -5006,17 +5498,109 @@ export class ItemCompleteUseAfterEvent {
         return unsupported("ItemCompleteUseAfterEvent.useDuration");
     }
 }
-export class ItemCompleteUseEvent {}
-export class ItemComponentBeforeDurabilityDamageEvent {}
+export class ItemCompleteUseEvent {
+    get itemStack() {
+        return unsupported("ItemCompleteUseEvent.itemStack");
+    }
+
+    get source() {
+        return unsupported("ItemCompleteUseEvent.source");
+    }
+}
+export class ItemComponentBeforeDurabilityDamageEvent {
+    get attackingEntity() {
+        return unsupported("ItemComponentBeforeDurabilityDamageEvent.attackingEntity");
+    }
+
+    get durabilityDamage() {
+        return unsupported("ItemComponentBeforeDurabilityDamageEvent.durabilityDamage");
+    }
+
+    get hitEntity() {
+        return unsupported("ItemComponentBeforeDurabilityDamageEvent.hitEntity");
+    }
+
+    get itemStack() {
+        return unsupported("ItemComponentBeforeDurabilityDamageEvent.itemStack");
+    }
+}
 export class ItemComponentCompleteUseEvent {}
-export class ItemComponentConsumeEvent {}
-export class ItemComponentHitEntityEvent {}
-export class ItemComponentMineBlockEvent {}
-export class ItemComponentRegistry {}
-export class ItemComponentUseEvent {}
-export class ItemComponentUseOnEvent {}
-export class ItemCustomComponentInstance {}
-export class ItemInventoryComponent {}
+export class ItemComponentConsumeEvent {
+    get itemStack() {
+        return unsupported("ItemComponentConsumeEvent.itemStack");
+    }
+
+    get source() {
+        return unsupported("ItemComponentConsumeEvent.source");
+    }
+}
+export class ItemComponentHitEntityEvent {
+    get attackingEntity() {
+        return unsupported("ItemComponentHitEntityEvent.attackingEntity");
+    }
+
+    get hadEffect() {
+        return unsupported("ItemComponentHitEntityEvent.hadEffect");
+    }
+
+    get hitEntity() {
+        return unsupported("ItemComponentHitEntityEvent.hitEntity");
+    }
+
+    get itemStack() {
+        return unsupported("ItemComponentHitEntityEvent.itemStack");
+    }
+}
+export class ItemComponentMineBlockEvent {
+    get block() {
+        return unsupported("ItemComponentMineBlockEvent.block");
+    }
+
+    get itemStack() {
+        return unsupported("ItemComponentMineBlockEvent.itemStack");
+    }
+
+    get minedBlockPermutation() {
+        return unsupported("ItemComponentMineBlockEvent.minedBlockPermutation");
+    }
+
+    get source() {
+        return unsupported("ItemComponentMineBlockEvent.source");
+    }
+}
+export class ItemComponentRegistry {
+    registerCustomComponent(name, component) {
+        customItemComponents.set(name, component ?? {});
+    }
+}
+export class ItemComponentUseEvent {
+    get itemStack() {
+        return unsupported("ItemComponentUseEvent.itemStack");
+    }
+
+    get source() {
+        return unsupported("ItemComponentUseEvent.source");
+    }
+}
+export class ItemComponentUseOnEvent {
+    get source() {
+        return unsupported("ItemComponentUseOnEvent.source");
+    }
+
+    get usedOnBlockPermutation() {
+        return unsupported("ItemComponentUseOnEvent.usedOnBlockPermutation");
+    }
+}
+export class ItemCustomComponentInstance extends ItemComponent {
+    get customComponentParameters() {
+        return unsupported("ItemCustomComponentInstance.customComponentParameters");
+    }
+}
+export class ItemInventoryComponent extends ItemComponent {
+    get container() {
+        return unsupported("ItemInventoryComponent.container");
+    }
+}
 export class ItemReleaseUseAfterEvent {
     get itemStack() {
         return unsupported("ItemReleaseUseAfterEvent.itemStack");
@@ -5073,8 +5657,20 @@ export class ItemStopUseAfterEvent {
         return unsupported("ItemStopUseAfterEvent.useDuration");
     }
 }
-export class ItemStopUseOnAfterEvent {}
-export class ItemStopUseOnAfterEventSignal {}
+export class ItemStopUseOnAfterEvent {
+    get block() {
+        return unsupported("ItemStopUseOnAfterEvent.block");
+    }
+
+    get itemStack() {
+        return unsupported("ItemStopUseOnAfterEvent.itemStack");
+    }
+
+    get source() {
+        return unsupported("ItemStopUseOnAfterEvent.source");
+    }
+}
+export class ItemStopUseOnAfterEventSignal extends EventSignal {}
 export class ItemUseAfterEvent {
     get itemStack() {
         return unsupported("ItemUseAfterEvent.itemStack");
@@ -5097,27 +5693,178 @@ export class ItemUseBeforeEvent {
         return unsupported("ItemUseBeforeEvent.source");
     }
 }
-export class ItemUseOnEvent {}
-export class KilledByEntityCondition {}
+export class ItemUseOnEvent {
+    get block() {
+        return unsupported("ItemUseOnEvent.block");
+    }
+
+    get blockFace() {
+        return unsupported("ItemUseOnEvent.blockFace");
+    }
+
+    get faceLocation() {
+        return unsupported("ItemUseOnEvent.faceLocation");
+    }
+
+    get itemStack() {
+        return unsupported("ItemUseOnEvent.itemStack");
+    }
+}
+export class KilledByEntityCondition {
+    get entityType() {
+        return unsupported("KilledByEntityCondition.entityType");
+    }
+}
 export class KilledByPlayerCondition {}
 export class KilledByPlayerOrPetsCondition {}
-export class LeverActionAfterEvent {}
-export class LeverActionAfterEventSignal {}
-export class LinearSpline {}
-export class LootItem {}
+export class LeverActionAfterEvent extends BlockEvent {
+    get isPowered() {
+        return unsupported("LeverActionAfterEvent.isPowered");
+    }
+
+    get player() {
+        return unsupported("LeverActionAfterEvent.player");
+    }
+}
+export class LinearSpline {
+    get controlPoints() {
+        return unsupported("LinearSpline.controlPoints");
+    }
+}
+export class LootItem {
+    get conditions() {
+        return unsupported("LootItem.conditions");
+    }
+
+    get functions() {
+        return unsupported("LootItem.functions");
+    }
+
+    get name() {
+        return unsupported("LootItem.name");
+    }
+}
 export class LootItemCondition {}
-export class LootItemFunction {}
-export class LootPool {}
-export class LootPoolEntry {}
-export class LootPoolTiers {}
-export class LootTable {}
-export class LootTableEntry {}
-export class LootTableReference {}
-export class LootingEnchantFunction {}
-export class MatchToolCondition {}
-export class PassengerOfEntityCondition {}
-export class PistonActivateAfterEvent {}
-export class PistonActivateAfterEventSignal {}
+export class LootItemFunction {
+    get conditions() {
+        return unsupported("LootItemFunction.conditions");
+    }
+}
+export class LootPool {
+    get bonusRolls() {
+        return unsupported("LootPool.bonusRolls");
+    }
+
+    get conditions() {
+        return unsupported("LootPool.conditions");
+    }
+
+    get entries() {
+        return unsupported("LootPool.entries");
+    }
+
+    get rolls() {
+        return unsupported("LootPool.rolls");
+    }
+
+    get tiers() {
+        return unsupported("LootPool.tiers");
+    }
+}
+export class LootPoolEntry {
+    get quality() {
+        return unsupported("LootPoolEntry.quality");
+    }
+
+    get subTable() {
+        return unsupported("LootPoolEntry.subTable");
+    }
+
+    get weight() {
+        return unsupported("LootPoolEntry.weight");
+    }
+}
+export class LootPoolTiers {
+    get bonusChance() {
+        return unsupported("LootPoolTiers.bonusChance");
+    }
+
+    get bonusRolls() {
+        return unsupported("LootPoolTiers.bonusRolls");
+    }
+
+    get initialRange() {
+        return unsupported("LootPoolTiers.initialRange");
+    }
+}
+export class LootTable {
+    get path() {
+        return unsupported("LootTable.path");
+    }
+
+    get pools() {
+        return unsupported("LootTable.pools");
+    }
+}
+export class LootTableEntry extends LootPoolEntry {
+    get lootTable() {
+        return unsupported("LootTableEntry.lootTable");
+    }
+}
+export class LootTableReference extends LootPoolEntry {
+    get path() {
+        return unsupported("LootTableReference.path");
+    }
+}
+export class LootingEnchantFunction extends LootItemFunction {
+    get count() {
+        return unsupported("LootingEnchantFunction.count");
+    }
+}
+export class MatchToolCondition extends LootItemCondition {
+    get count() {
+        return unsupported("MatchToolCondition.count");
+    }
+
+    get durability() {
+        return unsupported("MatchToolCondition.durability");
+    }
+
+    get enchantments() {
+        return unsupported("MatchToolCondition.enchantments");
+    }
+
+    get itemName() {
+        return unsupported("MatchToolCondition.itemName");
+    }
+
+    get itemTagsAll() {
+        return unsupported("MatchToolCondition.itemTagsAll");
+    }
+
+    get itemTagsAny() {
+        return unsupported("MatchToolCondition.itemTagsAny");
+    }
+
+    get itemTagsNone() {
+        return unsupported("MatchToolCondition.itemTagsNone");
+    }
+}
+export class PassengerOfEntityCondition extends LootItemCondition {
+    get entityType() {
+        return unsupported("PassengerOfEntityCondition.entityType");
+    }
+}
+export class PistonActivateAfterEvent extends BlockEvent {
+    get isExpanding() {
+        return unsupported("PistonActivateAfterEvent.isExpanding");
+    }
+
+    get piston() {
+        return unsupported("PistonActivateAfterEvent.piston");
+    }
+}
+export class PistonActivateAfterEventSignal extends EventSignal {}
 export class PlayerBreakBlockAfterEvent {
     get block() {
         return unsupported("PlayerBreakBlockAfterEvent.block");
@@ -5164,9 +5911,28 @@ export class PlayerBreakBlockBeforeEvent {
         return unsupported("PlayerBreakBlockBeforeEvent.player");
     }
 }
-export class PlayerButtonInputAfterEvent {}
-export class PlayerButtonInputAfterEventSignal {}
-export class PlayerCursorInventoryComponent {}
+export class PlayerButtonInputAfterEvent {
+    get button() {
+        return unsupported("PlayerButtonInputAfterEvent.button");
+    }
+
+    get newButtonState() {
+        return unsupported("PlayerButtonInputAfterEvent.newButtonState");
+    }
+
+    get player() {
+        return unsupported("PlayerButtonInputAfterEvent.player");
+    }
+}
+export class PlayerCursorInventoryComponent extends EntityComponent {
+    get item() {
+        return unsupported("PlayerCursorInventoryComponent.item");
+    }
+
+    clear() {
+        return unsupported("PlayerCursorInventoryComponent.clear");
+    }
+}
 export class PlayerDimensionChangeAfterEvent {
     get fromDimension() {
         return unsupported("PlayerDimensionChangeAfterEvent.fromDimension");
@@ -5188,8 +5954,16 @@ export class PlayerDimensionChangeAfterEvent {
         return unsupported("PlayerDimensionChangeAfterEvent.toLocation");
     }
 }
-export class PlayerEmoteAfterEvent {}
-export class PlayerEmoteAfterEventSignal {}
+export class PlayerEmoteAfterEvent {
+    get personaPieceId() {
+        return unsupported("PlayerEmoteAfterEvent.personaPieceId");
+    }
+
+    get player() {
+        return unsupported("PlayerEmoteAfterEvent.player");
+    }
+}
+export class PlayerEmoteAfterEventSignal extends EventSignal {}
 export class PlayerGameModeChangeAfterEvent {
     get fromGameMode() {
         return unsupported("PlayerGameModeChangeAfterEvent.fromGameMode");
@@ -5203,14 +5977,69 @@ export class PlayerGameModeChangeAfterEvent {
         return unsupported("PlayerGameModeChangeAfterEvent.toGameMode");
     }
 }
-export class PlayerGameModeChangeBeforeEvent {}
-export class PlayerGameModeChangeBeforeEventSignal {}
-export class PlayerHotbarSelectedSlotChangeAfterEvent {}
-export class PlayerHotbarSelectedSlotChangeAfterEventSignal {}
-export class PlayerInputModeChangeAfterEvent {}
-export class PlayerInputModeChangeAfterEventSignal {}
-export class PlayerInputPermissionCategoryChangeAfterEvent {}
-export class PlayerInputPermissionCategoryChangeAfterEventSignal {}
+export class PlayerGameModeChangeBeforeEvent {
+    get cancel() {
+        return unsupported("PlayerGameModeChangeBeforeEvent.cancel");
+    }
+
+    get fromGameMode() {
+        return unsupported("PlayerGameModeChangeBeforeEvent.fromGameMode");
+    }
+
+    get player() {
+        return unsupported("PlayerGameModeChangeBeforeEvent.player");
+    }
+
+    get toGameMode() {
+        return unsupported("PlayerGameModeChangeBeforeEvent.toGameMode");
+    }
+}
+export class PlayerGameModeChangeBeforeEventSignal extends EventSignal {}
+export class PlayerHotbarSelectedSlotChangeAfterEvent {
+    get itemStack() {
+        return unsupported("PlayerHotbarSelectedSlotChangeAfterEvent.itemStack");
+    }
+
+    get newSlotSelected() {
+        return unsupported("PlayerHotbarSelectedSlotChangeAfterEvent.newSlotSelected");
+    }
+
+    get player() {
+        return unsupported("PlayerHotbarSelectedSlotChangeAfterEvent.player");
+    }
+
+    get previousSlotSelected() {
+        return unsupported("PlayerHotbarSelectedSlotChangeAfterEvent.previousSlotSelected");
+    }
+}
+export class PlayerInputModeChangeAfterEvent {
+    get newInputModeUsed() {
+        return unsupported("PlayerInputModeChangeAfterEvent.newInputModeUsed");
+    }
+
+    get player() {
+        return unsupported("PlayerInputModeChangeAfterEvent.player");
+    }
+
+    get previousInputModeUsed() {
+        return unsupported("PlayerInputModeChangeAfterEvent.previousInputModeUsed");
+    }
+}
+export class PlayerInputModeChangeAfterEventSignal extends EventSignal {}
+export class PlayerInputPermissionCategoryChangeAfterEvent {
+    get category() {
+        return unsupported("PlayerInputPermissionCategoryChangeAfterEvent.category");
+    }
+
+    get enabled() {
+        return unsupported("PlayerInputPermissionCategoryChangeAfterEvent.enabled");
+    }
+
+    get player() {
+        return unsupported("PlayerInputPermissionCategoryChangeAfterEvent.player");
+    }
+}
+export class PlayerInputPermissionCategoryChangeAfterEventSignal extends EventSignal {}
 export class PlayerInteractWithBlockAfterEvent {
     get beforeItemStack() {
         return unsupported("PlayerInteractWithBlockAfterEvent.beforeItemStack");
@@ -5369,12 +6198,44 @@ export class PlayerSpawnAfterEvent {
         return unsupported("PlayerSpawnAfterEvent.player");
     }
 }
-export class PlayerSwingStartAfterEvent {}
-export class PlayerSwingStartAfterEventSignal {}
-export class PressurePlatePopAfterEvent {}
-export class PressurePlatePopAfterEventSignal {}
-export class PressurePlatePushAfterEvent {}
-export class PressurePlatePushAfterEventSignal {}
+export class PlayerSwingStartAfterEvent {
+    get heldItemStack() {
+        return unsupported("PlayerSwingStartAfterEvent.heldItemStack");
+    }
+
+    get player() {
+        return unsupported("PlayerSwingStartAfterEvent.player");
+    }
+
+    get swingSource() {
+        return unsupported("PlayerSwingStartAfterEvent.swingSource");
+    }
+}
+export class PlayerSwingStartAfterEventSignal extends EventSignal {}
+export class PressurePlatePopAfterEvent extends BlockEvent {
+    get previousRedstonePower() {
+        return unsupported("PressurePlatePopAfterEvent.previousRedstonePower");
+    }
+
+    get redstonePower() {
+        return unsupported("PressurePlatePopAfterEvent.redstonePower");
+    }
+}
+export class PressurePlatePopAfterEventSignal extends EventSignal {}
+export class PressurePlatePushAfterEvent extends BlockEvent {
+    get previousRedstonePower() {
+        return unsupported("PressurePlatePushAfterEvent.previousRedstonePower");
+    }
+
+    get redstonePower() {
+        return unsupported("PressurePlatePushAfterEvent.redstonePower");
+    }
+
+    get source() {
+        return unsupported("PressurePlatePushAfterEvent.source");
+    }
+}
+export class PressurePlatePushAfterEventSignal extends EventSignal {}
 export class ProjectileHitBlockAfterEvent {
     get dimension() {
         return unsupported("ProjectileHitBlockAfterEvent.dimension");
@@ -5425,13 +6286,45 @@ export class ProjectileHitEntityAfterEvent {
         return unsupported("ProjectileHitEntityAfterEvent.getEntityHit");
     }
 }
-export class RandomAuxValueFunction {}
-export class RandomBlockStateFunction {}
-export class RandomChanceCondition {}
-export class RandomChanceWithLootingCondition {}
-export class RandomDifficultyChanceCondition {}
+export class RandomAuxValueFunction extends LootItemFunction {
+    get values() {
+        return unsupported("RandomAuxValueFunction.values");
+    }
+}
+export class RandomBlockStateFunction extends LootItemFunction {
+    get blockState() {
+        return unsupported("RandomBlockStateFunction.blockState");
+    }
+
+    get values() {
+        return unsupported("RandomBlockStateFunction.values");
+    }
+}
+export class RandomChanceCondition extends LootItemCondition {
+    get chance() {
+        return unsupported("RandomChanceCondition.chance");
+    }
+}
+export class RandomChanceWithLootingCondition extends LootItemCondition {
+    get chance() {
+        return unsupported("RandomChanceWithLootingCondition.chance");
+    }
+
+    get lootingMultiplier() {
+        return unsupported("RandomChanceWithLootingCondition.lootingMultiplier");
+    }
+}
+export class RandomDifficultyChanceCondition extends LootItemCondition {
+    get chances() {
+        return unsupported("RandomDifficultyChanceCondition.chances");
+    }
+}
 export class RandomDyeFunction {}
-export class RandomRegionalDifficultyChanceCondition {}
+export class RandomRegionalDifficultyChanceCondition extends LootItemCondition {
+    get maxChance() {
+        return unsupported("RandomRegionalDifficultyChanceCondition.maxChance");
+    }
+}
 export class ScriptEventCommandMessageAfterEvent {
     get id() {
         return unsupported("ScriptEventCommandMessageAfterEvent.id");
@@ -5457,22 +6350,82 @@ export class ScriptEventCommandMessageAfterEvent {
         return unsupported("ScriptEventCommandMessageAfterEvent.sourceType");
     }
 }
-export class SetArmorTrimFunction {}
+export class SetArmorTrimFunction extends LootItemFunction {
+    get material() {
+        return unsupported("SetArmorTrimFunction.material");
+    }
+
+    get pattern() {
+        return unsupported("SetArmorTrimFunction.pattern");
+    }
+}
 export class SetBannerDetailsFunction {}
-export class SetBookContentsFunction {}
+export class SetBookContentsFunction extends LootItemFunction {
+    get author() {
+        return unsupported("SetBookContentsFunction.author");
+    }
+
+    get pages() {
+        return unsupported("SetBookContentsFunction.pages");
+    }
+
+    get title() {
+        return unsupported("SetBookContentsFunction.title");
+    }
+}
 export class SetDataFromColorIndexFunction {}
-export class SetItemCountFunction {}
-export class SetItemDamageFunction {}
-export class SetItemDataFunction {}
-export class SetItemLoreFunction {}
-export class SetItemNameFunction {}
-export class SetOminousBottleFunction {}
-export class SetPotionFunction {}
-export class SetSpawnEggFunction {}
-export class SetStewEffectFunction {}
+export class SetItemCountFunction extends LootItemFunction {
+    get count() {
+        return unsupported("SetItemCountFunction.count");
+    }
+}
+export class SetItemDamageFunction extends LootItemFunction {
+    get damage() {
+        return unsupported("SetItemDamageFunction.damage");
+    }
+}
+export class SetItemDataFunction extends LootItemFunction {
+    get data() {
+        return unsupported("SetItemDataFunction.data");
+    }
+}
+export class SetItemLoreFunction extends LootItemFunction {
+    get lore() {
+        return unsupported("SetItemLoreFunction.lore");
+    }
+}
+export class SetItemNameFunction extends LootItemFunction {
+    get name() {
+        return unsupported("SetItemNameFunction.name");
+    }
+}
+export class SetOminousBottleFunction extends LootItemFunction {
+    get amplifier() {
+        return unsupported("SetOminousBottleFunction.amplifier");
+    }
+}
+export class SetPotionFunction extends LootItemFunction {
+    get id() {
+        return unsupported("SetPotionFunction.id");
+    }
+}
+export class SetSpawnEggFunction extends LootItemFunction {
+    get id() {
+        return unsupported("SetSpawnEggFunction.id");
+    }
+}
+export class SetStewEffectFunction extends LootItemFunction {
+    get effects() {
+        return unsupported("SetStewEffectFunction.effects");
+    }
+}
 export class ShutdownEvent {}
 export class SmeltItemFunction {}
-export class SpecificEnchantFunction {}
+export class SpecificEnchantFunction extends LootItemFunction {
+    get enchantments() {
+        return unsupported("SpecificEnchantFunction.enchantments");
+    }
+}
 export class StartupEvent {
     get blockComponentRegistry() {
         return unsupported("StartupEvent.blockComponentRegistry");
@@ -5492,14 +6445,64 @@ export class StartupEvent {
 }
 export class SystemAfterEvents {}
 export class SystemBeforeEvents {}
-export class TargetBlockHitAfterEvent {}
-export class TargetBlockHitAfterEventSignal {}
-export class TripWireTripAfterEvent {}
-export class TripWireTripAfterEventSignal {}
-export class WeatherChangeAfterEvent {}
-export class WeatherChangeAfterEventSignal {}
-export class WeatherChangeBeforeEvent {}
-export class WeatherChangeBeforeEventSignal {}
+export class TargetBlockHitAfterEvent extends BlockEvent {
+    get hitVector() {
+        return unsupported("TargetBlockHitAfterEvent.hitVector");
+    }
+
+    get previousRedstonePower() {
+        return unsupported("TargetBlockHitAfterEvent.previousRedstonePower");
+    }
+
+    get redstonePower() {
+        return unsupported("TargetBlockHitAfterEvent.redstonePower");
+    }
+
+    get source() {
+        return unsupported("TargetBlockHitAfterEvent.source");
+    }
+}
+export class TargetBlockHitAfterEventSignal extends EventSignal {}
+export class TripWireTripAfterEvent extends BlockEvent {
+    get isPowered() {
+        return unsupported("TripWireTripAfterEvent.isPowered");
+    }
+
+    get sources() {
+        return unsupported("TripWireTripAfterEvent.sources");
+    }
+}
+export class TripWireTripAfterEventSignal extends EventSignal {}
+export class WeatherChangeAfterEvent {
+    get dimension() {
+        return unsupported("WeatherChangeAfterEvent.dimension");
+    }
+
+    get newWeather() {
+        return unsupported("WeatherChangeAfterEvent.newWeather");
+    }
+
+    get previousWeather() {
+        return unsupported("WeatherChangeAfterEvent.previousWeather");
+    }
+}
+export class WeatherChangeBeforeEvent {
+    get cancel() {
+        return unsupported("WeatherChangeBeforeEvent.cancel");
+    }
+
+    get duration() {
+        return unsupported("WeatherChangeBeforeEvent.duration");
+    }
+
+    get newWeather() {
+        return unsupported("WeatherChangeBeforeEvent.newWeather");
+    }
+
+    get previousWeather() {
+        return unsupported("WeatherChangeBeforeEvent.previousWeather");
+    }
+}
 export class WorldAfterEvents {}
 export class WorldBeforeEvents {}
 export class WorldLoadAfterEvent {}
@@ -5513,33 +6516,121 @@ export class AimAssistCategorySettings {}
 export class AimAssistPreset {}
 export class AimAssistPresetSettings {}
 export class AimAssistRegistry {}
-export class BlockComponentBlockStateChangeEvent {}
-export class BlockContainerClosedAfterEvent {}
-export class BlockContainerClosedAfterEventSignal {}
-export class BlockContainerOpenedAfterEvent {}
-export class BlockContainerOpenedAfterEventSignal {}
-export class DimensionRegistry {}
-export class EntityContainerClosedAfterEvent {}
-export class EntityContainerClosedAfterEventSignal {}
-export class EntityContainerOpenedAfterEvent {}
-export class EntityContainerOpenedAfterEventSignal {}
-export class EntityEnderInventoryComponent {}
-export class EntityUpgradeAfterEvent {}
-export class EntityUpgradeAfterEventSignal {}
+export class BlockComponentBlockStateChangeEvent extends BlockEvent {
+    get previousPermutation() {
+        return unsupported("BlockComponentBlockStateChangeEvent.previousPermutation");
+    }
+}
+export class BlockContainerClosedAfterEvent extends BlockEvent {
+    get closeSource() {
+        return unsupported("BlockContainerClosedAfterEvent.closeSource");
+    }
+}
+export class BlockContainerClosedAfterEventSignal extends EventSignal {}
+export class BlockContainerOpenedAfterEvent extends BlockEvent {
+    get openSource() {
+        return unsupported("BlockContainerOpenedAfterEvent.openSource");
+    }
+}
+export class BlockContainerOpenedAfterEventSignal extends EventSignal {}
+export class DimensionRegistry {
+    registerCustomDimension() {
+        return unsupported("DimensionRegistry.registerCustomDimension");
+    }
+}
+export class EntityContainerClosedAfterEvent {
+    get closeSource() {
+        return unsupported("EntityContainerClosedAfterEvent.closeSource");
+    }
+
+    get entity() {
+        return unsupported("EntityContainerClosedAfterEvent.entity");
+    }
+}
+export class EntityContainerClosedAfterEventSignal extends EventSignal {}
+export class EntityContainerOpenedAfterEvent {
+    get entity() {
+        return unsupported("EntityContainerOpenedAfterEvent.entity");
+    }
+
+    get openSource() {
+        return unsupported("EntityContainerOpenedAfterEvent.openSource");
+    }
+}
+export class EntityContainerOpenedAfterEventSignal extends EventSignal {}
+export class EntityEnderInventoryComponent extends EntityComponent {
+    get container() {
+        return unsupported("EntityEnderInventoryComponent.container");
+    }
+}
+export class EntityUpgradeAfterEvent {
+    get entity() {
+        return unsupported("EntityUpgradeAfterEvent.entity");
+    }
+
+    get upgradeId() {
+        return unsupported("EntityUpgradeAfterEvent.upgradeId");
+    }
+
+    getModifiers() {
+        return unsupported("EntityUpgradeAfterEvent.getModifiers");
+    }
+}
+export class EntityUpgradeAfterEventSignal extends EventSignal {}
 export class EntityWaypoint {}
 export class ISerializable {}
 export class LocationWaypoint {}
 export class LocatorBar {}
 export class PlayerAimAssist {}
-export class PlayerCancelBreakingBlockAfterEvent {}
-export class PlayerCancelBreakingBlockAfterEventSignal {}
+export class PlayerCancelBreakingBlockAfterEvent extends BlockEvent {
+    get blockPermutation() {
+        return unsupported("PlayerCancelBreakingBlockAfterEvent.blockPermutation");
+    }
+
+    get breakProgress() {
+        return unsupported("PlayerCancelBreakingBlockAfterEvent.breakProgress");
+    }
+
+    get face() {
+        return unsupported("PlayerCancelBreakingBlockAfterEvent.face");
+    }
+
+    get heldItemStack() {
+        return unsupported("PlayerCancelBreakingBlockAfterEvent.heldItemStack");
+    }
+
+    get player() {
+        return unsupported("PlayerCancelBreakingBlockAfterEvent.player");
+    }
+}
+export class PlayerCancelBreakingBlockAfterEventSignal extends EventSignal {}
 export class PlayerSplitScreenSlot {}
-export class PlayerStartBreakingBlockAfterEvent {}
-export class PlayerStartBreakingBlockAfterEventSignal {}
+export class PlayerStartBreakingBlockAfterEvent extends BlockEvent {
+    get blockPermutation() {
+        return unsupported("PlayerStartBreakingBlockAfterEvent.blockPermutation");
+    }
+
+    get face() {
+        return unsupported("PlayerStartBreakingBlockAfterEvent.face");
+    }
+
+    get heldItemStack() {
+        return unsupported("PlayerStartBreakingBlockAfterEvent.heldItemStack");
+    }
+
+    get player() {
+        return unsupported("PlayerStartBreakingBlockAfterEvent.player");
+    }
+}
+export class PlayerStartBreakingBlockAfterEventSignal extends EventSignal {}
 export class PlayerWaypoint {}
 export class PrimitiveShape {}
 export class PrimitiveShapesManager {}
-export class SoundInstance {}
+export class SoundInstance {
+    stop() {
+        return unsupported("SoundInstance.stop");
+    }
+}
 export class TextPrimitive {}
 export class Waypoint {}
 export class WaypointTexture {}

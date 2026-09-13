@@ -9,7 +9,8 @@
     "JumpingAccessor",
     "ItemEntityMixin",
     "ProjectileMixin",
-    "ButtonBlockMixin"
+    "ButtonBlockMixin",
+    "LeverBlockMixin"
   ],
   "injectors": {
     "defaultRequire": 1
