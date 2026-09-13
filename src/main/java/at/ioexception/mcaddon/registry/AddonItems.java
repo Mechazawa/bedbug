@@ -6,6 +6,7 @@ import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
 import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.convert.SpawnEggAppearance;
 import at.ioexception.mcaddon.item.AddonRecordItem;
+import at.ioexception.mcaddon.item.AddonScriptedItem;
 import at.ioexception.mcaddon.item.AddonShooterItem;
 import at.ioexception.mcaddon.item.AddonThrowableItem;
 import at.ioexception.mcaddon.pack.BedrockPack;
@@ -158,6 +159,10 @@ public final class AddonItems {
 
         Item thrown = thrower(definition, properties, id);
         if (thrown != null) return thrown;
+
+        // An item whose behaviour is a pack's own script, and which nothing above already claimed.
+        List<String> scripted = definition.scriptedComponents();
+        if (!scripted.isEmpty()) return AddonScriptedItem.build(properties, id, scripted);
 
         JsonObject wearable = definition.components().get("minecraft:wearable");
         return wearable == null
@@ -638,7 +643,7 @@ public final class AddonItems {
         "minecraft:seed", "minecraft:entity_placer", "minecraft:throwable",
         "minecraft:projectile", "minecraft:dyeable", "minecraft:should_despawn",
         "minecraft:shooter", "minecraft:storage_item", "minecraft:bundle_interaction",
-        "minecraft:swing_duration", "minecraft:record");
+        "minecraft:swing_duration", "minecraft:record", "minecraft:custom_components");
 
     private static Identifier identifier(String bedrock) {
         Names.Identifier split = Names.split(bedrock, "minecraft");

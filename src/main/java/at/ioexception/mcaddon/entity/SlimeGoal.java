@@ -18,12 +18,6 @@ import java.util.EnumSet;
  * velocity directly, so an entity carrying one needs nothing but a body.
  */
 public final class SlimeGoal extends Goal {
-    /** How high a hop carries, which is the height a vanilla slime clears. */
-    private static final double HOP_HEIGHT = 0.42;
-
-    /** How far forward one hop pushes at a speed multiplier of one. */
-    private static final double HOP_REACH = 0.3;
-
     /** How fast a slime rises through the liquid it is standing in. */
     private static final double FLOAT_RISE = 0.06;
 
@@ -51,7 +45,14 @@ public final class SlimeGoal extends Goal {
         this.turnRange = (float) Goals.number(component, "turn_range", 1) * 360f;
         // Bedrock states the chance out of a hundred; a slime in a liquid hops most ticks.
         this.jumpChance = Goals.number(component, "jump_chance_percentage", 80) / 100d;
-        setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.JUMP, Goal.Flag.LOOK));
+        // Only the kinds that decide where the entity faces take the look flag, so turning and
+        // attacking do not silently stop every other goal from looking at anything.
+        setFlags(switch (kind) {
+            case RANDOM_DIRECTION -> EnumSet.of(Goal.Flag.LOOK);
+            case FLOAT -> EnumSet.of(Goal.Flag.JUMP);
+            case KEEP_ON_JUMPING -> EnumSet.of(Goal.Flag.MOVE, Goal.Flag.JUMP);
+            default -> EnumSet.of(Goal.Flag.MOVE, Goal.Flag.JUMP, Goal.Flag.LOOK);
+        });
     }
 
     /** `minecraft:behavior.slime_random_direction`, which turns to a new heading every few seconds. */
@@ -98,7 +99,7 @@ public final class SlimeGoal extends Goal {
     public void tick() {
         switch (kind) {
             case RANDOM_DIRECTION -> turn();
-            case KEEP_ON_JUMPING -> hop();
+            case KEEP_ON_JUMPING -> Goals.hop(mob, speed);
             case FLOAT -> rise();
             case ATTACK -> close();
             default -> { }
@@ -113,15 +114,6 @@ public final class SlimeGoal extends Goal {
         mob.setYRot(mob.getYRot() + (mob.getRandom().nextFloat() - 0.5f) * turnRange);
         mob.yBodyRot = mob.getYRot();
         mob.yHeadRot = mob.getYRot();
-    }
-
-    /** One hop along whatever the entity is facing, taken as soon as it is back on the ground. */
-    private void hop() {
-        if (!mob.onGround()) return;
-
-        double facing = Math.toRadians(mob.getYRot());
-        mob.setDeltaMovement(-Math.sin(facing) * HOP_REACH * speed, HOP_HEIGHT,
-            Math.cos(facing) * HOP_REACH * speed);
     }
 
     /** A push upward while there is liquid to push against, with a hop out of it now and then. */
@@ -141,7 +133,7 @@ public final class SlimeGoal extends Goal {
         mob.yBodyRot = mob.getYRot();
         mob.yHeadRot = mob.getYRot();
 
-        hop();
+        Goals.hop(mob, speed);
         if (--untilHit <= 0 && mob.distanceTo(target) <= mob.getBbWidth() + target.getBbWidth()) {
             hit(target);
         }

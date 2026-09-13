@@ -18,6 +18,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Set;
@@ -97,11 +98,28 @@ public final class AddonEntities {
         return lines;
     }
 
+    /**
+     * Whether any installed entity declares a component, in its top level or in a group.
+     *
+     * A hook the whole game raises, rather than one entity's own tick, has to decide whether to
+     * look for entities that care at all. With no pack declaring the component, the answer is no
+     * and the hook costs a field read.
+     */
+    public static boolean anyoneDeclares(String component) {
+        return DECLARED.contains(component);
+    }
+
+    /** Every component name the installed packs use anywhere, gathered as they register. */
+    private static final Set<String> DECLARED = new HashSet<>();
+
     public static void register(PackSet packs) {
         for (BedrockPack pack : packs.packs()) {
             if (pack.role() != PackRole.BEHAVIOUR) continue;
             for (ServerEntityDefinition definition : ServerEntityDefinition.readAll(pack)) {
                 register(pack, definition);
+                DECLARED.addAll(definition.components().keySet());
+                definition.componentGroups().values()
+                    .forEach(group -> DECLARED.addAll(group.keySet()));
             }
         }
         if (!DEFINITIONS.isEmpty()) {

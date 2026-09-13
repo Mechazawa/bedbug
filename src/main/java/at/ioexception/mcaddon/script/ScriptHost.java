@@ -209,6 +209,23 @@ public final class ScriptHost {
         return enter("during startup", () -> runtime.invokeMember("startup").asString(), null);
     }
 
+    /**
+     * Calls one callback of a custom component a pack registered, and says whether it cancelled.
+     *
+     * `minecraft:custom_components` is how a block or an item hands a moment of its life to a
+     * script. The component's name is the pack's own, the callback's name is Bedrock's, and which
+     * callback belongs to which moment is decided by the caller rather than here.
+     */
+    public boolean runBlockComponent(String name, String callback, String argumentsJson) {
+        return enter("running a block component", () -> runtime
+            .invokeMember("runBlockComponent", name, callback, argumentsJson).asBoolean(), false);
+    }
+
+    public boolean runItemComponent(String name, String callback, String argumentsJson) {
+        return enter("running an item component", () -> runtime
+            .invokeMember("runItemComponent", name, callback, argumentsJson).asBoolean(), false);
+    }
+
     /** Runs a command the pack registered. The outcome carries a status and a message to show. */
     public com.google.gson.JsonObject runCommand(int index, String origin, String arguments) {
         return enter("running a command", () -> {

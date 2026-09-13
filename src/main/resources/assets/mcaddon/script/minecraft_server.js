@@ -3564,6 +3564,37 @@ function blockFrom(fields) {
     return new Block(fields.dimension, fields.x, fields.y, fields.z);
 }
 
+/**
+ * Calls one callback of one custom component and says whether the pack cancelled what happened.
+ *
+ * A component that has no callback by that name is not a mistake: Bedrock calls only what the pack
+ * wrote, so a component answering one moment and ignoring the rest is the ordinary case. A callback
+ * that throws costs its own call and nothing else, the same as any other listener.
+ */
+function runCustomComponent(registered, name, callback, argumentsJson) {
+    const component = registered.get(name);
+    const answer = component?.[callback];
+    if (typeof answer !== "function") return false;
+
+    const fields = JSON.parse(argumentsJson);
+    const event = {
+        block: fields.block === undefined ? undefined : blockFrom(fields.block),
+        dimension: fields.dimension === undefined ? undefined : dimensionOf(fields.dimension),
+        source: fields.source === undefined ? undefined : entityFor(fields.source),
+        player: fields.player === undefined ? undefined : entityFor(fields.player),
+        entity: fields.entity === undefined ? undefined : entityFor(fields.entity),
+        itemStack: undefined,
+        cancel: false,
+    };
+
+    try {
+        answer(event, { custom_component_parameters: { params: {} } });
+    } catch (error) {
+        bridge.reportError(String(error && error.stack ? error.stack : error));
+    }
+    return event.cancel === true;
+}
+
 function permutationFrom(fields) {
     return BlockPermutation.resolve(fields.typeId, { ...fields.states });
 }
@@ -4505,6 +4536,16 @@ export const system = new System();
 const customCommands = [];
 const customEnums = new Map();
 
+/*
+ * The custom components a pack registered, by the name its blocks and items name them under.
+ *
+ * A custom component is a plain object of callbacks. Bedrock calls the one whose name matches what
+ * just happened, and the block or item names the component in its own `minecraft:custom_components`
+ * rather than declaring the trigger the callback answers.
+ */
+const customBlockComponents = new Map();
+const customItemComponents = new Map();
+
 // What Java calls into, and where the other `@minecraft/*` modules read the helpers they share from.
 // Kept off the module exports so a pack cannot reach it through an import.
 globalThis.__mcaddon_runtime__ = {
@@ -4546,13 +4587,13 @@ globalThis.__mcaddon_runtime__ = {
                 },
             },
             blockComponentRegistry: {
-                registerCustomComponent(name) {
-                    bridge.unsupported("blockComponentRegistry.registerCustomComponent(" + name + ")");
+                registerCustomComponent(name, component) {
+                    customBlockComponents.set(name, component ?? {});
                 },
             },
             itemComponentRegistry: {
-                registerCustomComponent(name) {
-                    bridge.unsupported("itemComponentRegistry.registerCustomComponent(" + name + ")");
+                registerCustomComponent(name, component) {
+                    customItemComponents.set(name, component ?? {});
                 },
             },
         };
@@ -4569,6 +4610,20 @@ globalThis.__mcaddon_runtime__ = {
     },
 
     /** Runs one registered command; Java passes the origin and the parsed arguments as JSON. */
+    /**
+     * Calls one callback of one custom component, and says whether the pack cancelled what happened.
+     *
+     * Java knows which component names the block or item carries and which callback the moment it is
+     * in corresponds to; everything about what the callback then does is the pack's own.
+     */
+    runBlockComponent(name, callback, argumentsJson) {
+        return runCustomComponent(customBlockComponents, name, callback, argumentsJson);
+    },
+
+    runItemComponent(name, callback, argumentsJson) {
+        return runCustomComponent(customItemComponents, name, callback, argumentsJson);
+    },
+
     runCommand(index, originJson, argumentsJson) {
         const entry = customCommands[index];
         if (entry === undefined) return JSON.stringify({ status: 1, message: "" });

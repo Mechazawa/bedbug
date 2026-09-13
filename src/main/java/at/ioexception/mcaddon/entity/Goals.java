@@ -26,6 +26,26 @@ final class Goals {
     private Goals() {
     }
 
+    /** How high one hop carries, which is the height a rabbit and a slime both clear. */
+    static final double HOP_HEIGHT = 0.42;
+
+    /** How far forward one hop pushes at a speed multiplier of one. */
+    static final double HOP_REACH = 0.3;
+
+    /**
+     * Leaves the ground along whatever the entity is facing.
+     *
+     * Bedrock has two ways of describing something that hops rather than walks, and both come to
+     * this: turn, then push off. Nothing happens while the entity is already in the air.
+     */
+    static void hop(net.minecraft.world.entity.Mob mob, double speed) {
+        if (!mob.onGround()) return;
+
+        double facing = Math.toRadians(mob.getYRot());
+        mob.setDeltaMovement(-Math.sin(facing) * HOP_REACH * speed, HOP_HEIGHT,
+            Math.cos(facing) * HOP_REACH * speed);
+    }
+
     static double number(JsonObject component, String key, double fallback) {
         JsonElement value = component == null ? null : component.get(key);
         return value == null || !value.isJsonPrimitive() ? fallback : value.getAsDouble();

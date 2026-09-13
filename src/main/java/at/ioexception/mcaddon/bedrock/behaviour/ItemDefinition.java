@@ -238,6 +238,24 @@ public record ItemDefinition(String identifier, String iconKey, String displayNa
             .toList();
     }
 
+    /**
+     * The components a pack's own script registered that this item asks for.
+     *
+     * `minecraft:custom_components` is a list of names rather than a component with a body: what
+     * each name does lives in the pack's script, which registers it as the world starts up.
+     */
+    public List<String> scriptedComponents() {
+        JsonObject declared = components.get("minecraft:custom_components");
+        JsonElement named = declared == null ? null
+            : declared.has("value") ? declared.get("value") : null;
+        if (named == null || !named.isJsonArray()) return List.of();
+
+        return named.getAsJsonArray().asList().stream()
+            .filter(JsonElement::isJsonPrimitive)
+            .map(JsonElement::getAsString)
+            .toList();
+    }
+
     /** The items `minecraft:repairable` accepts for repairing this one. */
     public List<String> repairItems() {
         JsonObject repairable = components.get("minecraft:repairable");

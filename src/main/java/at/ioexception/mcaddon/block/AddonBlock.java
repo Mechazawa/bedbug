@@ -3,6 +3,7 @@ package at.ioexception.mcaddon.block;
 import at.ioexception.mcaddon.bedrock.behaviour.BlockDefinition;
 import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.server.BlockEvents;
+import at.ioexception.mcaddon.server.ServerHooks;
 import com.google.gson.JsonElement;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -167,6 +168,7 @@ public class AddonBlock extends Block {
     /** A right click raises the pack's own event and then opens whatever screen the block carries. */
     private InteractionResult clicked(Level level, BlockPos position, Player player) {
         fire("minecraft:on_interact", level, position, player);
+        scripted("onPlayerInteract", level, position, player);
         return openCraftingScreen(level, position, player);
     }
 
@@ -186,6 +188,7 @@ public class AddonBlock extends Block {
         boolean moving) {
         super.onPlace(state, level, position, replaced, moving);
         fire("minecraft:on_placed", level, position, null);
+        scripted("onPlace", level, position, null);
         if (events() != null && level instanceof ServerLevel server) {
             events().schedule(server, position, this);
         }
@@ -205,11 +208,13 @@ public class AddonBlock extends Block {
         BlockEntity blockEntity, ItemStack tool) {
         super.playerDestroy(level, player, position, state, blockEntity, tool);
         fire("minecraft:on_player_destroyed", level, position, player);
+        scripted("onPlayerBreak", level, position, player);
     }
 
     @Override
     public void stepOn(Level level, BlockPos position, BlockState state, Entity entity) {
         super.stepOn(level, position, state, entity);
+        scripted("onStepOn", level, position, entity);
         if (events() != null && level instanceof ServerLevel server) {
             events().stoodOn(server, position, entity);
         }
@@ -242,12 +247,14 @@ public class AddonBlock extends Block {
     public void tick(BlockState state, ServerLevel level, BlockPos position, RandomSource random) {
         super.tick(state, level, position, random);
         if (events() != null) events().ticked(level, position, this);
+        scripted("onTick", level, position, null);
     }
 
     @Override
     public void randomTick(BlockState state, ServerLevel level, BlockPos position, RandomSource random) {
         super.randomTick(state, level, position, random);
         fire("minecraft:random_ticking", level, position, null);
+        scripted("onRandomTick", level, position, null);
     }
 
     @Override
@@ -281,5 +288,39 @@ public class AddonBlock extends Block {
         if (events() != null && level instanceof ServerLevel server) {
             events().fire(component, server, position, actor);
         }
+    }
+
+    /**
+     * Hands a moment of the block's life to whatever `minecraft:custom_components` named.
+     *
+     * A custom component answers the moment itself rather than an event the pack declared, so this
+     * runs beside the pack's own events rather than through them. `who` is whoever brought the
+     * moment about, and is absent for the ones nobody did.
+     */
+    protected void scripted(String callback, Level level, BlockPos position, Entity who) {
+        if (components == null || components.scripted().isEmpty()) return;
+        if (!(level instanceof ServerLevel server)) return;
+
+        at.ioexception.mcaddon.script.ScriptHost scripts = ServerHooks.scripts();
+        if (scripts == null) return;
+
+        String dimension = at.ioexception.mcaddon.platform.Platform.idOf(server.dimension()).toString();
+        com.google.gson.JsonObject where = new com.google.gson.JsonObject();
+        where.addProperty("dimension", dimension);
+        where.addProperty("x", position.getX());
+        where.addProperty("y", position.getY());
+        where.addProperty("z", position.getZ());
+
+        com.google.gson.JsonObject fields = new com.google.gson.JsonObject();
+        fields.addProperty("dimension", dimension);
+        fields.add("block", where);
+        if (who != null) {
+            fields.addProperty("source", who.getStringUUID());
+            fields.addProperty("entity", who.getStringUUID());
+            if (who instanceof Player) fields.addProperty("player", who.getStringUUID());
+        }
+
+        String arguments = fields.toString();
+        components.scripted().forEach(name -> scripts.runBlockComponent(name, callback, arguments));
     }
 }

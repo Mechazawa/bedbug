@@ -25,6 +25,9 @@ public final class DolphinGoal extends Goal {
     /** How far above the water a breach still counts as being in it. */
     private static final int SURFACE_REACH = 3;
 
+    /** Ticks between two searches for buried treasure. */
+    private static final int SEARCH_INTERVAL = 200;
+
     private final AddonEntity mob;
     private final Kind kind;
     private final double speed;
@@ -33,6 +36,7 @@ public final class DolphinGoal extends Goal {
     private final int interval;
     private final double reach;
     private int untilNext;
+    private int untilSearch;
     private Player swimmer;
     private BlockPos treasure;
 
@@ -71,7 +75,12 @@ public final class DolphinGoal extends Goal {
         return switch (kind) {
             case BREACH -> untilNext-- <= 0 && nearTheSurface();
             case TREASURE -> {
-                treasure = buriedNearby();
+                // Finding a structure searches generated chunks, which is far too heavy to ask on
+                // every tick, so the goal keeps whatever it last found until it looks again.
+                if (untilSearch-- <= 0) {
+                    untilSearch = SEARCH_INTERVAL;
+                    treasure = buriedNearby();
+                }
                 yield treasure != null;
             }
             default -> {

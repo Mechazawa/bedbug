@@ -50,7 +50,7 @@ import java.util.Map;
  */
 public record BlockComponents(VoxelShape collision, VoxelShape selection, int lightDampening,
     Component craftingTitle, int catchChance, int destroyChance, Redstone redstone,
-    List<Placement> placement, BlockEvents events) {
+    List<Placement> placement, BlockEvents events, List<String> scripted) {
 
     /** The explosion resistance Java gives bedrock, which no blast reaches. */
     private static final float BLAST_PROOF = 3600000f;
@@ -88,7 +88,24 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
             burns ? (int) number(components, "minecraft:flammable", "catch_chance_modifier", 5) : -1,
             (int) number(components, "minecraft:flammable", "destroy_chance_modifier", 20),
             redstone(components), placement(components),
-            BlockEvents.of(definition, properties));
+            BlockEvents.of(definition, properties), scripted(components));
+    }
+
+    /**
+     * The components a pack's own script registered that this block asks for.
+     *
+     * `minecraft:custom_components` is a list of names rather than a component with a body: what
+     * each name does lives in the pack's script, which registers it as the world starts up.
+     */
+    private static List<String> scripted(JsonObject components) {
+        JsonElement declared = components.get("minecraft:custom_components");
+        if (declared == null || !declared.isJsonArray()) return List.of();
+
+        List<String> named = new ArrayList<>();
+        declared.getAsJsonArray().forEach(one -> {
+            if (one.isJsonPrimitive()) named.add(one.getAsString());
+        });
+        return List.copyOf(named);
     }
 
     /** Zero unless the block produces a signal and the asking neighbour touches a connected face. */

@@ -164,12 +164,25 @@ def scenes(version: str) -> list[dict]:
     ]
 
 
-def datapack(world: pathlib.Path, commands: list[str]) -> pathlib.Path:
-    """Writes the commands into the world as a function the game runs when it loads it.
+def packFormat(version: str) -> int:
+    """The pack format this version reads without calling a world experimental.
 
-    The pack format is deliberately low: a number the game does not recognise is refused outright,
-    and every supported version reads a pack that claims an older one.
+    A world holding a pack whose format the game does not recognise opens behind a screen asking
+    whether to load it anyway, and nothing typed or written reaches a game sitting on that screen.
+    The mod writes its own converted packs with the number this version uses, so the answer is
+    already on disk beside the world.
     """
+    converted = ROOT / "versions" / version / "run" / ".mcaddon" / "converted"
+    for meta in sorted(converted.glob("*/pack.mcmeta")):
+        try:
+            return int(json.loads(meta.read_text(encoding="utf-8"))["pack"]["pack_format"])
+        except (ValueError, OSError, KeyError, TypeError):
+            continue
+    return 15
+
+
+def datapack(world: pathlib.Path, commands: list[str], format: int) -> pathlib.Path:
+    """Writes the commands into the world as a function the game runs when it loads it."""
     pack = world / "datapacks" / "mcaddon-scene"
     if pack.exists():
         shutil.rmtree(pack)
@@ -177,7 +190,7 @@ def datapack(world: pathlib.Path, commands: list[str]) -> pathlib.Path:
     functions = pack / "data" / "mcaddon" / "function"
     functions.mkdir(parents=True, exist_ok=True)
     (pack / "pack.mcmeta").write_text(json.dumps({
-        "pack": {"pack_format": 15, "description": "mcaddon scene"},
+        "pack": {"pack_format": format, "description": "mcaddon scene"},
     }), encoding="utf-8")
 
     body = list(STAGE) + list(commands) + [f"say {DONE}"]
@@ -287,11 +300,28 @@ def exclusive(wait: float):
 
 
 def world_of(version: str) -> pathlib.Path | None:
-    """The saved world a scene can be run in, or None when this version has none."""
+    """The saved world a scene can be run in, or None when this version has none to run in.
+
+    A world is a fixture rather than something anybody made by hand, so one is taken from the
+    dedicated server's own when the saves directory is empty. `verify.py run` leaves one behind, and
+    a server writes a world nobody has to answer a question about before it opens.
+    """
     saves = ROOT / "versions" / version / "run" / "saves"
-    if not saves.is_dir():
+    saves.mkdir(parents=True, exist_ok=True)
+
+    existing = next((one for one in sorted(saves.iterdir()) if (one / "level.dat").is_file()), None)
+    if existing is not None:
+        return existing
+
+    served = ROOT / "versions" / version / "run" / "world"
+    if not (served / "level.dat").is_file():
         return None
-    return next((one for one in sorted(saves.iterdir()) if (one / "level.dat").is_file()), None)
+
+    copied = saves / "Scene World"
+    shutil.copytree(served, copied, dirs_exist_ok=True)
+    shutil.rmtree(copied / "datapacks", ignore_errors=True)
+    print(f"took a world from the dedicated server's own into {copied.relative_to(ROOT)}")
+    return copied
 
 
 def run(version: str, one: dict, timeout: float, keep: bool) -> tuple[bool, list[str]]:
@@ -300,7 +330,7 @@ def run(version: str, one: dict, timeout: float, keep: bool) -> tuple[bool, list
     if world is None:
         return (False, [f"{version} has no saved world to open"])
 
-    datapack(world, one["commands"])
+    datapack(world, one["commands"], packFormat(version))
     logs = ROOT / "build" / "scene"
     logs.mkdir(parents=True, exist_ok=True)
     log = logs / f"{version}-{one['name']}.log"

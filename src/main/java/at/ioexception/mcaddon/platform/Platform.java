@@ -19,7 +19,7 @@ import net.minecraft.server.packs.PathPackResources;
 import net.minecraft.server.packs.repository.Pack;
 import net.minecraft.server.packs.repository.PackCompatibility;
 import net.minecraft.server.packs.repository.PackSource;
-import net.minecraft.world.flag.FeatureFlagSet;
+import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.level.block.Block;
@@ -231,8 +231,11 @@ public final class Platform {
                 return new PathPackResources(info, directory);
             }
         };
+        // The features a pack asks for are what the world ends up enabled for, and a world enabled
+        // for anything other than the ordinary set is one the game calls experimental: every world
+        // with this mod installed would open behind a warning asking whether to load it at all.
         Pack.Metadata metadata = new Pack.Metadata(name, PackCompatibility.COMPATIBLE,
-            FeatureFlagSet.of(), List.of());
+            FeatureFlags.VANILLA_SET, List.of());
         return new Pack(location, resources, metadata, new PackSelectionConfig(true, Pack.Position.TOP, true));
         //?} else {
         /*Pack.ResourcesSupplier resources = ignored -> new PathPackResources(id, directory, false);

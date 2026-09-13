@@ -38,8 +38,28 @@ world.beforeEvents.entityRemove.subscribe(event => {
     }
 });
 
+// A block or an item naming a custom component reaches the pack's own script at the moment the
+// callback is named for. What is checked here is that the registry takes the registration: a pack
+// that registers on startup and is told the registry is unimplemented loses the whole feature.
+let registeredComponents = 0;
+
+system.beforeEvents.startup.subscribe(event => {
+    event.blockComponentRegistry.registerCustomComponent("probe:block", {
+        onPlace() {
+            report("customComponent.blockPlaced", true);
+        },
+    });
+    event.itemComponentRegistry.registerCustomComponent("probe:item", {
+        onUse() {
+            report("customComponent.itemUsed", true);
+        },
+    });
+    registeredComponents = 2;
+});
+
 system.run(() => {
     try {
+        report("customComponents.registered", registeredComponents);
         report("math.distance", Vector3Utils.distance({ x: 0, y: 0, z: 0 }, { x: 3, y: 4, z: 0 }));
         report("math.builder", new Vector3Builder(VECTOR3_UP).scale(3).toString());
         report("math.clampNumber", clampNumber(12, 0, 5));

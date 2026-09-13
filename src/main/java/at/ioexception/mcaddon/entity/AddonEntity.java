@@ -748,6 +748,8 @@ public class AddonEntity extends PathfinderMob
 
     /** A pack's controller reads being in the mood back as `q.is_in_love`. */
     private void publishBeingInLove() {
+        if (!declares("minecraft:breedable")) return;
+
         boolean inLove = inTheMood();
         if (inLove != Boolean.TRUE.equals(value("is_in_love"))) setValue("is_in_love", inLove);
     }
@@ -1976,7 +1978,10 @@ public class AddonEntity extends PathfinderMob
      * rather than only whatever landed the kill.
      */
     public static void noticeHuntSucceeded(net.minecraft.world.entity.LivingEntity quarry) {
-        if (quarry.level().isClientSide()) return;
+        if (quarry.level().isClientSide()
+            || !AddonEntities.anyoneDeclares("minecraft:celebrate_hunt")) {
+            return;
+        }
 
         for (AddonEntity hunter : quarry.level().getEntitiesOfClass(AddonEntity.class,
             quarry.getBoundingBox().inflate(CELEBRATION_RANGE))) {
@@ -2027,7 +2032,7 @@ public class AddonEntity extends PathfinderMob
      */
     public static void noticeBlockBroken(net.minecraft.world.level.Level level,
         net.minecraft.core.BlockPos broken, net.minecraft.world.level.block.state.BlockState state) {
-        if (level.isClientSide()) return;
+        if (level.isClientSide() || !AddonEntities.anyoneDeclares("minecraft:block_sensor")) return;
 
         String name = net.minecraft.core.registries.BuiltInRegistries.BLOCK
             .getKey(state.getBlock()).toString();

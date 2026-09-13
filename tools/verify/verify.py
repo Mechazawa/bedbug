@@ -24,6 +24,7 @@ import fcntl
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -95,6 +96,11 @@ SCRIPTS_RUNNING = re.compile(r"Running scripts from \d+ of \d+ behaviour pack")
 
 # The mod's line saying how much of an add-on reached the client, and the count it opens with.
 CLIENT_DEFINITIONS = re.compile(r"(\d+) add-on entities have a client definition")
+
+# The client's own integrated server saying it has started, which is the one line that only appears
+# once the world is really open. A client stopped on a screen asking the player a question loads
+# every model and texture first, so nothing earlier than this tells the two apart.
+CLIENT_IN_WORLD = re.compile(r"Starting integrated minecraft server|Preparing spawn area")
 
 # Gradle's own failure, which ends a wait: nothing more is coming.
 BUILD_FAILED = re.compile(r"FAILURE: Build failed|BUILD FAILED")
@@ -408,16 +414,30 @@ def wait_for(process: subprocess.Popen, lines: list[str], pattern: re.Pattern, d
 
 
 def world(root: Path, version: str) -> str | None:
-    """A saved world this version can be told to open, or None when it has none yet.
+    """A saved world this version can be told to open, or None when it has none to open.
 
     A client stopped at the title screen has nobody playing, so everything a pack does with a player
     is untouched by the run: the player surface, the forms a pack opens, and every event carrying
     somebody who used something. Opening a world is what puts a player in front of that code.
+
+    A world is a fixture rather than something anybody made by hand, so one is taken from the
+    dedicated server's own when there is none saved. A `run` leaves one behind.
     """
     saves = root / "versions" / version / "run" / "saves"
-    if not saves.is_dir():
+    saves.mkdir(parents=True, exist_ok=True)
+
+    existing = next((one.name for one in sorted(saves.iterdir()) if (one / "level.dat").is_file()), None)
+    if existing is not None:
+        return existing
+
+    served = root / "versions" / version / "run" / "world"
+    if not (served / "level.dat").is_file():
         return None
-    return next((one.name for one in sorted(saves.iterdir()) if (one / "level.dat").is_file()), None)
+
+    copied = saves / "Scene World"
+    shutil.copytree(served, copied, dirs_exist_ok=True)
+    shutil.rmtree(copied / "datapacks", ignore_errors=True)
+    return copied.name
 
 
 def play(root: Path, version: str, launch: Launch, ready: re.Pattern,
@@ -688,15 +708,22 @@ def check_client(root: Path, version: str, timeout: float, hold: float, verbose:
         return verdict
 
     addons, _, expected = addon_source(root, version, verdict)
-    ready = CLIENT.ready if addons else CLIENT.ready_without_addon
     opened = world(root, version)
+    # Told to open a world, the run waits for the world rather than for the drawing: everything the
+    # drawing line proves has already happened by then, and a client stopped on a screen asking the
+    # player a question would otherwise read as one that loaded.
+    ready = CLIENT_IN_WORLD if opened else (CLIENT.ready if addons else CLIENT.ready_without_addon)
     lines, log, outcome = play(root, version, CLIENT, ready, [], timeout, hold, verbose, opened)
 
     verdict.notes.append(f"client {outcome}, {len(lines)} lines in {log.relative_to(root)}")
-    if opened:
+    if not opened:
+        verdict.notes.append("no saved world, so nothing a pack does with a player was run")
+    elif any(CLIENT_IN_WORLD.search(line) for line in lines):
         verdict.notes.append(f"opened the world {opened!r}, so a player was in it")
     else:
-        verdict.notes.append("no saved world, so nothing a pack does with a player was run")
+        verdict.fail("the world never opened",
+                     f"the client was told to open {opened!r} and never started a server for it, "
+                     "which is what a screen waiting to be answered looks like")
     scan(lines, verdict, EXPECTED_WITH_ADDON if addons else ())
     gradle_failed(lines, outcome, verdict)
 

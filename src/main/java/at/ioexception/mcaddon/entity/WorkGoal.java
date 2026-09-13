@@ -30,6 +30,12 @@ public final class WorkGoal extends Goal {
     /** How close counts as standing at the station, squared. */
     private static final double ARRIVED = 4;
 
+    /** Ticks between two searches for somewhere to work. */
+    private static final int SEARCH_INTERVAL = 100;
+
+    /** How long the walk to the station may take before the entity gives up on it. */
+    private static final int TRAVEL_LIMIT = 400;
+
     private final AddonEntity mob;
     private final boolean composts;
     private final double speed;
@@ -41,6 +47,8 @@ public final class WorkGoal extends Goal {
     private BlockPos station;
     private int worked;
     private int used;
+    private int untilSearch;
+    private int travelled;
 
     private WorkGoal(AddonEntity mob, JsonObject component, boolean composts) {
         this.mob = mob;
@@ -66,7 +74,12 @@ public final class WorkGoal extends Goal {
 
     @Override
     public boolean canUse() {
+        // Searching the places index over a village's reach is not a per-tick question, so the
+        // goal asks it every few seconds instead of every time the selector comes round.
+        if (untilSearch-- > 0) return false;
         if (!(mob.level() instanceof ServerLevel level)) return false;
+
+        untilSearch = SEARCH_INTERVAL;
         if (!worksInRain && level.isRaining()) return false;
 
         station = nearestStation(level);
@@ -75,13 +88,16 @@ public final class WorkGoal extends Goal {
 
     @Override
     public boolean canContinueToUse() {
-        return station != null && worked < activeTicks;
+        // A station the entity cannot reach would otherwise hold the goal, and with it every other
+        // goal that wants to move, for as long as the entity lives.
+        return station != null && worked < activeTicks && travelled < TRAVEL_LIMIT;
     }
 
     @Override
     public void start() {
         worked = 0;
         used = 0;
+        travelled = 0;
         mob.getNavigation().moveTo(station.getX() + 0.5, station.getY(), station.getZ() + 0.5, speed);
     }
 
@@ -97,6 +113,7 @@ public final class WorkGoal extends Goal {
         Vec3 at = Vec3.atCenterOf(station);
         mob.getLookControl().setLookAt(at.x, at.y, at.z);
         if (mob.distanceToSqr(at) > ARRIVED) {
+            travelled++;
             if (mob.getNavigation().isDone()) {
                 mob.getNavigation().moveTo(at.x, at.y, at.z, speed);
             }
