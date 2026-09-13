@@ -106,12 +106,12 @@ get the current figures; the ones above are a snapshot.
 
 ## What does not work
 
-**Components with no Java counterpart.** `balloonable` describes an item Java does not have.
-`managed_wandering_trader` describes how Bedrock runs its own trader. `behavior.take_flower` and
-`behavior.celebrate_survive` are two moments Java writes into its villager's own brain, with no
-general form a pack's entity could be given. The player components describe a player, which an
-add-on cannot replace. Aim assist, pack settings and the device memory tiers describe a Bedrock
-client. Each is counted and named rather than silently doing nothing.
+**What no add-on entity can be.** A pack's entity is a Java mob, which fixes what it can become.
+`minecraft:projectile` describes a thing that flies and hits, `rail_movement` and `rail_sensor`
+describe a minecart, and the `player.*` components describe a player; none of the three is a mob.
+The memory components describe Java's brain, which its own mobs have and a data-driven one does not.
+Aim assist, pack settings and the device memory tiers describe a Bedrock client rather than a world.
+Each is counted and named rather than silently doing nothing.
 
 **A record plays nothing.** `minecraft:record` needs a jukebox song, and a song only exists as an
 entry in a registry a data pack writes into. A world holding such a pack is one the game calls
