@@ -100,6 +100,9 @@ export class GameTestError extends Error {
         this.name = "GameTestError";
         this.type = type ?? GameTestErrorType.Assert;
         this.messageParameters = [];
+        // Bedrock fills this with the arguments of the assertion that failed. The message carries
+        // them here, so the property stands as the published optional one with nothing in it.
+        this.context = undefined;
     }
 }
 

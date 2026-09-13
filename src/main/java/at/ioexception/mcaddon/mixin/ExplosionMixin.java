@@ -40,7 +40,9 @@ public abstract class ExplosionMixin {
     @Inject(method = "calculateExplodedPositions", at = @At("RETURN"))
     private void mcaddon$exploding(CallbackInfoReturnable<List<BlockPos>> info) {
         mcaddonRefused = WorldEvents.explosionRefused(level, source, info.getReturnValue());
-        if (mcaddonRefused) info.getReturnValue().clear();
+        // Handing back an empty list rather than emptying the one the game built, which is its own
+        // and need not accept being written to.
+        if (mcaddonRefused) info.setReturnValue(List.of());
     }
 
     @Inject(method = "hurtEntities", at = @At("HEAD"), cancellable = true)

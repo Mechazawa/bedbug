@@ -77,6 +77,9 @@ public final class WorldEvents {
     /** The container each player has open, ready for the event its closing raises. */
     private static final Map<UUID, OpenContainer> OPENED = new HashMap<>();
 
+    /** The block each player last reached for, and the tick they did it on. */
+    private static final Map<UUID, Reached> REACHED = new HashMap<>();
+
     /** The click each player is holding on a block, which ends the tick after the last one. */
     private static final Map<UUID, Map<String, Object>> USING_ON = new HashMap<>();
 
@@ -461,12 +464,11 @@ public final class WorldEvents {
 
     /** Somebody starting to break a block, which is the hold rather than the break that may follow. */
     public static void startedBreaking(ServerPlayer player, BlockPos position, Direction face) {
-        BREAKING.put(player.getUUID(), new Breaking(position, face, player.tickCount));
-
         ScriptHost scripts = ServerHooks.scripts();
-        if (scripts != null) {
-            scripts.raiseWorldEvent("playerStartBreakingBlock", breaking(player, position, face));
-        }
+        if (scripts == null) return;
+
+        BREAKING.put(player.getUUID(), new Breaking(position, face, player.tickCount));
+        scripts.raiseWorldEvent("playerStartBreakingBlock", breaking(player, position, face));
     }
 
     /** Somebody letting go part way through, reported with how far the block had got. */
@@ -544,7 +546,17 @@ public final class WorldEvents {
             openedBlock(player, held.getBlockPos());
             return;
         }
-        if (provider instanceof Entity held) openedEntity(player, held);
+        if (provider instanceof Entity held) {
+            openedEntity(player, held);
+            return;
+        }
+
+        // A double chest hands over a provider that joins its two halves and is neither the block
+        // entity nor an entity, so the block the player reached for on this tick is what opened.
+        Reached reached = REACHED.get(player.getUUID());
+        if (reached != null && reached.tick() == player.tickCount) {
+            openedBlock(player, reached.position());
+        }
     }
 
     /** A mount's own inventory, which Java opens without going through a menu provider. */
@@ -651,6 +663,17 @@ public final class WorldEvents {
         scripts.raiseWorldEvent("entityHealthChanged", fields);
     }
 
+    /** What one player was part way through, which nothing finishes once they are gone. */
+    public static void forget(ServerPlayer player) {
+        UUID id = player.getUUID();
+        BREAKING_WITH.remove(id);
+        BREAKING.remove(id);
+        OPENED.remove(id);
+        REACHED.remove(id);
+        USING_ON.remove(id);
+        USED_ON_THIS_TICK.remove(id);
+    }
+
     public static void forget() {
         BREAKING_WITH.clear();
         PLACEMENTS.clear();
@@ -659,6 +682,7 @@ public final class WorldEvents {
         RULES.clear();
         BREAKING.clear();
         OPENED.clear();
+        REACHED.clear();
         USING_ON.clear();
         USED_ON_THIS_TICK.clear();
         BlockEvents.forget();
@@ -685,6 +709,10 @@ public final class WorldEvents {
 
         ItemStack before = BREAKING_WITH.remove(player.getUUID());
 
+        // A creative break and one a tool finishes inside a tick destroy the block from the packet
+        // that started the hold and send no second one, so the block going is what ends a hold too.
+        BREAKING.remove(player.getUUID());
+
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("player", ScriptHost.EntityHandle.of(player));
         fields.put("block", block(level, position));
@@ -702,6 +730,8 @@ public final class WorldEvents {
             return InteractionResult.PASS;
         }
 
+        REACHED.put(player.getUUID(), new Reached(hit.getBlockPos(), player.tickCount));
+
         ItemStack held = player.getItemInHand(hand);
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("player", ScriptHost.EntityHandle.of(player));
@@ -716,12 +746,16 @@ public final class WorldEvents {
         scripts.raiseWorldEvent("playerInteractWithBlock", fields);
 
         if (!held.isEmpty()) {
-            Map<String, Object> started = new LinkedHashMap<>();
-            started.put("source", ScriptHost.EntityHandle.of(player));
-            started.put("block", block(level, hit.getBlockPos()));
-            started.put("blockFace", capitalised(hit.getDirection().getName()));
-            started.put("itemStack", item(held));
-            scripts.raiseWorldEvent("itemStartUseOn", started);
+            // A held button sends a packet a tick, and the run of them is one use, so the start
+            // belongs to the packet that opens a run and every later one only keeps it alive.
+            if (!USING_ON.containsKey(player.getUUID())) {
+                Map<String, Object> started = new LinkedHashMap<>();
+                started.put("source", ScriptHost.EntityHandle.of(player));
+                started.put("block", block(level, hit.getBlockPos()));
+                started.put("blockFace", capitalised(hit.getDirection().getName()));
+                started.put("itemStack", item(held));
+                scripts.raiseWorldEvent("itemStartUseOn", started);
+            }
 
             Map<String, Object> stopping = new LinkedHashMap<>();
             stopping.put("source", ScriptHost.EntityHandle.of(player));
@@ -914,6 +948,9 @@ public final class WorldEvents {
     }
 
     private record Breaking(BlockPos position, Direction face, int startedAt) {
+    }
+
+    private record Reached(BlockPos position, int tick) {
     }
 
     /** What a player has open: the event its closing raises, and what that event says was closed. */

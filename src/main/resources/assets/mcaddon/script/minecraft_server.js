@@ -2954,6 +2954,14 @@ export class Player extends Entity {
         return unsupported("Player.isEmoting");
     }
 
+    get locatorBar() {
+        return unsupported("Player.locatorBar", new LocatorBar());
+    }
+
+    getAimAssist() {
+        return unsupported("Player.getAimAssist", new PlayerAimAssist());
+    }
+
     getControlScheme() {
         return unsupported("Player.getControlScheme");
     }
@@ -4099,8 +4107,20 @@ export class World {
         return bridge.isHardcore();
     }
 
+    get primitiveShapesManager() {
+        return unsupported("World.primitiveShapesManager", new PrimitiveShapesManager());
+    }
+
     get seed() {
         return bridge.worlds.seed();
+    }
+
+    getAimAssist() {
+        return unsupported("World.getAimAssist", new AimAssistRegistry());
+    }
+
+    getPackSettings() {
+        return unsupported("World.getPackSettings", {});
     }
 
     get tickingAreaManager() {
@@ -6546,11 +6566,203 @@ export class WorldLoadAfterEvent {}
 // it runs, so a pack importing one of these would lose its whole script over a name rather than
 // over the one line that used it. Each is here so the import succeeds; reaching for what they would
 // do reports through the same path every other gap does.
-export class AimAssistCategory {}
-export class AimAssistCategorySettings {}
-export class AimAssistPreset {}
-export class AimAssistPresetSettings {}
-export class AimAssistRegistry {}
+export class AimAssistCategory {
+    get defaultBlockPriority() {
+        return unsupported("AimAssistCategory.defaultBlockPriority");
+    }
+
+    get defaultEntityPriority() {
+        return unsupported("AimAssistCategory.defaultEntityPriority");
+    }
+
+    get identifier() {
+        return unsupported("AimAssistCategory.identifier");
+    }
+
+    getBlockPriorities() {
+        return unsupported("AimAssistCategory.getBlockPriorities");
+    }
+
+    getBlockTagPriorities() {
+        return unsupported("AimAssistCategory.getBlockTagPriorities");
+    }
+
+    getEntityPriorities() {
+        return unsupported("AimAssistCategory.getEntityPriorities");
+    }
+
+    getEntityTypeFamilyPriorities() {
+        return unsupported("AimAssistCategory.getEntityTypeFamilyPriorities");
+    }
+}
+export class AimAssistCategorySettings {
+    get defaultBlockPriority() {
+        return unsupported("AimAssistCategorySettings.defaultBlockPriority");
+    }
+
+    get defaultEntityPriority() {
+        return unsupported("AimAssistCategorySettings.defaultEntityPriority");
+    }
+
+    get identifier() {
+        return unsupported("AimAssistCategorySettings.identifier");
+    }
+
+    getBlockPriorities() {
+        return unsupported("AimAssistCategorySettings.getBlockPriorities");
+    }
+
+    getBlockTagPriorities() {
+        return unsupported("AimAssistCategorySettings.getBlockTagPriorities");
+    }
+
+    getEntityPriorities() {
+        return unsupported("AimAssistCategorySettings.getEntityPriorities");
+    }
+
+    getEntityTypeFamilyPriorities() {
+        return unsupported("AimAssistCategorySettings.getEntityTypeFamilyPriorities");
+    }
+
+    setBlockPriorities() {
+        return unsupported("AimAssistCategorySettings.setBlockPriorities");
+    }
+
+    setBlockTagPriorities() {
+        return unsupported("AimAssistCategorySettings.setBlockTagPriorities");
+    }
+
+    setEntityPriorities() {
+        return unsupported("AimAssistCategorySettings.setEntityPriorities");
+    }
+
+    setEntityTypeFamilyPriorities() {
+        return unsupported("AimAssistCategorySettings.setEntityTypeFamilyPriorities");
+    }
+}
+export class AimAssistPreset {
+    get defaultItemSettings() {
+        return unsupported("AimAssistPreset.defaultItemSettings");
+    }
+
+    get handSettings() {
+        return unsupported("AimAssistPreset.handSettings");
+    }
+
+    get identifier() {
+        return unsupported("AimAssistPreset.identifier");
+    }
+
+    getExcludedBlockTagTargets() {
+        return unsupported("AimAssistPreset.getExcludedBlockTagTargets");
+    }
+
+    getExcludedBlockTargets() {
+        return unsupported("AimAssistPreset.getExcludedBlockTargets");
+    }
+
+    getExcludedEntityTargets() {
+        return unsupported("AimAssistPreset.getExcludedEntityTargets");
+    }
+
+    getExcludedEntityTypeFamilyTargets() {
+        return unsupported("AimAssistPreset.getExcludedEntityTypeFamilyTargets");
+    }
+
+    getItemSettings() {
+        return unsupported("AimAssistPreset.getItemSettings");
+    }
+
+    getLiquidTargetingItems() {
+        return unsupported("AimAssistPreset.getLiquidTargetingItems");
+    }
+}
+export class AimAssistPresetSettings {
+    get defaultItemSettings() {
+        return unsupported("AimAssistPresetSettings.defaultItemSettings");
+    }
+
+    get handSettings() {
+        return unsupported("AimAssistPresetSettings.handSettings");
+    }
+
+    get identifier() {
+        return unsupported("AimAssistPresetSettings.identifier");
+    }
+
+    getExcludedBlockTagTargets() {
+        return unsupported("AimAssistPresetSettings.getExcludedBlockTagTargets");
+    }
+
+    getExcludedBlockTargets() {
+        return unsupported("AimAssistPresetSettings.getExcludedBlockTargets");
+    }
+
+    getExcludedEntityTargets() {
+        return unsupported("AimAssistPresetSettings.getExcludedEntityTargets");
+    }
+
+    getExcludedEntityTypeFamilyTargets() {
+        return unsupported("AimAssistPresetSettings.getExcludedEntityTypeFamilyTargets");
+    }
+
+    getItemSettings() {
+        return unsupported("AimAssistPresetSettings.getItemSettings");
+    }
+
+    getLiquidTargetingItems() {
+        return unsupported("AimAssistPresetSettings.getLiquidTargetingItems");
+    }
+
+    setExcludedBlockTagTargets() {
+        return unsupported("AimAssistPresetSettings.setExcludedBlockTagTargets");
+    }
+
+    setExcludedBlockTargets() {
+        return unsupported("AimAssistPresetSettings.setExcludedBlockTargets");
+    }
+
+    setExcludedEntityTargets() {
+        return unsupported("AimAssistPresetSettings.setExcludedEntityTargets");
+    }
+
+    setExcludedEntityTypeFamilyTargets() {
+        return unsupported("AimAssistPresetSettings.setExcludedEntityTypeFamilyTargets");
+    }
+
+    setItemSettings() {
+        return unsupported("AimAssistPresetSettings.setItemSettings");
+    }
+
+    setLiquidTargetingItems() {
+        return unsupported("AimAssistPresetSettings.setLiquidTargetingItems");
+    }
+}
+export class AimAssistRegistry {
+    addCategory() {
+        return unsupported("AimAssistRegistry.addCategory");
+    }
+
+    addPreset() {
+        return unsupported("AimAssistRegistry.addPreset");
+    }
+
+    getCategories() {
+        return unsupported("AimAssistRegistry.getCategories");
+    }
+
+    getCategory() {
+        return unsupported("AimAssistRegistry.getCategory");
+    }
+
+    getPreset() {
+        return unsupported("AimAssistRegistry.getPreset");
+    }
+
+    getPresets() {
+        return unsupported("AimAssistRegistry.getPresets");
+    }
+}
 export class BlockComponentBlockStateChangeEvent extends BlockEvent {
     get previousPermutation() {
         return unsupported("BlockComponentBlockStateChangeEvent.previousPermutation");
@@ -6608,11 +6820,45 @@ export class EntityUpgradeAfterEvent {
     }
 }
 export class EntityUpgradeAfterEventSignal extends EventSignal {}
-export class EntityWaypoint {}
 export class ISerializable {}
-export class LocationWaypoint {}
-export class LocatorBar {}
-export class PlayerAimAssist {}
+export class LocatorBar {
+    get count() {
+        return unsupported("LocatorBar.count");
+    }
+
+    get maxCount() {
+        return unsupported("LocatorBar.maxCount");
+    }
+
+    addWaypoint() {
+        return unsupported("LocatorBar.addWaypoint");
+    }
+
+    getAllWaypoints() {
+        return unsupported("LocatorBar.getAllWaypoints");
+    }
+
+    hasWaypoint() {
+        return unsupported("LocatorBar.hasWaypoint");
+    }
+
+    removeAllWaypoints() {
+        return unsupported("LocatorBar.removeAllWaypoints");
+    }
+
+    removeWaypoint() {
+        return unsupported("LocatorBar.removeWaypoint");
+    }
+}
+export class PlayerAimAssist {
+    get settings() {
+        return unsupported("PlayerAimAssist.settings");
+    }
+
+    set() {
+        return unsupported("PlayerAimAssist.set");
+    }
+}
 export class PlayerCancelBreakingBlockAfterEvent extends BlockEvent {
     get blockPermutation() {
         return unsupported("PlayerCancelBreakingBlockAfterEvent.blockPermutation");
@@ -6652,17 +6898,158 @@ export class PlayerStartBreakingBlockAfterEvent extends BlockEvent {
         return unsupported("PlayerStartBreakingBlockAfterEvent.player");
     }
 }
-export class PlayerWaypoint {}
-export class PrimitiveShape {}
-export class PrimitiveShapesManager {}
+export class PrimitiveShapesManager {
+    get maxShapes() {
+        return unsupported("PrimitiveShapesManager.maxShapes");
+    }
+
+    addText() {
+        return unsupported("PrimitiveShapesManager.addText");
+    }
+
+    removeAll() {
+        return unsupported("PrimitiveShapesManager.removeAll");
+    }
+
+    removeText() {
+        return unsupported("PrimitiveShapesManager.removeText");
+    }
+}
 export class SoundInstance {
     stop() {
         return unsupported("SoundInstance.stop");
     }
 }
-export class TextPrimitive {}
-export class Waypoint {}
 export class WaypointTexture {}
+
+// A shape and a waypoint each come in kinds that carry what the base holds, and a class body reads
+// the one it extends as it is declared, so each base stands ahead of the kinds built on it.
+export class PrimitiveShape {
+    get attachedTo() {
+        return unsupported("PrimitiveShape.attachedTo");
+    }
+
+    get color() {
+        return unsupported("PrimitiveShape.color");
+    }
+
+    get dimension() {
+        return unsupported("PrimitiveShape.dimension");
+    }
+
+    get hasDuration() {
+        return unsupported("PrimitiveShape.hasDuration");
+    }
+
+    get location() {
+        return unsupported("PrimitiveShape.location");
+    }
+
+    get maximumRenderDistance() {
+        return unsupported("PrimitiveShape.maximumRenderDistance");
+    }
+
+    get rotation() {
+        return unsupported("PrimitiveShape.rotation");
+    }
+
+    get scale() {
+        return unsupported("PrimitiveShape.scale");
+    }
+
+    get timeLeft() {
+        return unsupported("PrimitiveShape.timeLeft");
+    }
+
+    get totalTimeLeft() {
+        return unsupported("PrimitiveShape.totalTimeLeft");
+    }
+
+    get visibleTo() {
+        return unsupported("PrimitiveShape.visibleTo");
+    }
+
+    remove() {
+        return unsupported("PrimitiveShape.remove");
+    }
+
+    setLocation() {
+        return unsupported("PrimitiveShape.setLocation");
+    }
+}
+export class TextPrimitive extends PrimitiveShape {
+    get backfaceVisible() {
+        return unsupported("TextPrimitive.backfaceVisible");
+    }
+
+    get backgroundColorOverride() {
+        return unsupported("TextPrimitive.backgroundColorOverride");
+    }
+
+    get depthTest() {
+        return unsupported("TextPrimitive.depthTest");
+    }
+
+    get text() {
+        return unsupported("TextPrimitive.text");
+    }
+
+    get textBackfaceVisible() {
+        return unsupported("TextPrimitive.textBackfaceVisible");
+    }
+
+    get useRotation() {
+        return unsupported("TextPrimitive.useRotation");
+    }
+
+    setText() {
+        return unsupported("TextPrimitive.setText");
+    }
+}
+export class Waypoint {
+    get color() {
+        return unsupported("Waypoint.color");
+    }
+
+    get isEnabled() {
+        return unsupported("Waypoint.isEnabled");
+    }
+
+    get isValid() {
+        return unsupported("Waypoint.isValid");
+    }
+
+    get textureSelector() {
+        return unsupported("Waypoint.textureSelector");
+    }
+
+    getDimensionLocation() {
+        return unsupported("Waypoint.getDimensionLocation");
+    }
+
+    remove() {
+        return unsupported("Waypoint.remove");
+    }
+}
+export class EntityWaypoint extends Waypoint {
+    get entity() {
+        return unsupported("EntityWaypoint.entity");
+    }
+
+    get entityRules() {
+        return unsupported("EntityWaypoint.entityRules");
+    }
+}
+export class LocationWaypoint extends Waypoint {
+    setDimensionLocation() {
+        return unsupported("LocationWaypoint.setDimensionLocation");
+    }
+}
+export class PlayerWaypoint extends EntityWaypoint {
+    get playerRules() {
+        return unsupported("PlayerWaypoint.playerRules");
+    }
+}
 
 export const AimAssistTargetMode = Object.freeze({ Angle: "Angle", Distance: "Distance" });
 export const LocatorBarErrorReason = Object.freeze({
@@ -6679,23 +7066,47 @@ export class CustomDimensionReloadNewDimensionError extends Error {}
 export class InvalidEntityComponentError extends Error {}
 export class InvalidWaypointError extends Error {}
 export class InvalidWaypointTextureSelectorError extends Error {}
-export class LocatorBarError extends Error {}
+export class LocatorBarError extends Error {
+    get reason() {
+        return unsupported("LocatorBarError.reason");
+    }
+}
 export class PrimitiveShapeError extends Error {}
 export class BlockCustomComponentReloadNewComponentError extends Error {}
 export class BlockCustomComponentReloadNewEventError extends Error {}
 export class BlockCustomComponentReloadVersionError extends Error {}
-export class BookError extends Error {}
+export class BookError extends Error {
+    get reason() {
+        return unsupported("BookError.reason");
+    }
+}
 export class BookPageContentError extends Error {
     constructor(message, pageIndex) {
         super(message);
         this.pageIndex = pageIndex;
     }
+
+    get reason() {
+        return unsupported("BookPageContentError.reason");
+    }
 }
 export class CommandError extends Error {}
-export class ContainerRulesError extends Error {}
-export class CustomCommandError extends Error {}
+export class ContainerRulesError extends Error {
+    get reason() {
+        return unsupported("ContainerRulesError.reason");
+    }
+}
+export class CustomCommandError extends Error {
+    get reason() {
+        return unsupported("CustomCommandError.reason");
+    }
+}
 export class CustomComponentInvalidRegistryError extends Error {}
-export class CustomComponentNameError extends Error {}
+export class CustomComponentNameError extends Error {
+    get reason() {
+        return unsupported("CustomComponentNameError.reason");
+    }
+}
 export class EnchantmentLevelOutOfBoundsError extends Error {}
 export class EnchantmentTypeNotCompatibleError extends Error {}
 export class EnchantmentTypeUnknownIdError extends Error {}
@@ -6703,8 +7114,20 @@ export class EntitySpawnError extends Error {}
 export class InvalidBlockComponentError extends Error {}
 export class InvalidContainerError extends Error {}
 export class InvalidContainerSlotError extends Error {}
-export class InvalidEntityError extends Error {}
-export class InvalidItemStackError extends Error {}
+export class InvalidEntityError extends Error {
+    get id() {
+        return unsupported("InvalidEntityError.id");
+    }
+
+    get type() {
+        return unsupported("InvalidEntityError.type");
+    }
+}
+export class InvalidItemStackError extends Error {
+    get itemType() {
+        return unsupported("InvalidItemStackError.itemType");
+    }
+}
 export class InvalidIteratorError extends Error {}
 export class InvalidPotionDeliveryTypeError extends Error {}
 export class InvalidPotionEffectTypeError extends Error {}
@@ -6715,7 +7138,11 @@ export class ItemCustomComponentReloadNewEventError extends Error {}
 export class ItemCustomComponentReloadVersionError extends Error {}
 export class LocationInUnloadedChunkError extends Error {}
 export class LocationOutOfWorldBoundariesError extends Error {}
-export class NamespaceNameError extends Error {}
+export class NamespaceNameError extends Error {
+    get reason() {
+        return unsupported("NamespaceNameError.reason");
+    }
+}
 export class PlaceJigsawError extends Error {}
 export class RawMessageError extends Error {}
 export class TickingAreaError extends Error {
