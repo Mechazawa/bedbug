@@ -34,7 +34,7 @@ server decides what happens; the client draws it.
 - Text, with Bedrock's `.lang` rules rather than a properties reader's.
 - Models, animations, animation controllers and render controllers, drawn through a full Molang
   evaluator, with each pass drawn the way its `.material` asks: alpha tested or blended, culled or
-  not, plain or glowing.
+  not, plain or glowing, and tinted the colour its controller worked out for it.
 - Entities a behaviour pack declares, with their properties, events, component groups, filters,
   breeding, riding, leashing, home ranges, navigation and item pickup, and the sensors that fire
   their events: environment, entity, target-nearby, block, timer, scheduler, drying-out, damage,
@@ -137,6 +137,10 @@ step away.
 **One ender dragon phase.** `behavior.dragondeath` is the animation a dragon plays while it dies.
 Java stops running a mob's goals the moment its health reaches zero, so a goal has no tick left to
 play anything in. The dragon's other seven phases are flown, and `/mcaddon entities` names this one.
+
+**Two ways of building a bone.** `texture_meshes` builds geometry out of a texture's opaque pixels,
+and `binding` hangs a bone off the skeleton of whatever entity is carrying the model. Java's
+renderer has no form of either, so a bone written that way is drawn as the boxes it also declares.
 
 **Stencil-masked material passes.** A material's alpha testing, blending, culling and emissiveness
 all become the render type the pass is drawn with. What cannot follow is the stencil buffer itself:

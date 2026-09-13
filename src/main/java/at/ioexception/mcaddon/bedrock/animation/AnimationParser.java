@@ -1,6 +1,5 @@
 package at.ioexception.mcaddon.bedrock.animation;
 
-import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import com.google.gson.JsonArray;
@@ -12,6 +11,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 /** Reads one keyframe animation out of a pack's `animations` JSON. */
 public final class AnimationParser {
@@ -20,10 +20,13 @@ public final class AnimationParser {
     }
 
     public static BedrockAnimation readAnimation(String name, JsonObject json) {
+        // A negative limit stands for an animation that declared no length, so nothing is clamped.
+        float declared = json.has("animation_length") ? json.get("animation_length").getAsFloat() : -1f;
+
         Map<String, BoneAnimation> bones = new HashMap<>();
         if (json.has("bones")) {
             for (Map.Entry<String, JsonElement> bone : json.getAsJsonObject("bones").entrySet()) {
-                bones.put(bone.getKey(), readBone(bone.getValue().getAsJsonObject()));
+                bones.put(bone.getKey(), readBone(bone.getValue().getAsJsonObject(), declared));
             }
         }
 
@@ -36,19 +39,45 @@ public final class AnimationParser {
             timeline.sort(Comparator.comparing(BedrockAnimation.TimelineEntry::time));
         }
 
+        List<BedrockAnimation.EffectEntry> sounds = readEffects(json.get("sound_effects"));
+        List<BedrockAnimation.EffectEntry> particles = readEffects(json.get("particle_effects"));
+
         return new BedrockAnimation(
             name,
-            json.has("animation_length") ? json.get("animation_length").getAsFloat() : 0f,
+            declared >= 0 ? declared : lastMoment(bones, timeline, sounds, particles),
             readLoop(json.get("loop")),
-            json.has("loop_delay") ? MolangParser.parse(primitive(json.get("loop_delay")))
-                .asFloat(new MolangEnvironment()) : 0f,
+            json.has("loop_delay") ? MolangParser.parse(primitive(json.get("loop_delay"))) : null,
+            json.has("start_delay") ? MolangParser.parse(primitive(json.get("start_delay"))) : null,
             json.has("blend_weight") ? MolangParser.parse(primitive(json.get("blend_weight"))) : null,
             json.has("anim_time_update") ? MolangParser.parse(primitive(json.get("anim_time_update"))) : null,
             json.has("override_previous_animation") && json.get("override_previous_animation").getAsBoolean(),
             Map.copyOf(bones),
             List.copyOf(timeline),
-            readEffects(json.get("sound_effects")),
-            readEffects(json.get("particle_effects")));
+            sounds,
+            particles);
+    }
+
+    /**
+     * How far an animation that declared no length runs: to its last keyframe or its last event.
+     *
+     * Most published animations leave `animation_length` out and rely on this, so an animation given
+     * a length of zero instead would hold its first frame and never advance.
+     */
+    private static float lastMoment(Map<String, BoneAnimation> bones,
+        List<BedrockAnimation.TimelineEntry> timeline,
+        List<BedrockAnimation.EffectEntry> sounds,
+        List<BedrockAnimation.EffectEntry> particles) {
+        double keyframes = bones.values().stream()
+            .flatMap(bone -> bone.channels().stream())
+            .mapToDouble(AnimationChannel::end)
+            .max().orElse(0);
+        double events = Stream.of(timeline.stream().map(BedrockAnimation.TimelineEntry::time),
+                sounds.stream().map(BedrockAnimation.EffectEntry::time),
+                particles.stream().map(BedrockAnimation.EffectEntry::time))
+            .flatMap(moments -> moments)
+            .mapToDouble(Float::doubleValue)
+            .max().orElse(0);
+        return (float) Math.max(keyframes, events);
     }
 
     /**
@@ -110,14 +139,14 @@ public final class AnimationParser {
         return List.copyOf(statements);
     }
 
-    private static BoneAnimation readBone(JsonObject json) {
+    private static BoneAnimation readBone(JsonObject json, float limit) {
         boolean relativeRotation = json.has("relative_to")
             && "entity".equals(optionalString(json.getAsJsonObject("relative_to"), "rotation"));
 
         return new BoneAnimation(
-            readChannel(json.get("rotation")),
-            readChannel(json.get("position")),
-            readChannel(json.get("scale")),
+            readChannel(json.get("rotation"), limit),
+            readChannel(json.get("position"), limit),
+            readChannel(json.get("scale"), limit),
             relativeRotation);
     }
 
@@ -129,14 +158,18 @@ public final class AnimationParser {
     /**
      * A channel is either one value that holds for the whole animation, or a map of times to
      * values. The single value case becomes one keyframe at time zero.
+     *
+     * A keyframe written past the declared length is pulled back onto it, where the engine holds it,
+     * so a spline crossing the end of the animation bends towards the value the pack wrote.
      */
-    private static AnimationChannel readChannel(JsonElement json) {
+    private static AnimationChannel readChannel(JsonElement json, float limit) {
         if (json == null || json.isJsonNull()) return new AnimationChannel(List.of());
 
         if (json.isJsonObject() && !isKeyframeValue(json.getAsJsonObject())) {
             List<Keyframe> keyframes = new ArrayList<>();
             for (Map.Entry<String, JsonElement> frame : json.getAsJsonObject().entrySet()) {
-                keyframes.add(readKeyframe(Float.parseFloat(frame.getKey()), frame.getValue()));
+                float time = Float.parseFloat(frame.getKey());
+                keyframes.add(readKeyframe(limit < 0 ? time : Math.min(time, limit), frame.getValue()));
             }
             keyframes.sort(Comparator.comparing(Keyframe::time));
             return new AnimationChannel(List.copyOf(keyframes));

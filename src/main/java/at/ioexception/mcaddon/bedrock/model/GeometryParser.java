@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.core.Direction;
+import org.joml.Vector2f;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
@@ -32,9 +33,15 @@ public final class GeometryParser {
     }
 
     private static BedrockBone readBone(JsonObject json) {
+        // A cube's own mirror and inflate replace the bone's rather than adding to them.
+        boolean mirror = json.has("mirror") && json.get("mirror").getAsBoolean();
+        float inflate = json.has("inflate") ? json.get("inflate").getAsFloat() : 0f;
+
         List<BedrockCube> cubes = new ArrayList<>();
         if (json.has("cubes")) {
-            for (JsonElement cube : json.getAsJsonArray("cubes")) cubes.add(readCube(cube.getAsJsonObject()));
+            for (JsonElement cube : json.getAsJsonArray("cubes")) {
+                cubes.add(readCube(cube.getAsJsonObject(), mirror, inflate));
+            }
         }
 
         Map<String, Vector3f> locators = new LinkedHashMap<>();
@@ -52,24 +59,27 @@ public final class GeometryParser {
             json.get("name").getAsString(),
             json.has("parent") ? json.get("parent").getAsString() : null,
             optionalVector(json, "pivot"),
-            optionalVector(json, "rotation"),
-            json.has("mirror") && json.get("mirror").getAsBoolean(),
+            // The 1.8 shape writes the resting rotation under either name, never a different one
+            // under each, so the newer spelling stands in for both wherever it is present.
+            optionalVector(json, "rotation", "bind_pose_rotation"),
+            json.has("neverRender") && json.get("neverRender").getAsBoolean(),
             List.copyOf(cubes),
             Map.copyOf(locators));
     }
 
-    private static BedrockCube readCube(JsonObject json) {
+    private static BedrockCube readCube(JsonObject json, boolean boneMirror, float boneInflate) {
+        Vector3f size = optionalVector(json, "size");
         return new BedrockCube(
             optionalVector(json, "origin"),
-            optionalVector(json, "size"),
-            json.has("inflate") ? json.get("inflate").getAsFloat() : 0f,
-            json.has("mirror") && json.get("mirror").getAsBoolean(),
+            size,
+            json.has("inflate") ? json.get("inflate").getAsFloat() : boneInflate,
+            json.has("mirror") ? json.get("mirror").getAsBoolean() : boneMirror,
             optionalVector(json, "pivot"),
             optionalVector(json, "rotation"),
-            readUv(json.get("uv")));
+            readUv(json.get("uv"), size));
     }
 
-    private static CubeUv readUv(JsonElement json) {
+    private static CubeUv readUv(JsonElement json, Vector3f cube) {
         if (json == null || json.isJsonNull()) return new CubeUv.Box(0, 0);
 
         if (json.isJsonArray()) {
@@ -85,13 +95,24 @@ public final class GeometryParser {
             JsonObject value = face.getValue().getAsJsonObject();
             JsonArray uv = value.getAsJsonArray("uv");
             JsonArray size = value.getAsJsonArray("uv_size");
+            // A face that declares no patch size maps the box as seen from that face.
+            Vector2f fallback = faceSize(direction, cube);
             faces.put(direction, new FaceUv(
                 uv.get(0).getAsFloat(), uv.get(1).getAsFloat(),
-                size == null ? 0 : size.get(0).getAsFloat(),
-                size == null ? 0 : size.get(1).getAsFloat(),
+                size == null ? fallback.x : size.get(0).getAsFloat(),
+                size == null ? fallback.y : size.get(1).getAsFloat(),
                 optionalInt(value, "uv_rotation", 0)));
         }
         return new CubeUv.PerFace(Map.copyOf(faces));
+    }
+
+    /** How wide and how tall a box looks from one of its faces. */
+    private static Vector2f faceSize(Direction face, Vector3f cube) {
+        return switch (face) {
+            case NORTH, SOUTH -> new Vector2f(cube.x, cube.y);
+            case EAST, WEST -> new Vector2f(cube.z, cube.y);
+            case UP, DOWN -> new Vector2f(cube.x, cube.z);
+        };
     }
 
     /**
@@ -110,8 +131,12 @@ public final class GeometryParser {
         };
     }
 
-    private static Vector3f optionalVector(JsonObject json, String field) {
-        return json.has(field) ? vector(json.getAsJsonArray(field)) : new Vector3f();
+    /** The first of these fields the object carries, or the origin when it carries none of them. */
+    private static Vector3f optionalVector(JsonObject json, String... fields) {
+        for (String field : fields) {
+            if (json.has(field)) return vector(json.getAsJsonArray(field));
+        }
+        return new Vector3f();
     }
 
     private static Vector3f vector(JsonArray array) {

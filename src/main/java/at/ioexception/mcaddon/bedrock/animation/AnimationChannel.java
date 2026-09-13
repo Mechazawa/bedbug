@@ -16,6 +16,11 @@ public record AnimationChannel(List<Keyframe> keyframes) {
         return keyframes.isEmpty();
     }
 
+    /** The time of the last keyframe, which is zero for one value held for the whole animation. */
+    public float end() {
+        return keyframes.isEmpty() ? 0f : keyframes.get(keyframes.size() - 1).time();
+    }
+
     public Vector3f evaluate(float time, MolangEnvironment environment, Vector3f current, Vector3f into) {
         if (keyframes.isEmpty()) return into.set(0, 0, 0);
         if (keyframes.size() == 1) return keyframes.get(0).post().evaluate(environment, current, into);

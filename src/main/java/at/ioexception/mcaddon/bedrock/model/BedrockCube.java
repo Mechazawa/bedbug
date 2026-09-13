@@ -7,7 +7,7 @@ import org.joml.Vector3f;
  *
  * `inflate` grows the box on every axis without moving its origin, which is how Bedrock layers a
  * second skin over a body. A cube may also carry its own pivot and rotation, independent of the
- * bone it belongs to.
+ * bone it belongs to. `inflate` and `mirror` hold the bone's value where the cube declared neither.
  */
 public record BedrockCube(
     Vector3f origin,

@@ -110,8 +110,8 @@ public final class BedrockModelRenderer {
         VertexConsumer buffer, Vector3f point, BakedVertex vertex, UvShift shift, Vector3f normal,
         int light, int overlay, int colour
     ) {
-        float u = vertex.u() + shift.u();
-        float v = vertex.v() + shift.v();
+        float u = shift.mapU(vertex.u());
+        float v = shift.mapV(vertex.v());
 
         //? if >=1.21 {
         buffer.addVertex(point.x, point.y, point.z)

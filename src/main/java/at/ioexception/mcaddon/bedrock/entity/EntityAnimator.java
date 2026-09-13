@@ -19,9 +19,9 @@ import java.util.Set;
 /**
  * Runs one entity's whole animation script.
  *
- * Each frame the entity's `pre_animation` statements set up its variables, then the `animate` list
- * runs in order. An entry is either a clip, which contributes to the pose directly, or a controller,
- * which is a state machine that decides which clips to run.
+ * Each frame the entity's `pre_animation` statements set up its variables, then its controllers and
+ * its `animate` list run in order. An entry is either a clip, which contributes to the pose
+ * directly, or a controller, which is a state machine that decides which clips to run.
  */
 public final class EntityAnimator {
     private final BedrockAssets assets;
@@ -109,6 +109,10 @@ public final class EntityAnimator {
         for (MolangExpression statement : definition.preAnimation()) statement.evaluate(environment);
 
         Set<String> wanted = new HashSet<>();
+        // A controller named in the definition itself runs on every frame, ahead of the animate list.
+        for (String controller : definition.animationControllers().values()) {
+            collect(controller, deltaSeconds, wanted);
+        }
         for (ClientEntityDefinition.Gated entry : definition.animate()) {
             if (entry.condition() != null && !entry.condition().evaluate(environment).truthy()) continue;
             collect(entry.name(), deltaSeconds, wanted);
@@ -214,8 +218,22 @@ public final class EntityAnimator {
         return AnimationPlayer.secondsPerTick();
     }
 
-    public float scale() {
-        MolangExpression scale = definition.scale();
-        return scale == null ? 1f : scale.asFloat(player.environment());
+    /**
+     * How far the whole model is grown on each axis.
+     *
+     * A pack may say it once for all three or once per axis, and the two multiply, so a slime that
+     * grows with age and squashes as it lands does both at the same time.
+     */
+    public Vector3f scale() {
+        MolangEnvironment environment = player.environment();
+        float uniform = number(definition.scale(), environment);
+        return new Vector3f(
+            uniform * number(definition.scaleX(), environment),
+            uniform * number(definition.scaleY(), environment),
+            uniform * number(definition.scaleZ(), environment));
+    }
+
+    private static float number(MolangExpression expression, MolangEnvironment environment) {
+        return expression == null ? 1f : expression.asFloat(environment);
     }
 }
