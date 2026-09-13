@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.bedrock.model;
 
+import at.ioexception.mcaddon.registry.AddonEntities;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -16,11 +17,30 @@ import java.util.Map;
 /** Reads one geometry out of a pack's `models/entity` JSON. */
 public final class GeometryParser {
 
+    /**
+     * The box Bedrock culls a model against, in both geometry shapes.
+     *
+     * Java culls an entity against the bounding box the server gave it, so what a geometry says
+     * about its own extent decides nothing here.
+     */
+    public static final List<String> UNREAD_DESCRIPTION =
+        List.of("visible_bounds_width", "visible_bounds_height", "visible_bounds_offset");
+
+    /**
+     * Two ways of building a bone that this renderer has no form of.
+     *
+     * `texture_meshes` builds geometry out of a texture's opaque pixels, and `binding` hangs the
+     * bone off the skeleton of whatever entity is carrying the model. A bone written either way is
+     * drawn as the boxes it also declares.
+     */
+    private static final List<String> UNREAD_BONE = List.of("texture_meshes", "binding");
+
     private GeometryParser() {
     }
 
     public static BedrockGeometry readGeometry(String identifier, JsonObject json) {
         JsonObject description = json.getAsJsonObject("description");
+        AddonEntities.unsupportedFields("geometry", description, UNREAD_DESCRIPTION);
         List<BedrockBone> bones = new ArrayList<>();
         if (json.has("bones")) {
             for (JsonElement bone : json.getAsJsonArray("bones")) bones.add(readBone(bone.getAsJsonObject()));
@@ -33,6 +53,8 @@ public final class GeometryParser {
     }
 
     private static BedrockBone readBone(JsonObject json) {
+        AddonEntities.unsupportedFields("geometry", json, UNREAD_BONE);
+
         // A cube's own mirror and inflate replace the bone's rather than adding to them.
         boolean mirror = json.has("mirror") && json.get("mirror").getAsBoolean();
         float inflate = json.has("inflate") ? json.get("inflate").getAsFloat() : 0f;

@@ -23,23 +23,23 @@ public final class Animators {
 
     /** Null when the entity's pack never described how it looks. */
     public static EntityAnimator of(Entity entity, String identifier, float partialTick, float ageInTicks) {
-        return of(entity, AddonClientAssets.of(identifier), identifier, partialTick, ageInTicks);
+        return of(entity, AddonClientAssets.of(identifier), identifier, false, partialTick, ageInTicks);
     }
 
     /**
      * One animator per entity and per thing drawn on it.
      *
      * A worn attachable runs its own animation script beside the entity's, so it needs a clock and a
-     * set of variables of its own rather than sharing the wearer's.
+     * set of variables of its own rather than sharing the wearer's. `attached` says which of the two
+     * this is, which is what Bedrock answers `query.is_attached` and `query.owner_identifier` from.
      */
     public static EntityAnimator of(Entity entity, AddonClientAssets.Binding binding, String key,
-        float partialTick, float ageInTicks) {
+        boolean attached, float partialTick, float ageInTicks) {
         if (binding == null) return null;
 
         Entry entry = ANIMATORS.computeIfAbsent(entity.getId() + "/" + key, id -> {
             EntityAnimator animator = new EntityAnimator(binding.models().assets(), binding.definition());
-            AddonQueries queries =
-                new AddonQueries(entity, animator, AddonClientAssets.attachableFor(key) != null);
+            AddonQueries queries = new AddonQueries(entity, animator, attached);
             animator.environment().setQueries(queries);
             animator.setEffects(AddonEffects.of(entity, animator, binding.models().converted().namespace()));
             return new Entry(animator, queries, new float[] {ageInTicks});

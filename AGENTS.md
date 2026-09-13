@@ -432,18 +432,33 @@ These are the checks it runs, and what each one catches:
 
 ### What the drawing readers do not read
 
-Four of the standing drops are deliberate, and the census will keep naming them:
+Every standing drop is reported through `AddonEntities.unsupported` at the reader that drops it, so
+what the census calls missing is what `/mcaddon entities` names. The field names sit in a constant
+beside the reader rather than inside it, because the census reads a reader's own string literals to
+decide what it acts on and a reported field is still a dropped one.
 
 - **`visible_bounds_width`, `visible_bounds_height` and `visible_bounds_offset`** are the box the
-  engine culls a model against. Java builds its own from the entity's bounding box.
+  engine culls a model against. Java culls against the bounding box the server gave the entity.
 - **`rebuild_animation_matrices`, `filter_lighting` and `light_color_multiplier`** describe how
   Bedrock's own renderer schedules and lights a pass. `ignore_lighting` has a Java form, full
   brightness, and is honoured; the other three do not.
 - **`texture_meshes` and `binding`** on a bone build geometry from a texture's opaque pixels and
   attach a bone to another entity's skeleton. Neither has a Java counterpart in this renderer.
+- **`blend_via_shortest_path`** on a controller state picks which way round the circle a rotation
+  travels while one state crosses into the next. The clips of every state a controller reaches are
+  summed at the weight each declares, so no rotation is carried from one value to another.
 - **`should_update_effects_offscreen`, `should_update_bones_and_effects_offscreen`,
   `min_engine_version`, `enable_attachables` and `hide_armor`** each ask the Bedrock client for
   behaviour it decides itself. Java decides those the same way for every entity.
+- **`held_item_scale`, `held_item_ignores_lighting` and `hide_held_items`** size, light and hide the
+  item the engine puts in an entity's hand. Nothing is drawn in an add-on entity's hand but the
+  attachable a pack describes for it, which carries its own scale and its own material.
+- **`parent_setup`** is reported only for the wearer it cannot reach. An attachable writes it into
+  whoever is carrying it, which works for a pack's own entity and has nowhere to land on one Java
+  draws with a model of its own.
+
+`blend_transition` is read into `AnimationController.State` and nothing acts on it, which the census
+counts as covered. Either give a state's clips a fade of that length or report the field.
 - **`tools/census/commands.py`** does the same for the command dialect. A `.mcfunction` is the one
   part of a pack Java refuses by halves, one bad line costing the whole file, so knowing which
   commands survive translation matters more here than anywhere else.

@@ -91,6 +91,19 @@ public final class AddonEntities {
         UNSUPPORTED.computeIfAbsent(component, name -> new AtomicInteger()).incrementAndGet();
     }
 
+    /**
+     * Names each of these fields the object carries, under a subsystem prefix.
+     *
+     * The drawing readers hold their dropped field names in a constant beside the reader rather than
+     * inside it, because `tools/census/model.py` reads a reader's own string literals to decide what
+     * it acts on and a field reported here is still dropped.
+     */
+    public static void unsupportedFields(String prefix, JsonObject body, List<String> fields) {
+        if (body == null) return;
+
+        fields.stream().filter(body::has).forEach(field -> unsupported(prefix + " " + field));
+    }
+
     public static List<String> report() {
         List<String> lines = new ArrayList<>();
         UNSUPPORTED.forEach((component, uses) -> lines.add("    " + component + " x" + uses.get()));

@@ -8,12 +8,8 @@ import org.joml.Vector3f;
 import net.minecraft.client.model.EntityModel;
 import net.minecraft.client.renderer.entity.RenderLayerParent;
 import net.minecraft.client.renderer.entity.layers.RenderLayer;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.item.ItemStack;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import net.minecraft.client.renderer.rendertype.RenderType;
@@ -85,32 +81,16 @@ public class AttachableLayer<S extends LivingEntityRenderState, M extends Entity
             material != null && material.emissive());
     }
 
-    /** One drawing pass and the animator whose bones it should be posed by. */
-    private record Worn(AddonModels.Pass pass, EntityAnimator animator) {
-    }
+    /**
+     * Everything the entity has on that an add-on described.
+     *
+     * The wearer is drawn from a Java model wherever this layer runs, except for a pack's own
+     * entity, which carries an animator an attachable can reach and write into.
+     */
+    private static List<Attachables.Drawn> worn(LivingEntity entity, float partialTick) {
+        if (entity == null) return List.of();
 
-    /** Everything the entity has on that an add-on described. */
-    private static List<Worn> worn(LivingEntity entity, float partialTick) {
-        List<Worn> worn = new ArrayList<>();
-        if (entity == null) return worn;
-
-        for (EquipmentSlot slot : EquipmentSlot.values()) {
-            ItemStack held = entity.getItemBySlot(slot);
-            if (held.isEmpty()) continue;
-
-            String item = BuiltInRegistries.ITEM.getKey(held.getItem()).toString();
-            AddonClientAssets.Binding binding = AddonClientAssets.attachableFor(item);
-            if (binding == null) continue;
-
-            EntityAnimator animator = Animators.of(entity, binding, item, partialTick,
-                entity.tickCount + partialTick);
-            if (animator == null) continue;
-
-            for (AddonModels.Pass pass : binding.models().resolve(animator)) {
-                worn.add(new Worn(pass, animator));
-            }
-        }
-        return worn;
+        return Attachables.on(entity, Animators.rootOf(entity.getId()), partialTick);
     }
 
     //? if >=1.21.2 {
@@ -120,11 +100,11 @@ public class AttachableLayer<S extends LivingEntityRenderState, M extends Entity
         LivingEntity entity = RenderStates.of(state);
         if (entity == null) return;
 
-        List<Worn> worn = worn(entity, 0);
+        List<Attachables.Drawn> worn = worn(entity, 0);
         if (worn.isEmpty()) return;
 
         boolean pushed = intoModelSpace(poseStack, entity, 0);
-        for (Worn each : worn) {
+        for (Attachables.Drawn each : worn) {
             AddonModels.Pass pass = each.pass();
             collector.submitCustomGeometry(poseStack, renderTypeOf(pass),
                 (pose, buffer) -> {
@@ -141,11 +121,11 @@ public class AttachableLayer<S extends LivingEntityRenderState, M extends Entity
     public void render(PoseStack poseStack, MultiBufferSource buffers, int light, T entity,
         float limbSwing, float limbSwingAmount, float partialTick,
         float ageInTicks, float netHeadYaw, float headPitch) {
-        List<Worn> worn = worn(entity, partialTick);
+        List<Attachables.Drawn> worn = worn(entity, partialTick);
         if (worn.isEmpty()) return;
 
         boolean pushed = intoModelSpace(poseStack, entity, partialTick);
-        for (Worn each : worn) {
+        for (Attachables.Drawn each : worn) {
             AddonModels.Pass pass = each.pass();
             VertexConsumer buffer = buffers.getBuffer(renderTypeOf(pass));
             BedrockModelRenderer.render(pass.geometry(), each.animator(), pass::hides, pass.shift(),

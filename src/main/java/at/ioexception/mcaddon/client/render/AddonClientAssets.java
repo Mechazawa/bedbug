@@ -6,7 +6,10 @@ import at.ioexception.mcaddon.bedrock.entity.ClientEntityDefinition;
 import at.ioexception.mcaddon.convert.ConvertedPack;
 import at.ioexception.mcaddon.resource.AddonPacks;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -22,20 +25,21 @@ public final class AddonClientAssets {
     }
 
     private static final Map<String, Binding> BY_IDENTIFIER = new LinkedHashMap<>();
-    private static final Map<String, Binding> ATTACHABLES = new LinkedHashMap<>();
+    private static final Map<String, List<Binding>> ATTACHABLES = new LinkedHashMap<>();
 
     private AddonClientAssets() {
     }
 
     public static void load() {
         BY_IDENTIFIER.clear();
+        ATTACHABLES.clear();
         for (ConvertedPack converted : AddonPacks.all()) {
             BedrockAssets assets = BedrockAssets.read(converted.pack());
             AddonModels models = new AddonModels(assets, converted);
             assets.entities().forEach((identifier, definition) ->
                 BY_IDENTIFIER.put(identifier, new Binding(models, definition)));
             assets.attachables().forEach((identifier, definition) ->
-                ATTACHABLES.put(identifier, new Binding(models, definition)));
+                index(new Binding(models, definition), identifier));
         }
         if (!BY_IDENTIFIER.isEmpty()) {
             McAddon.LOGGER.info("{} add-on entities have a client definition, {} items are attachable.",
@@ -48,8 +52,26 @@ public final class AddonClientAssets {
         return BY_IDENTIFIER.get(identifier);
     }
 
-    /** The model worn or held for an item, which an attachable names by the item's own identifier. */
-    public static Binding attachableFor(String itemIdentifier) {
-        return ATTACHABLES.get(itemIdentifier);
+    /**
+     * Files one attachable under every item it is worn for.
+     *
+     * A pack lists those items in `item`, and an attachable that lists none is worn for the one
+     * item its own identifier names.
+     */
+    private static void index(Binding binding, String identifier) {
+        Collection<String> items = binding.definition().items().isEmpty()
+            ? List.of(identifier)
+            : binding.definition().items().keySet();
+        items.forEach(item -> ATTACHABLES.computeIfAbsent(item, name -> new ArrayList<>()).add(binding));
+    }
+
+    /**
+     * Every model offered for an item worn or held, in the order the packs were read.
+     *
+     * A pack may describe more than one for the same item and pick between them on a condition,
+     * which is how an item is worn differently by a player than by anything else.
+     */
+    public static List<Binding> attachablesFor(String itemIdentifier) {
+        return ATTACHABLES.getOrDefault(itemIdentifier, List.of());
     }
 }

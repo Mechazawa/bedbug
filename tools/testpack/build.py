@@ -112,6 +112,13 @@ def sprite_egg(x: int, y: int) -> tuple[int, int, int, int]:
     return (58, 157, 35, 255) if (x + y) % 5 else (201, 226, 101, 255)
 
 
+def ember_egg(x: int, y: int) -> tuple[int, int, int, int]:
+    """The other half of the egg list, so a wrong `texture_index` shows a different egg."""
+    if ((x - 7.5) / 4.5) ** 2 + ((y - 8.0) / 6.0) ** 2 > 1.0:
+        return TRANSPARENT
+    return (217, 79, 30, 255) if (x + y) % 5 else (255, 208, 96, 255)
+
+
 def lamp_frame(x: int, y: int) -> tuple[int, int, int, int] | None:
     """The part of the lamp that looks the same lit or unlit."""
     return (74, 68, 60, 255) if ring(x, y, 16, 3) else None
@@ -179,6 +186,7 @@ TEXTURES = (
     ("textures/items/pouch.png", 16, pouch),
     ("textures/items/visor.png", 16, visor),
     ("textures/items/sprite_egg.png", 16, sprite_egg),
+    ("textures/items/ember_egg.png", 16, ember_egg),
     ("textures/blocks/lamp_off.png", 16, lamp_off),
     ("textures/blocks/lamp_on.png", 16, lamp_on),
     ("textures/blocks/lamp_on_mer.png", 16, lamp_on_mer),

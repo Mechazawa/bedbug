@@ -29,7 +29,8 @@
       },
       "render_controllers": ["controller.render.tp.sprite"],
       "spawn_egg": {
-        "texture": "sprite_egg"
+        "texture": "eggs",
+        "texture_index": 1
       }
     }
   }

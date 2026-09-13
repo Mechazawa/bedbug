@@ -511,15 +511,32 @@ public final class PackConverter {
                 for (Map.Entry<String, JsonElement> entry : data.entrySet()) {
                     if (!entry.getValue().isJsonObject()) continue;
                     JsonElement textures = entry.getValue().getAsJsonObject().get("textures");
-                    String path = textures == null ? null
-                        : textures.isJsonArray() ? textures.getAsJsonArray().get(0).getAsString()
-                        : textures.getAsString();
-                    String resolved = path == null ? null : texturePaths.get(path);
-                    if (resolved != null) icons.put(entry.getKey(), resolved);
+                    if (textures == null) continue;
+                    if (!textures.isJsonArray()) {
+                        put(icons, entry.getKey(), textures, texturePaths);
+                        continue;
+                    }
+
+                    // A key naming a list is one icon per entry, each picked by its own number,
+                    // which is how every spawn egg in the game shares the key `spawn_egg`.
+                    JsonArray list = textures.getAsJsonArray();
+                    for (int index = 0; index < list.size(); index++) {
+                        put(icons, index == 0 ? entry.getKey() : entry.getKey() + "#" + index,
+                            list.get(index), texturePaths);
+                    }
                 }
             } catch (IOException | RuntimeException error) {
                 McAddon.LOGGER.warn("Could not read {}: {}", file.getFileName(), error.toString());
             }
+        }
+
+        /** One icon, where the pack wrote a plain path and the conversion kept a texture for it. */
+        private static void put(Map<String, String> icons, String key, JsonElement texture,
+            Map<String, String> texturePaths) {
+            if (!texture.isJsonPrimitive()) return;
+
+            String resolved = texturePaths.get(texture.getAsString());
+            if (resolved != null) icons.put(key, resolved);
         }
     }
 
@@ -629,7 +646,7 @@ public final class PackConverter {
     private static void writeSpawnEggs(Path root, Map<String, String> icons,
         Map<String, SpawnEggAppearance> eggs, Set<String> sprites) throws IOException {
         for (SpawnEggAppearance egg : eggs.values()) {
-            String icon = egg.textureKey() == null ? null : icons.get(egg.textureKey());
+            String icon = egg.iconKey() == null ? null : icons.get(egg.iconKey());
             if (icon != null) sprites.add(icon);
             JsonObject vanilla = new JsonObject();
             vanilla.addProperty("parent", "minecraft:item/template_spawn_egg");

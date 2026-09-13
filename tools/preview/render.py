@@ -129,7 +129,9 @@ def load_geometries(pack):
 def inherit(child, parent_name, named):
     """A 1.8 geometry written as an extension of another, folded into one body.
 
-    The child's own fields win, and a bone it names again replaces the parent's bone of that name.
+    The child's own fields win. A bone it names again adds its fields to the one it inherited, which
+    is how an armour layer inflates a limb and keeps its cubes, unless that bone carries `reset`,
+    which drops what it inherited so the bone is only what the child wrote.
     """
     for name, body in named.items():
         identifier, _, grandparent = name.partition(":")
@@ -137,7 +139,10 @@ def inherit(child, parent_name, named):
             continue
         parent = inherit(body, grandparent, named) if grandparent else body
         bones = {bone.get("name"): bone for bone in parent.get("bones", [])}
-        bones.update({bone.get("name"): bone for bone in child.get("bones", [])})
+        for bone in child.get("bones", []):
+            inherited = bones.get(bone.get("name"))
+            bones[bone.get("name")] = bone if inherited is None or bone.get("reset") \
+                else {**inherited, **bone}
         return {**parent, **child, "bones": list(bones.values())}
     return child
 

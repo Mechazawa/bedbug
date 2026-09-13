@@ -367,7 +367,7 @@ public final class AddonQueries implements MolangEnvironment.Queries {
             case "equipped_item_any_tag" -> equippedTags(arguments, false);
             case "equipped_item_all_tags" -> equippedTags(arguments, true);
             case "equipped_item_is_attachable" -> MolangValue.of(
-                AddonClientAssets.attachableFor(itemName(handItem(arguments), true)) != null);
+                !AddonClientAssets.attachablesFor(itemName(handItem(arguments), true)).isEmpty());
             case "is_enchanted" -> MolangValue.of(worn(EquipmentSlot.MAINHAND).isEnchanted());
             case "is_selected_item" -> MolangValue.of(entity instanceof Player player
                 && !player.getMainHandItem().isEmpty());
@@ -411,10 +411,10 @@ public final class AddonQueries implements MolangEnvironment.Queries {
             case "item_max_use_duration" -> MolangValue.of(useDuration() / 20d);
             case "item_remaining_use_duration" -> itemRemainingUse(arguments);
 
-            case "is_owner_identifier_any" -> MolangValue.ZERO;
+            case "is_owner_identifier_any" -> MolangValue.of(arguments.stream()
+                .anyMatch(value -> value.isText() && value.text().equals(ownerIdentifier())));
             case "owning_entity" -> MolangValue.ZERO;
-            case "owner_identifier" -> MolangValue.of(
-                properties.get("owner") instanceof String owner ? owner : "");
+            case "owner_identifier" -> MolangValue.of(ownerIdentifier());
 
             // Each of these is a behaviour the server is running, published under the name Bedrock
             // gives the query so a pack's own controller can branch on it.
@@ -564,7 +564,19 @@ public final class AddonQueries implements MolangEnvironment.Queries {
         *///?}
     }
 
-    /** Whoever the entity belongs to, which the two versions keep under different names. */
+    /**
+     * Who this belongs to.
+     *
+     * For something worn or held it is the entity carrying it, which is what an attachable's `item`
+     * condition asks about to dress a player differently from everything else. For an entity it is
+     * whoever tamed it, which the server syncs across as a property.
+     */
+    private String ownerIdentifier() {
+        if (attached) return BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString();
+
+        return EntityProperties.of(entity.getId()).get("owner") instanceof String owner ? owner : "";
+    }
+
     /**
      * Whether somebody has tamed this entity.
      *
