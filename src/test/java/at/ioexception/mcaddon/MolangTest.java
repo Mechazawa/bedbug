@@ -115,6 +115,23 @@ class MolangTest {
         assertEquals(List.of("surface_particle_color.r", "block_state"), asked);
     }
 
+    /**
+     * A query that takes an argument names its member after the call rather than before it, and the
+     * two still have to reach the answering side together for `q.bone_aabb('leg').max.y` to answer
+     * anything. The member chain runs as deep as the struct does.
+     */
+    @Test
+    void carriesAStructMemberThatFollowsACall() {
+        List<String> asked = new ArrayList<>();
+        environment.setQueries((name, arguments) -> {
+            asked.add(name);
+            return MolangValue.of(arguments.size());
+        });
+
+        assertEquals(2, evaluate("q.bone_rotation('head').X + q.bone_aabb('leg1a').max.y"), 1e-6);
+        assertEquals(List.of("bone_rotation.x", "bone_aabb.max.y"), asked);
+    }
+
     @Test
     void runsLoops() {
         assertEquals(8, evaluate("{v.total = 0; loop(4, {v.total = v.total + 2;}); return v.total;}"), 1e-6);

@@ -27,6 +27,7 @@ public class MolangEnvironment {
     private float lifeTime;
     private float deltaTime;
     private float stateTime;
+    private float keyFrameLerpTime;
 
     public void setQueries(Queries queries) {
         this.queries = queries;
@@ -132,5 +133,19 @@ public class MolangEnvironment {
 
     public void setStateTime(float stateTime) {
         this.stateTime = stateTime;
+    }
+
+    /**
+     * How far the channel being evaluated stands between the keyframe behind it and the one ahead.
+     *
+     * A keyframe's own expression may read this, so the channel sets it before evaluating either
+     * end of the segment it is crossing. Zero everywhere else, which is where a keyframe sits.
+     */
+    public float keyFrameLerpTime() {
+        return keyFrameLerpTime;
+    }
+
+    public void setKeyFrameLerpTime(float keyFrameLerpTime) {
+        this.keyFrameLerpTime = keyFrameLerpTime;
     }
 }

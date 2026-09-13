@@ -115,7 +115,7 @@ definitions. All of them compare what they read against the names this mod acts 
 | Entity components | 93% |
 | Entity AI goals | 99% |
 | Entity filters | 100% |
-| Molang queries | 91% |
+| Molang queries | 100% |
 | Molang maths | 100% |
 | Block components | 92% |
 | Item components | 80% |
@@ -214,6 +214,18 @@ play anything in. The dragon's other seven phases are flown, and `/mcaddon entit
 and `binding` hangs a bone off the skeleton of whatever entity is carrying the model. Java's
 renderer has no form of either, so a bone written that way is drawn as the boxes it also declares.
 
+**What a Molang value can be.** A value is a number or a string, which is what every expression in a
+pack computes with. Two queries answer with neither: `bone_orientation_matrix` gives a matrix and
+`combine_entities` gives an array of entities, so both are counted and named. A query answering with
+several numbers at once does work, one member at a time, so `q.bone_aabb('leg1a').max.y` and
+`q.spellcolor.r` each answer. A pack that stores the whole of one in a variable and reads the members
+off that variable later is told rather than handed a zero.
+
+**Two particle counts with no effect to count.** `effect_emitter_count` and `effect_particle_count`
+count what belongs to the particle effect whose own Molang is being evaluated, and a query asked
+while an entity is drawn belongs to no effect, so both are named by `/mcaddon entities`.
+`total_emitter_count` and `total_particle_count` count the whole world and are answered.
+
 **Stencil-masked material passes.** A material's alpha testing, blending, culling and emissiveness
 all become the render type the pass is drawn with. What cannot follow is the stencil buffer itself:
 a pass that exists only to write a mask is left out rather than drawn as a shape that does not
@@ -252,8 +264,9 @@ or several times over is counted the same way: a run places one structure and ca
 touchscreen pick what a player is pointing at, the primitive shapes are text and boxes drawn over the
 world by the Bedrock renderer, and the locator bar and its waypoints are a Bedrock heads-up display.
 Java has none of the three, so every member of each is answered by `/mcaddon scripts` rather than
-quietly doing nothing. The same holds for `world.getPackSettings`, which reads a screen only Bedrock
-shows.
+quietly doing nothing. The same holds for `world.getPackSettings` and for the `get_pack_setting`,
+`is_pack_setting_enabled` and `is_pack_setting_selected` queries, which all read the sliders, toggles
+and dropdowns on a screen only Bedrock shows beside a resource pack.
 
 **Four spawn rule conditions with nothing to ask in Java.** `minecraft:permute_type` swaps the
 entity that spawns for another one after the biome list has already chosen a type.

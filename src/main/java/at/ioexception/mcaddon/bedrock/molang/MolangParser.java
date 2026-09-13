@@ -345,7 +345,11 @@ public final class MolangParser {
             case "math" -> parseCall(arguments -> MolangMath.call(insensitive, arguments));
             case "query", "q", "context", "c" -> {
                 List<MolangExpression> arguments = readArguments();
-                yield environment -> environment.query(insensitive, evaluateAll(arguments, environment));
+                // A query answering with a struct is read one member at a time. The member follows
+                // the call, so it joins the name the way a dotted path does and the query answers
+                // for one member at a time.
+                String whole = insensitive + trailingMembers();
+                yield environment -> environment.query(whole, evaluateAll(arguments, environment));
             }
             case "variable", "v" -> parseVariable(insensitive, false);
             case "temp", "t" -> parseVariable(insensitive, true);
@@ -444,6 +448,16 @@ public final class MolangParser {
     private MolangExpression parseCall(java.util.function.Function<List<MolangValue>, MolangValue> function) {
         List<MolangExpression> arguments = readArguments();
         return environment -> function.apply(evaluateAll(arguments, environment));
+    }
+
+    /** The `.x` chain trailing a call, which names one member of the struct the call answered with. */
+    private String trailingMembers() {
+        StringBuilder members = new StringBuilder();
+        while (peek() == '.' && (Character.isLetter(peekAt(1)) || peekAt(1) == '_')) {
+            at += 1;
+            members.append('.').append(readName().toLowerCase(Locale.ROOT));
+        }
+        return members.toString();
     }
 
     private List<MolangExpression> readArguments() {

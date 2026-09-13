@@ -44,8 +44,24 @@ public final class AddonItems {
     private static final Map<Item, String> PROJECTILES = new LinkedHashMap<>();
     private static final Map<Item, Set<String>> ABSORBED = new LinkedHashMap<>();
     private static final Map<Item, Set<String>> COMPONENTS = new LinkedHashMap<>();
+    private static final Map<Item, KineticTimings> KINETIC = new LinkedHashMap<>();
+    private static final Map<Item, Float> COOLDOWNS = new LinkedHashMap<>();
 
     private AddonItems() {
+    }
+
+    /** The durations `minecraft:kinetic_weapon` states, in ticks, which a pack reads back by name. */
+    public record KineticTimings(int delay, int damage, int knockback, int dismount) {
+    }
+
+    /** The kinetic weapon timings of a pack's own item, or null for anything else. */
+    public static KineticTimings kineticOf(Item item) {
+        return KINETIC.get(item);
+    }
+
+    /** How long `minecraft:cooldown` keeps a pack's own item busy, in seconds, or nothing. */
+    public static float cooldownOf(Item item) {
+        return COOLDOWNS.getOrDefault(item, 0f);
     }
 
     public static Map<String, Item> all() {
@@ -133,6 +149,18 @@ public final class AddonItems {
 
         String flies = definition.text("minecraft:projectile", "projectile_entity");
         if (flies != null) PROJECTILES.put(item, flies);
+
+        // What a pack stated, kept beside the item so every version answers the same number, even
+        // where the game has no component of its own to hold it.
+        if (definition.components().containsKey("minecraft:kinetic_weapon")) {
+            KINETIC.put(item, new KineticTimings(
+                (int) definition.number("minecraft:kinetic_weapon", "delay", 0f),
+                maxDuration(definition, "damage_conditions"),
+                maxDuration(definition, "knockback_conditions"),
+                maxDuration(definition, "dismount_conditions")));
+        }
+        float busyFor = definition.number("minecraft:cooldown", "duration", 0f);
+        if (busyFor > 0f) COOLDOWNS.put(item, busyFor);
 
         fuel(definition, item);
         compostable(definition, item);
@@ -581,6 +609,12 @@ public final class AddonItems {
 
     /** How long a kinetic weapon leaves a target alone after hitting it, in ticks. */
     private static final int SAME_TARGET_PAUSE = 10;
+
+    /** How long one of a kinetic weapon's effects lasts, in ticks, or nothing where it never applies. */
+    private static int maxDuration(ItemDefinition definition, String field) {
+        ItemDefinition.KineticCondition declared = definition.kineticCondition(field);
+        return declared == null ? 0 : declared.durationTicks();
+    }
 
     //? if >=26 {
     /** One `*_conditions` block, absent where the pack declared none and the effect never applies. */
