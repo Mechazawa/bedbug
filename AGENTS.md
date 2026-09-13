@@ -188,6 +188,26 @@ These are the checks that catch things:
   With no `.mcaddon` in `versions/<version>/run/addons/`, every mode reports that there was nothing
   to test and still passes.
 
+- **`tools/scene/scene.py`** runs a scene inside the game with nobody at the keyboard. `verify.py`
+  types into a server console, which reaches everything a server can be asked and nothing a player
+  does; the models, the attachables, the forms and every script path carrying a player only run once
+  somebody is in a world.
+
+  ```bash
+  python3 tools/scene/scene.py --version 26.2            # every scene
+  python3 tools/scene/scene.py --version 26.2 --scene entities
+  ```
+
+  A scene is a list of commands and the lines that have to appear afterwards. The commands are
+  written into a datapack in the world's own `datapacks/`, in a function tagged `minecraft:load`, so
+  the game runs them itself as the world opens. Nothing is typed and no window has to be focused. A
+  picture of the window is kept beside the log, and the datapack is removed again afterwards.
+
+  It needs a saved world in `versions/<version>/run/saves/`, and it reads the entity names to place
+  out of whatever packs are installed, so a checkout with no add-on still runs and simply places
+  nothing. **Only commands every supported version spells the same way belong in a scene**: 26
+  renamed the game rules, and one command that will not parse takes the whole function with it.
+
 - **`tools/census/script.py`** says how much of the published script API this mod offers, which is
   the one measurement `/mcaddon scripts` cannot make. That report names what a *loaded pack* asked
   for and did not get, so a pack that never opens a form says nothing about forms, and a surface no
@@ -236,6 +256,32 @@ These are the checks that catch things:
   Pass a geometry name it does not have and it lists the ones it does.
 - **`/mcaddon packs`** and **`/mcaddon scripts`** in game report what loaded and what a pack asked
   for that is not implemented.
+- **`tools/census/components.py`** measures the other direction. The in-game reports only see what a
+  loaded pack happened to ask for, so they can say nothing about a feature no pack used. This reads
+  the vocabulary Mojang publishes and the names this mod acts on, and prints coverage per surface
+  plus every missing name. No pack, no game.
+
+  ```bash
+  git clone --depth 1 https://github.com/Mojang/bedrock-samples scratchpad/bedrock/bedrock-samples
+  python3 tools/census/components.py            # prints the table and the gaps
+  python3 tools/census/components.py --strict   # exits non-zero while anything is missing
+  ```
+
+  The published side comes from `metadata/` in that checkout: the entity component schemas and the
+  entity docs, the engine's Molang query and function lists, and the block and item component
+  schemas. With `metadata/` absent it falls back to the component names the vanilla behaviour pack's
+  own entities use, which is a lower bound rather than the vocabulary. `scratchpad/` is gitignored,
+  so the checkout is never committed.
+
+  The mod's side is read out of the source: the `IMPLEMENTED` declarations in `AddonEntities`,
+  `AddonItems` and `AddonBlocks`, and the `case "..."` labels in `AddonEntity.addGoals`,
+  `EntityEvents.applyComponent`, `Filter.evaluate`, `AddonQueries.query` and `MolangMath.call`. A
+  name added to one of those switches counts the moment it is added.
+
+  The run ends with two lists worth reading. Names in the source that the published vocabulary does
+  not contain are stale or misspelt. Names an `IMPLEMENTED` declaration carries with no reader of
+  their own are either a component Java does for every mob anyway, which is why the declaration
+  names it, or a coverage claim nothing backs; each declaration's docblock says which it allows.
 
 ## Conventions
 
@@ -279,7 +325,9 @@ tools/testpack/              The three add-ons the harness checks against, and t
 tools/verify/verify.py       End to end harness: drives a dev server and checks a conversion
 tools/preview/render.py      Offline model renderer
 tools/molang/MolangCheck.java  Molang conformance harness
+tools/census/components.py   Coverage of Bedrock's published vocabulary, no pack and no game
 tools/census/script.py       How much of the published script API this mod offers
+tools/scene/scene.py         Scenes run inside the game, with nobody at the keyboard
 
 src/main/java/at/ioexception/mcaddon/
   pack/                      Discovery, manifests, dependency order

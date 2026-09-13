@@ -65,7 +65,7 @@ WRITTEN = (
 )
 
 # Words the patterns above pick up that name no member of the class.
-NOT_MEMBERS = frozenset({"constructor", "get", "set", "if", "for", "while", "return", "switch"})
+NOT_MEMBERS = frozenset({"constructor", "if", "for", "while", "return", "switch", "catch"})
 
 # The definitions list a constructor to mark it private. A pack never calls one as a member.
 PUBLISHED_SKIP = frozenset({"constructor"})

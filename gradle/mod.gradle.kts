@@ -233,10 +233,22 @@ project.tasks.named<Jar>("jar") {
  * somebody who used something. `-PquickPlay=<world>` hands the game a save to load on startup.
  */
 val quickPlayWorld = project.findProperty("quickPlay") as String?
-if (!quickPlayWorld.isNullOrBlank()) {
+val windowSize = project.findProperty("windowSize") as String?
+
+/** What the game is told on startup, beyond what Loom already passes it. */
+val clientArgs = buildList {
+    if (!quickPlayWorld.isNullOrBlank()) addAll(listOf("--quickPlaySingleplayer", quickPlayWorld))
+    // A window the size of a postage stamp makes a captured scene unreadable.
+    if (!windowSize.isNullOrBlank()) {
+        val across = windowSize.split("x")
+        if (across.size == 2) addAll(listOf("--width", across[0], "--height", across[1]))
+    }
+}
+
+if (clientArgs.isNotEmpty()) {
     val loom = project.extensions.getByName("loom")
     val runs = loom.javaClass.getMethod("getRuns").invoke(loom)
     val client = runs.javaClass.getMethod("getByName", String::class.java).invoke(runs, "client")
     client.javaClass.getMethod("programArgs", Array<String>::class.java)
-        .invoke(client, arrayOf("--quickPlaySingleplayer", quickPlayWorld))
+        .invoke(client, clientArgs.toTypedArray())
 }
