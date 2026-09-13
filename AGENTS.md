@@ -153,6 +153,13 @@ These are the checks it runs, and what each one catches:
   the ember's own events, runs a command as the ember and plays a clip whose timeline raises a
   second event. Each of the three kinds of statement leaves a mark a game test asks the world about,
   so a reader that stopped running shows up as an assertion rather than as a count.
+
+  The ember also carries a component group holding one marker, the two events that switch it on and
+  off, and a third event whose `has_component` filter asks for that marker. Nearly everything a
+  Bedrock pack switches on partway through lives in a group rather than at the top, so three game
+  tests ask what a group is worth: that the marker is published while the group is on and cleared
+  when it goes, that a filter asking `has_component` sees it, and that the live set is built again
+  from what was stored rather than lost with the chunk.
   Two more entities are there for what a mob walking about never reaches. One is a projectile with
   hit boxes wider than the box it collides in; the other shoots it, rides rails, remembers what comes
   near it and dies the ender dragon's long death. A third file describes `minecraft:player`, which is
@@ -663,6 +670,32 @@ clips staying at a falling weight while the state it moved to comes up.
   reported to the author; a kind in neither is a directory the mod passes over without a word. The
   run also names any path declared as read whose own literal appears in no other source file, which
   is a coverage claim with no reader behind it.
+- **`tools/census/declaration.py`** measures the one thing a count of names cannot: *where* a pack
+  declares a component, against where the mod reads it from. Every other census here is satisfied by
+  the name being present on both sides, so a component read off the top level of a definition while
+  every published pack writes it inside a component group counts as answered and answers nothing.
+
+  ```bash
+  python3 tools/census/declaration.py            # the table, then what no read can see a group of
+  python3 tools/census/declaration.py --strict   # exits non-zero while one stands
+  ```
+
+  Bedrock puts a component in a group whenever it is something the entity becomes rather than
+  something it is: `minecraft:is_saddled` arrives with the saddle and `minecraft:ageable` with being
+  young. Of the thirty-five vanilla entities that age, one writes `minecraft:ageable` at the top
+  level, so a reader asking the definition answers for almost no published pack.
+
+  The published side is how often each component appears at the top level of a vanilla entity and how
+  often only inside one of its groups. The mod's side is the call each name is read through:
+  `declaresNow` and `liveComponent` see the live set, `componentBody` sees every group whether it is
+  on or not, a `case` in `EntityEvents.applyComponent` sees only the moment a group arrives, and
+  `declares` and `components().get` see the top level alone. A goal is left out, because
+  `collectBehaviours` takes the union of both sides before the entity exists, and so is a marker,
+  because the markers are published together off one list.
+
+  **The `read` column ranks the work rather than deciding it.** A component read as the entity type
+  is built, such as its size, can be read no other way, and `elsewhere` means only that no recognised
+  call names that literal.
 
 ## Conventions
 
@@ -712,6 +745,7 @@ tools/census/commands.py     Coverage of Bedrock's published command dialect
 tools/census/particles.py    Coverage of Bedrock's published particle format
 tools/census/data.py         The same, for loot tables, recipes and trade tables
 tools/census/packfiles.py    Coverage of the file kinds a pack may ship, against the ones read
+tools/census/declaration.py  Where a pack declares a component, against where the mod reads it
 tools/checkall.sh            Every check, in the order that fails fastest
 tools/census/script.py       How much of the published script API this mod offers
 tools/scene/scene.py         Scenes run inside the game, with nobody at the keyboard

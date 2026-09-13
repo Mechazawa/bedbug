@@ -98,7 +98,7 @@ public class AddonEntity extends PathfinderMob
         super(type, level);
         this.definition = AddonEntities.definitionOf(type);
         if (definition != null) {
-            age = Age.tryFrom(definition);
+            age = Age.tryFrom(this);
             anger = Anger.tryFrom(definition);
             genetics = Genetics.tryFrom(definition);
             rails = Rails.tryFrom(this);
@@ -167,6 +167,28 @@ public class AddonEntity extends PathfinderMob
      */
     public java.util.Set<String> activeGroups() {
         return activeGroups;
+    }
+
+    /** The prefix the live set of component groups is written under, one property per group. */
+    public static final String GROUP = "group.";
+
+    /**
+     * Reads the live component groups back off the entity's own stored state.
+     *
+     * Which groups are on is what a pack changed about the entity rather than what it declared, so
+     * it has to survive the chunk being written out and read back: a creeper struck by lightning is
+     * charged until something uncharges it. Each group is already stored as a property of its own,
+     * because the drawing side branches on `q.had_component_group`, and this is the other end of
+     * that: the set the server decides with is built again from what was stored.
+     */
+    public void restoreGroups() {
+        if (isClientSide() || definition == null || ServerHooks.state() == null) return;
+
+        for (String group : definition.componentGroups().keySet()) {
+            if (Boolean.TRUE.equals(value(GROUP + group))) activeGroups.add(group);
+        }
+        publishMarkers();
+        refreshAge();
     }
 
     /** When `minecraft:timer` next fires, in ticks of this entity's own age. Negative until set. */
@@ -336,12 +358,7 @@ public class AddonEntity extends PathfinderMob
         }
         if (declares("minecraft:is_hidden_when_invisible")) setInvisible(isInvisible());
 
-        for (String marker : MARKERS) {
-            if (!declares(marker)) continue;
-
-            ServerHooks.state().setProperty(getUUID(),
-                marker.substring("minecraft:".length()), true);
-        }
+        publishMarkers();
 
         // Bedrock names the kind of pathfinding; Java asks whether the navigator may take each route.
         PathNavigation navigation = getNavigation();
@@ -381,8 +398,6 @@ public class AddonEntity extends PathfinderMob
             bossBar = Platform.bossBar(getDisplayName());
             bossBar.setDarkenScreen(number(definition, "minecraft:boss", "should_darken_sky", 0) != 0);
         }
-        // What a pack's render controller branches on, so a young entity is drawn as one.
-        if (age != null && age.baby()) ServerHooks.state().setProperty(getUUID(), "is_baby", true);
 
         if (declares("minecraft:default_look_angle")) {
             float angle = (float) number(definition, "minecraft:default_look_angle", "value", 0);
@@ -441,6 +456,28 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
+     * Publishes each marker the pack mentions as the flag its own Molang reads back.
+     *
+     * Bedrock states nearly every one of them inside a component group rather than at the top: a
+     * horse carries `minecraft:is_saddled` only while its saddled group is on, and a sheep carries
+     * `minecraft:is_sheared` until it eats grass and the group goes again. So each is worked out
+     * from what is on the entity at this moment rather than set once, and a flag whose group has
+     * gone is published as false. A marker the pack names nowhere is left off the entity, because a
+     * query about one reads false from its absence.
+     */
+    public void publishMarkers() {
+        for (String marker : MARKERS) {
+            boolean mentioned = definition.components().containsKey(marker)
+                || definition.componentGroups().values().stream().anyMatch(group -> group.has(marker));
+            if (mentioned) setValue(marker.substring("minecraft:".length()), declaresNow(marker));
+        }
+        // Being young is the same kind of fact and the client cannot work it out for itself: the
+        // component groups live on the server, and Java syncs no age for an entity that is not one
+        // of its own ageing mobs.
+        setValue("is_baby", isBaby());
+    }
+
+    /**
      * Whether a component is on the entity at this moment, in its own list or in a live group.
      *
      * A pack that switches a component on partway through writes it into a component group rather
@@ -458,6 +495,45 @@ public class AddonEntity extends PathfinderMob
     private String text(String component, String field) {
         com.google.gson.JsonObject body = definition.components().get(component);
         return body == null ? null : at.ioexception.mcaddon.util.Json.text(body, field, null);
+    }
+
+    /**
+     * The body of a component the entity carries at this moment, or null where it carries none.
+     *
+     * A group the entity has not been given answers nothing here, which is the difference from
+     * {@link #componentBody}: this is for a component whose presence is itself the state, where
+     * reading one out of a group that is off says the entity is something it is not.
+     */
+    public com.google.gson.JsonObject liveComponent(String component) {
+        if (definition == null) return null;
+
+        com.google.gson.JsonObject declared = definition.components().get(component);
+        if (declared != null) return declared;
+
+        return activeGroups.stream()
+            .map(definition.componentGroups()::get)
+            .filter(group -> group != null && group.has(component)
+                && group.get(component).isJsonObject())
+            .map(group -> group.getAsJsonObject(component))
+            .findFirst()
+            .orElse(null);
+    }
+
+    /**
+     * Builds the growing-up count again over what the entity carries now.
+     *
+     * Bedrock states `minecraft:ageable` inside the component group that makes an entity young
+     * rather than on the entity itself, because only a young one grows: of the thirty-five vanilla
+     * entities that age, one writes it at the top level. So the count begins when that group arrives
+     * and ends when it goes. A count already running is left where it is, because the entity has
+     * already spent part of its wait.
+     */
+    public void refreshAge() {
+        if (liveComponent("minecraft:ageable") == null) {
+            age = null;
+        } else if (age == null) {
+            age = Age.tryFrom(this);
+        }
     }
 
     /**
@@ -778,8 +854,7 @@ public class AddonEntity extends PathfinderMob
 
     /** The first seat a `minecraft:rideable` component names, or null when it names none. */
     private net.minecraft.world.phys.Vec3 seat() {
-        com.google.gson.JsonObject body = definition == null
-            ? null : definition.components().get("minecraft:rideable");
+        com.google.gson.JsonObject body = liveComponent("minecraft:rideable");
         com.google.gson.JsonArray seats = body == null ? null : body.getAsJsonArray("seats");
         if (seats == null || seats.isEmpty() || !seats.get(0).isJsonObject()) return null;
 
@@ -824,7 +899,7 @@ public class AddonEntity extends PathfinderMob
      * describes is carried out here.
      */
     private boolean fed(Player player, InteractionHand hand) {
-        com.google.gson.JsonObject breedable = definition.components().get("minecraft:breedable");
+        com.google.gson.JsonObject breedable = liveComponent("minecraft:breedable");
         if (breedable == null || !breedsWith(breedable, player.getItemInHand(hand))) return false;
 
         if (!player.getAbilities().instabuild) player.getItemInHand(hand).shrink(1);
@@ -1061,7 +1136,7 @@ public class AddonEntity extends PathfinderMob
 
     /** Marks a newly born one as a baby, which a pack's render controller reads as `q.is_baby`. */
     void setYoung() {
-        ServerHooks.state().setProperty(getUUID(), "is_baby", true);
+        setValue("is_baby", true);
     }
 
     /**
@@ -1208,8 +1283,7 @@ public class AddonEntity extends PathfinderMob
      * list is honoured by refusing anything outside it.
      */
     public boolean canBeLeashedTo(net.minecraft.world.entity.Entity holder) {
-        com.google.gson.JsonObject component = definition == null
-            ? null : definition.components().get("minecraft:leashable_to");
+        com.google.gson.JsonObject component = liveComponent("minecraft:leashable_to");
         com.google.gson.JsonArray kinds = component == null
             ? null : component.getAsJsonArray("leash_entity_type_filters");
         if (kinds == null) return true;
@@ -3266,7 +3340,7 @@ public class AddonEntity extends PathfinderMob
     private void growUp() {
         if (age == null || !age.advance(1)) return;
 
-        ServerHooks.state().setProperty(getUUID(), "is_baby", false);
+        setValue("is_baby", false);
         fire(age.grownEvent());
     }
 
@@ -3981,8 +4055,7 @@ public class AddonEntity extends PathfinderMob
 
     /** True when one of the pack's interactions applied, which is what consumes the click. */
     private boolean interact(Player player) {
-        com.google.gson.JsonObject component = definition == null
-            ? null : definition.components().get("minecraft:interact");
+        com.google.gson.JsonObject component = liveComponent("minecraft:interact");
         if (component == null) return false;
 
         for (com.google.gson.JsonElement element

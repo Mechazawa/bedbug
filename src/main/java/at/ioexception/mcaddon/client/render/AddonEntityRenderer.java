@@ -169,7 +169,7 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
                 (pose, buffer) -> {
                     PoseStack local = new PoseStack();
                     local.last().set(pose);
-                    BedrockModelRenderer.render(pass.geometry(), animator, pass::hides, pass.shift(),
+                    BedrockModelRenderer.render(pass.geometry(), animator, pass.visibility()::hides, pass.shift(),
                         local, buffer, pass.light(light), OverlayTexture.NO_OVERLAY, pass.colour());
                 });
         }
@@ -198,7 +198,7 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
         for (Attachables.Drawn each : drawn(entity, binding, animator, partialTick)) {
             AddonModels.Pass pass = each.pass();
             VertexConsumer buffer = buffers.getBuffer(renderTypeOf(pass));
-            BedrockModelRenderer.render(pass.geometry(), each.animator(), pass::hides, pass.shift(),
+            BedrockModelRenderer.render(pass.geometry(), each.animator(), pass.visibility()::hides, pass.shift(),
                 poseStack, buffer, pass.light(light), OverlayTexture.NO_OVERLAY, pass.colour());
         }
         poseStack.popPose();

@@ -31,6 +31,28 @@ public final class RenderControllerParser {
     private RenderControllerParser() {
     }
 
+    /**
+     * A list of bone rules, each rule an expression per bone or family of them.
+     *
+     * The order is what a rule means: `part_visibility` and `materials` both let a later rule answer
+     * for a bone an earlier one already matched, and one rule object can hold the wildcard and the
+     * bones overriding it together. So the declaration order is kept both between rules and inside
+     * one, which a map ordered any other way would lose.
+     */
+    private static List<Map<String, MolangExpression>> rules(JsonObject json, String field) {
+        List<Map<String, MolangExpression>> rules = new ArrayList<>();
+        if (!json.has(field)) return List.copyOf(rules);
+
+        for (JsonElement rule : json.getAsJsonArray(field)) {
+            Map<String, MolangExpression> parsed = new LinkedHashMap<>();
+            for (Map.Entry<String, JsonElement> bone : rule.getAsJsonObject().entrySet()) {
+                parsed.put(bone.getKey(), MolangParser.parse(bone.getValue().getAsString()));
+            }
+            rules.add(java.util.Collections.unmodifiableMap(parsed));
+        }
+        return List.copyOf(rules);
+    }
+
     public static RenderController read(String name, JsonObject json) {
         AddonEntities.unsupportedFields("render controller", json, UNREAD);
 
@@ -41,27 +63,8 @@ public final class RenderControllerParser {
             }
         }
 
-        List<Map<String, MolangExpression>> visibility = new ArrayList<>();
-        if (json.has("part_visibility")) {
-            for (JsonElement rule : json.getAsJsonArray("part_visibility")) {
-                Map<String, MolangExpression> parsed = new LinkedHashMap<>();
-                for (Map.Entry<String, JsonElement> bone : rule.getAsJsonObject().entrySet()) {
-                    parsed.put(bone.getKey(), MolangParser.parse(bone.getValue().getAsString()));
-                }
-                visibility.add(Map.copyOf(parsed));
-            }
-        }
-
-        List<Map<String, MolangExpression>> materials = new ArrayList<>();
-        if (json.has("materials")) {
-            for (JsonElement rule : json.getAsJsonArray("materials")) {
-                Map<String, MolangExpression> parsed = new LinkedHashMap<>();
-                for (Map.Entry<String, JsonElement> bone : rule.getAsJsonObject().entrySet()) {
-                    parsed.put(bone.getKey(), MolangParser.parse(bone.getValue().getAsString()));
-                }
-                materials.add(Map.copyOf(parsed));
-            }
-        }
+        List<Map<String, MolangExpression>> visibility = rules(json, "part_visibility");
+        List<Map<String, MolangExpression>> materials = rules(json, "materials");
 
         return new RenderController(
             name,

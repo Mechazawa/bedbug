@@ -1,6 +1,5 @@
 package at.ioexception.mcaddon.entity;
 
-import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -34,13 +33,18 @@ public final class Age {
         this.endScale = endScale;
     }
 
-    /** Null for an entity whose pack never said it was young to begin with. */
-    public static Age tryFrom(ServerEntityDefinition definition) {
-        JsonObject ageable = definition.components().get("minecraft:ageable");
+    /**
+     * Null for an entity that carries nothing saying it is young.
+     *
+     * The components are read off the entity rather than off its definition, because a pack states
+     * both of these inside the component group that makes the entity young rather than at the top.
+     */
+    public static Age tryFrom(AddonEntity entity) {
+        JsonObject ageable = entity.liveComponent("minecraft:ageable");
         if (ageable == null) return null;
 
         JsonObject growUp = ageable.getAsJsonObject("grow_up");
-        JsonObject scaling = definition.components().get("minecraft:scale_by_age");
+        JsonObject scaling = entity.liveComponent("minecraft:scale_by_age");
         return new Age(
             (int) (number(ageable, "duration", 1200) * 20),
             feedItems(ageable),

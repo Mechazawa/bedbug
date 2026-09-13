@@ -16,6 +16,11 @@
           "type": "bool",
           "default": false,
           "client_sync": true
+        },
+        "tp:saddle_seen": {
+          "type": "bool",
+          "default": false,
+          "client_sync": true
         }
       },
       "animations": {
@@ -89,6 +94,20 @@
         "value": 0.25
       }
     },
+    "component_groups": {
+      "tp:ember_saddled": {
+        "minecraft:is_saddled": {}
+      },
+      "tp:ember_young": {
+        "minecraft:ageable": {
+          "duration": 1200,
+          "grow_up": {
+            "event": "tp:ember_kindle",
+            "target": "self"
+          }
+        }
+      }
+    },
     "events": {
       "tp:ember_kindle": {
         "set_property": {
@@ -98,6 +117,31 @@
       "tp:ember_glow": {
         "set_property": {
           "tp:glowing": true
+        }
+      },
+      "tp:ember_saddle": {
+        "add": {
+          "component_groups": ["tp:ember_saddled"]
+        }
+      },
+      "tp:ember_unsaddle": {
+        "remove": {
+          "component_groups": ["tp:ember_saddled"]
+        }
+      },
+      "tp:ember_grow_young": {
+        "add": {
+          "component_groups": ["tp:ember_young"]
+        }
+      },
+      "tp:ember_look_for_saddle": {
+        "filters": {
+          "test": "has_component",
+          "subject": "self",
+          "value": "minecraft:is_saddled"
+        },
+        "set_property": {
+          "tp:saddle_seen": true
         }
       }
     }
