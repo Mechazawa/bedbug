@@ -80,12 +80,6 @@ public final class AddonItems {
     }
 
     /**
-     * The entity an item launches when something fires it.
-     *
-     * `minecraft:projectile` on the ammunition says what flies. Ammunition with no such component is
-     * one of the game's own, where the entity carries the item's name: an arrow fires an arrow.
-     */
-    /**
      * The component names a pack wrote on an item, which its filters ask about by name.
      *
      * Java keeps no such list on an item, and only the components this mod acts on leave any trace
@@ -96,6 +90,12 @@ public final class AddonItems {
         return COMPONENTS.getOrDefault(item, Set.of());
     }
 
+    /**
+     * The entity an item launches when something fires it.
+     *
+     * `minecraft:projectile` on the ammunition says what flies. Ammunition with no such component is
+     * one of the game's own, where the entity carries the item's name: an arrow fires an arrow.
+     */
     public static String projectileOf(Item ammunition) {
         String declared = PROJECTILES.get(ammunition);
         return declared != null ? declared : BuiltInRegistries.ITEM.getKey(ammunition).toString();
