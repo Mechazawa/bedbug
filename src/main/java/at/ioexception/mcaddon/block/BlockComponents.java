@@ -12,6 +12,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockBehaviour;
@@ -48,17 +49,78 @@ import java.util.Map;
  * @param placement      what has to be beside the block for it to stay, empty when anything does
  * @param events         the pack's own events, or null when the block names none
  * @param dynamicProperties whether a script may store values on each block of this kind separately
+ * @param chestObstruction what a chest opening in the space below this block is allowed to do
+ * @param support        the shape other blocks rest on, or null for the one the collision box gives
+ * @param connections    which of the blocks that reach sideways may reach this one
  */
 public record BlockComponents(VoxelShape collision, VoxelShape selection, int lightDampening,
     Component craftingTitle, int catchChance, int destroyChance, Redstone redstone,
     List<Placement> placement, BlockEvents events, List<String> scripted,
-    boolean dynamicProperties) {
+    boolean dynamicProperties, ChestObstruction chestObstruction, VoxelShape support,
+    Connections connections) {
 
     /** The explosion resistance Java gives bedrock, which no blast reaches. */
     private static final float BLAST_PROOF = 3600000f;
 
+    /**
+     * The post of a Java fence, which is what `minecraft:support` calls a fence shape.
+     *
+     * Java measures a shape across the whole block and Bedrock writes the same post as six to ten
+     * sixteenths on both horizontal axes.
+     */
+    private static final VoxelShape FENCE_POST = Shapes.box(0.375, 0, 0.375, 0.625, 1, 0.625);
+
     /** What `minecraft:redstone_producer` puts out, and which faces of the block carry it. */
     public record Redstone(int power, List<Direction> connected, Direction strong) {
+    }
+
+    /**
+     * Which of the blocks that reach sideways `minecraft:connection_rule` lets reach this one.
+     *
+     * Java asks three separate questions, one for fences, one for walls and one for panes and bars,
+     * and each of them first asks whether the face turned towards it is full. That shared first
+     * question is where `none` is answered; the other two values are answered per asker.
+     */
+    public enum Connections {
+        NONE, ONLY_FENCES, ALL;
+
+        /** Bedrock's default is `all`, and so is anything written here that names no type. */
+        static Connections of(String named) {
+            return switch (named == null ? "" : named) {
+                case "none" -> NONE;
+                case "only_fences" -> ONLY_FENCES;
+                default -> ALL;
+            };
+        }
+    }
+
+    /**
+     * Whether a chest may open in the space below this block.
+     *
+     * Java asks the block above a chest whether it conducts redstone, which for a pack's own block
+     * is whatever `minecraft:redstone_conductivity` said and has nothing to do with the lid. This
+     * answers the question Bedrock asks instead, so the two components stay apart.
+     */
+    public enum ChestObstruction {
+        ALWAYS, NEVER, SHAPE;
+
+        /** Bedrock's default is `shape`, and so is anything written here that names no rule. */
+        static ChestObstruction of(String named) {
+            return switch (named == null ? "" : named) {
+                case "always" -> ALWAYS;
+                case "never" -> NEVER;
+                default -> SHAPE;
+            };
+        }
+
+        /** A `shape` rule blocks the lid where the block fills its own space, as both editions do. */
+        public boolean blocks(BlockState state, BlockGetter level, BlockPos position) {
+            return switch (this) {
+                case ALWAYS -> true;
+                case NEVER -> false;
+                case SHAPE -> state.isCollisionShapeFullBlock(level, position);
+            };
+        }
     }
 
     /** One `minecraft:placement_filter` condition: the faces it may sit against, and against what. */
@@ -91,7 +153,48 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
             (int) number(components, "minecraft:flammable", "destroy_chance_modifier", 20),
             redstone(components), placement(components),
             BlockEvents.of(definition, properties), scripted(components),
-            flag(components, "minecraft:block_entity", "dynamic_properties"));
+            flag(components, "minecraft:block_entity", "dynamic_properties"),
+            ChestObstruction.of(text(components, "minecraft:chest_obstruction", "obstruction_rule")),
+            support(components), connections(components));
+    }
+
+    /**
+     * Which blocks `minecraft:connection_rule` lets reach across to this one.
+     *
+     * `only_fences` and the directions the rule may be narrowed to are separate questions per
+     * asker, and the one Java asks a pane or a bar carries neither the asker nor the direction, so
+     * both are reported and the rest of the rule still decides.
+     */
+    private static Connections connections(JsonObject components) {
+        if (!components.has("minecraft:connection_rule")) return Connections.ALL;
+
+        JsonObject rule = object(components, "minecraft:connection_rule");
+        if (rule.has("enabled_directions")) {
+            AddonEntities.unsupported("minecraft:connection_rule enabled_directions");
+        }
+
+        Connections accepted =
+            Connections.of(text(components, "minecraft:connection_rule", "accepts_connections_from"));
+        if (accepted == Connections.ONLY_FENCES) {
+            AddonEntities.unsupported("minecraft:connection_rule only_fences");
+        }
+        return accepted;
+    }
+
+    /**
+     * The shape `minecraft:support` asks other blocks to rest on, or null to keep Java's own.
+     *
+     * A stair shape is read off the block's facing and its upper or lower half, which Bedrock
+     * carries in the `minecraft:placement_direction` traits. A pack's traits become no Java state
+     * here, so a block asking for one is reported and keeps the shape its collision box gives.
+     */
+    private static VoxelShape support(JsonObject components) {
+        String shape = text(components, "minecraft:support", "shape");
+        if (shape == null) return null;
+        if ("fence".equals(shape)) return FENCE_POST;
+
+        AddonEntities.unsupported("minecraft:support " + shape);
+        return null;
     }
 
     /**
@@ -258,6 +361,8 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
             *///?}
         }
 
+        properties = precipitation(components, properties);
+
         BlockBehaviour.OffsetType offset = offsetType(components);
         if (offset != BlockBehaviour.OffsetType.NONE) properties = properties.offsetType(offset);
 
@@ -266,6 +371,35 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
 
         MapColor colour = mapColour(components);
         return colour == null ? properties : properties.mapColor(colour);
+    }
+
+    /**
+     * What `minecraft:precipitation_interactions` asks rain and snow to do here.
+     *
+     * Java decides both from one switch: a block is in the motion-blocking heightmap or it is not,
+     * and rain stops at the highest block that is. `forceSolidOn` and `forceSolidOff` set that
+     * switch whatever shape the pack gave the block, and they move what else reads it, so a block
+     * declaring no rule of its own keeps the answer its collision box gives.
+     *
+     * Snow settling on top is a second question, asked of the face below it, and the tag the
+     * declaration joins is what answers it for a block whose top face is not full.
+     */
+    private static BlockBehaviour.Properties precipitation(JsonObject components,
+        BlockBehaviour.Properties properties) {
+        String behaviour = text(components, "minecraft:precipitation_interactions",
+            "precipitation_behavior");
+        if (behaviour == null) return properties;
+
+        return switch (behaviour) {
+            case "none" -> properties.forceSolidOff();
+            case "obstruct_rain", "obstruct_rain_accumulate_snow" -> properties.forceSolidOn();
+            default -> {
+                // Bedrock's `snowlogging` puts snow inside the block's own space, which Java keeps
+                // as a block of its own standing on top and has no second occupant for.
+                AddonEntities.unsupported("minecraft:precipitation_interactions " + behaviour);
+                yield properties;
+            }
+        };
     }
 
     /** The component is written either as the bare word or as an object wrapping it under `value`. */
@@ -568,6 +702,13 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
         // Java decides what a leash can be tied to from a tag rather than from the block, so a
         // block a pack declared leashable joins the tag that already means it.
         if (definition.components().has("minecraft:leashable")) tags.add("minecraft:fences");
+
+        // Snow settles where the face below it is full, and a tag is how Java says a block carries
+        // it anyway, which is what a pack asking for snow to gather here needs.
+        if ("obstruct_rain_accumulate_snow".equals(text(definition.components(),
+            "minecraft:precipitation_interactions", "precipitation_behavior"))) {
+            tags.add(at.ioexception.mcaddon.platform.Platform.snowSupportTag());
+        }
 
         JsonElement component = definition.components().get("minecraft:tags");
         if (component == null || !component.isJsonArray()) return tags;

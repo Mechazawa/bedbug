@@ -6,6 +6,7 @@ import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
 import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.convert.SpawnEggAppearance;
 import at.ioexception.mcaddon.item.AddonScriptedItem;
+import at.ioexception.mcaddon.item.DurabilitySensor;
 import at.ioexception.mcaddon.item.AddonShooterItem;
 import at.ioexception.mcaddon.item.AddonThrowableItem;
 import at.ioexception.mcaddon.pack.BedrockPack;
@@ -46,6 +47,9 @@ public final class AddonItems {
     private static final Map<Item, Set<String>> COMPONENTS = new LinkedHashMap<>();
     private static final Map<Item, KineticTimings> KINETIC = new LinkedHashMap<>();
     private static final Map<Item, Float> COOLDOWNS = new LinkedHashMap<>();
+    private static final Map<Item, DurabilitySensor> SENSORS = new LinkedHashMap<>();
+    private static final Set<Item> OFF_HAND_REFUSED = new HashSet<>();
+    private static final Set<Item> LIQUID_CLIPPED = new HashSet<>();
 
     private AddonItems() {
     }
@@ -115,6 +119,43 @@ public final class AddonItems {
         }
     }
 
+    /**
+     * Whether the off hand refuses this stack.
+     *
+     * Bedrock takes nothing into that slot until `minecraft:allow_off_hand` lets it in, so every
+     * item a behaviour pack declares is kept out of it unless the pack asked otherwise. The game's
+     * own items are Java's business and keep Java's answer.
+     */
+    public static boolean refusedOffHand(net.minecraft.world.item.ItemStack stack) {
+        return OFF_HAND_REFUSED.contains(stack.getItem());
+    }
+
+    /**
+     * Whether holding this stack lets the crosshair stop at water and lava.
+     *
+     * `minecraft:liquid_clipped` is what asks for it, and Java casts the same ray for every item,
+     * so the question has to be asked of whatever is in hand at the moment it is cast.
+     */
+    public static boolean clipsLiquid(net.minecraft.world.item.ItemStack stack) {
+        return LIQUID_CLIPPED.contains(stack.getItem());
+    }
+
+    /**
+     * Shows what `minecraft:durability_sensor` asks for, as a pack's own item takes damage.
+     *
+     * The durability the sensor measures is what the stack has left, which Java counts from the
+     * other end as the damage done to it.
+     */
+    public static void durabilityLost(net.minecraft.world.item.ItemStack stack,
+        net.minecraft.world.entity.LivingEntity holder) {
+        DurabilitySensor sensor = SENSORS.get(stack.getItem());
+        if (sensor == null || !(holder.level() instanceof net.minecraft.server.level.ServerLevel level)) {
+            return;
+        }
+
+        sensor.reached(level, holder, stack.getMaxDamage() - stack.getDamageValue());
+    }
+
     public static void register(PackSet packs) {
         List<ItemDefinition> definitions = new ArrayList<>();
         for (BedrockPack pack : packs.packs()) {
@@ -161,6 +202,15 @@ public final class AddonItems {
         }
         float busyFor = definition.number("minecraft:cooldown", "duration", 0f);
         if (busyFor > 0f) COOLDOWNS.put(item, busyFor);
+
+        DurabilitySensor sensor = DurabilitySensor.tryFrom(definition);
+        if (sensor != null) SENSORS.put(item, sensor);
+
+        // The two editions disagree about the default: Java takes anything in the off hand and
+        // Bedrock takes nothing there until `allow_off_hand` says so, which is why a pack's own item
+        // is refused whether or not it declares the component.
+        if (!definition.declaredTrue("minecraft:allow_off_hand")) OFF_HAND_REFUSED.add(item);
+        if (definition.declaredTrue("minecraft:liquid_clipped")) LIQUID_CLIPPED.add(item);
 
         fuel(definition, item);
         compostable(definition, item);
@@ -828,7 +878,8 @@ public final class AddonItems {
         "minecraft:projectile", "minecraft:dyeable", "minecraft:should_despawn",
         "minecraft:shooter", "minecraft:storage_item", "minecraft:bundle_interaction",
         "minecraft:swing_duration", "minecraft:custom_components",
-        "minecraft:piercing_weapon", "minecraft:kinetic_weapon", "minecraft:damage_absorption");
+        "minecraft:piercing_weapon", "minecraft:kinetic_weapon", "minecraft:damage_absorption",
+        "minecraft:allow_off_hand", "minecraft:liquid_clipped", "minecraft:durability_sensor");
 
     private static Identifier identifier(String bedrock) {
         Names.Identifier split = Names.split(bedrock, "minecraft");

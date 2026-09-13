@@ -21,6 +21,20 @@
       "minecraft:damage_absorption": {
         "absorbable_causes": ["fire", "fireTick", "lava"]
       },
+      "minecraft:durability_sensor": {
+        "durability_thresholds": [
+          {
+            "durability": 24,
+            "particle_type": "basic_smoke",
+            "sound_event": "tp:sprite.chime"
+          },
+          {
+            "durability": 6,
+            "particle_type": "critical_hit",
+            "sound_event": "random.anvil_land"
+          }
+        ]
+      },
       "minecraft:display_name": {
         "value": "item.tp:visor.name"
       }

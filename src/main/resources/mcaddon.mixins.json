@@ -11,7 +11,13 @@
     "ItemEntityMixin",
     "ProjectileMixin",
     "ButtonBlockMixin",
-    "LeverBlockMixin"
+    "LeverBlockMixin",
+    "ChestBlockMixin",
+    "BlockConnectionMixin",
+    "ItemStackMixin",
+    "SlotMixin",
+    "PlayerActionMixin",
+    "EntityPickMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -156,6 +156,21 @@ def schema_properties(paths):
     return {key for path in paths for key in json.loads(text(path)).get("properties", {})}
 
 
+def block_doc_names(samples):
+    """The `Block Components` list in the block documentation module.
+
+    The block component schema leaves `minecraft:custom_components` out and the documentation
+    carries it, so a published side read from the schema alone calls that name stale. Reading both
+    is what the entity side already does.
+    """
+    document = json.loads(text(samples / "metadata/doc_modules/blocks.json"))
+    for node in document["nodes"]:
+        for child in node.get("nodes") or []:
+            if child.get("name") == "Block Components":
+                return doc_names(child.get("nodes") or [])
+    return set()
+
+
 def vanilla_components(samples, directory, root):
     """Every component name the vanilla behaviour pack's own files under `directory` declare.
 
@@ -227,9 +242,10 @@ def surfaces(samples):
         "block components",
         schema_properties(
             (metadata / "json_schemas/server/block_components").glob("*/Block Components.json"))
+        | block_doc_names(samples)
         | vanilla_components(samples, "behavior_pack/blocks", "minecraft:block"),
         literal_set(JAVA / "registry/AddonBlocks.java", "IMPLEMENTED = List.of"),
-        "the block component schema and the vanilla blocks"))
+        "the block component schema, the block docs and the vanilla blocks"))
     found.append(Surface(
         "item components",
         schema_properties((metadata / "json_schemas/server/item").glob("*/Components.json"))

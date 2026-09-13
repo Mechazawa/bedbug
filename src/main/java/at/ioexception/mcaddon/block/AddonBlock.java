@@ -145,6 +145,37 @@ public class AddonBlock extends Block {
         return collision == null ? super.getCollisionShape(state, level, position, context) : collision;
     }
 
+    @Override
+    public VoxelShape getBlockSupportShape(BlockState state, BlockGetter level, BlockPos position) {
+        VoxelShape support = components == null ? null : components.support();
+        return support == null ? super.getBlockSupportShape(state, level, position) : support;
+    }
+
+    /**
+     * Whether a fence, a wall or a pane is allowed to reach across to a block of this kind.
+     *
+     * All three ask Java the same first question, whether the face turned towards them is full, and
+     * `minecraft:connection_rule` saying `none` is what answers it here instead.
+     */
+    public boolean refusesConnections() {
+        return components != null
+            && components.connections() == BlockComponents.Connections.NONE;
+    }
+
+    /**
+     * Whether a chest may open in the space below a block of this kind.
+     *
+     * Java asks this of every block above a chest and answers it from redstone conductivity, which
+     * `minecraft:chest_obstruction` has nothing to do with, so the pack's own rule is answered here
+     * instead. Bedrock's default is the block's own shape, which is what a block declaring no rule
+     * of its own gets.
+     */
+    public boolean obstructsChest(BlockState state, BlockGetter level, BlockPos position) {
+        BlockComponents.ChestObstruction rule = components == null
+            ? BlockComponents.ChestObstruction.SHAPE : components.chestObstruction();
+        return rule.blocks(state, level, position);
+    }
+
     //? if >=26 {
     @Override
     protected int getLightDampening(BlockState state) {

@@ -11,6 +11,7 @@ still works:
 
     an item icon in each of the three shapes a pack may write it in
     a block with states and permutations, drawn with its own geometry
+    a block and an item declaring what only a mixin answers, each with one form that is reported
     a recipe of each of the five kinds that convert, and the tags deciding what each becomes
     a loot table and a trade table, each using every function and condition that converts
     two entities, one spawn egg naming a texture and one giving two colours

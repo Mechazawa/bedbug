@@ -390,8 +390,10 @@ These are the checks it runs, and what each one catches:
   ```
 
   The published side comes from `metadata/` in that checkout: the entity component schemas and the
-  entity docs, the engine's Molang query and function lists, and the block and item component
-  schemas. With `metadata/` absent it falls back to the component names the vanilla behaviour pack's
+  entity docs, the engine's Molang query and function lists, the block component schema together
+  with the block docs, and the item component schemas. The block docs are read beside the schema
+  because Mojang leaves `minecraft:custom_components` out of the schema and names it only in the
+  documentation. With `metadata/` absent it falls back to the component names the vanilla behaviour pack's
   own entities use, which is a lower bound rather than the vocabulary. `scratchpad/` is gitignored,
   so the checkout is never committed.
 
