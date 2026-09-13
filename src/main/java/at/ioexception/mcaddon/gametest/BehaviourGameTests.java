@@ -33,6 +33,9 @@ public final class BehaviourGameTests {
     /** The entity the synthetic pack declares, which every assertion about one uses. */
     private static final String ENTITY = "tp:ember";
 
+    /** The entity the synthetic pack declares young without giving it anything to grow into. */
+    private static final String YOUNG_ENTITY = "tp:sprite";
+
     /**
      * Taming an entity writes down whose it is, and the writing survives being read back.
      *
@@ -181,6 +184,33 @@ public final class BehaviourGameTests {
         helper.assertTrue(spawned instanceof net.minecraft.world.entity.Mob dressed
                 && !dressed.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.HEAD).isEmpty(),
             ENTITY + " names an equipment table and arrived wearing nothing.");
+        helper.succeed();
+    }
+
+    /**
+     * An entity whose pack declared it young reads as young.
+     *
+     * `minecraft:is_baby` is the flag for an entity that is young without growing up, and a pack's
+     * render controllers branch on it through `query.is_baby` to pick the geometry drawn for those
+     * proportions. A wrong answer picks the grown geometry for the body while the parts written for
+     * the young one keep their own place, so a hat lands above the head it belongs on.
+     */
+    @GameTest()
+    public void anEntityDeclaredYoungReadsAsYoung(GameTestHelper helper) {
+        EntityType<?> type = AddonEntities.typeOf(YOUNG_ENTITY);
+        if (type == null) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        Entity spawned = Platform.createMob(type, level);
+        BlockPos at = helper.absolutePos(STAND);
+        Platform.placeAt(spawned, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        level.addFreshEntity(spawned);
+
+        helper.assertTrue(spawned instanceof AddonEntity young && young.isBaby(),
+            YOUNG_ENTITY + " declares minecraft:is_baby and reads as grown.");
         helper.succeed();
     }
 

@@ -2,7 +2,16 @@
   "format_version": "1.10.0",
   "render_controllers": {
     "controller.render.tp.sprite": {
-      "geometry": "geometry.default",
+      "geometry": "query.is_baby ? geometry.young : geometry.default",
+      "materials": [
+        {
+          "*": "material.default"
+        }
+      ],
+      "textures": ["texture.default"]
+    },
+    "controller.render.tp.sprite.cap": {
+      "geometry": "geometry.cap",
       "materials": [
         {
           "*": "material.default"

@@ -11,7 +11,9 @@
         "default": "textures/entity/sprite"
       },
       "geometry": {
-        "default": "geometry.tp.sprite"
+        "default": "geometry.tp.sprite",
+        "young": "geometry.tp.sprite.young",
+        "cap": "geometry.tp.sprite.cap"
       },
       "animations": {
         "idle": "animation.tp.sprite.idle",
@@ -28,7 +30,10 @@
         "twinkle": "tp:sparkle",
         "pop": "tp:burst"
       },
-      "render_controllers": ["controller.render.tp.sprite"],
+      "render_controllers": [
+        "controller.render.tp.sprite",
+        "controller.render.tp.sprite.cap"
+      ],
       "spawn_egg": {
         "texture": "eggs",
         "texture_index": 1
