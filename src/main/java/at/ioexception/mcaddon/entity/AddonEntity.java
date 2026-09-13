@@ -440,11 +440,17 @@ public class AddonEntity extends PathfinderMob
      * How many riders the pack allows, which is what makes an entity rideable at all.
      *
      * Bedrock states the seats and Java asks the entity each time somebody tries to get on, so the
-     * count is read back out of the component rather than kept.
+     * count is read back out of the component rather than kept. `minecraft:behavior.player_ride_tamed`
+     * is the pack saying a player may only ride once the entity belongs to somebody, which is the one
+     * thing that behaviour decides, so it is answered here rather than as a goal.
      */
     @Override
     protected boolean canAddPassenger(net.minecraft.world.entity.Entity passenger) {
         if (definition == null || !declares("minecraft:rideable")) return false;
+        if (passenger instanceof Player && ownerUuid() == null
+            && definition.behaviours().contains("minecraft:behavior.player_ride_tamed")) {
+            return false;
+        }
         return getPassengers().size() < (int) number(definition, "minecraft:rideable", "seat_count", 1);
     }
 
@@ -1666,6 +1672,65 @@ public class AddonEntity extends PathfinderMob
                 case "minecraft:behavior.barter" -> goalSelector.addGoal(priority,
                     BarterGoal.bartering(this, componentBody(behaviour)));
 
+                // A wind-up held at range: a guardian's beam and a warden's boom.
+                case "minecraft:behavior.guardian_attack" -> goalSelector.addGoal(priority,
+                    BeamAttackGoal.beam(this, componentBody(behaviour)));
+                case "minecraft:behavior.sonic_boom" -> goalSelector.addGoal(priority,
+                    BeamAttackGoal.sonicBoom(this, componentBody(behaviour)));
+                case "minecraft:behavior.investigate_suspicious_location" ->
+                    goalSelector.addGoal(priority, new InvestigateGoal(this, componentBody(behaviour)));
+
+                case "minecraft:behavior.silverfish_merge_with_stone" ->
+                    goalSelector.addGoal(priority, SilverfishGoal.merging(this));
+                case "minecraft:behavior.silverfish_wake_up_friends" ->
+                    goalSelector.addGoal(priority, SilverfishGoal.wakingFriends(this));
+
+                case "minecraft:behavior.vex_random_move" ->
+                    goalSelector.addGoal(priority, new VexMoveGoal(this));
+                case "minecraft:behavior.vex_copy_owner_target" -> targetSelector.addGoal(priority,
+                    OwnerTargetGoal.whatTheOwnerIsAfter(this, componentBody(behaviour)));
+
+                case "minecraft:behavior.wither_random_attack_pos_goal" ->
+                    goalSelector.addGoal(priority,
+                        WitherGoal.loosingShots(this, componentBody(behaviour)));
+                case "minecraft:behavior.wither_target_highest_damage" ->
+                    targetSelector.addGoal(priority,
+                        WitherGoal.answeringTheWorstAttacker(this, componentBody(behaviour)));
+
+                case "minecraft:behavior.run_around_like_crazy" -> goalSelector.addGoal(priority,
+                    new BuckRiderGoal(this, componentBody(behaviour)));
+                case "minecraft:behavior.ocelot_sit_on_block" -> goalSelector.addGoal(priority,
+                    MoveToMatchingBlockGoal.sitOnBlock(this, componentBody(behaviour)));
+                case "minecraft:behavior.skeleton_horse_trap" -> goalSelector.addGoal(priority,
+                    new HorseTrapGoal(this, componentBody(behaviour)));
+                case "minecraft:behavior.defend_village_target" -> targetSelector.addGoal(priority,
+                    new DefendVillageGoal(this, componentBody(behaviour)));
+                case "minecraft:behavior.use_kinetic_weapon" -> goalSelector.addGoal(priority,
+                    new KineticWeaponGoal(this, componentBody(behaviour)));
+
+                case "minecraft:behavior.stay_near_noteblock" -> goalSelector.addGoal(priority,
+                    NoteblockGoal.stayingNear(this, componentBody(behaviour)));
+                case "minecraft:behavior.go_and_give_items_to_noteblock" ->
+                    goalSelector.addGoal(priority,
+                        NoteblockGoal.deliveringItems(this, componentBody(behaviour)));
+
+                // A dragon's flight and its three attacks, anchored on the place the entity is kept
+                // near rather than on the podium Java writes each of these phases around.
+                case "minecraft:behavior.dragonholdingpattern" ->
+                    goalSelector.addGoal(priority, DragonFlightGoal.circling(this));
+                case "minecraft:behavior.dragontakeoff" ->
+                    goalSelector.addGoal(priority, DragonFlightGoal.takingOff(this));
+                case "minecraft:behavior.dragonlanding" ->
+                    goalSelector.addGoal(priority, DragonFlightGoal.landing(this));
+                case "minecraft:behavior.dragonscanning" ->
+                    goalSelector.addGoal(priority, DragonFlightGoal.scanning(this));
+                case "minecraft:behavior.dragonchargeplayer" -> goalSelector.addGoal(priority,
+                    DragonAttackGoal.charging(this, componentBody(behaviour)));
+                case "minecraft:behavior.dragonstrafeplayer" -> goalSelector.addGoal(priority,
+                    DragonAttackGoal.strafing(this, componentBody(behaviour)));
+                case "minecraft:behavior.dragonflaming" -> goalSelector.addGoal(priority,
+                    DragonAttackGoal.flaming(this, componentBody(behaviour)));
+
                 case "minecraft:behavior.send_event" -> goalSelector.addGoal(priority,
                     SpellGoal.sendingEvents(this, componentBody(behaviour)));
                 case "minecraft:behavior.summon_entity" -> goalSelector.addGoal(priority,
@@ -2654,13 +2719,62 @@ public class AddonEntity extends PathfinderMob
         }
 
         boolean hurt = health < healthLastTick;
+        float lost = healthLastTick - health;
         healthLastTick = health;
         if (!hurt) return;
 
         lastHurtTick = tickCount;
+        recordDisturbance(getLastHurtByMob(), lost);
         annoy(getLastHurtByMob());
         raise("minecraft:on_hurt", getLastHurtByMob());
         if (getLastHurtByMob() instanceof Player) raise("minecraft:on_hurt_by_player", getLastHurtByMob());
+    }
+
+    /** How many attackers are kept a running total for, past which the smallest is dropped. */
+    private static final int ATTACKERS_KEPT = 8;
+
+    /** Where the entity was last hurt from, which is the one place a mob has reason to go and see. */
+    private net.minecraft.core.BlockPos disturbance;
+
+    /** What each attacker has taken off the entity, for the goal that answers the worst of them. */
+    private final java.util.Map<java.util.UUID, Float> damageTaken = new java.util.LinkedHashMap<>();
+
+    /** Where something last hurt the entity from, or null while nothing has. */
+    public net.minecraft.core.BlockPos disturbance() {
+        return disturbance;
+    }
+
+    /** Clears the place, so an entity that has been to look does not keep going back. */
+    public void forgetDisturbance() {
+        disturbance = null;
+    }
+
+    /** Whoever has taken the most health off the entity, or null while nobody has taken any. */
+    public java.util.UUID worstAttacker() {
+        return damageTaken.entrySet().stream()
+            .max(java.util.Map.Entry.comparingByValue())
+            .map(java.util.Map.Entry::getKey)
+            .orElse(null);
+    }
+
+    /**
+     * Notes where a hit came from and what it cost, on the tick the entity's health drops.
+     *
+     * The tally is kept to a handful of attackers by dropping the one that has done least, so an
+     * entity standing in a crowd for an hour holds a fixed number of entries rather than one per
+     * thing that has ever touched it.
+     */
+    private void recordDisturbance(net.minecraft.world.entity.Entity attacker, float lost) {
+        if (attacker == null) return;
+
+        disturbance = attacker.blockPosition();
+        damageTaken.merge(attacker.getUUID(), lost, Float::sum);
+        if (damageTaken.size() <= ATTACKERS_KEPT) return;
+
+        damageTaken.entrySet().stream()
+            .min(java.util.Map.Entry.comparingByValue())
+            .map(java.util.Map.Entry::getKey)
+            .ifPresent(damageTaken::remove);
     }
 
     /**

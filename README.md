@@ -90,6 +90,10 @@ Java form and run. The rest, which play a sound or a particle, deal damage, add 
 teleport, swing, spawn loot, or replace the block or the held item, are counted and named by
 `/mcaddon entities` instead, so a pack using one is told which response was dropped.
 
+**One ender dragon phase.** `behavior.dragondeath` is the animation a dragon plays while it dies.
+Java stops running a mob's goals the moment its health reaches zero, so a goal has no tick left to
+play anything in. The dragon's other seven phases are flown, and `/mcaddon entities` names this one.
+
 **Stencil-masked material passes.** A material's alpha testing, blending, culling and emissiveness
 all become the render type the pass is drawn with. What cannot follow is the stencil buffer itself:
 a pass that exists only to write a mask is left out rather than drawn as a shape that does not
