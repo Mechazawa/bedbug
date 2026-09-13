@@ -33,6 +33,7 @@ import zipfile
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 from threading import Thread
 
 USAGE = (__doc__ or "").splitlines()[0]
@@ -339,17 +340,31 @@ def console_script(identifiers: list[str], summons: int) -> list[tuple[float, st
     return steps
 
 
-def running(launch: Launch) -> set[int]:
-    """Every game of this kind running on this machine, whoever started it."""
+def running(launch: Launch, version: str) -> set[int]:
+    """Every game of this kind and this version running on this machine, whoever started it.
+
+    The version matters because the four are checked at the same time: each runs out of its own
+    directory, so one version's run must neither wait for another's nor kill it.
+    """
     found = subprocess.run(["pgrep", "-f", launch.signature], check=False,
                            capture_output=True, text=True)
-    return {int(one) for one in found.stdout.split() if one.isdigit()}
+    pids = {int(one) for one in found.stdout.split() if one.isdigit()}
+    return {pid for pid in pids if version in commandOf(pid)}
+
+
+def commandOf(pid: int) -> str:
+    """The full command a process was started with, or nothing when it has already gone."""
+    found = subprocess.run(["ps", "-o", "command=", "-p", str(pid)], check=False,
+                           capture_output=True, text=True)
+    return found.stdout
 
 
 @contextmanager
-def exclusive(root: Path, wait: float):
-    """Holds the harness lock, so two runs cannot fight over the port and the world lock.
+def exclusive(root: Path, wait: float, version: str):
+    """Holds this version's harness lock, so two runs cannot fight over its world and its port.
 
+    One lock per version rather than one for the whole harness: the four versions run out of four
+    directories on four ports, so only two runs of the same version have anything to fight over.
     The lock lives under `scratchpad/`, which git ignores, and is released when the process ends
     however it ends.
     """
@@ -359,7 +374,7 @@ def exclusive(root: Path, wait: float):
     if not ignore.exists():
         ignore.write_text("*\n")
 
-    path = scratchpad / "verify.lock"
+    path = scratchpad / f"verify-{version}.lock"
     # Append mode, so waiting for the lock does not blank the pid of whoever holds it.
     handle = path.open("a+")
     deadline = time.monotonic() + wait
@@ -385,6 +400,23 @@ def exclusive(root: Path, wait: float):
     finally:
         fcntl.flock(handle, fcntl.LOCK_UN)
         handle.close()
+
+
+def givePort(root: Path, version: str) -> None:
+    """Gives this version's server a port of its own, so four of them can be up at once.
+
+    A dedicated server binds one port and refuses to start when it is taken, and nothing here needs
+    a particular number: the harness never connects to it.
+    """
+    properties = root / "versions" / version / "run" / "server.properties"
+    port = 25565 + VERSIONS.index(version)
+    lines = []
+    if properties.is_file():
+        lines = [one for one in properties.read_text(encoding="utf-8").splitlines()
+                 if not one.startswith("server-port=")]
+    lines.append(f"server-port={port}")
+    properties.parent.mkdir(parents=True, exist_ok=True)
+    properties.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def free_world_lock(root: Path, version: str) -> None:
@@ -450,10 +482,12 @@ def play(root: Path, version: str, launch: Launch, ready: re.Pattern,
     """
     log = root / "build" / "verify" / f"{version}-{launch.name}.log"
     log.parent.mkdir(parents=True, exist_ok=True)
+    if launch.takes_commands:
+        givePort(root, version)
 
     lines: list[str] = []
     deadline = time.monotonic() + timeout
-    started_before = running(launch)
+    started_before = running(launch, version)
     command = ["./gradlew", f":{version}:{launch.task}", "--console=plain"]
     if quick_play:
         command.append(f"-PquickPlay={quick_play}")
@@ -497,10 +531,10 @@ def play(root: Path, version: str, launch: Launch, ready: re.Pattern,
     if launch.takes_commands and loaded:
         if not wait_until_exit(process, min(deadline, time.monotonic() + 30)):
             outcome = "killed on the deadline"
-            kill(process, started_before, launch)
+            kill(process, started_before, launch, version)
     elif process.poll() is None:
         outcome = "killed after loading" if loaded else "killed on the deadline"
-        kill(process, started_before, launch)
+        kill(process, started_before, launch, version)
 
     close_input(process)
     reader.join(timeout=5)
@@ -508,7 +542,7 @@ def play(root: Path, version: str, launch: Launch, ready: re.Pattern,
     # The next check refuses to start beside a running game, so wait for this one to leave the
     # process table rather than have it read as somebody else's.
     settle = time.monotonic() + 15
-    while running(launch) - started_before and time.monotonic() < settle:
+    while running(launch, version) - started_before and time.monotonic() < settle:
         time.sleep(1)
 
     free_world_lock(root, version)
@@ -542,7 +576,8 @@ def wait_until_exit(process: subprocess.Popen, deadline: float) -> bool:
     return False
 
 
-def kill(process: subprocess.Popen, started_before: set[int], launch: Launch) -> None:
+def kill(process: subprocess.Popen, started_before: set[int], launch: Launch,
+         version: str) -> None:
     """Ends this run's process group, then the game the Gradle daemon forked on its behalf.
 
     The Gradle daemon outlives a build and owns the forked game, so the group alone does not reach
@@ -558,7 +593,7 @@ def kill(process: subprocess.Popen, started_before: set[int], launch: Launch) ->
             break
         time.sleep(2)
 
-    for pid in running(launch) - started_before:
+    for pid in running(launch, version) - started_before:
         try:
             os.kill(pid, signal.SIGKILL)
         except (ProcessLookupError, PermissionError):
@@ -623,9 +658,9 @@ def addon_source(root: Path, version: str, verdict: Verdict) -> tuple[list[Path]
     return addons, identifiers, expected
 
 
-def occupied(launch: Launch, verdict: Verdict) -> bool:
-    """Whether somebody else's game of this kind is up, which this harness will not disturb."""
-    others = running(launch)
+def occupied(launch: Launch, verdict: Verdict, version: str) -> bool:
+    """Whether somebody else's game of this kind and version is up, which this will not disturb."""
+    others = running(launch, version)
     if not others:
         return False
     verdict.fail(f"a dev {launch.name} is already running",
@@ -667,7 +702,7 @@ def pack_gametests(lines: list[str], verdict: Verdict) -> None:
 
 def check_server(root: Path, version: str, timeout: float, summons: int, verbose: bool) -> Verdict:
     verdict = Verdict(f"{version} server")
-    if occupied(SERVER, verdict):
+    if occupied(SERVER, verdict, version):
         return verdict
 
     addons, identifiers, expected = addon_source(root, version, verdict)
@@ -704,7 +739,7 @@ def check_server(root: Path, version: str, timeout: float, summons: int, verbose
 def check_client(root: Path, version: str, timeout: float, hold: float, verbose: bool) -> Verdict:
     """Starts the client, which is the only half that loads models, textures and render controllers."""
     verdict = Verdict(f"{version} client")
-    if occupied(CLIENT, verdict):
+    if occupied(CLIENT, verdict, version):
         return verdict
 
     addons, _, expected = addon_source(root, version, verdict)
@@ -818,16 +853,24 @@ def main() -> int:
     destination = arguments.report or root / "build" / "verify" / "verdict.json"
     verdicts: list[Verdict] = []
 
-    # One lock for the whole run, because a server and a client of the same version share a world.
+    # One lock per version, because a server and a client of the same version share a world, and
+    # the four versions share nothing: four directories, four ports, four sets of processes. They
+    # are checked at the same time, which is most of what a whole run costs.
     if arguments.mode in ("run", "client", "all"):
-        with exclusive(root, arguments.lock_wait):
-            for version in versions:
+        def checkVersion(version: str) -> list[Verdict]:
+            found = []
+            with exclusive(root, arguments.lock_wait, version):
                 if arguments.mode in ("run", "all"):
-                    verdicts.append(check_server(
+                    found.append(check_server(
                         root, version, arguments.timeout, arguments.summons, arguments.verbose))
                 if arguments.mode in ("client", "all"):
-                    verdicts.append(check_client(
+                    found.append(check_client(
                         root, version, arguments.timeout, arguments.hold, arguments.verbose))
+            return found
+
+        with ThreadPoolExecutor(max_workers=len(versions)) as running_versions:
+            for found in running_versions.map(checkVersion, versions):
+                verdicts += found
 
     # After the games, because the conversion is what one of them wrote. A pack is converted again
     # once anything in it changes, so reading the cache before a game has run reads the last build's
