@@ -1,0 +1,19 @@
+{
+  "format_version": "1.21.120",
+  "minecraft:client_biome": {
+    "description": {
+      "identifier": "tp:glade"
+    },
+    "components": {
+      "minecraft:water_appearance": {
+        "surface_color": "#3f9bd4"
+      },
+      "minecraft:sky_color": {
+        "sky_color": "#79a6ff"
+      },
+      "minecraft:fog_appearance": {
+        "fog_identifier": "minecraft:fog_plains"
+      }
+    }
+  }
+}

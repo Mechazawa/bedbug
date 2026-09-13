@@ -136,6 +136,17 @@ server decides what happens; the client draws it.
   it is offered in; the brightness, height, difficulty, world age, distance, density, delay, the
   surface and underwater and lava markers and the blocks it may stand on are asked again of the
   spot the game is trying, so a mob that a pack said belongs on sand at night stays there.
+- The world a behaviour pack describes: the biomes it declares, the features it builds and the rules
+  that place them. A Bedrock biome states the climate a player feels and a list of tags, and both
+  become the band of Java's own climate space the biome is searched for in. A biome the pack's tags
+  put in the nether or the end is added to the list that world already searches, so it generates in
+  an ordinary world; one in the overworld is converted and registered and then reported, because
+  Java's overworld has no such list to add to. The colours the resource pack paints a biome with go
+  into it either way. A feature becomes a Java configured feature, and a feature rule becomes the
+  placed feature and the generation step beside it, hung at world load on every biome whose tags the
+  rule's own filter accepts. That last part is the direction Bedrock attaches from and the one a Java
+  biome cannot, because a Java biome lists the features it carries and nothing a data pack writes
+  reaches one from the other side.
 - Attachables: what any entity wears or holds, players and vanilla mobs included, animating on its
   own clock. A pack picks between several models for one item on a condition of its own, and what an
   attachable writes into whoever carries it reaches that entity's variables, so the layer it stands
@@ -209,7 +220,7 @@ compare what they read against the names this mod acts on:
 | Trade table fields | 100% |
 | Trade item functions | 80% |
 | Geometry, animation and controller fields | 93% |
-| Pack file kinds | 74% |
+| Pack file kinds | 83% |
 | `@minecraft/server` and friends | 100% |
 
 Every name in the remaining share is counted and shown by `/mcaddon entities` and `/mcaddon
@@ -462,55 +473,68 @@ colour. Each of the four is read by Bedrock only under Vibrant Visuals, its defe
 camera location, and its `air` and `water` fog colours are what Java carries as a biome's own fog
 colour and water fog colour, with the start and end distances answerable from 26 as well; only its
 `volumetric` block, the `transition_fog` fade and the lava, weather and powder snow locations have
-nothing behind them. The resource pack's `biomes` and `biomes_client.json` state a water surface
-colour on every one of Mojang's 88, and a grass colour, a foliage colour, a sky colour, a
-precipitation particle, ambient sounds and a music definition on some of them, each of which Java
-states on a biome too. Neither is read yet, so both are named against the pack that shipped them
-along with the rest.
+nothing behind them. The resource pack's `biomes` and `biomes_client.json` are read for the colours a
+converted biome is drawn with; the precipitation particles, the ambient sounds, the music definition
+and the identifiers naming a deferred renderer's atmosphere, lighting, water and colour grading are
+counted and named.
 
-**Worldgen a data pack would write.** `biomes`, `features`, `feature_rules` and `dimensions` on the
-behaviour side belong in registries a Java data pack writes into, and a converted pack is a data pack
-the server loads, so the route exists. What stands in it is the lifecycle on the oldest supported
-version, and what such an entry would be left holding.
+**Worldgen on 1.20.1.** An entry a data pack puts in a worldgen registry leaves a world stable only
+while the pack it came from carries a `KnownPack`, and a converted pack carries one from 1.21 on.
+1.20.1 has no such class at all: `RegistryDataLoader` keeps the decoded lifecycle for anything a pack
+that is not built in supplies, a worldgen codec decodes as experimental, `PrimaryLevelData` carries
+that through, and `WorldOpenFlows` then asks the player whether to load the world at all. Nothing
+records the answer, so it is asked on every open, forever. A pack shipping worldgen is a pack too new
+for that version, which is the answer Bedrock itself gives to a pack written for a newer engine. On
+1.20.1 nothing under `biomes`, `features` or `feature_rules` is written and every one of them is
+counted and named by `/mcaddon entities`, with the version that would run it. The other three
+versions convert all of it.
 
-The lifecycle is the part that blocks. An entry read from a pack carrying a `KnownPack` leaves a
-world stable, and a converted pack carries one from 1.21 on. 1.20.1 has no such class at all:
-`RegistryDataLoader` keeps the decoded lifecycle for anything a pack that is not built in supplies,
-a worldgen codec decodes as experimental, `PrimaryLevelData` carries that through, and
-`WorldOpenFlows` then asks the player whether to load the world at all. Nothing records the answer,
-so it is asked on every open. One `worldgen/biome` written for a pack would do that to every 1.20.1
-world the pack is installed in. On 1.20.1 an extra `dimension` entry does it on its own besides,
-because the baked dimension registry is stable there only while it holds exactly the three the game
-ships.
+**What a Bedrock biome states that a Java biome has no field for.** Of Mojang's own 88, 87 state a
+surface builder, 75 an overworld height and 31 the overworld generation rules, and Java has a field
+for none of the three: it states its surfaces in `worldgen/noise_settings` and its heights in density
+functions, one set for a whole dimension rather than one per biome. `minecraft:mountain_parameters`,
+`minecraft:village_type`, `minecraft:humidity`, `minecraft:replace_biomes` and a grass tint stated as
+noise are the same absence. Each is counted and named, and the rest of the biome still converts.
 
-Placement is open. `MultiNoiseBiomeSource`'s codec is an either: a `preset`
-naming one of the two lists the game holds in code, or an explicit `biomes` array of climate
-parameter points, and the second form is accepted wherever a biome source is written, on every
-supported version. `worldgen/world_preset` and `dimension` are both registries a data pack writes
-into, and `WorldDimensions.bake` takes the union of the data pack's entries and the ones the level
-data stored, resolving the pack's copy first, so a `dimension` file added after a world exists is
-read the next time that world loads. `/reload` reaches neither, because `reloadResources` rebuilds
-the server resources and never runs `RegistryDataLoader` again, so what this costs a player is a
-restart rather than a new world.
+**What a converted biome starts out holding.** Java requires carvers, features, spawners and spawn
+costs on every biome, and a Bedrock one states none of them, so each takes an empty value and the
+biome comes out valid. What fills it is the pack's own rest: a `feature_rules/` file puts features in
+it, a `spawn_rules/` file puts mobs in it, and a biome from a pack that ships neither generates as
+bare terrain. Java's own carvers belong to the dimension rather than to anything a data pack adds, so
+a converted biome has no caves of its own.
 
-What is left is that the two formats describe different things, which decides what a converted entry
-would hold rather than whether it can be written. A Bedrock biome states its climate and its tags,
-and of Mojang's own 88, 87 also state a surface builder, 75 an overworld height and 31 the overworld
-generation rules; a Java biome has a field for none of those, because Java states its surfaces in
-`worldgen/noise_settings` and its heights in density functions. A Java biome instead requires
-carvers, features, spawners and spawn costs, which a Bedrock one never states and each of which
-takes an empty value. A converted biome therefore comes out valid and empty: a climate, a water
-colour off the resource pack, and no terrain, no features, no carvers and no mobs in it. A Bedrock
-dimension states an identifier, a generator type name and a height range, where a Java one needs a
-whole chunk generator with a biome source and a noise settings reference behind it.
+**A biome in the overworld.** The limit here is Java's overworld biome source rather than anything
+about the pack. The nether and the end each hold a list of the biomes they search and a mod may add
+one to it, which is what a pack's nether or end biome does: the game's own entries stay exactly as
+they were and the pack's is one more beside them. The overworld has no such list to add to. Its biome
+source names a preset the game holds in code, and `MultiNoiseBiomeSource`'s codec takes either that
+name or an explicit list of every climate band in the world, so the only way to add one biome is to
+write all of them out again as a `dimension` entry. Doing that states the overworld's whole
+generator, the noise settings included, so a world created as amplified or as large biomes would read
+the default ones instead for as long as the pack was installed, and terrain made before the pack
+arrived would disagree with terrain made after. Rewriting the game's own biome list to add one entry
+to it is not a thing a pack should be able to do to somebody's world, so it is not done. An overworld
+biome is read, converted and registered, and `/mcaddon entities` says it will not generate.
 
-The features are the same shape of answer. Of Bedrock's twenty-eight feature types thirteen have a
-Java configured feature behind them, six are placement, which Java states on a placed feature,
-three are carving, which is a registry of its own and none of Java's eleven generation steps, and
-six have nothing on any of those three: `aggregate_feature`, `conditional_list`,
-`beards_and_shavers`, `rect_layout`, `multi_block_feature` and `horizontal_tree_decoration_feature`.
-A feature rule also attaches in the opposite direction: it hangs one feature on every biome carrying
-a tag, where a Java biome lists its own features and no data pack construct adds one to a tag set.
+**Half of Bedrock's feature types.** Of the twenty-eight, three become a Java configured feature that
+takes the same fields and builds the same thing: `ore_feature` becomes `minecraft:ore`,
+`single_block_feature` becomes `minecraft:simple_block` through a state provider, and
+`weighted_random_feature` becomes `minecraft:random_selector` with each weight turned into the chance
+it is worth after the entries before it. Three more state a position rather than a thing and become
+placement modifiers on whatever they wrap: `scatter_feature`, `snap_to_surface_feature` and
+`surface_relative_threshold_feature`. The rest are counted and named. Six have nothing behind them on
+any of the three: `aggregate_feature`, `conditional_list`, `beards_and_shavers`, `rect_layout`,
+`multi_block_feature` and `horizontal_tree_decoration_feature`. Three are carving, which in Java is a
+registry of its own outside the eleven generation steps and fixed when a dimension is made. The
+remaining thirteen name a Java feature whose configuration is a different model of the same idea, a
+tree and a geode among them, and a converted entry would be a guess at what the pack meant rather
+than what it wrote.
+
+**`dimensions`.** A Bedrock dimension states an identifier, a generator type name and a height range.
+A Java one needs a whole chunk generator with a biome source and a noise settings reference behind
+it, and a `dimension_type` beside it whose fields 26 rewrote: `ultrawarm`, `natural`, `bed_works`,
+`respawn_anchor_works`, `piglin_safe`, `has_raids` and `effects` all went, and what replaced them is a
+map of environment attributes. The directory is counted and named against the pack that shipped it.
 
 Surface lighting from a physically based texture set is the one thing that depends on what the
 player has installed: the emissive channel is drawn again at full brightness with or without a

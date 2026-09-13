@@ -2101,4 +2101,73 @@ public final class Platform {
         /*return 0f;
         *///?}
     }
+
+    /**
+     * Whether a pack's worldgen is converted at all on this version.
+     *
+     * An entry a data pack puts in a worldgen registry is stable only while the pack it came from
+     * carries a `KnownPack`, and 1.20.1 has no such class: everything a pack that is not built in
+     * supplies decodes as experimental there, the level data keeps that lifecycle, and the client
+     * then asks the player whether to load the world at all, on every open, with no way to answer
+     * once. A pack whose biomes would do that to a world is a pack too new for the version, so its
+     * worldgen is named through `/mcaddon entities` and none of it is written.
+     */
+    public static boolean convertsWorldgen() {
+        //? if >=1.21 {
+        return true;
+        //?} else {
+        /*return false;
+        *///?}
+    }
+
+    /**
+     * The empty carver list a converted biome carries.
+     *
+     * A Bedrock biome states no carvers, and the field is required either way. 26 made it one list;
+     * before that it is a map from the carving step to a list, and the two steps are `air` and
+     * `liquid`.
+     */
+    public static void emptyCarvers(com.google.gson.JsonObject biome) {
+        //? if >=26 {
+        biome.add("carvers", new com.google.gson.JsonArray());
+        //?} else {
+        /*biome.add("carvers", new com.google.gson.JsonObject());
+        *///?}
+    }
+
+    /**
+     * The colours a converted biome is drawn with, as the version writes them.
+     *
+     * Up to 1.21 a biome states its own fog, sky and water fog beside the water colour, and all four
+     * are required. 26 moved everything but the water colour and the two tints onto the dimension,
+     * where one set answers for every biome in it, so a sky colour a pack wrote for one biome has
+     * nowhere to go and is named instead.
+     */
+    public static void biomeColours(com.google.gson.JsonObject biome, int water, int sky, int grass,
+        int foliage, int dryFoliage) {
+        com.google.gson.JsonObject effects = new com.google.gson.JsonObject();
+        effects.addProperty("water_color", water);
+        if (grass >= 0) effects.addProperty("grass_color", grass);
+        if (foliage >= 0) effects.addProperty("foliage_color", foliage);
+
+        //? if >=26 {
+        if (dryFoliage >= 0) effects.addProperty("dry_foliage_color", dryFoliage);
+        if (sky >= 0) {
+            at.ioexception.mcaddon.registry.AddonEntities
+                .unsupported("client biome minecraft:sky_color");
+        }
+        //?} else {
+        /*effects.addProperty("sky_color", sky >= 0 ? sky
+            : at.ioexception.mcaddon.convert.Worldgen.skyColour(
+                biome.get("temperature").getAsFloat()));
+        effects.addProperty("fog_color", 12638463);
+        effects.addProperty("water_fog_color", 329011);
+        if (dryFoliage >= 0) {
+            at.ioexception.mcaddon.registry.AddonEntities
+                .unsupported("client biome minecraft:dry_foliage_color");
+        }
+        *///?}
+        biome.add("effects", effects);
+    }
+
 }

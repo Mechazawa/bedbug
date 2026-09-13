@@ -33,10 +33,10 @@ public final class PackFiles {
 
     /** The behaviour pack paths a reader opens. */
     private static final Set<String> BEHAVIOUR_READ = Set.of(
-        "manifest.json", "pack_icon.png", "animation_controllers", "animations", "blocks",
-        "entities", "functions", "item_catalog", "items", "loot_tables", "recipes", "scripts",
-        "shapes", "spawn_rules", "structures", "texts", "trading",
-        "texts/language_names.json", "texts/languages.json");
+        "manifest.json", "pack_icon.png", "animation_controllers", "animations", "biomes", "blocks",
+        "entities", "feature_rules", "features", "functions", "item_catalog", "items",
+        "loot_tables", "recipes", "scripts", "shapes", "spawn_rules", "structures", "texts",
+        "trading", "texts/language_names.json", "texts/languages.json");
 
     /** Everything Bedrock lets a resource pack ship. */
     private static final Set<String> RESOURCE_DEFINED = Set.of(
@@ -52,8 +52,8 @@ public final class PackFiles {
     /** The resource pack paths a reader opens. */
     private static final Set<String> RESOURCE_READ = Set.of(
         "manifest.json", "pack_icon.png", "animations", "animation_controllers", "attachables",
-        "blocks.json", "entity", "font", "materials", "models", "particles", "render_controllers",
-        "sounds", "sounds.json", "texts", "textures",
+        "biomes", "biomes_client.json", "blocks.json", "entity", "font", "materials", "models",
+        "particles", "render_controllers", "sounds", "sounds.json", "texts", "textures",
         "sounds/music_definitions.json", "sounds/sound_definitions.json",
         "textures/flipbook_textures.json", "textures/item_texture.json",
         "textures/terrain_texture.json",

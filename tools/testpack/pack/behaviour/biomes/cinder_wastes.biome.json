@@ -1,0 +1,24 @@
+{
+  "format_version": "1.21.110",
+  "minecraft:biome": {
+    "description": {
+      "identifier": "tp:cinder_wastes"
+    },
+    "components": {
+      "minecraft:climate": {
+        "downfall": 0.0,
+        "temperature": 2.0
+      },
+      "minecraft:multinoise_generation_rules": {
+        "target_temperature": 0.7,
+        "target_humidity": -0.7,
+        "target_altitude": 0.0,
+        "target_weirdness": 0.0,
+        "weight": 0.2
+      },
+      "minecraft:tags": {
+        "tags": ["nether", "spawns_nether_mobs", "monster"]
+      }
+    }
+  }
+}

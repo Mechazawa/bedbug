@@ -187,8 +187,8 @@ public class AddonEntity extends PathfinderMob
         for (String group : definition.componentGroups().keySet()) {
             if (Boolean.TRUE.equals(value(GROUP + group))) activeGroups.add(group);
         }
-        publishMarkers();
         refreshAge();
+        publishMarkers();
     }
 
     /** When `minecraft:timer` next fires, in ticks of this entity's own age. Negative until set. */
@@ -353,8 +353,8 @@ public class AddonEntity extends PathfinderMob
         for (String named : new String[] {"minecraft:color", "minecraft:color2"}) {
             if (!declares(named)) continue;
 
-            ServerHooks.state().setProperty(getUUID(),
-                named.substring("minecraft:".length()), number(definition, named, "value", 0));
+            setInitialValue(named.substring("minecraft:".length()),
+                number(definition, named, "value", 0));
         }
         if (declares("minecraft:is_hidden_when_invisible")) setInvisible(isInvisible());
 
@@ -434,7 +434,7 @@ public class AddonEntity extends PathfinderMob
         com.google.gson.JsonElement chosen = skins.get(random.nextInt(skins.size()));
         double variant = chosen.isJsonObject()
             ? Goals.number(chosen.getAsJsonObject(), "variant", 0) : 0;
-        ServerHooks.state().setProperty(getUUID(), "variant", variant);
+        setInitialValue("variant", variant);
     }
 
     /**
@@ -1188,6 +1188,21 @@ public class AddonEntity extends PathfinderMob
 
         ServerHooks.state().setProperty(getUUID(), name, value);
         at.ioexception.mcaddon.server.EntityPropertySync.broadcast(this, ServerHooks.state());
+    }
+
+    /**
+     * Writes one of the entity's own values while the entity is still being built.
+     *
+     * `setValue` is the wrong call there twice over. It tells every client watching, and nothing is
+     * watching an entity that is still in its constructor; and the state store belongs to a running
+     * server, which a client joining a dedicated one has none of, while that client builds this same
+     * entity out of the packet the server sent it. What a client should hold arrives over the
+     * property sync instead, so here the write is simply left out.
+     */
+    private void setInitialValue(String name, Object value) {
+        if (isClientSide() || ServerHooks.state() == null) return;
+
+        ServerHooks.state().setProperty(getUUID(), name, value);
     }
 
     /** One of those values as it stands, or null when nothing has set it. */

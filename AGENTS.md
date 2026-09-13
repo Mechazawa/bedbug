@@ -191,6 +191,14 @@ These are the checks it runs, and what each one catches:
   enchanted book priced by its own result and one selling an explorer map. Each also names something
   this mod reports rather than converts, so a run says both halves of the reporting path still work.
 
+  The worldgen side is a biome, five features and two rules. The biome carries the components a Java
+  biome has a field for and four it has none of, so both halves of the reporting path run. The
+  features cover the three kinds that convert and one of the six with nothing behind them, and one of
+  them wraps another in a scatter, which is what makes the placement chain more than one link. One
+  rule hangs an ore on every overworld biome and the other hangs flowers on the forests, so a fresh
+  chunk holds blocks that can be counted. **The ore places `tp:lamp`, which is the pack's own block**:
+  a run where the block registry and the worldgen registry disagree leaves nothing in the ground.
+
   The book table is the one a game test rolls: it holds a single entry carrying
   `enchant_book_for_trading` and no condition, so the loot function type this mod registers is
   exercised from the converted table through the codec to the enchanted book that comes back.
@@ -292,6 +300,37 @@ These are the checks it runs, and what each one catches:
   loaded the same experimental pack, started, ran the console script and stopped with nothing said
   about it, so this is a thing a player meets and a server operator does not.
 
+  **A `dimension` entry naming the same pack's own biome loads on a server and not on a client.**
+  Measured on 26.2 with one converted `dimension/overworld.json` whose biome list held the pack's own
+  `worldgen/biome` entry beside the game's. The dedicated server read it, the biome generated and its
+  ore placed; a client opening a single player world logged `Failed to parse minecraft:overworld from
+  pack mcaddon/tp` and stopped on the screen saying the selected data packs prevented the world from
+  loading. The same pack, the same file, the same version. `dimension` and `dimension_type` are
+  loaded as a set of their own after the worldgen registries rather than with them, and the two
+  world loads drive that second load from different places; which of the two answers a reference to a
+  pack's own entry differently, and why, is not established here. What follows for a pack either way
+  is that a `dimension` entry must not name one.
+
+  **A world that was once opened experimental stays experimental after the cause is gone.** Measured
+  while chasing the above: with the offending entry removed from the converted output and the jar
+  rebuilt, `verify.py client --version 1.21.1` still reported the world as experimental, and the same
+  check passed the moment `versions/1.21.1/run/saves` and `versions/1.21.1/run/world` were deleted and
+  the world made again. So a fix is not disproved by a run that still fails; delete both directories
+  first and only then believe the verdict. The same holds for the join check, whose client takes its
+  world from the server's.
+
+  **An either codec reports the last branch's error and swallows the first.** That is what made the
+  above read as the wrong thing entirely. `MultiNoiseBiomeSource`'s codec is
+  `Codec.mapEither(<the explicit list>, <the preset name>)`, so a list that failed to decode is
+  reported as `No key preset in MapLike[{"type":"minecraft:multi_noise","biomes":[...]}]`, with the
+  whole list printed after it. The list in that message is the input the *first* branch was given,
+  not something the second branch objected to, so the message reads as the explicit form being
+  refused outright when the explicit form is accepted on all four versions. Decode the suspect JSON
+  against the inner codec by hand before believing the message: `Climate.ParameterPoint.CODEC` and
+  `BiomeSource.CODEC` under a `RegistryOps` over `VanillaRegistries.createLookup()` both parse in a
+  unit test, and that is how the failure was narrowed to the one entry whose reference went
+  unresolved.
+
   **What a name costs a server that has one.** `RegistrySynchronization.packRegistry` leaves an
   entry's content out of what it sends when the client acknowledged that entry's `KnownPack`, and
   sends the whole of it encoded otherwise; the entry's id goes over either way. A client acknowledges
@@ -317,7 +356,10 @@ These are the checks it runs, and what each one catches:
   happened by the time such a screen is up. `1.21.1` also loads Mod Menu, Sodium and Iris, so it takes
   noticeably longer than the other two.
 
-  Failing in either: `ERROR`, `Caused by`, a crash report, a mixin apply failure, `Script error:`,
+  Failing in either: `ERROR`, `Caused by`, a crash report, a mixin apply failure, `Registry loading
+  errors:` and `Failed to parse <id> from pack`, which are named apart from the rest because a
+  registry entry a data pack could not decode stops a client on a screen asking the player to fix
+  their packs and a run with nobody at the keyboard would otherwise wait that screen out, `Script error:`,
   `Failed to load function`, `Multi threaded access requested by thread`, `Could not initialize
   class`, `StackOverflowError`, `Unable to load model`, `Missing textures in model`, a Java compile
   error and a Gradle build failure. The last two model checks are logged at `WARN`, which is why they
@@ -755,7 +797,7 @@ src/main/java/at/ioexception/mcaddon/
   pack/                      Discovery, manifests, dependency order
   convert/                   Runtime conversion: Targa, Ogg repair, sounds, text, models, functions
   resource/                  The converted packs and how the game is told about them
-  registry/                  Sounds, entities, items, blocks, spawns and the creative tab
+  registry/                  Sounds, entities, items, blocks, spawns, worldgen and the creative tab
   bedrock/molang/            Molang parser, evaluator, maths. Trig is in degrees.
   bedrock/model/             Geometry parsing, baking, render controllers
   bedrock/animation/         Animations, channels, player, controllers

@@ -54,6 +54,11 @@ SPECULAR_MAPS = ("metalness_emissive_roughness", "metalness_emissive_roughness_s
 # What makes a run fail, most specific first: a line is reported under the first name it matches.
 FAILURES = (
     ("java compile error", r"\.java:\d+: error:"),
+    # A registry entry a data pack could not decode stops the world behind a screen asking the
+    # player to fix their packs, which a harness with nobody at the keyboard waits out. The line
+    # names the registry and the element, so reading it beats reading the deadline.
+    ("a converted data pack would not load",
+     r"Registry loading errors:|Failed to parse .+ from pack "),
     ("script error", r"Script error:"),
     ("function java refused", r"Failed to load function"),
     ("script engine entered off thread", r"Multi threaded access requested by thread"),
@@ -899,7 +904,24 @@ def refused(verdict: Verdict, seen: list[str]) -> Verdict:
     named = {match.group(1) for match in (MISSING_ENTRY.search(one) for one in missing) if match}
     verdict.notes.append(f"turned away naming {len(missing)} entries across "
                          + ", ".join(sorted(named)))
+    verdict.notes.append(
+        "this is the pass condition: the window shows " + shownAs(seen)
+        + ", which reads as a crash and is the orderly refusal a client without the pack has to get")
     return verdict
+
+
+def shownAs(seen: list[str]) -> str:
+    """The words the client put on the screen, which differ by version for the one refusal.
+
+    A person watching the window sees a disconnect screen either way. Up to 1.21 it carries the
+    count and the namespaces; 26 shows `Network Protocol Error` and nothing else, which looks far
+    worse than what happened. Naming the wording in the verdict is what stops the screen being read
+    as a failure of the run.
+    """
+    for line in seen:
+        if "Network Protocol Error" in line:
+            return "'Network Protocol Error', which is all 26 says"
+    return "'Received N registry entries that are unknown to this client' and the namespaces"
 
 
 def check_join(root: Path, version: str, timeout: float, hold: float, verbose: bool,

@@ -1,0 +1,21 @@
+{
+  "format_version": "1.13.0",
+  "minecraft:feature_rules": {
+    "description": {
+      "identifier": "tp:shard_ore_rule",
+      "places_feature": "tp:shard_ore"
+    },
+    "conditions": {
+      "placement_pass": "underground_pass",
+      "minecraft:biome_filter": [
+        { "test": "has_biome_tag", "operator": "==", "value": "overworld" }
+      ]
+    },
+    "distribution": {
+      "iterations": 6,
+      "x": { "distribution": "uniform", "extent": [0, 15] },
+      "y": { "distribution": "uniform", "extent": [-48, 64] },
+      "z": { "distribution": "uniform", "extent": [0, 15] }
+    }
+  }
+}

@@ -12,6 +12,7 @@ import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.registry.AddonSounds;
 import at.ioexception.mcaddon.registry.AddonParticles;
 import at.ioexception.mcaddon.registry.AddonSpawns;
+import at.ioexception.mcaddon.registry.AddonWorldgen;
 import at.ioexception.mcaddon.resource.AddonPacks;
 import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.api.ModInitializer;
@@ -73,6 +74,7 @@ public final class McAddon implements ModInitializer {
         // After the items, because a brewing recipe naming a pack's own bottle has to find it.
         AddonBrewing.register(packs);
         AddonSpawns.register(packs);
+        AddonWorldgen.register(AddonPacks.all());
         // Logged after the spawn rules are read, because the conditions they drop belong in the
         // same register as the components an entity declares.
         AddonEntities.report().forEach(LOGGER::info);
