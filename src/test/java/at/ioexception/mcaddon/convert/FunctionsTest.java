@@ -92,16 +92,80 @@ class FunctionsTest {
             + "'item replace entity @s weapon.mainhand with stone'",
         "'replaceitem block ~ ~ ~ slot.container 3 stone 2', "
             + "'item replace block ~ ~ ~ container.3 with stone 2'",
-        "'ride @s start_riding @e[type=pig]', 'ride @s mount @e[type=minecraft:pig]'",
-        "'ride @s stop_riding', 'ride @s dismount'",
+        "'ride @s start_riding @e[type=pig]', "
+            + "'execute as @s at @s run ride @s mount @e[type=minecraft:pig,limit=1]'",
+        "'ride @s stop_riding', 'execute as @s run ride @s dismount'",
         "'save hold', 'save-off'",
         "'tickingarea add 0 0 0 32 0 32 named', 'forceload add 0 0 32 32'",
         "'tickingarea remove_all', 'forceload remove all'",
         "'time set sunrise', 'time set 23000'",
         "'time set day', 'time set day'",
+        "'changesetting difficulty h', 'difficulty hard'",
+        "'damage @s 4 fall', 'damage @s 4'",
+        "'damage @s 4 fall entity @p', 'damage @s 4 minecraft:generic by @p'",
+        "'execute in nether run say hi', 'execute in the_nether run say hi'",
+        "'tickingarea remove 10 64 20', 'forceload remove 10 20'",
+        "'replaceitem entity @s slot.armor 2 iron_leggings', "
+            + "'item replace entity @s armor.legs with iron_leggings'",
+        "'replaceitem entity @s slot.chest 0 chest', 'item replace entity @s horse.chest with chest'",
+        "'loot replace entity @s slot.armor.head 0 loot tp:hat', "
+            + "'loot replace entity @s armor.head loot tp:hat'",
+        "'ride @e[type=zombie] start_riding @e[type=pig] teleport_rider', "
+            + "'execute as @e[type=minecraft:zombie] at @s run ride @s mount @e[type=minecraft:pig,limit=1]'",
+        "'gametest stopall', 'gametest stopall'",
+        "'mobevent events_enabled false', 'mobevent events_enabled false'",
+        "'music stop 2', 'music stop'",
+        "'structure save tp:hut 0 0 0 4 4 4 true disk', 'structure save \"tp:hut\" 0 0 0 4 4 4'",
+        "'structure load tp:hut 0 64 0 90_degrees x', "
+            + "'place template tp:hut 0 64 0 clockwise_90 front_back'",
+        "'structure delete tp:hut', 'structure delete \"tp:hut\"'",
+        "'music play tp:theme 0.4', 'music play \"tp:theme\" 0.4'",
+        "'particle tp:sparkle ~ ~ ~', 'particle \"tp:sparkle\" ~ ~ ~'",
+        "'scriptevent tp:reset go', 'scriptevent \"tp:reset\" go'",
     })
     void rewritesTheCommandsJavaSpellsDifferently(String source, String expected) throws IOException {
         assertEquals(expected, only(source));
+    }
+
+    /**
+     * Forms of a command that does translate, which Java has no way to say.
+     *
+     * Each has to leave the line rather than be handed to Java, because a line Java's parser
+     * rejects costs the whole function.
+     */
+    @ParameterizedTest
+    @CsvSource({
+        "'gametest runthis', 'command gametest runthis, which Java has no form of'",
+        "'music play tp:theme 1 0 loop', 'command music loop, which Java has no form of'",
+        "'ride @e[type=pig] evict_riders', 'command ride evict_riders, which Java has no form of'",
+        "'ride @s start_riding @e[type=pig] until_full', "
+            + "'command ride until_full, which Java has no form of'",
+        "'save query', 'command save query, which Java has no form of'",
+        "'structure load tp:hut 0 64 0 0_degrees xz', 'command structure xz, which Java has no form of'",
+        "'summon pig ~ ~ ~ facing ~ ~1 ~', 'command summon facing, which Java has no form of'",
+        "'tickingarea preload 0 0 0', 'command tickingarea preload, which Java has no form of'",
+        "'mobevent minecraft:ender_dragon_event true', "
+            + "'command mobevent minecraft:ender_dragon_event, which Java has no form of'",
+        "'place featurerule tp:rule ~ ~ ~', 'command place featurerule, which Java has no form of'",
+    })
+    void dropsAFormOfATranslatedCommandJavaCannotSay(String source, String reported) throws IOException {
+        assertEquals(List.of(), translate(source));
+        assertTrue(problems.contains(reported), problems.toString());
+    }
+
+    /** Bedrock switches fire spreading where Java from 26 measures how far a player carries it. */
+    @Test
+    void writesTheFireRuleTheWayThisVersionOfJavaHoldsIt() throws IOException {
+        Integer radius = Platform.fireSpreadRadius(false);
+        assertEquals("gamerule " + Platform.gameRuleName("doFireTick") + " "
+            + (radius == null ? "false" : radius), only("gamerule dofiretick false"));
+    }
+
+    /** A saddle moved off the horse in 26, so which slot it is has to be asked for. */
+    @Test
+    void putsASaddleInTheSlotThisVersionOfJavaKeepsItIn() throws IOException {
+        assertEquals("item replace entity @s " + Platform.saddleSlot() + " with saddle",
+            only("replaceitem entity @s slot.saddle 0 saddle"));
     }
 
     /**

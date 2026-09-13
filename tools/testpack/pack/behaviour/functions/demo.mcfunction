@@ -22,3 +22,25 @@ tickingarea remove_all
 time set sunrise
 execute @a ~ ~ ~ say the old execute
 execute as @a at @s run effect @s speed 5
+execute in nether run say the nether is spelled differently
+changesetting difficulty h
+damage @s 1 fall entity @p
+locate structure minecraft:village_plains
+loot replace entity @s slot.armor.head 0 loot minecraft:entities/sheep
+music play tp:sprite.chime 0.5
+mobevent minecraft:pillager_patrols_event false
+gametest stopall
+particle tp:sparkle ~ ~ ~
+scriptevent tp:demo the script bridge takes a namespaced id
+structure save tp:hut 0 0 0 4 4 4
+structure load tp:hut 0 64 0 90_degrees x
+replaceitem entity @s slot.armor 0 minecraft:leather_helmet
+ride @e[type=zombie] start_riding @e[type=pig] teleport_rider
+tickingarea remove 0 0 0
+gamerule dofiretick true
+# Each of these is a form Java has no way to say, so the line goes and the rest of the file stays.
+gametest runthis
+music play tp:sprite.chime 1 0 loop
+ride @e[type=pig] evict_riders
+structure load tp:hut 0 64 0 0_degrees xz
+summon pig ~ ~ ~ facing ~ ~1 ~
