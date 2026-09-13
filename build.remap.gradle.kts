@@ -46,6 +46,8 @@ stonecutter {
             "import net.minecraft.world.entity.projectile.AbstractArrow;")
         replace("import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;",
             "import net.minecraft.world.entity.vehicle.AbstractMinecart;")
+        // 1.21.2 renamed what a particle answers with its packed sky and block light.
+        replace("getLightCoords(", "getLightColor(")
     }
 }
 

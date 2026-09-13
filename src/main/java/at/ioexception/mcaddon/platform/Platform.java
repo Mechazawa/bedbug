@@ -629,6 +629,27 @@ public final class Platform {
     }
 
     /**
+     * The name Java's own `gamerule` command knows a rule by, or null when Java has no such rule.
+     *
+     * The two editions agree on which rules exist far more than on what to call them, and 26 renamed
+     * Java's own set again, so the name has to be asked for rather than written down.
+     */
+    public static String gameRuleName(String bedrock) {
+        //? if >=26 {
+        GameRule<?> rule = rule(bedrock);
+        return rule == null ? null : rule.id();
+        //?} else {
+        /*net.minecraft.world.level.GameRules.Key<net.minecraft.world.level.GameRules.BooleanValue> flag =
+            flagRule(bedrock);
+        if (flag != null) return flag.getId();
+
+        net.minecraft.world.level.GameRules.Key<net.minecraft.world.level.GameRules.IntegerValue> count =
+            countRule(bedrock);
+        return count == null ? null : count.getId();
+        *///?}
+    }
+
+    /**
      * Writes a game rule, answering whether Java holds one that means the same.
      *
      * Text that does not read as the rule's own type leaves the rule where it was, the way the

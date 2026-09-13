@@ -380,6 +380,54 @@ Four of the standing drops are deliberate, and the census will keep naming them:
 - **`should_update_effects_offscreen`, `should_update_bones_and_effects_offscreen`,
   `min_engine_version`, `enable_attachables` and `hide_armor`** each ask the Bedrock client for
   behaviour it decides itself. Java decides those the same way for every entity.
+- **`tools/census/commands.py`** does the same for the command dialect. A `.mcfunction` is the one
+  part of a pack Java refuses by halves, one bad line costing the whole file, so knowing which
+  commands survive translation matters more here than anywhere else.
+
+  ```bash
+  bash tools/census/fetch.sh
+  python3 tools/census/commands.py            # prints the table and the gaps
+  python3 tools/census/commands.py --strict   # exits non-zero while anything is missing
+  ```
+
+  The published side is `metadata/command_modules/mojang-commands.json`. Three surfaces come out of
+  it. The **names** are every command it lists with the aliases folded in, because a function may
+  write either spelling. The **keywords** are the words that pick one form of a command over
+  another, `music play` against `music stop`: the file writes each as an enum, and an enum of at
+  most sixteen values is grammar while a longer one is an open vocabulary of blocks, items or
+  biomes. The **game rules** are the two rule enums, which matter because Bedrock writes a rule name
+  in lower case and Java's parser is case sensitive.
+
+  The mod's side is read out of `Functions.java`: the `SHARED_WITH_JAVA` and `RENAMED` declarations,
+  which say Java's own parser reads the line, the `REGISTERED_HERE` names, which this mod builds a
+  command for, and the `case "..."` labels of `Functions.rewrite`. Everything else is dropped and
+  named, and the report ends with the check for that: a published command that is missing and is not
+  in `BEDROCK_ONLY` would be a gap nobody decided on.
+
+  Two things the numbers do not say. A keyword of a rewritten command counts only when the source
+  spells the literal, so a rewrite that changes the front of a line and passes the rest through
+  reads as though it did not; the keyword figure is a floor. And the command metadata names no
+  selector arguments at all, so those are listed from the source instead, in three groups: rewritten,
+  passed through, and dropped.
+- **`tools/census/particles.py`** measures the effects a pack describes itself.
+
+  ```bash
+  bash tools/census/fetch.sh
+  python3 tools/census/particles.py            # prints the table and the gaps
+  python3 tools/census/particles.py --strict   # exits non-zero while anything is missing
+  ```
+
+  The published side is the particle schemas under `metadata/json_schemas/client/particles/`, the
+  particle documentation and the vanilla resource pack's own effects. Four surfaces: the
+  **components** the effect schema lists together with every one the vanilla effects declare, the
+  **fields** those component schemas carry read as one flat vocabulary, the four **curve types** the
+  documentation names, and the **Molang variables** the documentation says the particle system
+  answers by itself.
+
+  The mod's side is the string literals under `bedrock/particle/` and `client/render/`, plus the
+  prefix `AddonEmitters.randomise` builds the four random variables from. A component this mod does
+  not read is reported through `AddonEntities.unsupported` as the effect is read, so the two halves
+  agree: what the census calls missing is what a pack is told about in game.
 
 ## Conventions
 
@@ -425,6 +473,8 @@ tools/preview/render.py      Offline model renderer
 tools/molang/MolangCheck.java  Molang conformance harness
 tools/census/components.py   Coverage of Bedrock's published vocabulary, no pack and no game
 tools/census/model.py        Coverage of the fields the geometry and animation readers act on
+tools/census/commands.py     Coverage of Bedrock's published command dialect
+tools/census/particles.py    Coverage of Bedrock's published particle format
 tools/checkall.sh            Every check, in the order that fails fastest
 tools/census/script.py       How much of the published script API this mod offers
 tools/scene/scene.py         Scenes run inside the game, with nobody at the keyboard

@@ -69,8 +69,12 @@ server decides what happens; the client draws it.
 - Particle effects a pack describes itself: the emitter runs on its own clock at the rate and
   lifetime the pack chose, its shape decides where each particle is born and which way it leaves, and
   the particle's Molang drives its motion, size, spin, colour gradient and flipbook. Collision, the
-  kill plane and the block filters are honoured. A Bedrock id naming a vanilla effect is shown as the
-  Java one instead.
+  kill plane and the block filters are honoured. A curve the pack declares is evaluated every update
+  and becomes the Molang variable it is named after, in all four shapes Bedrock draws. An effect's
+  events run as well: at its creation, at its expiration, along its timeline, every so many blocks
+  travelled and on a collision, each one able to play a sound, start another effect, evaluate an
+  expression, run a sequence or pick one of several by weight. A Bedrock id naming a vanilla effect
+  is shown as the Java one instead.
 - Behaviour pack scripts against `@minecraft/server`, sandboxed: a script sees its own pack's files
   and nothing else on disk. Commands a script registers on startup become real commands,
   `@minecraft/server-ui` forms become real screens, and the world, system, entity, dimension, block,
@@ -90,9 +94,10 @@ for that this mod does not implement yet, which answers "will my pack work" with
 
 Measured against Mojang's own published vocabulary rather than against whatever pack happens to be
 installed. `tools/census/components.py` reads the entity, block and item component schemas, the
-filter documentation and the Molang query list out of Mojang's `bedrock-samples`, and
-`tools/census/script.py` reads the published `@minecraft/*` type definitions. Both compare them
-against the names this mod acts on:
+filter documentation and the Molang query list out of Mojang's `bedrock-samples`;
+`tools/census/commands.py` reads the published command list; `tools/census/particles.py` reads the
+particle schemas and documentation; and `tools/census/script.py` reads the published `@minecraft/*`
+type definitions. All four compare them against the names this mod acts on:
 
 | Surface | Answered |
 | --- | --- |
@@ -103,6 +108,11 @@ against the names this mod acts on:
 | Molang maths | 100% |
 | Block components | 92% |
 | Item components | 80% |
+| Command names | 74% |
+| Game rules | 65% |
+| Particle components | 100% |
+| Particle component fields | 97% |
+| Particle curves and Molang variables | 100% |
 | `@minecraft/server` and friends | 95% |
 
 Every name in the remaining share is counted and shown by `/mcaddon entities` and `/mcaddon
@@ -147,12 +157,27 @@ all become the render type the pass is drawn with. What cannot follow is the ste
 a pass that exists only to write a mask is left out rather than drawn as a shape that does not
 belong there.
 
-**A handful of Bedrock commands.** `fog`, `camera`, `camerashake`, `hud`, `dialogue`,
-`inputpermission`, `immutableworld`, `wsserver` and `connect` name a renderer feature Java has none
-of, or a server Java does not speak to. A function using one keeps its other lines and the dropped
-command is reported. `testfor`, `testforblock`, `testforblocks` and `titleraw` are translated;
-`playanimation`, `event`, `scriptevent`, `music`, `toggledownfall`, `structure`, `mobevent` and
-`gametest` are registered by this mod.
+**Eight of a particle's ten facing modes.** Java turns a particle to the camera on every axis or
+about the vertical one only, which is what `rotate_xyz`, `rotate_y`, `lookat_xyz` and `lookat_y`
+ask for. The three that aim the quad along the particle's own direction and the three that match the
+emitter's transform have no Java form, so they fall back to facing the camera, and the direction
+settings those modes read are not used.
+
+**A quarter of Bedrock's commands.** `fog`, `camera`, `camerashake`, `hud`, `dialogue`,
+`inputpermission`, `aimassist`, `controlscheme`, `project` and the rest of the twenty-four name a
+renderer feature Java has none of, a marketplace or a server Java does not speak to, or a word both
+editions use for different things: Bedrock's `schedule` waits for an area to load and Java's delays
+a function. A function using one keeps its other lines and the dropped command is reported, and so
+is a line whose selector asks for something Java cannot select on, such as `hasitem`.
+
+Everything else is translated or registered. `effect`, `xp`, `playsound`, `stopsound`,
+`spreadplayers`, `replaceitem`, `ride`, `tickingarea`, `save`, `gamerule`, `gamemode`, `difficulty`,
+`title`, `tellraw`, `titleraw`, `daylock`, `allowlist`, `testfor`, `testforblock`, `testforblocks`
+and both forms of `execute` are rewritten into what Java reads, including the command behind
+`execute ... run`. `playanimation`, `event`, `scriptevent`, `music`, `toggledownfall`, `structure`,
+`mobevent`, `particle` and `gametest` are registered by this mod. Of Bedrock's thirty-seven game
+rules, the twenty-four every supported version of Java has are set under the name that version knows
+them by, which 26 changed; the others are reported.
 
 **The player a test drives itself.** `Test.spawnSimulatedPlayer` and every member of the
 `SimulatedPlayer` it answers with describe a player the game walks, attacks and builds with. Java's

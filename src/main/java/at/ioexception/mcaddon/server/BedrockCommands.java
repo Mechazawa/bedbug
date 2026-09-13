@@ -26,6 +26,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 
@@ -92,7 +93,10 @@ public final class BedrockCommands {
             .then(Commands.literal("load")
                 .then(Commands.argument("name", StringArgumentType.string())
                     .then(Commands.argument("to", BlockPosArgument.blockPos())
-                        .executes(BedrockCommands::loadStructure)))));
+                        .executes(BedrockCommands::loadStructure))))
+            .then(Commands.literal("delete")
+                .then(Commands.argument("name", StringArgumentType.string())
+                    .executes(BedrockCommands::deleteStructure))));
 
         // A mob event switches a kind of spawning on or off, which Java states as a game rule.
         dispatcher.register(Commands.literal("mobevent")
@@ -261,25 +265,39 @@ public final class BedrockCommands {
             + " " + at.getZ());
     }
 
+    /** Forgets a structure saved under that name, which is what Bedrock's own delete does. */
+    private static int deleteStructure(CommandContext<CommandSourceStack> command) {
+        Identifier id = Identifier.tryParse(StringArgumentType.getString(command, "name"));
+        if (id == null) {
+            command.getSource().sendFailure(Component.literal("That is not a usable structure name."));
+            return 0;
+        }
+        command.getSource().getServer().getStructureManager().remove(id);
+        return 1;
+    }
+
     /**
      * Switches one kind of spawning on or off.
      *
      * Bedrock names the event and Java names the rule, and only the two that Java has a rule for can
-     * be answered. The rest are reported rather than silently accepted.
+     * be answered. `events_enabled` names every event at once, so it sets both. The rest are
+     * reported rather than silently accepted.
      */
     private static int mobEvent(CommandContext<CommandSourceStack> command) {
-        String rule = switch (StringArgumentType.getString(command, "event")) {
-            case "minecraft:pillager_patrols_event" -> "doPatrolSpawning";
-            case "minecraft:wandering_trader_event" -> "doTraderSpawning";
-            default -> null;
+        boolean enabled = BoolArgumentType.getBool(command, "enabled");
+        List<String> rules = switch (StringArgumentType.getString(command, "event")) {
+            case "minecraft:pillager_patrols_event" -> List.of("doPatrolSpawning");
+            case "minecraft:wandering_trader_event" -> List.of("doTraderSpawning");
+            case "events_enabled" -> List.of("doPatrolSpawning", "doTraderSpawning");
+            default -> List.of();
         };
-        if (rule == null) {
+        if (rules.isEmpty()) {
             command.getSource().sendFailure(
                 Component.literal("Java has no rule for that mob event."));
             return 0;
         }
-        return run(command.getSource(), "gamerule " + rule
-            + " " + BoolArgumentType.getBool(command, "enabled"));
+        rules.forEach(rule -> run(command.getSource(), "gamerule " + rule + " " + enabled));
+        return 1;
     }
 
     /** A pack's own effect starts an emitter; anything else is Java's own particle command. */

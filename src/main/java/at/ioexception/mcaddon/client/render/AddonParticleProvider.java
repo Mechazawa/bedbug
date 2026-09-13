@@ -46,6 +46,9 @@ public record AddonParticleProvider(String identifier, SpriteSet sprites)
         if (definition == null) return null;
 
         MolangEnvironment environment = new MolangEnvironment();
+        AddonEmitters.randomise(environment, "particle_random_");
+        AddonEmitters.evaluateCurves(definition, environment);
+
         Vector3f offset = born(definition.emitter().shape(), environment, random);
         Vector3f speed = speed(definition, environment, offset);
 
