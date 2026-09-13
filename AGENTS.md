@@ -178,6 +178,14 @@ These are the checks it runs, and what each one catches:
   enchanted book priced by its own result and one selling an explorer map. Each also names something
   this mod reports rather than converts, so a run says both halves of the reporting path still work.
 
+  The worldgen side is a biome, five features and two rules. The biome carries the components a Java
+  biome has a field for and four it has none of, so both halves of the reporting path run. The
+  features cover the three kinds that convert and one of the six with nothing behind them, and one of
+  them wraps another in a scatter, which is what makes the placement chain more than one link. One
+  rule hangs an ore on every overworld biome and the other hangs flowers on the forests, so a fresh
+  chunk holds blocks that can be counted. **The ore places `tp:lamp`, which is the pack's own block**:
+  a run where the block registry and the worldgen registry disagree leaves nothing in the ground.
+
   The book table is the one a game test rolls: it holds a single entry carrying
   `enchant_book_for_trading` and no condition, so the loot function type this mod registers is
   exercised from the converted table through the codec to the enchanted book that comes back.
@@ -715,7 +723,7 @@ src/main/java/at/ioexception/mcaddon/
   pack/                      Discovery, manifests, dependency order
   convert/                   Runtime conversion: Targa, Ogg repair, sounds, text, models, functions
   resource/                  The converted packs and how the game is told about them
-  registry/                  Sounds, entities, items, blocks, spawns and the creative tab
+  registry/                  Sounds, entities, items, blocks, spawns, worldgen and the creative tab
   bedrock/molang/            Molang parser, evaluator, maths. Trig is in degrees.
   bedrock/model/             Geometry parsing, baking, render controllers
   bedrock/animation/         Animations, channels, player, controllers

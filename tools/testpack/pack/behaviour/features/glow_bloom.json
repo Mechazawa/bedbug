@@ -1,0 +1,14 @@
+{
+  "format_version": "1.21.40",
+  "minecraft:single_block_feature": {
+    "description": {
+      "identifier": "tp:glow_bloom"
+    },
+    "places_block": [
+      { "block": "minecraft:dandelion", "weight": 3 },
+      { "block": "minecraft:poppy", "weight": 1 }
+    ],
+    "randomize_rotation": true,
+    "enforce_survivability_rules": true
+  }
+}

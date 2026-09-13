@@ -90,11 +90,20 @@ public final class PackConverter {
         List<RecipeDefinition> recipes = new ArrayList<>();
         List<LootTableDefinition> loot = new ArrayList<>();
         List<BlockDefinition> blocks = new ArrayList<>();
+        List<at.ioexception.mcaddon.bedrock.behaviour.BiomeDefinition> biomes = new ArrayList<>();
+        List<at.ioexception.mcaddon.bedrock.behaviour.FeatureDefinition> features = new ArrayList<>();
+        List<at.ioexception.mcaddon.bedrock.behaviour.FeatureRuleDefinition> featureRules =
+            new ArrayList<>();
         for (BedrockPack behaviour : bundle.behaviours()) {
             items.addAll(ItemDefinition.readAll(behaviour));
             recipes.addAll(RecipeDefinition.readAll(behaviour));
             loot.addAll(LootTableDefinition.readAll(behaviour));
             blocks.addAll(BlockDefinition.readAll(behaviour));
+            biomes.addAll(at.ioexception.mcaddon.bedrock.behaviour.BiomeDefinition.readAll(behaviour));
+            features.addAll(
+                at.ioexception.mcaddon.bedrock.behaviour.FeatureDefinition.readAll(behaviour));
+            featureRules.addAll(
+                at.ioexception.mcaddon.bedrock.behaviour.FeatureRuleDefinition.readAll(behaviour));
         }
         String namespace = Names.namespaceOf(pack, bundle.behaviours());
         Path root = cache.resolve("converted").resolve("%s-%s-%d".formatted(
@@ -138,6 +147,9 @@ public final class PackConverter {
                 writeParticles(pack, root, textures.paths());
                 writeFunctions(bundle, root, namespace);
                 writeFont(pack, root, namespace);
+                Worldgen.write(root, namespace, biomes,
+                    at.ioexception.mcaddon.bedrock.ClientBiomeDefinition.readAll(pack),
+                    features, featureRules);
             }
 
             if (fresh) {
@@ -149,8 +161,8 @@ public final class PackConverter {
             McAddon.LOGGER.error("Could not convert {}.", pack.displayName(), error);
         }
 
-        return new ConvertedPack(pack, root, namespace, textures.paths(), textures.emissive(),
-            icons, List.copyOf(sounds), eggs);
+        return new ConvertedPack(pack, bundle.behaviours(), root, namespace, textures.paths(),
+            textures.emissive(), icons, List.copyOf(sounds), eggs);
     }
 
     private static void writeMetadata(BedrockPack pack, Bundle bundle, Set<String> locales, Path root)

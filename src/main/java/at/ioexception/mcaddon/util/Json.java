@@ -73,6 +73,21 @@ public final class Json {
         return value == null || !value.isJsonPrimitive() ? fallback : value.getAsDouble();
     }
 
+    /**
+     * A `#rrggbb` colour as the packed integer Java writes one with, or -1 for anything else.
+     *
+     * Bedrock writes every colour in a pack as that string, and Java's biome effects, its particle
+     * tints and its map colours are all one integer.
+     */
+    public static int colour(String value) {
+        if (value == null) return -1;
+        try {
+            return Integer.parseInt(value.startsWith("#") ? value.substring(1) : value, 16) & 0xFFFFFF;
+        } catch (NumberFormatException notAColour) {
+            return -1;
+        }
+    }
+
     /** Writes the boolean, number and string values an entity property is allowed to hold. */
     public static String encode(Map<String, Object> values) {
         JsonObject json = new JsonObject();

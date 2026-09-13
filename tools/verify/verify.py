@@ -54,6 +54,11 @@ SPECULAR_MAPS = ("metalness_emissive_roughness", "metalness_emissive_roughness_s
 # What makes a run fail, most specific first: a line is reported under the first name it matches.
 FAILURES = (
     ("java compile error", r"\.java:\d+: error:"),
+    # A registry entry a data pack could not decode stops the world behind a screen asking the
+    # player to fix their packs, which a harness with nobody at the keyboard waits out. The line
+    # names the registry and the element, so reading it beats reading the deadline.
+    ("a converted data pack would not load",
+     r"Registry loading errors:|Failed to parse .+ from pack "),
     ("script error", r"Script error:"),
     ("function java refused", r"Failed to load function"),
     ("script engine entered off thread", r"Multi threaded access requested by thread"),

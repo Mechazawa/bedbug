@@ -10,6 +10,7 @@ import java.util.Map;
  * One Bedrock pack after conversion: a directory the game can read as a resource pack, plus the
  * lookups the rest of the mod needs.
  *
+ * @param behaviours     the behaviour packs that came out of the same file as this one
  * @param namespace      the namespace the pack's own assets were written under
  * @param texturePaths   Bedrock texture path, extension dropped, to the Java resource id
  * @param emissiveLayers those of them that a physically based texture set said have glowing pixels
@@ -17,8 +18,8 @@ import java.util.Map;
  * @param soundEvents    every sound event the pack defines, as `namespace:path`
  * @param spawnEggs      how each entity's egg looks, by the entity's identifier
  */
-public record ConvertedPack(BedrockPack pack, Path root, String namespace,
-    Map<String, String> texturePaths, Map<String, String> emissiveLayers,
+public record ConvertedPack(BedrockPack pack, List<BedrockPack> behaviours, Path root,
+    String namespace, Map<String, String> texturePaths, Map<String, String> emissiveLayers,
     Map<String, String> textureKeys, List<String> soundEvents,
     Map<String, SpawnEggAppearance> spawnEggs) {
 

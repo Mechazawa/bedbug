@@ -1,0 +1,9 @@
+{
+  "format_version": "1.13.0",
+  "minecraft:aggregate_feature": {
+    "description": {
+      "identifier": "tp:hollow_cluster"
+    },
+    "features": ["tp:glow_bloom", "tp:pale_bloom"]
+  }
+}

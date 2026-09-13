@@ -1,0 +1,17 @@
+{
+  "format_version": "1.13.0",
+  "minecraft:scatter_feature": {
+    "description": {
+      "identifier": "tp:scatter_blooms"
+    },
+    "places_feature": "tp:bloom_patch",
+    "distribution": {
+      "iterations": 4,
+      "scatter_chance": 50.0,
+      "coordinate_eval_order": "xzy",
+      "x": { "distribution": "uniform", "extent": [0, 15] },
+      "y": { "distribution": "uniform", "extent": [62, 90] },
+      "z": { "distribution": "uniform", "extent": [0, 15] }
+    }
+  }
+}
