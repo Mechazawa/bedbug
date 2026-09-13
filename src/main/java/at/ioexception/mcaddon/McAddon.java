@@ -5,6 +5,7 @@ import at.ioexception.mcaddon.pack.PackSet;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.registry.AddonBlocks;
+import at.ioexception.mcaddon.registry.AddonBrewing;
 import at.ioexception.mcaddon.registry.AddonCreativeTab;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.registry.AddonItems;
@@ -55,8 +56,9 @@ public final class McAddon implements ModInitializer {
     @Override
     public void onInitialize() {
         // Before the packs are read, because a converted loot table names this condition type and
-        // the game looks the name up as it parses the table.
+        // this function type, and the game looks both names up as it parses the table.
         at.ioexception.mcaddon.bedrock.behaviour.BedrockCondition.register();
+        at.ioexception.mcaddon.bedrock.behaviour.BedrockFunction.register();
 
         packs = PackDiscovery.scan();
         packs.report().forEach(LOGGER::info);
@@ -68,6 +70,8 @@ public final class McAddon implements ModInitializer {
         // registry by the time the item asking for it is built.
         AddonBlocks.register(packs);
         AddonItems.register(packs);
+        // After the items, because a brewing recipe naming a pack's own bottle has to find it.
+        AddonBrewing.register(packs);
         AddonSpawns.register(packs);
         // Logged after the spawn rules are read, because the conditions they drop belong in the
         // same register as the components an entity declares.

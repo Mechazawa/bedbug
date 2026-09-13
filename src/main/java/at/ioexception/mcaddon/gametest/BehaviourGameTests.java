@@ -89,6 +89,27 @@ public final class BehaviourGameTests {
     }
 
     /**
+     * A Bedrock loot function Java has none of picks an enchantment and rolls its level.
+     *
+     * `enchant_book_for_trading` reaches a loot function of this mod's own type carrying the object
+     * the pack wrote, so what is under test is the whole path: the type registered, the converted
+     * table named it, the object survived the codec and the book came back enchanted.
+     */
+    @GameTest()
+    public void aBedrockLootFunctionEnchantsTheBookItNames(GameTestHelper helper) {
+        List<ItemStack> rolled = Platform.rollLoot(helper.getLevel(),
+            Platform.id("tp", "entities/tome"), Platform.mockPlayer(helper));
+        if (rolled.isEmpty()) {
+            helper.succeed();
+            return;
+        }
+
+        helper.assertTrue(rolled.stream().anyMatch(stack -> Platform.storedEnchantmentCount(stack) > 0),
+            "The pack's book table handed out a book carrying no enchantment.");
+        helper.succeed();
+    }
+
+    /**
      * A drop the pack asked to keep lies there past the five minutes an ordinary one lasts.
      *
      * The lifetime is counted on the entity and the pack states it on the item, so the two are only

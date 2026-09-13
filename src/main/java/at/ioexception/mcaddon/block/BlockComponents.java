@@ -54,12 +54,13 @@ import java.util.Map;
  * @param chestObstruction what a chest opening in the space below this block is allowed to do
  * @param support        the shape other blocks rest on, or null for the one the collision box gives
  * @param connections    which of the blocks that reach sideways may reach this one
+ * @param occlusion      the shape neighbouring faces are culled against, or null for Java's own
  */
 public record BlockComponents(VoxelShape collision, VoxelShape selection, int lightDampening,
     Component craftingTitle, int catchChance, int destroyChance, Redstone redstone,
     List<Placement> placement, BlockEvents events, List<String> scripted,
     boolean dynamicProperties, ChestObstruction chestObstruction, VoxelShape support,
-    Connections connections) {
+    Connections connections, VoxelShape occlusion) {
 
     /** The explosion resistance Java gives bedrock, which no blast reaches. */
     private static final float BLAST_PROOF = 3600000f;
@@ -141,7 +142,7 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
     }
 
     public static BlockComponents of(BlockDefinition definition,
-        Map<String, Property<?>> properties) {
+        Map<String, Property<?>> properties, PackShapes shapes) {
         JsonObject components = definition.components();
         boolean burns = components.has("minecraft:flammable")
             && !isFalse(components.get("minecraft:flammable"));
@@ -157,7 +158,15 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
             BlockEvents.of(definition, properties), scripted(components),
             flag(components, "minecraft:block_entity", "dynamic_properties"),
             ChestObstruction.of(text(components, "minecraft:chest_obstruction", "obstruction_rule")),
-            support(components), connections(components));
+            support(components), connections(components),
+            shapes.named(cullingShape(components)));
+    }
+
+    /** The shape `minecraft:geometry` culls against, which it names beside the model it draws. */
+    private static String cullingShape(JsonObject components) {
+        JsonElement geometry = components.get("minecraft:geometry");
+        return geometry != null && geometry.isJsonObject()
+            ? Json.text(geometry.getAsJsonObject(), "culling_shape", null) : null;
     }
 
     /**
@@ -679,7 +688,7 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
     }
 
     /** A vector is three numbers in an array, or the same three under `x`, `y` and `z`. */
-    private static double[] vector(JsonElement value, double x, double y, double z) {
+    static double[] vector(JsonElement value, double x, double y, double z) {
         double[] fallback = {x, y, z};
         if (value == null) return fallback;
 

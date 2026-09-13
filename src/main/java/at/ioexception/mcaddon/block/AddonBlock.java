@@ -152,6 +152,26 @@ public class AddonBlock extends Block {
     }
 
     /**
+     * The shape the face between this block and the one beside it is culled against.
+     *
+     * `minecraft:geometry` names it under `culling_shape` and the pack's own `shapes/` declare it.
+     * A block naming none keeps the shape Java works out from the block itself.
+     */
+    //? if >=26 {
+    @Override
+    public VoxelShape getOcclusionShape(BlockState state) {
+        VoxelShape occlusion = components == null ? null : components.occlusion();
+        return occlusion == null ? super.getOcclusionShape(state) : occlusion;
+    }
+    //?} else {
+    /*@Override
+    public VoxelShape getOcclusionShape(BlockState state, BlockGetter level, BlockPos position) {
+        VoxelShape occlusion = components == null ? null : components.occlusion();
+        return occlusion == null ? super.getOcclusionShape(state, level, position) : occlusion;
+    }
+    *///?}
+
+    /**
      * Whether a fence, a wall or a pane is allowed to reach across to a block of this kind.
      *
      * All three ask Java the same first question, whether the face turned towards them is full, and

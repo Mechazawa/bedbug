@@ -24,9 +24,16 @@ import java.util.Set;
  */
 public record RecipeDefinition(String identifier, Kind kind, List<String> pattern,
     Map<String, String> key, List<Ingredient> ingredients, String result, int resultCount,
-    String group, List<String> tags, Smithing smithing, List<String> unlock) {
+    String group, List<String> tags, Smithing smithing, List<String> unlock, Brewing brewing) {
 
-    public enum Kind { SHAPED, SHAPELESS, FURNACE, SMITHING_TRANSFORM, SMITHING_TRIM }
+    public enum Kind {
+        SHAPED, SHAPELESS, FURNACE, SMITHING_TRANSFORM, SMITHING_TRIM,
+        BREWING_MIX, BREWING_CONTAINER;
+
+        public boolean brews() {
+            return this == BREWING_MIX || this == BREWING_CONTAINER;
+        }
+    }
 
     public record Ingredient(String item, int count) {
     }
@@ -35,10 +42,20 @@ public record RecipeDefinition(String identifier, Kind kind, List<String> patter
     public record Smithing(String template, String base, String addition) {
     }
 
+    /**
+     * A brewing stand's three parts: what stands in the bottles, what goes on top, and what comes out.
+     *
+     * A mix names a potion on each side, written `minecraft:potion_type:<name>`, and a container
+     * names the bottle itself, so `minecraft:potion` with gunpowder becomes `minecraft:splash_potion`.
+     */
+    public record Brewing(String input, String reagent, String output) {
+    }
+
     /** The recipe kinds this mod converts, against which a pack's own file is checked. */
     private static final Set<String> CONVERTED = Set.of(
         "minecraft:recipe_shaped", "minecraft:recipe_shapeless", "minecraft:recipe_furnace",
-        "minecraft:recipe_smithing_transform", "minecraft:recipe_smithing_trim");
+        "minecraft:recipe_smithing_transform", "minecraft:recipe_smithing_trim",
+        "minecraft:recipe_brewing_mix", "minecraft:recipe_brewing_container");
 
     /**
      * Every field of a recipe body this reads, qualified by the kind carrying it.
@@ -69,7 +86,12 @@ public record RecipeDefinition(String identifier, Kind kind, List<String> patter
         "smithing_trim.description", "smithing_trim.description.identifier",
         "smithing_trim.template", "smithing_trim.template.tag", "smithing_trim.base",
         "smithing_trim.base.tag", "smithing_trim.addition", "smithing_trim.addition.tag",
-        "smithing_trim.tags");
+        "smithing_trim.tags",
+        "brewing_mix.description", "brewing_mix.description.identifier", "brewing_mix.input",
+        "brewing_mix.reagent", "brewing_mix.output", "brewing_mix.tags",
+        "brewing_container.description", "brewing_container.description.identifier",
+        "brewing_container.input", "brewing_container.reagent", "brewing_container.output",
+        "brewing_container.tags");
 
     /** The fields Java's own recipe has no place for, each reported once a pack writes one. */
     private static final List<String> REPORTED = List.of("priority", "assume_symmetry");
@@ -79,7 +101,9 @@ public record RecipeDefinition(String identifier, Kind kind, List<String> patter
         Kind.SHAPELESS, "minecraft:recipe_shapeless",
         Kind.FURNACE, "minecraft:recipe_furnace",
         Kind.SMITHING_TRANSFORM, "minecraft:recipe_smithing_transform",
-        Kind.SMITHING_TRIM, "minecraft:recipe_smithing_trim");
+        Kind.SMITHING_TRIM, "minecraft:recipe_smithing_trim",
+        Kind.BREWING_MIX, "minecraft:recipe_brewing_mix",
+        Kind.BREWING_CONTAINER, "minecraft:recipe_brewing_container");
 
     public static List<RecipeDefinition> readAll(BedrockPack pack) {
         List<RecipeDefinition> recipes = new ArrayList<>();
@@ -96,8 +120,8 @@ public record RecipeDefinition(String identifier, Kind kind, List<String> patter
 
     private static RecipeDefinition read(JsonObject root) {
         // A recipe file names its kind as its only top-level key, so a kind nothing reads is a
-        // recipe that never reaches the game and is worth saying so. Java builds its brewing from
-        // its own code rather than from a data pack, and no Java block reduces a material.
+        // recipe that never reaches the game and is worth saying so. No Java block reduces a
+        // material, which is what `minecraft:recipe_material_reduction` describes.
         for (String declared : root.keySet()) {
             if (declared.startsWith("minecraft:recipe_") && !CONVERTED.contains(declared)) {
                 AddonEntities.unsupported(declared);
@@ -125,6 +149,16 @@ public record RecipeDefinition(String identifier, Kind kind, List<String> patter
     }
 
     private static RecipeDefinition build(Kind kind, String identifier, JsonObject body) {
+        List<String> tags = new ArrayList<>();
+        for (JsonElement tag : Json.list(body, "tags")) {
+            if (tag.isJsonPrimitive()) tags.add(tag.getAsString());
+        }
+        if (kind.brews()) {
+            return new RecipeDefinition(identifier, kind, List.of(), Map.of(), List.of(), null, 1,
+                null, tags, null, List.of(), new Brewing(Json.text(body, "input", null),
+                    Json.text(body, "reagent", null), Json.text(body, "output", null)));
+        }
+
         List<String> pattern = new ArrayList<>();
         for (JsonElement row : Json.list(body, "pattern")) {
             if (row.isJsonPrimitive()) pattern.add(row.getAsString());
@@ -163,13 +197,8 @@ public record RecipeDefinition(String identifier, Kind kind, List<String> patter
         String result = itemOf(output);
         if (result == null && kind != Kind.SMITHING_TRIM) return null;
 
-        List<String> tags = new ArrayList<>();
-        for (JsonElement tag : Json.list(body, "tags")) {
-            if (tag.isJsonPrimitive()) tags.add(tag.getAsString());
-        }
-
         return new RecipeDefinition(identifier, kind, pattern, key, ingredients, result,
-            count(output), Json.text(body, "group", null), tags, smithing, unlock(body));
+            count(output), Json.text(body, "group", null), tags, smithing, unlock(body), null);
     }
 
     /**

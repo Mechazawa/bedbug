@@ -134,22 +134,29 @@ These are the checks it runs, and what each one catches:
 
   It carries one of everything the mod has a reader for, so a reader that stops working shows up as
   a count that dropped: an item icon in each of the three shapes a pack may write it in, a block with
-  states and permutations drawn with its own geometry, a recipe of each kind that converts, two
+  states and permutations drawn with its own geometry and culling against a named voxel shape, a
+  recipe of each kind that converts, two
   entities whose spawn eggs take each of the two forms, an animation firing a sound and a particle
   off its timeline, three `particles/*.json` in the 1.10.0 format, a texture set whose emissive
-  channel has pixels in it, and a function using the commands and selector arguments that need
-  translating.
+  channel has pixels in it, a glyph page beside the locale list and the locale names a pack declares,
+  and a function using the commands and selector arguments that need translating.
 
-  The recipes cover the five kinds and the fields that decide what each becomes: a furnace recipe
+  The recipes cover the seven kinds and the fields that decide what each becomes: a furnace recipe
   naming four cookers and an unlock item, a shapeless one tagged for the stonecutter and unlocked by
   a context, a shaped one keyed on an item tag and carrying a `group`, a `priority` and an unlock
-  naming both an item and a tag, a smithing transform and a smithing trim. The ember's own loot
-  table, its equipment table and its trade table are the other three: between them they use each
+  naming both an item and a tag, a smithing transform, a smithing trim, a brewing mix turning one
+  potion into another over one of the pack's own items, and a brewing container turning a bottle into
+  a splash bottle. The ember's own loot table, its equipment table, a book table and its trade table
+  are the other four: between them they use each
   loot function and condition that converts, both entry types, a pool condition and an entry
   condition, a payment with two items to choose between, two tiers with the second behind an
   experience threshold, a trade whose result is enchanted, one whose result is dyed, one selling an
   enchanted book priced by its own result and one selling an explorer map. Each also names something
   this mod reports rather than converts, so a run says both halves of the reporting path still work.
+
+  The book table is the one a game test rolls: it holds a single entry carrying
+  `enchant_book_for_trading` and no condition, so the loot function type this mod registers is
+  exercised from the converted table through the codec to the enchanted book that comes back.
 - **`tools/testpack/build_modules.py`** builds a second add-on, whose script imports every
   `@minecraft/*` module the mod provides and calls one thing from each. Its sources are a manifest
   and one script under `tools/testpack/modules/`.
@@ -578,6 +585,24 @@ counts as covered. Either give a state's clips a fade of that length or report t
   carries it, so `shaped.key.tag` and `trade.max_uses` say which of the two `tag` fields and which
   `max_uses` is meant. The run ends by naming any declared field whose own literal appears nowhere
   else in the source, which is a claim with no reader behind it.
+- **`tools/census/packfiles.py`** measures the file kinds themselves. Every other census here is
+  about the vocabulary inside a file kind the mod already reads, and none of them can see a whole
+  directory an add-on ships that nothing opens, because a directory nobody reads asks no questions.
+
+  ```bash
+  python3 tools/census/packfiles.py            # the table, then what is reported and what is silent
+  python3 tools/census/packfiles.py --strict   # exits non-zero while a pack kind goes unnamed
+  ```
+
+  The published side is Mojang's own pack pair, widened by the material in the same checkout naming a
+  kind that pair happens not to ship. The mod's side is the `READ` and `DEFINED` declarations in
+  `pack/PackFiles.java`, and the difference between them is what `PackFiles.report` names against the
+  pack that shipped it.
+
+  **The silent column is the one that has to stay at zero.** A kind in `DEFINED` and not in `READ` is
+  reported to the author; a kind in neither is a directory the mod passes over without a word. The
+  run also names any path declared as read whose own literal appears in no other source file, which
+  is a coverage claim with no reader behind it.
 
 ## Conventions
 
@@ -626,6 +651,7 @@ tools/census/model.py        Coverage of the fields the geometry and animation r
 tools/census/commands.py     Coverage of Bedrock's published command dialect
 tools/census/particles.py    Coverage of Bedrock's published particle format
 tools/census/data.py         The same, for loot tables, recipes and trade tables
+tools/census/packfiles.py    Coverage of the file kinds a pack may ship, against the ones read
 tools/checkall.sh            Every check, in the order that fails fastest
 tools/census/script.py       How much of the published script API this mod offers
 tools/scene/scene.py         Scenes run inside the game, with nobody at the keyboard

@@ -913,6 +913,43 @@ public final class Platform {
     }
 
     /**
+     * A book carrying one named enchantment at a stated level, as a Bedrock loot function asks for.
+     *
+     * The stack a pack's entry names is an ordinary book, which Java has no way of writing a stored
+     * enchantment onto, so the book handed back is the enchanted one. An enchantment the game does
+     * not have leaves the stack as it was and is named.
+     */
+    public static net.minecraft.world.item.ItemStack enchantedBook(
+        net.minecraft.world.item.ItemStack stack, net.minecraft.core.RegistryAccess registries,
+        String named, int level) {
+        //? if >=26 {
+        net.minecraft.core.Registry<net.minecraft.world.item.enchantment.Enchantment> registry =
+            registries.lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT);
+        //?} else {
+        /*net.minecraft.core.Registry<net.minecraft.world.item.enchantment.Enchantment> registry =
+            registries.registryOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT);
+        *///?}
+
+        Identifier id = Identifier.tryParse(named.indexOf(':') < 0 ? "minecraft:" + named : named);
+        java.util.Optional<net.minecraft.world.item.enchantment.Enchantment> found =
+            id == null ? java.util.Optional.empty() : registry.getOptional(id);
+        if (found.isEmpty()) {
+            at.ioexception.mcaddon.registry.AddonEntities.unsupported("loot enchantment " + named);
+            return stack;
+        }
+
+        net.minecraft.world.item.ItemStack book = new net.minecraft.world.item.ItemStack(
+            net.minecraft.world.item.Items.ENCHANTED_BOOK, Math.max(1, stack.getCount()));
+        //? if >=1.21 {
+        book.enchant(registry.wrapAsHolder(found.get()), level);
+        //?} else {
+        /*net.minecraft.world.item.EnchantedBookItem.addEnchantment(book,
+            new net.minecraft.world.item.enchantment.EnchantmentInstance(found.get(), level));
+        *///?}
+        return book;
+    }
+
+    /**
      * How many enchantments a book is holding for whoever reads it.
      *
      * 1.20.5 moved them out of the item's own NBT list and onto a component beside every other one.
