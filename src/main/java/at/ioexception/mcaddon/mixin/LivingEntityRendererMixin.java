@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.mixin;
 
+import at.ioexception.mcaddon.client.render.AddonClientAssets;
 import at.ioexception.mcaddon.client.render.AttachableLayer;
 import at.ioexception.mcaddon.client.render.RenderStates;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
@@ -37,7 +38,7 @@ public abstract class LivingEntityRendererMixin {
     private void mcaddon$rememberEntity(LivingEntity entity,
         net.minecraft.client.renderer.entity.state.LivingEntityRenderState state, float partialTick,
         CallbackInfo info) {
-        RenderStates.remember(state, entity);
+        if (AddonClientAssets.anyAttachables()) RenderStates.remember(state, entity);
     }
     //?}
 }

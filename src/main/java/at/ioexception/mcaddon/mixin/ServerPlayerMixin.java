@@ -34,13 +34,13 @@ public abstract class ServerPlayerMixin {
     }
 
     //? if >=26 {
-    @Inject(method = "openHorseInventory", at = @At("TAIL"), require = 0)
+    @Inject(method = "openHorseInventory", at = @At("TAIL"))
     private void mcaddon$openedMount(net.minecraft.world.entity.animal.equine.AbstractHorse mount,
         Container container, CallbackInfo info) {
         WorldEvents.mountOpened((ServerPlayer) (Object) this, mount);
     }
     //?} else {
-    /*@Inject(method = "openHorseInventory", at = @At("TAIL"), require = 0)
+    /*@Inject(method = "openHorseInventory", at = @At("TAIL"))
     private void mcaddon$openedMount(net.minecraft.world.entity.animal.horse.AbstractHorse mount,
         Container container, CallbackInfo info) {
         WorldEvents.mountOpened((ServerPlayer) (Object) this, mount);

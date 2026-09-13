@@ -74,4 +74,15 @@ public final class AddonClientAssets {
     public static List<Binding> attachablesFor(String itemIdentifier) {
         return ATTACHABLES.getOrDefault(itemIdentifier, List.of());
     }
+
+    /**
+     * Whether any pack describes something worn or held.
+     *
+     * The layer that draws those hangs off every living entity renderer in the game, and the
+     * pairing it reads is recorded for every entity a frame draws. With no pack describing one,
+     * both cost a field read instead of a map write and a walk of six equipment slots per entity.
+     */
+    public static boolean anyAttachables() {
+        return !ATTACHABLES.isEmpty();
+    }
 }

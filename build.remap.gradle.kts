@@ -66,15 +66,23 @@ repositories {
 }
 
 /**
- * Mods this one is meant to work beside, installed only for `runClient`.
+ * Mods this one is meant to work beside, installed only for a dev run.
+ *
+ * Each one reaches a part of the game this mod also touches: the renderers Sodium, Iris and Indium
+ * replace, the entity, explosion, piston and chest paths Lithium rewrites, the block state storage
+ * Ferrite Core repacks, the living entity renderer Entity Texture Features and Entity Model
+ * Features both extend, the off-thread chunk loading C2ME introduces, and the dynamic registry
+ * entries Lithostitched and Terralith write from packs of their own.
  *
  * A version that has no build of one simply leaves the property empty. None of them is compiled
  * against, so nothing here changes what the mod jar needs.
  */
-fun companionMods() = listOf("sodium", "iris", "indium").mapNotNull { name ->
-    val version = findProperty("deps.$name") as String?
-    if (version.isNullOrBlank()) null else "maven.modrinth:$name:$version"
-}
+fun companionMods() = listOf("sodium", "iris", "indium", "lithium", "ferrite-core",
+    "entitytexturefeatures", "entity-model-features", "c2me-fabric", "lithostitched", "terralith")
+    .mapNotNull { name ->
+        val version = findProperty("deps.$name") as String?
+        if (version.isNullOrBlank()) null else "maven.modrinth:$name:$version"
+    }
 
 dependencies {
     minecraft("com.mojang:minecraft:${prop("deps.minecraft")}")

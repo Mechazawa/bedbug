@@ -25,7 +25,7 @@ public abstract class LivingEntityMixin {
     private float mcaddonHealthBefore;
 
     @Inject(method = "addEffect(Lnet/minecraft/world/effect/MobEffectInstance;Lnet/minecraft/world/entity/Entity;)Z",
-        at = @At("HEAD"), cancellable = true, require = 0)
+        at = @At("HEAD"), cancellable = true)
     private void mcaddon$beforeEffect(MobEffectInstance effect, net.minecraft.world.entity.Entity source,
         CallbackInfoReturnable<Boolean> info) {
         LivingEntity self = (LivingEntity) (Object) this;
@@ -35,7 +35,7 @@ public abstract class LivingEntityMixin {
     }
 
     @Inject(method = "addEffect(Lnet/minecraft/world/effect/MobEffectInstance;Lnet/minecraft/world/entity/Entity;)Z",
-        at = @At("RETURN"), require = 0)
+        at = @At("RETURN"))
     private void mcaddon$afterEffect(MobEffectInstance effect, net.minecraft.world.entity.Entity source,
         CallbackInfoReturnable<Boolean> info) {
         LivingEntity self = (LivingEntity) (Object) this;
@@ -44,7 +44,7 @@ public abstract class LivingEntityMixin {
         WorldEvents.effectAdded(self, effect);
     }
 
-    @Inject(method = "heal", at = @At("HEAD"), cancellable = true, require = 0)
+    @Inject(method = "heal", at = @At("HEAD"), cancellable = true)
     private void mcaddon$beforeHeal(float amount, CallbackInfo info) {
         LivingEntity self = (LivingEntity) (Object) this;
         if (self.level().isClientSide()) return;
@@ -52,13 +52,13 @@ public abstract class LivingEntityMixin {
         if (WorldEvents.healRefused(self, amount)) info.cancel();
     }
 
-    @Inject(method = "heal", at = @At("RETURN"), require = 0)
+    @Inject(method = "heal", at = @At("RETURN"))
     private void mcaddon$afterHeal(float amount, CallbackInfo info) {
         LivingEntity self = (LivingEntity) (Object) this;
         if (!self.level().isClientSide()) WorldEvents.healed(self, amount);
     }
 
-    @Inject(method = "setHealth", at = @At("HEAD"), require = 0)
+    @Inject(method = "setHealth", at = @At("HEAD"))
     private void mcaddon$beforeHealth(float health, CallbackInfo info) {
         mcaddonHealthBefore = ((LivingEntity) (Object) this).getHealth();
     }
@@ -70,7 +70,7 @@ public abstract class LivingEntityMixin {
      * chunk, before it is in the world at all. A script belongs to the server thread and would
      * refuse the call, so what Bedrock does not call a health change is not offered as one.
      */
-    @Inject(method = "setHealth", at = @At("RETURN"), require = 0)
+    @Inject(method = "setHealth", at = @At("RETURN"))
     private void mcaddon$afterHealth(float health, CallbackInfo info) {
         LivingEntity self = (LivingEntity) (Object) this;
         MinecraftServer server = self.level().getServer();

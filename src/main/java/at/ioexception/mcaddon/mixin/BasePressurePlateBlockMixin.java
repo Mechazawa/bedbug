@@ -18,6 +18,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * The game hands this method the signal the plate carried and works the new one out from what is
  * standing on it, so both halves of the change are available before anything is written back. An
  * entity is only there for the plate going down: it comes up on its own clock.
+ *
+ * Reading the new signal is a second count of what is on the plate, so it is asked for only once
+ * something is listening.
  */
 @Mixin(BasePressurePlateBlock.class)
 public abstract class BasePressurePlateBlockMixin {
@@ -28,7 +31,7 @@ public abstract class BasePressurePlateBlockMixin {
     private void mcaddon$pressed(Entity entity, Level level, BlockPos position, BlockState state,
         int signal, CallbackInfo info) {
 
-        if (level.isClientSide()) return;
+        if (level.isClientSide() || !WorldEvents.listening()) return;
 
         WorldEvents.plateSignalChanged(level, position, entity, signal, getSignalStrength(level, position));
     }

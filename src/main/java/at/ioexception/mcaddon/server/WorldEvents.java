@@ -91,6 +91,17 @@ public final class WorldEvents {
     private WorldEvents() {
     }
 
+    /**
+     * Whether a script is running that any of this could be told to.
+     *
+     * Every event here asks it as well, so a caller only needs it where gathering what the event
+     * carries costs something. A pressure plate and a tripwire each count what is standing on them,
+     * which is an entity query the game is already paying for once.
+     */
+    public static boolean listening() {
+        return ServerHooks.scripts() != null;
+    }
+
     public static void register() {
         PlayerBlockBreakEvents.BEFORE.register((level, player, position, state, blockEntity) ->
             !breakRefused(level, player, position));

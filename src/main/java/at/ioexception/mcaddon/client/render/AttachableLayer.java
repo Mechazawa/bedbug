@@ -88,7 +88,7 @@ public class AttachableLayer<S extends LivingEntityRenderState, M extends Entity
      * entity, which carries an animator an attachable can reach and write into.
      */
     private static List<Attachables.Drawn> worn(LivingEntity entity, float partialTick) {
-        if (entity == null) return List.of();
+        if (entity == null || !AddonClientAssets.anyAttachables()) return List.of();
 
         return Attachables.on(entity, Animators.rootOf(entity.getId()), partialTick);
     }

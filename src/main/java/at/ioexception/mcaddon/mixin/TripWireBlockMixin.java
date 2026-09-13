@@ -21,6 +21,9 @@ import java.util.List;
  * call is the point the change happened at: the new state is in the world and everything standing in
  * the line is still where it was. 26 moved the body of the check into an overload carrying that
  * list, which is why the injector is written twice rather than once.
+ *
+ * Gathering what is standing in the line costs an entity query on the older versions and a walk of
+ * the game's own list on 26, so both are asked for only once something is listening.
  */
 @Mixin(TripWireBlock.class)
 public abstract class TripWireBlockMixin {
@@ -33,7 +36,7 @@ public abstract class TripWireBlockMixin {
     private void mcaddon$tripped(Level level, BlockPos position, List<? extends Entity> found,
         CallbackInfo info) {
 
-        if (level.isClientSide()) return;
+        if (level.isClientSide() || !WorldEvents.listening()) return;
 
         WorldEvents.tripWireTripped(level, position, mcaddon$powered(level, position),
             mcaddon$tripping(found));
@@ -44,7 +47,7 @@ public abstract class TripWireBlockMixin {
             + "updateSource(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;"
             + "Lnet/minecraft/world/level/block/state/BlockState;)V"))
     private void mcaddon$tripped(Level level, BlockPos position, CallbackInfo info) {
-        if (level.isClientSide()) return;
+        if (level.isClientSide() || !WorldEvents.listening()) return;
 
         List<Entity> found = level.getEntities((Entity) null,
             level.getBlockState(position).getShape(level, position).bounds().move(position));

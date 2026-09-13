@@ -20,13 +20,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ServerLevel.class)
 public abstract class ServerLevelGameEventMixin {
     //? if >=1.21 {
-    @Inject(method = "gameEvent", at = @At("HEAD"), require = 0)
+    @Inject(method = "gameEvent", at = @At("HEAD"))
     private void mcaddon$rememberEvent(net.minecraft.core.Holder<GameEvent> event, Vec3 where,
         GameEvent.Context context, CallbackInfo info) {
         AddonEntity.rememberGameEvent((ServerLevel) (Object) this, where);
     }
     //?} else {
-    /*@Inject(method = "gameEvent", at = @At("HEAD"), require = 0)
+    /*@Inject(method = "gameEvent", at = @At("HEAD"))
     private void mcaddon$rememberEvent(GameEvent event, Vec3 where, GameEvent.Context context,
         CallbackInfo info) {
         AddonEntity.rememberGameEvent((ServerLevel) (Object) this, where);
