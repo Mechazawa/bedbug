@@ -151,6 +151,9 @@ public final class AddonEntities {
      * A component naming something the game already does for every mob is in here too: a pack saying
      * an entity is pushable or has physics is describing what a Java mob does anyway, so honouring it
      * is doing nothing, and reporting it would be noise rather than a gap.
+     *
+     * That is the only reason a name belongs here without a reader of its own. A component this mod
+     * neither acts on nor gets for free stays out, so `/mcaddon entities` counts it.
      */
     private static final Set<String> IMPLEMENTED = Set.of(
         "minecraft:health", "minecraft:scale", "minecraft:collision_box", "minecraft:movement",
@@ -161,7 +164,7 @@ public final class AddonEntities {
         "minecraft:environment_sensor", "minecraft:entity_sensor", "minecraft:timer",
         "minecraft:scheduler", "minecraft:hurt_on_condition", "minecraft:spawn_entity",
         "minecraft:physics", "minecraft:pushable", "minecraft:push_through", "minecraft:despawn",
-        "minecraft:nameable", "minecraft:persistent", "minecraft:loot", "minecraft:jump.static",
+        "minecraft:nameable", "minecraft:persistent", "minecraft:jump.static",
         "minecraft:can_climb", "minecraft:breathable", "minecraft:conditional_bandwidth_optimization",
         "minecraft:entity_spawned", "minecraft:follow_range", "minecraft:knockback_resistance",
         "minecraft:fire_immune", "minecraft:is_hidden_when_invisible", "minecraft:experience_reward",
@@ -181,21 +184,46 @@ public final class AddonEntities {
         "minecraft:navigation.walk", "minecraft:navigation.generic", "minecraft:navigation.swim",
         "minecraft:navigation.float", "minecraft:navigation.fly", "minecraft:navigation.climb",
         "minecraft:navigation.hover", "minecraft:movement.basic", "minecraft:movement.generic",
-        "minecraft:movement.fly", "minecraft:movement.hover", "minecraft:movement.jump",
-        "minecraft:movement.skip", "minecraft:movement.sway", "minecraft:movement.amphibious",
+        "minecraft:movement.fly", "minecraft:movement.hover", "minecraft:movement.glide",
+        "minecraft:movement.amphibious",
         "minecraft:preferred_path", "minecraft:leashable", "minecraft:angry",
         "minecraft:pushable_by_entity", "minecraft:pushable_by_block", "minecraft:rideable",
         "minecraft:teleport", "minecraft:trade_resupply", "minecraft:behavior.trade_with_player",
         "minecraft:behavior.trade_interest", "minecraft:behavior.pickup_items",
-        "minecraft:shareables", "minecraft:inventory", "minecraft:equipment",
+        "minecraft:shareables",
         "minecraft:home", "minecraft:dweller", "minecraft:target_nearby_sensor",
         "minecraft:color", "minecraft:color2", "minecraft:breedable", "minecraft:offspring",
         "minecraft:leashable_to", "minecraft:spawn_egg_interaction",
-        "minecraft:behavior.breed", "minecraft:behavior.follow_parent", "minecraft:behavior.sleep",
+        "minecraft:behavior.breed", "minecraft:behavior.sleep",
         "minecraft:behavior.drink_milk", "minecraft:behavior.drink_potion",
-        "minecraft:behavior.share_items", "minecraft:dimension_bound", "minecraft:hide",
+        "minecraft:dimension_bound",
         "minecraft:behavior.play", "minecraft:balloonable", "minecraft:managed_wandering_trader",
-        "minecraft:behavior.take_flower", "minecraft:behavior.celebrate_survive");
+        "minecraft:behavior.take_flower", "minecraft:behavior.celebrate_survive",
+        "minecraft:behavior.look_at_entity", "minecraft:behavior.random_look_around_and_sit",
+        "minecraft:behavior.go_home", "minecraft:behavior.move_to_village",
+        "minecraft:behavior.move_through_village", "minecraft:behavior.mingle",
+        "minecraft:behavior.move_towards_target", "minecraft:behavior.random_fly",
+        "minecraft:behavior.random_hover", "minecraft:behavior.hover",
+        "minecraft:behavior.float_wander", "minecraft:behavior.random_swim",
+        "minecraft:behavior.swim_wander", "minecraft:behavior.move_to_water",
+        "minecraft:behavior.move_to_liquid", "minecraft:behavior.swim_up_for_breath",
+        "minecraft:behavior.eat_block", "minecraft:behavior.flee_sun",
+        "minecraft:behavior.find_cover", "minecraft:behavior.restrict_sun",
+        "minecraft:behavior.break_door", "minecraft:annotation.break_door",
+        "minecraft:behavior.follow_mob", "minecraft:behavior.leap_at_target",
+        "minecraft:behavior.stalk_and_pounce_on_target", "minecraft:behavior.delayed_attack",
+        "minecraft:behavior.stomp_attack", "minecraft:behavior.charge_attack",
+        "minecraft:behavior.nearest_prioritized_attackable_target",
+        "minecraft:behavior.target_when_pushed", "minecraft:behavior.float_tempt",
+        "minecraft:attack", "minecraft:attack_damage",
+        "minecraft:burns_in_daylight", "minecraft:damage_over_time",
+        "minecraft:ambient_sound_interval", "minecraft:sound_volume",
+        "minecraft:cannot_be_attacked", "minecraft:is_collidable",
+        "minecraft:is_charged", "minecraft:is_chested", "minecraft:is_saddled",
+        "minecraft:is_ignited", "minecraft:is_illager_captain", "minecraft:is_pregnant",
+        "minecraft:is_shaking", "minecraft:is_stackable", "minecraft:is_stunned",
+        "minecraft:is_tamed", "minecraft:absorption", "minecraft:transient",
+        "minecraft:mob_effect_immunity");
 
     /**
      * The trade table an entity names, read while the pack it came from is still in hand.

@@ -148,6 +148,21 @@ public final class ScriptBridge {
         return Component.translatable(key).getString();
     }
 
+    /**
+     * The `MemoryTier` band this server sits in, measured from the heap the JVM was given.
+     *
+     * Bedrock reads the device's own memory; the nearest thing a Java server knows about itself is
+     * how much it is allowed to allocate, so the bands are drawn over that.
+     */
+    @HostAccess.Export
+    public int memoryTier() {
+        long megabytes = Runtime.getRuntime().maxMemory() / (1024L * 1024L);
+        if (megabytes < 1536) return 0;
+        if (megabytes < 3072) return 1;
+        if (megabytes < 6144) return 2;
+        return megabytes < 12288 ? 3 : 4;
+    }
+
     // World
 
     @HostAccess.Export
@@ -196,25 +211,15 @@ public final class ScriptBridge {
     @HostAccess.Export
     public String gameRule(String name) {
         String value = Platform.gameRule(server, name);
-        if (value == null) unsupported("World.gameRules." + name);
+        if (value == null) unsupported("GameRules." + name);
         return value;
     }
 
-    /**
-     * Written through the command rather than the rule map.
-     *
-     * `/gamerule` takes the same name on all three versions where the typed keys do not, and setting
-     * one is rare enough that going through the parser costs nothing.
-     */
     @HostAccess.Export
     public void setGameRule(String name, Value value) {
-        if (Platform.gameRule(server, name) == null) {
-            unsupported("World.gameRules." + name + " (write)");
-            return;
+        if (!Platform.setGameRule(server, name, String.valueOf(value))) {
+            unsupported("GameRules." + name + " (write)");
         }
-        // Bedrock capitalises the daylight rule differently; the rest share their spelling.
-        String rule = name.equals("doDayLightCycle") ? "doDaylightCycle" : name;
-        run(server.createCommandSourceStack(), "gamerule " + rule + " " + value);
     }
 
     @HostAccess.Export
@@ -1019,10 +1024,31 @@ public final class ScriptBridge {
             .orElse(new int[] {0, 0, 0});
     }
 
+    /** Every structure the world holds, whether a data pack shipped it or a script saved it. */
+    @HostAccess.Export
+    public String[] structureIds() {
+        return server.getStructureManager().listTemplates().map(Identifier::toString).toArray(String[]::new);
+    }
+
+    @HostAccess.Export
+    public boolean structureExists(String structure) {
+        Identifier id = structure == null ? null : Identifier.tryParse(structure);
+        return id != null && server.getStructureManager().get(id).isPresent();
+    }
+
+    /** Writes a structure the world was holding in memory out to disk, under the id it has. */
+    @HostAccess.Export
+    public boolean saveStructureToWorld(String structure) {
+        Identifier id = structure == null ? null : Identifier.tryParse(structure);
+        return id != null && server.getStructureManager().save(id);
+    }
+
+    /** False when the id named nothing, which is the answer Bedrock gives for a delete that missed. */
     @HostAccess.Export
     public boolean deleteStructure(String structure) {
-        unsupported("StructureManager.delete");
-        return false;
+        if (!structureExists(structure)) return false;
+        server.getStructureManager().remove(Identifier.tryParse(structure));
+        return true;
     }
 
     /**

@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.script.surface;
 
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
+import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.script.ScriptCoverage;
 import at.ioexception.mcaddon.server.EntityPropertySync;
@@ -399,5 +400,36 @@ public final class EntityMembers extends Surface {
         ServerEntityDefinition definition = AddonEntities.definitionOf(found.getType());
         JsonObject body = definition == null ? null : definition.components().get(component);
         return body == null ? null : body.toString();
+    }
+
+    /** Every component the pack declared for this entity, in the order the pack wrote them. */
+    @HostAccess.Export
+    public String[] packComponents(String id) {
+        Entity found = entity(id);
+        ServerEntityDefinition definition = found == null ? null
+            : AddonEntities.definitionOf(found.getType());
+        return definition == null ? new String[0]
+            : definition.components().keySet().toArray(String[]::new);
+    }
+
+    /** Who is holding this entity on a lead, or null when nobody is. */
+    @HostAccess.Export
+    public String leashHolder(String id) {
+        Entity holder = Platform.leashHolder(entity(id));
+        return holder == null ? null : holder.getStringUUID();
+    }
+
+    /** False when this entity is not the kind that can be led, which is what Bedrock reports. */
+    @HostAccess.Export
+    public boolean leashTo(String id, String holderId) {
+        Entity entity = entity(id);
+        Entity holder = entity(holderId);
+        return entity != null && holder != null && Platform.leashTo(entity, holder);
+    }
+
+    @HostAccess.Export
+    public boolean unleash(String id) {
+        Entity entity = entity(id);
+        return entity != null && Platform.unleash(entity);
     }
 }

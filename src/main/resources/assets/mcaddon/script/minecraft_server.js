@@ -470,8 +470,11 @@ function sameItem(one, other) {
 const itemComponents = Object.freeze([
     ItemComponentTypes.Durability, ItemComponentTypes.Food, ItemComponentTypes.Cooldown,
     ItemComponentTypes.Enchantable, ItemComponentTypes.Dyeable, ItemComponentTypes.Potion,
-    ItemComponentTypes.Compostable,
+    ItemComponentTypes.Compostable, ItemComponentTypes.Book,
 ]);
+
+// The two items that carry pages. Every other item answers that it has no book.
+const bookItems = Object.freeze(["minecraft:writable_book", "minecraft:written_book"]);
 
 /**
  * A stack of items, held as a value of its own and not as a slot in the world.
@@ -542,6 +545,8 @@ export class ItemStack {
         copy.dyeColor = this.dyeColor;
         copy.canDestroy = [...(this.canDestroy ?? [])];
         copy.canPlaceOn = [...(this.canPlaceOn ?? [])];
+        copy.book = this.book === undefined
+            ? undefined : { ...this.book, pages: [...this.book.pages] };
         return copy;
     }
 
@@ -579,6 +584,8 @@ export class ItemStack {
         const name = normaliseComponent(component);
         const info = itemInfo(this.typeId);
         switch (name) {
+            case ItemComponentTypes.Book:
+                return bookItems.includes(this.typeId) ? new ItemBookComponent(this) : undefined;
             case ItemComponentTypes.Durability:
                 return this.#durability(name);
             case ItemComponentTypes.Food:
@@ -1091,9 +1098,6 @@ export class EntityInventoryComponent extends EntityComponent {
     static componentId = "minecraft:inventory";
 }
 
-export class EntityRideableComponent extends EntityComponent {
-}
-
 export class EntityRidingComponent extends EntityComponent {
 }
 
@@ -1115,11 +1119,272 @@ export class EntityIsBabyComponent extends EntityComponent {
 export class EntityItemComponent extends EntityComponent {
 }
 
-export class EntityLeashableComponent extends EntityComponent {
+/**
+ * A component answered from what the pack declared for the entity rather than from the live game.
+ *
+ * Java holds none of this. Its pathfinding keeps no record of whether a mob may open a door and its
+ * arrows carry no bounce flag, so the behaviour pack is the only place the answer exists. The pack
+ * is read on every access, and a field the pack left out falls back to Bedrock's own default for it.
+ */
+class DeclaredComponent extends EntityComponent {
+    #entity;
+    #typeId;
+
+    constructor(entity, typeId) {
+        super();
+        this.#entity = entity;
+        this.#typeId = typeId;
+    }
+
+    get entity() {
+        return this.#entity;
+    }
+
+    get typeId() {
+        return this.#typeId;
+    }
+
+    get isValid() {
+        return bridge.entityIsValid(this.#entity.id);
+    }
+
+    field(name, fallback) {
+        const body = bridge.entityMembers.packComponent(this.#entity.id, this.#typeId);
+        const declared = body === null ? undefined : JSON.parse(body)[name];
+        return declared === undefined ? fallback : declared;
+    }
 }
 
-export class EntityProjectileComponent extends EntityComponent {
+/**
+ * Gives a component class one getter per declared field.
+ *
+ * Each entry is the name a script reads the field under, the name the pack writes it under, and the
+ * value Bedrock uses when the pack leaves it out.
+ */
+function declaredFields(component, fields) {
+    fields.forEach(([member, field, fallback]) => Object.defineProperty(component.prototype, member, {
+        enumerable: true,
+        get() {
+            return this.field(field, fallback);
+        },
+    }));
 }
+
+export class EntityNavigationComponent extends DeclaredComponent {
+}
+
+declaredFields(EntityNavigationComponent, [
+    ["avoidDamageBlocks", "avoid_damage_blocks", false],
+    ["avoidPortals", "avoid_portals", false],
+    ["avoidSun", "avoid_sun", false],
+    ["avoidWater", "avoid_water", false],
+    ["canBreach", "can_breach", false],
+    ["canBreakDoors", "can_break_doors", false],
+    ["canFloat", "can_float", false],
+    ["canJump", "can_jump", true],
+    ["canOpenDoors", "can_open_doors", false],
+    ["canOpenIronDoors", "can_open_iron_doors", false],
+    ["canPassDoors", "can_pass_doors", true],
+    ["canPathFromAir", "can_path_from_air", false],
+    ["canPathOverLava", "can_path_over_lava", false],
+    ["canPathOverWater", "can_path_over_water", false],
+    ["canSink", "can_sink", true],
+    ["canSwim", "can_swim", false],
+    ["canWalk", "can_walk", true],
+    ["canWalkInLava", "can_walk_in_lava", false],
+    ["isAmphibious", "is_amphibious", false],
+]);
+
+export class EntityBreathableComponent extends DeclaredComponent {
+    static componentId = "minecraft:breathable";
+
+    getBreatheBlocks() {
+        return this.field("breathe_blocks", []).map(blockPermutationOf);
+    }
+
+    getNonBreatheBlocks() {
+        return this.field("non_breathe_blocks", []).map(blockPermutationOf);
+    }
+}
+
+declaredFields(EntityBreathableComponent, [
+    ["breathesAir", "breathes_air", true],
+    ["breathesLava", "breathes_lava", false],
+    ["breathesSolids", "breathes_solids", false],
+    ["breathesWater", "breathes_water", false],
+    ["generatesBubbles", "generates_bubbles", true],
+    ["inhaleTime", "inhale_time", 0],
+    ["suffocateTime", "suffocate_time", -20],
+    ["totalSupply", "total_supply", 15],
+]);
+
+/** A pack names a block either bare or as an object carrying its states. */
+function blockPermutationOf(block) {
+    return typeof block === "string"
+        ? BlockPermutation.resolve(normaliseComponent(block))
+        : BlockPermutation.resolve(normaliseComponent(block.name), block.states);
+}
+
+export class EntityLeashableComponent extends DeclaredComponent {
+    static componentId = "minecraft:leashable";
+
+    get isLeashed() {
+        return bridge.entityMembers.leashHolder(this.entity.id) !== null;
+    }
+
+    get leashHolder() {
+        return entityFor(bridge.entityMembers.leashHolder(this.entity.id));
+    }
+
+    get leashHolderEntityId() {
+        return bridge.entityMembers.leashHolder(this.entity.id) ?? undefined;
+    }
+
+    leashTo(leashHolder) {
+        if (!bridge.entityMembers.leashTo(this.entity.id, leashHolder?.id)) {
+            unsupported("EntityLeashableComponent.leashTo");
+        }
+    }
+
+    unleash() {
+        if (!bridge.entityMembers.unleash(this.entity.id)) {
+            unsupported("EntityLeashableComponent.unleash");
+        }
+    }
+}
+
+declaredFields(EntityLeashableComponent, [
+    ["canBeStolen", "can_be_stolen", false],
+    ["hardDistance", "hard_distance", 55],
+    ["maxDistance", "max_distance", 10],
+    ["softDistance", "soft_distance", 4],
+]);
+
+export class EntityRideableComponent extends DeclaredComponent {
+    static componentId = "minecraft:rideable";
+
+    getFamilyTypes() {
+        return this.field("family_types", []);
+    }
+
+    getRiders() {
+        return list(bridge.entityRiders(this.entity.id)).map(id => entityFor(id));
+    }
+
+    getSeats() {
+        return this.field("seats", []).map(seat => new Seat(seat));
+    }
+
+    addRider(rider) {
+        return bridge.addRider(this.entity.id, rider.id);
+    }
+
+    ejectRider(rider) {
+        bridge.ejectRider(this.entity.id, rider.id);
+    }
+
+    ejectRiders() {
+        this.getRiders().forEach(rider => this.ejectRider(rider));
+    }
+}
+
+declaredFields(EntityRideableComponent, [
+    ["controllingSeat", "controlling_seat", 0],
+    ["crouchingSkipInteract", "crouching_skip_interact", true],
+    ["interactText", "interact_text", ""],
+    ["passengerMaxWidth", "passenger_max_width", 0],
+    ["pullInEntities", "pull_in_entities", false],
+    ["riderCanInteract", "rider_can_interact", false],
+    ["seatCount", "seat_count", 1],
+]);
+
+/** One seat of a rideable entity, as the pack wrote it. */
+export class Seat {
+    constructor(declared) {
+        this.lockRiderRotation = declared.lock_rider_rotation ?? 181;
+        this.maxRiderCount = declared.max_rider_count ?? 1;
+        this.minRiderCount = declared.min_rider_count ?? 0;
+        this.position = vector(declared.position ?? [0, 0, 0]);
+        this.seatRotation = declared.rotate_rider_by ?? 0;
+    }
+}
+
+export class EntityProjectileComponent extends DeclaredComponent {
+    static componentId = "minecraft:projectile";
+
+    /** Bedrock keeps who fired a projectile; Java keeps it per projectile class and not on an entity. */
+    get owner() {
+        return unsupported("EntityProjectileComponent.owner");
+    }
+
+    /**
+     * Throws the entity along a velocity, dropping whatever it was already doing.
+     *
+     * An impulse of nothing clears the movement, so the two calls together set the velocity rather
+     * than adding to it.
+     */
+    shoot(velocity, options) {
+        if (options?.uncertainty !== undefined) {
+            unsupported("ProjectileShootOptions.uncertainty");
+        }
+        bridge.applyImpulse(this.entity.id, 0, 0, 0);
+        bridge.applyImpulse(this.entity.id, velocity.x, velocity.y, velocity.z);
+    }
+}
+
+declaredFields(EntityProjectileComponent, [
+    ["airInertia", "inertia", 0.99],
+    ["catchFireOnHurt", "catch_fire", false],
+    ["critParticlesOnProjectileHurt", "crit_particle_on_hurt", false],
+    ["destroyOnProjectileHurt", "destroy_on_hurt", false],
+    ["gravity", "gravity", 0.05],
+    ["hitEntitySound", "hit_sound", undefined],
+    ["hitGroundSound", "hit_ground_sound", undefined],
+    ["hitParticle", "particle", undefined],
+    ["lightningStrikeOnHit", "lightning", false],
+    ["liquidInertia", "liquid_inertia", 0.6],
+    ["onFireTime", "on_fire_time", 5],
+    ["shouldBounceOnHit", "should_bounce", false],
+    ["stopOnHit", "stop_on_hit", false],
+]);
+
+export class EntityNavigationClimbComponent extends EntityNavigationComponent {
+    static componentId = "minecraft:navigation.climb";
+}
+
+export class EntityNavigationFloatComponent extends EntityNavigationComponent {
+    static componentId = "minecraft:navigation.float";
+}
+
+export class EntityNavigationFlyComponent extends EntityNavigationComponent {
+    static componentId = "minecraft:navigation.fly";
+}
+
+export class EntityNavigationGenericComponent extends EntityNavigationComponent {
+    static componentId = "minecraft:navigation.generic";
+}
+
+export class EntityNavigationHoverComponent extends EntityNavigationComponent {
+    static componentId = "minecraft:navigation.hover";
+}
+
+export class EntityNavigationWalkComponent extends EntityNavigationComponent {
+    static componentId = "minecraft:navigation.walk";
+}
+
+// Every component this mod builds from the pack's own definition, against the class that reads it.
+const DECLARED_COMPONENTS = Object.freeze({
+    "minecraft:breathable": EntityBreathableComponent,
+    "minecraft:leashable": EntityLeashableComponent,
+    "minecraft:projectile": EntityProjectileComponent,
+    "minecraft:rideable": EntityRideableComponent,
+    "minecraft:navigation.climb": EntityNavigationClimbComponent,
+    "minecraft:navigation.float": EntityNavigationFloatComponent,
+    "minecraft:navigation.fly": EntityNavigationFlyComponent,
+    "minecraft:navigation.generic": EntityNavigationGenericComponent,
+    "minecraft:navigation.hover": EntityNavigationHoverComponent,
+    "minecraft:navigation.walk": EntityNavigationWalkComponent,
+});
 
 export class ItemComponent {
 }
@@ -1128,6 +1393,97 @@ export class ItemDurabilityComponent extends ItemComponent {
 }
 
 export class ItemEnchantableComponent extends ItemComponent {
+}
+
+/**
+ * The pages of a writable or a written book, kept on the stack the way its lore is.
+ *
+ * A page reads and writes as plain text whichever kind of book it is; a signed book stores its
+ * pages as text components, and that conversion happens where the stack reaches the world.
+ */
+export class ItemBookComponent extends ItemComponent {
+    static componentId = "minecraft:book";
+
+    #stack;
+
+    constructor(stack) {
+        super();
+        this.#stack = stack;
+        this.typeId = ItemBookComponent.componentId;
+    }
+
+    #book() {
+        this.#stack.book = this.#stack.book ?? { signed: false, pages: [] };
+        return this.#stack.book;
+    }
+
+    /** Bedrock raises rather than growing the book when a pack names a page that is not there. */
+    #page(pageIndex) {
+        const pages = this.#book().pages;
+        if (!(pageIndex >= 0 && pageIndex < pages.length)) {
+            throw new BookPageContentError(
+                "No page " + pageIndex + " in a book of " + pages.length);
+        }
+        return pages;
+    }
+
+    get isSigned() {
+        return this.#book().signed;
+    }
+
+    get title() {
+        return this.#book().title;
+    }
+
+    get author() {
+        return this.#book().author;
+    }
+
+    get pageCount() {
+        return this.#book().pages.length;
+    }
+
+    get contents() {
+        return [...this.#book().pages];
+    }
+
+    get rawContents() {
+        return this.#book().pages.map(text => ({ text }));
+    }
+
+    getPageContent(pageIndex) {
+        return this.#book().pages[pageIndex];
+    }
+
+    getRawPageContent(pageIndex) {
+        const page = this.getPageContent(pageIndex);
+        return page === undefined ? undefined : { text: page };
+    }
+
+    setContents(contents) {
+        this.#book().pages = (contents ?? []).map(rawText);
+    }
+
+    setPageContent(pageIndex, content) {
+        this.#page(pageIndex)[pageIndex] = rawText(content);
+    }
+
+    insertPage(pageIndex, content) {
+        this.#book().pages.splice(pageIndex, 0, rawText(content));
+    }
+
+    removePage(pageIndex) {
+        this.#page(pageIndex).splice(pageIndex, 1);
+    }
+
+    /** Signing turns the stack into the other item, which is what carries a title and an author. */
+    signBook(title, author) {
+        const book = this.#book();
+        book.signed = true;
+        book.title = title;
+        book.author = author;
+        this.#stack.typeId = "minecraft:written_book";
+    }
 }
 
 export class ItemFoodComponent extends ItemComponent {
@@ -1801,9 +2157,10 @@ export class Entity {
     }
 
     getComponents() {
-        const names = list(bridge.entityComponents(this.id));
-        if (hasComponent(this, "minecraft:inventory")) names.push("minecraft:inventory");
-        return names.map(name => componentFor(this, name));
+        const names = new Set(list(bridge.entityComponents(this.id)));
+        if (hasComponent(this, "minecraft:inventory")) names.add("minecraft:inventory");
+        declaredComponents(this).forEach(name => names.add(name));
+        return [...names].map(name => componentFor(this, name));
     }
 
     getEffects() {
@@ -2008,36 +2365,7 @@ export class Player extends Entity {
     }
 
     get onScreenDisplay() {
-        const id = this.id;
-        return {
-            isValid: true,
-            setActionBar(text) {
-                bridge.players.setActionBar(id, JSON.stringify(text));
-            },
-            setTitle(text, options) {
-                bridge.players.setTitle(id, JSON.stringify(text), JSON.stringify(options ?? null));
-            },
-            updateSubtitle(text) {
-                bridge.players.updateSubtitle(id, JSON.stringify(text));
-            },
-            getHiddenHudElements() {
-                unsupported("ScreenDisplay.getHiddenHudElements");
-                return [];
-            },
-            hideAllExcept() {
-                unsupported("ScreenDisplay.hideAllExcept");
-            },
-            isForcedHidden() {
-                unsupported("ScreenDisplay.isForcedHidden");
-                return false;
-            },
-            resetHudElementsVisibility() {
-                unsupported("ScreenDisplay.resetHudElementsVisibility");
-            },
-            setHudVisibility() {
-                unsupported("ScreenDisplay.setHudVisibility");
-            },
-        };
+        return new ScreenDisplay(this.id);
     }
 
     sendMessage(message) {
@@ -2126,6 +2454,56 @@ function rawText(message) {
     return String(message);
 }
 
+/**
+ * The title, subtitle and action bar one player is being shown.
+ *
+ * The HUD members are the rest of it, and a Java server has no say over which pieces of a client's
+ * HUD are drawn, so each of those is reported rather than answered.
+ */
+export class ScreenDisplay {
+    #playerId;
+
+    constructor(playerId) {
+        this.#playerId = playerId;
+    }
+
+    get isValid() {
+        return bridge.entityIsValid(this.#playerId);
+    }
+
+    setActionBar(text) {
+        bridge.players.setActionBar(this.#playerId, JSON.stringify(text));
+    }
+
+    setTitle(title, options) {
+        bridge.players.setTitle(this.#playerId, JSON.stringify(title), JSON.stringify(options ?? null));
+    }
+
+    updateSubtitle(subtitle) {
+        bridge.players.updateSubtitle(this.#playerId, JSON.stringify(subtitle));
+    }
+
+    getHiddenHudElements() {
+        return unsupported("ScreenDisplay.getHiddenHudElements", []);
+    }
+
+    hideAllExcept() {
+        unsupported("ScreenDisplay.hideAllExcept");
+    }
+
+    isForcedHidden() {
+        return unsupported("ScreenDisplay.isForcedHidden", false);
+    }
+
+    resetHudElementsVisibility() {
+        unsupported("ScreenDisplay.resetHudElementsVisibility");
+    }
+
+    setHudVisibility() {
+        unsupported("ScreenDisplay.setHudVisibility");
+    }
+}
+
 function normaliseComponent(component) {
     const name = typeof component === "string" ? component : String(component);
     return name.includes(":") ? name : "minecraft:" + name;
@@ -2136,15 +2514,25 @@ function normaliseComponent(component) {
  *
  * The inventory is answered by whether a container could be found for the entity, because a player
  * and a chest minecart hold their items in objects the entity component list knows nothing about.
+ * Everything the pack declared is answered from the pack, which is the only place it was written.
  */
 function hasComponent(entity, name) {
-    return name === "minecraft:inventory"
-        ? bridge.containers.ofEntity(entity.id) !== null
+    if (name === "minecraft:inventory") return bridge.containers.ofEntity(entity.id) !== null;
+    return DECLARED_COMPONENTS[name] !== undefined
+        ? declaredComponents(entity).includes(name)
         : bridge.entityHasComponent(entity.id, name);
+}
+
+function declaredComponents(entity) {
+    return list(bridge.entityMembers.packComponents(entity.id))
+        .filter(name => DECLARED_COMPONENTS[name] !== undefined);
 }
 
 /** Only the components real packs read are modelled; the rest report themselves as unsupported. */
 function componentFor(entity, name) {
+    const declared = DECLARED_COMPONENTS[name];
+    if (declared !== undefined) return new declared(entity, name);
+
     switch (name) {
         case "minecraft:inventory":
             return {
@@ -2233,6 +2621,7 @@ function itemFrom(handle) {
     stack.maxDurability = handle.maxDurability ?? 0;
     stack.lore = handle.lore ?? [];
     stack.properties = handle.properties ?? {};
+    stack.book = handle.book;
     return stack;
 }
 
@@ -2246,6 +2635,7 @@ function itemJson(stack) {
         nameTag: stack.nameTag ?? "",
         lore: stack.lore ?? [],
         properties: stack.properties ?? {},
+        book: stack.book,
     });
 }
 
@@ -2640,9 +3030,50 @@ const RAISED = {
     systemBefore: ["startup", "shutdown"],
 };
 
+/**
+ * The game rules, under the names Bedrock gives them.
+ *
+ * Each name is a property with a getter and a setter, built from the two tables below because the
+ * only thing that differs between one rule and the next is whether it holds a flag or a count. A
+ * rule Java has nothing that means the same as reads as `undefined`, and the bridge reports it.
+ */
+const GAME_RULE_FLAGS = [
+    "commandBlockOutput", "commandBlocksEnabled", "doDayLightCycle", "doEntityDrops", "doFireTick",
+    "doImmediateRespawn", "doInsomnia", "doLimitedCrafting", "doMobLoot", "doMobSpawning",
+    "doTileDrops", "doWeatherCycle", "drowningDamage", "fallDamage", "fireDamage", "freezeDamage",
+    "keepInventory", "mobGriefing", "naturalRegeneration", "projectilesCanBreakBlocks", "pvp",
+    "recipesUnlock", "respawnBlocksExplode", "sendCommandFeedback", "showBorderEffect",
+    "showCoordinates", "showDaysPlayed", "showDeathMessages", "showRecipeMessages", "showTags",
+    "tntExplodes", "tntExplosionDropDecay",
+];
+
+const GAME_RULE_COUNTS = [
+    "functionCommandLimit", "maxCommandChainLength", "playersSleepingPercentage", "randomTickSpeed",
+    "spawnRadius",
+];
+
+export class GameRules {}
+
+function defineGameRule(name, read) {
+    Object.defineProperty(GameRules.prototype, name, {
+        enumerable: true,
+        get() {
+            const answer = bridge.gameRule(name);
+            return answer === null || answer === undefined ? undefined : read(answer);
+        },
+        set(value) {
+            bridge.setGameRule(name, value);
+        },
+    });
+}
+
+GAME_RULE_FLAGS.forEach(name => defineGameRule(name, answer => answer === "true"));
+GAME_RULE_COUNTS.forEach(name => defineGameRule(name, Number));
+
 export class World {
     #afterEvents = eventGroup(RAISED.worldAfter);
     #beforeEvents = eventGroup(RAISED.worldBefore);
+    #gameRules = new GameRules();
 
     get afterEvents() {
         return this.#afterEvents;
@@ -2653,15 +3084,7 @@ export class World {
     }
 
     get gameRules() {
-        return new Proxy({}, {
-            get(target, name) {
-                return bridge.gameRule(String(name));
-            },
-            set(target, name, value) {
-                bridge.setGameRule(String(name), value);
-                return true;
-            },
-        });
+        return this.#gameRules;
     }
 
     get isHardcore() {
@@ -2794,42 +3217,103 @@ export class World {
     }
 
     get structureManager() {
-        return {
-            get(id) {
-                const size = bridge.structureSize(id);
-                return size[0] === 0 && size[1] === 0 && size[2] === 0
-                    ? undefined
-                    : { id, size: { x: size[0], y: size[1], z: size[2] } };
-            },
-
-            place(structure, dimension, location, options) {
-                const id = typeof structure === "string" ? structure : structure?.id;
-                return bridge.placeStructure(dimension.id, id,
-                    Math.floor(location.x), Math.floor(location.y), Math.floor(location.z),
-                    options?.rotation ?? "None", options?.mirror ?? "None");
-            },
-
-            createFromWorld(id, dimension, from, to, options) {
-                const low = {
-                    x: Math.min(Math.floor(from.x), Math.floor(to.x)),
-                    y: Math.min(Math.floor(from.y), Math.floor(to.y)),
-                    z: Math.min(Math.floor(from.z), Math.floor(to.z)),
-                };
-                const size = {
-                    x: Math.abs(Math.floor(to.x) - Math.floor(from.x)) + 1,
-                    y: Math.abs(Math.floor(to.y) - Math.floor(from.y)) + 1,
-                    z: Math.abs(Math.floor(to.z) - Math.floor(from.z)) + 1,
-                };
-                bridge.saveStructure(dimension.id, id, low.x, low.y, low.z, size.x, size.y, size.z);
-                return { id, size };
-            },
-
-            delete(structure) {
-                return bridge.deleteStructure(typeof structure === "string" ? structure : structure?.id);
-            },
-        };
+        return structureManager;
     }
 }
+
+/**
+ * One saved structure, named by its id.
+ *
+ * Java's structure templates keep their blocks in a palette nothing outside the class can reach, so
+ * the members that read or write a single block inside a structure are reported rather than
+ * answered. Everything about the structure as a whole is real.
+ */
+export class Structure {
+    constructor(id) {
+        this.id = id;
+    }
+
+    get isValid() {
+        return bridge.structureExists(this.id);
+    }
+
+    get size() {
+        return vector(bridge.structureSize(this.id));
+    }
+
+    saveToWorld() {
+        bridge.saveStructureToWorld(this.id);
+    }
+
+    saveAs() {
+        return unsupported("Structure.saveAs");
+    }
+
+    getBlockPermutation() {
+        return unsupported("Structure.getBlockPermutation");
+    }
+
+    getIsWaterlogged() {
+        return unsupported("Structure.getIsWaterlogged", false);
+    }
+
+    setBlockPermutation() {
+        unsupported("Structure.setBlockPermutation");
+    }
+}
+
+export class StructureManager {
+    get(identifier) {
+        return bridge.structureExists(identifier) ? new Structure(identifier) : undefined;
+    }
+
+    getWorldStructureIds() {
+        return list(bridge.structureIds());
+    }
+
+    /** Java keeps a data pack's structures and the world's own in one place, under one set of ids. */
+    getPackStructureIds() {
+        return unsupported("StructureManager.getPackStructureIds", []);
+    }
+
+    place(structure, dimension, location, options) {
+        bridge.placeStructure(dimension.id, idOfStructure(structure),
+            Math.floor(location.x), Math.floor(location.y), Math.floor(location.z),
+            options?.rotation ?? "None", options?.mirror ?? "None");
+    }
+
+    createFromWorld(identifier, dimension, from, to) {
+        const low = corner(from, to, Math.min);
+        const high = corner(from, to, Math.max);
+        bridge.saveStructure(dimension.id, identifier, low.x, low.y, low.z,
+            high.x - low.x + 1, high.y - low.y + 1, high.z - low.z + 1);
+        return new Structure(identifier);
+    }
+
+    /** A template with no blocks in it has nothing Java can be asked to write them into. */
+    createEmpty() {
+        return unsupported("StructureManager.createEmpty");
+    }
+
+    delete(structure) {
+        return bridge.deleteStructure(idOfStructure(structure));
+    }
+
+    placeJigsaw() {
+        return unsupported("StructureManager.placeJigsaw");
+    }
+
+    placeJigsawStructure() {
+        return unsupported("StructureManager.placeJigsawStructure");
+    }
+}
+
+/** A pack names a structure either by its id or by handing back one it was given. */
+function idOfStructure(structure) {
+    return typeof structure === "string" ? structure : structure?.id;
+}
+
+const structureManager = new StructureManager();
 
 /** A scoreboard objective, which is what a pack reads and writes scores through. */
 export class ScoreboardObjective {
@@ -2975,7 +3459,7 @@ export const world = new World();
  * the tick budget is spent so a pack cannot stall the server indefinitely. A job is a generator the
  * pump advances while there is budget left.
  */
-class ScriptSystem {
+export class System {
     #next = 1;
     #runs = new Map();
     #jobs = new Map();
@@ -2992,6 +3476,15 @@ class ScriptSystem {
 
     get beforeEvents() {
         return this.#beforeEvents;
+    }
+
+    /** The editor is a Bedrock client mode, so a world this mod serves is never one. */
+    get isEditorWorld() {
+        return false;
+    }
+
+    get serverSystemInfo() {
+        return new SystemInfo();
     }
 
     run(callback) {
@@ -3068,7 +3561,13 @@ class ScriptSystem {
     }
 }
 
-export const system = new ScriptSystem();
+export class SystemInfo {
+    get memoryTier() {
+        return bridge.memoryTier();
+    }
+}
+
+export const system = new System();
 
 /**
  * The commands a pack registers during startup.
@@ -3302,7 +3801,6 @@ export class EntityAddRiderComponent {}
 export class EntityAgeableComponent {}
 export class EntityAttributeComponent {}
 export class EntityBaseMovementComponent {}
-export class EntityBreathableComponent {}
 export class EntityCanClimbComponent {}
 export class EntityCanFlyComponent {}
 export class EntityCanPowerJumpComponent {}
@@ -3367,13 +3865,6 @@ export class EntityMovementHoverComponent {}
 export class EntityMovementJumpComponent {}
 export class EntityMovementSkipComponent {}
 export class EntityMovementSwayComponent {}
-export class EntityNavigationClimbComponent {}
-export class EntityNavigationComponent {}
-export class EntityNavigationFloatComponent {}
-export class EntityNavigationFlyComponent {}
-export class EntityNavigationGenericComponent {}
-export class EntityNavigationHoverComponent {}
-export class EntityNavigationWalkComponent {}
 export class EntityOnFireComponent {}
 export class EntityPushThroughComponent {}
 export class EntityRemoveAfterEvent {}
@@ -3401,10 +3892,8 @@ export class FillContainerFunction {}
 export class FluidContainer {}
 export class GameRuleChangeAfterEvent {}
 export class GameRuleChangeAfterEventSignal {}
-export class GameRules {}
 export class InputInfo {}
 export class IsBabyCondition {}
-export class ItemBookComponent {}
 export class ItemCompleteUseAfterEvent {}
 export class ItemCompleteUseAfterEventSignal {}
 export class ItemCompleteUseEvent {}
@@ -3521,10 +4010,8 @@ export class RandomDyeFunction {}
 export class RandomRegionalDifficultyChanceCondition {}
 export class Scoreboard {}
 export class ScoreboardScoreInfo {}
-export class ScreenDisplay {}
 export class ScriptEventCommandMessageAfterEvent {}
 export class ScriptEventCommandMessageAfterEventSignal {}
-export class Seat {}
 export class SetArmorTrimFunction {}
 export class SetBannerDetailsFunction {}
 export class SetBookContentsFunction {}
@@ -3544,12 +4031,8 @@ export class SmeltItemFunction {}
 export class SpecificEnchantFunction {}
 export class StartupBeforeEventSignal {}
 export class StartupEvent {}
-export class Structure {}
-export class StructureManager {}
-export class System {}
 export class SystemAfterEvents {}
 export class SystemBeforeEvents {}
-export class SystemInfo {}
 export class TargetBlockHitAfterEvent {}
 export class TargetBlockHitAfterEventSignal {}
 export class TickingAreaManager {}

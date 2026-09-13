@@ -13,13 +13,32 @@ import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.AvoidEntityGoal;
+import net.minecraft.world.entity.ai.goal.BreakDoorGoal;
+import net.minecraft.world.entity.ai.goal.BreathAirGoal;
+import net.minecraft.world.entity.ai.goal.EatBlockGoal;
+import net.minecraft.world.entity.ai.goal.FleeSunGoal;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
+import net.minecraft.world.entity.ai.goal.FollowMobGoal;
+import net.minecraft.world.entity.ai.goal.LeapAtTargetGoal;
+import net.minecraft.world.entity.ai.goal.MoveBackToVillageGoal;
+import net.minecraft.world.entity.ai.goal.MoveThroughVillageGoal;
 import net.minecraft.world.entity.ai.goal.MoveTowardsRestrictionGoal;
+import net.minecraft.world.entity.ai.goal.MoveTowardsTargetGoal;
 import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.PanicGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
+import net.minecraft.world.entity.ai.goal.RandomSwimmingGoal;
+import net.minecraft.world.entity.ai.goal.RestrictSunGoal;
+import net.minecraft.world.entity.ai.goal.StrollThroughVillageGoal;
+import net.minecraft.world.entity.ai.goal.TryFindWaterGoal;
+import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomFlyingGoal;
 import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
+import net.minecraft.world.entity.ai.navigation.FlyingPathNavigation;
+import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
+import net.minecraft.world.entity.ai.navigation.PathNavigation;
+import net.minecraft.world.entity.ai.navigation.WallClimberNavigation;
+import net.minecraft.world.entity.ai.navigation.WaterBoundPathNavigation;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundEvent;
@@ -54,6 +73,7 @@ public class AddonEntity extends PathfinderMob implements Merchant {
         this.definition = AddonEntities.definitionOf(type);
         if (definition != null) {
             addGoals();
+            applyMoveControl();
             applyComponents();
         }
     }
@@ -93,7 +113,8 @@ public class AddonEntity extends PathfinderMob implements Merchant {
             .add(Attributes.MOVEMENT_SPEED, definition.movementSpeed())
             .add(Attributes.FOLLOW_RANGE, number(definition, "minecraft:follow_range", "value", 16))
             .add(Attributes.KNOCKBACK_RESISTANCE,
-                number(definition, "minecraft:knockback_resistance", "value", 0));
+                number(definition, "minecraft:knockback_resistance", "value", 0))
+            .add(Attributes.ATTACK_DAMAGE, attackDamage(definition));
 
         // 26 moved how far food tempts a mob out of the goal and onto the mob itself, and a goal
         // reading an attribute the type never declared fails the tick it runs in.
@@ -101,6 +122,26 @@ public class AddonEntity extends PathfinderMob implements Merchant {
         built = built.add(Attributes.TEMPT_RANGE, 10);
         //?}
         return built;
+    }
+
+    /**
+     * How hard the entity hits, from either component Bedrock lets a pack say it with.
+     *
+     * `minecraft:attack` writes the damage as a number or as a low and high pair, and a Java
+     * attribute holds one number, so a range becomes its midpoint.
+     */
+    private static double attackDamage(ServerEntityDefinition definition) {
+        com.google.gson.JsonObject attack = definition.components().get("minecraft:attack");
+        if (attack == null) {
+            return number(definition, "minecraft:attack_damage", "value", 1);
+        }
+
+        com.google.gson.JsonElement damage = attack.get("damage");
+        if (damage != null && damage.isJsonArray() && damage.getAsJsonArray().size() >= 2) {
+            return (damage.getAsJsonArray().get(0).getAsDouble()
+                + damage.getAsJsonArray().get(1).getAsDouble()) / 2;
+        }
+        return damage != null && damage.isJsonPrimitive() ? damage.getAsDouble() : 1;
     }
 
     /** A number a component carries, or the fallback when the pack declared neither. */
@@ -130,6 +171,9 @@ public class AddonEntity extends PathfinderMob implements Merchant {
         if (definition.components().containsKey("minecraft:persistent")) {
             setPersistenceRequired();
         }
+        if (has("minecraft:absorption")) {
+            setAbsorptionAmount((float) number(definition, "minecraft:absorption", "value", 0));
+        }
 
         // `color` and `color2` name a dye, which is the number a pack's own render controller reads
         // back as `q.color`. Java has no colour of its own for an arbitrary mob, so it is kept as
@@ -142,9 +186,16 @@ public class AddonEntity extends PathfinderMob implements Merchant {
         }
         if (has("minecraft:is_hidden_when_invisible")) setInvisible(isInvisible());
 
+        for (String marker : MARKERS) {
+            if (!has(marker)) continue;
+
+            ServerHooks.state().setProperty(getUUID(),
+                marker.substring("minecraft:".length()), true);
+        }
+
         // Bedrock names the kind of pathfinding; Java asks whether the navigator may take each route.
-        net.minecraft.world.entity.ai.navigation.PathNavigation navigation = getNavigation();
-        if (navigation instanceof net.minecraft.world.entity.ai.navigation.GroundPathNavigation ground) {
+        PathNavigation navigation = getNavigation();
+        if (navigation instanceof GroundPathNavigation ground) {
             ground.setCanOpenDoors(has("minecraft:annotation.open_door"));
             ground.setCanFloat(has("minecraft:navigation.swim") || has("minecraft:navigation.generic"));
         }
@@ -166,8 +217,65 @@ public class AddonEntity extends PathfinderMob implements Merchant {
         }
     }
 
+    /**
+     * The components that are a fact about the entity and nothing else.
+     *
+     * Each is a switch a pack sets on the entity and then reads back from its render controllers,
+     * its filters and its Molang, so carrying it as a property the server syncs is the whole of
+     * what Bedrock does with it. Java has no state of its own for any of them.
+     */
+    private static final String[] MARKERS = {
+        "minecraft:is_charged", "minecraft:is_chested", "minecraft:is_saddled",
+        "minecraft:is_ignited", "minecraft:is_illager_captain", "minecraft:is_pregnant",
+        "minecraft:is_shaking", "minecraft:is_stackable", "minecraft:is_stunned",
+        "minecraft:is_tamed", "minecraft:is_sheared", "minecraft:is_dyeable",
+    };
+
     private boolean has(String component) {
         return definition.components().containsKey(component);
+    }
+
+    /**
+     * The navigator the pack's `minecraft:navigation.*` component names.
+     *
+     * Java builds this inside the mob constructor, before the definition field is assigned, so the
+     * components are reached through the registry by type instead. An entity whose pack asked to
+     * fly and got a ground navigator walks under whatever it was supposed to fly over, which is
+     * why this is chosen per entity rather than left at the default.
+     */
+    @Override
+    protected PathNavigation createNavigation(Level level) {
+        ServerEntityDefinition declared = AddonEntities.definitionOf(getType());
+        if (declared == null) return super.createNavigation(level);
+
+        java.util.Set<String> components = declared.components().keySet();
+        if (components.contains("minecraft:navigation.fly")
+            || components.contains("minecraft:navigation.hover")
+            || components.contains("minecraft:navigation.float")) {
+            return new FlyingPathNavigation(this, level);
+        }
+        if (components.contains("minecraft:navigation.swim")) {
+            return new WaterBoundPathNavigation(this, level);
+        }
+        if (components.contains("minecraft:navigation.climb")
+            || components.contains("minecraft:can_climb")) {
+            return new WallClimberNavigation(this, level);
+        }
+        return super.createNavigation(level);
+    }
+
+    /**
+     * Holds the entity up when its pack described something that moves through the air.
+     *
+     * Java's default move control pulls a mob back to the ground between steps, so a flying
+     * navigator on its own produces a path the mob cannot follow. Hovering differs from flying only
+     * in whether the entity stops in place when it has nowhere to be.
+     */
+    private void applyMoveControl() {
+        boolean hovers = has("minecraft:movement.hover");
+        if (!hovers && !has("minecraft:movement.fly") && !has("minecraft:movement.glide")) return;
+
+        moveControl = new net.minecraft.world.entity.ai.control.FlyingMoveControl(this, 20, hovers);
     }
 
     /**
@@ -617,15 +725,62 @@ public class AddonEntity extends PathfinderMob implements Merchant {
                     goalSelector.addGoal(priority, new WaterAvoidingRandomStrollGoal(this, 0.6));
                 case "minecraft:behavior.look_at_player", "minecraft:behavior.look_at_trading_player" ->
                     goalSelector.addGoal(priority, new LookAtPlayerGoal(this, Player.class, 8f));
-                case "minecraft:behavior.random_look_around" ->
+                case "minecraft:behavior.random_look_around",
+                     "minecraft:behavior.random_look_around_and_sit" ->
                     goalSelector.addGoal(priority, new RandomLookAroundGoal(this));
+
+                // Bedrock names the kind of entity to watch; Java's goal takes a class, and the
+                // widest class that still means a creature is every living thing.
+                case "minecraft:behavior.look_at_entity" -> goalSelector.addGoal(priority,
+                    new LookAtPlayerGoal(this, net.minecraft.world.entity.LivingEntity.class, 8f));
 
                 // Bedrock names the kind of wandering; Java has one stroll goal and a speed.
                 case "minecraft:behavior.move_indoors",
                      "minecraft:behavior.move_towards_dwelling_restriction",
                      "minecraft:behavior.move_towards_home_restriction",
-                     "minecraft:behavior.move_towards_restriction" ->
+                     "minecraft:behavior.move_towards_restriction",
+                     "minecraft:behavior.go_home" ->
                     goalSelector.addGoal(priority, new MoveTowardsRestrictionGoal(this, 0.6));
+
+                case "minecraft:behavior.move_to_village" ->
+                    goalSelector.addGoal(priority, new MoveBackToVillageGoal(this, 0.6, false));
+                // Java's goal asks separately whether the route may run at night and whether the mob
+                // can get through a door. Bedrock states neither, so the walk is allowed at any
+                // hour and doors are left to the navigator.
+                case "minecraft:behavior.move_through_village" ->
+                    goalSelector.addGoal(priority,
+                        new MoveThroughVillageGoal(this, 0.6, false, 4, () -> false));
+                case "minecraft:behavior.mingle" ->
+                    goalSelector.addGoal(priority, new StrollThroughVillageGoal(this, 60));
+                case "minecraft:behavior.move_towards_target" ->
+                    goalSelector.addGoal(priority, new MoveTowardsTargetGoal(this, 0.9, 32f));
+
+                case "minecraft:behavior.random_fly", "minecraft:behavior.random_hover",
+                     "minecraft:behavior.hover", "minecraft:behavior.float_wander" ->
+                    goalSelector.addGoal(priority, new WaterAvoidingRandomFlyingGoal(this, 1.0));
+                case "minecraft:behavior.random_swim", "minecraft:behavior.swim_wander" ->
+                    goalSelector.addGoal(priority, new RandomSwimmingGoal(this, 1.0, 40));
+                case "minecraft:behavior.move_to_water", "minecraft:behavior.move_to_liquid" ->
+                    goalSelector.addGoal(priority, new TryFindWaterGoal(this));
+                case "minecraft:behavior.swim_up_for_breath" ->
+                    goalSelector.addGoal(priority, new BreathAirGoal(this));
+
+                case "minecraft:behavior.eat_block" ->
+                    goalSelector.addGoal(priority, new EatBlockGoal(this));
+                // Bedrock's find_cover and flee_sun both end with the mob standing out of the light.
+                case "minecraft:behavior.flee_sun", "minecraft:behavior.find_cover" ->
+                    goalSelector.addGoal(priority, new FleeSunGoal(this, 1.0));
+                case "minecraft:behavior.restrict_sun" ->
+                    goalSelector.addGoal(priority, new RestrictSunGoal(this));
+                // Java asks per difficulty whether a door may be broken; Bedrock states the ability
+                // once and leaves the difficulty out of it.
+                case "minecraft:behavior.break_door", "minecraft:annotation.break_door" ->
+                    goalSelector.addGoal(priority, new BreakDoorGoal(this, difficulty -> true));
+                case "minecraft:behavior.follow_mob" ->
+                    goalSelector.addGoal(priority, new FollowMobGoal(this, 1.0, 3f, 7f));
+                case "minecraft:behavior.leap_at_target",
+                     "minecraft:behavior.stalk_and_pounce_on_target" ->
+                    goalSelector.addGoal(priority, new LeapAtTargetGoal(this, 0.4f));
                 case "minecraft:behavior.mount_pathing", "minecraft:behavior.follow_owner",
                      "minecraft:behavior.play", "minecraft:behavior.stroll_towards_village" ->
                     goalSelector.addGoal(priority, new WaterAvoidingRandomStrollGoal(this, 0.6));
@@ -639,19 +794,26 @@ public class AddonEntity extends PathfinderMob implements Merchant {
                 case "minecraft:behavior.panic_on_fire" ->
                     goalSelector.addGoal(priority, new PanicGoal(this, 1.25));
 
-                case "minecraft:behavior.tempt" ->
+                case "minecraft:behavior.tempt", "minecraft:behavior.float_tempt" ->
                     goalSelector.addGoal(priority, Platform.temptGoal(this));
                 case "minecraft:behavior.open_door", "minecraft:annotation.open_door" ->
                     goalSelector.addGoal(priority, new OpenDoorGoal(this, true));
 
-                case "minecraft:behavior.melee_attack", "minecraft:behavior.melee_box_attack" ->
+                case "minecraft:behavior.melee_attack", "minecraft:behavior.melee_box_attack",
+                     "minecraft:behavior.delayed_attack", "minecraft:behavior.stomp_attack" ->
                     goalSelector.addGoal(priority,
                         new net.minecraft.world.entity.ai.goal.MeleeAttackGoal(this, 1.0, false));
-                case "minecraft:behavior.nearest_attackable_target" ->
+                // A charge is a melee attack run at, which Java expresses as the speed the goal
+                // closes the distance with.
+                case "minecraft:behavior.charge_attack" ->
+                    goalSelector.addGoal(priority,
+                        new net.minecraft.world.entity.ai.goal.MeleeAttackGoal(this, 1.4, false));
+                case "minecraft:behavior.nearest_attackable_target",
+                     "minecraft:behavior.nearest_prioritized_attackable_target" ->
                     targetSelector.addGoal(priority,
                         new net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal<>(
                             this, Player.class, true));
-                case "minecraft:behavior.hurt_by_target" ->
+                case "minecraft:behavior.hurt_by_target", "minecraft:behavior.target_when_pushed" ->
                     targetSelector.addGoal(priority,
                         new net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal(this));
 
@@ -687,7 +849,114 @@ public class AddonEntity extends PathfinderMob implements Merchant {
             rise();
             manageAsTrader();
             despawn();
+            burnInDaylight();
+            hurtOverTime();
         }
+    }
+
+    /**
+     * Sets the entity alight while the sun is on it, the way a Bedrock undead mob burns.
+     *
+     * The helmet exemption is Java's rule for its own undead and the one a player expects, so a
+     * pack's zombie behaves like the game's beside it.
+     */
+    private void burnInDaylight() {
+        if (!has("minecraft:burns_in_daylight") || isInWaterOrRain()) return;
+        if (Platform.dayTime(level()) % 24000L >= 12000L) return;
+        if (!level().canSeeSkyFromBelowWater(blockPosition())) return;
+        if (!getItemBySlot(net.minecraft.world.entity.EquipmentSlot.HEAD).isEmpty()) return;
+
+        //? if >=1.21 {
+        igniteForSeconds(8);
+        //?} else {
+        /*setSecondsOnFire(8);
+        *///?}
+    }
+
+    /**
+     * Wears the entity down at the rate `minecraft:damage_over_time` names.
+     *
+     * Bedrock counts the gap between hits in seconds and this runs on the sensor interval, so the
+     * gap is rounded to whole intervals rather than to ticks.
+     */
+    private void hurtOverTime() {
+        if (!has("minecraft:damage_over_time")
+            || !(level() instanceof net.minecraft.server.level.ServerLevel level)) {
+            return;
+        }
+
+        int seconds = (int) number(definition, "minecraft:damage_over_time", "time_between_hurt", 1);
+        int interval = Math.max(Sensors.INTERVAL_TICKS, seconds * 20);
+        if (tickCount % interval >= Sensors.INTERVAL_TICKS) return;
+
+        Platform.hurt(this, level, damageSources().magic(),
+            (float) number(definition, "minecraft:damage_over_time", "damage_per_hurt", 1));
+    }
+
+    /** Bedrock states the gap between idle sounds in seconds; Java counts it in ticks. */
+    @Override
+    public int getAmbientSoundInterval() {
+        return definition == null || !has("minecraft:ambient_sound_interval")
+            ? super.getAmbientSoundInterval()
+            : (int) (number(definition, "minecraft:ambient_sound_interval", "value", 8) * 20);
+    }
+
+    @Override
+    protected float getSoundVolume() {
+        return definition == null || !has("minecraft:sound_volume") ? super.getSoundVolume()
+            : (float) number(definition, "minecraft:sound_volume", "value", 1);
+    }
+
+    @Override
+    public boolean isAttackable() {
+        return (definition == null || !has("minecraft:cannot_be_attacked")) && super.isAttackable();
+    }
+
+    /** `minecraft:transient` marks an entity the world is not meant to hold on to. */
+    @Override
+    public boolean shouldBeSaved() {
+        return (definition == null || !has("minecraft:transient")) && super.shouldBeSaved();
+    }
+
+    /**
+     * The effects `minecraft:mob_effect_immunity` names bounce off.
+     *
+     * Bedrock lists the effects by their own names, which carry no namespace, so both spellings are
+     * compared against the effect Java is about to apply.
+     */
+    @Override
+    public boolean canBeAffected(net.minecraft.world.effect.MobEffectInstance effect) {
+        com.google.gson.JsonObject component = definition == null
+            ? null : definition.components().get("minecraft:mob_effect_immunity");
+        if (component == null) return super.canBeAffected(effect);
+
+        String id = Platform.effectId(effect);
+        for (com.google.gson.JsonElement named
+            : at.ioexception.mcaddon.util.Json.list(component, "mob_effects")) {
+            if (!named.isJsonPrimitive()) continue;
+
+            String wanted = named.getAsString();
+            if (wanted.equals(id) || ("minecraft:" + wanted).equals(id)) return false;
+        }
+        return super.canBeAffected(effect);
+    }
+
+    /**
+     * Whether other entities walk into this one or through it.
+     *
+     * Bedrock splits the question in two: `is_collidable` decides whether anything collides at all,
+     * and `pushable` decides whether a collision moves this entity. Java asks only the second, so
+     * an entity a pack made non-collidable is one nothing can push.
+     */
+    @Override
+    public boolean isPushable() {
+        if (definition == null) return super.isPushable();
+        if (has("minecraft:is_collidable")
+            && number(definition, "minecraft:is_collidable", "value", 1) == 0) {
+            return false;
+        }
+        return !has("minecraft:pushable")
+            || number(definition, "minecraft:pushable", "is_pushable", 1) != 0;
     }
 
     /** True when one of the pack's interactions applied, which is what consumes the click. */

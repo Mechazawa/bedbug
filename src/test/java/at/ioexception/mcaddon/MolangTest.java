@@ -48,6 +48,26 @@ class MolangTest {
         assertEquals(Math.PI, evaluate("math.pi"), 1e-6);
     }
 
+    /**
+     * Every easing runs from its first argument to its second, the way `math.lerp` does.
+     *
+     * Reversing the two ends is invisible at the midpoint and on a curve that starts where it
+     * finishes, so the cases here are asymmetric and read at the ends.
+     */
+    @ParameterizedTest
+    @CsvSource({
+        "'math.ease_in_quad(10, 20, 0)', 10",
+        "'math.ease_in_quad(10, 20, 1)', 20",
+        "'math.ease_in_quad(10, 20, 0.5)', 12.5",
+        "'math.ease_out_quad(10, 20, 0.5)', 17.5",
+        "'math.ease_out_expo(0, 100, 0)', 0",
+        "'math.ease_in_out_cubic(0, 8, 0.25)', 0.5",
+        "'math.inverse_lerp(10, 20, 12.5)', 0.25",
+    })
+    void easesFromTheFirstArgumentToTheSecond(String source, double expected) {
+        assertEquals(expected, evaluate(source), 1e-6, source);
+    }
+
     /** Dividing by zero is a zero rather than an error, which is what a pack relies on. */
     @ParameterizedTest
     @CsvSource({"'1 / 0', 0", "'math.mod(7, 0)', 0", "'q.missing_query', 0", "'0 ? 1', 0"})

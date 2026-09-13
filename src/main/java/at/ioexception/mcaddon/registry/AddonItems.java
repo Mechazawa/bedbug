@@ -140,10 +140,18 @@ public final class AddonItems {
         };
     }
 
+    /**
+     * Everything an item can declare that this mod does something about.
+     *
+     * A component read only to shape another one belongs here as well: `use_modifiers` carries the
+     * duration the food component is registered with. A component named here and read nowhere would
+     * stop `/mcaddon entities` counting a gap that is still a gap, so nothing is listed on the
+     * grounds that Java cannot express it.
+     */
     private static final List<String> IMPLEMENTED = List.of(
-        "minecraft:icon", "minecraft:display_name", "minecraft:max_stack_size", "minecraft:tags",
-        "minecraft:food", "minecraft:wearable", "minecraft:use_modifiers", "minecraft:use_animation",
-        "minecraft:interact_button", "minecraft:hand_equipped");
+        "minecraft:icon", "minecraft:display_name", "minecraft:max_stack_size",
+        "minecraft:food", "minecraft:wearable", "minecraft:use_modifiers",
+        "minecraft:hand_equipped");
 
     private static Identifier identifier(String bedrock) {
         Names.Identifier split = Names.split(bedrock, "minecraft");

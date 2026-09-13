@@ -21,6 +21,7 @@ import net.minecraft.server.packs.repository.PackCompatibility;
 import net.minecraft.server.packs.repository.PackSource;
 import net.minecraft.world.flag.FeatureFlagSet;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.damagesource.DamageSource;
@@ -31,12 +32,17 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
+//? if >=26 {
+import net.minecraft.world.level.gamerules.GameRule;
+import net.minecraft.world.level.gamerules.GameRules;
+//?}
 
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Every call whose spelling differs between the supported Minecraft versions.
@@ -485,73 +491,216 @@ public final class Platform {
     }
 
     /**
+     * Who is holding this entity on a lead, or null when nobody is.
+     *
+     * 1.21 moved being led off `Mob` and onto an interface, so a boat and a leash knot answer for
+     * themselves where only a mob used to.
+     */
+    public static Entity leashHolder(Entity entity) {
+        //? if >=1.21 {
+        return entity instanceof net.minecraft.world.entity.Leashable led && led.isLeashed()
+            ? led.getLeashHolder() : null;
+        //?} else {
+        /*return entity instanceof net.minecraft.world.entity.Mob led && led.isLeashed()
+            ? led.getLeashHolder() : null;
+        *///?}
+    }
+
+    /** False for an entity that cannot be led at all, which is the answer Bedrock gives. */
+    public static boolean leashTo(Entity entity, Entity holder) {
+        //? if >=1.21 {
+        if (!(entity instanceof net.minecraft.world.entity.Leashable led)) return false;
+        //?} else {
+        /*if (!(entity instanceof net.minecraft.world.entity.Mob led)) return false;
+        *///?}
+        led.setLeashedTo(holder, true);
+        return true;
+    }
+
+    /** Drops the lead where the entity stands, the way shearing one off does. */
+    public static boolean unleash(Entity entity) {
+        //? if >=26 {
+        if (!(entity instanceof net.minecraft.world.entity.Leashable led)) return false;
+        led.dropLeash();
+        //?} else if >=1.21 {
+        /*if (!(entity instanceof net.minecraft.world.entity.Leashable led)) return false;
+        led.dropLeash(true, true);
+        *///?} else {
+        /*if (!(entity instanceof net.minecraft.world.entity.Mob led)) return false;
+        led.dropLeash(true, true);
+        *///?}
+        return true;
+    }
+
+    /**
      * A game rule, by the name Bedrock calls it, as text.
      *
-     * The three supported versions disagree about everything here: the rule constants were renamed
-     * in 26 and the map they live in was rewritten, so the mapping is written out per version rather
-     * than abstracted. Null for a rule Java does not have, such as whether coordinates are shown.
+     * Null for a name Java has nothing that means the same as, such as whether coordinates are
+     * shown, which is what lets a pack be told the rule went unanswered instead of reading a
+     * default that was never Java's.
      */
     public static String gameRule(net.minecraft.server.MinecraftServer server, String bedrock) {
         //? if >=26 {
-        net.minecraft.world.level.gamerules.GameRules rules = server.getGameRules();
-        return switch (bedrock) {
-            case "doDayLightCycle" -> String.valueOf(rules.get(
-                net.minecraft.world.level.gamerules.GameRules.ADVANCE_TIME));
-            case "doWeatherCycle" -> String.valueOf(rules.get(
-                net.minecraft.world.level.gamerules.GameRules.ADVANCE_WEATHER));
-            case "keepInventory" -> String.valueOf(rules.get(
-                net.minecraft.world.level.gamerules.GameRules.KEEP_INVENTORY));
-            case "mobGriefing" -> String.valueOf(rules.get(
-                net.minecraft.world.level.gamerules.GameRules.MOB_GRIEFING));
-            case "naturalRegeneration" -> String.valueOf(rules.get(
-                net.minecraft.world.level.gamerules.GameRules.NATURAL_HEALTH_REGENERATION));
-            case "sendCommandFeedback" -> String.valueOf(rules.get(
-                net.minecraft.world.level.gamerules.GameRules.SEND_COMMAND_FEEDBACK));
-            case "showDeathMessages" -> String.valueOf(rules.get(
-                net.minecraft.world.level.gamerules.GameRules.SHOW_DEATH_MESSAGES));
-            case "doImmediateRespawn" -> String.valueOf(rules.get(
-                net.minecraft.world.level.gamerules.GameRules.IMMEDIATE_RESPAWN));
-            case "doEntityDrops" -> String.valueOf(rules.get(
-                net.minecraft.world.level.gamerules.GameRules.ENTITY_DROPS));
-            case "doTileDrops" -> String.valueOf(rules.get(
-                net.minecraft.world.level.gamerules.GameRules.BLOCK_DROPS));
-            case "commandBlockOutput" -> String.valueOf(rules.get(
-                net.minecraft.world.level.gamerules.GameRules.COMMAND_BLOCK_OUTPUT));
-            case "randomTickSpeed" -> String.valueOf(rules.get(
-                net.minecraft.world.level.gamerules.GameRules.RANDOM_TICK_SPEED));
-            default -> null;
-        };
+        GameRules rules = server.getGameRules();
+        if (bedrock.equals("doFireTick")) {
+            return String.valueOf(rules.get(GameRules.FIRE_SPREAD_RADIUS_AROUND_PLAYER) != 0);
+        }
+
+        GameRule<?> rule = rule(bedrock);
+        return rule == null ? null : rules.getAsString(rule);
         //?} else {
         /*net.minecraft.world.level.GameRules rules = server.getGameRules();
-        return switch (bedrock) {
-            case "doDayLightCycle" -> String.valueOf(rules.getBoolean(
-                net.minecraft.world.level.GameRules.RULE_DAYLIGHT));
-            case "doWeatherCycle" -> String.valueOf(rules.getBoolean(
-                net.minecraft.world.level.GameRules.RULE_WEATHER_CYCLE));
-            case "keepInventory" -> String.valueOf(rules.getBoolean(
-                net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY));
-            case "mobGriefing" -> String.valueOf(rules.getBoolean(
-                net.minecraft.world.level.GameRules.RULE_MOBGRIEFING));
-            case "naturalRegeneration" -> String.valueOf(rules.getBoolean(
-                net.minecraft.world.level.GameRules.RULE_NATURAL_REGENERATION));
-            case "sendCommandFeedback" -> String.valueOf(rules.getBoolean(
-                net.minecraft.world.level.GameRules.RULE_SENDCOMMANDFEEDBACK));
-            case "showDeathMessages" -> String.valueOf(rules.getBoolean(
-                net.minecraft.world.level.GameRules.RULE_SHOWDEATHMESSAGES));
-            case "doImmediateRespawn" -> String.valueOf(rules.getBoolean(
-                net.minecraft.world.level.GameRules.RULE_DO_IMMEDIATE_RESPAWN));
-            case "doEntityDrops" -> String.valueOf(rules.getBoolean(
-                net.minecraft.world.level.GameRules.RULE_DOENTITYDROPS));
-            case "doTileDrops" -> String.valueOf(rules.getBoolean(
-                net.minecraft.world.level.GameRules.RULE_DOBLOCKDROPS));
-            case "commandBlockOutput" -> String.valueOf(rules.getBoolean(
-                net.minecraft.world.level.GameRules.RULE_COMMANDBLOCKOUTPUT));
-            case "randomTickSpeed" -> String.valueOf(rules.getInt(
-                net.minecraft.world.level.GameRules.RULE_RANDOMTICKING));
-            default -> null;
-        };
+        net.minecraft.world.level.GameRules.Key<net.minecraft.world.level.GameRules.BooleanValue> flag =
+            flagRule(bedrock);
+        if (flag != null) return rules.getRule(flag).serialize();
+
+        net.minecraft.world.level.GameRules.Key<net.minecraft.world.level.GameRules.IntegerValue> count =
+            countRule(bedrock);
+        return count == null ? null : rules.getRule(count).serialize();
         *///?}
     }
+
+    /**
+     * Writes a game rule, answering whether Java holds one that means the same.
+     *
+     * Text that does not read as the rule's own type leaves the rule where it was, the way the
+     * command does with an argument it cannot parse.
+     */
+    public static boolean setGameRule(net.minecraft.server.MinecraftServer server, String bedrock,
+        String value) {
+        //? if >=26 {
+        if (bedrock.equals("doFireTick")) {
+            server.getGameRules().set(GameRules.FIRE_SPREAD_RADIUS_AROUND_PLAYER,
+                Boolean.parseBoolean(value)
+                    ? GameRules.FIRE_SPREAD_RADIUS_AROUND_PLAYER.defaultValue() : 0,
+                server);
+            return true;
+        }
+
+        GameRule<?> rule = rule(bedrock);
+        if (rule == null) return false;
+        assign(server, rule, value);
+        return true;
+        //?} else {
+        /*net.minecraft.world.level.GameRules rules = server.getGameRules();
+        net.minecraft.world.level.GameRules.Key<net.minecraft.world.level.GameRules.BooleanValue> flag =
+            flagRule(bedrock);
+        if (flag != null) {
+            rules.getRule(flag).set(Boolean.parseBoolean(value), server);
+            return true;
+        }
+
+        net.minecraft.world.level.GameRules.Key<net.minecraft.world.level.GameRules.IntegerValue> count =
+            countRule(bedrock);
+        if (count == null) return false;
+
+        Integer parsed = whole(value);
+        if (parsed != null) rules.getRule(count).set(parsed, server);
+        return true;
+        *///?}
+    }
+
+    //? if >=26 {
+    /**
+     * The Java rule a Bedrock rule name means.
+     *
+     * Bedrock's fire rule is absent because 26 turned it into a radius, which the two callers
+     * handle themselves. The rest are named apart from their Bedrock spelling often enough that the
+     * table is written out rather than derived.
+     */
+    private static GameRule<?> rule(String bedrock) {
+        return switch (bedrock) {
+            case "commandBlockOutput" -> GameRules.COMMAND_BLOCK_OUTPUT;
+            case "commandBlocksEnabled" -> GameRules.COMMAND_BLOCKS_WORK;
+            case "doDayLightCycle" -> GameRules.ADVANCE_TIME;
+            case "doEntityDrops" -> GameRules.ENTITY_DROPS;
+            case "doImmediateRespawn" -> GameRules.IMMEDIATE_RESPAWN;
+            case "doInsomnia" -> GameRules.SPAWN_PHANTOMS;
+            case "doLimitedCrafting" -> GameRules.LIMITED_CRAFTING;
+            case "doMobLoot" -> GameRules.MOB_DROPS;
+            case "doMobSpawning" -> GameRules.SPAWN_MOBS;
+            case "doTileDrops" -> GameRules.BLOCK_DROPS;
+            case "doWeatherCycle" -> GameRules.ADVANCE_WEATHER;
+            case "drowningDamage" -> GameRules.DROWNING_DAMAGE;
+            case "fallDamage" -> GameRules.FALL_DAMAGE;
+            case "fireDamage" -> GameRules.FIRE_DAMAGE;
+            case "freezeDamage" -> GameRules.FREEZE_DAMAGE;
+            case "keepInventory" -> GameRules.KEEP_INVENTORY;
+            case "maxCommandChainLength" -> GameRules.MAX_COMMAND_SEQUENCE_LENGTH;
+            case "mobGriefing" -> GameRules.MOB_GRIEFING;
+            case "naturalRegeneration" -> GameRules.NATURAL_HEALTH_REGENERATION;
+            case "playersSleepingPercentage" -> GameRules.PLAYERS_SLEEPING_PERCENTAGE;
+            case "projectilesCanBreakBlocks" -> GameRules.PROJECTILES_CAN_BREAK_BLOCKS;
+            case "pvp" -> GameRules.PVP;
+            case "randomTickSpeed" -> GameRules.RANDOM_TICK_SPEED;
+            case "sendCommandFeedback" -> GameRules.SEND_COMMAND_FEEDBACK;
+            case "showDeathMessages" -> GameRules.SHOW_DEATH_MESSAGES;
+            case "spawnRadius" -> GameRules.RESPAWN_RADIUS;
+            case "tntExplodes" -> GameRules.TNT_EXPLODES;
+            case "tntExplosionDropDecay" -> GameRules.TNT_EXPLOSION_DROP_DECAY;
+            default -> null;
+        };
+    }
+
+    /** Reads text as the rule's own value type, leaving the rule alone when it does not read. */
+    private static <T> void assign(net.minecraft.server.MinecraftServer server, GameRule<T> rule,
+        String value) {
+        rule.deserialize(value).result()
+            .ifPresent(parsed -> server.getGameRules().set(rule, parsed, server));
+    }
+    //?}
+
+    //? if <26 {
+    /*// The Java rule a Bedrock rule name means, among the rules holding a flag.
+    private static net.minecraft.world.level.GameRules.Key<net.minecraft.world.level.GameRules.BooleanValue>
+        flagRule(String bedrock) {
+        return switch (bedrock) {
+            case "commandBlockOutput" -> net.minecraft.world.level.GameRules.RULE_COMMANDBLOCKOUTPUT;
+            case "doDayLightCycle" -> net.minecraft.world.level.GameRules.RULE_DAYLIGHT;
+            case "doEntityDrops" -> net.minecraft.world.level.GameRules.RULE_DOENTITYDROPS;
+            case "doFireTick" -> net.minecraft.world.level.GameRules.RULE_DOFIRETICK;
+            case "doImmediateRespawn" -> net.minecraft.world.level.GameRules.RULE_DO_IMMEDIATE_RESPAWN;
+            case "doInsomnia" -> net.minecraft.world.level.GameRules.RULE_DOINSOMNIA;
+            case "doLimitedCrafting" -> net.minecraft.world.level.GameRules.RULE_LIMITED_CRAFTING;
+            case "doMobLoot" -> net.minecraft.world.level.GameRules.RULE_DOMOBLOOT;
+            case "doMobSpawning" -> net.minecraft.world.level.GameRules.RULE_DOMOBSPAWNING;
+            case "doTileDrops" -> net.minecraft.world.level.GameRules.RULE_DOBLOCKDROPS;
+            case "doWeatherCycle" -> net.minecraft.world.level.GameRules.RULE_WEATHER_CYCLE;
+            case "drowningDamage" -> net.minecraft.world.level.GameRules.RULE_DROWNING_DAMAGE;
+            case "fallDamage" -> net.minecraft.world.level.GameRules.RULE_FALL_DAMAGE;
+            case "fireDamage" -> net.minecraft.world.level.GameRules.RULE_FIRE_DAMAGE;
+            case "freezeDamage" -> net.minecraft.world.level.GameRules.RULE_FREEZE_DAMAGE;
+            case "keepInventory" -> net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY;
+            case "mobGriefing" -> net.minecraft.world.level.GameRules.RULE_MOBGRIEFING;
+            case "naturalRegeneration" -> net.minecraft.world.level.GameRules.RULE_NATURAL_REGENERATION;
+            case "sendCommandFeedback" -> net.minecraft.world.level.GameRules.RULE_SENDCOMMANDFEEDBACK;
+            case "showDeathMessages" -> net.minecraft.world.level.GameRules.RULE_SHOWDEATHMESSAGES;
+            case "tntExplosionDropDecay" -> net.minecraft.world.level.GameRules.RULE_TNT_EXPLOSION_DROP_DECAY;
+            default -> null;
+        };
+    }
+
+    // The Java rule a Bedrock rule name means, among the rules holding a count.
+    private static net.minecraft.world.level.GameRules.Key<net.minecraft.world.level.GameRules.IntegerValue>
+        countRule(String bedrock) {
+        return switch (bedrock) {
+            case "maxCommandChainLength" -> net.minecraft.world.level.GameRules.RULE_MAX_COMMAND_CHAIN_LENGTH;
+            case "playersSleepingPercentage" -> net.minecraft.world.level.GameRules.RULE_PLAYERS_SLEEPING_PERCENTAGE;
+            case "randomTickSpeed" -> net.minecraft.world.level.GameRules.RULE_RANDOMTICKING;
+            case "spawnRadius" -> net.minecraft.world.level.GameRules.RULE_SPAWN_RADIUS;
+            default -> null;
+        };
+    }
+
+    // A count a pack wrote, or null when the text does not read as one.
+    private static Integer whole(String value) {
+        try {
+            return Integer.valueOf(value.trim());
+        } catch (NumberFormatException unreadable) {
+            return null;
+        }
+    }
+    *///?}
 
     /**
      * One participant's score, or null when they have none on that objective.
@@ -864,6 +1013,39 @@ public final class Platform {
         return new int[] {level.getMinY(), level.getMaxY() + 1};
         //?} else {
         /*return new int[] {level.getMinBuildHeight(), level.getMaxBuildHeight()};
+        *///?}
+    }
+
+    /** Who a tamed animal belongs to. What it stores became an entity reference in 26. */
+    public static UUID ownerOf(net.minecraft.world.entity.TamableAnimal animal) {
+        //? if >=26 {
+        return animal.getOwnerReference() == null ? null : animal.getOwnerReference().getUUID();
+        //?} else {
+        /*return animal.getOwnerUUID();
+        *///?}
+    }
+
+    /** Where a mob is kept near, or null when it is kept nowhere. A restriction until 26. */
+    public static net.minecraft.core.BlockPos homeOf(net.minecraft.world.entity.Mob mob) {
+        //? if >=26 {
+        return mob.hasHome() ? mob.getHomePosition() : null;
+        //?} else {
+        /*return mob.hasRestriction() ? mob.getRestrictCenter() : null;
+        *///?}
+    }
+
+    /** The enchantments on a stack, by name. They became data-driven holders in 1.21. */
+    public static Set<String> enchantmentsOf(net.minecraft.world.item.ItemStack stack) {
+        //? if >=1.21 {
+        return EnchantmentHelper.getEnchantmentsForCrafting(stack).keySet().stream()
+            .map(holder -> holder.unwrapKey().map(key -> idOf(key).getPath()).orElse(""))
+            .collect(Collectors.toSet());
+        //?} else {
+        /*return EnchantmentHelper.getEnchantments(stack).keySet().stream()
+            .map(BuiltInRegistries.ENCHANTMENT::getKey)
+            .filter(java.util.Objects::nonNull)
+            .map(Identifier::getPath)
+            .collect(Collectors.toSet());
         *///?}
     }
 }
