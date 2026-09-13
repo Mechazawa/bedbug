@@ -1,11 +1,13 @@
 package at.ioexception.mcaddon.gametest;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.convert.ConvertedPack;
 import at.ioexception.mcaddon.entity.AddonEntity;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.registry.AddonParticles;
+import at.ioexception.mcaddon.resource.AddonPacks;
 import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
@@ -19,6 +21,11 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.block.state.properties.Property;
+
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.nio.file.Path;
 
 /**
  * What an add-on does once it is loaded into a world.
@@ -38,6 +45,9 @@ public final class PackGameTests {
     /** The two the pack declares for the components a plain mob has no occasion to use. */
     private static final String PROJECTILE = "tp:spark";
     private static final String SLOW_DYING = "tp:warden";
+
+    /** The pack's own entity texture, whose top band is written with Bedrock's cut-out alpha. */
+    private static final String MARKED_TEXTURE = "textures/entity/sprite";
 
     /**
      * A pack's own entity reaches the world and stays there.
@@ -368,6 +378,45 @@ public final class PackGameTests {
         AddonParticles.all().keySet().forEach(identifier ->
             helper.assertTrue(AddonParticles.typeOf(identifier) != null,
                 identifier + " was read but never registered."));
+        helper.succeed();
+    }
+
+    /**
+     * A texel the pack marks the way Bedrock marks a cut-out one reaches the game drawn.
+     *
+     * Bedrock's alpha test keeps every texel carrying any alpha and Java's cutout shader keeps only
+     * those above a tenth, so a region a pack wrote at alpha three is drawn by one edition and
+     * thrown away by the other. Nothing about that is visible in a count: the file is converted, the
+     * model finds it, and the entity is simply drawn without whatever the region held. What the
+     * conversion has to do instead is raise it, and this reads the written file back to say it did.
+     */
+    @GameTest()
+    public void aMarkedTexelIsConvertedOpaque(GameTestHelper helper) {
+        ConvertedPack pack = AddonPacks.all().stream()
+            .filter(one -> one.texturePaths().containsKey(MARKED_TEXTURE))
+            .findFirst().orElse(null);
+        if (pack == null) {
+            helper.succeed();
+            return;
+        }
+
+        String mapped = pack.texturePaths().get(MARKED_TEXTURE);
+        int colon = mapped.indexOf(':');
+        Path file = pack.root().resolve("assets").resolve(mapped.substring(0, colon))
+            .resolve("textures").resolve(mapped.substring(colon + 1) + ".png");
+
+        BufferedImage image;
+        try {
+            image = ImageIO.read(file.toFile());
+        } catch (IOException error) {
+            image = null;
+        }
+        helper.assertTrue(image != null, "The converted " + MARKED_TEXTURE + " could not be read.");
+
+        helper.assertTrue(image.getRGB(0, 0) >>> 24 == 0xFF,
+            "A texel the pack marked as drawn was converted too faint for Java's cutout to keep it.");
+        helper.assertTrue(image.getRGB(image.getWidth() - 1, image.getHeight() - 1) >>> 24 == 0,
+            "A texel the pack left empty was converted opaque.");
         helper.succeed();
     }
 

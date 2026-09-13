@@ -16,6 +16,7 @@ import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.convert.ConvertedPack;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonEntities;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.phys.AABB;
 
@@ -75,7 +76,12 @@ public final class AddonModels {
     /** Both light channels at their maximum, which is how Minecraft says "lit as if by the sun". */
     private static final int FULL_BRIGHT = 0xF000F0;
 
-    /** The entities already named as drawing nothing, so the log carries each of them once. */
+    /**
+     * The entities already named as drawing nothing and the texture paths already named as missing.
+     *
+     * A pass is resolved once per frame, so each of these would otherwise be counted thousands of
+     * times over for one thing being wrong once.
+     */
     private static final Set<String> REPORTED = new HashSet<>();
 
     private final BedrockAssets assets;
@@ -329,11 +335,18 @@ public final class AddonModels {
      * The Bedrock path as the definition wrote it, mapped to where the conversion filed it.
      *
      * The map is consulted rather than the path rebuilt, because two packs can hold textures with the
-     * same name and the conversion is what kept them apart.
+     * same name and the conversion is what kept them apart. A path the conversion never filed leaves
+     * the pass drawing plain white, which looks like a lit model with its markings gone rather than
+     * like anything failing, so it is named against the pack as well.
      */
     private Identifier textureId(String path) {
         String mapped = converted.texturePaths().get(path);
-        if (mapped == null) return Platform.id("minecraft", "textures/misc/white.png");
+        if (mapped == null) {
+            if (REPORTED.add(path)) {
+                AddonEntities.unsupported("texture " + path + ", drawn as the placeholder");
+            }
+            return Platform.id("minecraft", "textures/misc/white.png");
+        }
 
         int colon = mapped.indexOf(':');
         return Platform.id(mapped.substring(0, colon), "textures/" + mapped.substring(colon + 1) + ".png");
