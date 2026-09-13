@@ -223,8 +223,10 @@ These are the checks it runs, and what each one catches:
   python3 tools/census/script.py --list   # and the name of everything missing
   ```
 
-  It needs the published packages saved under `scratchpad/mcapi/<module>.d.ts`, which the file's own
-  docstring says how to fetch. That directory is not tracked.
+  It measures against material that is not committed, because it is Mojang's rather than ours:
+  `bedrock-samples` and the published `@minecraft/*` packages, under `scratchpad/`. Run
+  `bash tools/census/fetch.sh` to get them, or just run `tools/checkall.sh`, which fetches what is
+  absent and leaves what is there alone.
 
   **A missing top level name is the serious kind.** A module is linked before any of it runs, so a
   pack importing one name the module does not export loses its whole script rather than the line

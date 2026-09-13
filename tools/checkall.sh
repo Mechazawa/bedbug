@@ -36,6 +36,9 @@ step() {
     fi
 }
 
+# The censuses measure against material that is not committed, so it is fetched if absent.
+bash tools/census/fetch.sh >/dev/null 2>&1
+
 step "script modules link" python3 tools/modules/check.py
 step "build, four versions" ./gradlew build --console=plain -q
 step "script surface census" python3 tools/census/script.py
