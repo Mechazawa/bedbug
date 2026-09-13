@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.client.render;
 
 import at.ioexception.mcaddon.bedrock.entity.EntityAnimator;
+import at.ioexception.mcaddon.bedrock.entity.EntityQueries;
 import at.ioexception.mcaddon.entity.AddonEntity;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.entity.Entity;
@@ -15,7 +16,7 @@ import java.util.Map;
  * removes from grows for the whole session.
  */
 public final class Animators {
-    private record Entry(EntityAnimator animator, AddonQueries queries, float[] lastTime) {
+    private record Entry(EntityAnimator animator, EntityQueries queries, float[] lastTime) {
     }
 
     private static final Map<String, Entry> ANIMATORS = new HashMap<>();
@@ -40,8 +41,10 @@ public final class Animators {
         if (binding == null) return null;
 
         Entry entry = ANIMATORS.computeIfAbsent(entity.getId() + "/" + key, id -> {
-            EntityAnimator animator = new EntityAnimator(binding.models().assets(), binding.definition());
-            AddonQueries queries = new AddonQueries(entity, animator, attached);
+            EntityAnimator animator = new EntityAnimator(binding.models().assets(), entity, binding.definition());
+            EntityQueries queries = new EntityQueries(entity, animator.player(),
+                new DrawnModel(animator, entity.getId(), attached),
+                () -> EntityProperties.of(entity.getId()), attached);
             animator.environment().setQueries(queries);
             animator.setEffects(AddonEffects.of(entity, animator, binding.models().converted().namespace()));
             return new Entry(animator, queries, new float[] {ageInTicks});

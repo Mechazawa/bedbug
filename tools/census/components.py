@@ -230,7 +230,7 @@ def surfaces(samples):
         "molang queries",
         {query["name"].split(".", 1)[1]
          for query in json.loads(text(metadata / "molang_modules/mojang-molang-queries.json"))["queries"]},
-        case_labels(JAVA / "client/render/AddonQueries.java", "MolangValue query("),
+        case_labels(JAVA / "bedrock/entity/EntityQueries.java", "MolangValue query("),
         "the engine's molang query list"))
     found.append(Surface(
         "molang math",

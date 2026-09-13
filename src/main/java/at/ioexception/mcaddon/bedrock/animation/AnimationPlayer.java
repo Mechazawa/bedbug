@@ -3,6 +3,7 @@ package at.ioexception.mcaddon.bedrock.animation;
 import at.ioexception.mcaddon.bedrock.BedrockAssets;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
+import net.minecraft.world.entity.Entity;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
@@ -59,6 +60,14 @@ public final class AnimationPlayer {
     }
 
     private final BedrockAssets assets;
+
+    /**
+     * Whoever the clips are playing on, which is what a timeline statement acts through.
+     *
+     * Null where a clip is run with nothing standing in a world, which leaves its Molang the only
+     * part of a timeline with anywhere to land.
+     */
+    private final Entity entity;
     private final MolangEnvironment environment = new MolangEnvironment();
     private final Map<String, Running> running = new HashMap<>();
     private final Map<String, BonePose> poses = new HashMap<>();
@@ -92,8 +101,9 @@ public final class AnimationPlayer {
         this.effects = effects;
     }
 
-    public AnimationPlayer(BedrockAssets assets) {
+    public AnimationPlayer(BedrockAssets assets, Entity entity) {
         this.assets = assets;
+        this.entity = entity;
     }
 
     public MolangEnvironment environment() {
@@ -247,7 +257,7 @@ public final class AnimationPlayer {
 
         for (BedrockAnimation.TimelineEntry entry : clip.animation.timeline()) {
             if (entry.time() > position || entry.time() <= clip.lastFiredTime) continue;
-            for (MolangExpression statement : entry.statements()) statement.evaluate(environment);
+            for (AnimationAction statement : entry.statements()) statement.run(entity, environment);
         }
         for (BedrockAnimation.EffectEntry entry : clip.animation.soundEffects()) {
             if (due(entry, position, clip.lastFiredTime)) effects.sound(entry.effect());

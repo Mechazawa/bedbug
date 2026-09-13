@@ -33,9 +33,9 @@ public final class PackFiles {
 
     /** The behaviour pack paths a reader opens. */
     private static final Set<String> BEHAVIOUR_READ = Set.of(
-        "manifest.json", "pack_icon.png", "blocks", "entities", "functions", "item_catalog", "items",
-        "loot_tables", "recipes", "scripts", "shapes", "spawn_rules", "structures", "texts",
-        "trading",
+        "manifest.json", "pack_icon.png", "animation_controllers", "animations", "blocks",
+        "entities", "functions", "item_catalog", "items", "loot_tables", "recipes", "scripts",
+        "shapes", "spawn_rules", "structures", "texts", "trading",
         "texts/language_names.json", "texts/languages.json");
 
     /** Everything Bedrock lets a resource pack ship. */

@@ -1,0 +1,31 @@
+{
+  "format_version": "1.10.0",
+  "animation_controllers": {
+    "controller.animation.tp.ember.kindle": {
+      "initial_state": "cold",
+      "states": {
+        "cold": {
+          "transitions": [
+            { "kindling": "query.is_alive" }
+          ]
+        },
+        "kindling": {
+          "on_entry": [
+            "variable.kindled = 1;",
+            "@s tp:ember_kindle",
+            "/tag @s add tp_kindled"
+          ],
+          "animations": [ "kindle" ],
+          "transitions": [
+            { "lit": "query.all_animations_finished" }
+          ]
+        },
+        "lit": {
+          "on_entry": [
+            "variable.lit = 1;"
+          ]
+        }
+      }
+    }
+  }
+}

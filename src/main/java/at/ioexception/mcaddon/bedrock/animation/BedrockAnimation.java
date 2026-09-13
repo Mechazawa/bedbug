@@ -37,7 +37,7 @@ public record BedrockAnimation(
     }
 
     /** Statements to run once the animation passes `time`. */
-    public record TimelineEntry(float time, List<MolangExpression> statements) {
+    public record TimelineEntry(float time, List<AnimationAction> statements) {
     }
 
     /**

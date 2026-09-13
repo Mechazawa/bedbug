@@ -5,7 +5,28 @@
       "identifier": "tp:ember",
       "is_spawnable": true,
       "is_summonable": true,
-      "is_experimental": false
+      "is_experimental": false,
+      "properties": {
+        "tp:kindled": {
+          "type": "bool",
+          "default": false,
+          "client_sync": true
+        },
+        "tp:glowing": {
+          "type": "bool",
+          "default": false,
+          "client_sync": true
+        }
+      },
+      "animations": {
+        "kindle": "animation.tp.ember.kindle",
+        "kindle_controller": "controller.animation.tp.ember.kindle"
+      },
+      "scripts": {
+        "animate": [
+          "kindle_controller"
+        ]
+      }
     },
     "components": {
       "minecraft:type_family": {
@@ -68,6 +89,17 @@
         "value": 0.25
       }
     },
-    "events": {}
+    "events": {
+      "tp:ember_kindle": {
+        "set_property": {
+          "tp:kindled": true
+        }
+      },
+      "tp:ember_glow": {
+        "set_property": {
+          "tp:glowing": true
+        }
+      }
+    }
   }
 }

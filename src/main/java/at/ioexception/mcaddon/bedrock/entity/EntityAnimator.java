@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.bedrock.entity;
 
 import at.ioexception.mcaddon.bedrock.BedrockAssets;
+import at.ioexception.mcaddon.bedrock.animation.AnimationAction;
 import at.ioexception.mcaddon.bedrock.animation.AnimationController;
 import at.ioexception.mcaddon.bedrock.animation.AnimationPlayer;
 import at.ioexception.mcaddon.bedrock.animation.BonePose;
@@ -9,6 +10,7 @@ import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import at.ioexception.mcaddon.bedrock.model.BedrockBone;
 import at.ioexception.mcaddon.bedrock.model.BedrockGeometry;
+import net.minecraft.world.entity.Entity;
 import org.joml.Vector3f;
 
 import java.util.HashMap;
@@ -25,6 +27,7 @@ import java.util.Set;
  */
 public final class EntityAnimator {
     private final BedrockAssets assets;
+    private final Entity entity;
     private final ClientEntityDefinition definition;
     private final AnimationPlayer player;
     private final Map<String, ControllerState> controllers = new HashMap<>();
@@ -77,10 +80,11 @@ public final class EntityAnimator {
         }
     }
 
-    public EntityAnimator(BedrockAssets assets, ClientEntityDefinition definition) {
+    public EntityAnimator(BedrockAssets assets, Entity entity, ClientEntityDefinition definition) {
         this.assets = assets;
+        this.entity = entity;
         this.definition = definition;
-        this.player = new AnimationPlayer(assets);
+        this.player = new AnimationPlayer(assets, entity);
 
         // A render controller picks a geometry per pass out of the same list, so a query asked before
         // any pass is resolved reads the one the entity names `default`, or its first when it names
@@ -190,14 +194,14 @@ public final class EntityAnimator {
             if (!transition.condition().evaluate(environment).truthy()) continue;
             if (!controller.states().containsKey(transition.target())) continue;
 
-            for (MolangExpression statement : state.onExit()) statement.evaluate(environment);
+            for (AnimationAction statement : state.onExit()) statement.run(entity, environment);
             current.leaving = state;
             current.crossFadeSeconds = state.blendTransition();
             current.crossFadeLength = state.blendTransition();
             current.state = transition.target();
             current.timeInState = 0f;
             state = controller.states().get(current.state);
-            for (MolangExpression statement : state.onEntry()) statement.evaluate(environment);
+            for (AnimationAction statement : state.onEntry()) statement.run(entity, environment);
             fireStateEffects(state);
             break;
         }

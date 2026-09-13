@@ -107,7 +107,7 @@ class AnimationPlayerTest {
             {"header": {"uuid": "00000000-0000-0000-0000-000000000000", "name": "test"}}
             """).getAsJsonObject());
         AnimationPlayer player = new AnimationPlayer(
-            BedrockAssets.read(new BedrockPack(pack, manifest, "test.mcaddon")));
+            BedrockAssets.read(new BedrockPack(pack, manifest, "test.mcaddon")), null);
         player.play("animation.spin", null, 0f);
         return player;
     }

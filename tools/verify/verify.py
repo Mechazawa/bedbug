@@ -250,9 +250,14 @@ def texture_set_maps(name: str, body: dict) -> tuple[set[str], bool, bool]:
 
 
 def source_counts(names, read) -> dict:
-    """What the source pack holds, counted the way the converter counts it."""
+    """What the source pack holds, counted the way the converter counts it.
+
+    A pack keeps its glyph pages in `font/` rather than under `textures/`, and each becomes a texture
+    of the font it joins, so both directories count here as they do on the other side.
+    """
     images = [name for name in names
-              if "/textures/" in f"/{name}" and name.lower().endswith(IMAGE_SUFFIXES)]
+              if ("/textures/" in f"/{name}" or "/font/" in f"/{name}")
+              and name.lower().endswith(IMAGE_SUFFIXES)]
     sets = [name for name in names if name.endswith(".texture_set.json")]
 
     companions: set[str] = set()

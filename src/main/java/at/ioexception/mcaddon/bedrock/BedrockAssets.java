@@ -27,7 +27,8 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
 /**
- * Everything one resource pack declares about how its entities look.
+ * Everything one pack declares about its entities: how a resource pack draws them, and the clips a
+ * behaviour pack drives their state with.
  *
  * Held per pack rather than in one global table: two add-ons can name a geometry the same thing, and
  * the one that loaded second must not silently replace the first.
@@ -55,11 +56,7 @@ public final class BedrockAssets {
         Map<String, JsonObject> legacy = new LinkedHashMap<>();
         assets.each(pack, "models", root -> assets.readGeometries(root, legacy));
         assets.readLegacyGeometries(legacy);
-        assets.each(pack, "animations", root ->
-            assets.readSection(root, "animations", AnimationParser::readAnimation, assets.animations));
-        assets.each(pack, "animation_controllers", root ->
-            assets.readSection(root, "animation_controllers",
-                AnimationControllerParser::readController, assets.animationControllers));
+        assets.readClips(pack);
         assets.each(pack, "render_controllers", root ->
             assets.readSection(root, "render_controllers",
                 RenderControllerParser::read, assets.renderControllers));
@@ -74,6 +71,26 @@ public final class BedrockAssets {
             assets.animationControllers.size(), assets.renderControllers.size(),
             assets.entities.size(), assets.attachables.size());
         return assets;
+    }
+
+    /**
+     * The clips and controllers a behaviour pack ships, and nothing else.
+     *
+     * A behaviour pack animates an entity's state rather than its bones, and writes those clips into
+     * the same two directories a resource pack writes its own into, so the same readers open them.
+     */
+    public static BedrockAssets readBehaviour(BedrockPack pack) {
+        BedrockAssets assets = new BedrockAssets(pack.manifest().minEngineVersion());
+        assets.readClips(pack);
+        return assets;
+    }
+
+    private void readClips(BedrockPack pack) {
+        each(pack, "animations", root ->
+            readSection(root, "animations", AnimationParser::readAnimation, animations));
+        each(pack, "animation_controllers", root ->
+            readSection(root, "animation_controllers",
+                AnimationControllerParser::readController, animationControllers));
     }
 
     public BedrockGeometry geometry(String identifier) {

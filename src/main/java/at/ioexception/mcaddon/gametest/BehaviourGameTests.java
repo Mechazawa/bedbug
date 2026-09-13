@@ -269,6 +269,46 @@ public final class BehaviourGameTests {
         helper.succeed();
     }
 
+    /**
+     * A behaviour pack's own animation script drives the entity it is declared on.
+     *
+     * All three kinds of statement are in the one path: the controller's entry assigns a Molang
+     * variable, raises one of the entity's own events and runs a command as the entity, and the clip
+     * that state plays raises a second event off its timeline. Each leaves a mark a world can be
+     * asked about, so a run that reaches all of them proves the whole script ran rather than parsed.
+     */
+    @GameTest()
+    public void aBehaviourPacksOwnClipsDriveTheEntity(GameTestHelper helper) {
+        EntityType<?> type = AddonEntities.typeOf(ENTITY);
+        if (type == null) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        Entity spawned = Platform.createMob(type, level);
+        BlockPos at = helper.absolutePos(STAND);
+        Platform.placeAt(spawned, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        level.addFreshEntity(spawned);
+
+        for (int tick = 0; tick < KINDLE_TICKS; tick++) {
+            spawned.tick();
+        }
+
+        helper.assertTrue(Boolean.TRUE.equals(
+                ServerHooks.state().property(spawned.getUUID(), "tp:kindled")),
+            ENTITY + " never ran the event its controller raises as a state is entered.");
+        helper.assertTrue(Boolean.TRUE.equals(
+                ServerHooks.state().property(spawned.getUUID(), "tp:glowing")),
+            ENTITY + " never ran the event on its clip's own timeline.");
+        helper.assertTrue(Platform.tagsOf(spawned).contains("tp_kindled"),
+            ENTITY + " never ran the command its controller state names.");
+        helper.succeed();
+    }
+
+    /** Past the half second the pack's clip runs for, so its timeline has been crossed. */
+    private static final int KINDLE_TICKS = 20;
+
     /** The base cost and one level of the per-level cost the pack's book trade states. */
     private static final int BOOK_FLOOR = 5;
 

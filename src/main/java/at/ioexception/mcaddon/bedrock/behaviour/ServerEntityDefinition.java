@@ -36,7 +36,9 @@ public record ServerEntityDefinition(
     Map<String, JsonObject> components,
     Map<String, JsonObject> componentGroups,
     Map<String, EntityEvent> events,
-    Set<String> behaviours
+    Set<String> behaviours,
+    /** The clips and controllers this entity runs server side, which drive its own events. */
+    AnimationScript script
 ) {
     /** A data-driven entity property, which is how a behaviour pack tells a resource pack what to draw. */
     public record Property(String name, String type, double min, double max, List<String> values,
@@ -107,7 +109,8 @@ public record ServerEntityDefinition(
             components,
             componentGroups,
             EntityEvent.readAll(body.getAsJsonObject("events")),
-            behaviours);
+            behaviours,
+            AnimationScript.read(description));
     }
 
     private static void collectBehaviours(JsonObject components, Set<String> into) {
