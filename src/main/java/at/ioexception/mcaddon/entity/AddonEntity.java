@@ -3639,8 +3639,66 @@ public class AddonEntity extends PathfinderMob
 
     @Override
     protected float getSoundVolume() {
-        return definition == null || !declares("minecraft:sound_volume") ? super.getSoundVolume()
-            : (float) number(definition, "minecraft:sound_volume", "value", 1);
+        if (definition != null && declares("minecraft:sound_volume")) {
+            return (float) number(definition, "minecraft:sound_volume", "value", 1);
+        }
+        at.ioexception.mcaddon.bedrock.EntitySounds noises = AddonEntities.soundsOf(getType());
+        return noises == null || noises.volume() < 0
+            ? super.getSoundVolume() : (float) noises.volume();
+    }
+
+    /** The moment `sounds.json` names for this entity, or null where it names none. */
+    private net.minecraft.sounds.SoundEvent noise(String moment) {
+        at.ioexception.mcaddon.bedrock.EntitySounds noises = AddonEntities.soundsOf(getType());
+        return noises == null ? null : sound(noises.event(moment), null);
+    }
+
+    @Override
+    protected net.minecraft.sounds.SoundEvent getAmbientSound() {
+        net.minecraft.sounds.SoundEvent named = noise("ambient");
+        return named == null ? super.getAmbientSound() : named;
+    }
+
+    @Override
+    protected net.minecraft.sounds.SoundEvent getHurtSound(net.minecraft.world.damagesource.DamageSource source) {
+        net.minecraft.sounds.SoundEvent named = noise("hurt");
+        return named == null ? super.getHurtSound(source) : named;
+    }
+
+    @Override
+    protected net.minecraft.sounds.SoundEvent getDeathSound() {
+        net.minecraft.sounds.SoundEvent named = noise("death");
+        return named == null ? super.getDeathSound() : named;
+    }
+
+    /**
+     * The step this entity makes, which Bedrock lets a mob state and Java takes off the block.
+     *
+     * A mob naming no step of its own keeps the one the block it is walking on makes, which is what
+     * every Java mob without a step sound does.
+     */
+    @Override
+    protected void playStepSound(net.minecraft.core.BlockPos position,
+        net.minecraft.world.level.block.state.BlockState state) {
+        net.minecraft.sounds.SoundEvent named = noise("step");
+        if (named == null) {
+            super.playStepSound(position, state);
+            return;
+        }
+        playSound(named, 0.15f, 1f);
+    }
+
+    /**
+     * The pitch a sound of this entity is played at, drawn from the range `sounds.json` names.
+     *
+     * Java varies a mob's voice about a fixed point and Bedrock states the two ends of the range,
+     * so a pack naming one gets a pitch from inside it and a pack naming none keeps Java's own.
+     */
+    @Override
+    public float getVoicePitch() {
+        at.ioexception.mcaddon.bedrock.EntitySounds noises = AddonEntities.soundsOf(getType());
+        Float named = noises == null ? null : noises.voicePitch(random.nextDouble());
+        return named == null ? super.getVoicePitch() : named;
     }
 
     @Override
