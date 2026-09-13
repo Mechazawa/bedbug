@@ -650,6 +650,29 @@ public final class Platform {
     }
 
     /**
+     * The rule that decides whether pillager patrols appear, by the name this version calls it.
+     *
+     * Bedrock has no game rule for either of these: it switches them through `mobevent`, which is
+     * why they are asked for by what they do rather than through the Bedrock name table.
+     */
+    public static String patrolSpawningRule() {
+        //? if >=26 {
+        return GameRules.SPAWN_PATROLS.id();
+        //?} else {
+        /*return net.minecraft.world.level.GameRules.RULE_DO_PATROL_SPAWNING.getId();
+        *///?}
+    }
+
+    /** The rule that decides whether a wandering trader appears, by the name this version calls it. */
+    public static String traderSpawningRule() {
+        //? if >=26 {
+        return GameRules.SPAWN_WANDERING_TRADERS.id();
+        //?} else {
+        /*return net.minecraft.world.level.GameRules.RULE_DO_TRADER_SPAWNING.getId();
+        *///?}
+    }
+
+    /**
      * Writes a game rule, answering whether Java holds one that means the same.
      *
      * Text that does not read as the rule's own type leaves the rule where it was, the way the

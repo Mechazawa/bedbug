@@ -286,9 +286,10 @@ public final class BedrockCommands {
     private static int mobEvent(CommandContext<CommandSourceStack> command) {
         boolean enabled = BoolArgumentType.getBool(command, "enabled");
         List<String> rules = switch (StringArgumentType.getString(command, "event")) {
-            case "minecraft:pillager_patrols_event" -> List.of("doPatrolSpawning");
-            case "minecraft:wandering_trader_event" -> List.of("doTraderSpawning");
-            case "events_enabled" -> List.of("doPatrolSpawning", "doTraderSpawning");
+            case "minecraft:pillager_patrols_event" -> List.of(Platform.patrolSpawningRule());
+            case "minecraft:wandering_trader_event" -> List.of(Platform.traderSpawningRule());
+            case "events_enabled" ->
+                List.of(Platform.patrolSpawningRule(), Platform.traderSpawningRule());
             default -> List.of();
         };
         if (rules.isEmpty()) {
