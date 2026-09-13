@@ -9,10 +9,12 @@ import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
@@ -133,6 +135,50 @@ public final class BehaviourGameTests {
         //?}
         helper.succeed();
     }
+
+    /**
+     * A bow a pack declared fires its ammunition when it is drawn and let go.
+     *
+     * Drawing runs through the game's own use timer rather than through a call, so what is checked
+     * is the whole path: starting a use, the ticks counting down, and the release that launches.
+     */
+    @GameTest()
+    public void aShooterFiresWhatThePackLoadsIt(GameTestHelper helper) {
+        Item bow = AddonItems.all().get(SHOOTER_ITEM);
+        if (bow == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.assertTrue(bow instanceof at.ioexception.mcaddon.item.AddonShooterItem,
+            SHOOTER_ITEM + " declares a shooter and did not become one.");
+
+        ServerLevel level = helper.getLevel();
+        BlockPos at = helper.absolutePos(STAND);
+        Player archer = Platform.mockPlayer(helper);
+        Platform.placeAt(archer, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, -20f);
+        // The hand is a slot of the inventory, so the bow has to be held before the ammunition is
+        // handed over or it lands in the same slot and is thrown away again.
+        archer.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(bow));
+        archer.getInventory().add(new ItemStack(net.minecraft.world.item.Items.ARROW, 8));
+
+        archer.startUsingItem(InteractionHand.MAIN_HAND);
+        for (int tick = 0; tick < FULL_DRAW; tick++) {
+            archer.tick();
+        }
+        archer.releaseUsingItem();
+
+        helper.assertTrue(!level.getEntitiesOfClass(Projectile.class,
+                archer.getBoundingBox().inflate(8)).isEmpty(),
+            SHOOTER_ITEM + " was drawn and released and nothing was fired.");
+        helper.succeed();
+    }
+
+    /** Longer than the second the synthetic pack's bow takes to draw fully. */
+    private static final int FULL_DRAW = 25;
+
+    /** The item the synthetic pack declares a bow. */
+    private static final String SHOOTER_ITEM = "tp:wand";
 
     /** The item the synthetic pack asks to keep on the ground. */
     private static final String KEPT_ITEM = "tp:dust";

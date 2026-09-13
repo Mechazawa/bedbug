@@ -221,6 +221,23 @@ public record ItemDefinition(String identifier, String iconKey, String displayNa
             .toList();
     }
 
+    /**
+     * What `minecraft:shooter` accepts as ammunition, in the order the pack prefers it.
+     *
+     * Each entry names an item and says where it may be taken from. Where it comes from is Java's
+     * own rule, so only the name is read.
+     */
+    public List<String> ammunition() {
+        JsonObject shooter = components.get("minecraft:shooter");
+        if (shooter == null) return List.of();
+
+        return Json.list(shooter, "ammunition").stream()
+            .filter(JsonElement::isJsonObject)
+            .map(entry -> Json.text(entry.getAsJsonObject(), "item", null))
+            .filter(java.util.Objects::nonNull)
+            .toList();
+    }
+
     /** The items `minecraft:repairable` accepts for repairing this one. */
     public List<String> repairItems() {
         JsonObject repairable = components.get("minecraft:repairable");

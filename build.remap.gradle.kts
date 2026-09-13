@@ -31,6 +31,8 @@ stonecutter {
         replace("@GameTest(structure = ", "@GameTest(template = ")
         // Mojang counts the same limit in ticks under a different name.
         replace("maxTicks = ", "timeoutTicks = ")
+        // 1.21.4 spelled out what the animation belongs to.
+        replace("ItemUseAnimation", "UseAnim")
     }
 }
 

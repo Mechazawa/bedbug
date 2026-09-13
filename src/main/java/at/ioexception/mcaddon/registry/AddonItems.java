@@ -5,6 +5,7 @@ import at.ioexception.mcaddon.bedrock.behaviour.ItemDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
 import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.convert.SpawnEggAppearance;
+import at.ioexception.mcaddon.item.AddonShooterItem;
 import at.ioexception.mcaddon.item.AddonThrowableItem;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.PackRole;
@@ -39,6 +40,7 @@ public final class AddonItems {
     private static final Map<String, Item> BY_IDENTIFIER = new LinkedHashMap<>();
     private static final List<Item> DYEABLE = new ArrayList<>();
     private static final Set<Item> KEPT = new HashSet<>();
+    private static final Map<Item, String> PROJECTILES = new LinkedHashMap<>();
 
     private AddonItems() {
     }
@@ -50,6 +52,23 @@ public final class AddonItems {
     /** The items a pack declared dyeable, which the drawing side has to paint their dyed colour. */
     public static List<Item> dyeable() {
         return DYEABLE;
+    }
+
+    /** The item a Bedrock name refers to, a pack's own or the game's. */
+    public static Item named(String bedrock) {
+        Item own = BY_IDENTIFIER.get(bedrock);
+        return own != null ? own : itemNamed(bedrock);
+    }
+
+    /**
+     * The entity an item launches when something fires it.
+     *
+     * `minecraft:projectile` on the ammunition says what flies. Ammunition with no such component is
+     * one of the game's own, where the entity carries the item's name: an arrow fires an arrow.
+     */
+    public static String projectileOf(Item ammunition) {
+        String declared = PROJECTILES.get(ammunition);
+        return declared != null ? declared : BuiltInRegistries.ITEM.getKey(ammunition).toString();
     }
 
     /**
@@ -97,6 +116,9 @@ public final class AddonItems {
             KEPT.add(item);
         }
 
+        String flies = definition.text("minecraft:projectile", "projectile_entity");
+        if (flies != null) PROJECTILES.put(item, flies);
+
         fuel(definition, item);
         compostable(definition, item);
     }
@@ -118,6 +140,9 @@ public final class AddonItems {
             Item egg = Platform.spawnEgg(released, id, appearance.baseColour(), appearance.overlayColour());
             if (egg != null) return egg;
         }
+
+        Item shooter = shooter(definition, properties, id);
+        if (shooter != null) return shooter;
 
         Item thrown = thrower(definition, properties, id);
         if (thrown != null) return thrown;
@@ -506,6 +531,29 @@ public final class AddonItems {
     }
 
     /**
+     * The bow a pack declared, or null where this item is not one.
+     *
+     * A shooter with no ammunition listed can never fire, so it is reported as a gap rather than
+     * registered as a weapon that does nothing when it is drawn.
+     */
+    private static Item shooter(ItemDefinition definition, Item.Properties properties, Identifier id) {
+        if (!definition.components().containsKey("minecraft:shooter")) return null;
+
+        List<String> ammunition = definition.ammunition();
+        if (ammunition.isEmpty()) {
+            AddonEntities.unsupported("minecraft:shooter");
+            return null;
+        }
+
+        JsonObject shooter = definition.components().get("minecraft:shooter");
+        return AddonShooterItem.build(properties, id, ammunition,
+            definition.number("minecraft:shooter", "max_draw_duration", 0f),
+            !shooter.has("scale_power_by_draw_duration")
+                || shooter.get("scale_power_by_draw_duration").getAsBoolean(),
+            definition.number("minecraft:shooter", "launch_power_scale", 1f));
+    }
+
+    /**
      * The item a pack throws, or null where it described something else.
      *
      * `minecraft:projectile` on its own describes ammunition a shooter fires, which needs the bow
@@ -563,7 +611,8 @@ public final class AddonItems {
         "minecraft:digger", "minecraft:can_destroy_in_creative", "minecraft:enchantable",
         "minecraft:cooldown", "minecraft:block", "minecraft:block_placer",
         "minecraft:seed", "minecraft:entity_placer", "minecraft:throwable",
-        "minecraft:projectile", "minecraft:dyeable", "minecraft:should_despawn");
+        "minecraft:projectile", "minecraft:dyeable", "minecraft:should_despawn",
+        "minecraft:shooter");
 
     private static Identifier identifier(String bedrock) {
         Names.Identifier split = Names.split(bedrock, "minecraft");
