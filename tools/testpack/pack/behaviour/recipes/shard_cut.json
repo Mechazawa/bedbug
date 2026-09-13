@@ -6,6 +6,9 @@
     },
     "tags": ["stonecutter"],
     "group": "tp_shard",
+    "unlock": {
+      "context": "AlwaysUnlocked"
+    },
     "ingredients": [
       {
         "item": "tp:lamp"

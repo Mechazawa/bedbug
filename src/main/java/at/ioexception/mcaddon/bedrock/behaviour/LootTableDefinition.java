@@ -192,12 +192,54 @@ public record LootTableDefinition(String path, JsonObject java) {
                 function.addProperty("function", "minecraft:set_ominous_bottle_amplifier");
                 function.add("amplifier", range(bedrock.get("amplifier")));
             }
+            case "enchant_random_gear" -> {
+                // Java enchants the armour a mob spawns in by the same rule: the stated chance
+                // scaled by how hard the place is, then a level out of the range its own spawning
+                // draws from.
+                JsonObject levels = new JsonObject();
+                levels.addProperty("min", 5);
+                levels.addProperty("max", 22);
+
+                function.addProperty("function", "minecraft:enchant_with_levels");
+                function.add("levels", range(levels));
+                Platform.enchantmentChoice(function, false);
+
+                JsonObject chance = new JsonObject();
+                chance.addProperty("condition", "random_regional_difficulty_chance");
+                chance.addProperty("max_chance", Json.number(bedrock, "chance", 1));
+
+                JsonArray conditions = new JsonArray();
+                conditions.add(answeredHere(chance));
+                function.add("conditions", conditions);
+            }
+            case "set_armor_trim" -> {
+                String material = bare(Json.text(bedrock, "material", ""));
+                String pattern = bare(Json.text(bedrock, "pattern", ""));
+                if (!Platform.shipsTrim(material, pattern)) {
+                    AddonEntities.unsupported("loot function set_armor_trim "
+                        + material + " " + pattern);
+                    return null;
+                }
+                Platform.armorTrim(function, material, pattern);
+            }
+            case "set_banner_details" -> {
+                // Type 1 is the banner an illager captain carries; type 0 is a plain banner, which
+                // wants no pattern at all and so needs no function beside the entry.
+                if ((int) Json.number(bedrock, "type", 0) != 1) return null;
+                function.addProperty("function", "minecraft:set_banner_pattern");
+                function.add("patterns", ominousBanner());
+                function.addProperty("append", false);
+            }
+            case "set_stew_effect" -> {
+                JsonArray effects = stewEffects(bedrock);
+                if (effects.isEmpty()) return null;
+                function.addProperty("function", "minecraft:set_stew_effect");
+                function.add("effects", effects);
+            }
             // set_data, random_aux_value, set_data_from_color_index and random_block_state each pick
             // an item's data value, which Java has not had since blocks and items were flattened.
-            // enchant_random_gear enchants the mob's own equipment as it spawns, which a table
-            // describing its drops cannot reach, and enchant_book_for_trading prices a book against
-            // a villager's level, which no Java loot function does. set_armor_trim, set_banner_details
-            // and set_stew_effect name their result the Bedrock way and have no reader here yet.
+            // enchant_book_for_trading prices a book against a villager's level, and a price is
+            // part of a trade rather than anything a loot function states.
             default -> {
                 AddonEntities.unsupported("loot function " + name);
                 return null;
@@ -250,18 +292,30 @@ public record LootTableDefinition(String path, JsonObject java) {
                 condition.addProperty("condition", "minecraft:damage_source_properties");
                 condition.add("predicate", predicate);
             }
-            // entity_properties carries a Bedrock filter, whose vocabulary a Java entity predicate
-            // does not share. has_variant, has_mark_variant and bool_property read Bedrock entity
-            // data and pack-declared properties, which no Java predicate names. entity_killed asks
-            // what the dropping mob itself killed, and a Java loot context knows only the victim and
-            // the killer. killed_by_player_or_pets widens that killer to anything it tamed, which
-            // Java's predicate cannot say. The two difficulty chances read the world difficulty,
-            // which no Java loot condition can. biome_has_tag names a Bedrock biome tag.
+            // Each of these reads something a Java predicate has no field for: an entity's own
+            // properties, its variant, a property a pack declared, the world difficulty, who tamed
+            // the killer, a Bedrock biome tag. This mod answers them itself as the loot is rolled,
+            // so the condition keeps the object the pack wrote and names a condition type of its own.
+            case "entity_properties", "has_variant", "has_mark_variant", "bool_property",
+                "random_difficulty_chance", "random_regional_difficulty_chance",
+                "killed_by_player_or_pets", "biome_has_tag" -> {
+                return answeredHere(bedrock);
+            }
+            // entity_killed asks what the dropping mob itself killed, and a Java loot context holds
+            // the victim and whoever killed it and no record of what the victim did.
             default -> {
                 AddonEntities.unsupported("loot condition " + name);
                 return null;
             }
         }
+        return condition;
+    }
+
+    /** A Bedrock condition kept as it stands, for the condition type this mod answers itself. */
+    private static JsonObject answeredHere(JsonObject bedrock) {
+        JsonObject condition = new JsonObject();
+        condition.addProperty("condition", BedrockCondition.NAME);
+        condition.addProperty("bedrock", bedrock.toString());
         return condition;
     }
 
@@ -276,6 +330,66 @@ public record LootTableDefinition(String path, JsonObject java) {
         predicate.addProperty(Platform.entityPredicateKey("entity_type"),
             type == null ? "minecraft:pig" : type);
         return predicate;
+    }
+
+    /**
+     * The eight layers of the banner an illager captain carries.
+     *
+     * Java builds it in its own code out of patterns the game already ships, so a loot table can
+     * state the same eight and reach the same banner.
+     */
+    private static final List<Map.Entry<String, String>> OMINOUS_BANNER = List.of(
+        Map.entry("rhombus", "cyan"), Map.entry("stripe_bottom", "light_gray"),
+        Map.entry("stripe_center", "gray"), Map.entry("border", "light_gray"),
+        Map.entry("stripe_middle", "black"), Map.entry("half_horizontal", "light_gray"),
+        Map.entry("circle", "light_gray"), Map.entry("border", "black"));
+
+    private static JsonArray ominousBanner() {
+        JsonArray patterns = new JsonArray();
+        for (Map.Entry<String, String> layer : OMINOUS_BANNER) {
+            JsonObject pattern = new JsonObject();
+            pattern.addProperty("pattern", "minecraft:" + layer.getKey());
+            pattern.addProperty("color", layer.getValue());
+            patterns.add(pattern);
+        }
+        return patterns;
+    }
+
+    /**
+     * The effect each suspicious stew id stands for, and how long it lasts by default, in seconds.
+     *
+     * Bedrock numbers the stew effects rather than naming them, and the numbering is the one its own
+     * `suspicious_stew_from_*` recipes write as the item's data value. A pack stating no duration
+     * gets the one the stew made from that flower carries, floored at a second because the Java
+     * function counts in whole seconds.
+     */
+    private static final List<Map.Entry<String, Integer>> STEW_EFFECTS = List.of(
+        Map.entry("night_vision", 5), Map.entry("jump_boost", 5), Map.entry("weakness", 7),
+        Map.entry("blindness", 11), Map.entry("poison", 11), Map.entry("saturation", 1),
+        Map.entry("saturation", 1), Map.entry("fire_resistance", 3), Map.entry("regeneration", 7),
+        Map.entry("wither", 7), Map.entry("night_vision", 5), Map.entry("blindness", 11),
+        Map.entry("nausea", 7));
+
+    private static JsonArray stewEffects(JsonObject bedrock) {
+        JsonArray effects = new JsonArray();
+        for (JsonElement element : Json.list(bedrock, "effects")) {
+            if (!element.isJsonObject()) continue;
+
+            JsonObject stated = element.getAsJsonObject();
+            int id = (int) Json.number(stated, "id", -1);
+            if (id < 0 || id >= STEW_EFFECTS.size()) {
+                AddonEntities.unsupported("loot function set_stew_effect id " + id);
+                continue;
+            }
+
+            Map.Entry<String, Integer> known = STEW_EFFECTS.get(id);
+            JsonObject effect = new JsonObject();
+            effect.addProperty("type", "minecraft:" + known.getKey());
+            effect.add("duration", stated.has("duration")
+                ? range(stated.get("duration")) : new JsonPrimitive(known.getValue()));
+            effects.add(effect);
+        }
+        return effects;
     }
 
     /** `specific_enchants` names each enchantment and the level, or the level range, it is given. */

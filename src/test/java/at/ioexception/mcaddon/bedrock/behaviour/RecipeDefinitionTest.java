@@ -34,6 +34,37 @@ class RecipeDefinitionTest {
     }
 
     @Test
+    void readsAnUnlockListAsTheItemsAndTagsAnAdvancementWaitsForAPlayerToHold() throws IOException {
+        RecipeDefinition recipe = read("""
+            {"minecraft:recipe_shaped": {
+              "description": {"identifier": "probe:plank_block"},
+              "tags": ["crafting_table"],
+              "pattern": ["##", "##"],
+              "key": {"#": {"item": "minecraft:oak_planks"}},
+              "unlock": [{"tag": "minecraft:planks"}, {"item": "minecraft:stick"}],
+              "result": {"item": "probe:plank_block", "count": 1}}}
+            """);
+
+        assertEquals(2, recipe.unlock().size());
+        assertEquals("#minecraft:planks", recipe.unlock().get(0));
+        assertEquals("minecraft:stick", recipe.unlock().get(1));
+    }
+
+    @Test
+    void leavesAnUnlockStatedAsAGameEventWithNothingToWaitFor() throws IOException {
+        RecipeDefinition recipe = read("""
+            {"minecraft:recipe_shapeless": {
+              "description": {"identifier": "probe:cut"},
+              "tags": ["crafting_table"],
+              "ingredients": [{"item": "probe:raw"}],
+              "unlock": {"context": "PlayerInWater"},
+              "result": {"item": "probe:cut", "count": 1}}}
+            """);
+
+        assertEquals(0, recipe.unlock().size());
+    }
+
+    @Test
     void keepsEveryCookerAFurnaceRecipeNames() throws IOException {
         RecipeDefinition recipe = read("""
             {"minecraft:recipe_furnace": {

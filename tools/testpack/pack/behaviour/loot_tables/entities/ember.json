@@ -132,6 +132,84 @@
           ]
         }
       ]
+    },
+    {
+      "rolls": 1,
+      "conditions": [
+        {
+          "condition": "random_difficulty_chance",
+          "default_chance": 0.5,
+          "peaceful": 0,
+          "hard": 0.6
+        },
+        {
+          "condition": "random_regional_difficulty_chance",
+          "max_chance": 0.5
+        },
+        {
+          "condition": "killed_by_player_or_pets"
+        },
+        {
+          "condition": "entity_properties",
+          "entity": "this",
+          "properties": {
+            "on_fire": false
+          }
+        },
+        {
+          "condition": "has_variant",
+          "value": 0
+        },
+        {
+          "condition": "has_mark_variant",
+          "value": 0
+        },
+        {
+          "condition": "bool_property",
+          "domain": "tp:is_lit",
+          "value": false
+        },
+        {
+          "condition": "biome_has_tag",
+          "tag": "warm"
+        },
+        {
+          "condition": "entity_killed",
+          "entity_type": "minecraft:zombie"
+        }
+      ],
+      "entries": [
+        {
+          "type": "item",
+          "name": "minecraft:white_banner",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "set_banner_details",
+              "type": 1
+            }
+          ]
+        },
+        {
+          "type": "item",
+          "name": "minecraft:suspicious_stew",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "set_stew_effect",
+              "effects": [
+                {
+                  "id": 0
+                },
+                {
+                  "id": 4,
+                  "duration": 6
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ]
 }

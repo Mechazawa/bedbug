@@ -24,7 +24,7 @@ import java.util.Set;
  */
 public record RecipeDefinition(String identifier, Kind kind, List<String> pattern,
     Map<String, String> key, List<Ingredient> ingredients, String result, int resultCount,
-    String group, List<String> tags, Smithing smithing) {
+    String group, List<String> tags, Smithing smithing, List<String> unlock) {
 
     public enum Kind { SHAPED, SHAPELESS, FURNACE, SMITHING_TRANSFORM, SMITHING_TRIM }
 
@@ -40,17 +40,29 @@ public record RecipeDefinition(String identifier, Kind kind, List<String> patter
         "minecraft:recipe_shaped", "minecraft:recipe_shapeless", "minecraft:recipe_furnace",
         "minecraft:recipe_smithing_transform", "minecraft:recipe_smithing_trim");
 
-    /** Every field of a recipe body this reads, qualified by the kind carrying it. */
+    /**
+     * Every field of a recipe body this reads, qualified by the kind carrying it.
+     *
+     * A field Java has no place for counts here once it is read, because reading it is what lets
+     * `/mcaddon entities` name it: `priority`, `assume_symmetry`, an unlock stated as a context and
+     * every data value beside an item are each reported rather than converted.
+     */
     private static final Set<String> HANDLES = Set.of(
         "shaped.description", "shaped.description.identifier", "shaped.pattern", "shaped.key",
-        "shaped.key.item", "shaped.key.tag", "shaped.result", "shaped.result.item",
-        "shaped.result.count", "shaped.group", "shaped.tags",
+        "shaped.key.item", "shaped.key.tag", "shaped.key.data", "shaped.result",
+        "shaped.result.item", "shaped.result.count", "shaped.result.data", "shaped.group",
+        "shaped.tags", "shaped.priority", "shaped.assume_symmetry", "shaped.unlock",
+        "shaped.unlock.item", "shaped.unlock.tag", "shaped.unlock.data", "shaped.unlock.context",
         "shapeless.description", "shapeless.description.identifier", "shapeless.ingredients",
         "shapeless.ingredients.item", "shapeless.ingredients.tag", "shapeless.ingredients.count",
-        "shapeless.result", "shapeless.result.item", "shapeless.result.count", "shapeless.group",
-        "shapeless.tags",
+        "shapeless.ingredients.data", "shapeless.result", "shapeless.result.item",
+        "shapeless.result.count", "shapeless.result.data", "shapeless.group", "shapeless.tags",
+        "shapeless.priority", "shapeless.unlock", "shapeless.unlock.item", "shapeless.unlock.data",
+        "shapeless.unlock.context",
         "furnace.description", "furnace.description.identifier", "furnace.input",
-        "furnace.input.item", "furnace.input.tag", "furnace.output", "furnace.tags",
+        "furnace.input.item", "furnace.input.tag", "furnace.input.data", "furnace.output",
+        "furnace.tags", "furnace.priority", "furnace.unlock", "furnace.unlock.item",
+        "furnace.unlock.tag", "furnace.unlock.data",
         "smithing_transform.description", "smithing_transform.description.identifier",
         "smithing_transform.template", "smithing_transform.base", "smithing_transform.addition",
         "smithing_transform.result", "smithing_transform.tags",
@@ -60,7 +72,7 @@ public record RecipeDefinition(String identifier, Kind kind, List<String> patter
         "smithing_trim.tags");
 
     /** The fields Java's own recipe has no place for, each reported once a pack writes one. */
-    private static final List<String> REPORTED = List.of("priority", "unlock", "assume_symmetry");
+    private static final List<String> REPORTED = List.of("priority", "assume_symmetry");
 
     private static final Map<Kind, String> SECTIONS = Map.of(
         Kind.SHAPED, "minecraft:recipe_shaped",
@@ -101,8 +113,8 @@ public record RecipeDefinition(String identifier, Kind kind, List<String> patter
             String identifier = description == null ? null : Json.text(description, "identifier", null);
             if (identifier == null) return null;
 
-            // Java decides what a recipe unlocks from an advancement, offers every match rather than
-            // the one with the highest priority, and mirrors a shaped pattern whatever it holds.
+            // Java offers every recipe that matches rather than the one with the highest priority,
+            // and mirrors a shaped pattern whatever the recipe says about its symmetry.
             String name = section.substring("minecraft:recipe_".length());
             REPORTED.stream().filter(body::has)
                 .forEach(field -> AddonEntities.unsupported("recipe field " + name + "." + field));
@@ -157,7 +169,32 @@ public record RecipeDefinition(String identifier, Kind kind, List<String> patter
         }
 
         return new RecipeDefinition(identifier, kind, pattern, key, ingredients, result,
-            count(output), Json.text(body, "group", null), tags, smithing);
+            count(output), Json.text(body, "group", null), tags, smithing, unlock(body));
+    }
+
+    /**
+     * What a player has to have held before the recipe is theirs, as item and tag references.
+     *
+     * Java keeps the same idea in an advancement rewarding the recipe, which is what a converted
+     * one is written alongside. A context names a Bedrock game event instead of a thing to hold, and
+     * an advancement trigger waits on none of them, so a context is reported and the list is empty.
+     */
+    private static List<String> unlock(JsonObject body) {
+        List<String> items = new ArrayList<>();
+        for (JsonElement element : Json.list(body, "unlock")) {
+            if (!element.isJsonObject()) continue;
+
+            JsonObject entry = element.getAsJsonObject();
+            String context = Json.text(entry, "context", null);
+            if (context != null) {
+                AddonEntities.unsupported("recipe unlock context " + context);
+                continue;
+            }
+
+            String item = itemOf(entry);
+            if (item != null) items.add(item);
+        }
+        return items;
     }
 
     /**

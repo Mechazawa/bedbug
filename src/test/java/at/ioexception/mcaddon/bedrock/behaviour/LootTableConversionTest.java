@@ -1,6 +1,10 @@
 package at.ioexception.mcaddon.bedrock.behaviour;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -19,6 +23,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * output is what has to be checked here.
  */
 class LootTableConversionTest {
+    @BeforeAll
+    static void bootstrap() {
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
+    }
+
     @TempDir
     Path root;
 
@@ -93,6 +103,87 @@ class LootTableConversionTest {
         assertEquals(5, pool.getAsJsonArray("entries").get(0).getAsJsonObject()
             .get("quality").getAsInt());
         assertFalse(pool.has("tiers"));
+    }
+
+    @Test
+    void namesEachStewEffectByTheJavaEffectItsNumberStandsFor() throws IOException {
+        JsonArray effects = firstFunction("""
+            {"pools": [{"rolls": 1, "entries": [{"type": "item", "name": "minecraft:suspicious_stew",
+              "functions": [{"function": "set_stew_effect",
+                "effects": [{"id": 0}, {"id": 4, "duration": 6}]}]}]}]}
+            """).getAsJsonArray("effects");
+
+        assertEquals("minecraft:night_vision", effects.get(0).getAsJsonObject()
+            .get("type").getAsString());
+        assertEquals(5, effects.get(0).getAsJsonObject().get("duration").getAsInt());
+        assertEquals("minecraft:poison", effects.get(1).getAsJsonObject().get("type").getAsString());
+        assertEquals(6, effects.get(1).getAsJsonObject().get("duration").getAsInt());
+    }
+
+    @Test
+    void dropsAStewEffectNumberNoEffectAnswersToRatherThanNamingTheWrongOne() throws IOException {
+        assertFalse(firstEntry("""
+            {"pools": [{"rolls": 1, "entries": [{"type": "item", "name": "minecraft:suspicious_stew",
+              "functions": [{"function": "set_stew_effect", "effects": [{"id": 40}]}]}]}]}
+            """).has("functions"));
+    }
+
+    @Test
+    void givesABannerTheEightLayersOfTheOneAnIllagerCaptainCarries() throws IOException {
+        JsonArray patterns = firstFunction("""
+            {"pools": [{"rolls": 1, "entries": [{"type": "item", "name": "minecraft:white_banner",
+              "functions": [{"function": "set_banner_details", "type": 1}]}]}]}
+            """).getAsJsonArray("patterns");
+
+        assertEquals(8, patterns.size());
+        assertEquals("minecraft:rhombus", patterns.get(0).getAsJsonObject()
+            .get("pattern").getAsString());
+        assertEquals("cyan", patterns.get(0).getAsJsonObject().get("color").getAsString());
+    }
+
+    @Test
+    void writesNoPatternForTheBannerTypeThatMeansAPlainOne() throws IOException {
+        assertFalse(firstEntry("""
+            {"pools": [{"rolls": 1, "entries": [{"type": "item", "name": "minecraft:white_banner",
+              "functions": [{"function": "set_banner_details", "type": 0}]}]}]}
+            """).has("functions"));
+    }
+
+    @Test
+    void reportsATrimNoSupportedVersionShipsRatherThanNamingARegistryEntryWithNothingBehindIt()
+        throws IOException {
+        assertFalse(firstEntry("""
+            {"pools": [{"rolls": 1, "entries": [{"type": "item", "name": "minecraft:iron_helmet",
+              "functions": [{"function": "set_armor_trim",
+                "material": "copper", "pattern": "invented"}]}]}]}
+            """).has("functions"));
+    }
+
+    @Test
+    void guardsTheGearEnchantmentWithTheChanceTheDifficultyScales() throws IOException {
+        JsonObject function = firstFunction("""
+            {"pools": [{"rolls": 1, "entries": [{"type": "item", "name": "minecraft:golden_helmet",
+              "functions": [{"function": "enchant_random_gear", "chance": 0.25}]}]}]}
+            """);
+
+        assertEquals("minecraft:enchant_with_levels", function.get("function").getAsString());
+        assertEquals(BedrockCondition.NAME, function.getAsJsonArray("conditions").get(0)
+            .getAsJsonObject().get("condition").getAsString());
+    }
+
+    @Test
+    void keepsTheBedrockObjectOfAConditionThisModAnswersAsTheLootIsRolled() throws IOException {
+        JsonObject condition = firstPool("""
+            {"pools": [{"rolls": 1, "conditions": [{"condition": "has_mark_variant", "value": 3}],
+              "entries": [{"type": "item", "name": "minecraft:stick"}]}]}
+            """).getAsJsonArray("conditions").get(0).getAsJsonObject();
+
+        assertEquals(BedrockCondition.NAME, condition.get("condition").getAsString());
+        assertTrue(condition.get("bedrock").getAsString().contains("has_mark_variant"));
+    }
+
+    private JsonObject firstFunction(String table) throws IOException {
+        return firstEntry(table).getAsJsonArray("functions").get(0).getAsJsonObject();
     }
 
     private JsonObject firstPool(String table) throws IOException {

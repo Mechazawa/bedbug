@@ -702,6 +702,175 @@ public final class Platform {
         *///?}
     }
 
+    /**
+     * Whether the game ships the armour trim a pack names, material and pattern both.
+     *
+     * A trim pattern and a trim material are entries in registries a data pack writes into, and a
+     * world holding such a pack is one the game calls experimental, so a pack may only name a trim
+     * the game already has. 1.21 added the two trial chamber patterns and 26 added the resin
+     * material; a pack naming one the running version has not is told rather than left with a table
+     * the game refuses to parse.
+     */
+    public static boolean shipsTrim(String material, String pattern) {
+        return TRIM_MATERIALS.contains(material) && TRIM_PATTERNS.contains(pattern)
+            && !LATER_TRIMS.contains(material) && !LATER_TRIMS.contains(pattern);
+    }
+
+    private static final Set<String> TRIM_PATTERNS = Set.of("bolt", "coast", "dune", "eye", "flow",
+        "host", "raiser", "rib", "sentry", "shaper", "silence", "snout", "spire", "tide", "vex",
+        "ward", "wayfinder", "wild");
+
+    private static final Set<String> TRIM_MATERIALS = Set.of("amethyst", "copper", "diamond",
+        "emerald", "gold", "iron", "lapis", "netherite", "quartz", "redstone", "resin");
+
+    /** The trims a later version added, which the running one has no registry entry for. */
+    private static final Set<String> LATER_TRIMS = Set.of(
+        //? if >=26 {
+        //?} else if >=1.21 {
+        /*"resin"
+        *///?} else {
+        /*"resin", "bolt", "flow"
+        *///?}
+    );
+
+    /**
+     * The loot function that gives a drop an armour trim.
+     *
+     * 1.20.5 replaced the item's whole NBT tag with components, so what was one nested compound
+     * under `Trim` became the `minecraft:trim` component set beside every other one.
+     */
+    public static void armorTrim(com.google.gson.JsonObject function, String material,
+        String pattern) {
+        //? if >=1.21 {
+        com.google.gson.JsonObject trim = new com.google.gson.JsonObject();
+        trim.addProperty("material", "minecraft:" + material);
+        trim.addProperty("pattern", "minecraft:" + pattern);
+
+        com.google.gson.JsonObject components = new com.google.gson.JsonObject();
+        components.add("minecraft:trim", trim);
+        function.addProperty("function", "minecraft:set_components");
+        function.add("components", components);
+        //?} else {
+        /*function.addProperty("function", "minecraft:set_nbt");
+        function.addProperty("tag", "{Trim:{material:\"minecraft:" + material
+            + "\",pattern:\"minecraft:" + pattern + "\"}}");
+        *///?}
+    }
+
+    /**
+     * Paints a stack one of the sixteen dye colours, which is what a trade's `random_dye` asks for.
+     *
+     * 1.20.5 moved the colour off the item's display tag and onto a component of its own, and 26
+     * dropped the flag beside it that said the item had been dyed rather than born coloured.
+     */
+    public static net.minecraft.world.item.ItemStack dyed(net.minecraft.world.item.ItemStack stack,
+        net.minecraft.world.item.DyeColor colour) {
+        //? if >=26 {
+        stack.set(net.minecraft.core.component.DataComponents.DYED_COLOR,
+            new net.minecraft.world.item.component.DyedItemColor(colour.getTextureDiffuseColor()));
+        //?} else if >=1.21 {
+        /*stack.set(net.minecraft.core.component.DataComponents.DYED_COLOR,
+            new net.minecraft.world.item.component.DyedItemColor(colour.getTextureDiffuseColor(),
+                true));
+        *///?} else {
+        /*float[] channels = colour.getTextureDiffuseColors();
+        stack.getOrCreateTagElement("display").putInt("color",
+            ((int) (channels[0] * 255) << 16) | ((int) (channels[1] * 255) << 8)
+                | (int) (channels[2] * 255));
+        *///?}
+        return stack;
+    }
+
+    /**
+     * The entity a loot table is describing the drops of, or null when there is none.
+     *
+     * 26 moved a loot context's parameters into the general context keys and renamed the readers
+     * with them.
+     */
+    public static Entity lootSubject(
+        net.minecraft.world.level.storage.loot.LootContext context) {
+        //? if >=26 {
+        return context.getOptionalParameter(
+            net.minecraft.world.level.storage.loot.parameters.LootContextParams.THIS_ENTITY);
+        //?} else {
+        /*return context.getParamOrNull(
+            net.minecraft.world.level.storage.loot.parameters.LootContextParams.THIS_ENTITY);
+        *///?}
+    }
+
+    /**
+     * Whatever dealt the blow, or null when nothing did.
+     *
+     * 1.21 renamed the parameter from the killer to the attacker, because the same one answers a
+     * blow that did not kill.
+     */
+    public static Entity lootKiller(
+        net.minecraft.world.level.storage.loot.LootContext context) {
+        //? if >=26 {
+        return context.getOptionalParameter(
+            net.minecraft.world.level.storage.loot.parameters.LootContextParams.ATTACKING_ENTITY);
+        //?} else if >=1.21 {
+        /*return context.getParamOrNull(
+            net.minecraft.world.level.storage.loot.parameters.LootContextParams.ATTACKING_ENTITY);
+        *///?} else {
+        /*return context.getParamOrNull(
+            net.minecraft.world.level.storage.loot.parameters.LootContextParams.KILLER_ENTITY);
+        *///?}
+    }
+
+    private static net.minecraft.core.BlockPos lootOrigin(
+        net.minecraft.world.level.storage.loot.LootContext context) {
+        //? if >=26 {
+        net.minecraft.world.phys.Vec3 origin = context.getOptionalParameter(
+            net.minecraft.world.level.storage.loot.parameters.LootContextParams.ORIGIN);
+        //?} else {
+        /*net.minecraft.world.phys.Vec3 origin = context.getParamOrNull(
+            net.minecraft.world.level.storage.loot.parameters.LootContextParams.ORIGIN);
+        *///?}
+        return origin == null ? net.minecraft.core.BlockPos.ZERO
+            : net.minecraft.core.BlockPos.containing(origin);
+    }
+
+    /**
+     * How far into a place's own difficulty the drop is happening, between zero and one.
+     *
+     * Java works the same number out of the world difficulty, how long the world has been played
+     * and the moon, and uses it for the chances a mob spawns armed and enchanted.
+     */
+    public static double regionalDifficulty(
+        net.minecraft.world.level.storage.loot.LootContext context) {
+        return context.getLevel().getCurrentDifficultyAt(lootOrigin(context)).getSpecialMultiplier();
+    }
+
+    /** The biome the drop is happening in, by the path of its id, which is what a tag is read of. */
+    public static String lootBiome(
+        net.minecraft.world.level.storage.loot.LootContext context) {
+        return context.getLevel().getBiome(lootOrigin(context)).unwrapKey()
+            .map(key -> idOf(key).getPath()).orElse("");
+    }
+
+    /**
+     * One item an advancement waits for a player to hold.
+     *
+     * 1.20.5 gave an item predicate a single field naming either an item or a tag, where before a
+     * tag had a key of its own and an item was written as a list.
+     */
+    public static com.google.gson.JsonObject heldItem(String item) {
+        com.google.gson.JsonObject predicate = new com.google.gson.JsonObject();
+        //? if >=1.21 {
+        predicate.addProperty("items", item);
+        //?} else {
+        /*if (item.startsWith("#")) {
+            predicate.addProperty("tag", item.substring(1));
+            return predicate;
+        }
+        com.google.gson.JsonArray items = new com.google.gson.JsonArray();
+        items.add(item);
+        predicate.add("items", items);
+        *///?}
+        return predicate;
+    }
+
     /** Whether the game has an ominous bottle for a loot table to set the amplifier of. */
     public static boolean hasOminousBottle() {
         //? if >=1.21 {

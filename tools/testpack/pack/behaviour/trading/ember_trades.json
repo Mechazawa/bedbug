@@ -89,6 +89,38 @@
           ],
           "max_uses": 2,
           "trader_exp": 5
+        },
+        {
+          "wants": [
+            {
+              "item": "minecraft:emerald",
+              "quantity": 3
+            }
+          ],
+          "gives": [
+            {
+              "item": "minecraft:leather_helmet",
+              "quantity": 1,
+              "filters": {
+                "test": "is_daytime",
+                "value": true
+              },
+              "functions": [
+                {
+                  "function": "random_dye"
+                },
+                {
+                  "function": "random_aux_value",
+                  "values": {
+                    "min": 0,
+                    "max": 6
+                  }
+                }
+              ]
+            }
+          ],
+          "max_uses": 3,
+          "trader_exp": 1
         }
       ]
     }
