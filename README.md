@@ -94,6 +94,14 @@ to. A function using one keeps its other lines and the dropped command is report
 `scriptevent`, `music`, `toggledownfall`, `structure`, `mobevent`, `camera`, `camerashake` and
 `fog` are registered by this mod.
 
+**Hiding pieces of the heads-up display.** Bedrock's `/hud` names fourteen pieces and Java draws each
+of the ones it has from its own method, so hiding one means cancelling that method. Three pieces have
+no Java method on any version: nothing draws a paperdoll or touch controls, and the experience bar
+became a contextual bar chosen per frame in 26. Three more have none on 1.20.1, where the armour, the
+hunger and the air bubbles are drawn inline with the health. The class holding the rest moved twice
+across the four versions, so answering ten pieces on the newest and seven on the oldest would take
+four alternative renderer patches. `/hud` is dropped with its name reported, like the rest below.
+
 **The fog a pack describes for water, lava and powder snow, and its volumetric block.** A Bedrock fog
 file says what the world looks like through each medium the camera can be in, and adds a second
 description with its own scattering coefficients. `/fog` carries the `air` block, which is the one a

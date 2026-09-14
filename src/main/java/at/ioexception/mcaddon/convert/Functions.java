@@ -32,6 +32,18 @@ public final class Functions {
      *
      * What is left here asks for a renderer feature Java has none of, or for a server Java does not
      * speak to. Everything a Java client can be told to draw has moved to `REGISTERED_HERE`.
+     *
+     * `hud` is the one that could be answered in part and is not. Bedrock names fourteen pieces of
+     * the heads-up display and Java draws each of the ones it has from its own method, so hiding one
+     * means cancelling that method on all four versions. Three of the fourteen have no Java method
+     * at any version: `paperdoll` and `touch_controls` are drawn by nothing, and `progress_bar` lost
+     * its `Gui.renderExperienceBar` in 26 to `contextualbar.ContextualBar`, which is chosen per
+     * frame. Three more have none on 1.20.1: `Gui.renderPlayerHealth` draws the armour, the hunger
+     * and the air bubbles with inline `GuiGraphics.blit` calls there, while 1.21.1 has
+     * `Gui.renderArmor` and `Gui.renderFood` and 26 has `extractArmor`, `extractFood` and
+     * `extractAirBubbles`. The class holding them moved twice as well: `Gui` up to 26.1.2, then
+     * `Hud` in 26.2. Four alternative mixin bodies over private drawing methods, answering ten of
+     * fourteen pieces on the newest version and seven on the oldest, costs more than it returns.
      */
     private static final Set<String> BEDROCK_ONLY = Set.of(
         "inputpermission", "hud", "dialogue", "script",
