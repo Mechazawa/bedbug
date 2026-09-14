@@ -15,6 +15,7 @@ still works:
     two entities, one spawn egg naming a texture and one giving two colours
     an animation firing a sound and a particle off its timeline
     three particle definitions in the 1.10.0 format
+    a fog whose air and water blocks are written differently from each other
     a texture set whose emissive channel has pixels in it
     a function using the commands and selector arguments that need translating
 

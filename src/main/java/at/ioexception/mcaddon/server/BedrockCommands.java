@@ -5,6 +5,7 @@ import at.ioexception.mcaddon.bedrock.camera.CameraView;
 import at.ioexception.mcaddon.bedrock.camera.Easing;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonFogs;
 import at.ioexception.mcaddon.registry.AddonParticles;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
@@ -129,6 +130,32 @@ public final class BedrockCommands {
 
         registerCamera(dispatcher);
         registerCameraShake(dispatcher);
+        registerFog(dispatcher);
+    }
+
+    /**
+     * `/fog` layers a pack's own fog settings over the one the game would draw.
+     *
+     * Each layer carries a name the pack chose, which is what a later `pop` or `remove` finds it by,
+     * so the stack belongs to the player and is kept on the server. Pushing a fog no pack describes
+     * is reported rather than quietly leaving the stack as it was.
+     */
+    private static void registerFog(CommandDispatcher<CommandSourceStack> dispatcher) {
+        dispatcher.register(Commands.literal("fog")
+            .requires(source -> Platform.allowedAt(source, 1))
+            .then(Commands.argument("targets", EntityArgument.players())
+                .then(Commands.literal("push")
+                    .then(Commands.argument("fogId", IdentifierArgument.id())
+                        .suggests((command, builder) -> SharedSuggestionProvider.suggest(
+                            AddonFogs.all().keySet(), builder))
+                        .then(Commands.argument("userId", StringArgumentType.string())
+                            .executes(BedrockCommands::pushFog))))
+                .then(Commands.literal("pop")
+                    .then(Commands.argument("userId", StringArgumentType.string())
+                        .executes(command -> takeFog(command, false))))
+                .then(Commands.literal("remove")
+                    .then(Commands.argument("userId", StringArgumentType.string())
+                        .executes(command -> takeFog(command, true))))));
     }
 
     /**
@@ -385,6 +412,40 @@ public final class BedrockCommands {
         String encoded = shake.encode();
         targets.forEach(player -> Channels.sendCameraShake(player, encoded));
         return targets.size();
+    }
+
+    private static int pushFog(CommandContext<CommandSourceStack> command)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        String fogId = IdentifierArgument.getId(command, "fogId").toString();
+        if (AddonFogs.definitionOf(fogId) == null) {
+            command.getSource().sendFailure(
+                Component.literal("No add-on describes a fog called " + fogId + "."));
+            return 0;
+        }
+
+        String userId = StringArgumentType.getString(command, "userId");
+        int pushed = 0;
+        for (ServerPlayer player : EntityArgument.getPlayers(command, "targets")) {
+            if (PlayerFogs.push(player, fogId, userId)) pushed++;
+        }
+        return pushed;
+    }
+
+    /** `remove` takes off every layer pushed under the name; `pop` takes off only the last one. */
+    private static int takeFog(CommandContext<CommandSourceStack> command, boolean all)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        String userId = StringArgumentType.getString(command, "userId");
+
+        int taken = 0;
+        for (ServerPlayer player : EntityArgument.getPlayers(command, "targets")) {
+            boolean changed = all ? PlayerFogs.remove(player, userId) : PlayerFogs.pop(player, userId);
+            if (changed) taken++;
+        }
+        if (taken == 0) {
+            command.getSource().sendFailure(
+                Component.literal("No target has a fog pushed under " + userId + "."));
+        }
+        return taken;
     }
 
     /** The parsed nodes are the words that were typed, and every part of `/camera` is optional. */

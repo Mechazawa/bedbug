@@ -49,8 +49,11 @@ server decides what happens; the client draws it.
   dialect with a `tick` function tag.
 - `/camera` and `/camerashake`, which set one player's own view: the four presets, a position and a
   rotation of the pack's choosing, all thirty-one of Bedrock's easing curves, and a shake that moves
-  the camera or turns it. The server decides and tells each player separately, so a pack that sets
-  one player's camera in a multiplayer world leaves everybody else's alone.
+  the camera or turns it.
+- `/fog`, which layers a pack's own `fogs/` settings over the one the game would draw, with a stack
+  per player that `pop` and `remove` take apart the way Bedrock's do. Like the two camera commands it
+  is decided on the server and sent to each player alone, so setting one player's view in a
+  multiplayer world leaves everybody else's as it was.
 - Attachables: what any entity wears or holds, players and vanilla mobs included, animating on its
   own clock.
 - The sounds and particles an animation, an animation controller state or an entity's own definition
@@ -84,12 +87,18 @@ all become the render type the pass is drawn with. What cannot follow is the ste
 a pass that exists only to write a mask is left out rather than drawn as a shape that does not
 belong there.
 
-**A handful of Bedrock commands.** `fog`, `hud`, `dialogue`, `inputpermission`, `immutableworld`,
+**A handful of Bedrock commands.** `hud`, `dialogue`, `inputpermission`, `immutableworld`,
 `wsserver` and `connect` name a renderer feature Java has none of, or a server Java does not speak
 to. A function using one keeps its other lines and the dropped command is reported. `testfor`,
 `testforblock`, `testforblocks` and `titleraw` are translated; `playanimation`, `event`,
-`scriptevent`, `music`, `toggledownfall`, `structure`, `mobevent`, `camera` and `camerashake` are
-registered by this mod.
+`scriptevent`, `music`, `toggledownfall`, `structure`, `mobevent`, `camera`, `camerashake` and
+`fog` are registered by this mod.
+
+**The fog a pack describes for water, lava and powder snow, and its volumetric block.** A Bedrock fog
+file says what the world looks like through each medium the camera can be in, and adds a second
+description with its own scattering coefficients. `/fog` carries the `air` block, which is the one a
+pack pushes a fog for; Java draws its own fog for the other media and has no volumetric fog to give
+the second block to.
 
 **The tests a pack ships.** A pack can import `@minecraft/server-gametest` and register its tests,
 and the registration is taken and counted rather than refused, because refusing it would cost the

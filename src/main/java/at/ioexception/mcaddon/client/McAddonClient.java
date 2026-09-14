@@ -2,12 +2,14 @@ package at.ioexception.mcaddon.client;
 
 import at.ioexception.mcaddon.bedrock.camera.CameraShake;
 import at.ioexception.mcaddon.bedrock.camera.CameraView;
+import at.ioexception.mcaddon.bedrock.fog.FogDefinition;
 import at.ioexception.mcaddon.client.render.AddonClientAssets;
 import at.ioexception.mcaddon.client.render.AddonEntityRenderer;
 import at.ioexception.mcaddon.client.render.AddonParticleProvider;
 import at.ioexception.mcaddon.client.render.Animators;
 import at.ioexception.mcaddon.client.render.EntityProperties;
 import at.ioexception.mcaddon.client.render.PlayerCamera;
+import at.ioexception.mcaddon.client.render.PlayerFog;
 import at.ioexception.mcaddon.client.screen.AddonFormScreen;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.network.Channels;
@@ -38,6 +40,7 @@ public final class McAddonClient implements ClientModInitializer {
         Channels.receiveProperties(EntityProperties::accept);
         Channels.receiveCameraView(encoded -> PlayerCamera.accept(CameraView.decode(encoded)));
         Channels.receiveCameraShake(encoded -> PlayerCamera.shake(CameraShake.decode(encoded)));
+        Channels.receiveFog(encoded -> PlayerFog.accept(FogDefinition.decode(encoded)));
         Channels.receivePacks(McAddonClient::reportMissingPacks);
         Channels.receiveAnimation(Animators::play);
         Channels.receiveParticle((effect, x, y, z) ->
@@ -58,6 +61,7 @@ public final class McAddonClient implements ClientModInitializer {
             Animators.clear();
             EntityProperties.clear();
             PlayerCamera.clear();
+            PlayerFog.clear();
             at.ioexception.mcaddon.client.render.AddonEmitters.clear();
         });
     }

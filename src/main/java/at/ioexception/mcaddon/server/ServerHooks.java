@@ -105,7 +105,10 @@ public final class ServerHooks {
             Channels.sendPacks(handler.player, PackList.of(McAddon.packs()).encode());
             playerJoined(handler.player);
         });
-        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> playerLeft(handler.player));
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+            PlayerFogs.forget(handler.player);
+            playerLeft(handler.player);
+        });
         // A respawn is the other way into the world, and the flag is how a pack tells the two apart.
         ServerPlayerEvents.AFTER_RESPAWN.register((from, to, alive) -> playerSpawned(to, false));
     }

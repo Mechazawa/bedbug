@@ -15,4 +15,5 @@
     <suppress files="client[\\/]render[\\/]AddonEntityRenderer\.java" checks="UnusedImports"/>
     <suppress files="client[\\/]render[\\/]AttachableLayer\.java" checks="UnusedImports"/>
     <suppress files="mixin[\\/]LivingEntityRendererMixin\.java" checks="UnusedImports"/>
+    <suppress files="mixin[\\/]FogRendererMixin\.java" checks="UnusedImports"/>
 </suppressions>

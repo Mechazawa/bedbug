@@ -102,19 +102,22 @@ class FunctionsTest {
 
     @Test
     void dropsABedrockOnlyCommandAndSaysWhichOne() throws IOException {
-        assertEquals(List.of(), translate("fog @a push minecraft:fog_crimson_forest setting"));
-        assertTrue(problems.contains("command fog"), problems.toString());
+        assertEquals(List.of(), translate("dialogue open @e @p greeting"));
+        assertTrue(problems.contains("command dialogue"), problems.toString());
     }
 
-    /** The two that act on a player's own view keep the arguments a pack writes them with. */
+    /** The three that act on a player's own view keep the arguments a pack writes them with. */
     @ParameterizedTest
     @CsvSource({
         "'camera @a set minecraft:free ease 2 in_out_quad pos 1 2 3 rot 30 90'",
         "'camera @a clear'",
         "'camerashake add @a 0.5 3 rotational'",
         "'camerashake stop @a'",
+        "'fog @a push minecraft:fog_crimson_forest my_fog'",
+        "'fog @a pop my_fog'",
+        "'fog @a remove my_fog'",
     })
-    void keepsACameraLineWhole(String source) throws IOException {
+    void keepsAViewLineWhole(String source) throws IOException {
         assertEquals(source, only(source));
     }
 

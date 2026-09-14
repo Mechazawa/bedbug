@@ -34,19 +34,19 @@ public final class Functions {
      * speak to. Everything a Java client can be told to draw has moved to `REGISTERED_HERE`.
      */
     private static final Set<String> BEDROCK_ONLY = Set.of(
-        "fog", "inputpermission", "hud", "dialogue", "script",
+        "inputpermission", "hud", "dialogue", "script",
         "immutableworld", "wsserver", "connect");
 
     /**
      * Commands Bedrock has that this mod registers, so a function using one keeps the line.
      *
      * Java's own dispatcher knows none of these. Most are registered as the Java commands that do
-     * the same thing; `camera` and `camerashake` act on one player's own view, so they are sent to
-     * that player's client instead.
+     * the same thing; `camera`, `camerashake` and `fog` act on one player's own view, so they are
+     * sent to that player's client instead.
      */
     static final Set<String> REGISTERED_HERE = Set.of(
         "playanimation", "event", "scriptevent", "music", "toggledownfall", "structure", "mobevent",
-        "camera", "camerashake");
+        "camera", "camerashake", "fog");
 
     private static final Pattern SELECTOR = Pattern.compile("@[aeprsn]\\[([^\\]]*)\\]");
     private static final Pattern SPACE = Pattern.compile("\\s+");

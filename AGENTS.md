@@ -115,8 +115,9 @@ These are the checks that catch things:
   a count that dropped: an item icon in each of the three shapes a pack may write it in, a block with
   states and permutations drawn with its own geometry, a shaped and a shapeless recipe, two entities
   whose spawn eggs take each of the two forms, an animation firing a sound and a particle off its
-  timeline, three `particles/*.json` in the 1.10.0 format, a texture set whose emissive channel has
-  pixels in it, and a function using the commands and selector arguments that need translating.
+  timeline, three `particles/*.json` in the 1.10.0 format, a `fogs/` file whose air and water blocks
+  are written differently, a texture set whose emissive channel has pixels in it, and a function
+  using the commands and selector arguments that need translating.
 - **`tools/testpack/build_modules.py`** builds a second add-on, whose script imports every
   `@minecraft/*` module the mod provides and calls one thing from each. Its sources are a manifest
   and one script under `tools/testpack/modules/`.
@@ -245,6 +246,7 @@ src/main/java/at/ioexception/mcaddon/
   resource/                  The converted packs and how the game is told about them
   registry/                  Sounds, entities, items, blocks, spawns and the creative tab
   bedrock/camera/            What `/camera` and `/camerashake` set, and the easing curves they name
+  bedrock/fog/               A pack's `fogs/` settings, as far as Java's one fog can carry them
   bedrock/molang/            Molang parser, evaluator, maths. Trig is in degrees.
   bedrock/model/             Geometry parsing, baking, render controllers
   bedrock/animation/         Animations, channels, player, controllers
@@ -257,7 +259,7 @@ src/main/java/at/ioexception/mcaddon/
   gametest/                  The Mojang game tests, reached through the fabric-gametest entrypoint
   client/render/             Renderer, attachable layer, pass resolution, query answering
   client/screen/             The screen a Bedrock form becomes
-  mixin/                     Pack repository source, the attachable layer, and the camera
+  mixin/                     Pack repository source, the attachable layer, the camera and the fog
   platform/Platform.java     Every call whose spelling differs across versions
   network/Channels.java      Payloads, in both the 1.21+ and the older form
 

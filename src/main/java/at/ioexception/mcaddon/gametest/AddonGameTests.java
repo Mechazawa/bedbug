@@ -86,6 +86,9 @@ public final class AddonGameTests {
         parses(helper, "camerashake add @a 0.5 3");
         parses(helper, "camerashake add @a 0.5 3 rotational");
         parses(helper, "camerashake stop @a");
+        parses(helper, "fog @a push minecraft:fog_crimson_forest \"my fog\"");
+        parses(helper, "fog @a pop \"my fog\"");
+        parses(helper, "fog @a remove \"my fog\"");
         helper.succeed();
     }
 

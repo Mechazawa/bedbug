@@ -34,6 +34,7 @@ public final class Channels {
     private static final Identifier PARTICLE = McAddon.id("start_particle");
     private static final Identifier CAMERA = McAddon.id("camera_view");
     private static final Identifier SHAKE = McAddon.id("camera_shake");
+    private static final Identifier FOG = McAddon.id("fog");
 
     private Channels() {
     }
@@ -144,7 +145,7 @@ public final class Channels {
     //?}
 
     //? if >=1.21 {
-    /** The view a `/camera` set for one player, and the shake a `/camerashake` started. */
+    /** What `/camera`, `/camerashake` and `/fog` set for one player, each in its own message. */
     private record View(String view) implements CustomPacketPayload {
         private static final CustomPacketPayload.Type<View> TYPE = new CustomPacketPayload.Type<>(CAMERA);
 
@@ -170,7 +171,46 @@ public final class Channels {
             return TYPE;
         }
     }
+
+    private record Fog(String fog) implements CustomPacketPayload {
+        private static final CustomPacketPayload.Type<Fog> TYPE = new CustomPacketPayload.Type<>(FOG);
+
+        private static final StreamCodec<FriendlyByteBuf, Fog> CODEC = StreamCodec.composite(
+            ByteBufCodecs.STRING_UTF8, Fog::fog,
+            Fog::new);
+
+        @Override
+        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
     //?}
+
+    /** The fog now on top of a player's stack, or an empty description when nothing is left on it. */
+    public static void sendFog(ServerPlayer player, String fog) {
+        //? if >=1.21 {
+        ServerPlayNetworking.send(player, new Fog(fog));
+        //?} else {
+        /*FriendlyByteBuf buffer = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buffer.writeUtf(fog);
+        ServerPlayNetworking.send(player, FOG, buffer);
+        *///?}
+    }
+
+    public static void receiveFog(java.util.function.Consumer<String> handler) {
+        //? if >=1.21 {
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+            Fog.TYPE,
+            (payload, context) -> context.client().execute(() -> handler.accept(payload.fog())));
+        //?} else {
+        /*net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+            FOG,
+            (client, network, buffer, sender) -> {
+                String fog = buffer.readUtf();
+                client.execute(() -> handler.accept(fog));
+            });
+        *///?}
+    }
 
     public static void sendCameraView(ServerPlayer player, String view) {
         //? if >=1.21 {
@@ -310,6 +350,7 @@ public final class Channels {
         PayloadTypeRegistry.clientboundPlay().register(Form.TYPE, Form.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(View.TYPE, View.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Shake.TYPE, Shake.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(Fog.TYPE, Fog.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(FormResponse.TYPE, FormResponse.CODEC);
         //?}
     }

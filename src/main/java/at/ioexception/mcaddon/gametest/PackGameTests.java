@@ -1,8 +1,10 @@
 package at.ioexception.mcaddon.gametest;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.fog.FogDefinition;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.registry.AddonFogs;
 import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.registry.AddonParticles;
 import at.ioexception.mcaddon.server.EntityEvents;
@@ -30,6 +32,7 @@ public final class PackGameTests {
     /** The entity the synthetic pack declares, which every assertion about one uses. */
     private static final String ENTITY = "tp:ember";
     private static final String BLOCK = "tp:lamp";
+    private static final String FOG = "tp:dusk";
 
     /**
      * A pack's own entity reaches the world and stays there.
@@ -180,6 +183,28 @@ public final class PackGameTests {
         AddonParticles.all().keySet().forEach(identifier ->
             helper.assertTrue(AddonParticles.typeOf(identifier) != null,
                 identifier + " was read but never registered."));
+        helper.succeed();
+    }
+
+    /**
+     * The fog a pack ships is read, and its two distances mean what the file said they meant.
+     *
+     * `render_distance_type` decides whether a distance is blocks or a multiple of the render
+     * distance, and the render distance belongs to the client, so the multiple is what the server
+     * keeps. A file read the other way puts the fog on the player's nose.
+     */
+    @GameTest()
+    public void aPackFogIsReadWithItsOwnDistances(GameTestHelper helper) {
+        FogDefinition fog = AddonFogs.definitionOf(FOG);
+        if (fog == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.assertTrue(fog.scaledToRenderDistance(), FOG + " lost the render distance it scales to.");
+        helper.assertTrue(fog.endAt(160f) > fog.startAt(160f), FOG + " ends before it starts.");
+        helper.assertTrue(fog.red() > 0f || fog.green() > 0f || fog.blue() > 0f,
+            FOG + " came out black, so its colour was not read.");
         helper.succeed();
     }
 

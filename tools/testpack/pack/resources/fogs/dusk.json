@@ -1,0 +1,22 @@
+{
+  "format_version": "1.16.100",
+  "minecraft:fog_settings": {
+    "description": {
+      "identifier": "tp:dusk"
+    },
+    "distance": {
+      "air": {
+        "fog_start": 0.2,
+        "fog_end": 0.9,
+        "fog_color": "#3A2E5C",
+        "render_distance_type": "render"
+      },
+      "water": {
+        "fog_start": 0.0,
+        "fog_end": 0.4,
+        "fog_color": "#123A5C",
+        "render_distance_type": "fixed"
+      }
+    }
+  }
+}
