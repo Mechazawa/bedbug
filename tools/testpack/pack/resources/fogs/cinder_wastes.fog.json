@@ -1,0 +1,16 @@
+{
+  "format_version": "1.16.100",
+  "minecraft:fog_settings": {
+    "description": {
+      "identifier": "tp:fog_cinder_wastes"
+    },
+    "distance": {
+      "air": {
+        "fog_start": 6.0,
+        "fog_end": 52.0,
+        "fog_color": "#7a1408",
+        "render_distance_type": "fixed"
+      }
+    }
+  }
+}

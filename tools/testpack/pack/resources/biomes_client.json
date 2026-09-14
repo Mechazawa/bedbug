@@ -1,0 +1,11 @@
+{
+  "biomes": {
+    "tp:cinder_wastes": {
+      "water_surface_color": "#8a2f12",
+      "water_fog_color": "#61200c",
+      "water_fog_distance": 11,
+      "water_surface_transparency": 0.6,
+      "fog_identifier": "tp:fog_cinder_wastes"
+    }
+  }
+}

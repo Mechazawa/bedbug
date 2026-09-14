@@ -100,9 +100,10 @@ These are the checks it runs, and what each one catches:
 - **`./gradlew :26.2:test`** runs the unit tests in `src/test/java/`, for the checked-out version
   only, for the same reason linting is. They cover what is a function of its input rather than of a
   running game: the Molang evaluator, the Targa and Ogg readers, the command translation, the labPBR
-  channel arithmetic, manifest reading and pack order. Anything needing a world belongs in the game
-  tests instead. A test needing the registry calls `SharedConstants.tryDetectVersion()` and
-  `Bootstrap.bootStrap()` in a `@BeforeAll`, which is enough without launching the game.
+  channel arithmetic, the biome and fog colours, manifest reading and pack order. Anything needing a
+  world belongs in the game tests instead. A test needing the registry calls
+  `SharedConstants.tryDetectVersion()` and `Bootstrap.bootStrap()` in a `@BeforeAll`, which is
+  enough without launching the game.
 - **`./gradlew :26.2:runGameTest`** runs the Mojang game tests in
   `src/main/java/at/ioexception/mcaddon/gametest/`, headless, against a real world. `check` depends
   on it, so a failing one fails `./gradlew build`, and it is gated to the checked-out version like
@@ -203,6 +204,15 @@ These are the checks it runs, and what each one catches:
   rule hangs an ore on every overworld biome and the other hangs flowers on the forests, so a fresh
   chunk holds blocks that can be counted. **The ore places `tp:lamp`, which is the pack's own block**:
   a run where the block registry and the worldgen registry disagree leaves nothing in the ground.
+
+  The resource pack paints both of those biomes, once in each of the two shapes Bedrock allows. One
+  has a `biomes/*.client_biome.json` naming a fog of its own; the other is an entry in
+  `biomes_client.json` naming a second fog and stating its water half outright, which is what a pack
+  written before the split says. Between them the two fog files carry a distance in blocks, a
+  distance as a fraction of the render distance, and each of the locations and blocks no Java biome
+  has a field for, so the read half and the reported half both run. Nothing about a colour shows in a
+  count, so the `fog` scene is where these are looked at and `BiomeColourTest` is where the
+  arithmetic is asserted.
 
   The book table is the one a game test rolls: it holds a single entry carrying
   `enchant_book_for_trading` and no condition, so the loot function type this mod registers is
@@ -485,6 +495,14 @@ These are the checks it runs, and what each one catches:
   The `items` scene stands one armour stand per add-on item and puts the item on its head, which is
   what draws an item icon, its tint and its model in the world. The heads-up display is off while
   the picture is taken, so an item in a hotbar or in a hand would not be in it.
+
+  The `fog` scene paints the stage with the first biome a pack declares and floods half of it, so one
+  frame holds the fog colour a pack's `fogs` file puts over the distance and the water colour its
+  biome tints the pool with. Every scene starts by putting the stage's biome back, because
+  `fillbiome` is what the world keeps rather than what a scene builds. 1.20.1 registers no biome from
+  a pack, so the scene fills the pool there and names no biome: a command naming one would not parse
+  and would take the whole function with it, and the picture that comes back is what the game paints
+  when a pack's colours have nowhere to go.
 
 - **`tools/scene/zoom.py`** cuts a piece out of a scene's picture and scales it up without smearing
   the pixels, for looking at one subject rather than the whole window.

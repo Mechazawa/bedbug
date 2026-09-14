@@ -39,9 +39,6 @@ public final class Worldgen {
     /** Java's eleven decoration steps, which a biome lists one feature list per. */
     private static final int DECORATION_STEPS = 11;
 
-    /** What a biome with no water colour anywhere in the pack is drawn with. */
-    private static final int DEFAULT_WATER = 4159204;
-
     /** How deep a chain of features stating a position is followed before it is called a loop. */
     private static final int WRAPPER_LIMIT = 8;
 
@@ -52,7 +49,13 @@ public final class Worldgen {
     public static void write(Path root, String namespace, List<BiomeDefinition> biomes,
         Map<String, ClientBiomeDefinition> colours, List<FeatureDefinition> features,
         List<FeatureRuleDefinition> rules) throws IOException {
-        if (!Platform.convertsWorldgen()) return;
+        // No biome is converted on 1.20.1, so the colours and the fog a resource pack paints one
+        // with have nothing to land on either.
+        if (!Platform.convertsWorldgen()) {
+            colours.keySet().forEach(painted -> AddonEntities
+                .unsupported("resource pack biome colours (needs 1.21 or newer)"));
+            return;
+        }
 
         for (BiomeDefinition biome : biomes) {
             Names.Identifier id = Names.split(biome.identifier(), namespace);
@@ -98,10 +101,7 @@ public final class Worldgen {
         if (biome.partiallyFrozen()) json.addProperty("temperature_modifier", "frozen");
         json.addProperty("downfall", biome.downfall());
 
-        int grass = biome.grassColour() >= 0 ? biome.grassColour() : colours.grass();
-        int foliage = biome.foliageColour() >= 0 ? biome.foliageColour() : colours.foliage();
-        Platform.biomeColours(json, colours.water() >= 0 ? colours.water() : DEFAULT_WATER,
-            colours.sky(), grass, foliage, colours.dryFoliage());
+        Platform.biomeColours(json, colours.tinted(biome.grassColour(), biome.foliageColour()));
 
         Platform.emptyCarvers(json);
         JsonArray steps = new JsonArray();

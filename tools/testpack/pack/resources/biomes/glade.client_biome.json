@@ -12,7 +12,7 @@
         "sky_color": "#79a6ff"
       },
       "minecraft:fog_appearance": {
-        "fog_identifier": "minecraft:fog_plains"
+        "fog_identifier": "tp:fog_glade"
       }
     }
   }

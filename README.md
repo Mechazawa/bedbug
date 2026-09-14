@@ -142,11 +142,12 @@ server decides what happens; the client draws it.
   put in the nether or the end is added to the list that world already searches, so it generates in
   an ordinary world; one in the overworld is converted and registered and then reported, because
   Java's overworld has no such list to add to. The colours the resource pack paints a biome with go
-  into it either way. A feature becomes a Java configured feature, and a feature rule becomes the
-  placed feature and the generation step beside it, hung at world load on every biome whose tags the
-  rule's own filter accepts. That last part is the direction Bedrock attaches from and the one a Java
-  biome cannot, because a Java biome lists the features it carries and nothing a data pack writes
-  reaches one from the other side.
+  into it either way, the fog its `fogs` file paints the air and the water with among them, and from
+  26 the distances that fog fades over as well. A feature becomes a Java configured feature, and a
+  feature rule becomes the placed feature and the generation step beside it, hung at world load on
+  every biome whose tags the rule's own filter accepts. That last part is the direction Bedrock
+  attaches from and the one a Java biome cannot, because a Java biome lists the features it carries
+  and nothing a data pack writes reaches one from the other side.
 - Attachables: what any entity wears or holds, players and vanilla mobs included, animating on its
   own clock. A pack picks between several models for one item on a condition of its own, and what an
   attachable writes into whoever carries it reaches that entity's variables, so the layer it stands
@@ -469,14 +470,24 @@ chain to a biome. `water` states particle concentrations in milligrams per litre
 projection and an eleven field wave model, where Java water is a flipbook texture tinted by one
 colour. Each of the four is read by Bedrock only under Vibrant Visuals, its deferred pipeline.
 
-**Two directories hold more than a deferred renderer reads.** `fogs` states a `distance` block per
-camera location, and its `air` and `water` fog colours are what Java carries as a biome's own fog
-colour and water fog colour, with the start and end distances answerable from 26 as well; only its
-`volumetric` block, the `transition_fog` fade and the lava, weather and powder snow locations have
-nothing behind them. The resource pack's `biomes` and `biomes_client.json` are read for the colours a
-converted biome is drawn with; the precipitation particles, the ambient sounds, the music definition
-and the identifiers naming a deferred renderer's atmosphere, lighting, water and colour grading are
-counted and named.
+**The half of a fog a biome has no field for.** `fogs` states a `distance` block per camera
+location. The `air` and `water` colours become a biome's own fog colour and water fog colour, and
+from 26 the start and end distances go with them; 1.21.1 carries the two colours and has no field
+for a distance, so a distance is counted and named there. A distance written as a fraction of the
+render distance is named on every version, because Java states its own in blocks. The `volumetric`
+block, the `transition_fog` fade and the lava, weather and powder snow locations have nothing behind
+them. So does a fog identifier no installed pack defines, which is what Bedrock's own
+`minecraft:fog_*` settings are: they live in the engine rather than in any add-on, so a biome naming
+one keeps Java's fog and the author is told.
+
+**What a client biome states beside its colours.** The water, sky, grass and foliage colours out of
+`biomes` and `biomes_client.json` reach a converted biome, and the dry foliage colour reaches 26
+alone and is named before it. The whole-pack file's own water fog colour and water fog distance are
+read as that biome's water fog. Its water surface transparency, the precipitation particles, the
+ambient sounds, the music definition and the identifiers naming a deferred renderer's atmosphere,
+lighting, water and colour grading are counted and named. On 1.20.1 no biome from a pack is
+converted at all, so every biome the resource pack paints is counted and named with the version that
+would draw it.
 
 **Worldgen on 1.20.1.** An entry a data pack puts in a worldgen registry leaves a world stable only
 while the pack it came from carries a `KnownPack`, and a converted pack carries one from 1.21 on.

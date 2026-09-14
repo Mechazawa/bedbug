@@ -52,8 +52,8 @@ public final class PackFiles {
     /** The resource pack paths a reader opens. */
     private static final Set<String> RESOURCE_READ = Set.of(
         "manifest.json", "pack_icon.png", "animations", "animation_controllers", "attachables",
-        "biomes", "biomes_client.json", "blocks.json", "entity", "font", "materials", "models",
-        "particles", "render_controllers", "sounds", "sounds.json", "texts", "textures",
+        "biomes", "biomes_client.json", "blocks.json", "entity", "fogs", "font", "materials",
+        "models", "particles", "render_controllers", "sounds", "sounds.json", "texts", "textures",
         "sounds/music_definitions.json", "sounds/sound_definitions.json",
         "textures/flipbook_textures.json", "textures/item_texture.json",
         "textures/terrain_texture.json",
