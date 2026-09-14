@@ -219,6 +219,34 @@ public final class BehaviourGameTests {
         helper.succeed();
     }
 
+    /**
+     * A table naming an item this version has no id for still hands out the rest of what it holds.
+     *
+     * Java made an item of the field masoned banner pattern later than two of the versions this
+     * builds for, and one unreadable id costs a data pack the whole file, so an entry naming a
+     * family member the game has not got is left empty instead. Which half of that happens is
+     * decided by the version, and the pool beside it is what says the table was read at all.
+     */
+    @GameTest()
+    public void aTableKeepsItsOtherDropsWhenOneItemIsNotInThisVersion(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        List<String> dropped = rolled(helper, Platform.id("tp", "entities/pattern"), ember);
+        helper.assertTrue(dropped.contains("minecraft:stick"),
+            ENTITY + " has a table naming a banner pattern beside a stick and dropped " + dropped + ".");
+        helper.assertTrue(dropped.stream().allMatch(PATTERN_DROPS::contains),
+            ENTITY + " dropped " + dropped + " out of a table naming a stick and one banner pattern.");
+        helper.succeed();
+    }
+
+    /** What the pack's banner pattern table may hand out, whichever of the two items it can name. */
+    private static final List<String> PATTERN_DROPS =
+        List.of("minecraft:stick", "minecraft:field_masoned_banner_pattern");
+
     /** What a table handed out, by id, which is what a data value picks between. */
     private static List<String> rolled(GameTestHelper helper, Identifier table, Entity about) {
         return Platform.rollLoot(helper.getLevel(), table, about).stream()
