@@ -62,6 +62,7 @@ public final class McAddon implements ModInitializer {
         at.ioexception.mcaddon.bedrock.behaviour.BedrockFunction.register();
 
         packs = PackDiscovery.scan();
+        at.ioexception.mcaddon.pack.PackSettings.read(packs);
         packs.report().forEach(LOGGER::info);
 
         AddonPacks.convert(packs);

@@ -49,6 +49,7 @@ public final class AddonPacks {
         Map<String, List<BedrockPack>> behavioursByOrigin = new LinkedHashMap<>();
         for (BedrockPack pack : packs.packs()) {
             PackFiles.report(pack);
+            pack.manifest().report();
             if (pack.role() == PackRole.BEHAVIOUR) {
                 behavioursByOrigin.computeIfAbsent(pack.origin(), origin -> new ArrayList<>()).add(pack);
             }

@@ -436,7 +436,7 @@ public final class GameTests extends Surface {
         String wanted = name.replace(':', '/').toLowerCase(Locale.ROOT);
         for (BedrockPack pack : McAddon.packs().packs()) {
             for (Path file : pack.list("structures", ".mcstructure")) {
-                String relative = pack.root().relativize(file).toString()
+                String relative = pack.relative(file).toString()
                     .replace('\\', '/').toLowerCase(Locale.ROOT);
                 String bare = relative.substring("structures/".length(),
                     relative.length() - ".mcstructure".length());
@@ -447,7 +447,7 @@ public final class GameTests extends Surface {
     }
 
     private McStructure read(BedrockPack pack, Path file) {
-        try (InputStream stream = pack.open(pack.root().relativize(file).toString())) {
+        try (InputStream stream = pack.open(pack.relative(file).toString())) {
             return McStructure.read(stream.readAllBytes());
         } catch (IOException error) {
             McAddon.LOGGER.error("Could not read the structure {} from {}.", file, pack.displayName());

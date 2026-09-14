@@ -78,7 +78,11 @@ def lenient(path):
     closing brace. The game reads them, so a census that skipped them would measure a smaller
     vocabulary than the one Mojang ships.
     """
-    body = text(path)
+    return lenient_text(text(path))
+
+
+def lenient_text(body):
+    """The same reader, for JSON that arrived as text rather than as a file of its own."""
     out = []
     index = 0
     while index < len(body):

@@ -12,6 +12,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.stream.Stream;
 
 /**
@@ -25,16 +26,38 @@ public final class BedrockPack {
     private final Path root;
     private final PackManifest manifest;
     private final String origin;
+    private final Path overlay;
     private Map<String, String> texts;
 
     public BedrockPack(Path root, PackManifest manifest, String origin) {
         this.root = root;
         this.manifest = manifest;
         this.origin = origin;
+        this.overlay = overlayOf(root, manifest, origin);
     }
 
-    public Path root() {
-        return root;
+    /**
+     * The directory of the subpack this pack is loaded as, or null when it is loaded as itself.
+     *
+     * A pack ships each of its forms under `subpacks/<folder_name>/`, and the files there stand in
+     * for the pack's own of the same path. A folder the manifest names and the pack does not carry
+     * leaves the pack loaded as itself.
+     */
+    private static Path overlayOf(Path root, PackManifest manifest, String origin) {
+        PackManifest.Subpack chosen = manifest == null ? null : manifest.subpack();
+        if (chosen == null || chosen.folderName() == null) return null;
+
+        Path folder = root.resolve("subpacks").resolve(chosen.folderName());
+        if (Files.isDirectory(folder)) return folder;
+
+        McAddon.LOGGER.warn("{} names the subpack {} and ships no subpacks/{} to load it from.",
+            origin, chosen.name(), chosen.folderName());
+        return null;
+    }
+
+    /** The name of the form this pack is loaded as, or null when it is loaded as itself. */
+    public String subpackName() {
+        return overlay == null ? null : manifest.subpack().name();
     }
 
     public PackManifest manifest() {
@@ -55,7 +78,13 @@ public final class BedrockPack {
     }
 
     public Path file(String path) {
-        return root.resolve(path);
+        Path inSubpack = overlay == null ? null : overlay.resolve(path);
+        return inSubpack != null && Files.exists(inSubpack) ? inSubpack : root.resolve(path);
+    }
+
+    /** Where a file this pack handed out sits inside it, whichever of the pack's forms it came from. */
+    public Path relative(Path file) {
+        return overlay != null && file.startsWith(overlay) ? overlay.relativize(file) : root.relativize(file);
     }
 
     public boolean has(String path) {
@@ -71,19 +100,27 @@ public final class BedrockPack {
      *
      * Bedrock nests freely: `textures/oreville/vn/...` and `functions/oreville/vn/...` are both real
      * layouts in one pack, so a non-recursive listing silently sees nothing.
+     *
+     * A file the loaded subpack carries stands in for the pack's own of the same path, so one path
+     * is listed once whichever of the two forms it came out of.
      */
     public List<Path> list(String directory, String extension) {
-        Path start = file(directory);
-        if (!Files.isDirectory(start)) return List.of();
+        Map<String, Path> found = new TreeMap<>();
+        gather(root, directory, extension, found);
+        if (overlay != null) gather(overlay, directory, extension, found);
+        return List.copyOf(found.values());
+    }
+
+    private void gather(Path base, String directory, String extension, Map<String, Path> found) {
+        Path start = base.resolve(directory);
+        if (!Files.isDirectory(start)) return;
 
         try (Stream<Path> walk = Files.walk(start)) {
-            return walk.filter(Files::isRegularFile)
+            walk.filter(Files::isRegularFile)
                 .filter(path -> path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(extension))
-                .sorted()
-                .toList();
+                .forEach(path -> found.put(base.relativize(path).toString(), path));
         } catch (IOException error) {
             McAddon.LOGGER.warn("Could not list {} in {}.", directory, origin, error);
-            return List.of();
         }
     }
 

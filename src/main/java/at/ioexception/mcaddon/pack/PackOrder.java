@@ -45,7 +45,8 @@ final class PackOrder {
                 if (byUuid.containsKey(dependency.uuid())) {
                     required.add(dependency.uuid());
                 } else if (!known.contains(dependency.uuid())) {
-                    problems.add(pack.displayName() + " requires a pack that is not installed: " + dependency.uuid());
+                    problems.add(pack.displayName() + " requires a pack that is not installed: "
+                        + dependency.uuid() + " " + dependency.version());
                 }
             }
             waitingOn.put(pack.manifest().uuid(), required);

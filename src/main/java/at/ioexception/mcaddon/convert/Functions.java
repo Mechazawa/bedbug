@@ -253,7 +253,7 @@ public final class Functions {
             ? "function" : "functions";
 
         for (Path file : pack.list("functions", ".mcfunction")) {
-            String relative = pack.root().relativize(file).toString().replace('\\', '/');
+            String relative = pack.relative(file).toString().replace('\\', '/');
             String inside = Names.sanitise(relative.substring("functions/".length(), relative.length() - 11));
 
             List<String> lines = new ArrayList<>();
