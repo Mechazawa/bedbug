@@ -1481,6 +1481,31 @@ public final class Platform {
     }
 
     /**
+     * Sends a player on to another server, which is what Bedrock's `/transfer` does.
+     *
+     * Java gained the packet in 1.20.5 and 1.20.1 has no form of it, so there the player stays and
+     * the caller says so.
+     */
+    public static boolean transfer(ServerPlayer player, String host, int port) {
+        //? if >=1.21 {
+        player.connection.send(
+            new net.minecraft.network.protocol.common.ClientboundTransferPacket(host, port));
+        return true;
+        //?} else {
+        /*return false;
+        *///?}
+    }
+
+    /** Multiplies a whole transform onto a pose stack. 1.21 renamed the matrix form of the call. */
+    public static void mulPose(com.mojang.blaze3d.vertex.PoseStack poseStack, org.joml.Matrix4f matrix) {
+        //? if >=1.21 {
+        poseStack.mulPose(matrix);
+        //?} else {
+        /*poseStack.mulPoseMatrix(matrix);
+        *///?}
+    }
+
+    /**
      * How much of a stack's use cooldown is still to run, between nothing and one.
      *
      * 1.21.2 moved the question from the item to the stack, because a cooldown became something a

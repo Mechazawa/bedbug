@@ -82,7 +82,7 @@ public final class EntityQueries implements MolangEnvironment.Queries {
      * names, so `tools/census/components.py` reads this declaration to tell one of its own case
      * labels from the other. A name here is still answered; it is measured against nothing.
      */
-    public static final Set<String> CONTEXT = Set.of("owning_entity");
+    public static final Set<String> CONTEXT = Set.of("owning_entity", "item_slot");
 
     /**
      * What only somebody drawing the entity can answer.
@@ -183,6 +183,9 @@ public final class EntityQueries implements MolangEnvironment.Queries {
     /** The clock reading at which the entity caught fire, or -1 while it is not alight. */
     private float litAt = -1;
 
+    /** Which slot this attachable is worn in, empty for answers that are not for one. */
+    private String itemSlot = "";
+
     public EntityQueries(Entity entity, AnimationPlayer player, Drawn drawn,
         Supplier<Map<String, Object>> properties, boolean attached) {
         this.entity = entity;
@@ -194,6 +197,11 @@ public final class EntityQueries implements MolangEnvironment.Queries {
 
     public void setPartialTick(float partialTick) {
         this.partialTick = partialTick;
+    }
+
+    /** Named the way `item_slot_to_bone_name` takes an argument, which is what reads it back. */
+    public void setItemSlot(String itemSlot) {
+        this.itemSlot = itemSlot;
     }
 
     @Override
@@ -469,6 +477,7 @@ public final class EntityQueries implements MolangEnvironment.Queries {
             case "get_root_locator_offset" ->
                 MolangValue.of(locatorOffset(drawn.rootLocator(text(arguments, 0)), arguments));
 
+            case "item_slot" -> MolangValue.of(itemSlot);
             case "item_slot_to_bone_name" -> MolangValue.of(boneForSlot(text(arguments, 0)));
             case "item_is_charged" -> MolangValue.of(flag(properties, "item_is_charged"));
             case "equipped_item_any_tag" -> equippedTags(arguments, false);

@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.bedrock.behaviour;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.entity.AddonEntity;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.server.ServerHooks;
@@ -119,8 +120,25 @@ public final class BedrockCondition implements LootItemCondition {
                 < Json.number(bedrock, "max_chance", 1) * Platform.regionalDifficulty(context);
             case "killed_by_player_or_pets" -> killedByPlayerOrPets(Platform.lootKiller(context));
             case "biome_has_tag" -> biomeHasTag(context);
+            case "entity_killed" -> killed(subject);
             default -> false;
         };
+    }
+
+    /**
+     * Whether what the entity just killed is the kind the condition names.
+     *
+     * Bedrock asks this of the table `minecraft:behavior.eat_mob` names, which is rolled as the meal
+     * goes down, so the entity the loot belongs to is the one that did the killing. A name with no
+     * namespace means `minecraft:`, which is how every published table writes one.
+     */
+    private boolean killed(Entity subject) {
+        String wanted = Json.text(bedrock, "entity_type", "");
+        if (!(subject instanceof AddonEntity hunter) || wanted.isEmpty()) return false;
+
+        String victim = hunter.killed();
+        return victim != null
+            && victim.equals(wanted.contains(":") ? wanted : "minecraft:" + wanted);
     }
 
     /** `on_fire` and `on_ground` are the two the engine answers; the subject is the dying entity. */

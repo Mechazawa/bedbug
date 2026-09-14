@@ -34,6 +34,9 @@
         "controller.render.tp.sprite",
         "controller.render.tp.sprite.cap"
       ],
+      "enable_attachables": true,
+      "held_item_scale": 2.0,
+      "held_item_ignores_lighting": true,
       "spawn_egg": {
         "texture": "eggs",
         "texture_index": 1

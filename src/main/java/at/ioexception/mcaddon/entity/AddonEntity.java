@@ -1484,6 +1484,27 @@ public class AddonEntity extends PathfinderMob
     private java.util.UUID owner;
     private boolean ownerRead;
 
+    /** What this entity last swallowed, which is what a loot table's `entity_killed` asks about. */
+    private String killed;
+
+    /**
+     * Writes down what the entity just killed, so a table rolled over the body can ask what it was.
+     *
+     * Bedrock asks this of one table only, the one `minecraft:behavior.eat_mob` names, and that
+     * table is rolled as the meal goes down rather than when anything dies. The answer therefore
+     * belongs to the moment and is kept on the entity rather than in the add-on state.
+     */
+    public void setKilled(net.minecraft.world.entity.Entity victim) {
+        killed = victim == null ? null
+            : net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE
+                .getKey(victim.getType()).toString();
+    }
+
+    /** The identifier of what this entity last killed, or null while it has killed nothing. */
+    public String killed() {
+        return killed;
+    }
+
     /**
      * Marks the entity as belonging to somebody, which is what taming it amounts to.
      *

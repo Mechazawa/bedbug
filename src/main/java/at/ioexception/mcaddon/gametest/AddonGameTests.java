@@ -62,6 +62,9 @@ public final class AddonGameTests {
         parses(helper, "playanimation @e animation.walk");
         parses(helper, "playanimation @e animation.walk next.state 0.5 q.is_alive");
         parses(helper, "event entity @e mcaddon:test_event");
+        // Bedrock writes the port or leaves it out, and the line reaches the command as it stands.
+        parses(helper, "transfer @a \"example.test\"");
+        parses(helper, "transfer @a \"example.test\" 25565");
         helper.succeed();
     }
 

@@ -59,7 +59,7 @@ public final class Functions {
      */
     private static final Set<String> REGISTERED_HERE = Set.of(
         "playanimation", "event", "scriptevent", "music", "toggledownfall", "structure", "mobevent",
-        "particle", "gametest", "dialogue");
+        "particle", "gametest", "dialogue", "transfer");
 
     /**
      * The registered commands whose Bedrock line the command built here reads as it stands.
@@ -68,7 +68,7 @@ public final class Functions {
      * line Java's parser rejects, and one of those costs the whole function.
      */
     private static final Set<String> REGISTERED_WHOLE_LINE =
-        Set.of("playanimation", "event", "toggledownfall");
+        Set.of("playanimation", "event", "toggledownfall", "transfer");
 
     /**
      * Commands Bedrock has and Java has no counterpart for.
@@ -82,8 +82,8 @@ public final class Functions {
         "aimassist", "camera", "camerashake", "clearspawnpoint", "connect",
         "controlscheme", "editor-allowlist", "fog", "hud", "immutableworld",
         "inputpermission", "packstack", "permission", "ops", "project", "reloadconfig",
-        "reloadpacketlimitconfig", "schedule", "script", "sendshowstoreoffer", "setmaxplayers",
-        "transfer", "wsserver");
+        "reloadpacketlimitconfig", "script", "sendshowstoreoffer", "setmaxplayers",
+        "wsserver");
 
     /**
      * Commands whose rewrite changes the front of a line and leaves the rest as the pack wrote it.
@@ -93,7 +93,7 @@ public final class Functions {
      * masked`, `loot spawn`, `time query gametime` and `title @a times` all reach it as written.
      */
     private static final Set<String> TAIL_REACHES_JAVA =
-        Set.of("effect", "execute", "locate", "loot", "time", "title", "titleraw");
+        Set.of("effect", "execute", "locate", "loot", "schedule", "time", "title", "titleraw");
 
     /**
      * Forms of a command this mod does translate that Java has no way to say.
@@ -116,6 +116,7 @@ public final class Functions {
         "ride skip_riders", "ride summon_ride", "ride summon_rider", "ride teleport_ride",
         "ride until_full",
         "save query",
+        "schedule on_area_loaded",
         "structure block_by_block", "structure layer_by_layer", "structure memory", "structure xz",
         "summon facing",
         "tickingarea all-dimensions", "tickingarea circle", "tickingarea preload");
@@ -344,6 +345,7 @@ public final class Functions {
             case "particle" -> "particle " + quotedName(rest);
             case "scriptevent" -> "scriptevent " + quotedName(rest);
             case "dialogue" -> dialogue(rest, unsupported);
+            case "schedule" -> schedule(rest, unsupported);
             default -> {
                 unsupported.add("command " + name);
                 yield null;
@@ -952,6 +954,31 @@ public final class Functions {
             placement.append(' ').append(java);
         }
         return placement.toString();
+    }
+
+    /**
+     * `schedule delay`, which is the form both editions mean the same thing by.
+     *
+     * Bedrock writes `schedule delay add <function> <time> <replace|append>` and Java writes
+     * `schedule function <function> <time> [append|replace]`, with the same two words for the last
+     * argument, so the whole of the delay half crosses by swapping one keyword. `schedule clear` is
+     * spelled alike in both and `schedule delay clear` is the same thing said the longer way.
+     * `on_area_loaded` waits for chunks to be loaded, which Java keeps no queue for.
+     */
+    private static String schedule(String rest, Set<String> unsupported) {
+        String[] parts = SPACE.split(rest, 2);
+        String mode = parts[0].toLowerCase(Locale.ROOT);
+        String tail = parts.length > 1 ? parts[1] : "";
+
+        if (mode.equals("clear")) return "schedule clear " + tail;
+        if (!mode.equals("delay")) return dropped("schedule", mode, unsupported);
+
+        String[] action = SPACE.split(tail, 2);
+        return switch (action[0].toLowerCase(Locale.ROOT)) {
+            case "add" -> action.length > 1 ? "schedule function " + action[1] : null;
+            case "clear" -> action.length > 1 ? "schedule clear " + action[1] : null;
+            default -> dropped("schedule", action[0].toLowerCase(Locale.ROOT), unsupported);
+        };
     }
 
     /**

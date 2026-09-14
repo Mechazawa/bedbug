@@ -232,9 +232,67 @@ def scenes(version: str) -> list[dict]:
             ],
             ["PLAYER-READY"],
         ),
+        held(version, entities, items),
         fog(version),
         dialogue(version, entities),
     ]
+
+
+def held(version: str, entities: list[str], items: list[str]) -> dict:
+    """What a pack's own entity is holding and wearing, which nothing else in a run draws.
+
+    An item in a hand is drawn at the bone the model names for that hand, at the size the client
+    entity asked for, and an attachable is drawn at whichever bone of the wearer its `binding`
+    names. A model naming neither bone holds nothing, so every entity the pack declares stands here
+    and only the ones whose geometry says where their hands are have anything in them.
+
+    What goes on the head is the first item the pack describes an attachable for, because that is
+    the one where a binding has anything to land on; the hand takes the first item either way.
+    """
+    if not entities or not items:
+        return scene("held", [f"say NO-HELD {len(entities)} entities {len(items)} items"],
+                     [f"NO-HELD {len(entities)} entities {len(items)} items"])
+
+    worn = attachedItems(version)
+    dressing = ["kill @e[type=!player]"]
+    for index, name in enumerate(entities):
+        z = ROW_Z + index * 3
+        at = f"execute positioned {ROW_X} {FLOOR_Y + 1} {z} run item replace entity"
+        nearest = f"@e[type={name},limit=1,sort=nearest]"
+        dressing.append(f"summon {name} {ROW_X} {FLOOR_Y + 1} {z}")
+        dressing.append(f"{at} {nearest} weapon.mainhand with {items[0]}")
+        if worn:
+            dressing.append(f"{at} {nearest} armor.head with {worn[0]}")
+
+    middle = ROW_Z + max(len(entities) - 1, 0) * 3 // 2
+    return scene(
+        "held",
+        dressing + [
+            f"tp @a {CAMERA_X + 6} {FLOOR_Y + 2} {middle}",
+            f"tp @a {CAMERA_X + 6} {FLOOR_Y + 2} {middle} facing {ROW_X} {FLOOR_Y + 2} {middle}",
+            f"say DRESSED {len(entities)} entities, {len(worn)} attachable item(s)",
+        ],
+        [f"DRESSED {len(entities)} entities, {len(worn)} attachable item(s)", "COUNTED holders"],
+        [f"execute if entity @e[type={entities[0]},limit=1] run say COUNTED holders"],
+    )
+
+
+def attachedItems(version: str) -> list[str]:
+    """The items an installed pack describes an attachable for, which is what a binding is drawn on.
+
+    An attachable names the items it belongs to in its own `item` map rather than in an identifier,
+    so this reads that map instead of going through `declared`.
+    """
+    addons = ROOT / "versions" / version / "run" / "addons"
+    if not addons.is_dir():
+        return []
+
+    found = []
+    for entry in sorted(addons.iterdir()):
+        for body in declarations(entry, "attachables"):
+            description = body.get("minecraft:attachable", {}).get("description", {})
+            found.extend(name for name in description.get("item", {}) if ":" in name)
+    return sorted(set(found))
 
 
 def dialogue(version: str, entities: list[str]) -> dict:

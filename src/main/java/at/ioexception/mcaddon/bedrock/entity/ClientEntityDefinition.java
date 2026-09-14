@@ -26,6 +26,12 @@ public record ClientEntityDefinition(
     boolean attachablesEnabled,
     /** Hides what is worn in an armour slot, whatever `enable_attachables` allowed. */
     boolean armourHidden,
+    /** Whether the item the entity holds is left undrawn, asked every frame. Null keeps it drawn. */
+    MolangExpression heldItemsHidden,
+    /** Draws whatever is in a hand at full brightness rather than at the light around the entity. */
+    boolean heldItemLit,
+    /** How big the item in a hand is drawn, null where the pack asked for the ordinary size. */
+    MolangExpression heldItemScale,
     /** Keeps the entity's sounds and particles firing while nobody can see it. */
     boolean effectsRunOffscreen,
     /** Keeps its bones moving as well, so it is posed where it should be when it comes back. */

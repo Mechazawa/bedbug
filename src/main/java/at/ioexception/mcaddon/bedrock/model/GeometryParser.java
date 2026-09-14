@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.bedrock.model;
 
+import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -19,14 +20,12 @@ import java.util.Map;
 public final class GeometryParser {
 
     /**
-     * Two ways of building a bone that this renderer has no form of.
+     * A way of building a bone that this renderer has no form of.
      *
-     * `texture_meshes` builds geometry out of a texture's opaque pixels. `binding` names a bone of
-     * whatever entity is carrying the model and hangs this one off it, and an entity Java draws
-     * with a model of its own has parts rather than bones and no two models name theirs alike. A
-     * bone written either way is drawn as the boxes it also declares.
+     * `texture_meshes` builds geometry out of a texture's opaque pixels. A bone written that way is
+     * drawn as the boxes it also declares.
      */
-    private static final List<String> UNREAD_BONE = List.of("texture_meshes", "binding");
+    private static final List<String> UNREAD_BONE = List.of("texture_meshes");
 
     private GeometryParser() {
     }
@@ -97,6 +96,7 @@ public final class GeometryParser {
             // under each, so the newer spelling stands in for both wherever it is present.
             optionalVector(json, "rotation", "bind_pose_rotation"),
             json.has("neverRender") && json.get("neverRender").getAsBoolean(),
+            json.has("binding") ? MolangParser.parse(json.get("binding").getAsString()) : null,
             List.copyOf(cubes),
             Map.copyOf(locators));
     }

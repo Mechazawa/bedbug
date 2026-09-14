@@ -10,6 +10,7 @@ import com.google.gson.JsonParser;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.FloatArgumentType;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
@@ -80,6 +81,18 @@ public final class BedrockCommands {
         dispatcher.register(Commands.literal("toggledownfall")
             .requires(source -> Platform.allowedAt(source, 1))
             .executes(command -> toggleDownfall(command.getSource())));
+
+        // Bedrock sends a player on to another server and Java carries the same instruction as a
+        // packet rather than as a command. The port a line leaves out is the edition's own default,
+        // which is Java's rather than Bedrock's: a Java client sent to 19132 reaches nothing.
+        dispatcher.register(Commands.literal("transfer")
+            .requires(source -> Platform.allowedAt(source, 3))
+            .then(Commands.argument("targets", EntityArgument.players())
+                .then(Commands.argument("server", StringArgumentType.string())
+                    .executes(command -> transfer(command, DEFAULT_JAVA_PORT))
+                    .then(Commands.argument("port", IntegerArgumentType.integer(1, 65535))
+                        .executes(command ->
+                            transfer(command, IntegerArgumentType.getInteger(command, "port")))))));
 
         // Bedrock saves a region under a name and places it again; Java has the same two operations
         // behind a structure block and `/place template`, and no command that names them.
@@ -255,6 +268,32 @@ public final class BedrockCommands {
 
     private static int toggleDownfall(CommandSourceStack source) {
         return run(source, source.getLevel().isRaining() ? "weather clear" : "weather rain");
+    }
+
+    /** The port a Java server listens on, which is what a line naming none means here. */
+    private static final int DEFAULT_JAVA_PORT = 25565;
+
+    /**
+     * Hands each named player over to another server.
+     *
+     * The packet carrying this arrived in 1.20.5, so the oldest supported version cannot send it and
+     * says so rather than reporting a move that never happened.
+     */
+    private static int transfer(CommandContext<CommandSourceStack> command, int port)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        String host = StringArgumentType.getString(command, "server");
+        Collection<net.minecraft.server.level.ServerPlayer> players =
+            EntityArgument.getPlayers(command, "targets");
+
+        long moved = players.stream().filter(player -> Platform.transfer(player, host, port)).count();
+        if (moved == 0) {
+            command.getSource().sendFailure(
+                Component.literal("This version cannot send a player to another server."));
+            return 0;
+        }
+        command.getSource().sendSuccess(
+            () -> Component.literal("Sent " + moved + " player(s) to " + host + ":" + port), true);
+        return (int) moved;
     }
 
     /** The region between the two corners, kept under the name the pack gave it. */

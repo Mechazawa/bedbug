@@ -1,6 +1,8 @@
 package at.ioexception.mcaddon.bedrock.model;
 
 import at.ioexception.mcaddon.bedrock.BedrockAssets;
+import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
+import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.PackManifest;
 import at.ioexception.mcaddon.util.Json;
@@ -150,6 +152,25 @@ class GeometryReadingTest {
             """);
 
         assertEquals(45f, bone.rotation().x);
+    }
+
+    /**
+     * A `binding` names a bone of whoever is carrying the model, and is an expression rather than a
+     * name: every one Mojang ships answers it with `q.item_slot_to_bone_name`, and the spyglass
+     * moves between a hand and the head through the same call.
+     */
+    @Test
+    void readsTheBoneOfTheWearerAModelHangsOff() {
+        BakedGeometry baked = GeometryBaker.bake(geometry("""
+            [{"name": "shield", "pivot": [1, 15.5, 3],
+              "binding": "q.item_slot_to_bone_name('main_hand')",
+              "cubes": [{"origin": [0, 0, 0], "size": [1, 1, 1], "uv": [0, 0]}]}]
+            """));
+
+        MolangEnvironment holder = new MolangEnvironment();
+        holder.setQueries((name, arguments) -> MolangValue.of("rightitem"));
+        assertNotNull(baked.bones().get("shield").binding());
+        assertEquals("rightitem", baked.bones().get("shield").binding().evaluate(holder).text());
     }
 
     @Test
