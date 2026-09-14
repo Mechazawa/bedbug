@@ -30,14 +30,23 @@ public final class Functions {
     /**
      * Commands Bedrock has and Java has no counterpart for.
      *
-     * `scriptevent`, `playanimation`, `event`, `music`, `toggledownfall`, `structure` and `mobevent`
-     * are not among them: this mod registers all seven, because everything they need is already
-     * here. What is left asks for a renderer feature Java has none of, or for a server Java does not
-     * speak to.
+     * What is left here asks for a renderer feature Java has none of, or for a server Java does not
+     * speak to. Everything a Java client can be told to draw has moved to `REGISTERED_HERE`.
      */
     private static final Set<String> BEDROCK_ONLY = Set.of(
-        "fog", "camerashake", "camera", "inputpermission", "hud", "dialogue", "script",
+        "fog", "inputpermission", "hud", "dialogue", "script",
         "immutableworld", "wsserver", "connect");
+
+    /**
+     * Commands Bedrock has that this mod registers, so a function using one keeps the line.
+     *
+     * Java's own dispatcher knows none of these. Most are registered as the Java commands that do
+     * the same thing; `camera` and `camerashake` act on one player's own view, so they are sent to
+     * that player's client instead.
+     */
+    static final Set<String> REGISTERED_HERE = Set.of(
+        "playanimation", "event", "scriptevent", "music", "toggledownfall", "structure", "mobevent",
+        "camera", "camerashake");
 
     private static final Pattern SELECTOR = Pattern.compile("@[aeprsn]\\[([^\\]]*)\\]");
     private static final Pattern SPACE = Pattern.compile("\\s+");

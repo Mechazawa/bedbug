@@ -47,6 +47,10 @@ server decides what happens; the client draws it.
 - Trading, with Bedrock's tiers and groups flattened into Java's merchant screen.
 - Recipes, loot tables, natural spawning, and `.mcfunction` files translated into Java's command
   dialect with a `tick` function tag.
+- `/camera` and `/camerashake`, which set one player's own view: the four presets, a position and a
+  rotation of the pack's choosing, all thirty-one of Bedrock's easing curves, and a shake that moves
+  the camera or turns it. The server decides and tells each player separately, so a pack that sets
+  one player's camera in a multiplayer world leaves everybody else's alone.
 - Attachables: what any entity wears or holds, players and vanilla mobs included, animating on its
   own clock.
 - The sounds and particles an animation, an animation controller state or an entity's own definition
@@ -80,11 +84,11 @@ all become the render type the pass is drawn with. What cannot follow is the ste
 a pass that exists only to write a mask is left out rather than drawn as a shape that does not
 belong there.
 
-**A handful of Bedrock commands.** `fog`, `camera`, `camerashake`, `hud`, `dialogue`,
-`inputpermission`, `immutableworld`, `wsserver` and `connect` name a renderer feature Java has none
-of, or a server Java does not speak to. A function using one keeps its other lines and the dropped
-command is reported. `testfor`, `testforblock`, `testforblocks` and `titleraw` are translated;
-`playanimation`, `event`, `scriptevent`, `music`, `toggledownfall`, `structure` and `mobevent` are
+**A handful of Bedrock commands.** `fog`, `hud`, `dialogue`, `inputpermission`, `immutableworld`,
+`wsserver` and `connect` name a renderer feature Java has none of, or a server Java does not speak
+to. A function using one keeps its other lines and the dropped command is reported. `testfor`,
+`testforblock`, `testforblocks` and `titleraw` are translated; `playanimation`, `event`,
+`scriptevent`, `music`, `toggledownfall`, `structure`, `mobevent`, `camera` and `camerashake` are
 registered by this mod.
 
 **The tests a pack ships.** A pack can import `@minecraft/server-gametest` and register its tests,

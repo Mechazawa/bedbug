@@ -65,6 +65,30 @@ public final class AddonGameTests {
         helper.succeed();
     }
 
+    /**
+     * `/camera` and `/camerashake` take every word order Bedrock allows.
+     *
+     * Both build a deeper argument tree than anything else this mod registers, and each piece after
+     * the preset may be left out, so what a pack wrote is only accepted if every one of those routes
+     * through the tree ends somewhere. A missing route is a line dropped at load time.
+     */
+    @GameTest()
+    public void cameraCommandsParse(GameTestHelper helper) {
+        parses(helper, "camera @a clear");
+        parses(helper, "camera @a set minecraft:free");
+        parses(helper, "camera @a set free rot 30 -90");
+        parses(helper, "camera @a set minecraft:free pos 1 2 3");
+        parses(helper, "camera @a set minecraft:free pos ~ ~ ~ rot 0 0");
+        parses(helper, "camera @a set minecraft:third_person ease 2 in_out_quad");
+        parses(helper, "camera @a set minecraft:third_person_front ease 0.5 linear pos 1 2 3 rot 0 0");
+        parses(helper, "camerashake add @a");
+        parses(helper, "camerashake add @a 0.5");
+        parses(helper, "camerashake add @a 0.5 3");
+        parses(helper, "camerashake add @a 0.5 3 rotational");
+        parses(helper, "camerashake stop @a");
+        helper.succeed();
+    }
+
     /** Both commands run against a live target, and an event no entity declares is answered. */
     @GameTest()
     public void bedrockCommandsRun(GameTestHelper helper) {

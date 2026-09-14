@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -105,10 +106,38 @@ class FunctionsTest {
         assertTrue(problems.contains("command fog"), problems.toString());
     }
 
+    /** The two that act on a player's own view keep the arguments a pack writes them with. */
+    @ParameterizedTest
+    @CsvSource({
+        "'camera @a set minecraft:free ease 2 in_out_quad pos 1 2 3 rot 30 90'",
+        "'camera @a clear'",
+        "'camerashake add @a 0.5 3 rotational'",
+        "'camerashake stop @a'",
+    })
+    void keepsACameraLineWhole(String source) throws IOException {
+        assertEquals(source, only(source));
+    }
+
     @Test
     void keepsTheRestOfAFunctionThatHasOneDroppedLine() throws IOException {
         assertEquals(List.of("say before", "say after"),
-            translate("say before", "camerashake add @a 0.1 1", "say after"));
+            translate("say before", "hud @a hide all", "say after"));
+    }
+
+    /**
+     * A command this mod registers reaches Java's parser unchanged.
+     *
+     * Java's own dispatcher knows none of these names, so a line using one is only valid because
+     * `BedrockCommands` registered it. Dropping one here would cost a pack the line without saying so.
+     */
+    @ParameterizedTest
+    @MethodSource("registeredCommands")
+    void keepsACommandThisModRegisters(String name) throws IOException {
+        assertEquals(name + " @a", only(name + " @a"));
+    }
+
+    static Set<String> registeredCommands() {
+        return Functions.REGISTERED_HERE;
     }
 
     @Test

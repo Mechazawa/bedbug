@@ -16,11 +16,12 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 //?}
 
 /**
- * What the server tells clients about add-on entities.
+ * What the server tells one client to draw, and the one answer that comes back.
  *
  * The server owns every entity property a behaviour pack declares, because a pack's script sets them
  * and scripts only run there. The client needs them to answer `q.property` while it draws, so each
- * change and each newly tracked entity is pushed across.
+ * change and each newly tracked entity is pushed across. The same holds for everything else here: a
+ * form, an effect, a clip and a camera are all decided on the server and sent to each player alone.
  *
  * Networking was rewritten in 1.21: payload objects with codecs replaced raw channel buffers.
  */
@@ -31,6 +32,8 @@ public final class Channels {
     private static final Identifier FORM_RESPONSE = McAddon.id("form_response");
     private static final Identifier ANIMATION = McAddon.id("play_animation");
     private static final Identifier PARTICLE = McAddon.id("start_particle");
+    private static final Identifier CAMERA = McAddon.id("camera_view");
+    private static final Identifier SHAKE = McAddon.id("camera_shake");
 
     private Channels() {
     }
@@ -140,6 +143,85 @@ public final class Channels {
     }
     //?}
 
+    //? if >=1.21 {
+    /** The view a `/camera` set for one player, and the shake a `/camerashake` started. */
+    private record View(String view) implements CustomPacketPayload {
+        private static final CustomPacketPayload.Type<View> TYPE = new CustomPacketPayload.Type<>(CAMERA);
+
+        private static final StreamCodec<FriendlyByteBuf, View> CODEC = StreamCodec.composite(
+            ByteBufCodecs.STRING_UTF8, View::view,
+            View::new);
+
+        @Override
+        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    private record Shake(String shake) implements CustomPacketPayload {
+        private static final CustomPacketPayload.Type<Shake> TYPE = new CustomPacketPayload.Type<>(SHAKE);
+
+        private static final StreamCodec<FriendlyByteBuf, Shake> CODEC = StreamCodec.composite(
+            ByteBufCodecs.STRING_UTF8, Shake::shake,
+            Shake::new);
+
+        @Override
+        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+    //?}
+
+    public static void sendCameraView(ServerPlayer player, String view) {
+        //? if >=1.21 {
+        ServerPlayNetworking.send(player, new View(view));
+        //?} else {
+        /*FriendlyByteBuf buffer = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buffer.writeUtf(view);
+        ServerPlayNetworking.send(player, CAMERA, buffer);
+        *///?}
+    }
+
+    public static void receiveCameraView(java.util.function.Consumer<String> handler) {
+        //? if >=1.21 {
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+            View.TYPE,
+            (payload, context) -> context.client().execute(() -> handler.accept(payload.view())));
+        //?} else {
+        /*net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+            CAMERA,
+            (client, network, buffer, sender) -> {
+                String view = buffer.readUtf();
+                client.execute(() -> handler.accept(view));
+            });
+        *///?}
+    }
+
+    public static void sendCameraShake(ServerPlayer player, String shake) {
+        //? if >=1.21 {
+        ServerPlayNetworking.send(player, new Shake(shake));
+        //?} else {
+        /*FriendlyByteBuf buffer = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buffer.writeUtf(shake);
+        ServerPlayNetworking.send(player, SHAKE, buffer);
+        *///?}
+    }
+
+    public static void receiveCameraShake(java.util.function.Consumer<String> handler) {
+        //? if >=1.21 {
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+            Shake.TYPE,
+            (payload, context) -> context.client().execute(() -> handler.accept(payload.shake())));
+        //?} else {
+        /*net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+            SHAKE,
+            (client, network, buffer, sender) -> {
+                String shake = buffer.readUtf();
+                client.execute(() -> handler.accept(shake));
+            });
+        *///?}
+    }
+
     /** What a client needs to start one effect: which one, and where. */
     @FunctionalInterface
     public interface ParticleHandler {
@@ -226,6 +308,8 @@ public final class Channels {
         PayloadTypeRegistry.clientboundPlay().register(Properties.TYPE, Properties.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Packs.TYPE, Packs.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Form.TYPE, Form.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(View.TYPE, View.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(Shake.TYPE, Shake.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(FormResponse.TYPE, FormResponse.CODEC);
         //?}
     }

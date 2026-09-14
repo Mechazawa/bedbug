@@ -1,34 +1,51 @@
 package at.ioexception.mcaddon.server;
 
+import at.ioexception.mcaddon.bedrock.camera.CameraShake;
+import at.ioexception.mcaddon.bedrock.camera.CameraView;
+import at.ioexception.mcaddon.bedrock.camera.Easing;
+import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonParticles;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.context.ParsedCommandNode;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.commands.arguments.IdentifierArgument;
 import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
+import net.minecraft.commands.arguments.coordinates.Vec3Argument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 
 import java.util.Collection;
+import java.util.List;
 
 /**
  * The Bedrock commands a pack expects to exist and Java does not ship.
  *
- * Both are things this mod already does from script, so a `.mcfunction` or a command block gets the
+ * Most are things this mod already does from script, so a `.mcfunction` or a command block gets the
  * same behaviour the pack's script half gets. What Bedrock's own form takes and this does not is
  * `/playanimation`'s `next_state` and `controller`, which name a scratch animation controller; a
  * stop expression covers what packs actually use them for.
+ *
+ * `/camera` and `/camerashake` act on one player's own view, which only that player's client can
+ * draw, so both are decided here and sent to each named player alone.
  */
 public final class BedrockCommands {
+    /** Bedrock's two shakes: one moves the camera about, the other turns it. Positional is default. */
+    private static final List<String> SHAKE_KINDS = List.of("positional", "rotational");
+
     private BedrockCommands() {
     }
 
@@ -109,6 +126,73 @@ public final class BedrockCommands {
                 .then(Commands.argument("targets", EntityArgument.entities())
                     .then(Commands.argument("event", StringArgumentType.greedyString())
                         .executes(BedrockCommands::entityEvent)))));
+
+        registerCamera(dispatcher);
+        registerCameraShake(dispatcher);
+    }
+
+    /**
+     * `/camera` sets what one player sees, so every part of it is decided here and sent to them.
+     *
+     * Bedrock lets `ease`, `pos` and `rot` be written in that order and each of them left out, which
+     * is why the same two tails hang off both the bare preset and the end of an ease. One executor
+     * reads whichever of them the player typed.
+     */
+    private static void registerCamera(CommandDispatcher<CommandSourceStack> dispatcher) {
+        dispatcher.register(Commands.literal("camera")
+            .requires(source -> Platform.allowedAt(source, 1))
+            .then(Commands.argument("targets", EntityArgument.players())
+                .then(Commands.literal("clear").executes(BedrockCommands::clearCamera))
+                .then(Commands.literal("set")
+                    // A preset carries a namespace, which Brigadier's own word argument stops at.
+                    .then(Commands.argument("preset", IdentifierArgument.id())
+                        .suggests((command, builder) -> SharedSuggestionProvider.suggest(
+                            CameraView.presetNames(), builder))
+                        .executes(BedrockCommands::camera)
+                        .then(cameraPosition())
+                        .then(cameraRotation())
+                        .then(Commands.literal("ease")
+                            .then(Commands.argument("seconds", FloatArgumentType.floatArg(0))
+                                .then(Commands.argument("easeType", StringArgumentType.word())
+                                    .suggests((command, builder) -> SharedSuggestionProvider.suggest(
+                                        Easing.names(), builder))
+                                    .executes(BedrockCommands::camera)
+                                    .then(cameraPosition())
+                                    .then(cameraRotation()))))))));
+    }
+
+    /** `pos` may be followed by `rot`, which is the only pairing Bedrock allows in that order. */
+    private static LiteralArgumentBuilder<CommandSourceStack> cameraPosition() {
+        return Commands.literal("pos")
+            .then(Commands.argument("position", Vec3Argument.vec3())
+                .executes(BedrockCommands::camera)
+                .then(cameraRotation()));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> cameraRotation() {
+        return Commands.literal("rot")
+            .then(Commands.argument("xRot", FloatArgumentType.floatArg(-90, 90))
+                .then(Commands.argument("yRot", FloatArgumentType.floatArg())
+                    .executes(BedrockCommands::camera)));
+    }
+
+    private static void registerCameraShake(CommandDispatcher<CommandSourceStack> dispatcher) {
+        dispatcher.register(Commands.literal("camerashake")
+            .requires(source -> Platform.allowedAt(source, 1))
+            .then(Commands.literal("add")
+                .then(Commands.argument("targets", EntityArgument.players())
+                    .executes(BedrockCommands::cameraShake)
+                    .then(Commands.argument("intensity", FloatArgumentType.floatArg(0, 4))
+                        .executes(BedrockCommands::cameraShake)
+                        .then(Commands.argument("seconds", FloatArgumentType.floatArg(0))
+                            .executes(BedrockCommands::cameraShake)
+                            .then(Commands.argument("shakeType", StringArgumentType.word())
+                                .suggests((command, builder) -> SharedSuggestionProvider.suggest(
+                                    SHAKE_KINDS, builder))
+                                .executes(BedrockCommands::cameraShake))))))
+            .then(Commands.literal("stop")
+                .then(Commands.argument("targets", EntityArgument.players())
+                    .executes(BedrockCommands::stopCameraShake))));
     }
 
     /**
@@ -226,5 +310,88 @@ public final class BedrockCommands {
                 Component.literal("No target has an event named " + event + "."));
         }
         return fired;
+    }
+
+    /**
+     * Sets what each named player sees.
+     *
+     * A preset or an ease Bedrock has not got is reported rather than guessed at, because a camera
+     * pointing somewhere nobody asked for is worse than a line that says which word was wrong.
+     */
+    private static int camera(CommandContext<CommandSourceStack> command)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        String written = IdentifierArgument.getId(command, "preset").toString();
+        CameraView.Preset preset = CameraView.Preset.tryFrom(written);
+        if (preset == null) {
+            command.getSource().sendFailure(
+                Component.literal("There is no camera preset named " + written + "."));
+            return 0;
+        }
+
+        Easing easing = null;
+        if (given(command, "easeType")) {
+            String name = StringArgumentType.getString(command, "easeType");
+            easing = Easing.tryFrom(name);
+            if (easing == null) {
+                command.getSource().sendFailure(Component.literal("There is no ease named " + name + "."));
+                return 0;
+            }
+        }
+
+        return send(command, new CameraView(preset,
+            given(command, "position") ? Vec3Argument.getVec3(command, "position") : null,
+            given(command, "xRot") ? FloatArgumentType.getFloat(command, "xRot") : null,
+            given(command, "yRot") ? FloatArgumentType.getFloat(command, "yRot") : null,
+            given(command, "seconds") ? FloatArgumentType.getFloat(command, "seconds") : 0f,
+            easing).encode());
+    }
+
+    private static int clearCamera(CommandContext<CommandSourceStack> command)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        return send(command, CameraView.CLEARED.encode());
+    }
+
+    private static int send(CommandContext<CommandSourceStack> command, String view)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        Collection<ServerPlayer> targets = EntityArgument.getPlayers(command, "targets");
+        targets.forEach(player -> Channels.sendCameraView(player, view));
+        return targets.size();
+    }
+
+    /** Bedrock's own defaults: one unit of shake, for one second, moving rather than turning. */
+    private static int cameraShake(CommandContext<CommandSourceStack> command)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        String kind = given(command, "shakeType")
+            ? StringArgumentType.getString(command, "shakeType") : SHAKE_KINDS.get(0);
+        if (!SHAKE_KINDS.contains(kind)) {
+            command.getSource().sendFailure(Component.literal("There is no shake named " + kind + "."));
+            return 0;
+        }
+
+        return shake(command, new CameraShake(
+            given(command, "intensity") ? FloatArgumentType.getFloat(command, "intensity") : 1f,
+            given(command, "seconds") ? FloatArgumentType.getFloat(command, "seconds") : 1f,
+            kind.equals("rotational")));
+    }
+
+    private static int stopCameraShake(CommandContext<CommandSourceStack> command)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        return shake(command, CameraShake.STOP);
+    }
+
+    private static int shake(CommandContext<CommandSourceStack> command, CameraShake shake)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        Collection<ServerPlayer> targets = EntityArgument.getPlayers(command, "targets");
+        String encoded = shake.encode();
+        targets.forEach(player -> Channels.sendCameraShake(player, encoded));
+        return targets.size();
+    }
+
+    /** The parsed nodes are the words that were typed, and every part of `/camera` is optional. */
+    private static boolean given(CommandContext<CommandSourceStack> command, String name) {
+        for (ParsedCommandNode<CommandSourceStack> node : command.getNodes()) {
+            if (node.getNode().getName().equals(name)) return true;
+        }
+        return false;
     }
 }

@@ -244,6 +244,7 @@ src/main/java/at/ioexception/mcaddon/
   convert/                   Runtime conversion: Targa, Ogg repair, sounds, text, models, functions
   resource/                  The converted packs and how the game is told about them
   registry/                  Sounds, entities, items, blocks, spawns and the creative tab
+  bedrock/camera/            What `/camera` and `/camerashake` set, and the easing curves they name
   bedrock/molang/            Molang parser, evaluator, maths. Trig is in degrees.
   bedrock/model/             Geometry parsing, baking, render controllers
   bedrock/animation/         Animations, channels, player, controllers
@@ -256,7 +257,7 @@ src/main/java/at/ioexception/mcaddon/
   gametest/                  The Mojang game tests, reached through the fabric-gametest entrypoint
   client/render/             Renderer, attachable layer, pass resolution, query answering
   client/screen/             The screen a Bedrock form becomes
-  mixin/                     Pack repository source, and the attachable layer on living entities
+  mixin/                     Pack repository source, the attachable layer, and the camera
   platform/Platform.java     Every call whose spelling differs across versions
   network/Channels.java      Payloads, in both the 1.21+ and the older form
 
