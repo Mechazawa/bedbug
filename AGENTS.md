@@ -100,8 +100,9 @@ These are the checks it runs, and what each one catches:
 - **`./gradlew :26.2:test`** runs the unit tests in `src/test/java/`, for the checked-out version
   only, for the same reason linting is. They cover what is a function of its input rather than of a
   running game: the Molang evaluator, the Targa and Ogg readers, the command translation, the labPBR
-  channel arithmetic, the biome and fog colours, manifest reading and pack order. Anything needing a
-  world belongs in the game tests instead. A test needing the registry calls
+  channel arithmetic, the biome and fog colours, the band of height a dimension states, manifest
+  reading and pack order. Anything needing a world belongs in the game tests instead. A test needing
+  the registry calls
   `SharedConstants.tryDetectVersion()` and `Bootstrap.bootStrap()` in a `@BeforeAll`, which is
   enough without launching the game.
 - **`./gradlew :26.2:runGameTest`** runs the Mojang game tests in
@@ -109,8 +110,9 @@ These are the checks it runs, and what each one catches:
   on it, so a failing one fails `./gradlew build`, and it is gated to the checked-out version like
   everything else. What it covers is the half a unit test cannot reach: that `/playanimation` and
   `/event entity` still parse and run, that an entity event no pack declares is answered instead of
-  thrown, that delivering a tick's data-driven triggers ends, and that a script failing inside the
-  tick costs the tick rather than the server.
+  thrown, that delivering a tick's data-driven triggers ends, that a script failing inside the
+  tick costs the tick rather than the server, and that a converted dimension and its dimension type
+  decode through this version's own codecs, whose field lists differ on each of the four.
 
   The run directory is `versions/<minecraft>/build/run/gameTest/`. No pack content is committed, so
   the two tests that need one succeed when none is loaded; dropping a `.mcaddon` into that
@@ -240,6 +242,14 @@ These are the checks it runs, and what each one catches:
   26 holds and the older versions report. Its precipitation is a white ash density, which is a
   number rather than a count, so `BiomeSoundTest` is what asserts it comes out as Java's own chance.
 
+  Three dimension files and one dialogue file are there for the two directories with no count of
+  their own. Two of the dimensions state their band of height in each of the spellings Bedrock
+  writes it in and the third names a generator nothing converts, so the read half and the reported
+  half both run; `verify.py run` is what asks a server whether each became a level, because a game
+  test server cannot answer that. The dialogue file holds one scene with a name, text and two
+  buttons and one written in rawtext rather than in plain strings, which is the pair
+  `DialogueSceneTest` asserts on and the `dialogue` scene photographs.
+
   The book table is the one a game test rolls: it holds a single entry carrying
   `enchant_book_for_trading` and no condition, so the loot function type this mod registers is
   exercised from the converted table through the codec to the enchanted book that comes back.
@@ -337,6 +347,16 @@ These are the checks it runs, and what each one catches:
   - **A data pack in the world's own `datapacks/`** is not. One `test_instance` plus one
     `test_environment` written there marks a world exactly as one `jukebox_song` from an unnamed pack
     does, which is what `tools/scene/scene.py` would hit if a scene ever wrote one.
+
+  **A dimension a pack adds becomes a level, and only a real server shows it.**
+  `WorldDimensions.bake` unions the keys of the `dimension` registry the data packs loaded with the
+  ones the world was saved with, so a converted `dimension` entry is a level the next time that
+  world opens, on a dedicated server and in a single player world alike. A game test server proves
+  nothing about this: `GameTestServer` bakes its own dimensions against
+  `new MappedRegistry<>(Registries.LEVEL_STEM, Lifecycle.stable()).freeze()`, an empty registry, so
+  every add-on's dimension is dropped there whatever the pack holds. `verify.py run` types
+  `execute in <dimension>`, which the parser refuses outright when there is no such level, and reads
+  the line it would have printed back.
 
   **A dedicated server never asks.** The screen is `WorldOpenFlows`, which is client code. A server
   loaded the same experimental pack, started, ran the console script and stopped with nothing said
@@ -529,6 +549,11 @@ These are the checks it runs, and what each one catches:
   a pack, so the scene fills the pool there and names no biome: a command naming one would not parse
   and would take the whole function with it, and the picture that comes back is what the game paints
   when a pack's colours have nowhere to go.
+
+  The `dialogue` scene opens an NPC conversation on a pack's own entity, which is the one place a
+  scene photographs a screen rather than a world. A single player game pauses behind a screen and a
+  scheduled function in a paused game never runs, so the scene asks everything it has to ask first
+  and opens the screen in its last line.
 
 - **`tools/scene/zoom.py`** cuts a piece out of a scene's picture and scales it up without smearing
   the pixels, for looking at one subject rather than the whole window.
@@ -945,7 +970,8 @@ src/main/java/at/ioexception/mcaddon/
   structure/                 Bedrock `.mcstructure` reading, whose NBT is little endian
   entity/                    The one mob class every add-on entity uses
   block/                     The block class that carries a pack's own states
-  server/                    Server lifecycle, commands, sensors, entity events, property sync
+  server/                    Server lifecycle, commands, sensors, entity events, property sync,
+                             and the NPC dialogue an add-on's own screen is opened from
   gametest/                  The Mojang game tests, reached through the fabric-gametest entrypoint
   client/render/             Renderer, attachable layer, pass resolution, what only a client answers
   client/screen/             The screen a Bedrock form becomes

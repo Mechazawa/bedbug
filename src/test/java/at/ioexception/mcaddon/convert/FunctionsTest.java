@@ -122,6 +122,12 @@ class FunctionsTest {
         "'music play tp:theme 0.4', 'music play \"tp:theme\" 0.4'",
         "'particle tp:sparkle ~ ~ ~', 'particle \"tp:sparkle\" ~ ~ ~'",
         "'scriptevent tp:reset go', 'scriptevent \"tp:reset\" go'",
+        "'dialogue open @e[type=tp:ember,c=1] @p tp:greeting', "
+            + "'dialogue open @e[type=tp:ember,limit=1] @p \"tp:greeting\"'",
+        "'dialogue open @e @p', 'dialogue open @e @p'",
+        "'dialogue change @e[type=tp:ember] tp:greeting', "
+            + "'dialogue change @e[type=tp:ember] \"tp:greeting\"'",
+        "'dialogue change @e tp:greeting @a', 'dialogue change @e \"tp:greeting\"'",
     })
     void rewritesTheCommandsJavaSpellsDifferently(String source, String expected) throws IOException {
         assertEquals(expected, only(source));

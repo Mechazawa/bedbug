@@ -119,6 +119,26 @@ def declared(version: str, directory: str, key: str) -> list[str]:
     return sorted(set(found))
 
 
+def sceneTags(version: str) -> list[str]:
+    """The NPC conversations a pack installed for this version declares, by the tag that opens one.
+
+    A dialogue file holds several scenes under one `scenes` list rather than one identifier at the
+    top, so it is read here instead of through `declared`.
+    """
+    addons = ROOT / "versions" / version / "run" / "addons"
+    if not addons.is_dir():
+        return []
+
+    found = []
+    for entry in sorted(addons.iterdir()):
+        for body in declarations(entry, "dialogue"):
+            for one in body.get("minecraft:npc_dialogue", {}).get("scenes", []):
+                tag = one.get("scene_tag")
+                if tag and one.get("buttons"):
+                    found.append(tag)
+    return sorted(set(found))
+
+
 def declarations(entry: pathlib.Path, directory: str) -> list[dict]:
     """Every JSON body one installed pack holds under a named directory, archived or unpacked."""
     bodies = []
@@ -213,7 +233,38 @@ def scenes(version: str) -> list[dict]:
             ["PLAYER-READY"],
         ),
         fog(version),
+        dialogue(version, entities),
     ]
+
+
+def dialogue(version: str, entities: list[str]) -> dict:
+    """An NPC's conversation, which is a screen and so shows in a frame and nowhere else.
+
+    Bedrock draws this one itself and Java has no screen of the kind, so what a converted scene
+    becomes is the screen a `@minecraft/server-ui` form already becomes here: the scene's name as
+    the heading, its text laid out as lines, and a button per button the pack listed. A log line
+    says the scene was found and opened; only the picture says what the player is looking at.
+    """
+    tags = sceneTags(version)
+    stand = f"{ROW_X} {FLOOR_Y + 1} {ROW_Z}"
+    if not tags or not entities:
+        return scene("dialogue", [f"say NO-DIALOGUE {len(tags)} scenes"],
+                     [f"NO-DIALOGUE {len(tags)} scenes"])
+
+    speaker = entities[0]
+    return scene(
+        "dialogue",
+        ["kill @e[type=!player]",
+         f"summon {speaker} {stand}",
+         f"tp @a {CAMERA_X} {FLOOR_Y + 2} {ROW_Z} facing {stand}",
+         f'dialogue change @e[type={speaker}] "{tags[0]}"'],
+        [f"OPENED {tags[0]}", "COUNTED speaker"],
+        # The screen goes up last: a single player game pauses behind one, and a scheduled function
+        # in a paused game never runs, so everything the scene still has to ask comes first.
+        [f"execute if entity @e[type={speaker},limit=1] run say COUNTED speaker",
+         f'dialogue open @e[type={speaker},limit=1] @p "{tags[0]}"',
+         f"say OPENED {tags[0]}"],
+    )
 
 
 # The pool the fog scene floods half the stage with, inside the walls the stage clears each time.

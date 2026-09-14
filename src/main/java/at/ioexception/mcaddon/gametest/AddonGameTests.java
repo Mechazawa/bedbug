@@ -118,6 +118,41 @@ public final class AddonGameTests {
         helper.runAfterDelay(2, helper::succeed);
     }
 
+    /**
+     * A converted dimension decodes on the version that has to read it.
+     *
+     * A dimension type states a different set of fields on each supported version and a `dimension`
+     * entry a data pack cannot decode stops a client on the screen asking the player to fix their
+     * packs, which is a failure no compile and no count reports. Both are decoded here through the
+     * game's own codecs, so a field name that moved fails the version it moved on.
+     */
+    @GameTest()
+    public void aConvertedDimensionDecodes(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        com.mojang.serialization.DynamicOps<com.google.gson.JsonElement> ops =
+            net.minecraft.resources.RegistryOps.create(
+                com.mojang.serialization.JsonOps.INSTANCE, server.registryAccess());
+
+        decodes(helper, "dimension type",
+            net.minecraft.world.level.dimension.DimensionType.DIRECT_CODEC, ops,
+            Platform.dimensionType(-64, 384));
+        decodes(helper, "dimension",
+            net.minecraft.world.level.dimension.LevelStem.CODEC, ops,
+            at.ioexception.mcaddon.convert.Worldgen.voidDimension("minecraft:overworld",
+                "minecraft:the_void"));
+        helper.succeed();
+    }
+
+    private static <T> void decodes(GameTestHelper helper, String what,
+        com.mojang.serialization.Codec<T> codec,
+        com.mojang.serialization.DynamicOps<com.google.gson.JsonElement> ops,
+        com.google.gson.JsonObject json) {
+        com.mojang.serialization.DataResult<T> result = codec.parse(ops, json);
+        helper.assertTrue(result.result().isPresent(),
+            "A converted " + what + " did not decode: "
+                + result.error().map(Object::toString).orElse(""));
+    }
+
     private static EntityType<?> vanilla(String path) {
         return BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("minecraft", path)).orElse(null);
     }

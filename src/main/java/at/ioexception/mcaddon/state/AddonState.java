@@ -18,21 +18,25 @@ import java.util.UUID;
 
 /**
  * What a pack has stored: the dynamic properties of the world, of an entity and of a single block,
- * and the entity properties a behaviour pack declares.
+ * the entity properties a behaviour pack declares, and the dialogue scene each NPC is showing.
  *
  * This lives in a file beside the world rather than in entity NBT, which keeps it out of the way of
- * the save format and lets the same code run on all three Minecraft versions. Entity properties are
- * here too because they are the channel a behaviour pack uses to tell the resource pack what to
+ * the save format and lets the same code run on every supported Minecraft version. Entity properties
+ * are here too because they are the channel a behaviour pack uses to tell the resource pack what to
  * draw, so the server owns them and the client is told.
  */
 public final class AddonState {
     private static final Gson GSON = new Gson();
+
+    /** The one thing filed per NPC: which of its pack's scenes the next interaction opens. */
+    private static final String SCENE = "scene";
 
     private final Path file;
     private final Map<String, Object> world = new LinkedHashMap<>();
     private final Map<UUID, Map<String, Object>> entityDynamic = new HashMap<>();
     private final Map<UUID, Map<String, Object>> entityProperties = new HashMap<>();
     private final Map<String, Map<String, Object>> blockDynamic = new LinkedHashMap<>();
+    private final Map<UUID, Map<String, Object>> dialogue = new HashMap<>();
     private boolean dirty;
 
     private AddonState(Path file) {
@@ -49,6 +53,7 @@ public final class AddonState {
             readEntities(root.getAsJsonObject("entityDynamic"), state.entityDynamic);
             readEntities(root.getAsJsonObject("entityProperties"), state.entityProperties);
             readBlocks(root.getAsJsonObject("blockDynamic"), state.blockDynamic);
+            readEntities(root.getAsJsonObject("dialogue"), state.dialogue);
         } catch (IOException | RuntimeException error) {
             McAddon.LOGGER.error("Could not read {}; starting from empty add-on state.", file, error);
         }
@@ -62,6 +67,7 @@ public final class AddonState {
         root.add("entityDynamic", writeGroups(entityDynamic));
         root.add("entityProperties", writeGroups(entityProperties));
         root.add("blockDynamic", writeGroups(blockDynamic));
+        root.add("dialogue", writeGroups(dialogue));
 
         try {
             Files.createDirectories(file.getParent());
@@ -108,10 +114,27 @@ public final class AddonState {
         return entityProperties.getOrDefault(entity, Map.of());
     }
 
-    /** Called when an entity is gone for good, so neither map grows for the life of the world. */
+    /**
+     * The scene an NPC shows whoever interacts with it, which `/dialogue change` moves.
+     *
+     * It is filed here rather than among the entity's properties because it belongs to this mod
+     * and not to the pack: a pack reading its own entity's properties back must see what it wrote
+     * there and nothing else.
+     */
+    public String dialogueScene(UUID entity) {
+        Object scene = dialogue.getOrDefault(entity, Map.of()).get(SCENE);
+        return scene instanceof String named ? named : null;
+    }
+
+    public void setDialogueScene(UUID entity, String scene) {
+        put(dialogue.computeIfAbsent(entity, key -> new LinkedHashMap<>()), SCENE, scene);
+    }
+
+    /** Called when an entity is gone for good, so no map grows for the life of the world. */
     public void forget(UUID entity) {
         dirty |= entityDynamic.remove(entity) != null;
         dirty |= entityProperties.remove(entity) != null;
+        dirty |= dialogue.remove(entity) != null;
     }
 
     /** Where one block's own store is filed: the dimension it stands in and the position it holds. */

@@ -32,6 +32,9 @@ mobevent minecraft:pillager_patrols_event false
 gametest stopall
 particle tp:sparkle ~ ~ ~
 scriptevent tp:demo the script bridge takes a namespaced id
+dialogue change @e[type=tp:ember] tp:greeting
+dialogue open @e[type=tp:ember,c=1] @p tp:greeting
+dialogue change @e[type=tp:ember] tp:greeting @a
 structure save tp:hut 0 0 0 4 4 4
 structure load tp:hut 0 64 0 90_degrees x
 replaceitem entity @s slot.armor 0 minecraft:leather_helmet

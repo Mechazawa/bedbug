@@ -94,6 +94,8 @@ public final class PackConverter {
         List<at.ioexception.mcaddon.bedrock.behaviour.FeatureDefinition> features = new ArrayList<>();
         List<at.ioexception.mcaddon.bedrock.behaviour.FeatureRuleDefinition> featureRules =
             new ArrayList<>();
+        List<at.ioexception.mcaddon.bedrock.behaviour.DimensionDefinition> dimensions =
+            new ArrayList<>();
         for (BedrockPack behaviour : bundle.behaviours()) {
             items.addAll(ItemDefinition.readAll(behaviour));
             recipes.addAll(RecipeDefinition.readAll(behaviour));
@@ -104,6 +106,8 @@ public final class PackConverter {
                 at.ioexception.mcaddon.bedrock.behaviour.FeatureDefinition.readAll(behaviour));
             featureRules.addAll(
                 at.ioexception.mcaddon.bedrock.behaviour.FeatureRuleDefinition.readAll(behaviour));
+            dimensions.addAll(
+                at.ioexception.mcaddon.bedrock.behaviour.DimensionDefinition.readAll(behaviour));
         }
         String namespace = Names.namespaceOf(pack, bundle.behaviours());
         Path root = cache.resolve("converted").resolve("%s-%s-%d".formatted(
@@ -150,7 +154,7 @@ public final class PackConverter {
                 Worldgen.write(root, namespace, biomes,
                     at.ioexception.mcaddon.bedrock.ClientBiomeDefinition.readAll(pack,
                         name -> BedrockSoundNames.java(name, namespace, sounds)),
-                    features, featureRules);
+                    features, featureRules, dimensions);
             }
 
             if (fresh) {

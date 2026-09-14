@@ -117,8 +117,14 @@ public final class ServerHooks {
         });
         net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents.AFTER.register(
             (level, player, pos, broken, blockEntity) -> Sensors.blockBroken(level, player, pos, broken));
+        Dialogues.register();
+        // One channel and one screen serve both, so the id's sign is what says which is waiting.
         Channels.receiveFormResponse((formId, answer) -> {
-            if (scripts != null) scripts.formResponse(formId, answer);
+            if (Dialogues.answers(formId)) {
+                Dialogues.respond(formId, answer);
+            } else if (scripts != null) {
+                scripts.formResponse(formId, answer);
+            }
         });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             Channels.sendPacks(handler.player, PackList.of(McAddon.packs()).encode());
@@ -181,6 +187,7 @@ public final class ServerHooks {
     /** The after event names a player who is already gone, so it carries names and not a handle. */
     private static void playerLeft(ServerPlayer player) {
         WorldEvents.forget(player);
+        Dialogues.forget(player.getUUID());
         if (scripts == null) return;
 
         Map<String, Object> leaving = new LinkedHashMap<>();
