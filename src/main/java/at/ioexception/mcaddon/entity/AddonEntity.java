@@ -671,22 +671,6 @@ public class AddonEntity extends PathfinderMob implements Merchant {
     }
 
     /**
-     * Whether a lead holds this entity at all.
-     *
-     * `can_be_stolen` says whether a second player may take the lead off the first, not whether the
-     * entity may be leashed, so an entity is leashable whenever the component is there: Java allows
-     * a mob to be leashed by default and the component says the same thing.
-     */
-    // A mob could always be leashed before 1.21.2, where the question moved onto the entity.
-    //? if >=1.21.2 {
-    @Override
-    //?}
-    public boolean canBeLeashed() {
-        return definition == null || has("minecraft:leashable")
-            || !definition.components().containsKey("minecraft:leashable_to");
-    }
-
-    /**
      * Fires the events a pack wrote for a lead going on and coming off.
      *
      * Bedrock writes each as a trigger, which is the bare event name or the object carrying it, and
