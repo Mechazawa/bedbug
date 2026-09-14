@@ -22,21 +22,30 @@ public record CameraView(Preset preset, Vec3 position, Float xRot, Float yRot, f
     Easing easing) {
 
     public enum Preset {
-        FIRST_PERSON, THIRD_PERSON, THIRD_PERSON_FRONT, FREE;
+        FIRST_PERSON("minecraft:first_person"),
+        THIRD_PERSON("minecraft:third_person"),
+        THIRD_PERSON_FRONT("minecraft:third_person_front"),
+        FREE("minecraft:free");
+
+        private final String bedrockName;
+
+        Preset(String bedrockName) {
+            this.bedrockName = bedrockName;
+        }
 
         /** Null for a preset Bedrock has not got. The namespace may be left off, and usually is. */
         public static Preset tryFrom(String written) {
             String name = written.toLowerCase(Locale.ROOT);
-            String path = name.startsWith("minecraft:") ? name.substring("minecraft:".length()) : name;
+            String full = name.startsWith("minecraft:") ? name : "minecraft:" + name;
 
             for (Preset preset : values()) {
-                if (preset.name().toLowerCase(Locale.ROOT).equals(path)) return preset;
+                if (preset.bedrockName.equals(full)) return preset;
             }
             return null;
         }
 
         public String bedrockName() {
-            return "minecraft:" + name().toLowerCase(Locale.ROOT);
+            return bedrockName;
         }
     }
 

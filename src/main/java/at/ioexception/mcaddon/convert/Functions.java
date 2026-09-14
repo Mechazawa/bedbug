@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.convert;
 
+import at.ioexception.mcaddon.bedrock.camera.CameraView;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.platform.Platform;
@@ -68,8 +69,7 @@ public final class Functions {
      * line Java's parser rejects, and one of those costs the whole function.
      */
     static final Set<String> REGISTERED_WHOLE_LINE =
-        Set.of("playanimation", "event", "toggledownfall", "transfer",
-            "camera", "camerashake", "fog");
+        Set.of("playanimation", "event", "toggledownfall", "transfer", "camerashake", "fog");
 
     /**
      * Commands Bedrock has and Java has no counterpart for.
@@ -128,6 +128,11 @@ public final class Functions {
         "ride evict_riders", "ride if_group_fits", "ride no_ride_change", "ride reassign_rides",
         "ride skip_riders", "ride summon_ride", "ride summon_rider", "ride teleport_ride",
         "ride until_full",
+        "camera attach_to_entity", "camera color", "camera detach_from_entity",
+        "camera entity_offset", "camera fade", "camera fov_clear", "camera fov_set",
+        "camera minecraft:control_scheme_camera", "camera minecraft:fixed_boom",
+        "camera minecraft:follow_orbit", "camera play_spline", "camera remove_target",
+        "camera target_center_offset", "camera target_entity", "camera view_offset",
         "save query",
         "schedule on_area_loaded",
         "structure block_by_block", "structure layer_by_layer", "structure memory", "structure xz",
@@ -359,6 +364,7 @@ public final class Functions {
             case "scriptevent" -> "scriptevent " + quotedName(rest);
             case "dialogue" -> dialogue(rest, unsupported);
             case "schedule" -> schedule(rest, unsupported);
+            case "camera" -> camera(rest, unsupported);
             default -> {
                 unsupported.add("command " + name);
                 yield null;
@@ -992,6 +998,29 @@ public final class Functions {
             case "clear" -> action.length > 1 ? "schedule clear " + action[1] : null;
             default -> dropped("schedule", action[0].toLowerCase(Locale.ROOT), unsupported);
         };
+    }
+
+    /**
+     * `/camera`, of whose fifteen forms the four presets and their placement are drawn here.
+     *
+     * The line reaches the command this mod registers as the pack wrote it, so the only thing to
+     * decide is whether that command has a branch for the form. The three presets left name a
+     * camera Bedrock draws and Java has none of, and the rest fade the screen, move the field of
+     * view, follow a spline or hang the camera off another entity, none of which a Java client is
+     * told to do by any packet.
+     */
+    private static String camera(String rest, Set<String> unsupported) {
+        String[] parts = SPACE.split(rest, 3);
+        if (parts.length < 2) return "camera " + rest;
+
+        String form = parts[1].toLowerCase(Locale.ROOT);
+        if (form.equals("clear")) return "camera " + rest;
+        if (!form.equals("set")) return dropped("camera", form, unsupported);
+
+        String preset = parts.length > 2 ? SPACE.split(parts[2], 2)[0].toLowerCase(Locale.ROOT) : "";
+        if (!preset.startsWith("minecraft:")) preset = "minecraft:" + preset;
+        return CameraView.Preset.tryFrom(preset) == null
+            ? dropped("camera", preset, unsupported) : "camera " + rest;
     }
 
     /**

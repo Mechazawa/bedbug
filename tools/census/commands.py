@@ -56,7 +56,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 JAVA = ROOT / "src/main/java/at/ioexception/mcaddon"
 FUNCTIONS = JAVA / "convert/Functions.java"
-REGISTRATIONS = (JAVA / "server/BedrockCommands.java", JAVA / "server/ServerHooks.java")
+# `CameraView` is here because the preset words `/camera set` accepts are its enum rather than a
+# literal in the command tree, and those words are keywords the metadata counts.
+REGISTRATIONS = (JAVA / "server/BedrockCommands.java", JAVA / "server/ServerHooks.java",
+                 JAVA / "bedrock/camera/CameraView.java")
 DEFAULT_SAMPLES = ROOT / "scratchpad/bedrock/bedrock-samples"
 
 # Beyond this an enum is a vocabulary of blocks, items, entities or biomes rather than grammar.
