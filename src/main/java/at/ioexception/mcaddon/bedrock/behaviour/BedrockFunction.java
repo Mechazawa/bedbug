@@ -29,6 +29,10 @@ import java.util.List;
  * of a whole set, and neither picks one name out of a list and then rolls its own range, so the
  * Bedrock object reaches a function of this mod's own type and is answered here. The type goes in
  * the loot function registry, which the game builds itself rather than reading from a data pack.
+ *
+ * A data value that is settled per roll is the other kind: a range covers several of the items Java
+ * split one Bedrock id into, and a colour index names the one the entity being rolled for is
+ * wearing, and neither is a question a Java function asks of the stack it is handed.
  */
 public final class BedrockFunction implements LootItemFunction {
 
@@ -117,9 +121,8 @@ public final class BedrockFunction implements LootItemFunction {
      *
      * What each value in the range names was worked out as the table was converted, because a Java
      * id no longer says which Bedrock family the item came out of. A range picks one of them at
-     * random, and a colour index picks the one the entity's own colour points at. Whatever a
-     * function before this one made of the stack, the count is the part that carries over, which is
-     * the one a Bedrock table sets beside a data value.
+     * random, and a colour index picks the one the entity's own colour points at. Only the count
+     * carries over from whatever ran before, which is what a Bedrock table sets beside a data value.
      */
     private ItemStack picked(ItemStack stack, LootContext context) {
         List<JsonElement> choices = Json.list(bedrock, "items");
@@ -141,11 +144,11 @@ public final class BedrockFunction implements LootItemFunction {
     }
 
     /**
-     * The colour index the entity carries, which is Bedrock's own `minecraft:color` on it.
+     * The colour index the entity carries, which is what Bedrock's `minecraft:color` puts on it.
      *
-     * An entity with no colour reads as the first of whatever family the item came out of, which is
-     * what Bedrock hands back for a mob that was never given one: a sheared mooshroom's mushroom
-     * comes out of a table written this way and has one shape whatever colour is asked for.
+     * An entity that was never given one reads as zero, the first of the family, which is the answer
+     * Mojang's own tables are written for: a sheared mooshroom rolls one of these for a mushroom
+     * that has a single form.
      */
     private static int colour(net.minecraft.world.entity.Entity subject) {
         return subject instanceof at.ioexception.mcaddon.entity.AddonEntity addon

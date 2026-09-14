@@ -22,7 +22,9 @@ import java.util.Map;
  * A Bedrock loot table, rewritten as a Java one.
  *
  * The two formats share their shape: pools with rolls and weighted entries. What differs is naming,
- * so the conversion is a rename of a handful of fields rather than a translation.
+ * so the conversion is a rename of a handful of fields rather than a translation. The data value
+ * beside a Bedrock item is the exception: Java split the id it sits on into an item per value, so
+ * the pair has to be read as the one item it names.
  *
  * @param path the pack-relative path, which is how an entity's `minecraft:loot` names it
  */
