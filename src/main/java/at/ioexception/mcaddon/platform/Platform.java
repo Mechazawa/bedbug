@@ -2203,6 +2203,26 @@ public final class Platform {
     }
 
     /**
+     * Whether a pack's own dimensions are converted at all on this version.
+     *
+     * `WorldDimensions.bake` decides the level stem registry's lifecycle from the set of dimensions
+     * the world ends up with, and the two editions of that test disagree. From 26 it is
+     * `keys.containsAll(BUILTIN_ORDER)`, so a world carrying the three the game ships stays stable
+     * however many more a pack adds. Before that it is `list.size() == VANILLA_DIMENSION_COUNT`, so
+     * a fourth dimension of any kind makes the world experimental and a client asks the player
+     * whether to load it at all, every time they open it. A pack whose dimensions would do that is
+     * a pack too new for the version, so they are named through `/mcaddon entities` and none of
+     * them is written.
+     */
+    public static boolean convertsDimensions() {
+        //? if >=26 {
+        return true;
+        //?} else {
+        /*return false;
+        *///?}
+    }
+
+    /**
      * The empty carver list a converted biome carries.
      *
      * A Bedrock biome states no carvers, and the field is required either way. 26 made it one list;

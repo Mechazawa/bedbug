@@ -951,8 +951,10 @@ def check_server(root: Path, version: str, timeout: float, summons: int, verbose
     # stops, which reads as a mod that would not load rather than as a file nobody wrote yet.
     takeLocalJoins(root, version)
     free_world_lock(root, version)
-    # 1.20.1 writes no worldgen at all, so a dimension a pack declares is reported there instead.
-    script = console_script(identifiers, summons, dimensions if version != "1.20.1" else [])
+    # A dimension is written from 26 on. 1.20.1 writes no worldgen at all, and 1.21.1 calls a world
+    # carrying a fourth dimension experimental whatever pack it came from, so both report instead.
+    script = console_script(identifiers, summons,
+                            dimensions if version.startswith("26.") else [])
     lines, log, outcome = play(root, version, SERVER, SERVER.ready, script, timeout, 0.0, verbose)
 
     verdict.notes.append(f"server {outcome}, {len(lines)} lines in {log.relative_to(root)}")

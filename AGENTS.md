@@ -385,7 +385,18 @@ These are the checks it runs, and what each one catches:
   **A dimension a pack adds becomes a level, and only a real server shows it.**
   `WorldDimensions.bake` unions the keys of the `dimension` registry the data packs loaded with the
   ones the world was saved with, so a converted `dimension` entry is a level the next time that
-  world opens, on a dedicated server and in a single player world alike. A game test server proves
+  world opens, on a dedicated server and in a single player world alike.
+
+  **The same method decides whether that world is experimental, and the test changed at 26.** From
+  26 it is `keys.containsAll(BUILTIN_ORDER)`, so a world holding the three dimensions the game ships
+  stays stable however many a pack adds. Before that it is `list.size() == VANILLA_DIMENSION_COUNT`,
+  so a fourth dimension makes the world experimental whatever pack it came from and whatever
+  `KnownPack` that pack carries. `Platform.convertsDimensions` therefore writes a pack's dimensions
+  from 26 on and reports them below it, and `verify.py run` asks only the 26 versions for a level.
+  A dedicated server is unaffected either way, because it never asks the question, so a red 1.21.1
+  client beside a green 1.21.1 server is what this looks like rather than a fault in the pack.
+
+  A game test server proves
   nothing about this: `GameTestServer` bakes its own dimensions against
   `new MappedRegistry<>(Registries.LEVEL_STEM, Lifecycle.stable()).freeze()`, an empty registry, so
   every add-on's dimension is dropped there whatever the pack holds. `verify.py run` types

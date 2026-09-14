@@ -62,6 +62,10 @@ public final class Worldgen {
 
         for (DimensionDefinition dimension : dimensions) {
             if (!dimension.convertible()) continue;
+            if (!Platform.convertsDimensions()) {
+                AddonEntities.unsupported("behaviour pack dimensions (needs 26 or newer)");
+                continue;
+            }
 
             Names.Identifier id = Names.split(dimension.identifier(), namespace);
             write(path(root, id, "dimension_type"),
@@ -372,7 +376,7 @@ public final class Worldgen {
         Map<String, FeatureDefinition> features, Set<String> built, String namespace) {
         rule.scatter().report();
 
-        JsonArray placement = scatterPlacement(rule.scatter(), rule.decorationStep());
+        JsonArray placement = scatterPlacement(rule.scatter(), rule.decorationStep(), true);
         String named = rule.placesFeature();
 
         for (int step = 0; step < WRAPPER_LIMIT && !built.contains(named); step++) {
@@ -404,7 +408,9 @@ public final class Worldgen {
             case "minecraft:scatter_feature" -> {
                 Scatter scatter = feature.scatter();
                 scatter.report();
-                scatterPlacement(scatter, null).forEach(placement::add);
+                AddonEntities.unsupported(
+                    "feature minecraft:scatter_feature spread inside another scatter");
+                scatterPlacement(scatter, null, false).forEach(placement::add);
             }
             case "minecraft:surface_relative_threshold_feature" -> {
                 JsonObject filter = new JsonObject();
@@ -440,8 +446,14 @@ public final class Worldgen {
      * A step is given only for the outermost scatter, because it decides the heightmap a feature
      * with no height of its own lands on: what a pack scatters in the vegetation pass belongs on top
      * of whatever is already there, and everything else belongs on the terrain.
+     *
+     * `spreads` is true for that outermost scatter alone. `in_square` moves a position by up to
+     * fifteen blocks on each axis, so a second one can carry the feature into a neighbouring chunk,
+     * and `biome_filter` then asks `WorldGenRegion` for a chunk it refuses to answer for and takes
+     * the whole generating chunk with it. It would also throw away the column the heightmap
+     * between the two scatters had just settled on.
      */
-    private static JsonArray scatterPlacement(Scatter scatter, String step) {
+    private static JsonArray scatterPlacement(Scatter scatter, String step, boolean spreads) {
         JsonArray placement = new JsonArray();
 
         int rarity = scatter.rarity();
@@ -459,7 +471,7 @@ public final class Worldgen {
             count.addProperty("count", iterations);
             placement.add(count);
         }
-        placement.add(marker("minecraft:in_square"));
+        if (spreads) placement.add(marker("minecraft:in_square"));
 
         int[] heights = scatter.heights();
         if (heights != null) {

@@ -165,7 +165,10 @@ server decides what happens; the client draws it.
   ceiling and `minecraft:dimension_height` giving the floor and the height, and both are read.
   `WorldDimensions.bake` takes the union of the data pack's own entries and the ones the world was
   saved with, so a dimension an add-on adds to a world that already exists is there the next time
-  that world opens, and a pack removed again costs the world nothing.
+  that world opens, and a pack removed again costs the world nothing. This needs 26: before that,
+  the same method calls a world experimental as soon as it holds a fourth dimension, and a client
+  then asks the player whether to load it at all on every open, so 1.20.1 and 1.21.1 name each
+  dimension through `/mcaddon entities` and write none of them.
 - Attachables: what any entity wears or holds, players and vanilla mobs included, animating on its
   own clock. A pack picks between several models for one item on a condition of its own, and what an
   attachable writes into whoever carries it reaches that entity's variables, so the layer it stands
@@ -694,7 +697,10 @@ for that version, which is the answer Bedrock itself gives to a pack written for
 1.20.1 nothing under `biomes`, `features`, `feature_rules` or `dimensions` is written and every one
 of them is
 counted and named by `/mcaddon entities`, with the version that would run it. The other three
-versions convert all of it.
+versions convert the biomes and the features, and 1.21.1 stops short of the dimensions for a reason
+of its own: `WorldDimensions.bake` asks there whether the world holds exactly the three dimensions
+the game ships, and from 26 whether it holds at least those three, so a fourth one of any origin is
+experimental before 26 and ordinary from it.
 
 **What a Bedrock biome states that a Java biome has no field for.** Of Mojang's own 88, 87 state a
 surface builder, 75 an overworld height and 31 the overworld generation rules, and Java has a field
