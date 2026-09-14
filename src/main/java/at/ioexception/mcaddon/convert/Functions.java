@@ -59,7 +59,7 @@ public final class Functions {
      */
     private static final Set<String> REGISTERED_HERE = Set.of(
         "playanimation", "event", "scriptevent", "music", "toggledownfall", "structure", "mobevent",
-        "particle", "gametest");
+        "particle", "gametest", "dialogue");
 
     /**
      * The registered commands whose Bedrock line the command built here reads as it stands.
@@ -80,7 +80,7 @@ public final class Functions {
      */
     private static final Set<String> BEDROCK_ONLY = Set.of(
         "aimassist", "camera", "camerashake", "clearspawnpoint", "connect",
-        "controlscheme", "dialogue", "editor-allowlist", "fog", "hud", "immutableworld",
+        "controlscheme", "editor-allowlist", "fog", "hud", "immutableworld",
         "inputpermission", "packstack", "permission", "ops", "project", "reloadconfig",
         "reloadpacketlimitconfig", "schedule", "script", "sendshowstoreoffer", "setmaxplayers",
         "transfer", "wsserver");
@@ -343,6 +343,7 @@ public final class Functions {
             case "gametest" -> gameTest(rest, unsupported);
             case "particle" -> "particle " + quotedName(rest);
             case "scriptevent" -> "scriptevent " + quotedName(rest);
+            case "dialogue" -> dialogue(rest, unsupported);
             default -> {
                 unsupported.add("command " + name);
                 yield null;
@@ -827,6 +828,30 @@ public final class Functions {
     private static String quotedName(String rest) {
         String[] parts = SPACE.split(rest, 2);
         return new JsonPrimitive(parts[0]) + (parts.length > 1 ? " " + parts[1] : "");
+    }
+
+    /**
+     * `dialogue open <npc> <player> [scene]` and `dialogue change <npc> <scene> [players]`.
+     *
+     * The scene tag carries a namespace as often as not, so it is quoted wherever it stands. Which
+     * word that is differs between the two forms: `open` names it last and `change` names it before
+     * the players it changes the scene for.
+     */
+    private static String dialogue(String rest, Set<String> unsupported) {
+        String[] parts = SPACE.split(rest.strip());
+        String mode = parts.length > 0 ? parts[0].toLowerCase(Locale.ROOT) : "";
+
+        if (mode.equals("open") && parts.length >= 3) {
+            String scene = parts.length > 3 ? " " + new JsonPrimitive(parts[3]) : "";
+            return "dialogue open " + parts[1] + " " + parts[2] + scene;
+        }
+        if (mode.equals("change") && parts.length >= 3) {
+            // Bedrock's third argument narrows the change to some players, and the scene an NPC
+            // shows is here a fact about the NPC rather than one about each player looking at it.
+            if (parts.length > 3) unsupported.add("command dialogue change for chosen players");
+            return "dialogue change " + parts[1] + " " + new JsonPrimitive(parts[2]);
+        }
+        return dropped("dialogue", mode, unsupported);
     }
 
     /**

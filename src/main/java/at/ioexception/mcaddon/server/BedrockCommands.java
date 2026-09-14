@@ -44,6 +44,8 @@ public final class BedrockCommands {
     }
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+        Dialogues.registerCommand(dispatcher);
+
         dispatcher.register(Commands.literal("playanimation")
             .requires(source -> Platform.allowedAt(source, 1))
             .then(Commands.argument("targets", EntityArgument.entities())

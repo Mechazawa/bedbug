@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.convert;
 
 import at.ioexception.mcaddon.bedrock.ClientBiomeDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.BiomeDefinition;
+import at.ioexception.mcaddon.bedrock.behaviour.DimensionDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.FeatureDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.FeatureRuleDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.Scatter;
@@ -48,13 +49,25 @@ public final class Worldgen {
     /** Writes everything the pack's worldgen becomes. */
     public static void write(Path root, String namespace, List<BiomeDefinition> biomes,
         Map<String, ClientBiomeDefinition> colours, List<FeatureDefinition> features,
-        List<FeatureRuleDefinition> rules) throws IOException {
+        List<FeatureRuleDefinition> rules, List<DimensionDefinition> dimensions) throws IOException {
         // No biome is converted on 1.20.1, so the colours and the fog a resource pack paints one
         // with have nothing to land on either.
         if (!Platform.convertsWorldgen()) {
             colours.keySet().forEach(painted -> AddonEntities
                 .unsupported("resource pack biome colours (needs 1.21 or newer)"));
+            dimensions.forEach(dimension -> AddonEntities
+                .unsupported("behaviour pack dimensions (needs 1.21 or newer)"));
             return;
+        }
+
+        for (DimensionDefinition dimension : dimensions) {
+            if (!dimension.convertible()) continue;
+
+            Names.Identifier id = Names.split(dimension.identifier(), namespace);
+            write(path(root, id, "dimension_type"),
+                Platform.dimensionType(dimension.minimumY(), dimension.height()));
+            write(path(root, id, "dimension"),
+                voidDimension(id.namespace() + ":" + id.path(), dimension.biome()));
         }
 
         for (BiomeDefinition biome : biomes) {
@@ -481,6 +494,37 @@ public final class Worldgen {
         JsonObject modifier = new JsonObject();
         modifier.addProperty("type", type);
         return modifier;
+    }
+
+    /**
+     * The world a pack's own dimension generates, which is empty space.
+     *
+     * Bedrock accepts `void` and nothing else as a dimension's generator, and Java's flat generator
+     * with one layer of air is the same world: no terrain, no lakes and no features, so what stands
+     * in it is what the pack builds there.
+     */
+    public static JsonObject voidDimension(String type, String biome) {
+        JsonArray layers = new JsonArray();
+        JsonObject air = new JsonObject();
+        air.addProperty("block", "minecraft:air");
+        air.addProperty("height", 1);
+        layers.add(air);
+
+        JsonObject settings = new JsonObject();
+        settings.add("layers", layers);
+        settings.addProperty("biome", biome);
+        settings.addProperty("lakes", false);
+        settings.addProperty("features", false);
+        settings.add("structure_overrides", new JsonArray());
+
+        JsonObject generator = new JsonObject();
+        generator.addProperty("type", "minecraft:flat");
+        generator.add("settings", settings);
+
+        JsonObject json = new JsonObject();
+        json.addProperty("type", type);
+        json.add("generator", generator);
+        return json;
     }
 
     private static JsonObject placed(String feature, JsonArray placement) {

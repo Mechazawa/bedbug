@@ -154,6 +154,15 @@ server decides what happens; the client draws it.
   every biome whose tags the rule's own filter accepts. That last part is the direction Bedrock
   attaches from and the one a Java biome cannot, because a Java biome lists the features it carries
   and nothing a data pack writes reaches one from the other side.
+- The worlds a behaviour pack declares beside the one it is installed in. A `dimensions/` file states
+  an identifier, a band of height and a generator, and Bedrock builds such a world as empty space and
+  leaves the pack to build in it, so it becomes a Java dimension over a flat generator carrying one
+  layer of air and whatever biome the pack named. The band becomes the dimension type's own `min_y`
+  and `height`. Bedrock writes it two ways, `minecraft:dimension_bounds` giving the floor and the
+  ceiling and `minecraft:dimension_height` giving the floor and the height, and both are read.
+  `WorldDimensions.bake` takes the union of the data pack's own entries and the ones the world was
+  saved with, so a dimension an add-on adds to a world that already exists is there the next time
+  that world opens, and a pack removed again costs the world nothing.
 - Attachables: what any entity wears or holds, players and vanilla mobs included, animating on its
   own clock. A pack picks between several models for one item on a condition of its own, and what an
   attachable writes into whoever carries it reaches that entity's variables, so the layer it stands
@@ -171,6 +180,12 @@ server decides what happens; the client draws it.
   travelled and on a collision, each one able to play a sound, start another effect, evaluate an
   expression, run a sequence or pick one of several by weight. A Bedrock id naming a vanilla effect
   is shown as the Java one instead.
+- The conversations an NPC opens. A scene under `dialogue/` states a name, a body of text and a row
+  of buttons, which is what one of Bedrock's own forms states, so it is drawn by the screen this mod
+  already turns a form into. Each button runs the commands the scene gave it with the NPC's own
+  authority and with `@initiator` standing for whoever is reading the screen, and the scene's opening
+  and closing commands run either side of that. `/dialogue change` says which scene an NPC shows,
+  `/dialogue open` shows one now, and interacting with an NPC that has been given a scene opens it.
 - Behaviour pack scripts against `@minecraft/server`, sandboxed: a script sees its own pack's files
   and nothing else on disk. Commands a script registers on startup become real commands,
   `@minecraft/server-ui` forms become real screens, and the world, system, entity, dimension, block,
@@ -214,7 +229,7 @@ compare what they read against the names this mod acts on:
 | Molang maths | 100% |
 | Block components | 100% |
 | Item components | 88% |
-| Command names | 75% |
+| Command names | 76% |
 | Command keywords | 60% |
 | Game rules | 78% |
 | Particle components | 100% |
@@ -227,7 +242,7 @@ compare what they read against the names this mod acts on:
 | Trade table fields | 100% |
 | Trade item functions | 80% |
 | Geometry, animation and controller fields | 93% |
-| Pack file kinds | 83% |
+| Pack file kinds | 88% |
 | `@minecraft/server` and friends | 100% |
 
 Every name in the remaining share is counted and shown by `/mcaddon entities` and `/mcaddon
@@ -381,8 +396,8 @@ ask for. The three that aim the quad along the particle's own direction and the 
 emitter's transform have no Java form, so they fall back to facing the camera, and the direction
 settings those modes read are not used.
 
-**A quarter of Bedrock's commands.** `fog`, `camera`, `camerashake`, `hud`, `dialogue`,
-`inputpermission`, `aimassist`, `controlscheme`, `project` and the rest of the twenty-three name a
+**A quarter of Bedrock's commands.** `fog`, `camera`, `camerashake`, `hud`,
+`inputpermission`, `aimassist`, `controlscheme`, `project` and the rest of the twenty-two name a
 renderer feature Java has none of, a marketplace or a server Java does not speak to, or a word both
 editions use for different things: Bedrock's `schedule` waits for an area to load and Java's delays
 a function. A function using one keeps its other lines and the dropped command is reported, and so
@@ -402,8 +417,8 @@ Everything else is translated or registered. `effect`, `xp`, `playsound`, `stops
 `daylock`, `allowlist`, `testfor`, `testforblock`, `testforblocks` and both forms of `execute` are
 rewritten into what Java reads, including the command behind `execute ... run` and the dimension
 Bedrock calls the nether. `playanimation`, `event`, `scriptevent`, `music`, `toggledownfall`,
-`structure`, `mobevent`, `particle` and `gametest` are registered by this mod, and a line using one
-is written out in the form the command built here reads. Of Bedrock's thirty-seven game rules, the
+`structure`, `mobevent`, `particle`, `dialogue` and `gametest` are registered by this mod, and a line
+using one is written out in the form the command built here reads. Of Bedrock's thirty-seven game rules, the
 twenty-five every supported version of Java has are set under the name that version knows them by,
 which 26 changed, and four more reach a rule only the newer versions hold. The remaining eight name
 a Bedrock heads-up display or a limit Java keeps no rule for, and are reported.
@@ -454,12 +469,44 @@ A Bedrock biome tag with no Java biome carrying the same idea, `sulfur_caves` an
 nether tags among them, is named the same way and then left out of the filter, so the rest of the
 rule still decides.
 
-**Whole directories that describe a Bedrock client.** `ui` is Bedrock's own screen language, which
-draws every menu the engine shows and has no counterpart in a Java resource pack. `cameras` holds
-the presets `/camera` picks between and `dialogue` holds the screen an NPC opens, and both commands
-are already reported as ones Java has no form of. `textures/texture_list.json` is the index Bedrock
-keeps of every texture in the pack, and the conversion walks the directory itself. Each is named
-against the pack that shipped it, so `/mcaddon entities` says which directory went unread.
+**Bedrock's own screen language.** `ui` is the Bedrock client's whole screen tree written out as
+JSON. Mojang's resource pack ships 189 of those files, declaring more than four thousand controls in
+twenty-three element types and reading 1441 distinct binding names back out of the running client.
+What a pack writes there reaches a player by replacing a control inside one of the engine's own
+screens under the name the engine gave it: nothing in a pack opens a screen of its own, because
+`_ui_defs.json` adds a file to the list and that file is drawn only where one of the engine's screens
+already points at it. A Java screen is a class rather than a named tree, so there is no
+`hud_screen.json` to patch and no control name for an override to match, and the bindings name values
+the Bedrock client holds with no published list saying what any of them is. What a pack can put in
+front of a Java player is what `@minecraft/server-ui` describes and what an NPC dialogue scene
+states, and both of those are drawn.
+
+**A camera that is somewhere the player is not.** `cameras` holds the presets `/camera` picks
+between, and a preset a pack writes inherits from `minecraft:free` or from another of its own, so
+every one of them is a camera standing at a position and a rotation while the player stays where they
+are. Java's one camera control is not that. `ServerPlayer.setCamera` teleports the player to whatever
+entity it is given and then tells the client to draw from it, which is why `Camera.attachToEntity`
+works here and a preset cannot: the view and the player cannot be in two places. Of the fourteen
+things a preset states beside its identifier and what it inherits from, `pos_x`, `pos_y`, `pos_z`,
+`rot_x` and `rot_y` are the only ones naming anything Java holds at all. `player_effects`,
+`listener`, `extend_player_rendering`, `rotation_speed`, `snap_to_target`, `continue_targeting`,
+`tracking_radius` and the two rotation limits each describe the Bedrock client's own renderer, its
+audio or the input it takes away while a camera is up, and Java has none of the three.
+
+**The index beside a pack's textures.** `textures/texture_list.json` is a flat list of texture paths
+written without their extensions, which the Bedrock client keeps so it can resolve a texture by name
+without searching the directory. It states nothing the pack's own files do not: Mojang's resource
+pack lists 20 of the 8039 images it ships, every one of them a file that is there and already named
+by `terrain_texture.json` or `item_texture.json`. The conversion walks `textures/` itself, so what it
+writes covers whatever the index names and reading the index would change nothing. It is counted and
+named all the same, because a file this mod never opens is a fact the pack's author is owed.
+
+**A dimension with a generator nobody wrote down.** Bedrock builds a dimension a pack declares as
+empty space and accepts `void` and no other generator, so a file naming another one is counted and
+named rather than turned into a chunk generator this mod guessed at. A `minecraft:default_biome`
+naming one of the pack's own biomes is named too and the world is made of the void instead: measured
+on 26.2, a `dimension` entry referring to a biome out of the same pack loads on a dedicated server
+and stops a client on the screen asking the player to fix their packs.
 
 **Four of the renderer directories, field by field.** `atmospherics` states a Rayleigh and Mie
 scattering model: `rayleigh_strength`, `sun_mie_strength`, `moon_mie_strength`, `sun_glare_shape`
@@ -527,7 +574,8 @@ that is not built in supplies, a worldgen codec decodes as experimental, `Primar
 that through, and `WorldOpenFlows` then asks the player whether to load the world at all. Nothing
 records the answer, so it is asked on every open, forever. A pack shipping worldgen is a pack too new
 for that version, which is the answer Bedrock itself gives to a pack written for a newer engine. On
-1.20.1 nothing under `biomes`, `features` or `feature_rules` is written and every one of them is
+1.20.1 nothing under `biomes`, `features`, `feature_rules` or `dimensions` is written and every one
+of them is
 counted and named by `/mcaddon entities`, with the version that would run it. The other three
 versions convert all of it.
 
@@ -571,12 +619,6 @@ registry of its own outside the eleven generation steps and fixed when a dimensi
 remaining thirteen name a Java feature whose configuration is a different model of the same idea, a
 tree and a geode among them, and a converted entry would be a guess at what the pack meant rather
 than what it wrote.
-
-**`dimensions`.** A Bedrock dimension states an identifier, a generator type name and a height range.
-A Java one needs a whole chunk generator with a biome source and a noise settings reference behind
-it, and a `dimension_type` beside it whose fields 26 rewrote: `ultrawarm`, `natural`, `bed_works`,
-`respawn_anchor_works`, `piglin_safe`, `has_raids` and `effects` all went, and what replaced them is a
-map of environment attributes. The directory is counted and named against the pack that shipped it.
 
 Surface lighting from a physically based texture set is the one thing that depends on what the
 player has installed: the emissive channel is drawn again at full brightness with or without a

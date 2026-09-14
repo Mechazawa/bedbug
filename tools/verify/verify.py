@@ -186,6 +186,10 @@ TEST_FAILED = re.compile(r"([\w.:-]+) failed: ")
 PROBE_PASSES = "probe:floor_is_stone"
 PROBE_FAILS = "probe:diamond_is_missing"
 
+# What a dimension a pack declares says back once the server has built a level out of it. A level
+# that was never built takes the `execute in` naming it with the parse, so nothing is printed at all.
+DIMENSION_REACHED = "MCADDON-DIMENSION"
+
 # Counts the mod reports, pulled back out of the log so they can be checked against the source pack.
 REPORTED = (
     ("textures", r"Converted .*?: (\d+) textures"),
@@ -408,6 +412,27 @@ def item_identifiers(names, read) -> list[str]:
     return sorted(identifiers)
 
 
+def dimension_identifiers(names, read) -> list[str]:
+    """The worlds of its own a behaviour pack declares, narrowed to the ones that convert.
+
+    Bedrock builds a dimension a pack declares as empty space and accepts no other generator, so a
+    file naming one is reported rather than written and asking the server for it would fail whatever
+    the mod did.
+    """
+    identifiers = []
+    for name in declared(names, "dimensions"):
+        body = json.loads(read(name)).get("minecraft:dimension", {})
+        identifier = body.get("description", {}).get("identifier")
+        generation = body.get("components", {}).get("minecraft:generation", {})
+        if not identifier or ":" not in identifier:
+            continue
+        if generation.get("generator_type", "void") != "void":
+            continue
+        namespace, path = identifier.split(":", 1)
+        identifiers.append(f"{sanitise(namespace)}:{sanitise(path)}")
+    return sorted(identifiers)
+
+
 def addons_in(directory: Path) -> list[Path]:
     if not directory.is_dir():
         return []
@@ -415,7 +440,8 @@ def addons_in(directory: Path) -> list[Path]:
                   if one.suffix.lower() in (".mcaddon", ".mcpack") or one.is_dir())
 
 
-def console_script(identifiers: list[str], summons: int) -> list[tuple[float, str]]:
+def console_script(identifiers: list[str], summons: int,
+                   dimensions: list[str] | None = None) -> list[tuple[float, str]]:
     """The commands to type, each with the seconds to wait before it.
 
     A command in the same tick as a `summon` cannot see the entity, so every step that reads the
@@ -423,6 +449,10 @@ def console_script(identifiers: list[str], summons: int) -> list[tuple[float, st
     """
     chosen = identifiers[:summons]
     steps = [(2.0, "mcaddon packs"), (1.0, "mcaddon entities"), (1.0, "mcaddon scripts")]
+    # A dimension the pack added is a level only once the server built one out of the entry, and
+    # `execute in` is the one command that will not parse without it.
+    steps += [(0.5, f"execute in {one} run say {DIMENSION_REACHED} {one}")
+              for one in dimensions or []]
     steps += [(0.3, f"summon {identifier} 0 100 0") for identifier in chosen]
     steps += [(2.0, f"kill @e[type={identifier}]") for identifier in chosen]
     steps += [(2.0, "gametest runall"), (4.0, "gametest clearall")]
@@ -777,22 +807,25 @@ def reported_counts(lines: list[str]) -> dict[str, int]:
     return found
 
 
-def addon_source(root: Path, version: str, verdict: Verdict) -> tuple[list[Path], list[str], dict[str, int]]:
+def addon_source(root: Path, version: str,
+                 verdict: Verdict) -> tuple[list[Path], list[str], dict[str, int], list[str]]:
     """What the add-ons installed for one version declare, counted before the game starts."""
     addons = addons_in(root / "versions" / version / "run" / "addons")
     identifiers: list[str] = []
+    dimensions: list[str] = []
     expected: dict[str, int] = {}
 
     for addon in addons:
         names, read = open_source(addon)
         identifiers += entity_identifiers(names, read)
+        dimensions += dimension_identifiers(names, read)
         for key, value in source_counts(names, read).items():
             expected[key] = expected.get(key, 0) + value
 
     verdict.notes.append(
         f"{len(addons)} add-on(s) in versions/{version}/run/addons" if addons
         else f"no add-on in versions/{version}/run/addons, nothing to test against")
-    return addons, identifiers, expected
+    return addons, identifiers, expected, dimensions
 
 
 def occupied(launch: Launch, verdict: Verdict, version: str) -> bool:
@@ -837,17 +870,37 @@ def pack_gametests(lines: list[str], verdict: Verdict) -> None:
         verdict.fail("a pack's own test failed", name)
 
 
+def pack_dimensions(typed: list[str], lines: list[str], verdict: Verdict) -> None:
+    """Checks that every world a pack declared is one the server built a level out of.
+
+    `execute in <dimension>` is refused by the parser when the dimension is not there, so the line
+    the command would have printed is the whole of the evidence. A game test server cannot answer
+    this: it bakes its dimensions against an empty registry and never sees a data pack's own.
+    """
+    asked = [one.split()[2] for one in typed if one.startswith("execute in ")]
+    if not asked:
+        return
+
+    reached = {line.split(DIMENSION_REACHED + " ")[1].split()[0]
+               for line in lines if DIMENSION_REACHED + " " in line}
+    verdict.notes.append(f"{len(reached)} of {len(asked)} pack-declared dimension(s) are levels")
+    for name in sorted(set(asked) - reached):
+        verdict.fail("a pack's own dimension is not a level",
+                     f"{name} was converted and the server has no world under that name")
+
+
 def check_server(root: Path, version: str, timeout: float, summons: int, verbose: bool) -> Verdict:
     verdict = Verdict(f"{version} server")
     if occupied(SERVER, verdict, version):
         return verdict
 
-    addons, identifiers, expected = addon_source(root, version, verdict)
+    addons, identifiers, expected, dimensions = addon_source(root, version, verdict)
     # A fresh checkout has no `eula.txt`, and a server without one prints a line about it and
     # stops, which reads as a mod that would not load rather than as a file nobody wrote yet.
     takeLocalJoins(root, version)
     free_world_lock(root, version)
-    script = console_script(identifiers, summons)
+    # 1.20.1 writes no worldgen at all, so a dimension a pack declares is reported there instead.
+    script = console_script(identifiers, summons, dimensions if version != "1.20.1" else [])
     lines, log, outcome = play(root, version, SERVER, SERVER.ready, script, timeout, 0.0, verbose)
 
     verdict.notes.append(f"server {outcome}, {len(lines)} lines in {log.relative_to(root)}")
@@ -865,6 +918,7 @@ def check_server(root: Path, version: str, timeout: float, summons: int, verbose
                      f"{attempted} summon commands, {summoned} entities")
 
     pack_gametests(lines, verdict)
+    pack_dimensions([one for _, one in script], lines, verdict)
 
     reported = reported_counts(lines)
     verdict.counts = {"source": expected, "reported by the mod": reported}
@@ -882,7 +936,7 @@ def check_client(root: Path, version: str, timeout: float, hold: float, verbose:
     if occupied(CLIENT, verdict, version):
         return verdict
 
-    addons, _, expected = addon_source(root, version, verdict)
+    addons, _, expected, _ = addon_source(root, version, verdict)
     opened = world(root, version)
     # Told to open a world, the run waits for the world rather than for the drawing: everything the
     # drawing line proves has already happened by then, and a client stopped on a screen asking the
@@ -1106,7 +1160,7 @@ def check_join(root: Path, version: str, timeout: float, hold: float, verbose: b
     if occupied(SERVER, verdict, version) or occupied(CLIENT, verdict, version):
         return verdict
 
-    addons, _, expected = addon_source(root, version, verdict)
+    addons, _, expected, _ = addon_source(root, version, verdict)
     items = [one for addon in addons for one in item_identifiers(*open_source(addon))]
     free_world_lock(root, version)
     port = givePort(root, version)

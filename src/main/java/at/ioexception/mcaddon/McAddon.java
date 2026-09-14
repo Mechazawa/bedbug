@@ -80,6 +80,7 @@ public final class McAddon implements ModInitializer {
         AddonEntities.report().forEach(LOGGER::info);
         AddonParticles.register(AddonPacks.all());
         AddonCreativeTab.register(packs);
+        at.ioexception.mcaddon.server.Dialogues.read(packs);
         Channels.register();
         ServerHooks.register();
     }

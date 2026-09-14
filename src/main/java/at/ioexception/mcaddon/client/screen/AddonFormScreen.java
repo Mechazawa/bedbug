@@ -39,6 +39,9 @@ public final class AddonFormScreen extends Screen {
     /** Room for the button's own border on each side of the text it holds. */
     private static final int TEXT_PADDING = 8;
 
+    /** Between the heading and the first widget, so the two do not read as one block of text. */
+    private static final int HEADING_GAP = 6;
+
     private final int formId;
     private final JsonArray elements;
     private final List<Supplier<JsonElement>> answers = new ArrayList<>();
@@ -93,6 +96,11 @@ public final class AddonFormScreen extends Screen {
         int left = width / 2 - WIDGET_WIDTH / 2;
         int row = Math.max(36, height / 2 - elements.size() * ROW_HEIGHT / 2);
         int buttonIndex = 0;
+
+        // The heading is what a form is called and what an NPC scene names the speaker with, and a
+        // screen draws nothing of its own title.
+        addRenderableWidget(new StringWidget(left, row - LINE_HEIGHT - HEADING_GAP, WIDGET_WIDTH,
+            LINE_HEIGHT, getTitle(), font));
 
         for (JsonElement element : elements) {
             if (!element.isJsonObject()) continue;

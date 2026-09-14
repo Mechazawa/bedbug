@@ -2,7 +2,7 @@
 # Every check this repository has, in the order that fails fastest.
 #
 # The build covers four Minecraft versions, checkstyle, the unit tests and the in-game tests. The
-# seven censuses say how much of the published Bedrock vocabulary the mod answers, which the in-game
+# eight censuses say how much of the published Bedrock vocabulary the mod answers, which the in-game
 # coverage report cannot: that one sees only what a loaded pack asked for. The harness drives real
 # servers and clients, and the scenes open a world with a player in it.
 #
@@ -48,6 +48,7 @@ step "command census" python3 tools/census/commands.py
 step "particle census" python3 tools/census/particles.py
 step "data census" python3 tools/census/data.py
 step "declaration census" python3 tools/census/declaration.py
+step "pack file census" python3 tools/census/packfiles.py
 
 if [ "$quick" -eq 0 ]; then
     # The packs this repository owns, rebuilt so a stale archive cannot pass for a fresh one.

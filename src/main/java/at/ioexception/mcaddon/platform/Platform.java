@@ -2288,6 +2288,66 @@ public final class Platform {
     }
 
     /**
+     * The dimension type a converted dimension stands in, as the version spells one.
+     *
+     * A Bedrock dimension states a band of height and nothing else about the world it makes, so
+     * everything beside `min_y` and `height` is the overworld's own answer. What differs is the
+     * rest of the field list: up to 1.21 a dimension type carries `ultrawarm`, `natural`,
+     * `bed_works`, `respawn_anchor_works`, `piglin_safe`, `has_raids` and an `effects` name, and 26
+     * replaced all seven with environment attributes it reads off the biome and a flag for the
+     * dragon fight.
+     */
+    public static com.google.gson.JsonObject dimensionType(int minimumY, int height) {
+        com.google.gson.JsonObject type = new com.google.gson.JsonObject();
+        type.addProperty("has_skylight", true);
+        type.addProperty("has_ceiling", false);
+        type.addProperty("coordinate_scale", 1.0);
+        type.addProperty("ambient_light", 0.0f);
+        type.addProperty("min_y", minimumY);
+        type.addProperty("height", height);
+        type.addProperty("logical_height", height);
+        type.addProperty("infiniburn", "#minecraft:infiniburn_overworld");
+        type.addProperty("monster_spawn_block_light_limit", 0);
+
+        type.add("monster_spawn_light_level", monsterSpawnLight());
+
+        //? if >=26 {
+        type.addProperty("has_ender_dragon_fight", false);
+        //?} else {
+        /*type.addProperty("ultrawarm", false);
+        type.addProperty("natural", true);
+        type.addProperty("bed_works", true);
+        type.addProperty("respawn_anchor_works", false);
+        type.addProperty("piglin_safe", false);
+        type.addProperty("has_raids", true);
+        type.addProperty("effects", "minecraft:overworld");
+        *///?}
+        return type;
+    }
+
+    /**
+     * The light levels monsters spawn at, which is the overworld's own band of nought to seven.
+     *
+     * It is an int provider, and the two editions of Java write a dispatched value differently: from
+     * 1.21 the chosen type's own fields sit beside the type name, and before that they sit under a
+     * `value` block of their own.
+     */
+    private static com.google.gson.JsonObject monsterSpawnLight() {
+        com.google.gson.JsonObject light = new com.google.gson.JsonObject();
+        light.addProperty("type", "minecraft:uniform");
+        //? if >=1.21 {
+        light.addProperty("min_inclusive", 0);
+        light.addProperty("max_inclusive", 7);
+        //?} else {
+        /*com.google.gson.JsonObject band = new com.google.gson.JsonObject();
+        band.addProperty("min_inclusive", 0);
+        band.addProperty("max_inclusive", 7);
+        light.add("value", band);
+        *///?}
+        return light;
+    }
+
+    /**
      * The particle a biome drops through its air, and how often.
      *
      * Both versions state a particle and a probability. 26 keys the particle under `particle` and
