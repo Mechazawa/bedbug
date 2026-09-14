@@ -356,11 +356,24 @@ permission of its own to grant.
 at 0 is an ink sac, `minecraft:wool` at a sheep's colour index is that colour of wool, and
 `minecraft:bed` and `minecraft:banner` at 0 to 15 are the sixteen of each. Java has every one of
 those under an id of its own, because that is what flattening did, so the number is a lookup into a
-published family rather than a value with nowhere to go. What is missing here is the table: sixteen
-entries per family for the families Bedrock still writes, and, for the colour index, the colour of
-the entity the loot is about. Until it exists the entry naming `minecraft:bed` or `minecraft:wool`
-names an item Java has none of, and the function is counted. The same is why a recipe's `data`
-beside an item, and a result naming one, are read and reported. `minecraft:stacked_by_data` is a
+published family rather than a value with nowhere to go. `DataValues` is that table, forty families
+and their members in the order Mojang's own material states: the block properties in the command
+metadata, the aux-indexed texture arrays in `item_texture.json` and `terrain_texture.json`, and
+Mojang's own recipes, which is what settles that a banner's numbering runs the other way round from
+a dye's. A stated value settles the entry's item as the table is converted, since Java refuses a
+table naming an id it has not got, and a range or a colour index carries the family into the roll,
+where a sheep's own `minecraft:color` picks the fleece. A recipe's `data` beside an item is still
+read and reported, because a recipe is a third reader the table has not reached.
+
+A value with no family, and a family member this version of the game has no item for, are two
+different things: the first leaves the id the pack wrote and is counted, and the second empties that
+one entry rather than costing the whole table, which is what keeps a banner pattern table working on
+the versions before Java made the item. Bedrock's older id spellings are a separate gap with no
+count of its own: a sweep of Mojang's 207 loot tables leaves 31 ids unresolved, `record_13`,
+`muttonRaw`, `speckled_melon`, `golden_rail` and the like, none of them a data value and all of them
+a rename.
+
+`minecraft:stacked_by_data` is a
 different thing: it says whether two stacks of one id but different numbers may merge, and in Java
 two stacks of one id are the same item, so both answers to it describe what already happens.
 
