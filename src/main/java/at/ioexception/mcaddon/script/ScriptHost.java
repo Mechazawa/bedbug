@@ -153,7 +153,7 @@ public final class ScriptHost {
 
         for (Path script : pack.list("scripts", ".js")) {
             try {
-                String relative = pack.root().relativize(script).toString();
+                String relative = pack.relative(script).toString();
                 files.put(root + "/" + relative, Files.readAllBytes(script));
             } catch (IOException error) {
                 McAddon.LOGGER.error("Could not read {} from {}.", script, pack.displayName(), error);

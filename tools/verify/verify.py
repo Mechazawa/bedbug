@@ -276,13 +276,65 @@ def sanitise(value: str) -> str:
 
 
 def open_source(path: Path):
-    """Lists an add-on's files and returns a reader for them, for a directory or an archive."""
+    """Lists an add-on's files as the game loads them, and returns a reader for them."""
     if path.is_dir():
         names = tuple(str(file.relative_to(path).as_posix()) for file in path.rglob("*") if file.is_file())
-        return names, lambda name: (path / name).read_bytes()
 
-    archive = zipfile.ZipFile(path)
-    return tuple(name for name in archive.namelist() if not name.endswith("/")), archive.read
+        def read(name: str) -> bytes:
+            return (path / name).read_bytes()
+    else:
+        archive = zipfile.ZipFile(path)
+        names = tuple(name for name in archive.namelist() if not name.endswith("/"))
+        read = archive.read
+
+    return loaded(names, read), read
+
+
+def subpack_tier(subpack: dict) -> int:
+    """The one to five tier a subpack asks for, whichever of the two spellings it is written in.
+
+    `memory_tier` counts 250 MB of device memory, and Mojang's own table groups those numbers into
+    the five platform tiers, whose lowest members are 0, 12, 18, 24 and 32.
+    `memory_performance_tier` states the tier outright.
+    """
+    stated = subpack.get("memory_performance_tier")
+    if isinstance(stated, int) and stated > 0:
+        return stated
+
+    memory = subpack.get("memory_tier")
+    if not isinstance(memory, int) or memory <= 0:
+        return 0
+    return sum(1 for low in (0, 12, 18, 24, 32) if memory >= low)
+
+
+def loaded(names: tuple[str, ...], read) -> tuple[str, ...]:
+    """The pack's files with its subpacks resolved, which is what the mod converts.
+
+    A pack ships each of its forms under `subpacks/<folder_name>/`, and one of them stands in for
+    the pack's own files of the same path. Counting every form would count one texture several
+    times over and leave this harness expecting output no game would write. The form taken is the
+    one with the highest tier, the last of them where two tie, which is what the mod does.
+    """
+    kept = list(names)
+    for manifest in [name for name in names if name.endswith("manifest.json")]:
+        root = manifest[: -len("manifest.json")]
+        try:
+            subpacks = json.loads(read(manifest)).get("subpacks") or []
+        except (ValueError, UnicodeDecodeError):
+            continue
+        if not isinstance(subpacks, list) or not subpacks:
+            continue
+
+        chosen = None
+        for offered in [one for one in subpacks if isinstance(one, dict)]:
+            if chosen is None or subpack_tier(offered) >= subpack_tier(chosen):
+                chosen = offered
+        folder = f"{root}subpacks/{chosen.get('folder_name')}/" if chosen else None
+        shadowed = {root + name[len(folder):] for name in names if folder and name.startswith(folder)}
+        kept = [name for name in kept
+                if not (name.startswith(f"{root}subpacks/") and not (folder and name.startswith(folder)))
+                and name not in shadowed]
+    return tuple(kept)
 
 
 def texture_set_maps(name: str, body: dict) -> tuple[set[str], bool, bool]:

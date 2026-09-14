@@ -3,6 +3,8 @@ package at.ioexception.mcaddon.gametest;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.convert.ConvertedPack;
 import at.ioexception.mcaddon.entity.AddonEntity;
+import at.ioexception.mcaddon.pack.BedrockPack;
+import at.ioexception.mcaddon.pack.PackSettings;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.registry.AddonItems;
@@ -48,6 +50,9 @@ public final class PackGameTests {
 
     /** The pack's own entity texture, whose top band is written with Bedrock's cut-out alpha. */
     private static final String MARKED_TEXTURE = "textures/entity/sprite";
+
+    /** The body colour the pack's highest subpack paints that texture in, and no other form does. */
+    private static final int BRIGHT_SPRITE_BODY = 0xEB9620;
 
     /**
      * A pack's own entity reaches the world and stays there.
@@ -392,31 +397,75 @@ public final class PackGameTests {
      */
     @GameTest()
     public void aMarkedTexelIsConvertedOpaque(GameTestHelper helper) {
-        ConvertedPack pack = AddonPacks.all().stream()
-            .filter(one -> one.texturePaths().containsKey(MARKED_TEXTURE))
-            .findFirst().orElse(null);
-        if (pack == null) {
+        if (AddonPacks.all().stream().noneMatch(one -> one.texturePaths().containsKey(MARKED_TEXTURE))) {
             helper.succeed();
             return;
         }
 
-        String mapped = pack.texturePaths().get(MARKED_TEXTURE);
-        int colon = mapped.indexOf(':');
-        Path file = pack.root().resolve("assets").resolve(mapped.substring(0, colon))
-            .resolve("textures").resolve(mapped.substring(colon + 1) + ".png");
-
-        BufferedImage image;
-        try {
-            image = ImageIO.read(file.toFile());
-        } catch (IOException error) {
-            image = null;
-        }
+        BufferedImage image = convertedTexture(MARKED_TEXTURE);
         helper.assertTrue(image != null, "The converted " + MARKED_TEXTURE + " could not be read.");
 
         helper.assertTrue(image.getRGB(0, 0) >>> 24 == 0xFF,
             "A texel the pack marked as drawn was converted too faint for Java's cutout to keep it.");
         helper.assertTrue(image.getRGB(image.getWidth() - 1, image.getHeight() - 1) >>> 24 == 0,
             "A texel the pack left empty was converted opaque.");
+        helper.succeed();
+    }
+
+    /**
+     * A pack shipping several forms of itself is loaded as the one its author put highest.
+     *
+     * The synthetic pack paints its sprite three times over, once in the pack itself and once in
+     * each of its two subpacks, and leaves the low one last in the manifest so a reader taking the
+     * last entry rather than the highest tier picks the wrong one. The body colour of the converted
+     * texture is what says which of the three the converter read.
+     */
+    @GameTest()
+    public void aPackIsLoadedAsItsHighestSubpack(GameTestHelper helper) {
+        BedrockPack pack = McAddon.packs().packs().stream()
+            .filter(one -> one.subpackName() != null)
+            .findFirst().orElse(null);
+        if (pack == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.assertTrue("Bright sprite".equals(pack.subpackName()),
+            "The pack was loaded as " + pack.subpackName() + " rather than as its highest subpack.");
+
+        BufferedImage image = convertedTexture(MARKED_TEXTURE);
+        helper.assertTrue(image != null, "The converted " + MARKED_TEXTURE + " could not be read.");
+        helper.assertTrue((image.getRGB(0, 31) & 0xFFFFFF) == BRIGHT_SPRITE_BODY,
+            "The converted sprite was drawn from a form of the pack other than the chosen subpack.");
+        helper.succeed();
+    }
+
+    /**
+     * The settings a pack declares reach the two places that read one.
+     *
+     * Bedrock lets a player move these on a screen beside the pack, so a pack's Molang and its
+     * script both read back whatever they were left at. With no such screen, the value is the
+     * `default` the manifest states, and both readers have to agree on that or a pack sees its
+     * slider through its script and its own default through its models.
+     */
+    @GameTest()
+    public void aPacksOwnSettingsReadBackAtTheirDeclaredValues(GameTestHelper helper) {
+        if (PackSettings.values().isEmpty()) {
+            helper.succeed();
+            return;
+        }
+
+        helper.assertTrue(PackSettings.of("tp:ember_glows").enabled(),
+            "A toggle the pack ships switched on read back switched off.");
+        helper.assertTrue(PackSettings.of("tp:ember_heat").number() == 5.0,
+            "A slider the pack ships at five read back at "
+                + PackSettings.of("tp:ember_heat").number() + ".");
+        helper.assertTrue(PackSettings.of("tp:ember_mood").selected("restless"),
+            "The dropdown answered with an option the pack did not ship it at.");
+        helper.assertTrue(!PackSettings.of("tp:ember_mood").selected("calm"),
+            "The dropdown answered yes to an option it is not set to.");
+        helper.assertTrue(PackSettings.values().get("tp:ember_glows") == Boolean.TRUE,
+            "A script reading the pack settings is answered differently from the pack's own Molang.");
         helper.succeed();
     }
 
@@ -435,5 +484,24 @@ public final class PackGameTests {
             helper.assertTrue(line.contains("minecraft:") || line.contains("tp:") || line.contains(" x"),
                 "A reported gap does not name what was missing: " + line));
         helper.succeed();
+    }
+
+    /** The image a pack's texture was written as, or null where nothing wrote one. */
+    private static BufferedImage convertedTexture(String texture) {
+        ConvertedPack pack = AddonPacks.all().stream()
+            .filter(one -> one.texturePaths().containsKey(texture))
+            .findFirst().orElse(null);
+        if (pack == null) return null;
+
+        String mapped = pack.texturePaths().get(texture);
+        int colon = mapped.indexOf(':');
+        Path file = pack.root().resolve("assets").resolve(mapped.substring(0, colon))
+            .resolve("textures").resolve(mapped.substring(colon + 1) + ".png");
+
+        try {
+            return ImageIO.read(file.toFile());
+        } catch (IOException unreadable) {
+            return null;
+        }
     }
 }

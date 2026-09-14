@@ -204,6 +204,19 @@ server decides what happens; the client draws it.
 - The other modules a pack may import: `@minecraft/math`, `@minecraft/common`, and
   `@minecraft/vanilla-data`, whose tables of vanilla ids are read from this game's own registries so
   they hold what the version you play ships.
+- The several forms of itself a pack ships. A resource pack usually offers its textures at more than
+  one resolution, each under `subpacks/<folder>/`, and Bedrock picks one by how much memory the
+  player's device has. You get the highest tier the pack declares. Mojang's own tier table names a
+  PC at the top tier and at no other, and Java Edition runs nowhere else, so the form a Bedrock
+  player would see on a PC is the form you see here. Files in that folder stand in for the pack's
+  own of the same path and files only it has join the pack, which is what Bedrock does with them.
+  `/mcaddon packs` says which form was loaded.
+- The settings a pack offers. Bedrock puts a pack's sliders, toggles and dropdowns on a screen
+  beside it, and the pack's own Molang and its script read back whatever a player left them at. Java
+  has no such screen, so each one holds the `default` its author declared:
+  `query.get_pack_setting`, `query.is_pack_setting_enabled` and `query.is_pack_setting_selected` are
+  answered with it, and so is `World.getPackSettings`. `/mcaddon packs` also says who wrote a pack,
+  under what licence and where it lives, which is what its manifest's `metadata` states.
 
 `/mcaddon packs` lists what loaded. `/mcaddon entities` and `/mcaddon scripts` list what a pack asked
 for that this mod does not implement yet, which answers "will my pack work" with evidence.
@@ -217,7 +230,8 @@ filter documentation and the Molang query list out of Mojang's `bedrock-samples`
 particle schemas and documentation; `tools/census/data.py` reads the vanilla loot tables, recipes and
 trade tables; `tools/census/model.py` reads every shape the vanilla resource pack's geometries and
 animations are written in; `tools/census/packfiles.py` reads the file kinds Mojang's own pack pair
-ships; and `tools/census/script.py` reads the published `@minecraft/*` type definitions. All of them
+ships; `tools/census/manifest.py` reads the manifest schemas, which describe the one file every pack
+has; and `tools/census/script.py` reads the published `@minecraft/*` type definitions. All of them
 compare what they read against the names this mod acts on:
 
 | Surface | Answered |
@@ -243,6 +257,7 @@ compare what they read against the names this mod acts on:
 | Trade item functions | 80% |
 | Geometry, animation and controller fields | 93% |
 | Pack file kinds | 88% |
+| Manifest fields | 58% |
 | `@minecraft/server` and friends | 100% |
 
 Every name in the remaining share is counted and shown by `/mcaddon entities` and `/mcaddon
@@ -267,8 +282,34 @@ the name with an empty body, no field of any kind and no documentation, and no e
 behaviour pack declares it, so there is nothing in a pack to build the bucket out of. It is counted
 and named.
 
-**Aim assist, pack settings and the device memory tiers** describe a Bedrock client rather than a
+**Aim assist and the device memory tier a client reports** describe a Bedrock client rather than a
 world, and are counted and named the same way.
+
+**The manifest fields that describe a store, a device or a screen.** Every pack has a
+`manifest.json` and this mod reads most of it, so the rest is named through `/mcaddon entities`
+rather than passed over. `has_education_metadata` and the `chemistry` capability mark Minecraft
+Education material, and the Java game has no Education Edition. `base_game_version`,
+`allow_random_seed` and `lock_template_options` belong to a world template, which declares a
+`world_template` module and is refused as neither a resource nor a behaviour pack before any of it
+is read. `platform_locked` keeps a pack from travelling between a player's worlds and servers, and
+there is no entitlement here to lock against. `pack_scope` says whether a pack belongs to one world
+or to the installation, and `addons/` is one directory per instance with no world to attach a pack
+to. `pack_optimization_version` is in Mojang's schema and in Mojang's own field table with no
+description in either, so nothing is stated for a reader to act on. A module's `uuid` and `version`
+identify one half of a pack to Bedrock's content updater, and what names one installation of an
+add-on to another here is the header uuid and the header version. `optional` on a script API
+dependency says a pack runs without that module, which it cannot: a module is linked before any of
+the script runs, so a specifier this mod does not provide ends the whole script whatever the flag
+says. `product_type` decides on Bedrock whether a world keeps its achievements and whether the
+resource pack half is downloaded, and Java locks no advancement behind a pack and installs both
+halves together. The `editorExtension` capability asks for the Bedrock Editor, which Java has not
+got, and `experimental_custom_ui` asks for an HTML interface Bedrock itself dropped in 1.18.10.28.
+A setting's `text`, `min`, `max`, `step` and `options` describe the screen a player would move it
+on: with no such screen nothing moves a setting off its default, so the range it could have moved
+through decides nothing. The `pbr`, `raytraced` and `script_eval` capabilities are answered rather
+than named: the first two ask for physically based rendering, which the texture set conversion
+writes as labPBR sidecars, and the third asks for `eval`, which the script host evaluates with no
+permission of its own to grant.
 
 **An item's data value.** `set_data`, `random_aux_value`, `set_data_from_color_index` and
 `random_block_state` all pick one of the things a Bedrock id stands for by number. Java gave every

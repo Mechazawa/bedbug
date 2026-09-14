@@ -75,7 +75,7 @@ public record LootTableDefinition(String path, JsonObject java) {
         List<LootTableDefinition> tables = new ArrayList<>();
         for (Path file : pack.list("loot_tables", ".json")) {
             try {
-                String relative = pack.root().relativize(file).toString().replace('\\', '/');
+                String relative = pack.relative(file).toString().replace('\\', '/');
                 tables.add(new LootTableDefinition(relative, convert(Json.parseObject(file))));
             } catch (IOException | RuntimeException error) {
                 McAddon.LOGGER.warn("Could not read {}: {}", file.getFileName(), error.toString());

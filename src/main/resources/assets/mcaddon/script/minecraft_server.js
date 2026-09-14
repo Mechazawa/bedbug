@@ -4120,7 +4120,7 @@ export class World {
     }
 
     getPackSettings() {
-        return unsupported("World.getPackSettings", {});
+        return JSON.parse(bridge.worlds.packSettings());
     }
 
     get tickingAreaManager() {

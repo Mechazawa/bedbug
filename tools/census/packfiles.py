@@ -54,6 +54,7 @@ WIDENED = {
         "item_catalog": "metadata/json_schemas/server/crafting_catalog",
         "scripts": "metadata/script_modules/@minecraft",
         "structures": "metadata/json_schemas/client_server/structure",
+        "subpacks": "metadata/json_schemas/client_server/packaging/3.0.0/Subpack.json",
         "texts": "resource_pack/texts",
         "texts/language_names.json": "resource_pack/texts/language_names.json",
         "texts/languages.json": "resource_pack/texts/languages.json",
@@ -61,6 +62,7 @@ WIDENED = {
     "resource": {
         "font": None,
         "materials": None,
+        "subpacks": "metadata/json_schemas/client_server/packaging/3.0.0/Subpack.json",
     },
 }
 

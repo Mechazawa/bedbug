@@ -247,7 +247,7 @@ public final class PackConverter {
 
             Path target = root.resolve("assets").resolve(namespace).resolve("textures");
             for (Path source : pack.list("textures", "")) {
-                String relative = pack.root().relativize(source).toString().replace('\\', '/');
+                String relative = pack.relative(source).toString().replace('\\', '/');
                 String name = source.getFileName().toString().toLowerCase(Locale.ROOT);
                 boolean targa = name.endsWith(".tga");
                 if (!targa && !name.endsWith(".png")) continue;

@@ -20,6 +20,8 @@ still works:
     three particle definitions in the 1.10.0 format, one of them carrying a curve and events
     a client biome naming a sound of the pack's, two of the engine's, a track and a density
     a texture set whose emissive channel has pixels in it
+    two subpacks of the resource pack, each repainting the sprite, so the chosen one is readable
+    the pack settings a manifest declares, at the values the Molang queries read back
     an entity texture with a band written the way Bedrock marks a cut-out texel
     a page of the pack's own glyphs, and the locale list naming the languages it ships
     a function using the commands and selector arguments that need translating
@@ -162,21 +164,35 @@ def lamp_on_normal(x: int, y: int) -> tuple[int, int, int, int]:
     return (128, 128, 255, 255)
 
 
-def sprite_skin(x: int, y: int) -> tuple[int, int, int, int]:
+# The body colour each form of the sprite is painted in, which is what says which of the three the
+# renderer read: the pack's own, the low subpack's, and the high one's.
+SPRITE_BODY = (38, 96, 58, 255)
+PLAIN_SPRITE_BODY = (38, 58, 128, 255)
+BRIGHT_SPRITE_BODY = (235, 150, 32, 255)
+
+
+def sprite_skin(body: tuple[int, int, int, int]):
     """The sprite's skin, with the top four rows written the way Bedrock marks a cut-out texel.
 
     Bedrock's alpha test draws every texel carrying any alpha and drops only the fully transparent
     ones, so Mojang's own entity textures mark whole regions with an alpha of three: the face and
     the bare skin of the vanilla sheep are written that way. Java's cutout shader drops everything
     under a tenth, so the band is what a conversion has to raise for the model to keep it.
+
+    Each of the pack's three forms paints the body in a colour of its own and leaves the marked band
+    and the empty corner where they are, so the subpack that won is readable off one texel and the
+    cut-out assertion holds whichever form was loaded.
     """
-    if x >= 32 or y >= 32:
-        return TRANSPARENT
-    if y < 4:
-        return (214, 96, 120, MARKED)
-    if disc(x % 16, y % 16, 7.5, 6.0):
-        return (96, 214, 120, 255)
-    return (38, 96, 58, 255)
+    def paint(x: int, y: int) -> tuple[int, int, int, int]:
+        if x >= 32 or y >= 32:
+            return TRANSPARENT
+        if y < 4:
+            return (214, 96, 120, MARKED)
+        if disc(x % 16, y % 16, 7.5, 6.0):
+            return (96, 214, 120, 255)
+        return body
+
+    return paint
 
 
 def ember_skin(x: int, y: int) -> tuple[int, int, int, int]:
@@ -229,7 +245,9 @@ TEXTURES = (
     ("textures/blocks/lamp_on.png", 16, lamp_on),
     ("textures/blocks/lamp_on_mer.png", 16, lamp_on_mer),
     ("textures/blocks/lamp_on_normal.png", 16, lamp_on_normal),
-    ("textures/entity/sprite.png", 64, sprite_skin),
+    ("textures/entity/sprite.png", 64, sprite_skin(SPRITE_BODY)),
+    ("subpacks/plain/textures/entity/sprite.png", 64, sprite_skin(PLAIN_SPRITE_BODY)),
+    ("subpacks/bright/textures/entity/sprite.png", 64, sprite_skin(BRIGHT_SPRITE_BODY)),
     ("textures/entity/ember.png", 64, ember_skin),
     ("textures/particle/particles.png", 128, particle_atlas),
 )

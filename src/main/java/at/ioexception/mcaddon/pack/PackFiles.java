@@ -28,7 +28,7 @@ public final class PackFiles {
         "manifest.json", "pack_icon.png", "animations", "animation_controllers", "biomes", "blocks",
         "cameras", "dialogue", "dimensions", "entities", "feature_rules", "features", "functions",
         "item_catalog", "items", "loot_tables", "recipes", "scripts", "shapes", "spawn_rules",
-        "structures", "texts", "trading",
+        "structures", "subpacks", "texts", "trading",
         "texts/language_names.json", "texts/languages.json");
 
     /** The behaviour pack paths a reader opens. */
@@ -36,14 +36,15 @@ public final class PackFiles {
         "manifest.json", "pack_icon.png", "animation_controllers", "animations", "biomes", "blocks",
         "dialogue", "dimensions", "entities", "feature_rules", "features", "functions",
         "item_catalog", "items", "loot_tables", "recipes", "scripts", "shapes", "spawn_rules",
-        "structures", "texts", "trading", "texts/language_names.json", "texts/languages.json");
+        "structures", "subpacks", "texts", "trading", "texts/language_names.json",
+        "texts/languages.json");
 
     /** Everything Bedrock lets a resource pack ship. */
     private static final Set<String> RESOURCE_DEFINED = Set.of(
         "manifest.json", "pack_icon.png", "animations", "animation_controllers", "atmospherics",
         "attachables", "biomes", "biomes_client.json", "blocks.json", "color_grading", "entity",
         "fogs", "font", "lighting", "materials", "models", "particles", "render_controllers",
-        "sounds", "sounds.json", "texts", "textures", "ui", "water",
+        "sounds", "sounds.json", "subpacks", "texts", "textures", "ui", "water",
         "sounds/music_definitions.json", "sounds/sound_definitions.json",
         "textures/flipbook_textures.json", "textures/item_texture.json",
         "textures/terrain_texture.json", "textures/texture_list.json",
@@ -53,7 +54,8 @@ public final class PackFiles {
     private static final Set<String> RESOURCE_READ = Set.of(
         "manifest.json", "pack_icon.png", "animations", "animation_controllers", "attachables",
         "biomes", "biomes_client.json", "blocks.json", "entity", "fogs", "font", "materials",
-        "models", "particles", "render_controllers", "sounds", "sounds.json", "texts", "textures",
+        "models", "particles", "render_controllers", "sounds", "sounds.json", "subpacks", "texts",
+        "textures",
         "sounds/music_definitions.json", "sounds/sound_definitions.json",
         "textures/flipbook_textures.json", "textures/item_texture.json",
         "textures/terrain_texture.json",

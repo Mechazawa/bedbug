@@ -265,6 +265,14 @@ These are the checks it runs, and what each one catches:
   buttons and one written in rawtext rather than in plain strings, which is the pair
   `DialogueSceneTest` asserts on and the `dialogue` scene photographs.
 
+  The resource pack ships two subpacks of itself, each repainting the sprite in a colour of its own
+  and the pack itself painting it in a third, with the higher tier written first so a reader taking
+  the last entry rather than the highest tier picks the wrong one. The behaviour pack declares one
+  setting of each kind, which is what the three `query.*_pack_setting*` answers and
+  `World.getPackSettings` are asserted against. Both manifests also state the fields nothing here
+  acts on, a capability among them, so a run says the reporting half of the manifest reader still
+  works.
+
   The book table is the one a game test rolls: it holds a single entry carrying
   `enchant_book_for_trading` and no condition, so the loot function type this mod registers is
   exercised from the converted table through the codec to the enchanted book that comes back.
@@ -862,6 +870,39 @@ clips staying at a falling weight while the state it moved to comes up.
   reported to the author; a kind in neither is a directory the mod passes over without a word. The
   run also names any path declared as read whose own literal appears in no other source file, which
   is a coverage claim with no reader behind it.
+- **`tools/census/manifest.py`** measures the one file every pack has and no other census looks
+  inside. `packfiles.py` counts `manifest.json` as a kind that is opened and says nothing about what
+  is in it.
+
+  ```bash
+  python3 tools/census/manifest.py            # the table, then what is reported and what is silent
+  python3 tools/census/manifest.py --strict   # exits non-zero while a manifest field goes unnamed
+  ```
+
+  The published side is Mojang's own schema set for the manifest, `Manifest.json` and the documents
+  it points at with `$ref`, under `metadata/json_schemas/client_server/packaging/`. A field is named
+  by the level carrying it, so `header.name` and `subpack.name` are two names rather than one. Both
+  dependency shapes are one level and the four setting shapes are another, because a pack writes
+  each pair in one array and the reader tells them apart by the fields themselves.
+
+  The mod's side is `pack/PackManifest.java`. What it **reads** is found by the object each call is
+  given, `Json.text(header, "name", ...)` and `header.get("name")` being the two shapes every read
+  there is written in, so the census cannot credit `header.description` for a module's. What it
+  **reports** is the `<LEVEL>_DROPPED` declarations, which is what `PackManifest.report` names
+  against the pack that stated one, and `SUBPACK_LEGACY` is the older spelling read on purpose.
+
+  **The silent column has to stay at zero here as well**, for the same reason it does in
+  `packfiles.py`. Two more checks end the run. A field named here that the schemas do not carry is
+  stale, unless a `LEGACY` declaration claims it. And a record component nothing outside the reader
+  ever asks for is a field parsed and then ignored, which is as silent as one never parsed; string
+  literals are blanked before that search so a field name spelt in the reader cannot stand in for
+  its value being used.
+
+  The count behind each dropped field has two halves. **Vanilla** is Mojang's own pack pair, which
+  writes a thin manifest and says little. **Installed** is every manifest in the add-ons under
+  `versions/*/run/addons/`, one copy of each, which is where a real pack's habits show: a worktree
+  no game has run in has none of those directories, counts nothing and still passes, and `--addons`
+  points the count at a checkout that has them.
 - **`tools/census/declaration.py`** measures the one thing a count of names cannot: *where* a pack
   declares a component, against where the mod reads it from. Every other census here is satisfied by
   the name being present on both sides, so a component read off the top level of a definition while
@@ -972,6 +1013,7 @@ tools/census/commands.py     Coverage of Bedrock's published command dialect
 tools/census/particles.py    Coverage of Bedrock's published particle format
 tools/census/data.py         The same, for loot tables, recipes and trade tables
 tools/census/packfiles.py    Coverage of the file kinds a pack may ship, against the ones read
+tools/census/manifest.py     Coverage of the fields a manifest may carry, against the ones read
 tools/census/declaration.py  Where a pack declares a component, against where the mod reads it
 tools/checkall.sh            Every check, in the order that fails fastest
 tools/census/script.py       How much of the published script API this mod offers
