@@ -2138,36 +2138,72 @@ public final class Platform {
     /**
      * The colours a converted biome is drawn with, as the version writes them.
      *
-     * Up to 1.21 a biome states its own fog, sky and water fog beside the water colour, and all four
-     * are required. 26 moved everything but the water colour and the two tints onto the dimension,
-     * where one set answers for every biome in it, so a sky colour a pack wrote for one biome has
-     * nowhere to go and is named instead.
+     * Up to 1.21 a biome states its own fog, sky and water fog beside the water colour, and all
+     * four are required. 26 left the water colour and the tints in `effects` and moved the rest
+     * onto environment attributes, which a biome contributes a layer of, and which carry the two
+     * fog distances as well.
      */
-    public static void biomeColours(com.google.gson.JsonObject biome, int water, int sky, int grass,
-        int foliage, int dryFoliage) {
+    public static void biomeColours(com.google.gson.JsonObject biome,
+        at.ioexception.mcaddon.bedrock.ClientBiomeDefinition colours) {
+        at.ioexception.mcaddon.bedrock.FogDefinition fog = colours.fog();
+
         com.google.gson.JsonObject effects = new com.google.gson.JsonObject();
-        effects.addProperty("water_color", water);
-        if (grass >= 0) effects.addProperty("grass_color", grass);
-        if (foliage >= 0) effects.addProperty("foliage_color", foliage);
+        effects.addProperty("water_color", colours.water() >= 0 ? colours.water()
+            : at.ioexception.mcaddon.bedrock.ClientBiomeDefinition.DEFAULT_WATER);
+        if (colours.grass() >= 0) effects.addProperty("grass_color", colours.grass());
+        if (colours.foliage() >= 0) effects.addProperty("foliage_color", colours.foliage());
 
         //? if >=26 {
-        if (dryFoliage >= 0) effects.addProperty("dry_foliage_color", dryFoliage);
-        if (sky >= 0) {
-            at.ioexception.mcaddon.registry.AddonEntities
-                .unsupported("client biome minecraft:sky_color");
+        if (colours.dryFoliage() >= 0) {
+            effects.addProperty("dry_foliage_color", colours.dryFoliage());
         }
+
+        com.google.gson.JsonObject attributes = new com.google.gson.JsonObject();
+        if (colours.sky() >= 0) attributes.addProperty("minecraft:visual/sky_color", colours.sky());
+        attribute(attributes, "fog", fog.air());
+        attribute(attributes, "water_fog", fog.water());
+        if (attributes.size() > 0) biome.add("attributes", attributes);
         //?} else {
-        /*effects.addProperty("sky_color", sky >= 0 ? sky
+        /*effects.addProperty("sky_color", colours.sky() >= 0 ? colours.sky()
             : at.ioexception.mcaddon.convert.Worldgen.skyColour(
                 biome.get("temperature").getAsFloat()));
-        effects.addProperty("fog_color", 12638463);
-        effects.addProperty("water_fog_color", 329011);
-        if (dryFoliage >= 0) {
+        effects.addProperty("fog_color", fog.air().colour() >= 0 ? fog.air().colour() : 12638463);
+        effects.addProperty("water_fog_color",
+            fog.water().colour() >= 0 ? fog.water().colour() : 329011);
+        if (colours.dryFoliage() >= 0) {
             at.ioexception.mcaddon.registry.AddonEntities
                 .unsupported("client biome minecraft:dry_foliage_color");
+        }
+        if (fog.air().start() >= 0 || fog.air().end() >= 0
+            || fog.water().start() >= 0 || fog.water().end() >= 0) {
+            at.ioexception.mcaddon.registry.AddonEntities
+                .unsupported("fog distance (needs 26 or newer)");
         }
         *///?}
         biome.add("effects", effects);
     }
+
+    //? if >=26 {
+    /**
+     * One camera location as the environment attributes a biome layer states it with.
+     *
+     * An attribute written as a bare value replaces whatever the dimension beneath it holds, which
+     * is what a Bedrock fog does to the location it names.
+     */
+    private static void attribute(com.google.gson.JsonObject attributes, String name,
+        at.ioexception.mcaddon.bedrock.FogDefinition.Location location) {
+        if (!location.painted()) return;
+
+        if (location.colour() >= 0) {
+            attributes.addProperty("minecraft:visual/" + name + "_color", location.colour());
+        }
+        if (location.start() >= 0) {
+            attributes.addProperty("minecraft:visual/" + name + "_start_distance", location.start());
+        }
+        if (location.end() >= 0) {
+            attributes.addProperty("minecraft:visual/" + name + "_end_distance", location.end());
+        }
+    }
+    //?}
 
 }

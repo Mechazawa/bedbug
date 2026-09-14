@@ -65,6 +65,10 @@ STAGE = (
     "gamemode creative @a",
     f"fill -60 {FLOOR_Y} -115 -20 {FLOOR_Y} -80 minecraft:white_concrete",
     f"fill -60 {FLOOR_Y + 1} -115 -20 {FLOOR_Y + 12} -80 minecraft:air",
+    # The fog scene paints the stage with a pack's own biome and the world keeps it, so every scene
+    # starts by putting it back: a picture is only worth comparing against the last one when the
+    # light and the sky in it are the same.
+    f"fillbiome -60 {FLOOR_Y} -115 -20 {FLOOR_Y + 12} -80 minecraft:plains",
     f"tp @a {CAMERA_X} {FLOOR_Y + 4} {ROW_Z}",
     "time set noon",
     "weather clear",
@@ -208,7 +212,46 @@ def scenes(version: str) -> list[dict]:
             ],
             ["PLAYER-READY"],
         ),
+        fog(version),
     ]
+
+
+# The pool the fog scene floods half the stage with, inside the walls the stage clears each time.
+POOL_TOP = FLOOR_Y + 3
+
+
+def fog(version: str) -> dict:
+    """A pool in a pack's own biome, with the horizon behind it.
+
+    Colour is the one thing no log line reports on, and this frame carries two of a pack's at once:
+    the air fog its `fogs/` file paints the distance with, and the surface colour its biome tints
+    the pool with. Both come out of the resource pack while the biome itself comes out of the
+    behaviour pack, so a picture here says the two halves were read together.
+
+    The pool is filled inside the stage, which every scene builds again over the top of it.
+
+    1.20.1 registers no biome a pack declares, so naming one in `fillbiome` would not parse and
+    would take the whole function with it. The pool is filled there all the same, and what it shows
+    is what the game paints when a pack's own colours have nowhere to go.
+    """
+    painted = declared(version, "biomes", "minecraft:biome") if version != "1.20.1" else []
+    pool = f"{CAMERA_X} {FLOOR_Y + 2} -100"
+
+    filling = [f"fillbiome -60 {FLOOR_Y} -115 -20 {FLOOR_Y + 12} -80 {painted[0]}"] if painted else []
+    return scene(
+        "fog",
+        ["kill @e[type=!player]"] + filling + [
+            f"fill -58 {FLOOR_Y + 1} -113 -22 {POOL_TOP} -82 minecraft:water",
+            # Standing at the near end of the pool looking along it, so the frame holds the water in
+            # front and the open distance the fog is painted over behind it.
+            f"tp @a {CAMERA_X} {POOL_TOP + 2} {ROW_Z} facing {CAMERA_X} {FLOOR_Y + 1} -70",
+            f"say FLOODED {len(painted)} biomes",
+        ],
+        [f"FLOODED {len(painted)} biomes", "COUNTED water"]
+        + (["COUNTED biome"] if painted else []),
+        [f"execute if block {pool} minecraft:water run say COUNTED water"]
+        + ([f"execute if biome {pool} {painted[0]} run say COUNTED biome"] if painted else []),
+    )
 
 
 def packFormat(version: str) -> int:
