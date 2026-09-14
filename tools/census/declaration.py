@@ -24,7 +24,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from components import DEFAULT_SAMPLES, JAVA, lenient, literal_set, text  # noqa: E402
+from components import (DEFAULT_SAMPLES, JAVA, lenient, literal_set, text,  # noqa: E402
+                        unbacked_claims)
 
 # How a reader reaches a component, widest first. The order is the ranking: a component read only
 # from the top level cannot see a group, and one read only as a group arrives cannot see the top.
@@ -36,7 +37,7 @@ ELSEWHERE = "elsewhere"
 
 # What each call in the source means about the reach of the read it performs.
 REACH = (
-    (LIVE, ("declaresNow(", "liveComponent(")),
+    (LIVE, ("declaresNow(", "liveComponent(", "liveText(")),
     (ANY_GROUP, ("componentBody(",)),
     (DECLARED, ("declares(", "components().get(", "components().containsKey(",
                 "number(definition,", "text(", "anyDeclares(", "anyoneDeclares(")),
@@ -46,15 +47,17 @@ REACH = (
 # goal on writes it into a group and Java has to build the whole list before the entity exists.
 GOALS = ("minecraft:behavior.", "minecraft:memory_behavior.", "minecraft:annotation.")
 
-# A name in this set is a component Java does for every mob anyway, so no reader names it and the
-# question of where it was declared does not arise.
-FREE = {
-    "minecraft:physics", "minecraft:pushable", "minecraft:pushable_by_entity",
-    "minecraft:pushable_by_block", "minecraft:push_through", "minecraft:is_collidable",
-    "minecraft:conditional_bandwidth_optimization", "minecraft:tick_world",
-    "minecraft:free_camera_controlled", "minecraft:input_ground_controlled",
-    "minecraft:not_pickable_from_inside", "minecraft:transient",
-}
+
+def free():
+    """The implemented components no reader names, which is where a declaration cannot be read wrong.
+
+    Each of these is a component Java does for every mob anyway, which is why the implemented
+    declaration carries it and why nothing reads it: a pack saying its entity has physics or can be
+    named is describing what a Java mob does regardless. There is no read to widen, so where the
+    pack wrote it decides nothing. `components.py` already works the set out from the source, and
+    its own docblock is where the audit of each one lives.
+    """
+    return unbacked_claims().get("entity", set())
 
 
 def declarations(samples):
@@ -119,6 +122,7 @@ def main():
         return 0
 
     implemented = literal_set(JAVA / "registry/AddonEntities.java", "IMPLEMENTED = Set.of")
+    unread = free()
     top, grouped = declarations(arguments.samples)
 
     # The implemented declaration is a list of names rather than a read of any of them, so it is
@@ -134,7 +138,7 @@ def main():
 
     gaps = []
     for name in sorted(implemented):
-        if name in FREE:
+        if name in unread:
             continue
 
         in_groups = grouped.get(name, 0)
@@ -162,8 +166,13 @@ def main():
         print("`declared` is a read of the definition rather than of the entity, so a pack switching")
         print("the component on the way Bedrock says to is told it is off. `elsewhere` is a name no")
         print("recognised read names, which is either a reader reaching it some other way or nothing")
-        print("reading it at all; the column ranks the work rather than deciding it. A component read")
-        print("as the entity type is built, such as its size, can only be read that way.")
+        print("reading it at all; the column ranks the work rather than deciding it.")
+        print()
+        print("A component whose value the entity type was built from is still on this list, because")
+        print("the type being frozen bounds where the value may be applied rather than whether it")
+        print("can move: Java holds a size, an attribute and a navigator on the entity as well as on")
+        print("its type, and a group changing one reaches the entity through whichever of those the")
+        print("value belongs to. A name with no read at all is left off, there being nothing to widen.")
 
     return 1 if arguments.strict and gaps else 0
 

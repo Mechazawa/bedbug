@@ -150,8 +150,10 @@ public final class EntityEvents {
         }
         // A marker is a fact about the whole entity rather than about the group that brought it, and
         // a group leaving takes its markers with it, so they are worked out again over the new set.
-        // The age count is built first, because whether the entity is young is one of the flags.
+        // The age count is built first, because whether the entity is young is one of the flags and
+        // because the size the entity is drawn at is read through it.
         addon.refreshAge();
+        addon.refreshComponents();
         addon.publishMarkers();
     }
 
