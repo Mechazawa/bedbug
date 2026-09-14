@@ -30,9 +30,20 @@ export class BlockBoundingBox {
 }
 
 export class ArgumentOutOfBoundsError extends Error {
+    constructor(value, minValue, maxValue, index) {
+        super("A value of " + value + " is outside " + minValue + " to " + maxValue + ".");
+        this.value = value;
+        this.minValue = minValue;
+        this.maxValue = maxValue;
+        this.index = index;
+    }
 }
 
 export class ContainerSizeOutOfBoundsError extends Error {
+    constructor(maxValue) {
+        super("A container holds at most " + maxValue + " slots.");
+        this.maxValue = maxValue;
+    }
 }
 
 export class EngineError extends Error {
@@ -47,6 +58,12 @@ export class InvalidArgumentError extends Error {
 }
 
 export class PropertyOutOfBoundsError extends Error {
+    constructor(value, minValue, maxValue) {
+        super("A property value of " + value + " is outside " + minValue + " to " + maxValue + ".");
+        this.value = value;
+        this.minValue = minValue;
+        this.maxValue = maxValue;
+    }
 }
 
 export class RuntimeConditionError extends Error {

@@ -6,9 +6,11 @@ import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.script.surface.Blocks;
 import at.ioexception.mcaddon.script.surface.Containers;
 import at.ioexception.mcaddon.script.surface.EntityMembers;
+import at.ioexception.mcaddon.script.surface.GameTests;
 import at.ioexception.mcaddon.script.surface.Items;
 import at.ioexception.mcaddon.script.surface.Players;
 import at.ioexception.mcaddon.script.surface.Registries;
+import at.ioexception.mcaddon.script.surface.TickingAreas;
 import at.ioexception.mcaddon.script.surface.Worlds;
 import at.ioexception.mcaddon.server.DamageSources;
 import at.ioexception.mcaddon.state.AddonState;
@@ -37,6 +39,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
@@ -99,6 +102,12 @@ public final class ScriptBridge {
     @HostAccess.Export
     public final Worlds worlds;
 
+    @HostAccess.Export
+    public final GameTests gametests;
+
+    @HostAccess.Export
+    public final TickingAreas tickingAreas;
+
     ScriptBridge(MinecraftServer server, AddonState state, ScriptCoverage coverage) {
         this.server = server;
         this.state = state;
@@ -110,6 +119,8 @@ public final class ScriptBridge {
         this.registries = new Registries(server, coverage);
         this.entityMembers = new EntityMembers(server, coverage, state);
         this.worlds = new Worlds(server, coverage);
+        this.gametests = new GameTests(server, coverage);
+        this.tickingAreas = new TickingAreas(server, coverage);
     }
 
     void beginTick(long budgetNanos) {
@@ -141,6 +152,21 @@ public final class ScriptBridge {
     @HostAccess.Export
     public String translate(String key) {
         return Component.translatable(key).getString();
+    }
+
+    /**
+     * The `MemoryTier` band this server sits in, measured from the heap the JVM was given.
+     *
+     * Bedrock reads the device's own memory; the nearest thing a Java server knows about itself is
+     * how much it is allowed to allocate, so the bands are drawn over that.
+     */
+    @HostAccess.Export
+    public int memoryTier() {
+        long megabytes = Runtime.getRuntime().maxMemory() / (1024L * 1024L);
+        if (megabytes < 1536) return 0;
+        if (megabytes < 3072) return 1;
+        if (megabytes < 6144) return 2;
+        return megabytes < 12288 ? 3 : 4;
     }
 
     // World
@@ -191,25 +217,15 @@ public final class ScriptBridge {
     @HostAccess.Export
     public String gameRule(String name) {
         String value = Platform.gameRule(server, name);
-        if (value == null) unsupported("World.gameRules." + name);
+        if (value == null) unsupported("GameRules." + name);
         return value;
     }
 
-    /**
-     * Written through the command rather than the rule map.
-     *
-     * `/gamerule` takes the same name on all three versions where the typed keys do not, and setting
-     * one is rare enough that going through the parser costs nothing.
-     */
     @HostAccess.Export
     public void setGameRule(String name, Value value) {
-        if (Platform.gameRule(server, name) == null) {
-            unsupported("World.gameRules." + name + " (write)");
-            return;
+        if (!Platform.setGameRule(server, name, String.valueOf(value))) {
+            unsupported("GameRules." + name + " (write)");
         }
-        // Bedrock capitalises the daylight rule differently; the rest share their spelling.
-        String rule = name.equals("doDayLightCycle") ? "doDaylightCycle" : name;
-        run(server.createCommandSourceStack(), "gamerule " + rule + " " + value);
     }
 
     @HostAccess.Export
@@ -265,8 +281,17 @@ public final class ScriptBridge {
         return entity != null && entity.isAlive();
     }
 
+    /**
+     * Whether an id names somebody playing, which decides the class a script is handed.
+     *
+     * The player list is asked first and answers for anybody connected, however far through joining
+     * they are. Searching the levels alone would say no for the moment between a player connecting
+     * and the level indexing them, and a script told `Entity` then has no player members at all.
+     */
     @HostAccess.Export
     public boolean entityIsPlayer(String id) {
+        UUID uuid = uuid(id);
+        if (uuid != null && server.getPlayerList().getPlayer(uuid) != null) return true;
         return entity(id) instanceof ServerPlayer;
     }
 
@@ -535,6 +560,59 @@ public final class ScriptBridge {
     }
 
     /**
+     * The store one block keeps of its own, or null where the block was given none.
+     *
+     * `minecraft:block_entity` is what asks for the store, so a pack reading from a block without
+     * that component is answered the way every other unimplemented member is.
+     */
+    private String blockStore(String dimension, int x, int y, int z) {
+        ServerLevel level = level(dimension);
+        if (level == null) return null;
+
+        return level.getBlockState(new BlockPos(x, y, z)).getBlock()
+            instanceof at.ioexception.mcaddon.block.AddonBlock addon && addon.holdsState()
+            ? AddonState.blockKey(dimension, x, y, z) : null;
+    }
+
+    @HostAccess.Export
+    public Object blockDynamicProperty(String dimension, int x, int y, int z, String name) {
+        String store = blockStore(dimension, x, y, z);
+        if (store == null) {
+            coverage.unsupported("Block.getDynamicProperty");
+            return null;
+        }
+        return state.blockProperty(store, name);
+    }
+
+    @HostAccess.Export
+    public void setBlockDynamicProperty(String dimension, int x, int y, int z, String name, Value value) {
+        String store = blockStore(dimension, x, y, z);
+        if (store == null) {
+            coverage.unsupported("Block.setDynamicProperty");
+            return;
+        }
+        state.setBlockProperty(store, name, plain(value));
+    }
+
+    @HostAccess.Export
+    public String[] blockDynamicPropertyIds(String dimension, int x, int y, int z) {
+        String store = blockStore(dimension, x, y, z);
+        return store == null ? new String[0]
+            : state.blockPropertyNames(store).toArray(String[]::new);
+    }
+
+    /** Measured the way the world's own count is, so the two numbers a pack compares mean the same. */
+    @HostAccess.Export
+    public int blockDynamicPropertyBytes(String dimension, int x, int y, int z) {
+        String store = blockStore(dimension, x, y, z);
+        if (store == null) return 0;
+
+        return state.blockPropertyNames(store).stream()
+            .mapToInt(name -> name.length() + String.valueOf(state.blockProperty(store, name)).length())
+            .sum();
+    }
+
+    /**
      * Starts one of the pack's animations on an entity, for everyone watching it.
      *
      * Animations run on the client, so this is a message rather than a change to anything the server
@@ -558,7 +636,11 @@ public final class ScriptBridge {
         Entity entity = entity(id);
         if (entity == null) return false;
         return switch (component) {
-            case "minecraft:health", "minecraft:equippable" -> entity instanceof LivingEntity;
+            case "minecraft:health", "minecraft:equippable", "minecraft:movement" ->
+                entity instanceof LivingEntity;
+            case "minecraft:player.hunger", "minecraft:player.saturation" ->
+                entity instanceof Player;
+            case "minecraft:onfire" -> entity.isOnFire();
             case "minecraft:riding" -> entity.isPassenger();
             case "minecraft:rideable" -> !entity.getPassengers().isEmpty();
             case "minecraft:type_family" -> true;
@@ -572,7 +654,9 @@ public final class ScriptBridge {
     public String[] entityComponents(String id) {
         List<String> present = new ArrayList<>();
         for (String component : List.of("minecraft:health", "minecraft:equippable", "minecraft:riding",
-            "minecraft:rideable", "minecraft:type_family", "minecraft:is_baby", "minecraft:item")) {
+            "minecraft:rideable", "minecraft:type_family", "minecraft:is_baby", "minecraft:item",
+            "minecraft:movement", "minecraft:onfire", "minecraft:player.hunger",
+            "minecraft:player.saturation")) {
             if (entityHasComponent(id, component)) present.add(component);
         }
         return present.toArray(String[]::new);
@@ -1005,10 +1089,31 @@ public final class ScriptBridge {
             .orElse(new int[] {0, 0, 0});
     }
 
+    /** Every structure the world holds, whether a data pack shipped it or a script saved it. */
+    @HostAccess.Export
+    public String[] structureIds() {
+        return server.getStructureManager().listTemplates().map(Identifier::toString).toArray(String[]::new);
+    }
+
+    @HostAccess.Export
+    public boolean structureExists(String structure) {
+        Identifier id = structure == null ? null : Identifier.tryParse(structure);
+        return id != null && server.getStructureManager().get(id).isPresent();
+    }
+
+    /** Writes a structure the world was holding in memory out to disk, under the id it has. */
+    @HostAccess.Export
+    public boolean saveStructureToWorld(String structure) {
+        Identifier id = structure == null ? null : Identifier.tryParse(structure);
+        return id != null && server.getStructureManager().save(id);
+    }
+
+    /** False when the id named nothing, which is the answer Bedrock gives for a delete that missed. */
     @HostAccess.Export
     public boolean deleteStructure(String structure) {
-        unsupported("StructureManager.delete");
-        return false;
+        if (!structureExists(structure)) return false;
+        server.getStructureManager().remove(Identifier.tryParse(structure));
+        return true;
     }
 
     /**
@@ -1018,12 +1123,7 @@ public final class ScriptBridge {
      */
     @HostAccess.Export
     public void setDisplaySlot(String slot, String objective) {
-        String java = switch (slot == null ? "" : slot.toLowerCase(Locale.ROOT)) {
-            case "list" -> "list";
-            case "belowname" -> "below_name";
-            case "sidebar" -> "sidebar";
-            default -> null;
-        };
+        String java = javaDisplaySlot(slot);
         if (java == null) {
             unsupported("Scoreboard display slot " + slot);
             return;
@@ -1031,6 +1131,39 @@ public final class ScriptBridge {
         run(server.createCommandSourceStack(), objective == null || objective.isBlank()
             ? "scoreboard objectives setdisplay " + java
             : "scoreboard objectives setdisplay " + java + " " + objective);
+    }
+
+    /** The objective a slot currently shows, or null when the slot names nothing or is empty. */
+    @HostAccess.Export
+    public String objectiveAtDisplaySlot(String slot) {
+        String java = javaDisplaySlot(slot);
+        if (java == null) {
+            unsupported("Scoreboard display slot " + slot);
+            return null;
+        }
+        Objective shown = displayedObjective(java);
+        return shown == null ? null : shown.getName();
+    }
+
+    /** A display slot became an enum of its own in 1.21; before that it was an index. */
+    private Objective displayedObjective(String java) {
+        //? if >=1.21 {
+        net.minecraft.world.scores.DisplaySlot slot =
+            net.minecraft.world.scores.DisplaySlot.CODEC.byName(java);
+        return slot == null ? null : server.getScoreboard().getDisplayObjective(slot);
+        //?} else {
+        /*int slot = net.minecraft.world.scores.Scoreboard.getDisplaySlotByName(java);
+        return slot < 0 ? null : server.getScoreboard().getDisplayObjective(slot);
+        *///?}
+    }
+
+    private static String javaDisplaySlot(String slot) {
+        return switch (slot == null ? "" : slot.toLowerCase(Locale.ROOT)) {
+            case "list" -> "list";
+            case "belowname" -> "below_name";
+            case "sidebar" -> "sidebar";
+            default -> null;
+        };
     }
 
     private static String javaRotation(String bedrock) {
@@ -1152,12 +1285,31 @@ public final class ScriptBridge {
      */
     private int run(CommandSourceStack source, String command) {
         String trimmed = command.startsWith("/") ? command.substring(1) : command;
-        try {
-            return server.getCommands().getDispatcher().execute(trimmed, source.withSuppressedOutput());
-        } catch (CommandSyntaxException error) {
-            coverage.failedCommand(trimmed, error.getMessage());
+        CommandSourceStack quiet = source.withSuppressedOutput();
+
+        // Brigadier raises the same kind of failure for a command it cannot read and one that read
+        // fine and then declined. Only the first says this mod is missing something, so the two are
+        // counted apart: a selector matching nothing is the game answering, not a gap.
+        com.mojang.brigadier.ParseResults<CommandSourceStack> parsed =
+            server.getCommands().getDispatcher().parse(trimmed, quiet);
+        if (!parsed.getExceptions().isEmpty() || parsed.getReader().canRead()) {
+            coverage.failedCommand(trimmed, unreadable(parsed));
             return 0;
         }
+
+        try {
+            return server.getCommands().getDispatcher().execute(parsed);
+        } catch (CommandSyntaxException declined) {
+            coverage.refusedCommand(trimmed, declined.getMessage());
+            return 0;
+        }
+    }
+
+    /** What Brigadier objected to, or where it stopped reading when it said nothing. */
+    private static String unreadable(com.mojang.brigadier.ParseResults<CommandSourceStack> parsed) {
+        return parsed.getExceptions().values().stream().findFirst()
+            .map(CommandSyntaxException::getMessage)
+            .orElseGet(() -> "unread from position " + parsed.getReader().getCursor());
     }
 
     private ItemStack stack(String itemId, int amount) {

@@ -11,12 +11,20 @@ still works:
 
     an item icon in each of the three shapes a pack may write it in
     a block with states and permutations, drawn with its own geometry
-    a shaped and a shapeless recipe
+    a block and an item declaring what only a mixin answers, each with one form that is reported
+    a recipe of each of the seven kinds that convert, and the tags deciding what each becomes
+    a named voxel shape, and the block that culls its faces against it
+    a loot table and a trade table, each using every function and condition that converts
     two entities, one spawn egg naming a texture and one giving two colours
     an animation firing a sound and a particle off its timeline
-    three particle definitions in the 1.10.0 format
+    three particle definitions in the 1.10.0 format, one of them carrying a curve and events
     a fog whose air and water blocks are written differently from each other
+    a client biome naming a sound of the pack's, two of the engine's, a track and a density
     a texture set whose emissive channel has pixels in it
+    two subpacks of the resource pack, each repainting the sprite, so the chosen one is readable
+    the pack settings a manifest declares, at the values the Molang queries read back
+    an entity texture with a band written the way Bedrock marks a cut-out texel
+    a page of the pack's own glyphs, and the locale list naming the languages it ships
     a function using the commands and selector arguments that need translating
 
     python3 tools/testpack/build.py                  # build/testpack/test-addon.mcaddon
@@ -45,6 +53,10 @@ PACK_DIRECTORIES = (("behaviour", "Test Add-On BP"), ("resources", "Test Add-On 
 ZIP_TIMESTAMP = (2020, 1, 1, 0, 0, 0)
 
 TRANSPARENT = (0, 0, 0, 0)
+
+# The alpha Bedrock marks a drawn but not fully opaque texel with, which Java's cutout shader
+# discards and a conversion therefore has to raise.
+MARKED = 3
 
 
 def png(width: int, height: int, paint) -> bytes:
@@ -92,10 +104,37 @@ def dust(x: int, y: int) -> tuple[int, int, int, int]:
     return (214, 168, 255, 255) if (x * 7 + y * 3) % 11 < 3 else TRANSPARENT
 
 
+def record_icon(x: int, y: int) -> tuple[int, int, int, int]:
+    if not disc(x, y, 7.5, 6.5):
+        return TRANSPARENT
+    return (198, 132, 74, 255) if disc(x, y, 7.5, 2.0) else (36, 32, 40, 255)
+
+
+def pouch(x: int, y: int) -> tuple[int, int, int, int]:
+    if y < 4:
+        return (168, 128, 84, 255) if 5 <= x <= 10 else TRANSPARENT
+    if not 2 <= x <= 13:
+        return TRANSPARENT
+    return (206, 164, 108, 255) if y < 6 else (150, 110, 70, 255)
+
+
+def visor(x: int, y: int) -> tuple[int, int, int, int]:
+    if not 2 <= x <= 13 or not 4 <= y <= 11:
+        return TRANSPARENT
+    return (120, 190, 220, 255) if 6 <= y <= 9 else (96, 104, 116, 255)
+
+
 def sprite_egg(x: int, y: int) -> tuple[int, int, int, int]:
     if ((x - 7.5) / 4.5) ** 2 + ((y - 8.0) / 6.0) ** 2 > 1.0:
         return TRANSPARENT
     return (58, 157, 35, 255) if (x + y) % 5 else (201, 226, 101, 255)
+
+
+def ember_egg(x: int, y: int) -> tuple[int, int, int, int]:
+    """The other half of the egg list, so a wrong `texture_index` shows a different egg."""
+    if ((x - 7.5) / 4.5) ** 2 + ((y - 8.0) / 6.0) ** 2 > 1.0:
+        return TRANSPARENT
+    return (217, 79, 30, 255) if (x + y) % 5 else (255, 208, 96, 255)
 
 
 def lamp_frame(x: int, y: int) -> tuple[int, int, int, int] | None:
@@ -126,12 +165,35 @@ def lamp_on_normal(x: int, y: int) -> tuple[int, int, int, int]:
     return (128, 128, 255, 255)
 
 
-def sprite_skin(x: int, y: int) -> tuple[int, int, int, int]:
-    if x >= 32 or y >= 32:
-        return TRANSPARENT
-    if disc(x % 16, y % 16, 7.5, 6.0):
-        return (96, 214, 120, 255)
-    return (38, 96, 58, 255)
+# The body colour each form of the sprite is painted in, which is what says which of the three the
+# renderer read: the pack's own, the low subpack's, and the high one's.
+SPRITE_BODY = (38, 96, 58, 255)
+PLAIN_SPRITE_BODY = (38, 58, 128, 255)
+BRIGHT_SPRITE_BODY = (235, 150, 32, 255)
+
+
+def sprite_skin(body: tuple[int, int, int, int]):
+    """The sprite's skin, with the top four rows written the way Bedrock marks a cut-out texel.
+
+    Bedrock's alpha test draws every texel carrying any alpha and drops only the fully transparent
+    ones, so Mojang's own entity textures mark whole regions with an alpha of three: the face and
+    the bare skin of the vanilla sheep are written that way. Java's cutout shader drops everything
+    under a tenth, so the band is what a conversion has to raise for the model to keep it.
+
+    Each of the pack's three forms paints the body in a colour of its own and leaves the marked band
+    and the empty corner where they are, so the subpack that won is readable off one texel and the
+    cut-out assertion holds whichever form was loaded.
+    """
+    def paint(x: int, y: int) -> tuple[int, int, int, int]:
+        if x >= 32 or y >= 32:
+            return TRANSPARENT
+        if y < 4:
+            return (214, 96, 120, MARKED)
+        if disc(x % 16, y % 16, 7.5, 6.0):
+            return (96, 214, 120, 255)
+        return body
+
+    return paint
 
 
 def ember_skin(x: int, y: int) -> tuple[int, int, int, int]:
@@ -158,16 +220,35 @@ def particle_atlas(x: int, y: int) -> tuple[int, int, int, int]:
     return TRANSPARENT
 
 
+def glyph_page(x: int, y: int) -> tuple[int, int, int, int]:
+    """A 128x128 page of 8x8 glyph cells, which is the grid Bedrock paints its own glyphs on.
+
+    Each cell holds a block as wide as its column and as tall as its row, so a glyph taken out of
+    the wrong cell is a different shape rather than the same shape in another place. Every cell has
+    at least the one pixel, because a glyph with no pixels at all has no width to advance by.
+    """
+    if x % 8 > x // 8 or y % 8 > y // 8:
+        return TRANSPARENT
+    return (255, 255, 255, 255)
+
+
 TEXTURES = (
+    ("font/glyph_E1.png", 128, glyph_page),
     ("textures/items/wand.png", 16, wand),
     ("textures/items/shard.png", 16, shard),
     ("textures/items/dust.png", 16, dust),
+    ("textures/items/pouch.png", 16, pouch),
+    ("textures/items/visor.png", 16, visor),
+    ("textures/items/record.png", 16, record_icon),
     ("textures/items/sprite_egg.png", 16, sprite_egg),
+    ("textures/items/ember_egg.png", 16, ember_egg),
     ("textures/blocks/lamp_off.png", 16, lamp_off),
     ("textures/blocks/lamp_on.png", 16, lamp_on),
     ("textures/blocks/lamp_on_mer.png", 16, lamp_on_mer),
     ("textures/blocks/lamp_on_normal.png", 16, lamp_on_normal),
-    ("textures/entity/sprite.png", 64, sprite_skin),
+    ("textures/entity/sprite.png", 64, sprite_skin(SPRITE_BODY)),
+    ("subpacks/plain/textures/entity/sprite.png", 64, sprite_skin(PLAIN_SPRITE_BODY)),
+    ("subpacks/bright/textures/entity/sprite.png", 64, sprite_skin(BRIGHT_SPRITE_BODY)),
     ("textures/entity/ember.png", 64, ember_skin),
     ("textures/particle/particles.png", 128, particle_atlas),
 )
@@ -175,21 +256,23 @@ TEXTURES = (
 
 def pack_files(directory: Path) -> dict[str, bytes]:
     """Everything one pack ships, keyed by its path inside that pack."""
+    if not directory.is_dir():
+        raise SystemExit(f"missing pack sources: {directory}")
     return {str(file.relative_to(directory).as_posix()): file.read_bytes()
             for file in sorted(directory.rglob("*")) if file.is_file()}
 
 
-def build(destination: Path) -> tuple[Path, int]:
-    missing = [name for name, _ in PACK_DIRECTORIES if not (SOURCE / name).is_dir()]
-    if missing:
-        raise SystemExit(f"missing pack sources under {SOURCE}: {', '.join(missing)}")
+def addon_contents() -> dict[str, bytes]:
+    """Both packs, each under the name it takes inside the archive, with the textures painted in."""
+    packed = {f"{inside}/{name}": body
+              for source, inside in PACK_DIRECTORIES
+              for name, body in pack_files(SOURCE / source).items()}
+    return packed | {f"{PACK_DIRECTORIES[1][1]}/{name}": png(size, size, paint)
+                     for name, size, paint in TEXTURES}
 
-    contents: dict[str, bytes] = {}
-    for source, inside in PACK_DIRECTORIES:
-        contents |= {f"{inside}/{name}": body for name, body in pack_files(SOURCE / source).items()}
-    contents |= {f"{PACK_DIRECTORIES[1][1]}/{name}": png(size, size, paint)
-                 for name, size, paint in TEXTURES}
 
+def write_addon(contents: dict[str, bytes], destination: Path) -> None:
+    """Writes one archive. The timestamp and the mode are fixed, so equal contents give equal bytes."""
     destination.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(destination, "w", zipfile.ZIP_DEFLATED) as archive:
         for name in sorted(contents):
@@ -198,24 +281,24 @@ def build(destination: Path) -> tuple[Path, int]:
             entry.external_attr = 0o644 << 16
             archive.writestr(entry, contents[name])
 
-    return destination, len(contents)
 
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("--out", type=Path, default=ROOT / "build" / "testpack" / "test-addon.mcaddon",
+def main(description: str, default_out: Path, contents: dict[str, bytes]) -> int:
+    """The command line every builder here shares: write the archive, then place the copies asked for."""
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument("--out", type=Path, default=default_out,
                         help="where to write the archive")
     parser.add_argument("--version", action="append", default=[],
                         help="also copy it into versions/<version>/run/addons; repeatable")
     arguments = parser.parse_args()
 
-    written, count = build(arguments.out)
-    print(f"{written} ({count} files, {written.stat().st_size} bytes)")
+    written = arguments.out
+    write_addon(contents, written)
+    print(f"{written} ({len(contents)} files, {written.stat().st_size} bytes)")
 
     for version in arguments.version:
-        addons = ROOT / "versions" / version / "run" / "addons"
         if not (ROOT / "versions" / version).is_dir():
             raise SystemExit(f"no such version: {version}")
+        addons = ROOT / "versions" / version / "run" / "addons"
         addons.mkdir(parents=True, exist_ok=True)
         target = addons / written.name
         target.write_bytes(written.read_bytes())
@@ -225,4 +308,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main((__doc__ or "").splitlines()[0],
+                  ROOT / "build" / "testpack" / "test-addon.mcaddon",
+                  addon_contents()))

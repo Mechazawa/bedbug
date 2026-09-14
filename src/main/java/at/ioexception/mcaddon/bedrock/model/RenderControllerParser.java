@@ -3,6 +3,7 @@ package at.ioexception.mcaddon.bedrock.model;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import at.ioexception.mcaddon.bedrock.molang.MolangValue;
+import at.ioexception.mcaddon.registry.AddonEntities;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
@@ -15,10 +16,46 @@ import java.util.Map;
 /** Reads one render controller out of a pack's `render_controllers` JSON. */
 public final class RenderControllerParser {
 
+    /**
+     * How Bedrock's own renderer schedules and lights a pass.
+     *
+     * `rebuild_animation_matrices` asks it to pose the skeleton again before this pass, and every
+     * pass here already reads one skeleton posed for the frame from the same variables, so there is
+     * nothing a rebuild between passes would change. `filter_lighting` picks between two ways of
+     * sampling the light over a model, and Java lights a whole entity from the one value at its
+     * position, so there is no second way to pick.
+     */
+    private static final List<String> UNREAD = List.of(
+        "rebuild_animation_matrices", "filter_lighting");
+
     private RenderControllerParser() {
     }
 
+    /**
+     * A list of bone rules, each rule an expression per bone or family of them.
+     *
+     * The order is what a rule means: `part_visibility` and `materials` both let a later rule answer
+     * for a bone an earlier one already matched, and one rule object can hold the wildcard and the
+     * bones overriding it together. So the declaration order is kept both between rules and inside
+     * one, which a map ordered any other way would lose.
+     */
+    private static List<Map<String, MolangExpression>> rules(JsonObject json, String field) {
+        List<Map<String, MolangExpression>> rules = new ArrayList<>();
+        if (!json.has(field)) return List.copyOf(rules);
+
+        for (JsonElement rule : json.getAsJsonArray(field)) {
+            Map<String, MolangExpression> parsed = new LinkedHashMap<>();
+            for (Map.Entry<String, JsonElement> bone : rule.getAsJsonObject().entrySet()) {
+                parsed.put(bone.getKey(), MolangParser.parse(bone.getValue().getAsString()));
+            }
+            rules.add(java.util.Collections.unmodifiableMap(parsed));
+        }
+        return List.copyOf(rules);
+    }
+
     public static RenderController read(String name, JsonObject json) {
+        AddonEntities.unsupportedFields("render controller", json, UNREAD);
+
         List<MolangExpression> textures = new ArrayList<>();
         if (json.has("textures")) {
             for (JsonElement texture : json.getAsJsonArray("textures")) {
@@ -26,27 +63,8 @@ public final class RenderControllerParser {
             }
         }
 
-        List<Map<String, MolangExpression>> visibility = new ArrayList<>();
-        if (json.has("part_visibility")) {
-            for (JsonElement rule : json.getAsJsonArray("part_visibility")) {
-                Map<String, MolangExpression> parsed = new LinkedHashMap<>();
-                for (Map.Entry<String, JsonElement> bone : rule.getAsJsonObject().entrySet()) {
-                    parsed.put(bone.getKey(), MolangParser.parse(bone.getValue().getAsString()));
-                }
-                visibility.add(Map.copyOf(parsed));
-            }
-        }
-
-        List<Map<String, MolangExpression>> materials = new ArrayList<>();
-        if (json.has("materials")) {
-            for (JsonElement rule : json.getAsJsonArray("materials")) {
-                Map<String, MolangExpression> parsed = new LinkedHashMap<>();
-                for (Map.Entry<String, JsonElement> bone : rule.getAsJsonObject().entrySet()) {
-                    parsed.put(bone.getKey(), MolangParser.parse(bone.getValue().getAsString()));
-                }
-                materials.add(Map.copyOf(parsed));
-            }
-        }
+        List<Map<String, MolangExpression>> visibility = rules(json, "part_visibility");
+        List<Map<String, MolangExpression>> materials = rules(json, "materials");
 
         return new RenderController(
             name,
@@ -54,27 +72,41 @@ public final class RenderControllerParser {
             List.copyOf(textures),
             List.copyOf(visibility),
             List.copyOf(materials),
-            uvOffset(json, 0),
-            uvOffset(json, 1),
-            readArrays(json));
+            uvAnim(json, "offset", 0),
+            uvAnim(json, "offset", 1),
+            uvAnim(json, "scale", 0),
+            uvAnim(json, "scale", 1),
+            json.has("ignore_lighting") && json.get("ignore_lighting").getAsBoolean(),
+            molang(json.get("light_color_multiplier")),
+            readArrays(json),
+            ControllerColour.tryFrom(json, "color"),
+            ControllerColour.tryFrom(json, "overlay_color"),
+            ControllerColour.tryFrom(json, "is_hurt_color"),
+            ControllerColour.tryFrom(json, "on_fire_color"));
     }
 
-    /**
-     * One axis of `uv_anim.offset`, which may be a number or a Molang expression.
-     *
-     * Bedrock writes it in texture widths, so a value of one slides the texture past itself exactly
-     * once. Nothing in the add-on animates it; it picks a fixed row out of a tall strip.
-     */
-    private static MolangExpression uvOffset(JsonObject json, int axis) {
-        if (!json.has("uv_anim")) return null;
+    /** A field Mojang types as Molang and vanilla writes as a plain number. Null where absent. */
+    private static MolangExpression molang(JsonElement value) {
+        if (value == null || value.isJsonNull()) return null;
 
-        JsonObject animation = json.getAsJsonObject("uv_anim");
-        if (!animation.has("offset")) return null;
-
-        JsonElement value = animation.getAsJsonArray("offset").get(axis);
         return value.getAsJsonPrimitive().isString()
             ? MolangParser.parse(value.getAsString())
             : MolangExpression.constant(value.getAsFloat());
+    }
+
+    /**
+     * One axis of a `uv_anim` field, which may be a number or a Molang expression.
+     *
+     * Bedrock writes an offset in texture widths, so a value of one slides the texture past itself
+     * exactly once. A scale of one leaves the texture at the size the geometry declared.
+     */
+    private static MolangExpression uvAnim(JsonObject json, String field, int axis) {
+        if (!json.has("uv_anim")) return null;
+
+        JsonObject animation = json.getAsJsonObject("uv_anim");
+        if (!animation.has(field)) return null;
+
+        return molang(animation.getAsJsonArray(field).get(axis));
     }
 
     /** Named lists a controller indexes into, such as one texture per villager profession. */

@@ -41,6 +41,11 @@ export const MinecraftDimensionTypes = Object.freeze({ Nether: dimensions.TheNet
 
 // The three tables with no registry behind them. Bedrock keeps each as a fixed set rather than as
 // data, so there is nothing to read them from and nothing about them that moves between versions.
+export const MinecraftPotionDeliveryTypes = Object.freeze({
+    Lingering: "lingering",
+    Splash: "splash",
+});
+
 export const MinecraftPotionLiquidTypes = Object.freeze({
     Lingering: "Lingering",
     Regular: "Regular",

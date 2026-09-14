@@ -12,6 +12,7 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.alchemy.Potion;
 import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.level.biome.Biome;
 import org.graalvm.polyglot.HostAccess;
 
 import java.util.List;
@@ -172,6 +173,23 @@ public final class Registries extends Surface {
     }
 
     /**
+     * The tags a biome belongs to.
+     *
+     * Reached by wrapping the biome itself rather than by asking the registry for a holder, because
+     * the lookup from an id to a holder is spelled three different ways over the supported versions
+     * and this one is spelled the same in all of them.
+     */
+    @HostAccess.Export
+    public String[] biomeTags(String id) {
+        Registry<Biome> registry = dynamic(net.minecraft.core.registries.Registries.BIOME);
+        Identifier parsed = qualified(id);
+        return parsed == null ? new String[0] : registry.getOptional(parsed)
+            .map(registry::wrapAsHolder)
+            .map(biome -> biome.tags().map(tag -> tag.location().toString()).toArray(String[]::new))
+            .orElse(new String[0]);
+    }
+
+    /**
      * A registry the world carries rather than the game.
      *
      * Enchantments and biomes are data-driven, so they are reached through the server's registry
@@ -186,6 +204,6 @@ public final class Registries extends Surface {
     }
 
     private static Identifier qualified(String id) {
-        return id == null ? null : Identifier.tryParse(id.indexOf(':') < 0 ? "minecraft:" + id : id);
+        return id == null ? null : Identifier.tryParse(namespaced(id));
     }
 }

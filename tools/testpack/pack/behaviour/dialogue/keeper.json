@@ -1,0 +1,33 @@
+{
+  "format_version": "1.17.0",
+  "minecraft:npc_dialogue": {
+    "scenes": [
+      {
+        "scene_tag": "tp:greeting",
+        "npc_name": "The Ember Keeper",
+        "text": "The ember burns low.\nWill you feed it?",
+        "on_open_commands": ["/scoreboard players set @initiator tp.dialogue 1"],
+        "on_close_commands": ["/scoreboard players add @initiator tp.dialogue 10"],
+        "buttons": [
+          {
+            "name": "Feed it",
+            "commands": ["/scoreboard players add @initiator tp.dialogue 100"]
+          },
+          {
+            "name": "Walk away",
+            "commands": ["/scoreboard players add @initiator tp.dialogue 200"]
+          }
+        ]
+      },
+      {
+        "scene_tag": "tp:farewell",
+        "npc_name": {
+          "rawtext": [{ "text": "The Ember Keeper" }]
+        },
+        "text": {
+          "rawtext": [{ "text": "Go warm." }]
+        }
+      }
+    ]
+  }
+}

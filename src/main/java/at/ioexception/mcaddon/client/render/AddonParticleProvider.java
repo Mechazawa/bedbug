@@ -46,11 +46,17 @@ public record AddonParticleProvider(String identifier, SpriteSet sprites)
         if (definition == null) return null;
 
         MolangEnvironment environment = new MolangEnvironment();
+        AddonEmitters.randomise(environment, "particle_random_");
+        AddonEmitters.evaluateCurves(definition, environment);
+
         Vector3f offset = born(definition.emitter().shape(), environment, random);
         Vector3f speed = speed(definition, environment, offset);
 
+        // A pack states a speed in blocks a second and Java moves a particle once a tick.
         return new AddonParticle(level, x + offset.x(), y + offset.y(), z + offset.z(),
-            dx + speed.x(), dy + speed.y(), dz + speed.z(),
+            dx + at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.blocksPerTick(speed.x()),
+            dy + at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.blocksPerTick(speed.y()),
+            dz + at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.blocksPerTick(speed.z()),
             sprites.get(random), definition, environment);
     }
 

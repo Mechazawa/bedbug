@@ -10,6 +10,7 @@ import com.google.gson.JsonPrimitive;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.StringWidget;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
@@ -32,6 +33,15 @@ public final class AddonFormScreen extends Screen {
     private static final int WIDGET_WIDTH = 240;
     private static final int ROW_HEIGHT = 24;
 
+    /** A line of body text takes the height of the text, not the height of a button. */
+    private static final int LINE_HEIGHT = 12;
+
+    /** Room for the button's own border on each side of the text it holds. */
+    private static final int TEXT_PADDING = 8;
+
+    /** Between the heading and the first widget, so the two do not read as one block of text. */
+    private static final int HEADING_GAP = 6;
+
     private final int formId;
     private final JsonArray elements;
     private final List<Supplier<JsonElement>> answers = new ArrayList<>();
@@ -49,6 +59,30 @@ public final class AddonFormScreen extends Screen {
             ? body.getAsJsonArray("elements") : new JsonArray();
     }
 
+    /**
+     * One line of body text per line it needs, because a form describes its text and not its layout.
+     *
+     * A pack writes a paragraph with newlines in it and expects the game to lay it out. Java draws a
+     * button's message on one line and shows a newline as a missing glyph, so the breaks a pack asked
+     * for are taken here and anything still too wide for the width is broken at a space.
+     */
+    private List<String> wrapped(String text) {
+        List<String> lines = new ArrayList<>();
+        for (String paragraph : text.split("\\r?\\n", -1)) {
+            String rest = paragraph;
+            while (font.width(rest) > WIDGET_WIDTH - TEXT_PADDING) {
+                int cut = rest.length();
+                while (cut > 1 && font.width(rest.substring(0, cut)) > WIDGET_WIDTH - TEXT_PADDING) {
+                    cut = rest.lastIndexOf(' ', cut - 1) > 0 ? rest.lastIndexOf(' ', cut - 1) : cut - 1;
+                }
+                lines.add(rest.substring(0, cut));
+                rest = rest.substring(cut).stripLeading();
+            }
+            lines.add(rest);
+        }
+        return lines;
+    }
+
     private static Component title(String description) {
         JsonElement parsed = JsonParser.parseString(description);
         String heading = parsed.isJsonObject() ? Json.text(parsed.getAsJsonObject(), "title", "") : "";
@@ -62,6 +96,11 @@ public final class AddonFormScreen extends Screen {
         int left = width / 2 - WIDGET_WIDTH / 2;
         int row = Math.max(36, height / 2 - elements.size() * ROW_HEIGHT / 2);
         int buttonIndex = 0;
+
+        // The heading is what a form is called and what an NPC scene names the speaker with, and a
+        // screen draws nothing of its own title.
+        addRenderableWidget(new StringWidget(left, row - LINE_HEIGHT - HEADING_GAP, WIDGET_WIDTH,
+            LINE_HEIGHT, getTitle(), font));
 
         for (JsonElement element : elements) {
             if (!element.isJsonObject()) continue;
@@ -123,9 +162,12 @@ public final class AddonFormScreen extends Screen {
                     continue;
                 }
                 default -> {
-                    Button label = addRenderableWidget(Button.builder(Component.literal(text), button -> { })
-                        .bounds(left, row, WIDGET_WIDTH, 20).build());
-                    label.active = false;
+                    for (String line : wrapped(text)) {
+                        addRenderableWidget(new StringWidget(left, row, WIDGET_WIDTH, LINE_HEIGHT,
+                            Component.literal(line), font));
+                        row += LINE_HEIGHT;
+                    }
+                    continue;
                 }
             }
             row += ROW_HEIGHT;

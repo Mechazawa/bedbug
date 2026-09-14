@@ -49,6 +49,13 @@ NORMALS = {
     ("z", 0): (0, 0, -1), ("z", 1): (0, 0, 1),
 }
 
+# How wide and how tall a box looks from a face on each axis, for a face declaring no uv_size.
+FACE_SIZES = {
+    "x": lambda size: (size[2], size[1]),
+    "y": lambda size: (size[0], size[2]),
+    "z": lambda size: (size[0], size[1]),
+}
+
 TEXTURE_SUFFIXES = (".png", ".tga")
 
 USAGE = (__doc__ or "").splitlines()[0]
@@ -81,8 +88,13 @@ def to_model_rotation(degrees):
 
 
 def load_geometries(pack):
-    """Every geometry under `models/`, in both the 1.12 and the 1.8 shape, keyed by identifier."""
+    """Every geometry under `models/`, in both the 1.12 and the 1.8 shape, keyed by identifier.
+
+    A 1.8 geometry may extend one held in another file, so those are gathered first and folded
+    together once every file has been read.
+    """
     geometries = {}
+    named = {}
     for file in sorted((pack / "models").rglob("*.json")):
         try:
             root = json.loads(file.read_text(encoding="utf-8"))
@@ -99,11 +111,40 @@ def load_geometries(pack):
                     geometries[identifier] = normalise(body.get("description", {}), body)
             continue
 
-        for name, body in root.items():
-            # The 1.8 form keeps the texture size beside the bones instead of in a description.
-            if name.startswith("geometry.") and isinstance(body, dict):
-                geometries[name] = normalise(body, body)
+        # The 1.8 form keeps the texture size beside the bones, spelled without its underscore, and
+        # names what a geometry extends in the key itself as `geometry.child:geometry.parent`.
+        named.update({name: body for name, body in root.items()
+                      if name.startswith("geometry.") and isinstance(body, dict)})
+
+    for name, body in named.items():
+        identifier, _, parent = name.partition(":")
+        merged = inherit(body, parent, named) if parent else body
+        geometries[identifier] = normalise(
+            {"texture_width": merged.get("texturewidth", merged.get("texture_width", 64)),
+             "texture_height": merged.get("textureheight", merged.get("texture_height", 64))},
+            merged)
     return geometries
+
+
+def inherit(child, parent_name, named):
+    """A 1.8 geometry written as an extension of another, folded into one body.
+
+    The child's own fields win. A bone it names again adds its fields to the one it inherited, which
+    is how an armour layer inflates a limb and keeps its cubes, unless that bone carries `reset`,
+    which drops what it inherited so the bone is only what the child wrote.
+    """
+    for name, body in named.items():
+        identifier, _, grandparent = name.partition(":")
+        if identifier != parent_name:
+            continue
+        parent = inherit(body, grandparent, named) if grandparent else body
+        bones = {bone.get("name"): bone for bone in parent.get("bones", [])}
+        for bone in child.get("bones", []):
+            inherited = bones.get(bone.get("name"))
+            bones[bone.get("name")] = bone if inherited is None or bone.get("reset") \
+                else {**inherited, **bone}
+        return {**parent, **child, "bones": list(bones.values())}
+    return child
 
 
 def normalise(description, body):
@@ -239,18 +280,21 @@ def face_coordinates(rectangle, texture_size):
     return coordinates
 
 
-def bake_cube(cube, bone_pivot, bone_mirror, texture_size):
-    """Returns the quads of one cube, as (corner positions, corner UVs, normal)."""
+def bake_cube(cube, bone_pivot, bone, texture_size):
+    """Returns the quads of one cube, as (corner positions, corner UVs, normal).
+
+    A cube's own `inflate` and `mirror` replace the bone's rather than adding to them.
+    """
     origin = cube["origin"]
     size = cube["size"]
-    inflate = cube.get("inflate", 0)
+    inflate = cube.get("inflate", bone.get("inflate", 0))
 
     min_x, max_x = origin[0] - inflate, origin[0] + size[0] + inflate
     min_z, max_z = origin[2] - inflate, origin[2] + size[2] + inflate
     min_y = MODEL_ORIGIN_HEIGHT - (origin[1] + size[1] + inflate)
     max_y = MODEL_ORIGIN_HEIGHT - (origin[1] - inflate)
 
-    mirror = cube.get("mirror", False) or bone_mirror
+    mirror = cube.get("mirror", bone.get("mirror", False))
     if mirror:
         min_x, max_x = max_x, min_x
 
@@ -278,7 +322,8 @@ def bake_cube(cube, bone_pivot, bone_mirror, texture_size):
             if name not in FACES:
                 continue
             u, v = face["uv"]
-            w, h = face.get("uv_size", [0, 0])
+            # A face that declares no patch size maps the box as seen from that face.
+            w, h = face.get("uv_size", FACE_SIZES[FACES[name][0]](size))
             if w == 0 or h == 0:
                 # Bedrock does not draw a face whose uv rectangle has no area.
                 continue
@@ -318,7 +363,10 @@ def bake(geometry):
 
     def walk(bone, place, turn, parent_pivot):
         pivot = to_model_space(bone.get("pivot", [0, 0, 0]))
-        angles = to_model_rotation(bone.get("rotation", [0, 0, 0]))
+        # The 1.8 shape writes the resting rotation under either name, never a different one
+        # under each, so the newer spelling stands in for both wherever it is present.
+        angles = to_model_rotation(
+            bone.get("rotation", bone.get("bind_pose_rotation", [0, 0, 0])))
         offset = tuple(a - b for a, b in zip(pivot, parent_pivot))
 
         def place_here(point):
@@ -327,9 +375,9 @@ def bake(geometry):
         def turn_here(vector):
             return turn(rotate(vector, angles))
 
-        for cube in bone.get("cubes", []):
-            for points, coordinates, normal in bake_cube(
-                    cube, pivot, bone.get("mirror", False), texture_size):
+        # A bone marked neverRender still places its children; only its own boxes are left out.
+        for cube in (() if bone.get("neverRender") else bone.get("cubes", [])):
+            for points, coordinates, normal in bake_cube(cube, pivot, bone, texture_size):
                 quads.append(([place_here(point) for point in points], coordinates, turn_here(normal)))
 
         for child in children.get(bone["name"], []):

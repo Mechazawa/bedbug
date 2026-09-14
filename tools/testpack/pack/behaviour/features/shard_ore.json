@@ -1,0 +1,16 @@
+{
+  "format_version": "1.13.0",
+  "minecraft:ore_feature": {
+    "description": {
+      "identifier": "tp:shard_ore"
+    },
+    "count": 9,
+    "discard_chance_on_air_exposure": 0.5,
+    "replace_rules": [
+      {
+        "places_block": "tp:lamp",
+        "may_replace": ["minecraft:stone", "minecraft:deepslate"]
+      }
+    ]
+  }
+}

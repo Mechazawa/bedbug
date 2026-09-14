@@ -1,0 +1,21 @@
+{
+  "format_version": "1.21.20",
+  "minecraft:block": {
+    "description": {
+      "identifier": "bp:scripted"
+    },
+    "components": {
+      "minecraft:custom_components": ["bp:probe"],
+      "minecraft:destructible_by_mining": {
+        "seconds_to_destroy": 0.5
+      },
+      "minecraft:map_color": "#7755AA",
+      "minecraft:material_instances": {
+        "*": {
+          "texture": "stone",
+          "render_method": "opaque"
+        }
+      }
+    }
+  }
+}

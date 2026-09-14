@@ -5,11 +5,65 @@
       "identifier": "tp:ember",
       "is_spawnable": true,
       "is_summonable": true,
-      "is_experimental": false
+      "is_experimental": false,
+      "properties": {
+        "tp:kindled": {
+          "type": "bool",
+          "default": false,
+          "client_sync": true
+        },
+        "tp:glowing": {
+          "type": "bool",
+          "default": false,
+          "client_sync": true
+        },
+        "tp:saddle_seen": {
+          "type": "bool",
+          "default": false,
+          "client_sync": true
+        },
+        "tp:timed": {
+          "type": "bool",
+          "default": false,
+          "client_sync": true
+        },
+        "tp:sensed": {
+          "type": "bool",
+          "default": false,
+          "client_sync": true
+        },
+        "tp:calmed": {
+          "type": "bool",
+          "default": false,
+          "client_sync": true
+        },
+        "tp:scratched": {
+          "type": "bool",
+          "default": false,
+          "client_sync": true
+        },
+        "tp:sat": {
+          "type": "bool",
+          "default": false,
+          "client_sync": true
+        }
+      },
+      "animations": {
+        "kindle": "animation.tp.ember.kindle",
+        "kindle_controller": "controller.animation.tp.ember.kindle"
+      },
+      "scripts": {
+        "animate": [
+          "kindle_controller"
+        ]
+      }
     },
     "components": {
       "minecraft:type_family": {
-        "family": ["tp_ember", "mob"]
+        "family": [
+          "tp_ember",
+          "mob"
+        ]
       },
       "minecraft:collision_box": {
         "width": 0.4,
@@ -30,8 +84,365 @@
       "minecraft:behavior.random_stroll": {
         "priority": 5,
         "speed_multiplier": 1.2
+      },
+      "minecraft:equipment": {
+        "table": "loot_tables/entities/ember_equipment.json",
+        "slot_drop_chance": [
+          {
+            "slot": "slot.armor.head",
+            "drop_chance": 1.0
+          }
+        ]
+      },
+      "minecraft:loot": {
+        "table": "loot_tables/entities/ember.json"
+      },
+      "minecraft:trade_table": {
+        "display_name": "Ember",
+        "table": "trading/ember_trades.json"
+      },
+      "minecraft:behavior.trade_with_player": {
+        "priority": 2
+      },
+      "minecraft:behavior.trade_interest": {
+        "priority": 3,
+        "within_radius": 6.0,
+        "interest_time": 45,
+        "remove_item_time": 1,
+        "carried_item_switch_time": 2,
+        "cooldown": 2
+      },
+      "minecraft:variable_max_auto_step": {
+        "base_value": 1.0
+      },
+      "minecraft:flying_speed": {
+        "value": 0.25
+      },
+      "minecraft:behavior.pickup_items": {
+        "priority": 6,
+        "max_dist": 4.0
+      },
+      "minecraft:rideable": {
+        "seat_count": 1,
+        "seats": [
+          {
+            "position": [0.0, 0.4, 0.0]
+          }
+        ]
       }
     },
-    "events": {}
+    "component_groups": {
+      "tp:ember_saddled": {
+        "minecraft:is_saddled": {}
+      },
+      "tp:ember_young": {
+        "minecraft:ageable": {
+          "duration": 1200,
+          "grow_up": {
+            "event": "tp:ember_kindle",
+            "target": "self"
+          }
+        }
+      },
+      "tp:ember_small": {
+        "minecraft:scale": {
+          "value": 0.5
+        }
+      },
+      "tp:ember_grown": {
+        "minecraft:experience_reward": {
+          "on_death": "query.last_hit_by_player ? 7 : 0"
+        }
+      },
+      "tp:ember_fierce": {
+        "minecraft:attack": {
+          "damage": 9
+        },
+        "minecraft:knockback_resistance": {
+          "value": 1.0
+        },
+        "minecraft:persistent": {}
+      },
+      "tp:ember_angry": {
+        "minecraft:angry": {
+          "duration": 0.25,
+          "calm_event": {
+            "event": "tp:ember_calmed",
+            "target": "self"
+          }
+        }
+      },
+      "tp:ember_laden": {
+        "minecraft:collision_box": {
+          "width": 1.4,
+          "height": 0.25
+        },
+        "minecraft:inventory": {
+          "inventory_size": 9
+        },
+        "minecraft:shareables": {
+          "items": [
+            {
+              "item": "minecraft:gold_ingot"
+            }
+          ]
+        },
+        "minecraft:ambient_sound_interval": {
+          "value": 3.0
+        },
+        "minecraft:item_hopper": {},
+        "minecraft:can_power_jump": {},
+        "minecraft:color": {
+          "value": 11
+        },
+        "minecraft:dweller": {
+          "restriction_radius": 5
+        },
+        "minecraft:leashable": {
+          "can_be_stolen": false
+        },
+        "minecraft:input_ground_controlled": {},
+        "minecraft:sittable": {
+          "sit_event": {
+            "event": "tp:ember_sat"
+          }
+        }
+      },
+      "tp:ember_primed": {
+        "minecraft:explode": {
+          "fuse_length": 2.5,
+          "power": 3,
+          "breaks_blocks": false,
+          "causes_fire": false
+        }
+      },
+      "tp:ember_warded": {
+        "minecraft:damage_sensor": {
+          "triggers": [
+            {
+              "deals_damage": false,
+              "on_damage": {
+                "event": "tp:ember_scratched"
+              }
+            }
+          ]
+        }
+      },
+      "tp:ember_airborne": {
+        "minecraft:navigation.float": {},
+        "minecraft:movement.hover": {}
+      },
+      "tp:ember_clinging": {
+        "minecraft:can_climb": {}
+      },
+      "tp:ember_ghostly": {
+        "minecraft:is_collidable": {
+          "value": false
+        },
+        "minecraft:pushable": {
+          "is_pushable": false
+        }
+      },
+      "tp:ember_shod": {
+        "minecraft:variable_max_auto_step": {
+          "base_value": 2.0
+        },
+        "minecraft:preferred_path": {},
+        "minecraft:mob_effect_immunity": {
+          "mob_effects": ["poison"]
+        }
+      },
+      "tp:ember_stocked": {
+        "minecraft:trade_table": {
+          "display_name": "Ember",
+          "table": "trading/ember_restock.json"
+        }
+      },
+      "tp:ember_alert": {
+        "minecraft:timer": {
+          "time": 1.0,
+          "looping": false,
+          "time_down_event": {
+            "event": "tp:ember_time_up"
+          }
+        },
+        "minecraft:environment_sensor": {
+          "triggers": [
+            {
+              "event": "tp:ember_sensed"
+            }
+          ]
+        }
+      }
+    },
+    "events": {
+      "tp:ember_kindle": {
+        "set_property": {
+          "tp:kindled": true
+        }
+      },
+      "tp:ember_glow": {
+        "set_property": {
+          "tp:glowing": true
+        }
+      },
+      "tp:ember_saddle": {
+        "add": {
+          "component_groups": ["tp:ember_saddled"]
+        }
+      },
+      "tp:ember_unsaddle": {
+        "remove": {
+          "component_groups": ["tp:ember_saddled"]
+        }
+      },
+      "tp:ember_grow_young": {
+        "add": {
+          "component_groups": ["tp:ember_young"]
+        }
+      },
+      "tp:ember_shrink": {
+        "add": {
+          "component_groups": ["tp:ember_small"]
+        }
+      },
+      "tp:ember_unshrink": {
+        "remove": {
+          "component_groups": ["tp:ember_small"]
+        }
+      },
+      "tp:ember_mature": {
+        "add": {
+          "component_groups": ["tp:ember_grown"]
+        }
+      },
+      "tp:ember_enrage": {
+        "add": {
+          "component_groups": ["tp:ember_fierce"]
+        }
+      },
+      "tp:ember_soothe": {
+        "remove": {
+          "component_groups": ["tp:ember_fierce"]
+        }
+      },
+      "tp:ember_provoke": {
+        "add": {
+          "component_groups": ["tp:ember_angry"]
+        }
+      },
+      "tp:ember_calmed": {
+        "remove": {
+          "component_groups": ["tp:ember_angry"]
+        },
+        "set_property": {
+          "tp:calmed": true
+        }
+      },
+      "tp:ember_alert_on": {
+        "add": {
+          "component_groups": ["tp:ember_alert"]
+        }
+      },
+      "tp:ember_alert_off": {
+        "remove": {
+          "component_groups": ["tp:ember_alert"]
+        },
+        "set_property": {
+          "tp:timed": false,
+          "tp:sensed": false
+        }
+      },
+      "tp:ember_time_up": {
+        "set_property": {
+          "tp:timed": true
+        }
+      },
+      "tp:ember_sensed": {
+        "set_property": {
+          "tp:sensed": true
+        }
+      },
+      "tp:ember_load": {
+        "add": {
+          "component_groups": ["tp:ember_laden"]
+        }
+      },
+      "tp:ember_unload": {
+        "remove": {
+          "component_groups": ["tp:ember_laden"]
+        }
+      },
+      "tp:ember_sat": {
+        "set_property": {
+          "tp:sat": true
+        }
+      },
+      "tp:ember_prime": {
+        "add": {
+          "component_groups": ["tp:ember_primed"]
+        }
+      },
+      "tp:ember_ward_on": {
+        "add": {
+          "component_groups": ["tp:ember_warded"]
+        }
+      },
+      "tp:ember_scratched": {
+        "set_property": {
+          "tp:scratched": true
+        }
+      },
+      "tp:ember_take_off": {
+        "add": {
+          "component_groups": ["tp:ember_airborne"]
+        }
+      },
+      "tp:ember_land": {
+        "remove": {
+          "component_groups": ["tp:ember_airborne"]
+        }
+      },
+      "tp:ember_cling": {
+        "add": {
+          "component_groups": ["tp:ember_clinging"]
+        }
+      },
+      "tp:ember_let_go": {
+        "remove": {
+          "component_groups": ["tp:ember_clinging"]
+        }
+      },
+      "tp:ember_fade": {
+        "add": {
+          "component_groups": ["tp:ember_ghostly"]
+        }
+      },
+      "tp:ember_shoe": {
+        "add": {
+          "component_groups": ["tp:ember_shod"]
+        }
+      },
+      "tp:ember_unshoe": {
+        "remove": {
+          "component_groups": ["tp:ember_shod"]
+        }
+      },
+      "tp:ember_stock": {
+        "add": {
+          "component_groups": ["tp:ember_stocked"]
+        }
+      },
+      "tp:ember_look_for_saddle": {
+        "filters": {
+          "test": "has_component",
+          "subject": "self",
+          "value": "minecraft:is_saddled"
+        },
+        "set_property": {
+          "tp:saddle_seen": true
+        }
+      }
+    }
   }
 }

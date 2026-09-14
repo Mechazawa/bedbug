@@ -29,12 +29,14 @@ public record AnimationController(
     public record State(
         List<Entry> animations,
         List<Transition> transitions,
-        List<MolangExpression> onEntry,
-        List<MolangExpression> onExit,
+        List<AnimationAction> onEntry,
+        List<AnimationAction> onExit,
         List<String> soundEffects,
         /** Each entry is an effect name and, where the state names one, the bone it is born at. */
         List<Effect> particleEffects,
-        float blendTransition
+        float blendTransition,
+        /** Whether a rotation this state contributes takes the short way round to meet the others. */
+        boolean blendViaShortestPath
     ) {
     }
 }

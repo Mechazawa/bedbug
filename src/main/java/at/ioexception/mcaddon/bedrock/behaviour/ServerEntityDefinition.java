@@ -36,7 +36,9 @@ public record ServerEntityDefinition(
     Map<String, JsonObject> components,
     Map<String, JsonObject> componentGroups,
     Map<String, EntityEvent> events,
-    Set<String> behaviours
+    Set<String> behaviours,
+    /** The clips and controllers this entity runs server side, which drive its own events. */
+    AnimationScript script
 ) {
     /** A data-driven entity property, which is how a behaviour pack tells a resource pack what to draw. */
     public record Property(String name, String type, double min, double max, List<String> values,
@@ -88,6 +90,8 @@ public record ServerEntityDefinition(
             }
         }
 
+        // A collision box a pack leaves out is one block each way, which is Bedrock's own default
+        // rather than the player-shaped box Java falls back to.
         JsonObject collision = components.get("minecraft:collision_box");
         JsonObject health = components.get("minecraft:health");
         JsonObject movement = components.get("minecraft:movement");
@@ -97,8 +101,8 @@ public record ServerEntityDefinition(
             identifier,
             bool(description, "is_spawnable", true),
             bool(description, "is_summonable", true),
-            number(collision, "width", 0.6f),
-            number(collision, "height", 1.8f),
+            number(collision, "width", 1f),
+            number(collision, "height", 1f),
             number(health, "value", 20f),
             number(movement, "value", 0.23f),
             number(scale, "value", 1f),
@@ -107,13 +111,22 @@ public record ServerEntityDefinition(
             components,
             componentGroups,
             EntityEvent.readAll(body.getAsJsonObject("events")),
-            behaviours);
+            behaviours,
+            AnimationScript.read(description));
     }
 
+    /**
+     * The component names that stand for something the entity decides to do.
+     *
+     * Bedrock spells a goal `minecraft:behavior.*` and a goal driven by a memory
+     * `minecraft:memory_behavior.*`, and both carry a priority and become a goal here.
+     */
     private static void collectBehaviours(JsonObject components, Set<String> into) {
         if (components == null) return;
         for (String key : components.keySet()) {
-            if (key.startsWith("minecraft:behavior.")) into.add(key);
+            if (key.startsWith("minecraft:behavior.") || key.startsWith("minecraft:memory_behavior.")) {
+                into.add(key);
+            }
         }
     }
 

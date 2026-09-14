@@ -1,0 +1,43 @@
+{
+  "format_version": "1.21.20",
+  "minecraft:item": {
+    "description": {
+      "identifier": "tp:visor"
+    },
+    "components": {
+      "minecraft:icon": {
+        "textures": {
+          "default": "visor"
+        }
+      },
+      "minecraft:max_stack_size": 1,
+      "minecraft:wearable": {
+        "slot": "slot.armor.head",
+        "protection": 2
+      },
+      "minecraft:durability": {
+        "max_durability": 64
+      },
+      "minecraft:damage_absorption": {
+        "absorbable_causes": ["fire", "fireTick", "lava"]
+      },
+      "minecraft:durability_sensor": {
+        "durability_thresholds": [
+          {
+            "durability": 24,
+            "particle_type": "basic_smoke",
+            "sound_event": "tp:sprite.chime"
+          },
+          {
+            "durability": 6,
+            "particle_type": "critical_hit",
+            "sound_event": "random.anvil_land"
+          }
+        ]
+      },
+      "minecraft:display_name": {
+        "value": "item.tp:visor.name"
+      }
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "format_version": "1.20.0",
+  "minecraft:recipe_smithing_trim": {
+    "description": {
+      "identifier": "tp:visor_trim"
+    },
+    "tags": ["smithing_table"],
+    "template": "minecraft:coast_armor_trim_smithing_template",
+    "base": {
+      "tag": "minecraft:trimmable_armor"
+    },
+    "addition": {
+      "tag": "minecraft:trim_materials"
+    }
+  }
+}

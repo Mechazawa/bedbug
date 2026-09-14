@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.server;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.behaviour.PlayerDefinition;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.network.PackList;
@@ -58,10 +59,16 @@ public final class ServerHooks {
         ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {
             if (state != null) {
                 EntityPropertySync.seed(entity, state);
+                // Which component groups are on is state a pack changed rather than state it
+                // declared, so it is read back before anything asks the entity what it carries.
+                if (entity instanceof at.ioexception.mcaddon.entity.AddonEntity addon) {
+                    addon.restoreGroups();
+                }
                 // Bedrock raises this on every entity as it comes into the world, and a pack's
                 // starting state is usually set from it.
                 EntityEvents.trigger(entity, "minecraft:entity_spawned", null, state);
             }
+            at.ioexception.mcaddon.registry.AddonItems.keepDropped(entity);
             raiseEntityEvent("entityLoad", entity);
             // Bedrock separates the two: a chunk load raises one, coming into existence raises both.
             if (entity.tickCount == 0) {
@@ -74,9 +81,15 @@ public final class ServerHooks {
             if (state != null) EntityPropertySync.sendTo(player, entity, state);
         });
         ServerEntityEvents.ENTITY_UNLOAD.register((entity, level) -> entityRemoved(entity));
+        net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents.AFTER.register(
+            (level, player, broken, was, blockEntity) -> {
+                at.ioexception.mcaddon.entity.AddonEntity.noticeBlockBroken(level, broken, was);
+                forgetBlockStore(level, broken, was);
+            });
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> {
+            at.ioexception.mcaddon.entity.AddonEntity.noticeHuntSucceeded(entity);
             Map<String, Object> fields = new LinkedHashMap<>();
-            fields.put("deadEntity", new ScriptHost.EntityHandle(entity.getStringUUID()));
+            fields.put("deadEntity", ScriptHost.EntityHandle.of(entity));
             fields.put("damageSource", DamageSources.describe(source));
             if (scripts != null) scripts.raiseWorldEvent("entityDie", fields);
         });
@@ -85,7 +98,7 @@ public final class ServerHooks {
         //? if >=1.21 {
         ServerLivingEntityEvents.AFTER_DAMAGE.register((entity, source, base, taken, blocked) -> {
             Map<String, Object> fields = new LinkedHashMap<>();
-            fields.put("hurtEntity", new ScriptHost.EntityHandle(entity.getStringUUID()));
+            fields.put("hurtEntity", ScriptHost.EntityHandle.of(entity));
             fields.put("damage", (double) taken);
             fields.put("damageSource", DamageSources.describe(source));
             if (scripts != null) scripts.raiseWorldEvent("entityHurt", fields);
@@ -94,23 +107,73 @@ public final class ServerHooks {
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> state = null);
         CommandRegistrationCallback.EVENT.register(ServerHooks::registerCommands);
         WorldEvents.register();
+        // Both sides are asked whatever the other answers: a pack's script watches for the attempt
+        // and not only for the damage that lands.
         ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> {
-            damageSensor(entity, source);
-            return !hurtRefused(entity, source, amount);
+            boolean lands = damageSensor(entity, source);
+            if (at.ioexception.mcaddon.registry.AddonItems.absorbed(entity, source, amount)) {
+                return false;
+            }
+            return !hurtRefused(entity, source, amount) && lands;
         });
+        net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents.AFTER.register(
+            (level, player, pos, broken, blockEntity) -> Sensors.blockBroken(level, player, pos, broken));
+        Dialogues.register();
+        // One channel and one screen serve both, so the id's sign is what says which is waiting.
         Channels.receiveFormResponse((formId, answer) -> {
-            if (scripts != null) scripts.formResponse(formId, answer);
+            if (Dialogues.answers(formId)) {
+                Dialogues.respond(formId, answer);
+            } else if (scripts != null) {
+                scripts.formResponse(formId, answer);
+            }
         });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             Channels.sendPacks(handler.player, PackList.of(McAddon.packs()).encode());
+            startState(handler.player);
             playerJoined(handler.player);
         });
+        // A connection is dropped on the thread reading it, and a script belongs to the server
+        // thread, so the event is handed over rather than raised where the drop was noticed.
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
-            PlayerFogs.forget(handler.player);
-            playerLeft(handler.player);
+            ServerPlayer left = handler.player;
+            PlayerFogs.forget(left);
+            server.execute(() -> playerLeft(left));
         });
         // A respawn is the other way into the world, and the flag is how a pack tells the two apart.
-        ServerPlayerEvents.AFTER_RESPAWN.register((from, to, alive) -> playerSpawned(to, false));
+        ServerPlayerEvents.AFTER_RESPAWN.register((from, to, alive) -> {
+            PlayerDefinition player = PlayerDefinition.declared();
+            if (player != null) player.applyTo(to);
+            playerSpawned(to, false);
+        });
+    }
+
+    /**
+     * The food and experience a pack's own `entities/player.json` says a player starts with.
+     *
+     * Bedrock builds these into the player the moment it makes one, so they belong to a first join
+     * and to a respawn rather than to every login: a second login has to read back what the last one
+     * left. Nothing in Java writes down that a player has been here before, so the state store this
+     * mod already keeps per player is what remembers it.
+     */
+    private static void startState(ServerPlayer player) {
+        PlayerDefinition declared = PlayerDefinition.declared();
+        if (declared == null || state == null) return;
+        if (state.property(player.getUUID(), "player_start") != null) return;
+
+        state.setProperty(player.getUUID(), "player_start", true);
+        declared.applyTo(player);
+    }
+
+    /** A block a pack gave a store of its own takes that store with it when it is broken. */
+    private static void forgetBlockStore(net.minecraft.world.level.Level level,
+        net.minecraft.core.BlockPos position, net.minecraft.world.level.block.state.BlockState was) {
+        if (state == null) return;
+        if (!(was.getBlock() instanceof at.ioexception.mcaddon.block.AddonBlock block)) return;
+        if (!block.holdsState()) return;
+
+        state.forgetBlock(at.ioexception.mcaddon.state.AddonState.blockKey(
+            at.ioexception.mcaddon.platform.Platform.idOf(level.dimension()).toString(),
+            position.getX(), position.getY(), position.getZ()));
     }
 
     /** A pack may refuse damage outright, which is what Bedrock's before event is for. */
@@ -119,7 +182,7 @@ public final class ServerHooks {
         if (scripts == null) return false;
 
         Map<String, Object> fields = new LinkedHashMap<>();
-        fields.put("hurtEntity", new ScriptHost.EntityHandle(entity.getStringUUID()));
+        fields.put("hurtEntity", ScriptHost.EntityHandle.of(entity));
         fields.put("damage", (double) amount);
         fields.put("damageSource", DamageSources.describe(source));
         return scripts.raiseCancellable("entityHurt", fields);
@@ -129,7 +192,7 @@ public final class ServerHooks {
         if (scripts == null) return;
 
         Map<String, Object> fields = new LinkedHashMap<>();
-        fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
+        fields.put("player", ScriptHost.EntityHandle.of(player));
         fields.put("playerId", player.getStringUUID());
         fields.put("playerName", player.getName().getString());
         scripts.raiseWorldEvent("playerJoin", fields);
@@ -140,17 +203,19 @@ public final class ServerHooks {
         if (scripts == null) return;
 
         Map<String, Object> fields = new LinkedHashMap<>();
-        fields.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
+        fields.put("player", ScriptHost.EntityHandle.of(player));
         fields.put("initialSpawn", initial);
         scripts.raiseWorldEvent("playerSpawn", fields);
     }
 
     /** The after event names a player who is already gone, so it carries names and not a handle. */
     private static void playerLeft(ServerPlayer player) {
+        WorldEvents.forget(player);
+        Dialogues.forget(player.getUUID());
         if (scripts == null) return;
 
         Map<String, Object> leaving = new LinkedHashMap<>();
-        leaving.put("player", new ScriptHost.EntityHandle(player.getStringUUID()));
+        leaving.put("player", ScriptHost.EntityHandle.of(player));
         scripts.raiseCancellable("playerLeave", leaving);
 
         Map<String, Object> left = new LinkedHashMap<>();
@@ -163,16 +228,19 @@ public final class ServerHooks {
      * `minecraft:damage_sensor` is how a pack reacts to its entity being hurt.
      *
      * The sensor's own filters run against the damage's source, so a pack can tell a fall from a
-     * player's sword without the damage itself carrying that meaning.
+     * player's sword without the damage itself carrying that meaning. False when a matching trigger
+     * says the damage does not land, which is how a pack makes its entity immune to one kind of
+     * harm without making it immune to everything.
      */
-    private static void damageSensor(net.minecraft.world.entity.LivingEntity entity,
+    private static boolean damageSensor(net.minecraft.world.entity.LivingEntity entity,
         net.minecraft.world.damagesource.DamageSource source) {
-        if (state == null || !(entity instanceof at.ioexception.mcaddon.entity.AddonEntity addon)) return;
-        if (addon.definition() == null) return;
+        if (state == null || !(entity instanceof at.ioexception.mcaddon.entity.AddonEntity addon)) return true;
+        if (addon.definition() == null) return true;
 
-        com.google.gson.JsonObject sensor = addon.definition().components().get("minecraft:damage_sensor");
-        if (sensor == null) return;
+        com.google.gson.JsonObject sensor = addon.liveComponent("minecraft:damage_sensor");
+        if (sensor == null) return true;
 
+        boolean lands = true;
         for (com.google.gson.JsonElement element
             : at.ioexception.mcaddon.util.Json.list(sensor, "triggers")) {
             if (!element.isJsonObject()) continue;
@@ -182,18 +250,28 @@ public final class ServerHooks {
             if (cause != null && !cause.equals("any") && !cause.equals(source.getMsgId())) continue;
 
             com.google.gson.JsonObject onDamage = trigger.getAsJsonObject("on_damage");
-            String event = onDamage == null
-                ? null : at.ioexception.mcaddon.util.Json.text(onDamage, "event", null);
-            if (event == null) continue;
-
             at.ioexception.mcaddon.bedrock.behaviour.Filter filter =
-                at.ioexception.mcaddon.bedrock.behaviour.Filter.parse(onDamage.get("filters"));
+                at.ioexception.mcaddon.bedrock.behaviour.Filter.parse(
+                    onDamage == null ? null : onDamage.get("filters"));
             if (!filter.matches(new at.ioexception.mcaddon.bedrock.behaviour.Filter.Context(
                 entity, source.getEntity() == null ? entity : source.getEntity(), null, state))) {
                 continue;
             }
-            EntityEvents.trigger(entity, event, source.getEntity(), state);
+
+            if (trigger.has("deals_damage") && !dealsDamage(trigger.get("deals_damage"))) lands = false;
+
+            String event = onDamage == null
+                ? null : at.ioexception.mcaddon.util.Json.text(onDamage, "event", null);
+            if (event != null) EntityEvents.trigger(entity, event, source.getEntity(), state);
         }
+        return lands;
+    }
+
+    /** Bedrock writes this as a boolean, or as one of `yes`, `no` and `no_but_side_effects`. */
+    private static boolean dealsDamage(com.google.gson.JsonElement value) {
+        if (!value.isJsonPrimitive()) return true;
+        if (value.getAsJsonPrimitive().isBoolean()) return value.getAsBoolean();
+        return !value.getAsString().startsWith("no");
     }
 
     private static void start(MinecraftServer server) {
@@ -208,6 +286,9 @@ public final class ServerHooks {
     private static void stop() {
         if (scripts != null) {
             scripts.raiseSystemBeforeEvent("shutdown", Map.of());
+            // A test area started and never cleared is holding its chunks, and a chunk held by a
+            // server that is going away is held by nobody.
+            scripts.bridge().gametests.clearAll();
             scripts.stop();
             scripts = null;
         }
@@ -226,7 +307,7 @@ public final class ServerHooks {
         if (scripts == null) return;
 
         Map<String, Object> fields = new LinkedHashMap<>();
-        fields.put("entity", new ScriptHost.EntityHandle(entity.getStringUUID()));
+        fields.put("entity", ScriptHost.EntityHandle.of(entity));
         fields.put("cause", event.equals("entitySpawn") ? "Spawned" : "Loaded");
         scripts.raiseWorldEvent(event, fields);
     }
@@ -236,7 +317,7 @@ public final class ServerHooks {
         if (scripts == null) return;
 
         Map<String, Object> leaving = new LinkedHashMap<>();
-        leaving.put("removedEntity", new ScriptHost.EntityHandle(entity.getStringUUID()));
+        leaving.put("removedEntity", ScriptHost.EntityHandle.of(entity));
         scripts.raiseCancellable("entityRemove", leaving);
 
         Map<String, Object> removed = new LinkedHashMap<>();
@@ -254,8 +335,10 @@ public final class ServerHooks {
         CommandBuildContext context, Commands.CommandSelection selection) {
         BedrockCommands.register(dispatcher);
 
+        // A script event id carries the namespace of the pack that declared it, and Brigadier reads
+        // a colon only inside quotes, which is how the translated form of the command writes it.
         dispatcher.register(Commands.literal("scriptevent")
-            .then(Commands.argument("id", StringArgumentType.word())
+            .then(Commands.argument("id", StringArgumentType.string())
                 .then(Commands.argument("message", StringArgumentType.greedyString())
                     .executes(command -> scriptEvent(command.getSource(),
                         StringArgumentType.getString(command, "id"),
@@ -298,7 +381,7 @@ public final class ServerHooks {
         fields.put("message", message);
         fields.put("sourceType", source.getEntity() == null ? "Server" : "Entity");
         if (source.getEntity() != null) {
-            fields.put("sourceEntity", new ScriptHost.EntityHandle(source.getEntity().getStringUUID()));
+            fields.put("sourceEntity", ScriptHost.EntityHandle.of(source.getEntity()));
         }
         scripts.raiseSystemEvent("scriptEventReceive", fields);
         return 1;

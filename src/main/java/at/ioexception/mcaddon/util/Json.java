@@ -49,9 +49,43 @@ public final class Json {
         }
     }
 
+    /** A pack file whose whole body is an array, which is how a flipbook index is written. */
+    public static com.google.gson.JsonArray parseArray(Path file) throws IOException {
+        try (InputStream stream = Files.newInputStream(file)) {
+            JsonElement parsed = parse(stream);
+            if (!parsed.isJsonArray()) throw new IOException(file + " is not a JSON array");
+            return parsed.getAsJsonArray();
+        }
+    }
+
     public static String text(JsonObject json, String key, String fallback) {
         JsonElement value = json.get(key);
         return value == null || !value.isJsonPrimitive() ? fallback : value.getAsString();
+    }
+
+    public static boolean bool(JsonObject json, String key, boolean fallback) {
+        JsonElement value = json.get(key);
+        return value == null || !value.isJsonPrimitive() ? fallback : value.getAsBoolean();
+    }
+
+    public static double number(JsonObject json, String key, double fallback) {
+        JsonElement value = json.get(key);
+        return value == null || !value.isJsonPrimitive() ? fallback : value.getAsDouble();
+    }
+
+    /**
+     * A `#rrggbb` colour as the packed integer Java writes one with, or -1 for anything else.
+     *
+     * Bedrock writes every colour in a pack as that string, and Java's biome effects, its particle
+     * tints and its map colours are all one integer.
+     */
+    public static int colour(String value) {
+        if (value == null) return -1;
+        try {
+            return Integer.parseInt(value.startsWith("#") ? value.substring(1) : value, 16) & 0xFFFFFF;
+        } catch (NumberFormatException notAColour) {
+            return -1;
+        }
     }
 
     /** Writes the boolean, number and string values an entity property is allowed to hold. */

@@ -153,7 +153,7 @@ public final class ScriptHost {
 
         for (Path script : pack.list("scripts", ".js")) {
             try {
-                String relative = pack.root().relativize(script).toString();
+                String relative = pack.relative(script).toString();
                 files.put(root + "/" + relative, Files.readAllBytes(script));
             } catch (IOException error) {
                 McAddon.LOGGER.error("Could not read {} from {}.", script, pack.displayName(), error);
@@ -186,7 +186,7 @@ public final class ScriptHost {
      */
     private <T> T enter(String what, Supplier<T> call, T fallback) {
         if (!server.isSameThread()) {
-            McAddon.LOGGER.error("Something asked the scripts to {} off the server thread.", what);
+            McAddon.LOGGER.error("Nothing reached the scripts {}: that came from off the server thread.", what);
             return fallback;
         }
 
@@ -209,12 +209,60 @@ public final class ScriptHost {
         return enter("during startup", () -> runtime.invokeMember("startup").asString(), null);
     }
 
+    /**
+     * Calls one callback of a custom component a pack registered, and says whether it cancelled.
+     *
+     * `minecraft:custom_components` is how a block or an item hands a moment of its life to a
+     * script. The component's name is the pack's own, the callback's name is Bedrock's, and which
+     * callback belongs to which moment is decided by the caller rather than here.
+     */
+    public boolean runBlockComponent(String name, String callback, String argumentsJson) {
+        return enter("running a block component", () -> runtime
+            .invokeMember("runBlockComponent", name, callback, argumentsJson).asBoolean(), false);
+    }
+
+    public boolean runItemComponent(String name, String callback, String argumentsJson) {
+        return enter("running an item component", () -> runtime
+            .invokeMember("runItemComponent", name, callback, argumentsJson).asBoolean(), false);
+    }
+
     /** Runs a command the pack registered. The outcome carries a status and a message to show. */
     public com.google.gson.JsonObject runCommand(int index, String origin, String arguments) {
         return enter("running a command", () -> {
             String outcome = runtime.invokeMember("runCommand", index, origin, arguments).asString();
             return com.google.gson.JsonParser.parseString(outcome).getAsJsonObject();
         }, new com.google.gson.JsonObject());
+    }
+
+    /**
+     * The tests the packs registered, as JSON, and an empty list while no pack imports the module.
+     *
+     * The module is only evaluated when a pack imports it, so the hook it installs stands in for
+     * whether any pack ships tests at all.
+     */
+    public String gameTests() {
+        return enter("listing the tests", () -> {
+            Value tests = context.getBindings("js").getMember("__mcaddon_gametests__");
+            return tests == null ? "[]" : tests.invokeMember("list").asString();
+        }, "[]");
+    }
+
+    /** Starts one registered test in the area the caller already built for it. */
+    public void startGameTest(int index, String placementJson) {
+        enter("starting a test", () -> {
+            Value tests = context.getBindings("js").getMember("__mcaddon_gametests__");
+            if (tests != null) tests.invokeMember("start", index, placementJson);
+            return null;
+        }, null);
+    }
+
+    /** Abandons every test still running, which is what clearing their areas means for the script. */
+    public void stopGameTests() {
+        enter("stopping the tests", () -> {
+            Value tests = context.getBindings("js").getMember("__mcaddon_gametests__");
+            if (tests != null) tests.invokeMember("stop");
+            return null;
+        }, null);
     }
 
     /** Hands a form's answer back to the promise the pack is waiting on. */
@@ -282,6 +330,17 @@ public final class ScriptHost {
         }, false));
     }
 
+    /**
+     * Whether anything is listening on one event, so a caller can decide before building it.
+     *
+     * Raising already costs nothing when nobody listens, and this is for the few events whose
+     * fields are expensive to gather: an explosion names every block it will take.
+     */
+    public boolean listens(String group, String name) {
+        return Boolean.TRUE.equals(enter("counting the listeners on " + name,
+            () -> runtime.invokeMember(group, name).getMember("size").asInt() > 0, false));
+    }
+
     private void raise(String group, String name, Map<String, Object> fields) {
         enter("handling " + name, () -> {
             Value signal = runtime.invokeMember(group, name);
@@ -299,10 +358,18 @@ public final class ScriptHost {
      *
      * An entity arrives as the wrapper the pack may already have stashed state on, and a map arrives
      * as a guest object rather than as a host one: only annotated members of a host object are
-     * reachable, so a pack reading a plain field of it would find nothing there.
+     * reachable, so a pack reading a plain field of it would find nothing there. A list is a guest
+     * array for the same reason, and because a pack maps and filters what it is handed.
      */
     private Object wrap(Object value) {
-        if (value instanceof EntityHandle handle) return runtime.invokeMember("entityFor", handle.uuid());
+        if (value instanceof EntityHandle handle) {
+            return runtime.invokeMember("entityFor", handle.uuid(), handle.player());
+        }
+        if (value instanceof List<?> items) {
+            Value array = context.eval("js", "([])");
+            for (int i = 0; i < items.size(); i++) array.setArrayElement(i, wrap(items.get(i)));
+            return array;
+        }
         if (!(value instanceof Map<?, ?> nested)) return value;
 
         Value object = context.eval("js", "({})");
@@ -310,8 +377,23 @@ public final class ScriptHost {
         return object;
     }
 
-    /** Marks a value as an entity id so it arrives in the script as an Entity and not as a string. */
-    public record EntityHandle(String uuid) {
+    /**
+     * Marks a value as an entity id so it arrives in the script as an Entity and not as a string.
+     *
+     * An event that can only ever carry somebody playing says so, because the game will not always
+     * answer that question in time: a player joining is not in the player list yet while the events
+     * about them are being raised, and a script handed a plain entity for a player has none of the
+     * player members to call.
+     */
+    public record EntityHandle(String uuid, boolean player) {
+        public EntityHandle(String uuid) {
+            this(uuid, false);
+        }
+
+        public static EntityHandle of(net.minecraft.world.entity.Entity entity) {
+            return new EntityHandle(entity.getStringUUID(),
+                entity instanceof net.minecraft.server.level.ServerPlayer);
+        }
     }
 
     /** The bridge a pack's script reaches the game through, for anything that has to ask it too. */

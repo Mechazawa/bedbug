@@ -289,6 +289,9 @@ public final class Containers extends Surface {
         lore(stack).forEach(lore::add);
         item.add("lore", lore);
         item.add("properties", properties(stack));
+
+        JsonObject book = book(stack);
+        if (book != null) item.add("book", book);
         return item.toString();
     }
 
@@ -318,6 +321,10 @@ public final class Containers extends Surface {
 
         setProperties(built, item.has("properties") && item.get("properties").isJsonObject()
             ? item.getAsJsonObject("properties") : new JsonObject());
+
+        if (item.has("book") && item.get("book").isJsonObject()) {
+            setBook(built, item.getAsJsonObject("book"));
+        }
         return built;
     }
 
@@ -404,6 +411,98 @@ public final class Containers extends Surface {
         lines.forEach(line -> stored.add(net.minecraft.nbt.StringTag.valueOf(
             Component.Serializer.toJson(Component.literal(line)))));
         stack.getOrCreateTagElement("display").put("Lore", stored);
+        *///?}
+    }
+
+    /**
+     * The book a stack is, or null for an item that is no kind of book.
+     *
+     * A signed book keeps its pages as text components and an unsigned one keeps them as plain
+     * text, so both come back as plain text and `signed` says which the stack was.
+     */
+    private static JsonObject book(ItemStack stack) {
+        JsonObject book = new JsonObject();
+        JsonArray pages = new JsonArray();
+        book.add("pages", pages);
+        //? if >=1.21 {
+        net.minecraft.world.item.component.WrittenBookContent written =
+            stack.get(net.minecraft.core.component.DataComponents.WRITTEN_BOOK_CONTENT);
+        if (written != null) {
+            book.addProperty("signed", true);
+            book.addProperty("title", written.title().raw());
+            book.addProperty("author", written.author());
+            written.pages().forEach(page -> pages.add(page.raw().getString()));
+            return book;
+        }
+
+        net.minecraft.world.item.component.WritableBookContent writable =
+            stack.get(net.minecraft.core.component.DataComponents.WRITABLE_BOOK_CONTENT);
+        if (writable == null) return null;
+
+        book.addProperty("signed", false);
+        writable.pages().forEach(page -> pages.add(page.raw()));
+        return book;
+        //?} else {
+        /*net.minecraft.nbt.CompoundTag tag = stack.getTag();
+        if (tag == null || !tag.contains("pages", 9)) return null;
+
+        boolean signed = tag.contains("title", 8);
+        book.addProperty("signed", signed);
+        if (signed) {
+            book.addProperty("title", tag.getString("title"));
+            book.addProperty("author", tag.getString("author"));
+        }
+
+        net.minecraft.nbt.ListTag stored = tag.getList("pages", 8);
+        for (int page = 0; page < stored.size(); page++) {
+            Component text = signed ? Component.Serializer.fromJson(stored.getString(page)) : null;
+            pages.add(signed ? text == null ? "" : text.getString() : stored.getString(page));
+        }
+        return book;
+        *///?}
+    }
+
+    /** Writes a stack's pages, and its title and author once the pack has signed it. */
+    private static void setBook(ItemStack stack, JsonObject book) {
+        List<String> pages = new ArrayList<>();
+        if (book.has("pages") && book.get("pages").isJsonArray()) {
+            book.getAsJsonArray("pages").forEach(page -> pages.add(page.getAsString()));
+        }
+        boolean signed = book.has("signed") && book.get("signed").getAsBoolean();
+        String title = book.has("title") && book.get("title").isJsonPrimitive()
+            ? book.get("title").getAsString() : "";
+        String author = book.has("author") && book.get("author").isJsonPrimitive()
+            ? book.get("author").getAsString() : "";
+
+        //? if >=1.21 {
+        if (!signed) {
+            stack.set(net.minecraft.core.component.DataComponents.WRITABLE_BOOK_CONTENT,
+                new net.minecraft.world.item.component.WritableBookContent(
+                    pages.stream().map(net.minecraft.server.network.Filterable::passThrough).toList()));
+            return;
+        }
+
+        stack.remove(net.minecraft.core.component.DataComponents.WRITABLE_BOOK_CONTENT);
+        stack.set(net.minecraft.core.component.DataComponents.WRITTEN_BOOK_CONTENT,
+            new net.minecraft.world.item.component.WrittenBookContent(
+                net.minecraft.server.network.Filterable.passThrough(title), author, 0,
+                pages.stream()
+                    .map(page -> net.minecraft.server.network.Filterable.passThrough(
+                        (Component) Component.literal(page)))
+                    .toList(),
+                false));
+        //?} else {
+        /*net.minecraft.nbt.ListTag stored = new net.minecraft.nbt.ListTag();
+        pages.forEach(page -> stored.add(net.minecraft.nbt.StringTag.valueOf(
+            signed ? Component.Serializer.toJson(Component.literal(page)) : page)));
+
+        net.minecraft.nbt.CompoundTag tag = stack.getOrCreateTag();
+        tag.put("pages", stored);
+        if (signed) {
+            tag.putString("title", title);
+            tag.putString("author", author);
+            tag.putInt("generation", 0);
+        }
         *///?}
     }
 

@@ -57,11 +57,23 @@ public final class BedrockModelRenderer {
     ) {
         if (hidden.test(bone.name())) return;
 
+        poseStack.pushPose();
+        poseBone(bone, animator, poseStack);
+
+        PoseStack.Pose last = poseStack.last();
+        for (BakedQuad quad : bone.quads()) emitQuad(quad, shift, last, buffer, light, overlay, colour);
+
+        for (BakedBone child : bone.children()) {
+            renderBone(child, animator, hidden, shift, poseStack, buffer, light, overlay, colour);
+        }
+        poseStack.popPose();
+    }
+
+    /** Moves the stack from the bone's parent onto the bone itself, posed for this frame. */
+    private static void poseBone(BakedBone bone, EntityAnimator animator, PoseStack poseStack) {
         BonePose pose = animator == null ? null : animator.poseOf(bone.name());
 
-        poseStack.pushPose();
         poseStack.translate(bone.pivot().x * PIXEL, bone.pivot().y * PIXEL, bone.pivot().z * PIXEL);
-
         if (pose != null) {
             // A position channel is in Bedrock's axes, so its Y runs the other way.
             poseStack.translate(pose.position.x * PIXEL, -pose.position.y * PIXEL, pose.position.z * PIXEL);
@@ -82,14 +94,50 @@ public final class BedrockModelRenderer {
         if (pose != null && !pose.scale.equals(1, 1, 1)) {
             poseStack.scale(pose.scale.x, pose.scale.y, pose.scale.z);
         }
+    }
 
-        PoseStack.Pose last = poseStack.last();
-        for (BakedQuad quad : bone.quads()) emitQuad(quad, shift, last, buffer, light, overlay, colour);
+    /**
+     * Where one bone of a posed model sits, in the space the model itself is drawn in.
+     *
+     * This is what a Bedrock model states a hand or a mounting point with: the bone carries no boxes
+     * and exists to be hung off. Null where the model has no bone of that name. Bedrock matches such
+     * a name without regard to case, which is why `q.item_slot_to_bone_name` answers `rightitem` for
+     * a model whose bone is written `rightItem`.
+     */
+    public static Matrix4f anchorOf(BakedGeometry geometry, EntityAnimator animator, String bone) {
+        PoseStack poseStack = new PoseStack();
+        for (BakedBone root : geometry.roots()) {
+            Matrix4f found = searchBone(root, animator, bone, poseStack);
+            if (found != null) return found;
+        }
+        return null;
+    }
 
+    /**
+     * The space a model bound to that bone is drawn in.
+     *
+     * A bound bone's own pivot stops being a place in the wearer's model and becomes the point its
+     * animation turns it about, so the pivot is taken back out and the boxes, which are already
+     * stated relative to it, land on the bone. Mojang's own trident settles it: its bone pivots at
+     * 24 pixels with boxes running from 27 below that point to 4 above, which is a pole held at the
+     * grip rather than one standing over a mob's head.
+     */
+    public static Matrix4f hangFrom(Matrix4f anchor, Vector3f pivot) {
+        return new Matrix4f(anchor).translate(-pivot.x * PIXEL, -pivot.y * PIXEL, -pivot.z * PIXEL);
+    }
+
+    private static Matrix4f searchBone(BakedBone bone, EntityAnimator animator, String name,
+        PoseStack poseStack) {
+        poseStack.pushPose();
+        poseBone(bone, animator, poseStack);
+
+        Matrix4f found = bone.name().equalsIgnoreCase(name) ? new Matrix4f(poseStack.last().pose()) : null;
         for (BakedBone child : bone.children()) {
-            renderBone(child, animator, hidden, shift, poseStack, buffer, light, overlay, colour);
+            if (found != null) break;
+            found = searchBone(child, animator, name, poseStack);
         }
         poseStack.popPose();
+        return found;
     }
 
     private static void emitQuad(
@@ -110,8 +158,8 @@ public final class BedrockModelRenderer {
         VertexConsumer buffer, Vector3f point, BakedVertex vertex, UvShift shift, Vector3f normal,
         int light, int overlay, int colour
     ) {
-        float u = vertex.u() + shift.u();
-        float v = vertex.v() + shift.v();
+        float u = shift.mapU(vertex.u());
+        float v = shift.mapV(vertex.v());
 
         //? if >=1.21 {
         buffer.addVertex(point.x, point.y, point.z)

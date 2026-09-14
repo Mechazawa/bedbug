@@ -25,6 +25,9 @@ public record PackSet(List<BedrockPack> packs, List<String> problems) {
                 pack.role() == PackRole.RESOURCE ? "resources" : "behaviour",
                 pack.displayName(), manifest.version(), pack.origin(), modules));
 
+            if (!manifest.metadata().isEmpty()) lines.add("    " + credits(manifest.metadata()));
+            if (pack.subpackName() != null) lines.add("    loaded as " + pack.subpackName());
+
             for (PackManifest.ModuleDependency dependency : manifest.moduleDependencies()) {
                 lines.add("    script API " + dependency.moduleName() + " " + dependency.version());
             }
@@ -32,5 +35,14 @@ public record PackSet(List<BedrockPack> packs, List<String> problems) {
 
         for (String problem : problems) lines.add("problem: " + problem);
         return lines;
+    }
+
+    /** Who a pack says wrote it, under what licence and where it lives, in whichever parts it states. */
+    private static String credits(PackManifest.Metadata metadata) {
+        List<String> parts = new ArrayList<>();
+        if (!metadata.authors().isEmpty()) parts.add("by " + String.join(", ", metadata.authors()));
+        if (metadata.license() != null) parts.add(metadata.license());
+        if (metadata.url() != null) parts.add(metadata.url());
+        return String.join(", ", parts);
     }
 }

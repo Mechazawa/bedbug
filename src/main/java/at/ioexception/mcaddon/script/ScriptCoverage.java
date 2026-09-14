@@ -19,6 +19,7 @@ public final class ScriptCoverage {
     private final Map<String, AtomicInteger> unsupported = new LinkedHashMap<>();
     private final Map<String, AtomicInteger> missingSounds = new LinkedHashMap<>();
     private final Map<String, String> failedCommands = new LinkedHashMap<>();
+    private final Map<String, String> refusedCommands = new LinkedHashMap<>();
 
     public void unsupported(String member) {
         count(unsupported, member);
@@ -30,6 +31,11 @@ public final class ScriptCoverage {
 
     void failedCommand(String command, String reason) {
         failedCommands.putIfAbsent(command.split(" ")[0], reason);
+    }
+
+    /** A command the game read and then declined, which says nothing about what this mod supports. */
+    void refusedCommand(String command, String reason) {
+        refusedCommands.putIfAbsent(command.split(" ")[0], reason);
     }
 
     public List<String> report() {
@@ -47,6 +53,14 @@ public final class ScriptCoverage {
             failedCommands.forEach((command, reason) -> lines.add("    " + command + ": " + reason));
         }
         if (lines.isEmpty()) lines.add("Everything the packs asked for was implemented.");
+
+        // Listed after the verdict rather than among the gaps: a command the game read and then
+        // declined is the game answering, and counting it would make a pack that asks about an
+        // empty chunk read as a pack this mod cannot serve.
+        if (!refusedCommands.isEmpty()) {
+            lines.add("Commands the packs ran that the game declined:");
+            refusedCommands.forEach((command, reason) -> lines.add("    " + command + ": " + reason));
+        }
         return lines;
     }
 

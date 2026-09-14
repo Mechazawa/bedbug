@@ -396,6 +396,58 @@ public final class Blocks extends Surface {
         return stateTypes;
     }
 
+    // Loot
+
+    /**
+     * What breaking this block would drop, without breaking it.
+     *
+     * Rolled through the block's own loot table, so the answer is the real one: the tool counts, its
+     * enchantments count, and a block that only drops itself under silk touch answers accordingly.
+     * Null when nothing is at that position to break.
+     */
+    @HostAccess.Export
+    public String dropsAt(String dimension, int x, int y, int z, String toolId) {
+        ServerLevel level = level(dimension);
+        if (level == null) return null;
+
+        BlockPos at = new BlockPos(x, y, z);
+        return dropsJson(level, level.getBlockState(at), at, level.getBlockEntity(at), toolId);
+    }
+
+    /**
+     * The same for a block that is not standing anywhere.
+     *
+     * The roll still needs a position to name, and the origin stands in. A table that reads its own
+     * position is the rare one; every other table answers the same wherever it is rolled.
+     */
+    @HostAccess.Export
+    public String dropsOf(String typeId, String statesJson, String toolId) {
+        BlockState state = permutation(typeId, statesJson);
+        return state == null ? null
+            : dropsJson(server.overworld(), state, BlockPos.ZERO, null, toolId);
+    }
+
+    private static String dropsJson(ServerLevel level, BlockState state, BlockPos at,
+        net.minecraft.world.level.block.entity.BlockEntity holder, String toolId) {
+        Item tool = toolId == null ? null : BuiltInRegistries.ITEM
+            .getOptional(Identifier.tryParse(toolId)).orElse(null);
+        JsonArray dropped = new JsonArray();
+        Block.getDrops(state, level, at, holder, null,
+                tool == null ? net.minecraft.world.item.ItemStack.EMPTY
+                    : new net.minecraft.world.item.ItemStack(tool))
+            .forEach(stack -> dropped.add(stackJson(stack)));
+        return dropped.toString();
+    }
+
+    private static JsonObject stackJson(net.minecraft.world.item.ItemStack stack) {
+        JsonObject item = new JsonObject();
+        item.addProperty("typeId", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+        item.addProperty("amount", stack.getCount());
+        item.addProperty("damage", stack.getDamageValue());
+        item.addProperty("maxDurability", stack.getMaxDamage());
+        return item;
+    }
+
     private BlockState stateAt(String dimension, int x, int y, int z) {
         ServerLevel level = level(dimension);
         return level == null ? net.minecraft.world.level.block.Blocks.AIR.defaultBlockState()

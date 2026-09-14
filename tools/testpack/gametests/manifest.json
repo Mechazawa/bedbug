@@ -1,0 +1,28 @@
+{
+    "format_version": 2,
+    "header": {
+        "name": "GameTest Probe",
+        "description": "Registers one test that passes and one that fails, so a run proves both.",
+        "uuid": "8a2d1f3e-6b47-4c58-9a10-2f7c5d4e91b3",
+        "version": [1, 0, 0],
+        "min_engine_version": [1, 20, 0]
+    },
+    "modules": [
+        {
+            "type": "data",
+            "uuid": "1c9e77a4-52b8-4d16-8e33-0b6a4f2c7d95",
+            "version": [1, 0, 0]
+        },
+        {
+            "type": "script",
+            "language": "javascript",
+            "uuid": "4f0b8c21-9d35-4a7e-b264-83e15c7a0d62",
+            "version": [1, 0, 0],
+            "entry": "scripts/main.js"
+        }
+    ],
+    "dependencies": [
+        { "module_name": "@minecraft/server", "version": "2.0.0" },
+        { "module_name": "@minecraft/server-gametest", "version": "1.0.0" }
+    ]
+}

@@ -1,0 +1,12 @@
+{
+  "format_version": "1.20.10",
+  "minecraft:recipe_brewing_container": {
+    "description": {
+      "identifier": "tp:glow_bottle"
+    },
+    "tags": ["brewing_stand"],
+    "input": "minecraft:potion",
+    "reagent": "tp:shard",
+    "output": "minecraft:splash_potion"
+  }
+}

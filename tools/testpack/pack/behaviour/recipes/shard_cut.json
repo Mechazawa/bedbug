@@ -1,0 +1,22 @@
+{
+  "format_version": "1.20.0",
+  "minecraft:recipe_shapeless": {
+    "description": {
+      "identifier": "tp:shard_cut"
+    },
+    "tags": ["stonecutter"],
+    "group": "tp_shard",
+    "unlock": {
+      "context": "AlwaysUnlocked"
+    },
+    "ingredients": [
+      {
+        "item": "tp:lamp"
+      }
+    ],
+    "result": {
+      "item": "tp:shard",
+      "count": 2
+    }
+  }
+}

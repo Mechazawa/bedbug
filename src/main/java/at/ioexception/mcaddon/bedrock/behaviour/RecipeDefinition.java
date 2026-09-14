@@ -13,20 +13,97 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A crafting recipe a behaviour pack declares.
  *
  * Bedrock's shaped recipes use a key map and a pattern the same way Java's do, which is what makes
- * these two of the few formats that convert almost directly.
+ * these two of the few formats that convert almost directly. `tags` names the block the recipe is
+ * made at, which is what decides the Java recipe type a furnace or a stonecutter recipe becomes.
  */
 public record RecipeDefinition(String identifier, Kind kind, List<String> pattern,
-    Map<String, String> key, List<Ingredient> ingredients, String result, int resultCount) {
+    Map<String, String> key, List<Ingredient> ingredients, String result, int resultCount,
+    String group, List<String> tags, Smithing smithing, List<String> unlock, Brewing brewing) {
 
-    public enum Kind { SHAPED, SHAPELESS, FURNACE }
+    public enum Kind {
+        SHAPED, SHAPELESS, FURNACE, SMITHING_TRANSFORM, SMITHING_TRIM,
+        BREWING_MIX, BREWING_CONTAINER;
+
+        public boolean brews() {
+            return this == BREWING_MIX || this == BREWING_CONTAINER;
+        }
+    }
 
     public record Ingredient(String item, int count) {
     }
+
+    /** A smithing table's three inputs: what shapes the result, what is changed, and what changes it. */
+    public record Smithing(String template, String base, String addition) {
+    }
+
+    /**
+     * A brewing stand's three parts: what stands in the bottles, what goes on top, and what comes out.
+     *
+     * A mix names a potion on each side, written `minecraft:potion_type:<name>`, and a container
+     * names the bottle itself, so `minecraft:potion` with gunpowder becomes `minecraft:splash_potion`.
+     */
+    public record Brewing(String input, String reagent, String output) {
+    }
+
+    /** The recipe kinds this mod converts, against which a pack's own file is checked. */
+    private static final Set<String> CONVERTED = Set.of(
+        "minecraft:recipe_shaped", "minecraft:recipe_shapeless", "minecraft:recipe_furnace",
+        "minecraft:recipe_smithing_transform", "minecraft:recipe_smithing_trim",
+        "minecraft:recipe_brewing_mix", "minecraft:recipe_brewing_container");
+
+    /**
+     * Every field of a recipe body this reads, qualified by the kind carrying it.
+     *
+     * A field Java has no place for counts here once it is read, because reading it is what lets
+     * `/mcaddon entities` name it: `priority`, `assume_symmetry`, an unlock stated as a context and
+     * every data value beside an item are each reported rather than converted.
+     */
+    private static final Set<String> HANDLES = Set.of(
+        "shaped.description", "shaped.description.identifier", "shaped.pattern", "shaped.key",
+        "shaped.key.item", "shaped.key.tag", "shaped.key.data", "shaped.result",
+        "shaped.result.item", "shaped.result.count", "shaped.result.data", "shaped.group",
+        "shaped.tags", "shaped.priority", "shaped.assume_symmetry", "shaped.unlock",
+        "shaped.unlock.item", "shaped.unlock.tag", "shaped.unlock.data", "shaped.unlock.context",
+        "shapeless.description", "shapeless.description.identifier", "shapeless.ingredients",
+        "shapeless.ingredients.item", "shapeless.ingredients.tag", "shapeless.ingredients.count",
+        "shapeless.ingredients.data", "shapeless.result", "shapeless.result.item",
+        "shapeless.result.count", "shapeless.result.data", "shapeless.group", "shapeless.tags",
+        "shapeless.priority", "shapeless.unlock", "shapeless.unlock.item", "shapeless.unlock.data",
+        "shapeless.unlock.context",
+        "furnace.description", "furnace.description.identifier", "furnace.input",
+        "furnace.input.item", "furnace.input.tag", "furnace.input.data", "furnace.output",
+        "furnace.tags", "furnace.priority", "furnace.unlock", "furnace.unlock.item",
+        "furnace.unlock.tag", "furnace.unlock.data",
+        "smithing_transform.description", "smithing_transform.description.identifier",
+        "smithing_transform.template", "smithing_transform.base", "smithing_transform.addition",
+        "smithing_transform.result", "smithing_transform.tags",
+        "smithing_trim.description", "smithing_trim.description.identifier",
+        "smithing_trim.template", "smithing_trim.template.tag", "smithing_trim.base",
+        "smithing_trim.base.tag", "smithing_trim.addition", "smithing_trim.addition.tag",
+        "smithing_trim.tags",
+        "brewing_mix.description", "brewing_mix.description.identifier", "brewing_mix.input",
+        "brewing_mix.reagent", "brewing_mix.output", "brewing_mix.tags",
+        "brewing_container.description", "brewing_container.description.identifier",
+        "brewing_container.input", "brewing_container.reagent", "brewing_container.output",
+        "brewing_container.tags");
+
+    /** The fields Java's own recipe has no place for, each reported once a pack writes one. */
+    private static final List<String> REPORTED = List.of("priority", "assume_symmetry");
+
+    private static final Map<Kind, String> SECTIONS = Map.of(
+        Kind.SHAPED, "minecraft:recipe_shaped",
+        Kind.SHAPELESS, "minecraft:recipe_shapeless",
+        Kind.FURNACE, "minecraft:recipe_furnace",
+        Kind.SMITHING_TRANSFORM, "minecraft:recipe_smithing_transform",
+        Kind.SMITHING_TRIM, "minecraft:recipe_smithing_trim",
+        Kind.BREWING_MIX, "minecraft:recipe_brewing_mix",
+        Kind.BREWING_CONTAINER, "minecraft:recipe_brewing_container");
 
     public static List<RecipeDefinition> readAll(BedrockPack pack) {
         List<RecipeDefinition> recipes = new ArrayList<>();
@@ -41,25 +118,18 @@ public record RecipeDefinition(String identifier, Kind kind, List<String> patter
         return recipes;
     }
 
-    /** The recipe kinds this mod converts, against which a pack's own file is checked. */
-    private static final java.util.Set<String> KINDS = java.util.Set.of(
-        "minecraft:recipe_shaped", "minecraft:recipe_shapeless", "minecraft:recipe_furnace");
-
     private static RecipeDefinition read(JsonObject root) {
         // A recipe file names its kind as its only top-level key, so a kind nothing reads is a
-        // recipe that never reaches the game and is worth saying so.
+        // recipe that never reaches the game and is worth saying so. No Java block reduces a
+        // material, which is what `minecraft:recipe_material_reduction` describes.
         for (String declared : root.keySet()) {
-            if (declared.startsWith("minecraft:recipe_") && !KINDS.contains(declared)) {
+            if (declared.startsWith("minecraft:recipe_") && !CONVERTED.contains(declared)) {
                 AddonEntities.unsupported(declared);
             }
         }
 
         for (Kind kind : Kind.values()) {
-            String section = switch (kind) {
-                case SHAPED -> "minecraft:recipe_shaped";
-                case SHAPELESS -> "minecraft:recipe_shapeless";
-                case FURNACE -> "minecraft:recipe_furnace";
-            };
+            String section = SECTIONS.get(kind);
             if (!root.has(section) || !root.get(section).isJsonObject()) continue;
 
             JsonObject body = root.getAsJsonObject(section);
@@ -67,49 +137,125 @@ public record RecipeDefinition(String identifier, Kind kind, List<String> patter
             String identifier = description == null ? null : Json.text(description, "identifier", null);
             if (identifier == null) return null;
 
-            List<String> pattern = new ArrayList<>();
-            for (JsonElement row : Json.list(body, "pattern")) {
-                if (row.isJsonPrimitive()) pattern.add(row.getAsString());
-            }
+            // Java offers every recipe that matches rather than the one with the highest priority,
+            // and mirrors a shaped pattern whatever the recipe says about its symmetry.
+            String name = section.substring("minecraft:recipe_".length());
+            REPORTED.stream().filter(body::has)
+                .forEach(field -> AddonEntities.unsupported("recipe field " + name + "." + field));
 
-            Map<String, String> key = new LinkedHashMap<>();
-            JsonObject keys = body.getAsJsonObject("key");
-            if (keys != null) {
-                for (Map.Entry<String, JsonElement> entry : keys.entrySet()) {
-                    String item = itemOf(entry.getValue());
-                    if (item != null) key.put(entry.getKey(), item);
-                }
-            }
-
-            List<Ingredient> ingredients = new ArrayList<>();
-            for (JsonElement element : Json.list(body, "ingredients")) {
-                String item = itemOf(element);
-                if (item != null) ingredients.add(new Ingredient(item, count(element)));
-            }
-            String input = itemOf(body.get("input"));
-            if (input != null) ingredients.add(new Ingredient(input, 1));
-
-            JsonElement output = body.has("result") ? body.get("result") : body.get("output");
-            String result = itemOf(output);
-            if (result == null) return null;
-
-            return new RecipeDefinition(identifier, kind, pattern, key, ingredients, result, count(output));
+            return build(kind, identifier, body);
         }
         return null;
     }
 
-    /** An item reference is a bare id, an object with `item`, or a one entry list of either. */
+    private static RecipeDefinition build(Kind kind, String identifier, JsonObject body) {
+        List<String> tags = new ArrayList<>();
+        for (JsonElement tag : Json.list(body, "tags")) {
+            if (tag.isJsonPrimitive()) tags.add(tag.getAsString());
+        }
+        if (kind.brews()) {
+            return new RecipeDefinition(identifier, kind, List.of(), Map.of(), List.of(), null, 1,
+                null, tags, null, List.of(), new Brewing(Json.text(body, "input", null),
+                    Json.text(body, "reagent", null), Json.text(body, "output", null)));
+        }
+
+        List<String> pattern = new ArrayList<>();
+        for (JsonElement row : Json.list(body, "pattern")) {
+            if (row.isJsonPrimitive()) pattern.add(row.getAsString());
+        }
+
+        Map<String, String> key = new LinkedHashMap<>();
+        JsonObject keys = body.getAsJsonObject("key");
+        if (keys != null) {
+            for (Map.Entry<String, JsonElement> entry : keys.entrySet()) {
+                String item = itemOf(entry.getValue());
+                if (item != null) key.put(entry.getKey(), item);
+            }
+        }
+
+        List<Ingredient> ingredients = new ArrayList<>();
+        for (JsonElement element : Json.list(body, "ingredients")) {
+            String item = itemOf(element);
+            if (item != null) ingredients.add(new Ingredient(item, count(element)));
+        }
+        String input = itemOf(body.get("input"));
+        if (input != null) ingredients.add(new Ingredient(input, 1));
+
+        JsonElement output = body.has("result") ? body.get("result") : body.get("output");
+        if (output != null && output.isJsonArray() && output.getAsJsonArray().size() > 1) {
+            // A Java recipe hands back one stack, so the rest of a Bedrock result list is dropped.
+            AddonEntities.unsupported("recipe result list");
+        }
+
+        boolean smiths = kind == Kind.SMITHING_TRANSFORM || kind == Kind.SMITHING_TRIM;
+        Smithing smithing = smiths
+            ? new Smithing(itemOf(body.get("template")), itemOf(body.get("base")),
+                itemOf(body.get("addition")))
+            : null;
+        if (smiths && (smithing.base() == null || smithing.template() == null)) return null;
+
+        String result = itemOf(output);
+        if (result == null && kind != Kind.SMITHING_TRIM) return null;
+
+        return new RecipeDefinition(identifier, kind, pattern, key, ingredients, result,
+            count(output), Json.text(body, "group", null), tags, smithing, unlock(body), null);
+    }
+
+    /**
+     * What a player has to have held before the recipe is theirs, as item and tag references.
+     *
+     * Java keeps the same idea in an advancement rewarding the recipe, which is what a converted
+     * one is written alongside. A context names a Bedrock game event instead of a thing to hold, and
+     * an advancement trigger waits on none of them, so a context is reported and the list is empty.
+     */
+    private static List<String> unlock(JsonObject body) {
+        List<String> items = new ArrayList<>();
+        for (JsonElement element : Json.list(body, "unlock")) {
+            if (!element.isJsonObject()) continue;
+
+            JsonObject entry = element.getAsJsonObject();
+            String context = Json.text(entry, "context", null);
+            if (context != null) {
+                AddonEntities.unsupported("recipe unlock context " + context);
+                continue;
+            }
+
+            String item = itemOf(entry);
+            if (item != null) items.add(item);
+        }
+        return items;
+    }
+
+    /**
+     * An item reference is a bare id, an object with `item` or `tag`, or a one entry list of either.
+     *
+     * A tag comes back carrying the `#` Java marks one with, which is what tells the two apart
+     * everywhere a converted recipe writes an ingredient.
+     */
     private static String itemOf(JsonElement element) {
         if (element == null || element.isJsonNull()) return null;
         if (element.isJsonPrimitive()) return element.getAsString();
         if (element.isJsonArray()) {
             return element.getAsJsonArray().isEmpty() ? null : itemOf(element.getAsJsonArray().get(0));
         }
-        return element.isJsonObject() ? Json.text(element.getAsJsonObject(), "item", null) : null;
+        if (!element.isJsonObject()) return null;
+
+        JsonObject body = element.getAsJsonObject();
+        // A data value picks one of the blocks or items an id used to stand for, which Java stopped
+        // having when it gave each of them an id of its own.
+        if (body.has("data")) AddonEntities.unsupported("recipe item data value");
+
+        String tag = Json.text(body, "tag", null);
+        return tag != null ? "#" + tag : Json.text(body, "item", null);
     }
 
     private static int count(JsonElement element) {
-        if (element == null || !element.isJsonObject()) return 1;
+        if (element == null) return 1;
+        if (element.isJsonArray()) {
+            return element.getAsJsonArray().isEmpty() ? 1 : count(element.getAsJsonArray().get(0));
+        }
+        if (!element.isJsonObject()) return 1;
+
         JsonObject body = element.getAsJsonObject();
         return body.has("count") && body.get("count").isJsonPrimitive() ? body.get("count").getAsInt() : 1;
     }

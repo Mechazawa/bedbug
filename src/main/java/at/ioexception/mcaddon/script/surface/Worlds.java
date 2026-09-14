@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.script.surface;
 
+import at.ioexception.mcaddon.pack.PackSettings;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.script.ScriptBridge;
 import at.ioexception.mcaddon.script.ScriptCoverage;
@@ -426,6 +427,17 @@ public final class Worlds extends Surface {
             return;
         }
         server.setDifficulty(wanted, true);
+    }
+
+    /**
+     * The pack settings every installed pack declares, at the values they ship with.
+     *
+     * Bedrock lets a world owner move a behaviour pack's settings on a screen of its own. With no
+     * such screen, each one stays at the `default` its author wrote into the manifest.
+     */
+    @HostAccess.Export
+    public String packSettings() {
+        return Json.encode(PackSettings.values());
     }
 
     /** A string, because a Bedrock seed does not fit a double without losing its low bits. */

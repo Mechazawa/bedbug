@@ -37,6 +37,8 @@ public final class McAddonClient implements ClientModInitializer {
             Platform.registerParticle(at.ioexception.mcaddon.registry.AddonParticles.typeOf(identifier),
                 sprites -> new AddonParticleProvider(identifier, sprites)));
 
+        Platform.registerDyeTint(at.ioexception.mcaddon.registry.AddonItems.dyeable());
+
         Channels.receiveProperties(EntityProperties::accept);
         Channels.receiveCameraView(encoded -> PlayerCamera.accept(CameraView.decode(encoded)));
         Channels.receiveCameraShake(encoded -> PlayerCamera.shake(CameraShake.decode(encoded)));
@@ -51,7 +53,10 @@ public final class McAddonClient implements ClientModInitializer {
             description.isEmpty() ? null : new AddonFormScreen(formId, description)));
 
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK
-            .register(client -> at.ioexception.mcaddon.client.render.AddonEmitters.tick());
+            .register(client -> {
+                at.ioexception.mcaddon.client.render.AddonEmitters.tick();
+                if (client.level != null) Animators.tickOffscreen(client.level);
+            });
 
         ClientEntityEvents.ENTITY_UNLOAD.register((entity, level) -> {
             Animators.forget(entity.getId());
