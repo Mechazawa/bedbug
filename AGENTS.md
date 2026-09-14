@@ -223,6 +223,15 @@ These are the checks it runs, and what each one catches:
   count, so the `fog` scene is where these are looked at and `BiomeColourTest` is where the
   arithmetic is asserted.
 
+  The per-biome file also states what that biome sounds like and what falls through its air, in the
+  spellings that put each half of the sound mapping to work. Its ambient loop is the pack's own
+  definition, its mood is one of the engine's own names the two editions spell differently, and its
+  addition is one they spell the same; an underwater moment is there too, which no Java biome has a
+  field for. Its music names an entry in the pack's `sounds/music_definitions.json`, asks for
+  underwater music, which reaches the `water` entry beside it, and states a volume multiplier, which
+  26 holds and the older versions report. Its precipitation is a white ash density, which is a
+  number rather than a count, so `BiomeSoundTest` is what asserts it comes out as Java's own chance.
+
   The book table is the one a game test rolls: it holds a single entry carrying
   `enchant_book_for_trading` and no condition, so the loot function type this mod registers is
   exercised from the converted table through the codec to the enchanted book that comes back.

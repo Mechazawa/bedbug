@@ -2136,41 +2136,72 @@ public final class Platform {
     }
 
     /**
-     * The colours a converted biome is drawn with, as the version writes them.
+     * How a converted biome looks and sounds, as the version writes it.
      *
      * Up to 1.21 a biome states its own fog, sky and water fog beside the water colour, and all
-     * four are required. 26 left the water colour and the tints in `effects` and moved the rest
-     * onto environment attributes, which a biome contributes a layer of, and which carry the two
-     * fog distances as well.
+     * four are required. Its ambient particle, its three ambient sound moments and its music are
+     * fields of the same `effects` block. 26 left the water colour and the tints in `effects` and
+     * moved the rest onto environment attributes, which a biome contributes a layer of, and which
+     * carry the two fog distances, the music volume and an underwater track as well.
      */
-    public static void biomeColours(com.google.gson.JsonObject biome,
-        at.ioexception.mcaddon.bedrock.ClientBiomeDefinition colours) {
-        at.ioexception.mcaddon.bedrock.FogDefinition fog = colours.fog();
+    public static void biomeEffects(com.google.gson.JsonObject biome,
+        at.ioexception.mcaddon.bedrock.ClientBiomeDefinition painted) {
+        at.ioexception.mcaddon.bedrock.FogDefinition fog = painted.fog();
+        at.ioexception.mcaddon.bedrock.BiomeSounds sounds = painted.sounds();
+        at.ioexception.mcaddon.bedrock.BiomeMusic music = painted.music();
 
         com.google.gson.JsonObject effects = new com.google.gson.JsonObject();
-        effects.addProperty("water_color", colours.water() >= 0 ? colours.water()
+        effects.addProperty("water_color", painted.water() >= 0 ? painted.water()
             : at.ioexception.mcaddon.bedrock.ClientBiomeDefinition.DEFAULT_WATER);
-        if (colours.grass() >= 0) effects.addProperty("grass_color", colours.grass());
-        if (colours.foliage() >= 0) effects.addProperty("foliage_color", colours.foliage());
+        if (painted.grass() >= 0) effects.addProperty("grass_color", painted.grass());
+        if (painted.foliage() >= 0) effects.addProperty("foliage_color", painted.foliage());
 
         //? if >=26 {
-        if (colours.dryFoliage() >= 0) {
-            effects.addProperty("dry_foliage_color", colours.dryFoliage());
+        if (painted.dryFoliage() >= 0) {
+            effects.addProperty("dry_foliage_color", painted.dryFoliage());
         }
 
         com.google.gson.JsonObject attributes = new com.google.gson.JsonObject();
-        if (colours.sky() >= 0) attributes.addProperty("minecraft:visual/sky_color", colours.sky());
+        if (painted.sky() >= 0) attributes.addProperty("minecraft:visual/sky_color", painted.sky());
         attribute(attributes, "fog", fog.air());
         attribute(attributes, "water_fog", fog.water());
+
+        if (painted.particles().painted()) {
+            com.google.gson.JsonArray drawn = new com.google.gson.JsonArray();
+            drawn.add(ambientParticle(painted.particles()));
+            attributes.add("minecraft:visual/ambient_particles", drawn);
+        }
+        if (sounds.heard()) {
+            com.google.gson.JsonObject heard = new com.google.gson.JsonObject();
+            if (sounds.loop() != null) heard.addProperty("loop", sounds.loop());
+            if (sounds.mood() != null) heard.add("mood", moodSound(sounds.mood()));
+            if (sounds.addition() != null) {
+                com.google.gson.JsonArray additions = new com.google.gson.JsonArray();
+                additions.add(additionsSound(sounds));
+                heard.add("additions", additions);
+            }
+            attributes.add("minecraft:audio/ambient_sounds", heard);
+        }
+        if (music.track() != null || music.underwater() != null) {
+            com.google.gson.JsonObject background = new com.google.gson.JsonObject();
+            if (music.track() != null) background.add("default", music(music.track()));
+            if (music.underwater() != null) {
+                background.add("underwater", music(music.underwater()));
+            }
+            attributes.add("minecraft:audio/background_music", background);
+        }
+        if (music.volume() >= 0) {
+            attributes.addProperty("minecraft:audio/music_volume", music.volume());
+        }
         if (attributes.size() > 0) biome.add("attributes", attributes);
         //?} else {
-        /*effects.addProperty("sky_color", colours.sky() >= 0 ? colours.sky()
+        /*effects.addProperty("sky_color", painted.sky() >= 0 ? painted.sky()
             : at.ioexception.mcaddon.convert.Worldgen.skyColour(
                 biome.get("temperature").getAsFloat()));
         effects.addProperty("fog_color", fog.air().colour() >= 0 ? fog.air().colour() : 12638463);
         effects.addProperty("water_fog_color",
             fog.water().colour() >= 0 ? fog.water().colour() : 329011);
-        if (colours.dryFoliage() >= 0) {
+        if (painted.dryFoliage() >= 0) {
             at.ioexception.mcaddon.registry.AddonEntities
                 .unsupported("client biome minecraft:dry_foliage_color");
         }
@@ -2179,8 +2210,85 @@ public final class Platform {
             at.ioexception.mcaddon.registry.AddonEntities
                 .unsupported("fog distance (needs 26 or newer)");
         }
+
+        if (painted.particles().painted()) {
+            effects.add("particle", ambientParticle(painted.particles()));
+        }
+        if (sounds.loop() != null) effects.addProperty("ambient_sound", sounds.loop());
+        if (sounds.mood() != null) effects.add("mood_sound", moodSound(sounds.mood()));
+        if (sounds.addition() != null) effects.add("additions_sound", additionsSound(sounds));
+        if (music.track() != null) effects.add("music", music(music.track()));
+        if (music.underwater() != null) {
+            at.ioexception.mcaddon.registry.AddonEntities.unsupported(
+                "client biome minecraft:biome_music underwater_music (needs 26 or newer)");
+        }
+        if (music.volume() >= 0) {
+            at.ioexception.mcaddon.registry.AddonEntities.unsupported(
+                "client biome minecraft:biome_music volume_multiplier (needs 26 or newer)");
+        }
         *///?}
         biome.add("effects", effects);
+    }
+
+    /**
+     * The particle a biome drops through its air, and how often.
+     *
+     * Both versions state a particle and a probability. 26 keys the particle under `particle` and
+     * holds a list of these, and before that it is `options` and one entry at most.
+     */
+    private static com.google.gson.JsonObject ambientParticle(
+        at.ioexception.mcaddon.bedrock.BiomeParticles particles) {
+        com.google.gson.JsonObject options = new com.google.gson.JsonObject();
+        options.addProperty("type", particles.particle());
+
+        com.google.gson.JsonObject drawn = new com.google.gson.JsonObject();
+        //? if >=26 {
+        drawn.add("particle", options);
+        //?} else {
+        /*drawn.add("options", options);
+        *///?}
+        drawn.addProperty("probability", particles.probability());
+        return drawn;
+    }
+
+    /**
+     * The mood sound, with the timing Java's own caves use.
+     *
+     * Bedrock names the sound and nothing else, so how long the silence is, how far a dark block is
+     * searched for and how far in front of it the sound plays are the numbers Java states for the
+     * mood every biome without one of its own falls back to.
+     */
+    private static com.google.gson.JsonObject moodSound(String sound) {
+        com.google.gson.JsonObject mood = new com.google.gson.JsonObject();
+        mood.addProperty("sound", sound);
+        mood.addProperty("tick_delay", 6000);
+        mood.addProperty("block_search_extent", 8);
+        mood.addProperty("offset", 2.0);
+        return mood;
+    }
+
+    private static com.google.gson.JsonObject additionsSound(
+        at.ioexception.mcaddon.bedrock.BiomeSounds sounds) {
+        com.google.gson.JsonObject additions = new com.google.gson.JsonObject();
+        additions.addProperty("sound", sounds.addition());
+        additions.addProperty("tick_chance", sounds.additionChance());
+        return additions;
+    }
+
+    /**
+     * One track and the silence around it.
+     *
+     * Bedrock has no equivalent of Java's `replace_current_music`, and a biome the player walks
+     * into waits for the current track to end, which is what false means.
+     */
+    private static com.google.gson.JsonObject music(
+        at.ioexception.mcaddon.bedrock.MusicDefinitions track) {
+        com.google.gson.JsonObject playing = new com.google.gson.JsonObject();
+        playing.addProperty("sound", track.event());
+        playing.addProperty("min_delay", track.minDelay());
+        playing.addProperty("max_delay", track.maxDelay());
+        playing.addProperty("replace_current_music", false);
+        return playing;
     }
 
     //? if >=26 {

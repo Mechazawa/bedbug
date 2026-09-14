@@ -13,6 +13,23 @@
       },
       "minecraft:fog_appearance": {
         "fog_identifier": "tp:fog_glade"
+      },
+      "minecraft:precipitation": {
+        "white_ash": 2.0
+      },
+      "minecraft:ambient_sounds": {
+        "loop": "tp:ambient.glade.loop",
+        "mood": "ambient.soulsand_valley.mood",
+        "addition": {
+          "asset": "ambient.crimson_forest.additions",
+          "chance": 0.0111
+        },
+        "underwater_loop": "ambient.underwater.loop"
+      },
+      "minecraft:biome_music": {
+        "music_definition": "glade",
+        "underwater_music": true,
+        "volume_multiplier": 0.5
       }
     }
   }

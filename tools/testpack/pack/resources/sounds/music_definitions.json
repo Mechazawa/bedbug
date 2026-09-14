@@ -1,0 +1,12 @@
+{
+  "glade": {
+    "event_name": "tp:ambient.glade.loop",
+    "min_delay": 60,
+    "max_delay": 180
+  },
+  "water": {
+    "event_name": "music.game.water",
+    "min_delay": 10,
+    "max_delay": 20
+  }
+}

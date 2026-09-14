@@ -2,8 +2,8 @@ package at.ioexception.mcaddon.registry;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.MusicDefinitions;
+import at.ioexception.mcaddon.convert.BedrockSoundNames;
 import at.ioexception.mcaddon.convert.ConvertedPack;
-import at.ioexception.mcaddon.convert.Names;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
@@ -60,13 +60,15 @@ public final class AddonSounds {
     /**
      * The music a pack chose per biome, against the sound events it just registered.
      *
-     * A definition naming an event the pack does not define plays nothing, so it is left out and
-     * the biome keeps whatever the game already plays there.
+     * A definition naming one of Bedrock's own tracks has no definition in the pack to convert, so
+     * it is read as Java's equivalent. One neither the pack nor the engine has plays nothing, so it
+     * is left out and the biome keeps whatever the game already plays there.
      */
     private static void readMusic(ConvertedPack pack) {
         MusicDefinitions.readAll(pack.pack()).forEach((biome, music) -> {
-            Names.Identifier named = Names.soundEvent(music.event(), pack.namespace());
-            Identifier id = Identifier.tryParse(named.namespace() + ":" + named.path());
+            String named = BedrockSoundNames.java(music.event(), pack.namespace(),
+                pack.soundEvents());
+            Identifier id = named == null ? null : Identifier.tryParse(named);
             SoundEvent event = id == null ? null
                 : BuiltInRegistries.SOUND_EVENT.getOptional(id).orElse(null);
             if (event == null) {

@@ -107,7 +107,7 @@ class BiomeColourTest {
     void aPerBiomeFileCarriesTheFogItNames(@TempDir Path root) throws IOException {
         ClientBiomeDefinition glade = ClientBiomeDefinition.readAll(packHolding(root, Map.of(
             "fogs/glade.fog.json", FOG,
-            "biomes/glade.client_biome.json", CLIENT_BIOME))).get("tp:glade");
+            "biomes/glade.client_biome.json", CLIENT_BIOME)), name -> null).get("tp:glade");
 
         assertEquals(4168660, glade.water());
         assertEquals(7972607, glade.sky());
@@ -123,7 +123,7 @@ class BiomeColourTest {
     void theWholePackFileOverridesTheFogItNames(@TempDir Path root) throws IOException {
         ClientBiomeDefinition wastes = ClientBiomeDefinition.readAll(packHolding(root, Map.of(
             "fogs/glade.fog.json", FOG,
-            "biomes_client.json", WHOLE_PACK))).get("tp:cinder_wastes");
+            "biomes_client.json", WHOLE_PACK)), name -> null).get("tp:cinder_wastes");
 
         assertEquals(9056018, wastes.water());
         assertEquals(6365196, wastes.fog().water().colour());
@@ -135,7 +135,8 @@ class BiomeColourTest {
     @Test
     void aBehaviourPackTintWins() {
         ClientBiomeDefinition painted = new ClientBiomeDefinition(1, 2, 3, 4, 5,
-            new FogDefinition(new FogDefinition.Location(6, -1, -1), FogDefinition.Location.NONE));
+            new FogDefinition(new FogDefinition.Location(6, -1, -1), FogDefinition.Location.NONE),
+            BiomeParticles.NONE, BiomeSounds.NONE, BiomeMusic.NONE);
 
         assertEquals(7, painted.tinted(7, -1).grass());
         assertEquals(4, painted.tinted(7, -1).foliage());
