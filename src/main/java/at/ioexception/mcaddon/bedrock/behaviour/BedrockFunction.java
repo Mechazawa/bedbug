@@ -11,7 +11,9 @@ import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.loot.LootContext;
 import net.minecraft.world.level.storage.loot.functions.LootItemFunction;
@@ -105,8 +107,49 @@ public final class BedrockFunction implements LootItemFunction {
         return switch (Json.text(bedrock, "function", "").replaceFirst("^minecraft:", "")) {
             case "enchant_book_for_trading" ->
                 book(stack, context.getRandom(), context.getLevel().registryAccess());
+            case "set_data", "random_aux_value", "set_data_from_color_index" -> picked(stack, context);
             default -> stack;
         };
+    }
+
+    /**
+     * The item a data value landed on, for the values that are not settled until the table is rolled.
+     *
+     * What each value in the range names was worked out as the table was converted, because a Java
+     * id no longer says which Bedrock family the item came out of. A range picks one of them at
+     * random, and a colour index picks the one the entity's own colour points at. Whatever a
+     * function before this one made of the stack, the count is the part that carries over, which is
+     * the one a Bedrock table sets beside a data value.
+     */
+    private ItemStack picked(ItemStack stack, LootContext context) {
+        List<JsonElement> choices = Json.list(bedrock, "items");
+        if (choices.isEmpty()) return stack;
+
+        String name = Json.text(bedrock, "function", "");
+        int index = name.endsWith("set_data_from_color_index")
+            ? colour(Platform.lootSubject(context)) : context.getRandom().nextInt(choices.size());
+
+        JsonElement named = index >= 0 && index < choices.size() ? choices.get(index) : null;
+        Identifier id = named != null && named.isJsonPrimitive()
+            ? Identifier.tryParse(named.getAsString()) : null;
+        Item item = id == null ? null : BuiltInRegistries.ITEM.getOptional(id).orElse(null);
+        if (item == null) {
+            AddonEntities.unsupported("loot function " + name + " value " + index);
+            return stack;
+        }
+        return new ItemStack(item, stack.getCount());
+    }
+
+    /**
+     * The colour index the entity carries, which is Bedrock's own `minecraft:color` on it.
+     *
+     * An entity with no colour reads as the first of whatever family the item came out of, which is
+     * what Bedrock hands back for a mob that was never given one: a sheared mooshroom's mushroom
+     * comes out of a table written this way and has one shape whatever colour is asked for.
+     */
+    private static int colour(net.minecraft.world.entity.Entity subject) {
+        return subject instanceof at.ioexception.mcaddon.entity.AddonEntity addon
+            && addon.value("color") instanceof Number dye ? dye.intValue() : 0;
     }
 
     /**

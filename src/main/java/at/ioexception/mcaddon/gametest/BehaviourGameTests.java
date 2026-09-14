@@ -164,6 +164,70 @@ public final class BehaviourGameTests {
     }
 
     /**
+     * The wool a table hands out is the colour of the entity it was rolled for.
+     *
+     * `set_data_from_color_index` is the one data value written nowhere in the pack: it is whatever
+     * colour the entity is carrying at the moment the table is rolled, and the colour arrives with
+     * a component group, so nothing about it exists until an entity is standing in a world.
+     */
+    @GameTest()
+    public void aColourIndexPicksTheItemTheEntitysOwnColourNames(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        Identifier table = Platform.id("tp", "entities/fleece");
+        helper.assertTrue(rolled(helper, table, ember).contains("minecraft:white_wool"),
+            ENTITY + " carries no colour and its table handed out no white wool.");
+
+        EntityEvents.trigger(ember, "tp:ember_load", null, ServerHooks.state());
+        helper.assertTrue(rolled(helper, table, ember).contains("minecraft:blue_wool"),
+            ENTITY + " was given colour " + GROUPED_DYE + " and its table handed out other wool.");
+        helper.succeed();
+    }
+
+    /**
+     * A range over a Bedrock id's data values hands out one of the items that id stood for.
+     *
+     * Which one is settled per roll rather than per table, so what a run of rolls shows is the
+     * whole path: the items the conversion worked out survived the codec, and the roll is what
+     * picks between them rather than the entry naming one of them for good. Sixteen rolls over
+     * three carpets land on one colour about once in seven million runs.
+     */
+    @GameTest()
+    public void aRangeOfDataValuesPicksOneOfTheItemsItCovers(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        List<String> covered = List.of("minecraft:orange_carpet", "minecraft:magenta_carpet",
+            "minecraft:light_blue_carpet");
+        Identifier table = Platform.id("tp", "entities/fleece");
+        java.util.Set<String> carpets = new java.util.LinkedHashSet<>();
+        for (int roll = 0; roll < 16; roll++) {
+            rolled(helper, table, ember).stream().filter(covered::contains).forEach(carpets::add);
+        }
+
+        helper.assertTrue(!carpets.isEmpty(),
+            ENTITY + " has a table naming three carpets by data value and handed out none of them.");
+        helper.assertTrue(carpets.size() > 1,
+            ENTITY + " rolled its carpet range sixteen times and every roll was " + carpets + ".");
+        helper.succeed();
+    }
+
+    /** What a table handed out, by id, which is what a data value picks between. */
+    private static List<String> rolled(GameTestHelper helper, Identifier table, Entity about) {
+        return Platform.rollLoot(helper.getLevel(), table, about).stream()
+            .map(stack -> net.minecraft.core.registries.BuiltInRegistries.ITEM
+                .getKey(stack.getItem()).toString())
+            .toList();
+    }
+
+    /**
      * A drop the pack asked to keep lies there past the five minutes an ordinary one lasts.
      *
      * The lifetime is counted on the entity and the pack states it on the item, so the two are only
