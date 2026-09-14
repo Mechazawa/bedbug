@@ -582,18 +582,22 @@ def world(root: Path, version: str) -> str | None:
     """
     saves = root / "versions" / version / "run" / "saves"
     saves.mkdir(parents=True, exist_ok=True)
+    served = root / "versions" / version / "run" / "world"
+    copied = saves / "Scene World"
 
-    existing = next((one.name for one in sorted(saves.iterdir()) if (one / "level.dat").is_file()), None)
-    if existing is not None:
+    if not (served / "level.dat").is_file():
+        existing = next(
+            (one.name for one in sorted(saves.iterdir()) if (one / "level.dat").is_file()), None)
         return existing
 
-    served = root / "versions" / version / "run" / "world"
-    if not (served / "level.dat").is_file():
-        return None
-
-    copied = saves / "Scene World"
+    # A fresh copy every run, because a client writes its player into the world as it leaves and a
+    # server leaves one under `players/`. Either of those opens the next run behind a screen waiting
+    # to be answered, and a checkout that has been run in once would then fail every client check
+    # after it for a reason that has nothing to do with the mod.
+    shutil.rmtree(copied, ignore_errors=True)
     shutil.copytree(served, copied, dirs_exist_ok=True)
     shutil.rmtree(copied / "datapacks", ignore_errors=True)
+    shutil.rmtree(copied / "players", ignore_errors=True)
     return copied.name
 
 
@@ -894,7 +898,10 @@ def check_client(root: Path, version: str, timeout: float, hold: float, verbose:
     else:
         verdict.fail("the world never opened",
                      f"the client was told to open {opened!r} and never started a server for it, "
-                     "which is what a screen waiting to be answered looks like")
+                     "which is what a screen waiting to be answered looks like. A checkout no "
+                     "client has ever opened a world in fails this way whatever the mod does, so "
+                     "check whether the same run passes in the main checkout before reading it as "
+                     "a fault of the change under test")
     scan(lines, verdict, EXPECTED_WITH_ADDON if addons else ())
     gradle_failed(lines, outcome, verdict)
 

@@ -398,6 +398,14 @@ These are the checks it runs, and what each one catches:
   happened by the time such a screen is up. `1.21.1` also loads Mod Menu, Sodium and Iris, so it takes
   noticeably longer than the other two.
 
+  **A checkout no client has ever opened a world in fails this check whatever the mod does.** The
+  world is copied fresh from the dedicated server's own on every run, a client half of it has never
+  been through, and the client then stops before starting a server for it. `run`, `convert` and
+  `./gradlew build` are unaffected, and the same commit passes the client check in a checkout that
+  has one. A worktree is always such a checkout on its first run, which has cost three separate
+  passes time spent doubting a change that was fine. Before reading a red client as a fault of the
+  change under test, run it in the main checkout.
+
   Failing in either: `ERROR`, `Caused by`, a crash report, a mixin apply failure, `Registry loading
   errors:` and `Failed to parse <id> from pack`, which are named apart from the rest because a
   registry entry a data pack could not decode stops a client on a screen asking the player to fix
