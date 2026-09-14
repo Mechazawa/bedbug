@@ -206,7 +206,7 @@ public final class ServerHooks {
         if (state == null || !(entity instanceof at.ioexception.mcaddon.entity.AddonEntity addon)) return true;
         if (addon.definition() == null) return true;
 
-        com.google.gson.JsonObject sensor = addon.definition().components().get("minecraft:damage_sensor");
+        com.google.gson.JsonObject sensor = addon.liveComponent("minecraft:damage_sensor");
         if (sensor == null) return true;
 
         boolean lands = true;

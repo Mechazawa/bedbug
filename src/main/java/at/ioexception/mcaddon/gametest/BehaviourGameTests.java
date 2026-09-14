@@ -698,6 +698,317 @@ public final class BehaviourGameTests {
         });
     }
 
+    /**
+     * A group carrying `minecraft:collision_box` moves the width and the height apart from each other.
+     *
+     * A scale multiplies both axes together, so this is the only way a pack can say its entity
+     * changes shape rather than size, and it is what a shell opening or a mount taking on a load is
+     * described as. The entity type was built from the top level and is frozen with the registries,
+     * so a box read off the definition leaves the entity colliding in whatever it was born with:
+     * a wide one walks through the gap it should be stopped by and a short one is hit above its head.
+     */
+    @GameTest()
+    public void aGroupCarryingACollisionBoxMovesBothAxesApart(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        float born = ember.getBbWidth();
+        EntityEvents.trigger(ember, "tp:ember_load", null, ServerHooks.state());
+        helper.assertTrue(ember.getBbWidth() > born,
+            ENTITY + " gained a wider minecraft:collision_box from a group and did not widen.");
+        helper.assertTrue(ember.getBbHeight() < ember.getBbWidth(),
+            ENTITY + " gained a box wider than it is tall and is still as tall as it is wide.");
+
+        EntityEvents.trigger(ember, "tp:ember_unload", null, ServerHooks.state());
+        helper.assertTrue(ember.getBbWidth() == born,
+            ENTITY + " lost the group carrying minecraft:collision_box and kept the box it brought.");
+        helper.succeed();
+    }
+
+    /**
+     * A group carrying `minecraft:ambient_sound_interval` decides the gap between idle sounds.
+     *
+     * Bedrock states the gap in seconds and puts it in the group that gives the entity the voice: a
+     * mob says nothing until the state that makes it say something is on it.
+     */
+    @GameTest()
+    public void aGroupCarryingTheIdleSoundIntervalSetsTheGap(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        int silent = ember.getAmbientSoundInterval();
+        EntityEvents.trigger(ember, "tp:ember_load", null, ServerHooks.state());
+        helper.assertTrue(ember.getAmbientSoundInterval() == GROUPED_SOUND_GAP,
+            ENTITY + " gained minecraft:ambient_sound_interval from a group and kept the gap "
+                + silent + ".");
+        helper.succeed();
+    }
+
+    /**
+     * A group saying the entity may not be stolen refuses a lead.
+     *
+     * `minecraft:leashable` is written into a group as often as at the top, because being tied is a
+     * state a pack puts the entity into, and `can_be_stolen` is the half of it that says whether
+     * somebody else may take the other end.
+     */
+    @GameTest()
+    public void aGroupRefusingTheEntityToBeStolenRefusesTheLead(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.assertTrue(ember.canBeLeashed(), ENTITY + " refuses a lead before any group says so.");
+        EntityEvents.trigger(ember, "tp:ember_load", null, ServerHooks.state());
+        helper.assertFalse(ember.canBeLeashed(),
+            ENTITY + " gained a minecraft:leashable refusing to be stolen and accepts a lead.");
+        helper.succeed();
+    }
+
+    /**
+     * The flags a group brings reach the clients drawing the entity.
+     *
+     * `minecraft:can_power_jump` and `minecraft:color` are each read back through Molang rather than
+     * held anywhere by Java, so the property is the whole of what either is worth on this side. Both
+     * arrive with the group that saddles or dyes the entity, so a flag published once as the entity
+     * spawned answers for a pack that never writes either at the top.
+     */
+    @GameTest()
+    public void aGroupCarryingTheFlagsAPackReadsBackPublishesThem(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.assertFalse(Boolean.TRUE.equals(ember.value("can_power_jump")),
+            ENTITY + " reads as able to power jump before any group said it could.");
+
+        EntityEvents.trigger(ember, "tp:ember_load", null, ServerHooks.state());
+        helper.assertTrue(Boolean.TRUE.equals(ember.value("can_power_jump")),
+            ENTITY + " gained minecraft:can_power_jump from a group and never told the clients.");
+        helper.assertTrue(ember.value("color") instanceof Number dye
+                && dye.intValue() == GROUPED_DYE,
+            ENTITY + " gained minecraft:color from a group and published " + ember.value("color") + ".");
+
+        EntityEvents.trigger(ember, "tp:ember_unload", null, ServerHooks.state());
+        helper.assertFalse(Boolean.TRUE.equals(ember.value("can_power_jump")),
+            ENTITY + " lost the group carrying minecraft:can_power_jump and still reads as able.");
+        helper.succeed();
+    }
+
+    /**
+     * A group carrying `minecraft:dweller` holds the entity to where it was standing.
+     *
+     * Bedrock has no other place for it: a villager is a dweller of the village it took a job in, so
+     * the component arrives with the group describing the job. Java keeps the place on the mob, so a
+     * read of the definition leaves a pack's villager free to walk out of its own village.
+     */
+    @GameTest()
+    public void aGroupCarryingADwellerHoldsTheEntityWhereItStands(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.assertFalse(Platform.hasHome(ember),
+            ENTITY + " is held somewhere before any group said it belonged there.");
+
+        EntityEvents.trigger(ember, "tp:ember_load", null, ServerHooks.state());
+        helper.assertTrue(Platform.hasHome(ember),
+            ENTITY + " gained minecraft:dweller from a group and wanders as freely as before.");
+
+        EntityEvents.trigger(ember, "tp:ember_unload", null, ServerHooks.state());
+        helper.assertFalse(Platform.hasHome(ember),
+            ENTITY + " lost the group carrying minecraft:dweller and is still held to the place.");
+        helper.succeed();
+    }
+
+    /**
+     * A group carrying `minecraft:input_ground_controlled` hands the rider the reins.
+     *
+     * Being steerable is what a saddle brings, so Bedrock writes it into the group the saddle switches
+     * on: eight of the nine vanilla uses are in a group. Java asks the vehicle which passenger is
+     * driving, so a definition read leaves a pack's saddled mount walking wherever it likes with a
+     * player on its back.
+     */
+    @GameTest()
+    public void aGroupSteeringTheEntityHandsItsRiderTheReins(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        Player rider = Platform.mockPlayer(helper);
+        Platform.placeAt(rider, ember.getX(), ember.getY(), ember.getZ(), 0f, 0f);
+        rider.startRiding(ember);
+        helper.assertTrue(ember.getPassengers().contains(rider), ENTITY + " could not be ridden.");
+        helper.assertTrue(ember.getControllingPassenger() != rider,
+            ENTITY + " is steered by its rider before any group said it could be.");
+
+        EntityEvents.trigger(ember, "tp:ember_load", null, ServerHooks.state());
+        helper.assertTrue(ember.getControllingPassenger() == rider,
+            ENTITY + " gained minecraft:input_ground_controlled from a group and steers itself.");
+        helper.succeed();
+    }
+
+    /**
+     * A group carrying `minecraft:sittable` lets a player sit the entity down.
+     *
+     * Sitting is a state rather than a fact, which is why Bedrock puts the component in a group: a
+     * pet sits once it belongs to somebody. The click is the whole of it, so a definition read leaves
+     * a tamed pet that cannot be told to stay.
+     */
+    @GameTest()
+    public void aGroupCarryingASittableSitsTheEntityDown(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        Player owner = Platform.mockPlayer(helper);
+        Platform.placeAt(owner, ember.getX(), ember.getY(), ember.getZ(), 0f, 0f);
+        owner.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+
+        ember.mobInteract(owner, InteractionHand.MAIN_HAND);
+        helper.assertFalse(ember.getPose() == net.minecraft.world.entity.Pose.SITTING,
+            ENTITY + " sat down before any group said it was sittable.");
+
+        EntityEvents.trigger(ember, "tp:ember_load", null, ServerHooks.state());
+        ember.mobInteract(owner, InteractionHand.MAIN_HAND);
+        helper.assertTrue(ember.getPose() == net.minecraft.world.entity.Pose.SITTING,
+            ENTITY + " gained minecraft:sittable from a group and stayed on its feet.");
+        helper.assertTrue(Boolean.TRUE.equals(ember.value("tp:sat")),
+            ENTITY + " sat down and never raised the event minecraft:sittable names.");
+        helper.succeed();
+    }
+
+    /**
+     * A group carrying `minecraft:damage_sensor` answers for the blow the entity takes.
+     *
+     * A pack arms one for as long as the state it belongs to lasts, a mob shrugging off fire only
+     * while it is standing in its own element, so thirty-four of the thirty-nine vanilla sensors that
+     * are not at the top are in a group. The sensor decides both whether the damage lands and what
+     * the entity does about it, so one read off the definition is a whole reaction that never runs.
+     */
+    @GameTest()
+    public void aGroupCarryingADamageSensorAnswersForTheBlow(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_ward_on", null, ServerHooks.state());
+        float whole = ember.getHealth();
+        Platform.hurt(ember, helper.getLevel(), helper.getLevel().damageSources().generic(), SCRATCH);
+
+        helper.assertTrue(Boolean.TRUE.equals(ember.value("tp:scratched")),
+            ENTITY + " was hurt carrying a minecraft:damage_sensor and never ran its event.");
+        helper.assertTrue(ember.getHealth() == whole,
+            ENTITY + " carries a sensor refusing the damage and lost health anyway.");
+        helper.succeed();
+    }
+
+    /**
+     * A group carrying `minecraft:explode` names the fuse and goes off where the entity fell.
+     *
+     * Being primed is the state Bedrock describes with this, so the component arrives with the group
+     * a creeper enters when something walks into it. A pack's own controllers count the fuse down
+     * over the entity's head, and the blast is what the component is for, so a definition read leaves
+     * both out for every pack that primes its entity the way Bedrock says to.
+     */
+    @GameTest()
+    public void aGroupCarryingAnExplosionNamesItsFuseAndGoesOff(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        AddonEntity bystander = spawn(helper, ENTITY);
+        if (ember == null || bystander == null) {
+            helper.succeed();
+            return;
+        }
+
+        Platform.placeAt(bystander, ember.getX() + 1, ember.getY(), ember.getZ(), 0f, 0f);
+        helper.assertTrue(ember.value("fuse_time") == null,
+            ENTITY + " names a fuse before any group primed it.");
+
+        EntityEvents.trigger(ember, "tp:ember_prime", null, ServerHooks.state());
+        helper.assertTrue(ember.value("fuse_time") instanceof Number fuse
+                && fuse.doubleValue() == PRIMED_FUSE,
+            ENTITY + " was primed by a group and names the fuse " + ember.value("fuse_time") + ".");
+
+        float whole = bystander.getHealth();
+        Platform.hurt(ember, helper.getLevel(),
+            helper.getLevel().damageSources().generic(), KILLING_BLOW);
+        helper.assertTrue(bystander.getHealth() < whole || !bystander.isAlive(),
+            ENTITY + " died carrying minecraft:explode from a group and nothing beside it was hurt.");
+        helper.succeed();
+    }
+
+    /**
+     * A group carrying `minecraft:inventory` gives the entity somewhere to put what it picks up.
+     *
+     * Both halves of hauling arrive with the group that gives the entity the job: the slots, and the
+     * `minecraft:shareables` list saying what may go in them. Without the slots there is one hand, so
+     * a definition read leaves a pack's pack animal holding one item and refusing the rest, and a
+     * shareables list read there lets it pick up whatever it treads on.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 120)
+    public void aGroupCarryingAnInventoryStowsWhatTheEntityPicksUp(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_load", null, ServerHooks.state());
+        ItemEntity wanted = drop(helper, ember, net.minecraft.world.item.Items.GOLD_INGOT);
+        ItemEntity refused = drop(helper, ember, net.minecraft.world.item.Items.IRON_INGOT);
+
+        helper.runAfterDelay(PICKED_UP_BY, () -> {
+            helper.assertFalse(wanted.isAlive(),
+                ENTITY + " left the item its minecraft:shareables list names lying there.");
+            helper.assertTrue(ember.getMainHandItem().isEmpty(),
+                ENTITY + " gained minecraft:inventory from a group and held what it picked up.");
+            helper.assertTrue(refused.isAlive(),
+                ENTITY + " picked up an item its minecraft:shareables list leaves out.");
+            helper.succeed();
+        });
+    }
+
+    /** An item lying where the entity stands, ready to be picked up on the next pass. */
+    private static ItemEntity drop(GameTestHelper helper, AddonEntity beside, Item item) {
+        ItemEntity dropped = new ItemEntity(helper.getLevel(),
+            beside.getX(), beside.getY(), beside.getZ(), new ItemStack(item));
+        dropped.setNoPickUpDelay();
+        helper.getLevel().addFreshEntity(dropped);
+        return dropped;
+    }
+
+    /** The gap in ticks the pack's laden group states, which it writes in seconds. */
+    private static final int GROUPED_SOUND_GAP = 60;
+
+    /** The dye the pack's laden group names. */
+    private static final int GROUPED_DYE = 11;
+
+    /** The fuse in seconds the pack's primed group names. */
+    private static final double PRIMED_FUSE = 2.5;
+
+    /** Enough to show on the health bar, and well under the ember's four. */
+    private static final float SCRATCH = 2f;
+
+    /** Two passes of the sensor interval the pickup runs on, so one of them has been and gone. */
+    private static final int PICKED_UP_BY = 25;
+
     /** One of the pack's own entities, in the world and ready to assert about. */
     private static AddonEntity spawn(GameTestHelper helper, String identifier) {
         EntityType<?> type = AddonEntities.typeOf(identifier);

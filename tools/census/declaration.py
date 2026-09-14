@@ -37,7 +37,7 @@ ELSEWHERE = "elsewhere"
 
 # What each call in the source means about the reach of the read it performs.
 REACH = (
-    (LIVE, ("declaresNow(", "liveComponent(", "liveText(")),
+    (LIVE, ("declaresNow(", "liveComponent(", "liveText(", "liveNumber(")),
     (ANY_GROUP, ("componentBody(",)),
     (DECLARED, ("declares(", "components().get(", "components().containsKey(",
                 "number(definition,", "text(", "anyDeclares(", "anyoneDeclares(")),
@@ -46,6 +46,97 @@ REACH = (
 # A goal is collected from the top level and from every group at once, because a pack switching a
 # goal on writes it into a group and Java has to build the whole list before the entity exists.
 GOALS = ("minecraft:behavior.", "minecraft:memory_behavior.", "minecraft:annotation.")
+
+# A method taking the component name as a parameter, which is what a helper forwarding to one of the
+# calls above looks like, and a loop walking a list of names and reading each in turn. A statement
+# opening a block is spelt the same way and names a keyword rather than a method.
+KEYWORDS = ("for", "if", "while", "switch", "catch", "synchronized", "do", "else", "try", "return")
+METHOD = re.compile(r'\b(\w+)\s*\(([^);]*\bString\s+\w+[^);]*)\)\s*\{')
+LOOP = re.compile(r'\bfor\s*\(\s*(?:final\s+)?String\s+(\w+)\s*:\s*'
+                  r'(?:new\s+String\s*\[\]\s*|List\.of|Set\.of)\s*[{(]([^})]*)[})]\s*\)')
+
+
+def block(body, start):
+    """The braced block beginning at the first brace at or after `start`."""
+    opened = body.index("{", start)
+    depth = 0
+    for index in range(opened, len(body)):
+        if body[index] == "{":
+            depth += 1
+        elif body[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return body[opened:index + 1]
+    return body[opened:]
+
+
+def without(body, declaration):
+    """The source with one parenthesised declaration taken out, the rest of the file left alone."""
+    start = body.index(declaration)
+    opened = body.index("(", start)
+    depth = 0
+    for index in range(opened, len(body)):
+        if body[index] == "(":
+            depth += 1
+        elif body[index] == ")":
+            depth -= 1
+            if depth == 0:
+                return body[:start] + body[index + 1:]
+    return body[:start]
+
+
+def reads_with(body, variable, calls):
+    """Whether one of these calls is handed this variable as the component it reads."""
+    return any(re.search(r'%s\s*%s\s*[,)]' % (re.escape(call), re.escape(variable)), body)
+               for call in calls)
+
+
+def forwarders(bodies, reach):
+    """The helpers that read whatever component name they are handed, and how widely each reads it.
+
+    `REACH` names the calls that reach a component by name. A helper taking that name as a parameter
+    and passing it to one of them reads it exactly as widely, and the call site shows none of that:
+    `raise("minecraft:on_hurt", ...)` is a live read and looks like a bare string. Each is found by
+    its own parameter reaching a recognised call inside its body, so a helper written in the source
+    counts the moment it is written rather than when somebody remembers to declare it.
+    """
+    found = []
+    known = {call for _, calls in reach for call in calls}
+    for body in bodies:
+        for match in METHOD.finditer(body):
+            if match.group(1) in KEYWORDS:
+                continue
+
+            name = match.group(1) + "("
+            if name in known:
+                continue
+
+            parameters = re.findall(r'\bString\s+(\w+)', match.group(2))
+            inner = block(body, match.end() - 1)
+            for kind, calls in reach:
+                if any(reads_with(inner, parameter, calls) for parameter in parameters):
+                    found.append((kind, name))
+                    break
+    return found
+
+
+def loops(body, reach):
+    """Per component, the reads a loop over a list of component names performs on each of them.
+
+    A name walked over in a list is read through the loop's own variable, so the line carrying the
+    name carries no call and the line carrying the call carries no name. What decides is the loop
+    body: every name in the list is read however the calls taking that variable read it.
+    """
+    found = {}
+    for match in LOOP.finditer(body):
+        names = re.findall(r'"([^"]+)"', match.group(2))
+        inner = block(body, match.end() - 1)
+        for kind, calls in reach:
+            if not reads_with(inner, match.group(1), calls):
+                continue
+            for name in names:
+                found.setdefault(name, set()).add(kind)
+    return found
 
 
 def free():
@@ -88,7 +179,7 @@ def marker_names():
     return set(re.findall(r'"([^"]+)"', body[start:body.index("};", start)]))
 
 
-def reaches(source, name):
+def reaches(source, name, reach):
     """Every kind of read the source performs on this component, as a set."""
     found = set()
     quoted = '"%s"' % name
@@ -97,7 +188,7 @@ def reaches(source, name):
             continue
         if re.search(r'case\s+"[^"]*"(\s*,\s*"[^"]*")*\s*->', line) and quoted in line:
             found.add(ON_ADD)
-        for kind, calls in REACH:
+        for kind, calls in reach:
             if any(call in line for call in calls):
                 found.add(kind)
     return found
@@ -125,14 +216,29 @@ def main():
     unread = free()
     top, grouped = declarations(arguments.samples)
 
-    # The implemented declaration is a list of names rather than a read of any of them, so it is
-    # taken out before the source is searched for what reaches each name.
-    source = []
+    # The implemented declaration is a list of names rather than a read of any of them, so the list
+    # itself is cut out before the source is searched for what reaches each name. Only the list: the
+    # rest of that file reads components like any other.
+    bodies = []
     for path in sorted(JAVA.rglob("*.java")):
         body = text(path)
         if path.name == "AddonEntities.java":
-            body = body[:body.index("IMPLEMENTED = Set.of")]
-        source.extend(body.splitlines())
+            body = without(body, "IMPLEMENTED = Set.of")
+        bodies.append(body)
+
+    source = [line for body in bodies for line in body.splitlines()]
+
+    # A helper handed the name reads it as widely as whatever it forwards to, so the call sites of
+    # one are reads in their own right and the ranking has to know that before it reads a line.
+    reach = REACH
+    for kind, call in forwarders(bodies, REACH):
+        reach = tuple((named, calls + (call,)) if named == kind else (named, calls)
+                      for named, calls in reach)
+
+    through_loops = {}
+    for body in bodies:
+        for name, kinds in loops(body, reach).items():
+            through_loops.setdefault(name, set()).update(kinds)
 
     markers = marker_names()
 
@@ -149,9 +255,9 @@ def main():
         if name.startswith(GOALS) or name in markers:
             continue
 
-        reach = widest(reaches(source, name))
-        if reach in (DECLARED, ELSEWHERE):
-            gaps.append((in_groups, at_top, name, reach))
+        found = reaches(source, name, reach) | through_loops.get(name, set())
+        if widest(found) in (DECLARED, ELSEWHERE):
+            gaps.append((in_groups, at_top, name, widest(found)))
 
     published = sum(1 for name in implemented if grouped.get(name, 0))
     print("Components a vanilla entity declares inside a component group: %d" % published)
