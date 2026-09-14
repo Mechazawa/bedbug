@@ -2,7 +2,7 @@
 # Every check this repository has, in the order that fails fastest.
 #
 # The build covers four Minecraft versions, checkstyle, the unit tests and the in-game tests. The
-# ten censuses say how much of the published Bedrock vocabulary the mod answers, which the in-game
+# twelve censuses say how much of the published Bedrock vocabulary the mod answers, which the in-game
 # coverage report cannot: that one sees only what a loaded pack asked for. The harness drives real
 # servers and clients, and the scenes open a world with a player in it.
 #

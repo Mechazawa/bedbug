@@ -31,7 +31,6 @@ import collections
 import json
 import pathlib
 import re
-import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SAMPLES = ROOT / "scratchpad" / "bedrock" / "bedrock-samples"
@@ -465,7 +464,7 @@ def direct(text: str) -> set[str]:
 
 
 def harvest(text: str, methods: dict[str, list[str]], seen: set[str], depth: int = 0,
-            types: dict[str, set[str]] = None) -> set[str]:
+            types: dict[str, set[str]] | None = None) -> set[str]:
     """The fields a piece of a reader asks for, following the helpers it calls to get them.
 
     A reader hands the object to a helper as often as it reads a field itself, so a helper called
