@@ -1,7 +1,6 @@
 package at.ioexception.mcaddon.bedrock.animation;
 
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
-import at.ioexception.mcaddon.registry.AddonEntities;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
@@ -12,14 +11,6 @@ import java.util.Map;
 
 /** Reads one animation controller out of a pack's `animation_controllers` JSON. */
 public final class AnimationControllerParser {
-
-    /**
-     * Which way round the circle a rotation travels while one state crosses into the next.
-     *
-     * A bone's rotation is the weighted sum of every clip contributing to it, the clips of a state
-     * being crossed out of among them, rather than a pair of angles with a route between them.
-     */
-    private static final List<String> UNREAD_STATE = List.of("blend_via_shortest_path");
 
     private AnimationControllerParser() {
     }
@@ -37,8 +28,6 @@ public final class AnimationControllerParser {
     }
 
     private static AnimationController.State readState(JsonObject json) {
-        AddonEntities.unsupportedFields("animation controller", json, UNREAD_STATE);
-
         List<AnimationController.Entry> animations = new ArrayList<>();
         if (json.has("animations")) {
             for (JsonElement entry : json.getAsJsonArray("animations")) {
@@ -86,7 +75,8 @@ public final class AnimationControllerParser {
             readStatements(json, "on_exit"),
             List.copyOf(sounds),
             List.copyOf(particles),
-            readBlendTransition(json.get("blend_transition")));
+            readBlendTransition(json.get("blend_transition")),
+            json.has("blend_via_shortest_path") && json.get("blend_via_shortest_path").getAsBoolean());
     }
 
     /**

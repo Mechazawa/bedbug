@@ -766,12 +766,6 @@ decide what it acts on and a reported field is still a dropped one.
   an arrow, an egg, a fireball, both potions, a leash knot, an item sprite, an experience bottle and
   a fireworks rocket. What it does to a pass is not established from the published material, so
   nothing is done with it rather than something guessed at.
-- **`blend_via_shortest_path`** on a controller state picks which way round the circle a rotation
-  travels while one state crosses into the next. It does have an effect to have here:
-  `BonePose.addRotation` adds each clip's Euler angles scaled by its weight, so two clips at 350 and
-  10 degrees at equal weight leave the bone at 180 rather than at 0. What is missing is the thread
-  from the state that declared the flag, through the clips it contributes, to the accumulation,
-  which would wrap each contribution into the half turn nearest the running total.
 - **`parent_setup` and `binding`** are reported only for the wearer they cannot reach. An attachable
   writes the first into whoever is carrying it and hangs itself off the bone the second names, which
   both work for a pack's own entity and have nowhere to land on one Java draws with a model of its
@@ -806,7 +800,10 @@ Seven fields are read outside the renderer itself, which is where to look for th
   asking only for its effects has its bones posed as well.
 
 `blend_transition` is acted on as well: a state declaring one is crossed out of rather than left, its
-clips staying at a falling weight while the state it moved to comes up.
+clips staying at a falling weight while the state it moved to comes up. `blend_via_shortest_path`
+rides on that crossing: a bone's rotation is the weighted sum of every clip reaching it, so 350 and
+10 degrees at equal weight otherwise leave the bone at 180, and a state declaring the flag has each
+later angle turned to within half a circle of the first one before it is weighed.
 - **`tools/census/commands.py`** does the same for the command dialect. A `.mcfunction` is the one
   part of a pack Java refuses by halves, one bad line costing the whole file, so knowing which
   commands survive translation matters more here than anywhere else.

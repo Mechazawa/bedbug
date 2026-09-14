@@ -73,7 +73,8 @@ public final class ServerAnimator {
     private void collect(String resolved, Set<String> wanted) {
         AnimationController controller = clips.animationController(resolved);
         if (controller == null) {
-            player.ensurePlaying(resolved, 1f);
+            // Nothing here poses a bone: a behaviour pack's clips run a timeline rather than a model.
+            player.ensurePlaying(resolved, 1f, false);
             wanted.add(resolved);
             return;
         }

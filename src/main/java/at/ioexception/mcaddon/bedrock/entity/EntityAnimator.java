@@ -137,11 +137,11 @@ public final class EntityAnimator {
         Set<String> wanted = new HashSet<>();
         // A controller named in the definition itself runs on every frame, ahead of the animate list.
         for (String controller : definition.animationControllers().values()) {
-            collect(controller, deltaSeconds, 1f, wanted);
+            collect(controller, deltaSeconds, 1f, false, wanted);
         }
         for (ClientEntityDefinition.Gated entry : definition.animate()) {
             if (entry.condition() != null && !entry.condition().evaluate(environment).truthy()) continue;
-            collect(entry.name(), deltaSeconds, 1f, wanted);
+            collect(entry.name(), deltaSeconds, 1f, false, wanted);
         }
 
         // A clip nobody asked for this frame has been switched off, so it stops rather than lingers.
@@ -152,12 +152,13 @@ public final class EntityAnimator {
         player.tick(deltaSeconds);
     }
 
-    private void collect(String shortName, float deltaSeconds, float weight, Set<String> wanted) {
+    private void collect(String shortName, float deltaSeconds, float weight, boolean shortestPath,
+        Set<String> wanted) {
         String resolved = definition.resolveAnimation(shortName);
 
         AnimationController controller = assets.animationController(resolved);
         if (controller == null) {
-            player.ensurePlaying(resolved, weight);
+            player.ensurePlaying(resolved, weight, shortestPath);
             wanted.add(resolved);
             return;
         }
@@ -218,7 +219,7 @@ public final class EntityAnimator {
         MolangEnvironment environment = player.environment();
         for (AnimationController.Entry entry : state.animations()) {
             if (entry.weight() != null && !entry.weight().evaluate(environment).truthy()) continue;
-            collect(entry.animation(), deltaSeconds, weight, wanted);
+            collect(entry.animation(), deltaSeconds, weight, state.blendViaShortestPath(), wanted);
         }
     }
 

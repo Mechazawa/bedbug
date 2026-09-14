@@ -47,6 +47,9 @@ public final class AnimationPlayer {
         /** How strongly the controller state asking for this clip currently applies. */
         float stateWeight = 1f;
 
+        /** What the controller state asking for this clip declared, which the poses read back. */
+        boolean shortestPath;
+
         Running(BedrockAnimation animation) {
             this.animation = animation;
         }
@@ -164,11 +167,14 @@ public final class AnimationPlayer {
      * The weight is what a controller crossing out of one state and into another sets on the clips
      * of each, so the two are lerped rather than swapped.
      */
-    public void ensurePlaying(String name, float weight) {
+    public void ensurePlaying(String name, float weight, boolean shortestPath) {
         if (!running.containsKey(name)) play(name, null, 0f);
 
         Running clip = running.get(name);
-        if (clip != null) clip.stateWeight = weight;
+        if (clip == null) return;
+
+        clip.stateWeight = weight;
+        clip.shortestPath = shortestPath;
     }
 
     public void stopAll() {
@@ -292,7 +298,8 @@ public final class AnimationPlayer {
             BoneAnimation channels = bone.getValue();
 
             if (!channels.rotation().isEmpty()) {
-                pose.addRotation(channels.rotation().evaluate(position, environment, pose.rotation, scratch), weight);
+                pose.addRotation(channels.rotation().evaluate(position, environment, pose.rotation, scratch),
+                    weight, clip.shortestPath);
                 pose.rotationRelativeToEntity |= channels.rotationRelativeToEntity();
             }
             if (!channels.position().isEmpty()) {
