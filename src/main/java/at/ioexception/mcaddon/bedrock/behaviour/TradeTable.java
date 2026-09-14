@@ -78,18 +78,44 @@ public record TradeTable(List<Offer> offers, List<Integer> tierExperience) {
 
         /** The stack this describes, with every function it names run over it. */
         public Built build(RandomSource random, Entity trader) {
-            Identifier id = item == null ? null : Identifier.tryParse(item);
-            Built built = new Built(id == null ? ItemStack.EMPTY
-                : BuiltInRegistries.ITEM.getOptional(id)
-                    .map(found -> new ItemStack(found, Math.max(1, count)))
-                    .orElse(ItemStack.EMPTY), 0);
+            Named named = Named.of(item);
+            Built built = new Built(named.stack(Math.max(1, count)), 0);
 
             for (JsonElement element : functions) {
                 if (element.isJsonObject()) {
-                    built = applyFunction(element.getAsJsonObject(), built, random, trader);
+                    built = applyFunction(element.getAsJsonObject(), built, random, trader,
+                        named.id());
                 }
             }
             return built;
+        }
+    }
+
+    /**
+     * The item a trade names: the id, and the data value Bedrock glues onto the end of it.
+     *
+     * `minecraft:wool:1` is the orange one of the sixteen wools Java split that id into, and an id
+     * carrying no number at all means the first of whatever family it names.
+     */
+    private record Named(String id, int data) {
+        static Named of(String named) {
+            int colon = named == null ? -1 : named.lastIndexOf(':');
+            String tail = colon > 0 ? named.substring(colon + 1) : "";
+            return tail.matches("\\d+")
+                ? new Named(named.substring(0, colon), Integer.parseInt(tail)) : new Named(named, 0);
+        }
+
+        ItemStack stack(int count) {
+            if (id == null) return ItemStack.EMPTY;
+
+            String flattened = DataValues.item(id, data);
+            if (flattened == null && data != 0) {
+                AddonEntities.unsupported("trade item " + id + " " + data);
+            }
+
+            Identifier found = Identifier.tryParse(flattened == null ? id : flattened);
+            return found == null ? ItemStack.EMPTY : BuiltInRegistries.ITEM.getOptional(found)
+                .map(item -> new ItemStack(item, count)).orElse(ItemStack.EMPTY);
         }
     }
 
@@ -110,12 +136,12 @@ public record TradeTable(List<Offer> offers, List<Integer> tierExperience) {
     /**
      * Runs one function over the trade item a merchant is about to offer.
      *
-     * `random_aux_value` picks one of the things a Bedrock id stands for by number, and Java gave
-     * each of those an id of its own when it flattened items, so the stack the trade names is
-     * already the wrong one.
+     * The Bedrock id the trade named travels with the stack, because `random_aux_value` picks one
+     * of the things that id stood for by number and a Java id no longer says which family it came
+     * out of.
      */
     private static Built applyFunction(JsonObject function, Built built, RandomSource random,
-        Entity trader) {
+        Entity trader, String item) {
         RegistryAccess registries = trader.level().registryAccess();
         ItemStack stack = built.stack();
 
@@ -132,7 +158,9 @@ public record TradeTable(List<Offer> offers, List<Integer> tierExperience) {
             case "enchant_randomly" -> built.holding(Platform.enchant(random, stack,
                 5 + random.nextInt(26), false, registries));
             case "random_dye" -> built.holding(Platform.dyed(stack,
-                net.minecraft.world.item.DyeColor.byId(random.nextInt(16))));
+                net.minecraft.world.item.DyeColor.byId(random.nextInt(DataValues.COLOURS))));
+            case "random_aux_value" -> built.holding(
+                picked(stack, item, (int) between(function.get("values"))));
             case "exploration_map" -> {
                 String tag = LootTableDefinition.mapDestination(
                     Json.text(function, "destination", "buriedtreasure"));
@@ -147,6 +175,24 @@ public record TradeTable(List<Offer> offers, List<Integer> tierExperience) {
                 yield built;
             }
         };
+    }
+
+    /**
+     * The item a rolled data value names, or the stack as it stands where nothing answers the pair.
+     *
+     * The trade named one Bedrock id and the roll picks which of the items Java split it into is on
+     * the counter, so the whole of the change is which item the stack holds.
+     */
+    private static ItemStack picked(ItemStack stack, String item, int data) {
+        String flattened = DataValues.item(item, data);
+        if (flattened == null) {
+            AddonEntities.unsupported("trade function random_aux_value " + item + " " + data);
+            return stack;
+        }
+
+        Identifier id = Identifier.tryParse(flattened);
+        return id == null ? stack : BuiltInRegistries.ITEM.getOptional(id)
+            .map(found -> new ItemStack(found, stack.getCount())).orElse(stack);
     }
 
     /**

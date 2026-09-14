@@ -519,6 +519,10 @@ public final class BehaviourGameTests {
      * where a Bedrock item function reaches the other side of the trade it sits on. A trade whose
      * result is a map of somewhere this world holds none of is left out instead of reaching the
      * screen as an offer of nothing, and one whose function this mod only reports keeps its item.
+     *
+     * Two of the trades name a Bedrock id that stands for a family: one sells a bed out of the last
+     * four of the sixteen, which is a colour the trade lands on only if the roll is what picked it,
+     * and one sells the wool a data value glued onto its id names.
      */
     @GameTest()
     public void aMerchantsOffersCarryWhatItsItemFunctionsDid(GameTestHelper helper) {
@@ -551,6 +555,13 @@ public final class BehaviourGameTests {
         helper.assertTrue(results.stream().anyMatch(stack ->
                 stack.is(net.minecraft.world.item.Items.LEATHER_HELMET)),
             ENTITY + " lost the trade whose result is painted and whose data value is reported.");
+        List<String> sold = results.stream().map(stack -> net.minecraft.core.registries
+            .BuiltInRegistries.ITEM.getKey(stack.getItem()).toString()).toList();
+        helper.assertTrue(sold.contains("minecraft:lime_wool"),
+            ENTITY + " sells the wool a data value names and handed over " + sold + ".");
+        helper.assertTrue(sold.stream().anyMatch(LATE_BEDS::contains),
+            ENTITY + " sells a bed out of the last four colours and handed over " + sold + ".");
+
         helper.assertTrue(!book.isEmpty(), ENTITY + " offers no enchanted book.");
         helper.assertTrue(Platform.storedEnchantmentCount(book) > 0,
             "the book " + ENTITY + " sells carries no enchantment.");
@@ -601,6 +612,10 @@ public final class BehaviourGameTests {
 
     /** The base cost and one level of the per-level cost the pack's book trade states. */
     private static final int BOOK_FLOOR = 5;
+
+    /** The colours the range the pack's bed trade rolls over covers, which white is not among. */
+    private static final List<String> LATE_BEDS = List.of("minecraft:brown_bed", "minecraft:green_bed",
+        "minecraft:red_bed", "minecraft:black_bed");
 
     /** Longer than the second the synthetic pack's bow takes to draw fully. */
     private static final int FULL_DRAW = 25;

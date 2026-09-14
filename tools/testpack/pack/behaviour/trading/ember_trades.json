@@ -89,6 +89,47 @@
           ],
           "max_uses": 3,
           "trader_exp": 1
+        },
+        {
+          "wants": [
+            {
+              "item": "minecraft:emerald",
+              "quantity": 4
+            }
+          ],
+          "gives": [
+            {
+              "item": "minecraft:bed",
+              "quantity": 1,
+              "functions": [
+                {
+                  "function": "random_aux_value",
+                  "values": {
+                    "min": 12,
+                    "max": 15
+                  }
+                }
+              ]
+            }
+          ],
+          "max_uses": 2,
+          "trader_exp": 1
+        },
+        {
+          "wants": [
+            {
+              "item": "minecraft:emerald",
+              "quantity": 2
+            }
+          ],
+          "gives": [
+            {
+              "item": "minecraft:wool:5",
+              "quantity": 1
+            }
+          ],
+          "max_uses": 2,
+          "trader_exp": 1
         }
       ],
       "groups": [
