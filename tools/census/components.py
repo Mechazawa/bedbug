@@ -26,11 +26,12 @@ GOAL_PREFIXES = ("minecraft:behavior.", "minecraft:annotation.")
 class Surface:
     """One vocabulary, the names the mod acts on, and where each side was read."""
 
-    def __init__(self, title, published, implemented, source):
+    def __init__(self, title, published, implemented, source, legacy=()):
         self.title = title
         self.published = set(published)
         self.implemented = set(implemented)
         self.source = source
+        self.legacy = set(legacy)
 
     @property
     def covered(self):
@@ -42,8 +43,22 @@ class Surface:
 
     @property
     def unpublished(self):
-        """Names the mod acts on that the published vocabulary does not contain."""
-        return self.implemented - self.published
+        """Names the mod acts on that the published vocabulary does not contain and nobody meant.
+
+        A name a legacy declaration covers is left out, so what is listed here is stale or
+        misspelt and nothing else.
+        """
+        return self.implemented - self.published - self.legacy
+
+    @property
+    def tolerated(self):
+        """Names read on purpose for packs older than the schemas."""
+        return self.legacy - self.published
+
+    @property
+    def misdeclared(self):
+        """Legacy names the declaration may not carry: published today, or read by nothing."""
+        return (self.legacy & self.published) | (self.legacy - self.implemented)
 
     @property
     def percent(self):
@@ -319,7 +334,8 @@ def surfaces(samples):
         schema_properties((metadata / "json_schemas/server/item").glob("*/Components.json"))
         | vanilla_components(samples, "behavior_pack/items", "minecraft:item"),
         literal_set(JAVA / "registry/AddonItems.java", "IMPLEMENTED = List.of"),
-        "the item component schemas and the vanilla items"))
+        "the item component schemas and the vanilla items",
+        literal_set(JAVA / "registry/AddonItems.java", "LEGACY = Set.of")))
     return found
 
 
@@ -369,6 +385,9 @@ def main():
         print_names(f"Missing, {surface.title}", surface.missing)
         print_names(f"Named in the source but absent from the published {surface.title}",
                     surface.unpublished)
+        print_names(f"Read for packs older than the published {surface.title}", surface.tolerated)
+        print_names(f"Declared legacy and either published or read by nothing, {surface.title}",
+                    surface.misdeclared)
     for kind, names in sorted(unbacked_claims().items()):
         print_names(f"Listed as implemented with no reader of their own, {kind} components", names)
 

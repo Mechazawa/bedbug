@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.client.render;
 
 import at.ioexception.mcaddon.bedrock.animation.Vector3Expression;
+import at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangValue;
@@ -198,17 +199,25 @@ public class AddonParticle extends SingleQuadParticle {
         return age >= maxLifetime;
     }
 
-    /** `particle_motion_dynamic`: an acceleration and a drag, both in blocks and seconds. */
+    /**
+     * `particle_motion_dynamic`: an acceleration and a drag, both in blocks and seconds.
+     *
+     * The acceleration crosses into Java's units twice over, once for the distance and once for the
+     * time, while the drag crosses once: the pack's coefficient prices a velocity, so the second
+     * crossing cancels against the one that turned the velocity into blocks a tick.
+     *
+     * The spin keeps Bedrock's own units throughout, because nothing in Java advances it.
+     */
     private void accelerate(ParticleDefinition.Particle.Dynamic dynamic) {
         Vector3f acceleration = evaluate(dynamic.linearAcceleration());
         float drag = dynamic.linearDrag().asFloat(environment);
 
-        xd += (acceleration.x() - drag * xd) / 20f;
-        yd += (acceleration.y() - drag * yd) / 20f;
-        zd += (acceleration.z() - drag * zd) / 20f;
+        xd += BedrockUnits.blocksPerTickSquared(acceleration.x()) - drag * xd / BedrockUnits.TICKS_PER_SECOND;
+        yd += BedrockUnits.blocksPerTickSquared(acceleration.y()) - drag * yd / BedrockUnits.TICKS_PER_SECOND;
+        zd += BedrockUnits.blocksPerTickSquared(acceleration.z()) - drag * zd / BedrockUnits.TICKS_PER_SECOND;
 
         spinRate += (dynamic.rotationAcceleration().asFloat(environment)
-            - dynamic.rotationDrag().asFloat(environment) * spinRate) / 20f;
+            - dynamic.rotationDrag().asFloat(environment) * spinRate) / BedrockUnits.TICKS_PER_SECOND;
     }
 
     /** `particle_motion_parametric`: the pack says where the particle is rather than how it moves. */

@@ -21,7 +21,8 @@ import java.util.Set;
  */
 final class Goals {
     /** Bedrock counts a goal's waits and durations in seconds, and Java counts them in ticks. */
-    static final int TICKS_PER_SECOND = 20;
+    static final int TICKS_PER_SECOND =
+        at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.TICKS_PER_SECOND;
 
     private Goals() {
     }

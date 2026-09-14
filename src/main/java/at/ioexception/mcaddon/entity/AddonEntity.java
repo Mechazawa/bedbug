@@ -744,8 +744,8 @@ public class AddonEntity extends PathfinderMob
     /**
      * Where a rider sits, taken from the first seat the pack described.
      *
-     * Bedrock measures a seat in the model's own units, sixteen to the block, and puts the vertical
-     * axis where Java does, so only the scale differs.
+     * A seat is stated in blocks relative to the entity's own position, which is the space Java
+     * answers an attachment point in, and its vertical axis points the same way.
      */
     //? if >=1.21 {
     @Override
@@ -836,21 +836,40 @@ public class AddonEntity extends PathfinderMob
     /**
      * Moves the entity somewhere else nearby, the way Bedrock's teleport component does.
      *
-     * A pack gives a chance and a distance; what it is describing is a mob that blinks about rather
-     * than walks, which Java has no component for but can be asked to do outright.
+     * A pack gives how often to try, how likely each try is and the box to land in; what it is
+     * describing is a mob that blinks about rather than walks, which Java has no component for but
+     * can be asked to do outright. The two teleport times are seconds between tries and
+     * `random_teleport_cube` is the whole width of the box on each axis, so a jump reaches half of
+     * it from where the entity stands. A jump out of the light is priced apart from one out of the
+     * dark, which is what makes an enderman's daylight blink more likely than its night one.
      */
     private void teleportAbout() {
         if (!declares("minecraft:teleport") || level().isClientSide()) return;
 
-        double chance = number(definition, "minecraft:teleport", "random_teleport_chance", 0.01);
-        if (random.nextDouble() > chance) return;
+        com.google.gson.JsonObject body = componentBody("minecraft:teleport");
+        if (!Goals.flag(body, "random_teleports", true) || tickCount < teleportReadyAt) return;
 
-        double range = number(definition, "minecraft:teleport", "max_random_teleport_time", 16);
-        double x = getX() + (random.nextDouble() - 0.5) * range * 2;
-        double y = getY() + (random.nextInt(8) - 4);
-        double z = getZ() + (random.nextDouble() - 0.5) * range * 2;
+        teleportReadyAt = tickCount + Goals.between(random,
+            Math.max(1, Goals.ticks(body, "min_random_teleport_time", 0)),
+            Math.max(1, Goals.ticks(body, "max_random_teleport_time", 20)));
+
+        boolean lit = level().getMaxLocalRawBrightness(blockPosition()) > 7;
+        if (random.nextDouble() > Goals.number(body,
+            lit ? "light_teleport_chance" : "dark_teleport_chance", 0.01)) {
+            return;
+        }
+
+        net.minecraft.world.phys.Vec3 cube =
+            at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.blocks(
+                body.get("random_teleport_cube"),
+                new net.minecraft.world.phys.Vec3(32, 16, 32));
+        double x = getX() + (random.nextDouble() - 0.5) * cube.x;
+        double y = getY() + (random.nextDouble() - 0.5) * cube.y;
+        double z = getZ() + (random.nextDouble() - 0.5) * cube.z;
         Platform.placeAt(this, x, y, z, getYRot(), getXRot());
     }
+
+    private int teleportReadyAt;
 
     /** The first seat a `minecraft:rideable` component names, or null when it names none. */
     private net.minecraft.world.phys.Vec3 seat() {
@@ -858,10 +877,8 @@ public class AddonEntity extends PathfinderMob
         com.google.gson.JsonArray seats = body == null ? null : body.getAsJsonArray("seats");
         if (seats == null || seats.isEmpty() || !seats.get(0).isJsonObject()) return null;
 
-        com.google.gson.JsonArray at = seats.get(0).getAsJsonObject().getAsJsonArray("position");
-        return at == null || at.size() < 3 ? null
-            : new net.minecraft.world.phys.Vec3(at.get(0).getAsDouble() / 16,
-                at.get(1).getAsDouble() / 16, at.get(2).getAsDouble() / 16);
+        return at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.blocks(
+            seats.get(0).getAsJsonObject().get("position"), null);
     }
 
     /**
@@ -1376,15 +1393,16 @@ public class AddonEntity extends PathfinderMob
     /**
      * Hurts whatever is standing against the entity, which is what `minecraft:area_attack` does.
      *
-     * The damage is per second in Bedrock and this runs on the sensor interval, so what lands is
-     * the share of a second that has passed.
+     * `damage_per_tick` is the damage of one hit rather than a rate: a large magma cube writes six
+     * and hits for six, the same six Java deals. What paces it is the half second a hurt entity is
+     * invulnerable for, which is also the sensor interval this runs on.
      */
     private void attackAround() {
         if (!declares("minecraft:area_attack")) return;
         if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
 
         double range = number(definition, "minecraft:area_attack", "damage_range", 0.2);
-        float perSecond = (float) number(definition, "minecraft:area_attack", "damage_per_tick", 2);
+        float damage = (float) number(definition, "minecraft:area_attack", "damage_per_tick", 2);
         Filter filter = Filter.parse(componentBody("minecraft:area_attack").get("entity_filter"));
 
         for (net.minecraft.world.entity.LivingEntity nearby : level.getEntitiesOfClass(
@@ -1392,8 +1410,7 @@ public class AddonEntity extends PathfinderMob
             if (nearby == this) continue;
             if (!filter.matches(new Filter.Context(this, nearby, nearby, ServerHooks.state()))) continue;
 
-            Platform.hurt(nearby, level, damageSources().mobAttack(this),
-                perSecond * Sensors.INTERVAL_TICKS / 20f);
+            Platform.hurt(nearby, level, damageSources().mobAttack(this), damage);
         }
     }
 
@@ -1425,27 +1442,40 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
-     * Ripens the crops the entity is standing among, which is what `minecraft:grows_crop` does.
+     * Ripens the crop the entity is standing on, which is what `minecraft:grows_crop` does.
      *
-     * Bedrock gives a chance and a radius. Java already knows what growing means for every block
-     * that can be given bone meal, so the block decides rather than a table of crops.
+     * `chance` is per tick of the entity and `charges` is how many crops it may ripen before the
+     * component is spent, which is what stops one bee turning a whole field over. Java already knows
+     * what growing means for every block that can be given bone meal, so the block decides rather
+     * than a table of crops.
      */
     private void growCrops() {
         if (!declares("minecraft:grows_crop")) return;
         if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
 
-        double chance = number(definition, "minecraft:grows_crop", "chance", 0.02);
-        if (random.nextDouble() > chance) return;
+        if (cropCharges < 0) {
+            cropCharges = (int) number(definition, "minecraft:grows_crop", "charges", 10);
+        }
+        if (cropCharges == 0) return;
 
-        int radius = (int) number(definition, "minecraft:grows_crop", "charges", 1) + 1;
-        net.minecraft.core.BlockPos at = blockPosition().offset(
-            random.nextInt(radius * 2 + 1) - radius, 0, random.nextInt(radius * 2 + 1) - radius);
+        double chance = number(definition, "minecraft:grows_crop", "chance", 0);
+        if (random.nextDouble()
+            > at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.chanceOverTicks(
+                chance, Sensors.INTERVAL_TICKS)) {
+            return;
+        }
+
+        net.minecraft.core.BlockPos at = blockPosition();
         net.minecraft.world.level.block.state.BlockState state = level.getBlockState(at);
         if (!(state.getBlock() instanceof net.minecraft.world.level.block.BonemealableBlock crop)) return;
         if (!Platform.canBonemeal(crop, level, at, state)) return;
 
         crop.performBonemeal(level, random, at, state);
+        cropCharges--;
     }
+
+    /** How many crops the entity may still ripen, counted down from the component's own charges. */
+    private int cropCharges = -1;
 
     /**
      * Fires the event a pack asked for while somebody is looking at the entity.
@@ -2159,7 +2189,7 @@ public class AddonEntity extends PathfinderMob
         if (trades != null) setValue("max_trade_tier", (double) trades.tiers());
 
         if (declares("minecraft:heartbeat")) {
-            setValue("heartbeat_interval", number(definition, "minecraft:heartbeat", "interval", 2));
+            setValue("heartbeat_interval", number(definition, "minecraft:heartbeat", "interval", 1));
         }
         if (declares("minecraft:explode")) {
             setValue("fuse_time", number(definition, "minecraft:explode", "fuse_length", 1.5));
@@ -2661,7 +2691,7 @@ public class AddonEntity extends PathfinderMob
     private void beat() {
         if (!declares("minecraft:heartbeat")) return;
 
-        int interval = (int) (number(definition, "minecraft:heartbeat", "interval", 2)
+        int interval = (int) (number(definition, "minecraft:heartbeat", "interval", 1)
             * Goals.TICKS_PER_SECOND);
         if (interval <= 0 || tickCount % interval != 0) return;
 
@@ -3044,14 +3074,14 @@ public class AddonEntity extends PathfinderMob
     /**
      * The lunge `minecraft:dash_action` gives a mount, on the tick its rider asks for one.
      *
-     * Bedrock states the momentum per second in both directions and the wait between two dashes.
-     * How far through that wait the entity is is what a pack's own controllers draw the recovery
-     * from, so it is published while it runs down rather than only at its ends.
+     * Bedrock states the wait between two dashes in seconds, the forward momentum per second and the
+     * upward one per tick. How far through that wait the entity is is what a pack's own controllers
+     * draw the recovery from, so it is published while it runs down rather than only at its ends.
      */
     private void dash() {
         if (!declares("minecraft:dash_action")) return;
 
-        int wait = (int) (number(definition, "minecraft:dash_action", "cooldown_time", 1.75)
+        int wait = (int) (number(definition, "minecraft:dash_action", "cooldown_time", 1)
             * Goals.TICKS_PER_SECOND);
         if (dashReadyAt > tickCount) {
             if (tickCount % Goals.TICKS_PER_SECOND == 0 && wait > 0) {
@@ -3169,13 +3199,19 @@ public class AddonEntity extends PathfinderMob
      *
      * Bedrock states a dozen weights for how tightly a school holds together. What carries across is
      * the school itself: an entity outside the distance the pack allows is pulled back towards the
-     * middle of whatever it can see.
+     * middle of whatever it can see. Both numbers default to nothing, so a component with an empty
+     * body schools no one, which is what a pack writing one means.
+     *
+     * `innner_cohesion_threshold` carries the third `n` every published pack writes it with.
      */
     private void flock() {
         if (!declares("minecraft:flocking")) return;
 
-        double influence = number(definition, "minecraft:flocking", "influence_radius", 3);
-        double innerRadius = number(definition, "minecraft:flocking", "inner_cohesion_radius", 0.5);
+        double influence = number(definition, "minecraft:flocking", "influence_radius", 0);
+        if (influence <= 0) return;
+
+        double innerRadius =
+            number(definition, "minecraft:flocking", "innner_cohesion_threshold", 0);
         java.util.List<AddonEntity> school = level().getEntitiesOfClass(AddonEntity.class,
             getBoundingBox().inflate(influence),
             other -> other != this && other.getType() == getType());
@@ -3189,7 +3225,7 @@ public class AddonEntity extends PathfinderMob
         double apart = towards.length();
         if (apart < innerRadius) return;
 
-        double pull = number(definition, "minecraft:flocking", "goal_weight", 0.4) * FLOCK_PULL;
+        double pull = number(definition, "minecraft:flocking", "goal_weight", 0) * FLOCK_PULL;
         setDeltaMovement(getDeltaMovement().add(towards.normalize().scale(pull)));
     }
 
@@ -3883,8 +3919,8 @@ public class AddonEntity extends PathfinderMob
     /**
      * Wears the entity down at the rate `minecraft:damage_over_time` names.
      *
-     * Bedrock counts the gap between hits in seconds and this runs on the sensor interval, so the
-     * gap is rounded to whole intervals rather than to ticks.
+     * Bedrock counts the gap between hits in seconds, in fractions of one as readily as in whole
+     * ones, and this runs on the sensor interval, so a gap shorter than that interval becomes it.
      */
     private void hurtOverTime() {
         if (!declares("minecraft:damage_over_time")
@@ -3892,8 +3928,9 @@ public class AddonEntity extends PathfinderMob
             return;
         }
 
-        int seconds = (int) number(definition, "minecraft:damage_over_time", "time_between_hurt", 1);
-        int interval = Math.max(Sensors.INTERVAL_TICKS, seconds * 20);
+        double seconds = number(definition, "minecraft:damage_over_time", "time_between_hurt", 0);
+        int interval = Math.max(Sensors.INTERVAL_TICKS,
+            (int) Math.round(seconds * Goals.TICKS_PER_SECOND));
         if (tickCount % interval >= Sensors.INTERVAL_TICKS) return;
 
         Platform.hurt(this, level, damageSources().magic(),
