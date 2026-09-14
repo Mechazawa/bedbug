@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.registry;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.EntitySounds;
+import at.ioexception.mcaddon.bedrock.behaviour.PlayerDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
 import com.google.gson.JsonObject;
 import at.ioexception.mcaddon.bedrock.behaviour.TradeTable;
@@ -201,16 +202,25 @@ public final class AddonEntities {
      * Names every component of a definition that redescribes an entity the game already has.
      *
      * A pack writing `entities/player.json` or `entities/zombie.json` is replacing a definition
-     * Java holds in code rather than adding one, and this mod keeps the game's. Nothing on such a
-     * definition is applied, so every component on it is a gap whatever this mod does with the same
-     * component on an entity of the pack's own, which is why the implemented set is not consulted.
-     * `minecraft:player.hunger` and the four beside it, and `minecraft:exhaustion_values`, reach
-     * `/mcaddon entities` this way and no other: Bedrock ignores all six on anything but the player.
+     * Java holds in code rather than adding one, and this mod keeps the game's. Nothing else on such
+     * a definition is applied, so every component on it is a gap whatever this mod does with the
+     * same component on an entity of the pack's own, which is why the implemented set is not
+     * consulted. The six components Bedrock reads on the player and nowhere else are the exception:
+     * `PlayerDefinition` takes them here, because here is the only place they can arrive.
      */
     private static void reportOverride(ServerEntityDefinition definition) {
-        definition.components().keySet().forEach(AddonEntities::unsupported);
-        definition.componentGroups().values().stream()
-            .flatMap(group -> group.keySet().stream())
+        PlayerDefinition player = PlayerDefinition.tryFrom(definition);
+        if (player != null) {
+            player.install();
+            player.unread().forEach(AddonEntities::unsupported);
+        }
+        Set<String> taken = player == null ? Set.of() : player.taken();
+
+        java.util.stream.Stream.concat(
+                definition.components().keySet().stream(),
+                definition.componentGroups().values().stream()
+                    .flatMap(group -> group.keySet().stream()))
+            .filter(component -> !taken.contains(component))
             .forEach(AddonEntities::unsupported);
     }
 
@@ -481,7 +491,9 @@ public final class AddonEntities {
         "minecraft:rail_sensor", "minecraft:behavior.dragondeath",
         "minecraft:memory_sensor.in_range_of_entity", "minecraft:memory_sensor.game_event",
         "minecraft:memory_behavior.follow_target", "minecraft:memory_behavior.flee_threat",
-        "minecraft:memory_behavior.move_to_position");
+        "minecraft:memory_behavior.move_to_position",
+        "minecraft:player.hunger", "minecraft:player.saturation", "minecraft:player.exhaustion",
+        "minecraft:player.level", "minecraft:player.experience", "minecraft:exhaustion_values");
 
     /**
      * Every trade table an entity names, read while the pack it came from is still in hand.

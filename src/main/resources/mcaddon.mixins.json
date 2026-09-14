@@ -27,7 +27,14 @@
     "ServerPlayerGameModeMixin",
     "ServerGamePacketListenerMixin",
     "ServerPlayerMixin",
-    "ServerLevelGameEventMixin"
+    "ServerLevelGameEventMixin",
+    "FoodDataAccessor",
+    "FoodDataMixin",
+    "BlockMinedExhaustionMixin",
+    "PlayerAttackExhaustionMixin",
+    "PlayerJumpExhaustionMixin",
+    "PlayerMovementExhaustionMixin",
+    "LungeExhaustionMixin"
   ],
   "injectors": {
     "defaultRequire": 1
