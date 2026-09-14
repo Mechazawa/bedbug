@@ -18,6 +18,7 @@ still works:
     two entities, one spawn egg naming a texture and one giving two colours
     an animation firing a sound and a particle off its timeline
     three particle definitions in the 1.10.0 format, one of them carrying a curve and events
+    a client biome naming a sound of the pack's, two of the engine's, a track and a density
     a texture set whose emissive channel has pixels in it
     an entity texture with a band written the way Bedrock marks a cut-out texel
     a page of the pack's own glyphs, and the locale list naming the languages it ships

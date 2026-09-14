@@ -148,7 +148,8 @@ public final class PackConverter {
                 writeFunctions(bundle, root, namespace);
                 writeFont(pack, root, namespace);
                 Worldgen.write(root, namespace, biomes,
-                    at.ioexception.mcaddon.bedrock.ClientBiomeDefinition.readAll(pack),
+                    at.ioexception.mcaddon.bedrock.ClientBiomeDefinition.readAll(pack,
+                        name -> BedrockSoundNames.java(name, namespace, sounds)),
                     features, featureRules);
             }
 

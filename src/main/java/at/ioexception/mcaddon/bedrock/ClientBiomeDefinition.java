@@ -12,13 +12,15 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.UnaryOperator;
 
 /**
- * The colours a resource pack paints one biome with.
+ * What a resource pack paints and plays one biome with.
  *
  * Bedrock puts the drawing half of a biome in the resource pack and the generating half in the
  * behaviour pack, under the same identifier. Java keeps both on one entry, so the two halves are
- * read together and the colours land in the converted biome's `effects`.
+ * read together and the colours, the particle, the ambient sounds and the music land on the
+ * converted biome.
  *
  * A pack may write them in either of two shapes. `biomes/<name>.client_biome.json` is one file per
  * biome with named components; `biomes_client.json` is one file naming every biome at once, which
@@ -26,14 +28,15 @@ import java.util.Set;
  * pack ships both.
  *
  * The fog a biome names is a file of its own under `fogs/`, so it is resolved here and carried on
- * the biome that named it.
+ * the biome that named it, and the same goes for the music definition its `minecraft:biome_music`
+ * names.
  */
 public record ClientBiomeDefinition(int water, int sky, int grass, int foliage, int dryFoliage,
-    FogDefinition fog) {
+    FogDefinition fog, BiomeParticles particles, BiomeSounds sounds, BiomeMusic music) {
 
     /** No colour at all, which is what a biome the resource pack never mentions gets. */
-    public static final ClientBiomeDefinition NONE =
-        new ClientBiomeDefinition(-1, -1, -1, -1, -1, FogDefinition.NONE);
+    public static final ClientBiomeDefinition NONE = new ClientBiomeDefinition(-1, -1, -1, -1, -1,
+        FogDefinition.NONE, BiomeParticles.NONE, BiomeSounds.NONE, BiomeMusic.NONE);
 
     /** What a biome no resource pack states a water colour for is drawn with. */
     public static final int DEFAULT_WATER = 4159204;
@@ -41,7 +44,8 @@ public record ClientBiomeDefinition(int water, int sky, int grass, int foliage, 
     /** The components a converted biome carries something of. */
     private static final Set<String> READ = Set.of("minecraft:water_appearance",
         "minecraft:sky_color", "minecraft:grass_appearance", "minecraft:foliage_appearance",
-        "minecraft:dry_foliage_color", "minecraft:fog_appearance");
+        "minecraft:dry_foliage_color", "minecraft:fog_appearance", "minecraft:ambient_sounds",
+        "minecraft:biome_music", "minecraft:precipitation");
 
     /** What one entry in the whole-pack file states that a converted biome carries something of. */
     private static final Set<String> LEGACY_READ = Set.of("water_surface_color", "water_fog_color",
@@ -52,15 +56,19 @@ public record ClientBiomeDefinition(int water, int sky, int grass, int foliage, 
      *
      * The whole-pack file is read first so a per-biome file overrides it, which is the order
      * Bedrock reads them in.
+     *
+     * @param sound the Java sound event one of the pack's sound names becomes, or null for none
      */
-    public static Map<String, ClientBiomeDefinition> readAll(BedrockPack pack) {
+    public static Map<String, ClientBiomeDefinition> readAll(BedrockPack pack,
+        UnaryOperator<String> sound) {
         Map<String, FogDefinition> fogs = FogDefinition.readAll(pack);
+        Map<String, MusicDefinitions> music = MusicDefinitions.readAll(pack);
         Map<String, ClientBiomeDefinition> found = new LinkedHashMap<>();
         readLegacy(pack, fogs, found);
 
         for (Path file : pack.list("biomes", ".json")) {
             try {
-                read(Json.parseObject(file), fogs, found);
+                read(Json.parseObject(file), fogs, music, sound, found);
             } catch (IOException | RuntimeException error) {
                 McAddon.LOGGER.warn("Could not read {}: {}", file.getFileName(), error.toString());
             }
@@ -71,10 +79,11 @@ public record ClientBiomeDefinition(int water, int sky, int grass, int foliage, 
     /** The same colours with the behaviour pack's own tints where it states them. */
     public ClientBiomeDefinition tinted(int grassTint, int foliageTint) {
         return new ClientBiomeDefinition(water, sky, grassTint >= 0 ? grassTint : grass,
-            foliageTint >= 0 ? foliageTint : foliage, dryFoliage, fog);
+            foliageTint >= 0 ? foliageTint : foliage, dryFoliage, fog, particles, sounds, music);
     }
 
     private static void read(JsonObject root, Map<String, FogDefinition> fogs,
+        Map<String, MusicDefinitions> music, UnaryOperator<String> sound,
         Map<String, ClientBiomeDefinition> into) {
         JsonObject body = root.has("minecraft:client_biome")
             && root.get("minecraft:client_biome").isJsonObject()
@@ -96,7 +105,10 @@ public record ClientBiomeDefinition(int water, int sky, int grass, int foliage, 
             colour(components, "minecraft:grass_appearance", "color"),
             colour(components, "minecraft:foliage_appearance", "color"),
             colour(components, "minecraft:dry_foliage_color", "color"),
-            named(appearance == null ? null : Json.text(appearance, "fog_identifier", null), fogs)));
+            named(appearance == null ? null : Json.text(appearance, "fog_identifier", null), fogs),
+            BiomeParticles.read(components.getAsJsonObject("minecraft:precipitation")),
+            BiomeSounds.read(components.getAsJsonObject("minecraft:ambient_sounds"), sound),
+            BiomeMusic.read(components.getAsJsonObject("minecraft:biome_music"), music, sound)));
     }
 
     private static void readLegacy(BedrockPack pack, Map<String, FogDefinition> fogs,
@@ -117,7 +129,7 @@ public record ClientBiomeDefinition(int water, int sky, int grass, int foliage, 
 
                 into.put(entry.getKey(), new ClientBiomeDefinition(
                     Json.colour(Json.text(body, "water_surface_color", null)), -1, -1, -1, -1,
-                    legacyFog(body, fogs)));
+                    legacyFog(body, fogs), BiomeParticles.NONE, BiomeSounds.NONE, BiomeMusic.NONE));
             }
         } catch (IOException | RuntimeException error) {
             McAddon.LOGGER.warn("Could not read biomes_client.json: {}", error.toString());

@@ -141,9 +141,10 @@ server decides what happens; the client draws it.
   become the band of Java's own climate space the biome is searched for in. A biome the pack's tags
   put in the nether or the end is added to the list that world already searches, so it generates in
   an ordinary world; one in the overworld is converted and registered and then reported, because
-  Java's overworld has no such list to add to. The colours the resource pack paints a biome with go
-  into it either way, the fog its `fogs` file paints the air and the water with among them, and from
-  26 the distances that fog fades over as well. A feature becomes a Java configured feature, and a
+  Java's overworld has no such list to add to. What the resource pack paints a biome with goes into
+  it either way: its colours, the fog its `fogs` file paints the air and the water with, the
+  particle it drops through its air, the sounds it loops and the track it plays, and from 26 the
+  distances that fog fades over as well. A feature becomes a Java configured feature, and a
   feature rule becomes the placed feature and the generation step beside it, hung at world load on
   every biome whose tags the rule's own filter accepts. That last part is the direction Bedrock
   attaches from and the one a Java biome cannot, because a Java biome lists the features it carries
@@ -483,11 +484,36 @@ one keeps Java's fog and the author is told.
 **What a client biome states beside its colours.** The water, sky, grass and foliage colours out of
 `biomes` and `biomes_client.json` reach a converted biome, and the dry foliage colour reaches 26
 alone and is named before it. The whole-pack file's own water fog colour and water fog distance are
-read as that biome's water fog. Its water surface transparency, the precipitation particles, the
-ambient sounds, the music definition and the identifiers naming a deferred renderer's atmosphere,
-lighting, water and colour grading are counted and named. On 1.20.1 no biome from a pack is
+read as that biome's water fog. `minecraft:precipitation` becomes the biome's ambient particle,
+`minecraft:ambient_sounds` its loop, mood and addition, and `minecraft:biome_music` the track named
+by the entry it points at in `sounds/music_definitions.json`: 26 states each as an attribute, and
+1.21.1 as a field of the `effects` block. The three underwater ambient moments have no Java field on
+any version, and the music's volume multiplier and its underwater track reach 26 alone. Each of
+those is counted and named, and so are the water surface transparency and the identifiers naming a
+deferred renderer's atmosphere, lighting, water and colour grading. On 1.20.1 no biome from a pack is
 converted at all, so every biome the resource pack paints is counted and named with the version that
 would draw it.
+
+**Two scales for one falling particle.** Bedrock states a precipitation density and Java the chance
+it spawns a particle on a tick, and the ratio between the two is not the same for all four visuals.
+Mojang writes both numbers for the four biomes that carry one: a white ash density of 2 against a
+white ash chance of 0.118, an ash density of 0.05 against 0.00625, and a spore density of 0.25
+against 0.025 for the red and 0.014 for the blue. The conversion is anchored on each of those four
+pairs, so a pack writing Bedrock's own density gets Java's own chance and a pack writing twice that
+gets twice the chance, up to the certainty Java's field allows.
+
+**A biome naming one of the engine's own sounds.** Bedrock's built-in sounds live in the engine
+rather than in any add-on, so a biome or a music definition naming one has nothing in the pack to
+convert. Half of the engine's 70 ambient and music names are spelled the same in both editions and
+go straight across; the other 35 are not, and `ambient.soulsand_valley.loop`, `music.game.endboss`
+and `music.overworld.mesa` are named against Java's `ambient.soul_sand_valley.loop`, `music.dragon`
+and `music.overworld.badlands` instead. A pack's own `sound_definitions.json` is searched first, so a
+pack shipping a definition under one of those names means its own file. What decides the rest is the
+sound event registry rather than the list, because Java gained two of these names after Bedrock had
+them: all 70 reach an event on 26.2, 69 on 26.1.2, which has no sulfur caves music, and 68 on the
+older two, which have no end flash either. A biome is one entry and an id the registry has not got
+costs the whole biome, so a name nothing answers is reported and the biome keeps whatever the game
+already plays there.
 
 **Worldgen on 1.20.1.** An entry a data pack puts in a worldgen registry leaves a world stable only
 while the pack it came from carries a `KnownPack`, and a converted pack carries one from 1.21 on.

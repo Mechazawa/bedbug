@@ -1,0 +1,90 @@
+package at.ioexception.mcaddon.convert;
+
+import at.ioexception.mcaddon.platform.Platform;
+import net.minecraft.core.registries.BuiltInRegistries;
+
+import java.util.List;
+import java.util.Map;
+
+/**
+ * What the two editions call the same built-in sound.
+ *
+ * A pack names a sound either by a key its own `sound_definitions.json` declares, which this mod
+ * registers an event for, or by one of the engine's own. An engine name lives in Bedrock rather
+ * than in any add-on, so there is no definition to convert and the only way to play something is to
+ * name Java's equivalent. Most of the ambient and music names are spelled the same in both
+ * editions, which is why only the ones that differ are listed.
+ *
+ * The registry decides whether the answer exists, because a track Java added later is absent on an
+ * older version. A name it has nothing for comes back null, and the caller reports it rather than
+ * writing an id the game would refuse a whole biome over.
+ */
+public final class BedrockSoundNames {
+    private static final Map<String, String> RENAMED = Map.ofEntries(
+        Map.entry("ambient.soulsand_valley.additions", "ambient.soul_sand_valley.additions"),
+        Map.entry("ambient.soulsand_valley.loop", "ambient.soul_sand_valley.loop"),
+        Map.entry("ambient.soulsand_valley.mood", "ambient.soul_sand_valley.mood"),
+        Map.entry("ambient.underwater.additions", "ambient.underwater.loop.additions"),
+        Map.entry("ambient.candle", "block.candle.ambient"),
+        Map.entry("ambient.weather.lightning.impact", "entity.lightning_bolt.impact"),
+        Map.entry("ambient.weather.rain", "weather.rain"),
+        Map.entry("ambient.weather.the_end_light_flash", "weather.end_flash"),
+        Map.entry("ambient.weather.thunder", "entity.lightning_bolt.thunder"),
+        Map.entry("music.game.basalt_deltas", "music.nether.basalt_deltas"),
+        Map.entry("music.game.creative", "music.creative"),
+        Map.entry("music.game.credits", "music.credits"),
+        Map.entry("music.game.crimson_forest", "music.nether.crimson_forest"),
+        Map.entry("music.game.deep_dark", "music.overworld.deep_dark"),
+        Map.entry("music.game.dripstone_caves", "music.overworld.dripstone_caves"),
+        Map.entry("music.game.end", "music.end"),
+        Map.entry("music.game.endboss", "music.dragon"),
+        Map.entry("music.game.frozen_peaks", "music.overworld.frozen_peaks"),
+        Map.entry("music.game.grove", "music.overworld.grove"),
+        Map.entry("music.game.jagged_peaks", "music.overworld.jagged_peaks"),
+        Map.entry("music.game.lush_caves", "music.overworld.lush_caves"),
+        Map.entry("music.game.meadow", "music.overworld.meadow"),
+        // Bedrock's generic nether track plays the four pieces Java's nether wastes music plays.
+        Map.entry("music.game.nether", "music.nether.nether_wastes"),
+        Map.entry("music.game.nether_wastes", "music.nether.nether_wastes"),
+        Map.entry("music.game.snowy_slopes", "music.overworld.snowy_slopes"),
+        Map.entry("music.game.soulsand_valley", "music.nether.soul_sand_valley"),
+        Map.entry("music.game.stony_peaks", "music.overworld.stony_peaks"),
+        Map.entry("music.game.swamp_music", "music.overworld.swamp"),
+        Map.entry("music.game.warped_forest", "music.nether.warped_forest"),
+        Map.entry("music.game.water", "music.under_water"),
+        // Both pick from the calm, hal and piano pieces Java plays under one name.
+        Map.entry("music.game_and_wild_equal_chance", "music.game"),
+        Map.entry("music.game_and_wild_favor_game", "music.game"),
+        Map.entry("music.overworld.jungle_edge", "music.overworld.sparse_jungle"),
+        Map.entry("music.overworld.mesa", "music.overworld.badlands"),
+        Map.entry("music.overworld.swamp_music", "music.overworld.swamp"));
+
+    private BedrockSoundNames() {
+    }
+
+    /**
+     * The sound event a pack's own name becomes, or null where nothing plays under it.
+     *
+     * The pack's own definitions are searched first, because a pack naming one of the engine's
+     * sounds and shipping a definition under that name means its own file rather than the
+     * engine's.
+     *
+     * @param defined every sound event the pack defines, as `namespace:path`
+     */
+    public static String java(String bedrock, String namespace, List<String> defined) {
+        Names.Identifier own = Names.soundEvent(bedrock, namespace);
+        String id = own.namespace() + ":" + own.path();
+        return defined.contains(id) ? id : java(bedrock);
+    }
+
+    /** The Java id for one of Bedrock's own sounds, or null where this version has no such event. */
+    public static String java(String bedrock) {
+        String name = bedrock.startsWith("minecraft:")
+            ? bedrock.substring("minecraft:".length()) : bedrock;
+        if (name.contains(":")) return null;
+
+        String candidate = RENAMED.getOrDefault(name, name);
+        return BuiltInRegistries.SOUND_EVENT.containsKey(Platform.id("minecraft", candidate))
+            ? "minecraft:" + candidate : null;
+    }
+}

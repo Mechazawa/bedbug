@@ -101,7 +101,7 @@ public final class Worldgen {
         if (biome.partiallyFrozen()) json.addProperty("temperature_modifier", "frozen");
         json.addProperty("downfall", biome.downfall());
 
-        Platform.biomeColours(json, colours.tinted(biome.grassColour(), biome.foliageColour()));
+        Platform.biomeEffects(json, colours.tinted(biome.grassColour(), biome.foliageColour()));
 
         Platform.emptyCarvers(json);
         JsonArray steps = new JsonArray();
