@@ -13,10 +13,16 @@ names that reach a `has`, a `get` or one of the JSON helpers inside the reader t
 component.
 
 The mod's side is an upper bound: a read is credited to every component its switch arm or its method
-names, so a field this census calls unread is one no reader mentions anywhere.
+names, and to every component whose body is handed to a type of its own, so a field this census calls
+unread is one no reader mentions anywhere.
 
-    python3 tools/census/fields.py                  # the whole table
-    python3 tools/census/fields.py --strict         # non-zero while a used field has no reader
+`--strict` fails on a field eight or more of Mojang's entities declare that has neither a reader nor
+a reason in `REASONS`. Everything with fewer declarations is counted and can be listed, because that
+tail is a reading list rather than a regression.
+
+    python3 tools/census/fields.py                     # the table and the gated gaps
+    python3 tools/census/fields.py --strict            # non-zero while a gated field has no reader
+    python3 tools/census/fields.py --min-declarations 1  # and the whole tail below the gate
     python3 tools/census/fields.py --component minecraft:teleport
 """
 
@@ -33,6 +39,14 @@ SOURCES = ROOT / "src" / "main" / "java"
 IMPLEMENTED_LIST = SOURCES / "at" / "ioexception" / "mcaddon" / "registry" / "AddonEntities.java"
 
 INDEX = "Entity component definitions.json"
+
+# How many of Mojang's own entities have to declare a field before `--strict` gates on it.
+#
+# Every field with a declaration behind it is reported whatever this is set to; what it decides is
+# which of them fails the build. Eight is where the census's own argument sits: a field a handful of
+# entities declare is worth acting on, and the long tail of fields one entity declares is a reading
+# list rather than a regression. `--min-declarations 1` gates on the whole tail.
+GATE = 8
 
 # A field a reader may skip, and why. Keyed by component, then by field; the key "*" covers every
 # field of that component that no reader names.
@@ -112,8 +126,28 @@ REASONS = {
     "minecraft:movement.sway": {"*": "Java has no swimming sway to give an arbitrary mob."},
     "minecraft:movement.jump": {"*": "Java's jump control has no delay of its own."},
 
+    "minecraft:ambient_sound_interval": {
+        "event_name": "Java gives a mob the idle sound its own type ships, with no name to swap in.",
+        "event_names": "Java gives a mob the idle sound its own type ships, with no name to swap in.",
+        "range": "Java spreads the gap between idle sounds itself, off the interval it is given.",
+    },
+    "minecraft:explode": {
+        "fuse_lit": "The fuse is lit by the goal that swells the entity, so its starting state is "
+                    "whatever that goal has done rather than a field read at spawn.",
+    },
+    "minecraft:buoyant": {
+        "liquid_blocks": "Java floats a mob in water and in nothing else, so a list of liquids has "
+                         "only the one entry it can be given.",
+        "apply_gravity": "Java applies gravity to every mob and offers no per-entity switch.",
+        "base_buoyancy": "Read as the lift the entity is given, under the scale beside it.",
+    },
+
     # Goals. Java's goal of the same name takes fewer parameters than Bedrock states.
     "minecraft:behavior.random_stroll": {"*": "Java's stroll goal picks its own distance."},
+    "minecraft:behavior.random_swim": {
+        "xz_dist": "Java's swim goal picks how far it goes.",
+        "y_dist": "Java's swim goal picks how far it goes.",
+    },
     "minecraft:behavior.explore_outskirts": {"*": "Java's stroll goal picks its own distance and wait."},
     "minecraft:behavior.stroll_towards_village": {"*": "Java's stroll goal has no village to aim at."},
     "minecraft:behavior.move_indoors": {"*": "Java's goal has no cooldown of its own."},
@@ -216,11 +250,17 @@ READS = [
     re.compile(r"\.has\(\s*\"([^\"]+)\"\s*\)"),
     re.compile(r"\.get\(\s*\"([^\"]+)\"\s*\)"),
     re.compile(r"\.getAsJson(?:Object|Array|Primitive)\(\s*\"([^\"]+)\"\s*\)"),
-    re.compile(r"\b\w+\(\s*[A-Za-z_][\w.]*\s*,\s*\"([^\"]+)\""),
+    # A helper handed the object and then the field, with the component's own name between the two
+    # when the caller is a switch over component names.
+    re.compile(r"\b\w+\(\s*[A-Za-z_][\w.]*\s*(?:,\s*[A-Za-z_][\w.]*\s*)?,\s*\"([^\"]+)\""),
 ]
 
 # A helper handed the component's own name and then the field inside it, which pins the pair exactly.
-PAIR = re.compile(r"\"(minecraft:[a-z0-9_.]+)\"\s*,\s*\"([A-Za-z0-9_]+)\"")
+PAIR = re.compile(r"\"(minecraft:[a-z0-9_.]+)\"\s*\)?\s*,\s*\"([A-Za-z0-9_]+)\"")
+
+# A type built out of one component's body, which is how this mod keeps a component's own reading
+# together. Every field that type's own file asks for belongs to the component the caller named.
+TYPE = re.compile(r"\b([A-Z]\w+)\s*[.(]")
 
 COMPONENT = re.compile(r"\"(minecraft:[a-z0-9_.]+)\"")
 METHOD = re.compile(
@@ -414,19 +454,29 @@ def segments(body: str) -> list[tuple[str, str]]:
     return pieces
 
 
-def harvest(text: str, methods: dict[str, list[str]], seen: set[str], depth: int = 0) -> set[str]:
+def direct(text: str) -> set[str]:
+    """The field names one piece of source asks a JSON object for."""
+    return {
+        field
+        for pattern in READS
+        for field in pattern.findall(text)
+        if not field.startswith("minecraft:") and re.fullmatch(r"[A-Za-z0-9_]+", field)
+    }
+
+
+def harvest(text: str, methods: dict[str, list[str]], seen: set[str], depth: int = 0,
+            types: dict[str, set[str]] = None) -> set[str]:
     """The fields a piece of a reader asks for, following the helpers it calls to get them.
 
     A reader hands the object to a helper as often as it reads a field itself, so a helper called
     from the reader counts as part of it. Helpers anywhere in the mod are followed, because the ones
     that turn a component into a value live in their own files.
     """
-    fields = {
-        field
-        for pattern in READS
-        for field in pattern.findall(text)
-        if not field.startswith("minecraft:") and re.fullmatch(r"[A-Za-z0-9_]+", field)
-    }
+    fields = direct(text)
+    if depth == 0 and types:
+        for named in set(TYPE.findall(text)) & set(types):
+            fields.update(types[named])
+
     if depth >= HELPER_DEPTH:
         return fields
 
@@ -439,7 +489,8 @@ def harvest(text: str, methods: dict[str, list[str]], seen: set[str], depth: int
     return fields
 
 
-def reads(source: str, methods: dict[str, list[str]]) -> dict[str, set[str]]:
+def reads(source: str, methods: dict[str, list[str]],
+          types: dict[str, set[str]]) -> dict[str, set[str]]:
     """The field names each component's reader takes out of its JSON object."""
     taken: dict[str, set[str]] = collections.defaultdict(set)
 
@@ -449,11 +500,13 @@ def reads(source: str, methods: dict[str, list[str]]) -> dict[str, set[str]]:
                 taken[component].add(field)
 
             for labels, text in segments(body):
-                named = set(COMPONENT.findall(labels)) or set(COMPONENT.findall(text))
+                # An arm naming another component in its body is reading that one too: a goal is
+                # often built out of the plain component that sits beside it.
+                named = set(COMPONENT.findall(labels)) | set(COMPONENT.findall(text))
                 if not named:
                     continue
 
-                fields = harvest(text, methods, set())
+                fields = harvest(text, methods, set(), 0, types)
                 for component in named:
                     taken[component].update(fields)
     return taken
@@ -478,8 +531,9 @@ def main() -> int:
     parser.add_argument("--samples", default=str(SAMPLES), help="the bedrock-samples checkout")
     parser.add_argument("--sources", default=str(SOURCES), help="the mod's Java sources")
     parser.add_argument("--component", help="report one component rather than the table")
-    parser.add_argument("--min-declarations", type=int, default=1,
-                        help="how many of Mojang's entities must declare a field for it to count")
+    parser.add_argument("--min-declarations", type=int, default=GATE,
+                        help="how many of Mojang's entities must declare a field for it to be gated"
+                             " (default: %(default)s; 1 lists every field with a declaration)")
     parser.add_argument("--strict", action="store_true",
                         help="exit non-zero while a used field has no reader and no reason")
     arguments = parser.parse_args()
@@ -502,9 +556,11 @@ def main() -> int:
         for name, overloads in bodies(source).items():
             methods[name].extend(overloads)
 
+    types = {path.stem: direct(source) for path, source in java.items()}
+
     taken: dict[str, set[str]] = collections.defaultdict(set)
     for source in java.values():
-        for component, fields in reads(source, methods).items():
+        for component, fields in reads(source, methods, types).items():
             taken[component].update(fields)
     handled = implemented(next(sources.rglob("AddonEntities.java")))
 
@@ -517,7 +573,9 @@ def main() -> int:
             field for name, field in per_field if name == component}
         for field in sorted(fields):
             uses = per_field.get((component, field), 0)
-            if field in taken.get(component, set()) or uses < arguments.min_declarations:
+            # Every field with a declaration behind it is collected; the gate decides which of them
+            # fails, so the tail below it can still be counted and named.
+            if field in taken.get(component, set()) or uses < 1:
                 continue
             gaps.append((uses, component, field, component in handled, reason(component, field)))
 
@@ -545,13 +603,18 @@ def main() -> int:
 
     open_gaps = [gap for gap in gaps if gap[3] and gap[4] is None]
     excused = [gap for gap in gaps if gap[3] and gap[4] is not None]
-    print(f"{len(open_gaps)} fields of an implemented component have no reader "
-          f"and no recorded reason; {len(excused)} carry one.")
+    gated = [gap for gap in open_gaps if gap[0] >= arguments.min_declarations]
+    print(f"{len(gated)} fields declared by {arguments.min_declarations} or more of Mojang's "
+          f"entities have no reader and no recorded reason; {len(excused)} carry one.")
 
-    for uses, component, field, _, _ in sorted(open_gaps, reverse=True):
+    for uses, component, field, _, _ in sorted(gated, reverse=True):
         print(f"  x{uses:<4} {component} {field}")
 
-    return 1 if arguments.strict and open_gaps else 0
+    tail = len(open_gaps) - len(gated)
+    if tail:
+        print(f"  and {tail} more below the gate, listed by --min-declarations 1.")
+
+    return 1 if arguments.strict and gated else 0
 
 
 if __name__ == "__main__":

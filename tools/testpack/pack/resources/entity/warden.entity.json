@@ -1,0 +1,22 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "tp:warden",
+      "materials": {
+        "default": "entity_alphatest"
+      },
+      "textures": {
+        "default": "textures/entity/sprite"
+      },
+      "geometry": {
+        "default": "geometry.tp.sprite"
+      },
+      "render_controllers": ["controller.render.tp.sprite"],
+      "spawn_egg": {
+        "base_color": "#3f6d4e",
+        "overlay_color": "#c9e86a"
+      }
+    }
+  }
+}

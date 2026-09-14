@@ -1,9 +1,13 @@
 package at.ioexception.mcaddon.bedrock.model;
 
+import at.ioexception.mcaddon.bedrock.molang.MolangParser;
+import at.ioexception.mcaddon.registry.AddonEntities;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.core.Direction;
+import net.minecraft.world.phys.AABB;
+import org.joml.Vector2f;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
@@ -14,6 +18,14 @@ import java.util.Map;
 
 /** Reads one geometry out of a pack's `models/entity` JSON. */
 public final class GeometryParser {
+
+    /**
+     * A way of building a bone that this renderer has no form of.
+     *
+     * `texture_meshes` builds geometry out of a texture's opaque pixels. A bone written that way is
+     * drawn as the boxes it also declares.
+     */
+    private static final List<String> UNREAD_BONE = List.of("texture_meshes");
 
     private GeometryParser() {
     }
@@ -28,13 +40,41 @@ public final class GeometryParser {
             identifier,
             optionalInt(description, "texture_width", 64),
             optionalInt(description, "texture_height", 64),
+            visibleBounds(
+                optionalFloat(description, "visible_bounds_width"),
+                optionalFloat(description, "visible_bounds_height"),
+                optionalVector(description, "visible_bounds_offset")),
             List.copyOf(bones));
     }
 
+    /**
+     * The box the model fills, measured in blocks about a point above the entity's feet.
+     *
+     * A geometry that gives no width or no height has nothing to say about its extent, which is
+     * what a null stands for.
+     */
+    private static AABB visibleBounds(float width, float height, Vector3f offset) {
+        if (width <= 0f || height <= 0f) return null;
+
+        float halfWidth = width / 2f;
+        float halfHeight = height / 2f;
+        return new AABB(
+            offset.x - halfWidth, offset.y - halfHeight, offset.z - halfWidth,
+            offset.x + halfWidth, offset.y + halfHeight, offset.z + halfWidth);
+    }
+
     private static BedrockBone readBone(JsonObject json) {
+        AddonEntities.unsupportedFields("geometry", json, UNREAD_BONE);
+
+        // A cube's own mirror and inflate replace the bone's rather than adding to them.
+        boolean mirror = json.has("mirror") && json.get("mirror").getAsBoolean();
+        float inflate = json.has("inflate") ? json.get("inflate").getAsFloat() : 0f;
+
         List<BedrockCube> cubes = new ArrayList<>();
         if (json.has("cubes")) {
-            for (JsonElement cube : json.getAsJsonArray("cubes")) cubes.add(readCube(cube.getAsJsonObject()));
+            for (JsonElement cube : json.getAsJsonArray("cubes")) {
+                cubes.add(readCube(cube.getAsJsonObject(), mirror, inflate));
+            }
         }
 
         Map<String, Vector3f> locators = new LinkedHashMap<>();
@@ -52,24 +92,28 @@ public final class GeometryParser {
             json.get("name").getAsString(),
             json.has("parent") ? json.get("parent").getAsString() : null,
             optionalVector(json, "pivot"),
-            optionalVector(json, "rotation"),
-            json.has("mirror") && json.get("mirror").getAsBoolean(),
+            // The 1.8 shape writes the resting rotation under either name, never a different one
+            // under each, so the newer spelling stands in for both wherever it is present.
+            optionalVector(json, "rotation", "bind_pose_rotation"),
+            json.has("neverRender") && json.get("neverRender").getAsBoolean(),
+            json.has("binding") ? MolangParser.parse(json.get("binding").getAsString()) : null,
             List.copyOf(cubes),
             Map.copyOf(locators));
     }
 
-    private static BedrockCube readCube(JsonObject json) {
+    private static BedrockCube readCube(JsonObject json, boolean boneMirror, float boneInflate) {
+        Vector3f size = optionalVector(json, "size");
         return new BedrockCube(
             optionalVector(json, "origin"),
-            optionalVector(json, "size"),
-            json.has("inflate") ? json.get("inflate").getAsFloat() : 0f,
-            json.has("mirror") && json.get("mirror").getAsBoolean(),
+            size,
+            json.has("inflate") ? json.get("inflate").getAsFloat() : boneInflate,
+            json.has("mirror") ? json.get("mirror").getAsBoolean() : boneMirror,
             optionalVector(json, "pivot"),
             optionalVector(json, "rotation"),
-            readUv(json.get("uv")));
+            readUv(json.get("uv"), size));
     }
 
-    private static CubeUv readUv(JsonElement json) {
+    private static CubeUv readUv(JsonElement json, Vector3f cube) {
         if (json == null || json.isJsonNull()) return new CubeUv.Box(0, 0);
 
         if (json.isJsonArray()) {
@@ -85,13 +129,24 @@ public final class GeometryParser {
             JsonObject value = face.getValue().getAsJsonObject();
             JsonArray uv = value.getAsJsonArray("uv");
             JsonArray size = value.getAsJsonArray("uv_size");
+            // A face that declares no patch size maps the box as seen from that face.
+            Vector2f fallback = faceSize(direction, cube);
             faces.put(direction, new FaceUv(
                 uv.get(0).getAsFloat(), uv.get(1).getAsFloat(),
-                size == null ? 0 : size.get(0).getAsFloat(),
-                size == null ? 0 : size.get(1).getAsFloat(),
+                size == null ? fallback.x : size.get(0).getAsFloat(),
+                size == null ? fallback.y : size.get(1).getAsFloat(),
                 optionalInt(value, "uv_rotation", 0)));
         }
         return new CubeUv.PerFace(Map.copyOf(faces));
+    }
+
+    /** How wide and how tall a box looks from one of its faces. */
+    private static Vector2f faceSize(Direction face, Vector3f cube) {
+        return switch (face) {
+            case NORTH, SOUTH -> new Vector2f(cube.x, cube.y);
+            case EAST, WEST -> new Vector2f(cube.z, cube.y);
+            case UP, DOWN -> new Vector2f(cube.x, cube.z);
+        };
     }
 
     /**
@@ -110,8 +165,12 @@ public final class GeometryParser {
         };
     }
 
-    private static Vector3f optionalVector(JsonObject json, String field) {
-        return json.has(field) ? vector(json.getAsJsonArray(field)) : new Vector3f();
+    /** The first of these fields the object carries, or the origin when it carries none of them. */
+    private static Vector3f optionalVector(JsonObject json, String... fields) {
+        for (String field : fields) {
+            if (json.has(field)) return vector(json.getAsJsonArray(field));
+        }
+        return new Vector3f();
     }
 
     private static Vector3f vector(JsonArray array) {
@@ -120,6 +179,10 @@ public final class GeometryParser {
 
     private static int optionalInt(JsonObject json, String field, int fallback) {
         return json.has(field) ? json.get(field).getAsInt() : fallback;
+    }
+
+    private static float optionalFloat(JsonObject json, String field) {
+        return json.has(field) ? json.get(field).getAsFloat() : 0f;
     }
 
 }

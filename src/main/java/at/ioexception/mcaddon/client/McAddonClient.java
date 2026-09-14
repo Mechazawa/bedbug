@@ -1,10 +1,15 @@
 package at.ioexception.mcaddon.client;
 
+import at.ioexception.mcaddon.bedrock.camera.CameraShake;
+import at.ioexception.mcaddon.bedrock.camera.CameraView;
+import at.ioexception.mcaddon.bedrock.fog.FogDefinition;
 import at.ioexception.mcaddon.client.render.AddonClientAssets;
 import at.ioexception.mcaddon.client.render.AddonEntityRenderer;
 import at.ioexception.mcaddon.client.render.AddonParticleProvider;
 import at.ioexception.mcaddon.client.render.Animators;
 import at.ioexception.mcaddon.client.render.EntityProperties;
+import at.ioexception.mcaddon.client.render.PlayerCamera;
+import at.ioexception.mcaddon.client.render.PlayerFog;
 import at.ioexception.mcaddon.client.screen.AddonFormScreen;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.network.Channels;
@@ -32,7 +37,12 @@ public final class McAddonClient implements ClientModInitializer {
             Platform.registerParticle(at.ioexception.mcaddon.registry.AddonParticles.typeOf(identifier),
                 sprites -> new AddonParticleProvider(identifier, sprites)));
 
+        Platform.registerDyeTint(at.ioexception.mcaddon.registry.AddonItems.dyeable());
+
         Channels.receiveProperties(EntityProperties::accept);
+        Channels.receiveCameraView(encoded -> PlayerCamera.accept(CameraView.decode(encoded)));
+        Channels.receiveCameraShake(encoded -> PlayerCamera.shake(CameraShake.decode(encoded)));
+        Channels.receiveFog(encoded -> PlayerFog.accept(FogDefinition.decode(encoded)));
         Channels.receivePacks(McAddonClient::reportMissingPacks);
         Channels.receiveAnimation(Animators::play);
         Channels.receiveParticle((effect, x, y, z) ->
@@ -43,7 +53,10 @@ public final class McAddonClient implements ClientModInitializer {
             description.isEmpty() ? null : new AddonFormScreen(formId, description)));
 
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK
-            .register(client -> at.ioexception.mcaddon.client.render.AddonEmitters.tick());
+            .register(client -> {
+                at.ioexception.mcaddon.client.render.AddonEmitters.tick();
+                if (client.level != null) Animators.tickOffscreen(client.level);
+            });
 
         ClientEntityEvents.ENTITY_UNLOAD.register((entity, level) -> {
             Animators.forget(entity.getId());
@@ -52,6 +65,8 @@ public final class McAddonClient implements ClientModInitializer {
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             Animators.clear();
             EntityProperties.clear();
+            PlayerCamera.clear();
+            PlayerFog.clear();
             at.ioexception.mcaddon.client.render.AddonEmitters.clear();
         });
     }

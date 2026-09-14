@@ -77,7 +77,7 @@ class PackOrderTest {
         PackSet set = PackOrder.sort(List.of(pack("Alpha", ONE, "resources", ABSENT)), problems);
 
         assertEquals(List.of("Alpha"), names(set));
-        assertEquals(List.of("Alpha requires a pack that is not installed: " + ABSENT), problems);
+        assertEquals(List.of("Alpha requires a pack that is not installed: " + ABSENT + " 1.0.0"), problems);
     }
 
     private static List<String> names(PackSet set) {

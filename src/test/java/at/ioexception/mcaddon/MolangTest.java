@@ -2,9 +2,14 @@ package at.ioexception.mcaddon;
 
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
+import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -48,6 +53,26 @@ class MolangTest {
         assertEquals(Math.PI, evaluate("math.pi"), 1e-6);
     }
 
+    /**
+     * Every easing runs from its first argument to its second, the way `math.lerp` does.
+     *
+     * Reversing the two ends is invisible at the midpoint and on a curve that starts where it
+     * finishes, so the cases here are asymmetric and read at the ends.
+     */
+    @ParameterizedTest
+    @CsvSource({
+        "'math.ease_in_quad(10, 20, 0)', 10",
+        "'math.ease_in_quad(10, 20, 1)', 20",
+        "'math.ease_in_quad(10, 20, 0.5)', 12.5",
+        "'math.ease_out_quad(10, 20, 0.5)', 17.5",
+        "'math.ease_out_expo(0, 100, 0)', 0",
+        "'math.ease_in_out_cubic(0, 8, 0.25)', 0.5",
+        "'math.inverse_lerp(10, 20, 12.5)', 0.25",
+    })
+    void easesFromTheFirstArgumentToTheSecond(String source, double expected) {
+        assertEquals(expected, evaluate(source), 1e-6, source);
+    }
+
     /** Dividing by zero is a zero rather than an error, which is what a pack relies on. */
     @ParameterizedTest
     @CsvSource({"'1 / 0', 0", "'math.mod(7, 0)', 0", "'q.missing_query', 0", "'0 ? 1', 0"})
@@ -72,6 +97,42 @@ class MolangTest {
         assertEquals(4, evaluate("{v.Mixed = 4; return v.mixed;}"), 1e-6);
     }
 
+    /**
+     * A query answering with a struct is asked for one member at a time, and the member reaches the
+     * answering side as the tail of the query's name rather than as a read of its own.
+     *
+     * Whoever answers `q.surface_particle_color.r` therefore has to split the channel off the name,
+     * which is only correct while the parser keeps handing the two over together and lowercased.
+     */
+    @Test
+    void carriesAStructMemberInTheQueryName() {
+        List<String> asked = new ArrayList<>();
+        environment.setQueries((name, arguments) -> {
+            asked.add(name);
+            return MolangValue.of(arguments.size());
+        });
+
+        assertEquals(2, evaluate("q.surface_particle_color.r + q.Block_State('age', 1)"), 1e-6);
+        assertEquals(List.of("surface_particle_color.r", "block_state"), asked);
+    }
+
+    /**
+     * A query that takes an argument names its member after the call rather than before it, and the
+     * two still have to reach the answering side together for `q.bone_aabb('leg').max.y` to answer
+     * anything. The member chain runs as deep as the struct does.
+     */
+    @Test
+    void carriesAStructMemberThatFollowsACall() {
+        List<String> asked = new ArrayList<>();
+        environment.setQueries((name, arguments) -> {
+            asked.add(name);
+            return MolangValue.of(arguments.size());
+        });
+
+        assertEquals(2, evaluate("q.bone_rotation('head').X + q.bone_aabb('leg1a').max.y"), 1e-6);
+        assertEquals(List.of("bone_rotation.x", "bone_aabb.max.y"), asked);
+    }
+
     @Test
     void runsLoops() {
         assertEquals(8, evaluate("{v.total = 0; loop(4, {v.total = v.total + 2;}); return v.total;}"), 1e-6);
@@ -86,6 +147,21 @@ class MolangTest {
     @Test
     void readsThroughAnArrow() {
         assertEquals(0, evaluate("c.owning_entity->v.anything"), 1e-6);
+    }
+
+    /** An attachable sees the variables its wearer published and nothing else it holds. */
+    @Test
+    void readsOnlyThePublishedVariablesOfALinkedEntity() {
+        MolangEnvironment wearer = new MolangEnvironment();
+        wearer.setVariable("attack_time", MolangValue.of(3));
+        wearer.setVariable("secret", MolangValue.of(7));
+
+        MolangEnvironment attachable = new MolangEnvironment();
+        attachable.setLink("owning_entity", wearer.publishedAs(Set.of("attack_time")));
+
+        assertEquals(3, MolangParser.parse("c.owning_entity->v.attack_time")
+            .asFloat(attachable), 1e-6);
+        assertEquals(0, MolangParser.parse("c.owning_entity->v.secret").asFloat(attachable), 1e-6);
     }
 
     @Test

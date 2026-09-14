@@ -1,0 +1,238 @@
+{
+  "pools": [
+    {
+      "rolls": 1,
+      "bonus_rolls": 0,
+      "entries": [
+        {
+          "type": "item",
+          "name": "tp:dust",
+          "weight": 3,
+          "quality": 1,
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": {
+                "min": 1,
+                "max": 3
+              }
+            },
+            {
+              "function": "looting_enchant",
+              "count": {
+                "min": 0,
+                "max": 1
+              },
+              "limit": 4
+            }
+          ]
+        },
+        {
+          "type": "empty",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "rolls": 1,
+      "conditions": [
+        {
+          "condition": "killed_by_player"
+        },
+        {
+          "condition": "random_chance_with_looting",
+          "chance": 0.25,
+          "looting_multiplier": 0.05
+        }
+      ],
+      "entries": [
+        {
+          "type": "item",
+          "name": "tp:wand",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "specific_enchants",
+              "enchants": [
+                {
+                  "id": "unbreaking",
+                  "level": [
+                    1,
+                    2
+                  ]
+                }
+              ]
+            },
+            {
+              "function": "set_damage",
+              "damage": {
+                "min": 0.5,
+                "max": 0.9
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "rolls": 1,
+      "conditions": [
+        {
+          "condition": "random_chance",
+          "chance": 0.1
+        }
+      ],
+      "entries": [
+        {
+          "type": "item",
+          "name": "minecraft:potion",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "set_potion",
+              "id": "fire_resistance"
+            }
+          ]
+        },
+        {
+          "type": "item",
+          "name": "minecraft:map",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "exploration_map",
+              "destination": "buriedtreasure"
+            }
+          ]
+        },
+        {
+          "type": "item",
+          "name": "minecraft:golden_sword",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "enchant_with_levels",
+              "levels": {
+                "min": 5,
+                "max": 12
+              },
+              "treasure": false
+            }
+          ]
+        },
+        {
+          "type": "item",
+          "name": "minecraft:dye",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "set_data",
+              "data": 4
+            }
+          ]
+        },
+        {
+          "type": "item",
+          "name": "minecraft:book",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "enchant_book_for_trading",
+              "base_cost": 2,
+              "enchantments": [
+                {
+                  "name": "unbreaking",
+                  "min": 1,
+                  "max": 3
+                },
+                {
+                  "name": "mending",
+                  "min": 1,
+                  "max": 1
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "rolls": 1,
+      "conditions": [
+        {
+          "condition": "random_difficulty_chance",
+          "default_chance": 0.5,
+          "peaceful": 0,
+          "hard": 0.6
+        },
+        {
+          "condition": "random_regional_difficulty_chance",
+          "max_chance": 0.5
+        },
+        {
+          "condition": "killed_by_player_or_pets"
+        },
+        {
+          "condition": "entity_properties",
+          "entity": "this",
+          "properties": {
+            "on_fire": false
+          }
+        },
+        {
+          "condition": "has_variant",
+          "value": 0
+        },
+        {
+          "condition": "has_mark_variant",
+          "value": 0
+        },
+        {
+          "condition": "bool_property",
+          "domain": "tp:is_lit",
+          "value": false
+        },
+        {
+          "condition": "biome_has_tag",
+          "tag": "warm"
+        },
+        {
+          "condition": "entity_killed",
+          "entity_type": "minecraft:zombie"
+        }
+      ],
+      "entries": [
+        {
+          "type": "item",
+          "name": "minecraft:white_banner",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "set_banner_details",
+              "type": 1
+            }
+          ]
+        },
+        {
+          "type": "item",
+          "name": "minecraft:suspicious_stew",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "set_stew_effect",
+              "effects": [
+                {
+                  "id": 0
+                },
+                {
+                  "id": 4,
+                  "duration": 6
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

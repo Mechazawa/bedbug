@@ -85,7 +85,9 @@ public final class GeometryBaker {
         Vector3f pivot = toModelSpace(bone.pivot());
 
         List<BakedQuad> quads = new ArrayList<>();
-        for (BedrockCube cube : bone.cubes()) quads.addAll(bakeCube(cube, bone, pivot, geometry));
+        if (!bone.neverRender()) {
+            for (BedrockCube cube : bone.cubes()) quads.addAll(bakeCube(cube, pivot, geometry));
+        }
 
         List<BakedBone> children = new ArrayList<>();
         for (BedrockBone child : childrenOf.getOrDefault(bone.name(), List.of())) {
@@ -97,15 +99,14 @@ public final class GeometryBaker {
             bone.name(),
             new Vector3f(pivot).sub(parentPivot),
             toModelRotation(bone.rotation()),
+            bone.binding(),
             List.copyOf(quads),
             List.copyOf(children));
         byName.put(bone.name(), baked);
         return baked;
     }
 
-    private static List<BakedQuad> bakeCube(
-        BedrockCube cube, BedrockBone bone, Vector3f bonePivot, BedrockGeometry geometry
-    ) {
+    private static List<BakedQuad> bakeCube(BedrockCube cube, Vector3f bonePivot, BedrockGeometry geometry) {
         float inflate = cube.inflate();
         float minX = cube.origin().x - inflate;
         float maxX = cube.origin().x + cube.size().x + inflate;
@@ -116,7 +117,7 @@ public final class GeometryBaker {
         float minY = MODEL_ORIGIN_HEIGHT - (cube.origin().y + cube.size().y + inflate);
         float maxY = MODEL_ORIGIN_HEIGHT - (cube.origin().y - inflate);
 
-        boolean mirror = cube.mirror() || bone.mirror();
+        boolean mirror = cube.mirror();
         if (mirror) {
             float swap = minX;
             minX = maxX;
@@ -232,6 +233,8 @@ public final class GeometryBaker {
         if (cube.uv() instanceof CubeUv.PerFace perFace) {
             for (Map.Entry<Direction, FaceUv> entry : perFace.faces().entrySet()) {
                 FaceUv uv = entry.getValue();
+                // Bedrock leaves out a face whose patch has no area, which is how a plane is drawn.
+                if (uv.width() == 0 || uv.height() == 0) continue;
                 rectangles.put(faceOf(entry.getKey()), new float[]{
                     uv.u(), uv.v(), uv.u() + uv.width(), uv.v() + uv.height(), uv.rotation()});
             }

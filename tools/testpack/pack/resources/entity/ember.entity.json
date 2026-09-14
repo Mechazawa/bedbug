@@ -15,13 +15,16 @@
       "animations": {
         "idle": "animation.tp.sprite.idle"
       },
+      "animation_controllers": [
+        {"drift": "controller.animation.tp.ember.drift"}
+      ],
       "scripts": {
-        "animate": ["idle"]
+        "should_update_effects_offscreen": true
       },
       "particle_effects": {
         "trail": "tp:ember_trail"
       },
-      "render_controllers": ["controller.render.tp.sprite"],
+      "render_controllers": ["controller.render.tp.ember"],
       "spawn_egg": {
         "base_color": "#D94F1E",
         "overlay_color": "#FFD060"

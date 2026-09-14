@@ -3,6 +3,7 @@ package at.ioexception.mcaddon.bedrock.molang;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The state an expression is evaluated against: the entity's queries, the variables animations
@@ -27,6 +28,7 @@ public class MolangEnvironment {
     private float lifeTime;
     private float deltaTime;
     private float stateTime;
+    private float keyFrameLerpTime;
 
     public void setQueries(Queries queries) {
         this.queries = queries;
@@ -60,6 +62,32 @@ public class MolangEnvironment {
 
     public void setLink(String name, MolangEnvironment environment) {
         links.put(name, environment);
+    }
+
+    /**
+     * This environment as another entity may read it: the named variables, and the queries.
+     *
+     * An attachable reaches whoever carries it through `c.owning_entity->v.name`, and Bedrock
+     * answers zero for a variable that entity's `scripts.variables` does not name.
+     */
+    public MolangEnvironment publishedAs(Set<String> published) {
+        MolangEnvironment owner = this;
+        return new MolangEnvironment() {
+            @Override
+            public MolangValue variable(String name) {
+                return published.contains(name) ? owner.variable(name) : MolangValue.ZERO;
+            }
+
+            @Override
+            public boolean hasVariable(String name) {
+                return published.contains(name) && owner.hasVariable(name);
+            }
+
+            @Override
+            public MolangValue query(String name, List<MolangValue> arguments) {
+                return owner.query(name, arguments);
+            }
+        };
     }
 
     public boolean hasTemporary(String name) {
@@ -132,5 +160,19 @@ public class MolangEnvironment {
 
     public void setStateTime(float stateTime) {
         this.stateTime = stateTime;
+    }
+
+    /**
+     * How far the channel being evaluated stands between the keyframe behind it and the one ahead.
+     *
+     * A keyframe's own expression may read this, so the channel sets it before evaluating either
+     * end of the segment it is crossing. Zero everywhere else, which is where a keyframe sits.
+     */
+    public float keyFrameLerpTime() {
+        return keyFrameLerpTime;
+    }
+
+    public void setKeyFrameLerpTime(float keyFrameLerpTime) {
+        this.keyFrameLerpTime = keyFrameLerpTime;
     }
 }

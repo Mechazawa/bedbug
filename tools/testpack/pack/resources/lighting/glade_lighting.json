@@ -1,0 +1,29 @@
+{
+  "format_version": "1.21.70",
+  "minecraft:lighting_settings": {
+    "description": {
+      "identifier": "tp:glade_lighting"
+    },
+    "directional_lights": {
+      "sun": {
+        "illuminance": {
+          "0.00": 60.0,
+          "0.30": 0.0,
+          "0.70": 0.0
+        },
+        "color": [255, 238, 196]
+      },
+      "moon": {
+        "illuminance": {
+          "0.00": 0.0,
+          "0.50": 0.35,
+          "0.75": 0.0
+        },
+        "color": [150, 176, 255]
+      }
+    },
+    "sky": {
+      "intensity": 0.6
+    }
+  }
+}

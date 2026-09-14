@@ -37,7 +37,9 @@ public record ServerEntityDefinition(
     Map<String, JsonObject> components,
     Map<String, JsonObject> componentGroups,
     Map<String, EntityEvent> events,
-    Map<String, JsonObject> behaviours
+    Set<String> behaviours,
+    /** The clips and controllers this entity runs server side, which drive its own events. */
+    AnimationScript script
 ) {
     /** A data-driven entity property, which is how a behaviour pack tells a resource pack what to draw. */
     public record Property(String name, String type, double min, double max, List<String> values,
@@ -81,6 +83,14 @@ public record ServerEntityDefinition(
             return value.getAsJsonArray().isEmpty()
                 ? fallback : number(value.getAsJsonArray().get(0), fallback);
         }
+        // A field that varies per entity is written as an object naming both ends of its range, and
+        // a caller asking for one number wants the middle of it.
+        if (value.isJsonObject()) {
+            JsonObject range = value.getAsJsonObject();
+            if (!range.has("range_min") || !range.has("range_max")) return fallback;
+            return (number(range.get("range_min"), fallback)
+                + number(range.get("range_max"), fallback)) / 2;
+        }
         return number(value, fallback);
     }
 
@@ -96,18 +106,11 @@ public record ServerEntityDefinition(
     }
 
     /**
-     * The experience `minecraft:experience_reward` says this entity is worth.
+     * What a successful breeding pays out, which Bedrock states as Molang beside the death reward.
      *
-     * Bedrock writes the amount as Molang rather than as a number, and the expression every entity
-     * uses asks whether a player landed the last hit. Java pays experience only for a player's kill
-     * anyway, so the question is answered yes here and Java decides whether to hand it over.
+     * The expression the field carries asks about the kill rather than the birth, so the queries
+     * answer as they would for one, and a bare number is the case the parser also covers.
      */
-    public int experienceOnDeath(int fallback) {
-        JsonObject reward = components.get("minecraft:experience_reward");
-        return amount(reward == null ? null : reward.get("on_death"), fallback);
-    }
-
-    /** What a successful breeding pays out, which Bedrock states in the same component. */
     public int experienceWhenBred() {
         JsonObject reward = components.get("minecraft:experience_reward");
         return amount(reward == null ? null : reward.get("on_bred"), 0);
@@ -179,7 +182,7 @@ public record ServerEntityDefinition(
             }
         }
 
-        Map<String, JsonObject> behaviours = new LinkedHashMap<>();
+        Set<String> behaviours = new LinkedHashSet<>();
         collectBehaviours(declared, behaviours);
 
         Map<String, JsonObject> componentGroups = new LinkedHashMap<>();
@@ -192,6 +195,8 @@ public record ServerEntityDefinition(
             }
         }
 
+        // A collision box a pack leaves out is one block each way, which is Bedrock's own default
+        // rather than the player-shaped box Java falls back to.
         JsonObject collision = components.get("minecraft:collision_box");
         JsonObject health = components.get("minecraft:health");
         JsonObject movement = components.get("minecraft:movement");
@@ -206,8 +211,8 @@ public record ServerEntityDefinition(
             identifier,
             bool(description, "is_spawnable", true),
             bool(description, "is_summonable", true),
-            (float) number(collision, "width", 0.6),
-            (float) number(collision, "height", 1.8),
+            (float) number(collision, "width", 1),
+            (float) number(collision, "height", 1),
             (float) Math.max(1, ceiling),
             (float) Math.min(value, Math.max(1, ceiling)),
             (float) number(movement, "value", 0.23),
@@ -217,23 +222,24 @@ public record ServerEntityDefinition(
             components,
             componentGroups,
             EntityEvent.readAll(body.getAsJsonObject("events")),
-            behaviours);
+            behaviours,
+            AnimationScript.read(description));
     }
 
     /**
-     * The goals a pack declares, with the body each one carries.
+     * The component names that stand for something the entity decides to do.
      *
-     * A goal's `priority` and `speed_multiplier` live in that body, so the name alone is half the
-     * declaration. A goal a component group adds is kept as well, under the same name as the one at
-     * the top level when both declare it: the top-level body wins, which is what Bedrock does until
-     * the group is switched on.
+     * Bedrock spells a goal `minecraft:behavior.*` and a goal driven by a memory
+     * `minecraft:memory_behavior.*`, and both carry a priority and become a goal here. The body each
+     * one carries is read back by name where the goal is built, because a group declares a goal as
+     * readily as the top level does.
      */
-    private static void collectBehaviours(JsonObject components, Map<String, JsonObject> into) {
+    private static void collectBehaviours(JsonObject components, Set<String> into) {
         if (components == null) return;
-        for (Map.Entry<String, JsonElement> entry : components.entrySet()) {
-            if (!entry.getKey().startsWith("minecraft:behavior.")) continue;
-            into.putIfAbsent(entry.getKey(), entry.getValue().isJsonObject()
-                ? entry.getValue().getAsJsonObject() : new JsonObject());
+        for (String key : components.keySet()) {
+            if (key.startsWith("minecraft:behavior.") || key.startsWith("minecraft:memory_behavior.")) {
+                into.add(key);
+            }
         }
     }
 

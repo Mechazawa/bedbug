@@ -1,0 +1,20 @@
+{
+  "format_version": "1.21.90",
+  "minecraft:dimension": {
+    "description": {
+      "identifier": "tp:grove"
+    },
+    "components": {
+      "minecraft:default_biome": {
+        "biome": "minecraft:plains"
+      },
+      "minecraft:dimension_height": {
+        "min_y": 0,
+        "height_range": 128
+      },
+      "minecraft:generation": {
+        "generator_type": "void"
+      }
+    }
+  }
+}

@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.bedrock.model;
 
+import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import org.joml.Vector3f;
 
 import java.util.List;
@@ -14,6 +15,8 @@ public record BakedBone(
     String name,
     Vector3f pivot,
     Vector3f rotation,
+    /** Names a bone of whoever is carrying this model, which this bone hangs off instead. */
+    MolangExpression binding,
     List<BakedQuad> quads,
     List<BakedBone> children
 ) {

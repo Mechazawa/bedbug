@@ -1,0 +1,12 @@
+{
+  "format_version": "1.20.10",
+  "minecraft:recipe_brewing_mix": {
+    "description": {
+      "identifier": "tp:glow_brew"
+    },
+    "tags": ["brewing_stand"],
+    "input": "minecraft:potion_type:awkward",
+    "reagent": "tp:dust",
+    "output": "minecraft:potion_type:nightvision"
+  }
+}

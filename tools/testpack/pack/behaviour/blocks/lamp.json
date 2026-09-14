@@ -25,7 +25,59 @@
         "explosion_resistance": 2
       },
       "minecraft:light_emission": 0,
-      "minecraft:geometry": "geometry.lamp"
+      "minecraft:geometry": {
+        "identifier": "geometry.lamp",
+        "culling_shape": "tp:lamp_shape"
+      },
+      "minecraft:queued_ticking": {
+        "interval_range": [5, 5],
+        "looping": false,
+        "on_tick": {
+          "event": "tp:light"
+        }
+      },
+      "minecraft:on_step_on": {
+        "event": "tp:brighten"
+      },
+      "minecraft:breathability": "air",
+      "minecraft:chest_obstruction": {
+        "obstruction_rule": "never"
+      },
+      "minecraft:support": {
+        "shape": "fence"
+      },
+      "minecraft:connection_rule": {
+        "accepts_connections_from": "none",
+        "enabled_directions": ["north", "south"]
+      },
+      "minecraft:precipitation_interactions": {
+        "precipitation_behavior": "obstruct_rain_accumulate_snow"
+      },
+      "minecraft:block_entity": {
+        "dynamic_properties": true
+      },
+      "minecraft:flower_pottable": {},
+      "minecraft:embedded_visual": {
+        "minecraft:geometry": "geometry.lamp_potted",
+        "minecraft:material_instances": {
+          "*": {
+            "texture": "lamp_on",
+            "render_method": "opaque"
+          }
+        }
+      }
+    },
+    "events": {
+      "tp:light": {
+        "set_block_state": {
+          "tp:lit": "true"
+        }
+      },
+      "tp:brighten": {
+        "set_block_state": {
+          "tp:level": "2"
+        }
+      }
     },
     "permutations": [
       {

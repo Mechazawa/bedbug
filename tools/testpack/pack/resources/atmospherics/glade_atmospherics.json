@@ -1,0 +1,13 @@
+{
+  "format_version": "1.21.40",
+  "minecraft:atmosphere_settings": {
+    "description": {
+      "identifier": "tp:glade_atmospherics"
+    },
+    "sky_zenith_color": {
+      "0.00": [102, 150, 205],
+      "0.50": [14, 18, 36]
+    },
+    "sky_horizon_color": "#cdd8e6"
+  }
+}

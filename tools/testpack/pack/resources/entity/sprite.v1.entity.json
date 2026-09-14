@@ -1,0 +1,19 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "tp:sprite",
+      "min_engine_version": "1.8.0",
+      "materials": {
+        "default": "entity_alphatest"
+      },
+      "textures": {
+        "default": "textures/entity/sprite"
+      },
+      "geometry": {
+        "default": "geometry.tp.sprite.retired"
+      },
+      "render_controllers": ["controller.render.tp.sprite"]
+    }
+  }
+}

@@ -19,5 +19,42 @@
       "uuid": "32e0d039-0df5-408f-99bb-fa898f5d1fc2",
       "version": [1, 0, 0]
     }
+  ],
+  "has_education_metadata": false,
+  "metadata": {
+    "authors": ["mcaddon-fabric"],
+    "license": "MIT",
+    "generated_with": {"testpack": ["1.0.0"]}
+  },
+  "settings": [
+    {
+      "type": "label",
+      "text": "The settings the harness reads back at the values declared here."
+    },
+    {
+      "type": "toggle",
+      "name": "tp:ember_glows",
+      "text": "Ember glows",
+      "default": true
+    },
+    {
+      "type": "slider",
+      "name": "tp:ember_heat",
+      "text": "Ember heat",
+      "min": 1,
+      "max": 8,
+      "step": 1,
+      "default": 5
+    },
+    {
+      "type": "dropdown",
+      "name": "tp:ember_mood",
+      "text": "Ember mood",
+      "options": [
+        {"name": "calm", "text": "Calm"},
+        {"name": "restless", "text": "Restless"}
+      ],
+      "default": "restless"
+    }
   ]
 }

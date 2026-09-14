@@ -1,58 +1,79 @@
-#!/usr/bin/env bash
+#!/bin/bash
+# Every check this repository has, in the order that fails fastest.
 #
-# Every check in this repository, in the order that fails fastest.
+# The build covers four Minecraft versions, checkstyle, the unit tests and the in-game tests. The
+# ten censuses say how much of the published Bedrock vocabulary the mod answers, which the in-game
+# coverage report cannot: that one sees only what a loaded pack asked for. The harness drives real
+# servers and clients, and the scenes open a world with a player in it.
 #
-# `--quick` stops before the Gradle build, which is the only part that needs the game and the only
-# part that takes minutes. Everything before it runs on a checkout with no add-on and no JDK.
-#
-#   bash tools/checkall.sh --quick
-#   bash tools/checkall.sh
-set -uo pipefail
+#   tools/checkall.sh            # build, censuses and the harness
+#   tools/checkall.sh --quick    # build and censuses only
+#   tools/checkall.sh --scenes   # and the in-game scenes, which open a window
+set -u
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$root"
+cd "$(dirname "$0")/.." || exit 2
+export JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@25}
 
 quick=0
-[ "${1:-}" = "--quick" ] && quick=1
+scenes=0
+for argument in "$@"; do
+    case "$argument" in
+        --quick) quick=1 ;;
+        --scenes) scenes=1 ;;
+        *) echo "unknown option: $argument" >&2; exit 2 ;;
+    esac
+done
 
 failed=()
-
-run() {
-    local name="$1"
-    shift
-    printf '\n=== %s\n' "$name"
+step() {
+    local name="$1"; shift
+    echo "=== $name"
     if "$@"; then
-        return 0
+        echo "--- $name ok"
+    else
+        echo "--- $name FAILED"
+        failed+=("$name")
     fi
-    failed+=("$name")
 }
 
-# Parses every tool, which no compiler covers: these scripts are run by hand and could otherwise
-# sit broken for weeks.
-parse_tools() {
-    local broken=0
-    while IFS= read -r script; do
-        python3 -m py_compile "$script" || broken=1
-    done < <(find tools -name '*.py')
-    return $broken
-}
+# The censuses measure against material that is not committed, so it is fetched if absent.
+bash tools/census/fetch.sh >/dev/null 2>&1
 
-run "tool scripts parse" parse_tools
-run "script modules link" python3 tools/modules/check.py
-run "entity component fields" python3 tools/census/fields.py --strict
-run "test pack builds" python3 tools/testpack/build.py
-run "module pack builds" python3 tools/testpack/build_modules.py
+step "script modules link" python3 tools/modules/check.py
+step "build, four versions" ./gradlew build --console=plain -q
+step "script surface census" python3 tools/census/script.py
+step "component census" python3 tools/census/components.py
+step "component field census" python3 tools/census/fields.py --strict
+step "model census" python3 tools/census/model.py
+step "command census" python3 tools/census/commands.py
+step "particle census" python3 tools/census/particles.py
+step "data census" python3 tools/census/data.py
+step "declaration census" python3 tools/census/declaration.py
+step "pack file census" python3 tools/census/packfiles.py
+step "manifest census" python3 tools/census/manifest.py
 
 if [ "$quick" -eq 0 ]; then
-    export JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk@25}"
-    run "all four versions build" ./gradlew build
+    # The packs this repository owns, rebuilt so a stale archive cannot pass for a fresh one.
+    for version in 1.20.1 1.21.1 26.1.2 26.2; do
+        python3 tools/testpack/build.py --version "$version" >/dev/null
+        python3 tools/testpack/build_modules.py --version "$version" >/dev/null
+        python3 tools/testpack/build_gametests.py --version "$version" >/dev/null
+        python3 tools/testpack/build_blockprobe.py --version "$version" >/dev/null
+    done
+    step "servers and clients" python3 tools/verify/verify.py all
+    # 26.2 alone, because it is the one target that carries every companion mod: the two remapped
+    # targets lose the ones that ship libraries inside themselves.
+    step "beside other mods" python3 tools/verify/verify.py companions --version 26.2
 fi
 
-printf '\n'
+if [ "$scenes" -eq 1 ]; then
+    step "scenes in a world" python3 tools/scene/scene.py --version 26.2
+fi
+
+echo
 if [ ${#failed[@]} -eq 0 ]; then
-    echo "All checks passed."
+    echo "PASS  everything"
     exit 0
 fi
-
-printf 'Failed: %s\n' "${failed[@]}"
+echo "FAIL  ${failed[*]}"
 exit 1

@@ -1,0 +1,226 @@
+{
+  "format_version": "1.21.30",
+  "tiers": [
+    {
+      "total_exp_required": 0,
+      "trades": [
+        {
+          "wants": [
+            {
+              "item": "minecraft:emerald",
+              "quantity": {
+                "min": 5,
+                "max": 64
+              }
+            },
+            {
+              "item": "minecraft:book",
+              "quantity": 1
+            }
+          ],
+          "gives": [
+            {
+              "item": "minecraft:enchanted_book",
+              "quantity": 1,
+              "functions": [
+                {
+                  "function": "enchant_book_for_trading",
+                  "base_cost": 2,
+                  "base_random_cost": 5,
+                  "per_level_random_cost": 10,
+                  "per_level_cost": 3
+                }
+              ]
+            }
+          ],
+          "max_uses": 12,
+          "trader_exp": 1
+        },
+        {
+          "wants": [
+            {
+              "item": "minecraft:emerald",
+              "quantity": 12
+            }
+          ],
+          "gives": [
+            {
+              "item": "minecraft:map",
+              "quantity": 1,
+              "functions": [
+                {
+                  "function": "exploration_map",
+                  "destination": "buriedtreasure"
+                }
+              ]
+            }
+          ],
+          "max_uses": 1,
+          "trader_exp": 5
+        },
+        {
+          "wants": [
+            {
+              "item": "minecraft:emerald",
+              "quantity": 3
+            }
+          ],
+          "gives": [
+            {
+              "item": "minecraft:leather_helmet",
+              "quantity": 1,
+              "filters": {
+                "test": "is_daytime",
+                "value": true
+              },
+              "functions": [
+                {
+                  "function": "random_dye"
+                },
+                {
+                  "function": "random_aux_value",
+                  "values": {
+                    "min": 0,
+                    "max": 6
+                  }
+                }
+              ]
+            }
+          ],
+          "max_uses": 3,
+          "trader_exp": 1
+        },
+        {
+          "wants": [
+            {
+              "item": "minecraft:emerald",
+              "quantity": 4
+            }
+          ],
+          "gives": [
+            {
+              "item": "minecraft:bed",
+              "quantity": 1,
+              "functions": [
+                {
+                  "function": "random_aux_value",
+                  "values": {
+                    "min": 12,
+                    "max": 15
+                  }
+                }
+              ]
+            }
+          ],
+          "max_uses": 2,
+          "trader_exp": 1
+        },
+        {
+          "wants": [
+            {
+              "item": "minecraft:emerald",
+              "quantity": 2
+            }
+          ],
+          "gives": [
+            {
+              "item": "minecraft:wool:5",
+              "quantity": 1
+            }
+          ],
+          "max_uses": 2,
+          "trader_exp": 1
+        }
+      ],
+      "groups": [
+        {
+          "num_to_select": 1,
+          "trades": [
+            {
+              "weight": 3,
+              "wants": [
+                {
+                  "choice": [
+                    {
+                      "item": "minecraft:emerald"
+                    },
+                    {
+                      "item": "minecraft:gold_ingot"
+                    }
+                  ],
+                  "quantity": 2,
+                  "price_multiplier": 0.05
+                }
+              ],
+              "gives": [
+                {
+                  "item": "tp:dust",
+                  "quantity": {
+                    "min": 2,
+                    "max": 4
+                  }
+                }
+              ],
+              "max_uses": 8,
+              "trader_exp": 2,
+              "reward_exp": true
+            },
+            {
+              "weight": 1,
+              "wants": [
+                {
+                  "item": "tp:shard",
+                  "quantity": 1
+                }
+              ],
+              "gives": [
+                {
+                  "item": "minecraft:emerald",
+                  "quantity": 1
+                }
+              ],
+              "max_uses": 4,
+              "trader_exp": 1,
+              "reward_exp": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "total_exp_required": 10,
+      "trades": [
+        {
+          "wants": [
+            {
+              "item": "minecraft:emerald",
+              "quantity": 6
+            },
+            {
+              "item": "tp:dust",
+              "quantity": 2
+            }
+          ],
+          "gives": [
+            {
+              "item": "minecraft:golden_sword",
+              "quantity": 1,
+              "functions": [
+                {
+                  "function": "enchant_with_levels",
+                  "levels": {
+                    "min": 5,
+                    "max": 15
+                  },
+                  "treasure": false
+                }
+              ]
+            }
+          ],
+          "max_uses": 2,
+          "trader_exp": 5
+        }
+      ]
+    }
+  ]
+}

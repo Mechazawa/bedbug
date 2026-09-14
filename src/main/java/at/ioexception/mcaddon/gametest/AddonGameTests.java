@@ -62,6 +62,36 @@ public final class AddonGameTests {
         parses(helper, "playanimation @e animation.walk");
         parses(helper, "playanimation @e animation.walk next.state 0.5 q.is_alive");
         parses(helper, "event entity @e mcaddon:test_event");
+        // Bedrock writes the port or leaves it out, and the line reaches the command as it stands.
+        parses(helper, "transfer @a \"example.test\"");
+        parses(helper, "transfer @a \"example.test\" 25565");
+        helper.succeed();
+    }
+
+    /**
+     * `/camera` and `/camerashake` take every word order Bedrock allows.
+     *
+     * Both build a deeper argument tree than anything else this mod registers, and each piece after
+     * the preset may be left out, so what a pack wrote is only accepted if every one of those routes
+     * through the tree ends somewhere. A missing route is a line dropped at load time.
+     */
+    @GameTest()
+    public void cameraCommandsParse(GameTestHelper helper) {
+        parses(helper, "camera @a clear");
+        parses(helper, "camera @a set minecraft:free");
+        parses(helper, "camera @a set free rot 30 -90");
+        parses(helper, "camera @a set minecraft:free pos 1 2 3");
+        parses(helper, "camera @a set minecraft:free pos ~ ~ ~ rot 0 0");
+        parses(helper, "camera @a set minecraft:third_person ease 2 in_out_quad");
+        parses(helper, "camera @a set minecraft:third_person_front ease 0.5 linear pos 1 2 3 rot 0 0");
+        parses(helper, "camerashake add @a");
+        parses(helper, "camerashake add @a 0.5");
+        parses(helper, "camerashake add @a 0.5 3");
+        parses(helper, "camerashake add @a 0.5 3 rotational");
+        parses(helper, "camerashake stop @a");
+        parses(helper, "fog @a push minecraft:fog_crimson_forest \"my fog\"");
+        parses(helper, "fog @a pop \"my fog\"");
+        parses(helper, "fog @a remove \"my fog\"");
         helper.succeed();
     }
 
@@ -116,6 +146,41 @@ public final class AddonGameTests {
             ServerHooks.scripts().tick(1);
         }
         helper.runAfterDelay(2, helper::succeed);
+    }
+
+    /**
+     * A converted dimension decodes on the version that has to read it.
+     *
+     * A dimension type states a different set of fields on each supported version and a `dimension`
+     * entry a data pack cannot decode stops a client on the screen asking the player to fix their
+     * packs, which is a failure no compile and no count reports. Both are decoded here through the
+     * game's own codecs, so a field name that moved fails the version it moved on.
+     */
+    @GameTest()
+    public void aConvertedDimensionDecodes(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        com.mojang.serialization.DynamicOps<com.google.gson.JsonElement> ops =
+            net.minecraft.resources.RegistryOps.create(
+                com.mojang.serialization.JsonOps.INSTANCE, server.registryAccess());
+
+        decodes(helper, "dimension type",
+            net.minecraft.world.level.dimension.DimensionType.DIRECT_CODEC, ops,
+            Platform.dimensionType(-64, 384));
+        decodes(helper, "dimension",
+            net.minecraft.world.level.dimension.LevelStem.CODEC, ops,
+            at.ioexception.mcaddon.convert.Worldgen.voidDimension("minecraft:overworld",
+                "minecraft:the_void"));
+        helper.succeed();
+    }
+
+    private static <T> void decodes(GameTestHelper helper, String what,
+        com.mojang.serialization.Codec<T> codec,
+        com.mojang.serialization.DynamicOps<com.google.gson.JsonElement> ops,
+        com.google.gson.JsonObject json) {
+        com.mojang.serialization.DataResult<T> result = codec.parse(ops, json);
+        helper.assertTrue(result.result().isPresent(),
+            "A converted " + what + " did not decode: "
+                + result.error().map(Object::toString).orElse(""));
     }
 
     private static EntityType<?> vanilla(String path) {

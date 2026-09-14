@@ -20,13 +20,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ButtonBlock.class)
 public abstract class ButtonBlockMixin {
     //? if >=1.21 {
-    @Inject(method = "press", at = @At("HEAD"), require = 0)
+    @Inject(method = "press", at = @At("HEAD"))
     private void mcaddon$pushed(BlockState state, Level level, BlockPos position, Player player,
         CallbackInfo info) {
         if (!level.isClientSide()) WorldEvents.buttonPushed(level, position, player);
     }
     //?} else {
-    /*@Inject(method = "press", at = @At("HEAD"), require = 0)
+    /*@Inject(method = "press", at = @At("HEAD"))
     private void mcaddon$pushed(BlockState state, Level level, BlockPos position, CallbackInfo info) {
         if (!level.isClientSide()) WorldEvents.buttonPushed(level, position, null);
     }

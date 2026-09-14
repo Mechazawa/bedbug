@@ -9,9 +9,9 @@
 
 const bridge = globalThis.__mcaddon_bridge__;
 
-function unsupported(member) {
+function unsupported(member, answer) {
     bridge.unsupported(member);
-    return undefined;
+    return answer;
 }
 
 export class Vector3 {
@@ -144,6 +144,19 @@ export class BlockLocationIterator {
 
 /** What every volume answers, worked out from the two corners its own shape reports. */
 export class BlockVolumeBase {
+    /** The three a shape supplies. A base volume carries no positions, so it has no corners. */
+    getMin() {
+        return unsupported("BlockVolumeBase.getMin");
+    }
+
+    getMax() {
+        return unsupported("BlockVolumeBase.getMax");
+    }
+
+    translate() {
+        return unsupported("BlockVolumeBase.translate");
+    }
+
     getSpan() {
         const min = this.getMin();
         const max = this.getMax();
@@ -186,6 +199,41 @@ export class BlockVolume extends BlockVolumeBase {
     translate(delta) {
         this.from = moved(this.from, delta);
         this.to = moved(this.to, delta);
+    }
+
+    /** Disjoint, contained whole, or overlapping, which is the three Bedrock reports. */
+    intersects(other) {
+        const min = this.getMin();
+        const max = this.getMax();
+        const otherMin = other.getMin();
+        const otherMax = other.getMax();
+        if (otherMin.x > max.x || otherMax.x < min.x || otherMin.y > max.y || otherMax.y < min.y
+            || otherMin.z > max.z || otherMax.z < min.z) {
+            return BlockVolumeIntersection.Disjoint;
+        }
+        return this.isInside(otherMin) && this.isInside(otherMax)
+            ? BlockVolumeIntersection.Contains : BlockVolumeIntersection.Intersects;
+    }
+
+    /** A position inside the volume and on one of its outer planes rather than in the middle. */
+    doesLocationTouchFaces(location) {
+        const at = blockPosition(location);
+        const min = this.getMin();
+        const max = this.getMax();
+        return this.isInside(at) && (at.x === min.x || at.x === max.x || at.y === min.y
+            || at.y === max.y || at.z === min.z || at.z === max.z);
+    }
+
+    /** Overlapping without sitting clear of every outer plane, which is what touching a face is. */
+    doesVolumeTouchFaces(other) {
+        if (this.intersects(other) === BlockVolumeIntersection.Disjoint) return false;
+
+        const min = this.getMin();
+        const max = this.getMax();
+        const otherMin = other.getMin();
+        const otherMax = other.getMax();
+        return otherMin.x <= min.x || otherMax.x >= max.x || otherMin.y <= min.y
+            || otherMax.y >= max.y || otherMin.z <= min.z || otherMax.z >= max.z;
     }
 }
 
@@ -267,10 +315,18 @@ function positionsIn(flat) {
 const blockTypeCache = new Map();
 
 /** A block type, which is its id and the key its name is translated under. */
+export class BlockType {
+    constructor(id) {
+        this.id = id;
+        this.localizationKey = bridge.blocks.localizationKey(id) ?? id;
+        Object.freeze(this);
+    }
+}
+
 function blockType(id) {
     let type = blockTypeCache.get(id);
     if (type === undefined) {
-        type = Object.freeze({ id, localizationKey: bridge.blocks.localizationKey(id) ?? id });
+        type = new BlockType(id);
         blockTypeCache.set(id, type);
     }
     return type;
@@ -362,29 +418,42 @@ export class BlockPermutation {
     }
 }
 
-export const BlockTypes = Object.freeze({
-    get(typeName) {
+export class BlockTypes {
+    static get(typeName) {
         const id = bridge.blocks.canonicalId(typeName);
         return id === null ? undefined : blockType(id);
-    },
-    getAll() {
+    }
+
+    static getAll() {
         return list(bridge.blocks.typeIds()).map(id => blockType(id));
-    },
-});
+    }
+}
+
+/** One state name a block may carry, against every value the game accepts for it. */
+export class BlockStateType {
+    constructor(fields) {
+        this.id = fields.id;
+        this.validValues = fields.validValues;
+        Object.freeze(this);
+    }
+}
 
 // The catalogue is the same for as long as the game runs, and building it reads every block there
 // is, so it is read once and handed out as a copy.
 let blockStateTypes;
 
-export const BlockStates = Object.freeze({
-    get(stateName) {
+export class BlockStates {
+    static get(stateName) {
         return BlockStates.getAll().find(state => state.id === stateName);
-    },
-    getAll() {
-        if (blockStateTypes === undefined) blockStateTypes = JSON.parse(bridge.blocks.stateTypes());
+    }
+
+    static getAll() {
+        if (blockStateTypes === undefined) {
+            blockStateTypes = JSON.parse(bridge.blocks.stateTypes()).map(one => new BlockStateType(one));
+        }
         return blockStateTypes.slice();
-    },
-});
+    }
+}
 
 // A kind of item is the same for as long as the game runs, so what the game says about one is read
 // once and handed back frozen, which also keeps one ItemType object per id for a pack to compare.
@@ -396,27 +465,35 @@ function namespaced(name) {
     return id !== undefined && id !== null && !id.includes(":") ? "minecraft:" + id : id;
 }
 
+export class ItemType {
+    constructor(fields) {
+        this.id = fields.id;
+        this.localizationKey = fields.localizationKey;
+        Object.freeze(this);
+    }
+}
+
 /** What the game knows about a kind of item, with no fields at all for an id nothing registers. */
 function itemInfo(typeId) {
     let info = itemTypeCache.get(typeId);
     if (info === undefined) {
         info = JSON.parse(bridge.items.describe(typeId ?? ""));
-        info.type = info.id === undefined ? undefined
-            : Object.freeze({ id: info.id, localizationKey: info.localizationKey });
+        info.type = info.id === undefined ? undefined : new ItemType(info);
         Object.freeze(info);
         itemTypeCache.set(typeId, info);
     }
     return info;
 }
 
-export const ItemTypes = Object.freeze({
-    get(itemId) {
+export class ItemTypes {
+    static get(itemId) {
         return itemInfo(namespaced(itemId)).type;
-    },
-    getAll() {
+    }
+
+    static getAll() {
         return list(bridge.items.all()).map(id => itemInfo(id).type);
-    },
-});
+    }
+}
 
 /** An enchantment type is its id and the highest level the game gives it. Undefined for a bad id. */
 function enchantmentType(type) {
@@ -467,11 +544,8 @@ function sameItem(one, other) {
 }
 
 // The components a kind of item can carry here, which is what getComponents() offers a pack.
-const itemComponents = Object.freeze([
-    ItemComponentTypes.Durability, ItemComponentTypes.Food, ItemComponentTypes.Cooldown,
-    ItemComponentTypes.Enchantable, ItemComponentTypes.Dyeable, ItemComponentTypes.Potion,
-    ItemComponentTypes.Compostable,
-]);
+// The two items that carry pages. Every other item answers that it has no book.
+const bookItems = Object.freeze(["minecraft:writable_book", "minecraft:written_book"]);
 
 /**
  * A stack of items, held as a value of its own and not as a slot in the world.
@@ -542,6 +616,8 @@ export class ItemStack {
         copy.dyeColor = this.dyeColor;
         copy.canDestroy = [...(this.canDestroy ?? [])];
         copy.canPlaceOn = [...(this.canPlaceOn ?? [])];
+        copy.book = this.book === undefined
+            ? undefined : { ...this.book, pages: [...this.book.pages] };
         return copy;
     }
 
@@ -577,138 +653,15 @@ export class ItemStack {
 
     getComponent(component) {
         const name = normaliseComponent(component);
-        const info = itemInfo(this.typeId);
-        switch (name) {
-            case ItemComponentTypes.Durability:
-                return this.#durability(name);
-            case ItemComponentTypes.Food:
-                return info.food === undefined ? undefined : { typeId: name, ...info.food };
-            case ItemComponentTypes.Compostable:
-                return info.compostable === undefined ? undefined : { typeId: name, ...info.compostable };
-            case ItemComponentTypes.Cooldown:
-                return this.#cooldown(name, info.cooldown);
-            case ItemComponentTypes.Enchantable:
-                return this.#enchantable(name, info.enchantable);
-            case ItemComponentTypes.Dyeable:
-                return this.#dyeable(name, info.dyeable);
-            case ItemComponentTypes.Potion:
-                return this.#potion(name, info.potion);
-            default:
-                return unsupported("ItemStack.getComponent(" + name + ")");
-        }
-    }
+        const build = ITEM_COMPONENTS[name];
+        if (build === undefined) return unsupported("ItemStack.getComponent(" + name + ")");
 
-    #durability(name) {
-        const max = this.maxDurability ?? bridge.itemMaxDurability(this.typeId);
-        if (max <= 0) return undefined;
-
-        const stack = this;
-        return {
-            typeId: name,
-            maxDurability: max,
-            get damage() {
-                return stack.damage ?? 0;
-            },
-            set damage(value) {
-                stack.damage = value;
-            },
-            get unbreakable() {
-                return stack.unbreakable ?? false;
-            },
-            set unbreakable(value) {
-                stack.unbreakable = value;
-                if (value) unsupported("ItemDurabilityComponent.unbreakable");
-            },
-            getDamageChance: () => 100,
-            getDamageChanceRange: () => ({ min: 100, max: 100 }),
-        };
-    }
-
-    /** A cooldown is read from a player, because it is the player and not the item that holds one. */
-    #cooldown(name, cooldown) {
-        if (cooldown === undefined) return undefined;
-
-        const typeId = this.typeId;
-        return {
-            typeId: name,
-            cooldownCategory: cooldown.cooldownCategory,
-            cooldownTicks: cooldown.cooldownTicks,
-            isCooldownCategory: category => category === cooldown.cooldownCategory,
-            getCooldownTicksRemaining: player => bridge.items.cooldownRemaining(player.id, typeId),
-            startCooldown: player => {
-                bridge.items.startCooldown(player.id, typeId, cooldown.cooldownTicks);
-            },
-        };
-    }
-
-    /**
-     * An enchantment a pack adds is kept on the stack and answered back. Nothing carries it onto the
-     * item the world holds, so adding one is reported.
-     */
-    #enchantable(name, enchantable) {
-        if (enchantable === undefined) return undefined;
-
-        const stack = this;
-        const held = () => stack.enchantments ?? [];
-        const add = enchantment => {
-            const added = enchantmentOf(enchantment);
-            stack.enchantments = [...held().filter(on => on.type.id !== added.type.id), added];
-            unsupported("ItemEnchantableComponent.addEnchantment");
-        };
-        return {
-            typeId: name,
-            slots: [...enchantable.slots],
-            getEnchantments: () => held().slice(),
-            getEnchantment: type => held().find(on => on.type.id === namespaced(type)),
-            hasEnchantment: type => held().some(on => on.type.id === namespaced(type)),
-            canAddEnchantment: enchantment => {
-                const asked = enchantmentOf(enchantment);
-                return !held().some(on => on.type.id === asked.type.id);
-            },
-            addEnchantment: add,
-            addEnchantments: enchantments => (enchantments ?? []).forEach(add),
-            removeEnchantment: type => {
-                stack.enchantments = held().filter(on => on.type.id !== namespaced(type));
-            },
-            removeAllEnchantments: () => {
-                stack.enchantments = [];
-            },
-        };
-    }
-
-    /** A colour a pack dyes the stack is answered back, and nothing carries it into the world. */
-    #dyeable(name, dyeable) {
-        if (dyeable === undefined) return undefined;
-
-        const stack = this;
-        return {
-            typeId: name,
-            defaultColor: { ...dyeable.defaultColor },
-            get color() {
-                return stack.dyeColor ?? { ...dyeable.defaultColor };
-            },
-            set color(value) {
-                stack.dyeColor = value;
-                unsupported("ItemDyeableComponent.color");
-            },
-        };
-    }
-
-    /** Which effect the potion carries is written on the stack in the world, not on its type. */
-    #potion(name, potion) {
-        if (potion === undefined) return undefined;
-
-        return {
-            typeId: name,
-            potionDeliveryType: Object.freeze({ id: potion.potionDeliveryType }),
-            get potionEffectType() {
-                return unsupported("ItemPotionComponent.potionEffectType");
-            },
-        };
+        const declared = build.declaredOn(this);
+        return declared === undefined ? undefined : new build(this, name, declared);
     }
 
     getComponents() {
-        return itemComponents
+        return Object.keys(ITEM_COMPONENTS)
             .map(name => this.getComponent(name))
             .filter(component => component !== undefined);
     }
@@ -838,6 +791,30 @@ export class Block {
         return this.permutation.matches(type, states);
     }
 
+    getDynamicProperty(name) {
+        return bridge.blockDynamicProperty(...blockAt(this), name);
+    }
+
+    setDynamicProperty(name, value) {
+        bridge.setBlockDynamicProperty(...blockAt(this), name, value === undefined ? null : value);
+    }
+
+    setDynamicProperties(values) {
+        Object.entries(values ?? {}).forEach(([name, value]) => this.setDynamicProperty(name, value));
+    }
+
+    getDynamicPropertyIds() {
+        return list(bridge.blockDynamicPropertyIds(...blockAt(this)));
+    }
+
+    getDynamicPropertyTotalByteCount() {
+        return bridge.blockDynamicPropertyBytes(...blockAt(this));
+    }
+
+    clearDynamicProperties() {
+        for (const name of this.getDynamicPropertyIds()) this.setDynamicProperty(name, undefined);
+    }
+
     getTags() {
         return list(bridge.blocks.tags(this.typeId));
     }
@@ -854,6 +831,16 @@ export class Block {
 
     getRedstonePower() {
         return bridge.blocks.redstonePower(this.dimension.id, this.x, this.y, this.z) ?? undefined;
+    }
+
+    /**
+     * Bedrock's multi-block pieces.
+     *
+     * Java writes a bed or a door as two blocks that know nothing of each other, so there is no
+     * list of parts to hand back.
+     */
+    getParts() {
+        return unsupported("Block.getParts");
     }
 
     getLightLevel() {
@@ -937,24 +924,25 @@ export class Block {
     /** Undefined for a block that has no such component; one this mod cannot build is reported. */
     getComponent(component) {
         const name = normaliseComponent(component);
-        const build = BLOCK_COMPONENTS[name];
-        return build === undefined ? unsupported("Block.getComponent(" + name + ")") : build(this);
+        if (BLOCK_COMPONENTS[name] === undefined) {
+            return unsupported("Block.getComponent(" + name + ")");
+        }
+        return blockComponentFor(this, name);
     }
 
     getComponents() {
-        return Object.values(BLOCK_COMPONENTS)
-            .map(build => build(this))
+        return Object.keys(BLOCK_COMPONENTS)
+            .map(name => blockComponentFor(this, name))
             .filter(component => component !== undefined);
     }
 
     hasComponent(component) {
         const name = normaliseComponent(component);
-        const build = BLOCK_COMPONENTS[name];
-        if (build === undefined) {
+        if (BLOCK_COMPONENTS[name] === undefined) {
             unsupported("Block.hasComponent(" + name + ")");
             return false;
         }
-        return build(this) !== undefined;
+        return blockComponentFor(this, name) !== undefined;
     }
 }
 
@@ -968,173 +956,1170 @@ function blockComponent(state) {
     return state === null ? undefined : JSON.parse(state);
 }
 
-function movableComponent(block) {
-    const movement = blockComponent(bridge.blocks.movement(...blockAt(block)));
-    return { typeId: "minecraft:movable", block, ...movement };
+/** What every block component carries: the block it was read off, and the name it was asked for. */
+export class BlockComponent {
+    constructor(block, typeId) {
+        this.block = block;
+        this.typeId = typeId;
+    }
+
+    get isValid() {
+        return bridge.blocks.exists(...blockAt(this.block));
+    }
+
+    /** The component reads the block again for every answer, so nothing here is a stale copy. */
+    read() {
+        const reader = COMPONENT_READERS[this.typeId];
+        return reader === undefined
+            ? undefined : blockComponent(bridge.blocks[reader](...blockAt(this.block)));
+    }
+
+    /** Whether this block carries the component at all, which decides what `getComponent` hands back. */
+    present() {
+        return this.read() !== undefined;
+    }
 }
 
-/**
- * The sign a pack writes to, reading the block again for every answer.
- *
- * A pack holds a component and expects it to follow the sign, so nothing here is a copy taken when
- * the component was handed out. A side is the front unless the back was asked for by name.
- */
-function signComponent(block) {
-    const read = () => blockComponent(bridge.blocks.sign(...blockAt(block)));
-    if (read() === undefined) return undefined;
-
-    const isFront = side => side !== SignSide.Back;
-    const text = side => read()?.[isFront(side) ? "front" : "back"];
-    return {
-        typeId: "minecraft:sign",
-        block,
-        get isWaxed() {
-            return read()?.isWaxed === true;
-        },
-        getText: side => text(side)?.text,
-        getRawText: side => ({ rawtext: [{ text: text(side)?.text ?? "" }] }),
-        getTextDyeColor: side => text(side)?.color,
-        setText: (message, side) =>
-            bridge.blocks.setSignText(...blockAt(block), isFront(side), rawText(message)),
-        setTextDyeColor: (color, side) =>
-            bridge.blocks.setSignDye(...blockAt(block), isFront(side), color ?? null),
-        setWaxed: waxed => bridge.blocks.setSignWaxed(...blockAt(block), waxed === true),
-    };
+/** The component the block carries under that name, or undefined when it carries none. */
+function blockComponentFor(block, name) {
+    const component = new BLOCK_COMPONENTS[name](block, name);
+    return component.present() ? component : undefined;
 }
 
-/** The container a chest, a hopper or a furnace holds, read again on every call like the rest. */
-function inventoryComponent(block) {
-    const read = () => containerAt(...blockAt(block));
-    if (read() === undefined) return undefined;
+/** The bridge call each block component reads itself from. */
+const COMPONENT_READERS = Object.freeze({
+    "minecraft:movable": "movement",
+    "minecraft:sign": "sign",
+    "minecraft:piston": "piston",
+    "minecraft:map_color": "mapColour",
+    "minecraft:redstone_producer": "redstoneProducer",
+});
 
-    return {
-        typeId: "minecraft:inventory",
-        block,
-        get container() {
-            return read();
-        },
-    };
+/** Every block answers how a piston moves it, so this one is carried by all of them. */
+export class BlockMovableComponent extends BlockComponent {
+    static componentId = "minecraft:movable";
+
+    present() {
+        return true;
+    }
+
+    get movementType() {
+        return this.read()?.movementType;
+    }
+
+    get stickyType() {
+        return this.read()?.stickyType;
+    }
 }
 
-function pistonComponent(block) {
-    const read = () => blockComponent(bridge.blocks.piston(...blockAt(block)));
-    if (read() === undefined) return undefined;
+export class BlockPistonComponent extends BlockComponent {
+    static componentId = "minecraft:piston";
 
-    const attached = () => (read()?.attached ?? []).map(vector);
-    return {
-        typeId: "minecraft:piston",
-        block,
-        get isMoving() {
-            return read()?.isMoving === true;
-        },
-        get state() {
-            return read()?.state;
-        },
-        getAttachedBlocksLocations: attached,
-        getAttachedBlocks: () => attached().map(location => block.dimension.getBlock(location))
-            .filter(found => found !== undefined),
-    };
+    get isMoving() {
+        return this.read()?.isMoving === true;
+    }
+
+    get state() {
+        return this.read()?.state;
+    }
+
+    getAttachedBlocksLocations() {
+        return (this.read()?.attached ?? []).map(vector);
+    }
+
+    getAttachedBlocks() {
+        return this.getAttachedBlocksLocations()
+            .map(location => this.block.dimension.getBlock(location))
+            .filter(found => found !== undefined);
+    }
 }
 
 /** Java gives a block one map colour, so the tinted colour is that same colour untouched. */
-function mapColorComponent(block) {
-    const colour = blockComponent(bridge.blocks.mapColour(...blockAt(block)));
-    if (colour === undefined) return undefined;
+export class BlockMapColorComponent extends BlockComponent {
+    static componentId = "minecraft:map_color";
 
-    return {
-        typeId: "minecraft:map_color",
-        block,
-        color: colour,
-        tintedColor: colour,
-        tintMethod: TintMethod.None,
-    };
+    tintMethod = TintMethod.None;
+
+    get color() {
+        return this.read();
+    }
+
+    get tintedColor() {
+        return this.read();
+    }
 }
 
-function redstoneProducerComponent(block) {
-    const read = () => blockComponent(bridge.blocks.redstoneProducer(...blockAt(block)));
-    if (read() === undefined) return undefined;
+export class BlockRedstoneProducerComponent extends BlockComponent {
+    static componentId = "minecraft:redstone_producer";
 
-    return {
-        typeId: "minecraft:redstone_producer",
-        block,
-        get power() {
-            return read()?.power ?? 0;
-        },
-        getConnectedFaces: () => read()?.connectedFaces ?? [],
-        getStronglyPoweredFace: () => read()?.stronglyPoweredFace ?? undefined,
-    };
+    get power() {
+        return this.read()?.power ?? 0;
+    }
+
+    getConnectedFaces() {
+        return this.read()?.connectedFaces ?? [];
+    }
+
+    getStronglyPoweredFace() {
+        return this.read()?.stronglyPoweredFace ?? undefined;
+    }
 }
 
-// Every component this mod answers for a block, by the name a pack asks for it under. A builder
-// hands back undefined for a block that does not carry its component, which is what Bedrock does.
-const BLOCK_COMPONENTS = {
-    "minecraft:inventory": inventoryComponent,
-    "minecraft:movable": movableComponent,
-    "minecraft:sign": signComponent,
-    "minecraft:piston": pistonComponent,
-    "minecraft:map_color": mapColorComponent,
-    "minecraft:redstone_producer": redstoneProducerComponent,
-};
+/** The container a chest, a hopper or a furnace holds, read again on every call like the rest. */
+export class BlockInventoryComponent extends BlockComponent {
+    static componentId = "minecraft:inventory";
 
-// Component classes. A pack imports these to name a type, and the objects `getComponent` hands back
-// are plain objects, so these exist to satisfy the import and any `instanceof` written against them.
+    present() {
+        return this.container !== undefined;
+    }
+
+    get container() {
+        return containerAt(...blockAt(this.block));
+    }
+}
+
+/** A side is the front unless the back was asked for by name, which is how Bedrock reads one. */
+export class BlockSignComponent extends BlockComponent {
+    static componentId = "minecraft:sign";
+
+    get isWaxed() {
+        return this.read()?.isWaxed === true;
+    }
+
+    #text(side) {
+        return this.read()?.[side === SignSide.Back ? "back" : "front"];
+    }
+
+    getText(side) {
+        return this.#text(side)?.text;
+    }
+
+    getRawText(side) {
+        return { rawtext: [{ text: this.#text(side)?.text ?? "" }] };
+    }
+
+    getTextDyeColor(side) {
+        return this.#text(side)?.color;
+    }
+
+    setText(message, side) {
+        bridge.blocks.setSignText(...blockAt(this.block), side !== SignSide.Back, rawText(message));
+    }
+
+    setTextDyeColor(color, side) {
+        bridge.blocks.setSignDye(...blockAt(this.block), side !== SignSide.Back, color ?? null);
+    }
+
+    setWaxed(waxed) {
+        bridge.blocks.setSignWaxed(...blockAt(this.block), waxed === true);
+    }
+}
+
+const BLOCK_COMPONENTS = Object.freeze({
+    "minecraft:inventory": BlockInventoryComponent,
+    "minecraft:movable": BlockMovableComponent,
+    "minecraft:sign": BlockSignComponent,
+    "minecraft:piston": BlockPistonComponent,
+    "minecraft:map_color": BlockMapColorComponent,
+    "minecraft:redstone_producer": BlockRedstoneProducerComponent,
+});
+
+// Component classes. A pack imports one to name a type, and `getComponent` hands back an instance of
+// whichever of these matches the name it asked for.
 export class EntityComponent {
+    #entity;
+    #typeId;
+
+    constructor(entity, typeId) {
+        this.#entity = entity;
+        this.#typeId = typeId;
+    }
+
+    get entity() {
+        return this.#entity;
+    }
+
+    get typeId() {
+        return this.#typeId;
+    }
+
+    get isValid() {
+        return bridge.entityIsValid(this.#entity.id);
+    }
 }
 
-export class EntityHealthComponent extends EntityComponent {
+/**
+ * One number the game keeps about an entity, which Bedrock hands out as a component per number.
+ *
+ * Java holds these in one attribute map plus a few fields beside it, so the component id says which
+ * to read. A Bedrock attribute this game has no counterpart for answers nothing and reports itself.
+ */
+export class EntityAttributeComponent extends EntityComponent {
+    #read(field) {
+        const found = bridge.entityMembers.attribute(this.entity.id, this.typeId);
+        return found === null
+            ? unsupported("EntityAttributeComponent(" + this.typeId + ")") : JSON.parse(found)[field];
+    }
+
+    get currentValue() {
+        return this.#read("current");
+    }
+
+    get defaultValue() {
+        return this.#read("default");
+    }
+
+    get effectiveMax() {
+        return this.#read("max");
+    }
+
+    get effectiveMin() {
+        return this.#read("min");
+    }
+
+    setCurrentValue(value) {
+        const set = bridge.entityMembers.setAttribute(this.entity.id, this.typeId, value);
+        if (!set) unsupported("EntityAttributeComponent(" + this.typeId + ")");
+        return set;
+    }
+
+    resetToDefaultValue() {
+        this.setCurrentValue(this.defaultValue);
+    }
+
+    resetToMaxValue() {
+        this.setCurrentValue(this.effectiveMax);
+    }
+
+    resetToMinValue() {
+        this.setCurrentValue(this.effectiveMin);
+    }
+}
+
+export class EntityHealthComponent extends EntityAttributeComponent {
+    static componentId = "minecraft:health";
+}
+
+export class EntityMovementComponent extends EntityAttributeComponent {
+    static componentId = "minecraft:movement";
+}
+
+export class EntityHungerComponent extends EntityAttributeComponent {
+    static componentId = "minecraft:player.hunger";
+}
+
+export class EntitySaturationComponent extends EntityAttributeComponent {
+    static componentId = "minecraft:player.saturation";
+}
+
+export class EntityOnFireComponent extends EntityComponent {
+    static componentId = "minecraft:onfire";
+
+    get onFireTicksRemaining() {
+        return bridge.entityMembers.fireTicks(this.entity.id);
+    }
 }
 
 export class EntityEquippableComponent extends EntityComponent {
+    static componentId = "minecraft:equippable";
+
+    getEquipment(slot) {
+        const item = bridge.equipment(this.entity.id, slot);
+        return item === null ? undefined : itemFrom(JSON.parse(item));
+    }
+
+    setEquipment(slot, item) {
+        return bridge.setEquipment(this.entity.id, slot, item?.typeId ?? null, item?.amount ?? 1);
+    }
+
+    // A slot is a handle into a container the guest can hold on to, which an equipment slot on a
+    // Java entity is not: armour and held items sit in fields rather than in the inventory.
+    getEquipmentSlot() {
+        return unsupported("EntityEquippableComponent.getEquipmentSlot");
+    }
+
+    get totalArmor() {
+        return bridge.entityMembers.armour(this.entity.id);
+    }
+
+    get totalToughness() {
+        return bridge.entityMembers.armourToughness(this.entity.id);
+    }
 }
 
 export class EntityInventoryComponent extends EntityComponent {
     static componentId = "minecraft:inventory";
-}
 
-export class EntityRideableComponent extends EntityComponent {
+    additionalSlotsPerStrength = 0;
+    canBeSiphonedFrom = false;
+    private = false;
+    restrictToOwner = false;
+
+    /** The pack says what kind of container its entity carries; Java has one kind of inventory. */
+    get containerType() {
+        const declared = bridge.entityMembers.packComponent(this.entity.id, EntityInventoryComponent.componentId);
+        return declared === null ? "inventory" : (JSON.parse(declared).container_type ?? "inventory");
+    }
+
+    get container() {
+        const handle = bridge.containers.ofEntity(this.entity.id);
+        return handle === null ? undefined : new Container(handle);
+    }
+
+    get inventorySize() {
+        return this.container?.size ?? 0;
+    }
 }
 
 export class EntityRidingComponent extends EntityComponent {
+    static componentId = "minecraft:riding";
+
+    get entityRidingOn() {
+        const vehicle = bridge.entityVehicle(this.entity.id);
+        return vehicle === null ? undefined : entityFor(vehicle);
+    }
 }
 
-export class EntityVariantComponent extends EntityComponent {
+/** The entity properties Bedrock reads as a component, each one number the pack or the game set. */
+class PropertyComponent extends EntityComponent {
+    get value() {
+        return bridge.entityProperty(this.entity.id, this.typeId.slice("minecraft:".length)) ?? 0;
+    }
 }
 
-export class EntityMarkVariantComponent extends EntityComponent {
+export class EntityVariantComponent extends PropertyComponent {
+    static componentId = "minecraft:variant";
 }
 
-export class EntitySkinIdComponent extends EntityComponent {
+export class EntityMarkVariantComponent extends PropertyComponent {
+    static componentId = "minecraft:mark_variant";
+}
+
+export class EntitySkinIdComponent extends PropertyComponent {
+    static componentId = "minecraft:skin_id";
 }
 
 export class EntityTypeFamilyComponent extends EntityComponent {
+    static componentId = "minecraft:type_family";
+
+    getTypeFamilies() {
+        return list(bridge.entityFamilies(this.entity.id));
+    }
+
+    hasTypeFamily(family) {
+        return this.getTypeFamilies().includes(family);
+    }
 }
 
 export class EntityIsBabyComponent extends EntityComponent {
+    static componentId = "minecraft:is_baby";
 }
 
 export class EntityItemComponent extends EntityComponent {
+    static componentId = "minecraft:item";
 }
 
-export class EntityLeashableComponent extends EntityComponent {
+/**
+ * A component answered from what the pack declared for the entity rather than from the live game.
+ *
+ * Java holds none of this. Its pathfinding keeps no record of whether a mob may open a door and its
+ * arrows carry no bounce flag, so the behaviour pack is the only place the answer exists. The pack
+ * is read on every access, and a field the pack left out falls back to Bedrock's own default for it.
+ */
+class DeclaredComponent extends EntityComponent {
+    field(name, fallback) {
+        const body = bridge.entityMembers.packComponent(this.entity.id, this.typeId);
+        const declared = body === null ? undefined : JSON.parse(body)[name];
+        return declared === undefined ? fallback : declared;
+    }
 }
 
-export class EntityProjectileComponent extends EntityComponent {
+/**
+ * Gives a component class one getter per declared field.
+ *
+ * Each entry is the name a script reads the field under, the name the pack writes it under, and the
+ * value Bedrock uses when the pack leaves it out.
+ */
+function declaredFields(component, fields) {
+    fields.forEach(([member, field, fallback]) => Object.defineProperty(component.prototype, member, {
+        enumerable: true,
+        get() {
+            return this.field(field, fallback);
+        },
+    }));
 }
 
+export class EntityNavigationComponent extends DeclaredComponent {
+}
+
+declaredFields(EntityNavigationComponent, [
+    ["avoidDamageBlocks", "avoid_damage_blocks", false],
+    ["avoidPortals", "avoid_portals", false],
+    ["avoidSun", "avoid_sun", false],
+    ["avoidWater", "avoid_water", false],
+    ["canBreach", "can_breach", false],
+    ["canBreakDoors", "can_break_doors", false],
+    ["canFloat", "can_float", false],
+    ["canJump", "can_jump", true],
+    ["canOpenDoors", "can_open_doors", false],
+    ["canOpenIronDoors", "can_open_iron_doors", false],
+    ["canPassDoors", "can_pass_doors", true],
+    ["canPathFromAir", "can_path_from_air", false],
+    ["canPathOverLava", "can_path_over_lava", false],
+    ["canPathOverWater", "can_path_over_water", false],
+    ["canSink", "can_sink", true],
+    ["canSwim", "can_swim", false],
+    ["canWalk", "can_walk", true],
+    ["canWalkInLava", "can_walk_in_lava", false],
+    ["isAmphibious", "is_amphibious", false],
+]);
+
+export class EntityBreathableComponent extends DeclaredComponent {
+    static componentId = "minecraft:breathable";
+
+    getBreatheBlocks() {
+        return this.field("breathe_blocks", []).map(blockPermutationOf);
+    }
+
+    getNonBreatheBlocks() {
+        return this.field("non_breathe_blocks", []).map(blockPermutationOf);
+    }
+}
+
+declaredFields(EntityBreathableComponent, [
+    ["breathesAir", "breathes_air", true],
+    ["breathesLava", "breathes_lava", false],
+    ["breathesSolids", "breathes_solids", false],
+    ["breathesWater", "breathes_water", false],
+    ["generatesBubbles", "generates_bubbles", true],
+    ["inhaleTime", "inhale_time", 0],
+    ["suffocateTime", "suffocate_time", -20],
+    ["totalSupply", "total_supply", 15],
+]);
+
+/** A pack names a block either bare or as an object carrying its states. */
+function blockPermutationOf(block) {
+    return typeof block === "string"
+        ? BlockPermutation.resolve(normaliseComponent(block))
+        : BlockPermutation.resolve(normaliseComponent(block.name), block.states);
+}
+
+export class EntityLeashableComponent extends DeclaredComponent {
+    static componentId = "minecraft:leashable";
+
+    get isLeashed() {
+        return bridge.entityMembers.leashHolder(this.entity.id) !== null;
+    }
+
+    get leashHolder() {
+        return entityFor(bridge.entityMembers.leashHolder(this.entity.id));
+    }
+
+    get leashHolderEntityId() {
+        return bridge.entityMembers.leashHolder(this.entity.id) ?? undefined;
+    }
+
+    leashTo(leashHolder) {
+        if (!bridge.entityMembers.leashTo(this.entity.id, leashHolder?.id)) {
+            unsupported("EntityLeashableComponent.leashTo");
+        }
+    }
+
+    unleash() {
+        if (!bridge.entityMembers.unleash(this.entity.id)) {
+            unsupported("EntityLeashableComponent.unleash");
+        }
+    }
+}
+
+declaredFields(EntityLeashableComponent, [
+    ["canBeStolen", "can_be_stolen", false],
+    ["hardDistance", "hard_distance", 55],
+    ["maxDistance", "max_distance", 10],
+    ["softDistance", "soft_distance", 4],
+]);
+
+export class EntityRideableComponent extends DeclaredComponent {
+    static componentId = "minecraft:rideable";
+
+    getFamilyTypes() {
+        return this.field("family_types", []);
+    }
+
+    getRiders() {
+        return list(bridge.entityRiders(this.entity.id)).map(id => entityFor(id));
+    }
+
+    getSeats() {
+        return this.field("seats", []).map(seat => new Seat(seat));
+    }
+
+    addRider(rider) {
+        return bridge.addRider(this.entity.id, rider.id);
+    }
+
+    ejectRider(rider) {
+        bridge.ejectRider(this.entity.id, rider.id);
+    }
+
+    ejectRiders() {
+        this.getRiders().forEach(rider => this.ejectRider(rider));
+    }
+}
+
+declaredFields(EntityRideableComponent, [
+    ["controllingSeat", "controlling_seat", 0],
+    ["crouchingSkipInteract", "crouching_skip_interact", true],
+    ["interactText", "interact_text", ""],
+    ["passengerMaxWidth", "passenger_max_width", 0],
+    ["pullInEntities", "pull_in_entities", false],
+    ["riderCanInteract", "rider_can_interact", false],
+    ["seatCount", "seat_count", 1],
+]);
+
+/** One seat of a rideable entity, as the pack wrote it. */
+export class Seat {
+    constructor(declared) {
+        this.lockRiderRotation = declared.lock_rider_rotation ?? 181;
+        this.maxRiderCount = declared.max_rider_count ?? 1;
+        this.minRiderCount = declared.min_rider_count ?? 0;
+        this.position = vector(declared.position ?? [0, 0, 0]);
+        this.seatRotation = declared.rotate_rider_by ?? 0;
+    }
+}
+
+export class EntityProjectileComponent extends DeclaredComponent {
+    static componentId = "minecraft:projectile";
+
+    /** Bedrock keeps who fired a projectile; Java keeps it per projectile class and not on an entity. */
+    get owner() {
+        return unsupported("EntityProjectileComponent.owner");
+    }
+
+    /**
+     * Throws the entity along a velocity, dropping whatever it was already doing.
+     *
+     * An impulse of nothing clears the movement, so the two calls together set the velocity rather
+     * than adding to it.
+     */
+    shoot(velocity, options) {
+        if (options?.uncertainty !== undefined) {
+            unsupported("ProjectileShootOptions.uncertainty");
+        }
+        bridge.applyImpulse(this.entity.id, 0, 0, 0);
+        bridge.applyImpulse(this.entity.id, velocity.x, velocity.y, velocity.z);
+    }
+}
+
+declaredFields(EntityProjectileComponent, [
+    ["airInertia", "inertia", 0.99],
+    ["catchFireOnHurt", "catch_fire", false],
+    ["critParticlesOnProjectileHurt", "crit_particle_on_hurt", false],
+    ["destroyOnProjectileHurt", "destroy_on_hurt", false],
+    ["gravity", "gravity", 0.05],
+    ["hitEntitySound", "hit_sound", undefined],
+    ["hitGroundSound", "hit_ground_sound", undefined],
+    ["hitParticle", "particle", undefined],
+    ["lightningStrikeOnHit", "lightning", false],
+    ["liquidInertia", "liquid_inertia", 0.6],
+    ["onFireTime", "on_fire_time", 5],
+    ["shouldBounceOnHit", "should_bounce", false],
+    ["stopOnHit", "stop_on_hit", false],
+]);
+
+export class EntityNavigationClimbComponent extends EntityNavigationComponent {
+    static componentId = "minecraft:navigation.climb";
+}
+
+export class EntityNavigationFloatComponent extends EntityNavigationComponent {
+    static componentId = "minecraft:navigation.float";
+}
+
+export class EntityNavigationFlyComponent extends EntityNavigationComponent {
+    static componentId = "minecraft:navigation.fly";
+}
+
+export class EntityNavigationGenericComponent extends EntityNavigationComponent {
+    static componentId = "minecraft:navigation.generic";
+}
+
+export class EntityNavigationHoverComponent extends EntityNavigationComponent {
+    static componentId = "minecraft:navigation.hover";
+}
+
+export class EntityNavigationWalkComponent extends EntityNavigationComponent {
+    static componentId = "minecraft:navigation.walk";
+}
+
+/** How fast a mob turns while it moves, which every one of Bedrock's movement kinds carries. */
+export class EntityBaseMovementComponent extends DeclaredComponent {
+}
+
+declaredFields(EntityBaseMovementComponent, [["maxTurn", "max_turn", 30]]);
+
+export class EntityMovementAmphibiousComponent extends EntityBaseMovementComponent {
+    static componentId = "minecraft:movement.amphibious";
+}
+
+export class EntityMovementBasicComponent extends EntityBaseMovementComponent {
+    static componentId = "minecraft:movement.basic";
+}
+
+export class EntityMovementFlyComponent extends EntityBaseMovementComponent {
+    static componentId = "minecraft:movement.fly";
+}
+
+export class EntityMovementGenericComponent extends EntityBaseMovementComponent {
+    static componentId = "minecraft:movement.generic";
+}
+
+export class EntityMovementGlideComponent extends EntityBaseMovementComponent {
+    static componentId = "minecraft:movement.glide";
+}
+
+declaredFields(EntityMovementGlideComponent, [
+    ["speedWhenTurning", "speed_when_turning", 0.2],
+    ["startSpeed", "start_speed", 0.1],
+]);
+
+export class EntityMovementHoverComponent extends EntityBaseMovementComponent {
+    static componentId = "minecraft:movement.hover";
+}
+
+export class EntityMovementJumpComponent extends EntityBaseMovementComponent {
+    static componentId = "minecraft:movement.jump";
+}
+
+export class EntityMovementSkipComponent extends EntityBaseMovementComponent {
+    static componentId = "minecraft:movement.skip";
+}
+
+export class EntityMovementSwayComponent extends EntityBaseMovementComponent {
+    static componentId = "minecraft:movement.sway";
+}
+
+declaredFields(EntityMovementSwayComponent, [
+    ["swayAmplitude", "sway_amplitude", 0.05],
+    ["swayFrequency", "sway_frequency", 0.5],
+]);
+
+export class EntityStrengthComponent extends DeclaredComponent {
+    static componentId = "minecraft:strength";
+}
+
+declaredFields(EntityStrengthComponent, [["max", "max", 5], ["value", "value", 1]]);
+
+export class EntityAddRiderComponent extends DeclaredComponent {
+    static componentId = "minecraft:addrider";
+}
+
+declaredFields(EntityAddRiderComponent, [
+    ["entityType", "entity_type", ""],
+    ["spawnEvent", "spawn_event", ""],
+]);
+
+/** An event the pack names on a component, which is all a `Trigger` is. */
+export class Trigger {
+    constructor(declared) {
+        this.eventName = typeof declared === "string" ? declared : (declared?.event ?? "");
+    }
+}
+
+/** One item a young entity is fed, and how much of its growing up that feeding is worth. */
+export class EntityDefinitionFeedItem {
+    constructor(declared) {
+        this.item = typeof declared === "string" ? declared : declared.item;
+        this.growth = typeof declared === "string" ? 0 : (declared.growth ?? 0);
+        this.resultItem = typeof declared === "string" ? undefined : declared.result_item;
+    }
+}
+
+export class EntityAgeableComponent extends DeclaredComponent {
+    static componentId = "minecraft:ageable";
+
+    get growUp() {
+        return new Trigger(this.field("grow_up", ""));
+    }
+
+    getDropItems() {
+        return this.field("drop_items", []);
+    }
+
+    getFeedItems() {
+        return this.field("feed_items", []).map(item => new EntityDefinitionFeedItem(item));
+    }
+}
+
+declaredFields(EntityAgeableComponent, [
+    ["duration", "duration", 1200],
+    ["transformToItem", "transform_to_item", ""],
+]);
+
+/** One effect a feeding puts on the entity, as the healable component writes it. */
+export class FeedItemEffect {
+    constructor(declared) {
+        this.name = declared.name;
+        this.amplifier = declared.amplifier ?? 0;
+        this.chance = declared.chance ?? 1;
+        this.duration = declared.duration ?? 0;
+    }
+}
+
+export class FeedItem {
+    constructor(declared) {
+        this.item = typeof declared === "string" ? declared : declared.item;
+        this.healAmount = typeof declared === "string" ? 1 : (declared.heal_amount ?? 1);
+        this.resultItem = typeof declared === "string" ? undefined : declared.replace_item;
+        this.#effects = typeof declared === "string" ? [] : (declared.effects ?? []);
+    }
+
+    #effects;
+
+    getEffects() {
+        return this.#effects.map(effect => new FeedItemEffect(effect));
+    }
+}
+
+export class EntityHealableComponent extends DeclaredComponent {
+    static componentId = "minecraft:healable";
+
+    getFeedItems() {
+        return this.field("items", []).map(item => new FeedItem(item));
+    }
+}
+
+declaredFields(EntityHealableComponent, [["forceUse", "force_use", false]]);
+
+export class EntityTameableComponent extends DeclaredComponent {
+    static componentId = "minecraft:tameable";
+
+    /** Published as a property rather than as a call, which is how Bedrock spells this one. */
+    get getTameItems() {
+        return this.field("tame_items", []).map(item => new ItemStack(namespaced(item), 1));
+    }
+
+    get isTamed() {
+        return bridge.entityMembers.owner(this.entity.id) !== null;
+    }
+
+    get tamedToPlayerId() {
+        return bridge.entityMembers.owner(this.entity.id) ?? undefined;
+    }
+
+    get tamedToPlayer() {
+        return entityFor(bridge.entityMembers.owner(this.entity.id));
+    }
+
+    tame(player) {
+        return bridge.entityMembers.tame(this.entity.id, player?.id);
+    }
+}
+
+declaredFields(EntityTameableComponent, [["probability", "probability", 1]]);
+
+/**
+ * A mount a player tames by riding it.
+ *
+ * Java keeps a horse's temper and its owner on the horse class itself rather than on the tameable
+ * mixin every other tamed mob uses, so none of the live state here has a reader and each of these
+ * says so. What the pack declared about the mount is read the same way as every other component.
+ */
+export class EntityTameMountComponent extends DeclaredComponent {
+    static componentId = "minecraft:tamemount";
+
+    get isTamed() {
+        return unsupported("EntityTameMountComponent.isTamed");
+    }
+
+    get isTamedToPlayer() {
+        return unsupported("EntityTameMountComponent.isTamedToPlayer");
+    }
+
+    get tamedToPlayer() {
+        return unsupported("EntityTameMountComponent.tamedToPlayer");
+    }
+
+    get tamedToPlayerId() {
+        return unsupported("EntityTameMountComponent.tamedToPlayerId");
+    }
+
+    tame() {
+        unsupported("EntityTameMountComponent.tame");
+    }
+
+    tameToPlayer() {
+        return unsupported("EntityTameMountComponent.tameToPlayer");
+    }
+}
+
+// Every component this mod builds from the pack's own definition, against the class that reads it.
+const DECLARED_COMPONENTS = Object.freeze({
+    "minecraft:breathable": EntityBreathableComponent,
+    "minecraft:leashable": EntityLeashableComponent,
+    "minecraft:projectile": EntityProjectileComponent,
+    "minecraft:rideable": EntityRideableComponent,
+    "minecraft:navigation.climb": EntityNavigationClimbComponent,
+    "minecraft:navigation.float": EntityNavigationFloatComponent,
+    "minecraft:navigation.fly": EntityNavigationFlyComponent,
+    "minecraft:navigation.generic": EntityNavigationGenericComponent,
+    "minecraft:navigation.hover": EntityNavigationHoverComponent,
+    "minecraft:navigation.walk": EntityNavigationWalkComponent,
+    "minecraft:movement.amphibious": EntityMovementAmphibiousComponent,
+    "minecraft:movement.basic": EntityMovementBasicComponent,
+    "minecraft:movement.fly": EntityMovementFlyComponent,
+    "minecraft:movement.generic": EntityMovementGenericComponent,
+    "minecraft:movement.glide": EntityMovementGlideComponent,
+    "minecraft:movement.hover": EntityMovementHoverComponent,
+    "minecraft:movement.jump": EntityMovementJumpComponent,
+    "minecraft:movement.skip": EntityMovementSkipComponent,
+    "minecraft:movement.sway": EntityMovementSwayComponent,
+    "minecraft:strength": EntityStrengthComponent,
+    "minecraft:addrider": EntityAddRiderComponent,
+    "minecraft:ageable": EntityAgeableComponent,
+    "minecraft:healable": EntityHealableComponent,
+    "minecraft:tameable": EntityTameableComponent,
+    "minecraft:tamemount": EntityTameMountComponent,
+});
+
+/**
+ * What every item component carries.
+ *
+ * A component is handed out per call rather than kept, so each one holds the stack it was read off
+ * and what the game says about that kind of item. The two accessors are this mod's own: Bedrock
+ * publishes neither, and the components that write a value back need both.
+ */
 export class ItemComponent {
+    #stack;
+    #declared;
+
+    constructor(stack, typeId, declared) {
+        this.#stack = stack;
+        this.typeId = typeId;
+        this.#declared = declared;
+    }
+
+    /** A stack here is a plain object a pack holds, so it is valid for as long as the pack has it. */
+    get isValid() {
+        return true;
+    }
+
+    stack() {
+        return this.#stack;
+    }
+
+    declared() {
+        return this.#declared;
+    }
+
+    /** What `getComponent` reads to decide whether this kind of item carries the component at all. */
+    static declaredOn() {
+        return {};
+    }
 }
 
 export class ItemDurabilityComponent extends ItemComponent {
-}
+    static componentId = "minecraft:durability";
 
-export class ItemEnchantableComponent extends ItemComponent {
+    static declaredOn(stack) {
+        const max = stack.maxDurability ?? bridge.itemMaxDurability(stack.typeId);
+        return max > 0 ? { maxDurability: max } : undefined;
+    }
+
+    constructor(stack, typeId, declared) {
+        super(stack, typeId, declared);
+        this.maxDurability = declared.maxDurability;
+    }
+
+    get damage() {
+        return this.stack().damage ?? 0;
+    }
+
+    set damage(value) {
+        this.stack().damage = value;
+    }
+
+    /** Kept on the stack and answered back; nothing carries the flag onto the item in the world. */
+    get unbreakable() {
+        return this.stack().unbreakable ?? false;
+    }
+
+    set unbreakable(value) {
+        this.stack().unbreakable = value;
+        if (value) unsupported("ItemDurabilityComponent.unbreakable");
+    }
+
+    /** Java damages a tool on every use, so the chance of it is the whole range at once. */
+    getDamageChance() {
+        return 100;
+    }
+
+    getDamageChanceRange() {
+        return { min: 100, max: 100 };
+    }
 }
 
 export class ItemFoodComponent extends ItemComponent {
+    static componentId = "minecraft:food";
+
+    static declaredOn(stack) {
+        return itemInfo(stack.typeId).food;
+    }
+
+    constructor(stack, typeId, declared) {
+        super(stack, typeId, declared);
+        this.canAlwaysEat = declared.canAlwaysEat;
+        this.nutrition = declared.nutrition;
+        this.saturationModifier = declared.saturationModifier;
+        this.usingConvertsTo = declared.usingConvertsTo;
+    }
 }
 
-export class ItemCooldownComponent extends ItemComponent {
+export class ItemCompostableComponent extends ItemComponent {
+    static componentId = "minecraft:compostable";
+
+    static declaredOn(stack) {
+        return itemInfo(stack.typeId).compostable;
+    }
+
+    constructor(stack, typeId, declared) {
+        super(stack, typeId, declared);
+        this.compostingChance = declared.compostingChance;
+    }
 }
+
+/** A cooldown is read from a player, because it is the player and not the item that holds one. */
+export class ItemCooldownComponent extends ItemComponent {
+    static componentId = "minecraft:cooldown";
+
+    static declaredOn(stack) {
+        return itemInfo(stack.typeId).cooldown;
+    }
+
+    constructor(stack, typeId, declared) {
+        super(stack, typeId, declared);
+        this.cooldownCategory = declared.cooldownCategory;
+        this.cooldownTicks = declared.cooldownTicks;
+    }
+
+    isCooldownCategory(category) {
+        return category === this.cooldownCategory;
+    }
+
+    getCooldownTicksRemaining(player) {
+        return bridge.items.cooldownRemaining(player.id, this.stack().typeId);
+    }
+
+    startCooldown(player) {
+        bridge.items.startCooldown(player.id, this.stack().typeId, this.cooldownTicks);
+    }
+}
+
+/**
+ * An enchantment a pack adds is kept on the stack and answered back. Nothing carries it onto the
+ * item the world holds, so adding one is reported.
+ */
+export class ItemEnchantableComponent extends ItemComponent {
+    static componentId = "minecraft:enchantable";
+
+    static declaredOn(stack) {
+        return itemInfo(stack.typeId).enchantable;
+    }
+
+    constructor(stack, typeId, declared) {
+        super(stack, typeId, declared);
+        this.slots = [...declared.slots];
+    }
+
+    #held() {
+        return this.stack().enchantments ?? [];
+    }
+
+    getEnchantments() {
+        return this.#held().slice();
+    }
+
+    getEnchantment(type) {
+        return this.#held().find(on => on.type.id === namespaced(type));
+    }
+
+    hasEnchantment(type) {
+        return this.#held().some(on => on.type.id === namespaced(type));
+    }
+
+    canAddEnchantment(enchantment) {
+        const asked = enchantmentOf(enchantment);
+        return !this.#held().some(on => on.type.id === asked.type.id);
+    }
+
+    addEnchantment(enchantment) {
+        const added = enchantmentOf(enchantment);
+        this.stack().enchantments = [
+            ...this.#held().filter(on => on.type.id !== added.type.id), added,
+        ];
+        unsupported("ItemEnchantableComponent.addEnchantment");
+    }
+
+    addEnchantments(enchantments) {
+        (enchantments ?? []).forEach(enchantment => this.addEnchantment(enchantment));
+    }
+
+    removeEnchantment(type) {
+        this.stack().enchantments = this.#held().filter(on => on.type.id !== namespaced(type));
+    }
+
+    removeAllEnchantments() {
+        this.stack().enchantments = [];
+    }
+}
+
+/** A colour a pack dyes the stack is answered back, and nothing carries it into the world. */
+export class ItemDyeableComponent extends ItemComponent {
+    static componentId = "minecraft:dyeable";
+
+    static declaredOn(stack) {
+        return itemInfo(stack.typeId).dyeable;
+    }
+
+    constructor(stack, typeId, declared) {
+        super(stack, typeId, declared);
+        this.defaultColor = { ...declared.defaultColor };
+    }
+
+    get color() {
+        return this.stack().dyeColor ?? { ...this.defaultColor };
+    }
+
+    set color(value) {
+        this.stack().dyeColor = value;
+        unsupported("ItemDyeableComponent.color");
+    }
+}
+
+/** The shape a potion is thrown in, which Bedrock names apart from the effect it carries. */
+export class PotionDeliveryType {
+    constructor(id) {
+        this.id = id;
+        Object.freeze(this);
+    }
+}
+
+/** Which effect the potion carries is written on the stack in the world, not on its type. */
+export class ItemPotionComponent extends ItemComponent {
+    static componentId = "minecraft:potion";
+
+    static declaredOn(stack) {
+        return itemInfo(stack.typeId).potion;
+    }
+
+    constructor(stack, typeId, declared) {
+        super(stack, typeId, declared);
+        this.potionDeliveryType = new PotionDeliveryType(declared.potionDeliveryType);
+    }
+
+    get potionEffectType() {
+        return unsupported("ItemPotionComponent.potionEffectType");
+    }
+}
+
+/**
+ * The pages of a writable or a written book, kept on the stack the way its lore is.
+ *
+ * A page reads and writes as plain text whichever kind of book it is; a signed book stores its
+ * pages as text components, and that conversion happens where the stack reaches the world.
+ */
+export class ItemBookComponent extends ItemComponent {
+    static componentId = "minecraft:book";
+
+    static declaredOn(stack) {
+        return bookItems.includes(stack.typeId) ? {} : undefined;
+    }
+
+    #book() {
+        this.stack().book = this.stack().book ?? { signed: false, pages: [] };
+        return this.stack().book;
+    }
+
+    /** Bedrock raises rather than growing the book when a pack names a page that is not there. */
+    #page(pageIndex) {
+        const pages = this.#book().pages;
+        if (!(pageIndex >= 0 && pageIndex < pages.length)) {
+            throw new BookPageContentError(
+                "No page " + pageIndex + " in a book of " + pages.length, pageIndex);
+        }
+        return pages;
+    }
+
+    get isSigned() {
+        return this.#book().signed;
+    }
+
+    get title() {
+        return this.#book().title;
+    }
+
+    get author() {
+        return this.#book().author;
+    }
+
+    get pageCount() {
+        return this.#book().pages.length;
+    }
+
+    get contents() {
+        return [...this.#book().pages];
+    }
+
+    get rawContents() {
+        return this.#book().pages.map(text => ({ text }));
+    }
+
+    getPageContent(pageIndex) {
+        return this.#book().pages[pageIndex];
+    }
+
+    getRawPageContent(pageIndex) {
+        const page = this.getPageContent(pageIndex);
+        return page === undefined ? undefined : { text: page };
+    }
+
+    setContents(contents) {
+        this.#book().pages = (contents ?? []).map(rawText);
+    }
+
+    setPageContent(pageIndex, content) {
+        this.#page(pageIndex)[pageIndex] = rawText(content);
+    }
+
+    insertPage(pageIndex, content) {
+        this.#book().pages.splice(pageIndex, 0, rawText(content));
+    }
+
+    removePage(pageIndex) {
+        this.#page(pageIndex).splice(pageIndex, 1);
+    }
+
+    /** Signing turns the stack into the other item, which is what carries a title and an author. */
+    signBook(title, author) {
+        const book = this.#book();
+        book.signed = true;
+        book.title = title;
+        book.author = author;
+        this.stack().typeId = "minecraft:written_book";
+    }
+}
+
+// Every component this mod answers for a stack, by the name a pack asks for it under. Each class
+// says for itself whether the kind of item carries it, and undefined means it does not.
+const ITEM_COMPONENTS = Object.freeze({
+    "minecraft:book": ItemBookComponent,
+    "minecraft:compostable": ItemCompostableComponent,
+    "minecraft:cooldown": ItemCooldownComponent,
+    "minecraft:durability": ItemDurabilityComponent,
+    "minecraft:dyeable": ItemDyeableComponent,
+    "minecraft:enchantable": ItemEnchantableComponent,
+    "minecraft:food": ItemFoodComponent,
+    "minecraft:potion": ItemPotionComponent,
+});
 
 /**
  * One slot of a container, held as the container it belongs to and the index in it.
@@ -1327,6 +2312,11 @@ export class Container {
         return bridge.containers.size(this.#handle);
     }
 
+    /** Bedrock's weight and item rules belong to a container kind Java has nothing that matches. */
+    get containerRules() {
+        return unsupported("Container.containerRules");
+    }
+
     get emptySlotsCount() {
         return bridge.containers.emptySlots(this.#handle);
     }
@@ -1409,7 +2399,15 @@ export function containerAt(dimensionId, x, y, z) {
     return handle === null ? undefined : new Container(handle);
 }
 
+/** One effect an entity is under, read at the moment the pack asked for it. */
 export class Effect {
+    constructor(fields) {
+        this.typeId = fields.typeId;
+        this.amplifier = fields.amplifier;
+        this.displayName = fields.displayName;
+        this.duration = fields.duration;
+        this.isValid = true;
+    }
 }
 
 export class EffectType {
@@ -1427,16 +2425,16 @@ export class EffectType {
 // what this game has. Bedrock writes a vanilla id without its namespace, and every id handed back
 // carries one.
 
-export const EffectTypes = Object.freeze({
-    get(identifier) {
+export class EffectTypes {
+    static get(identifier) {
         return bridge.registries.hasEffectType(identifier)
             ? new EffectType(namespaced(identifier)) : undefined;
-    },
+    }
 
-    getAll() {
+    static getAll() {
         return list(bridge.registries.effectTypes()).map(id => new EffectType(id));
-    },
-});
+    }
+}
 
 export class EntityType {
     constructor(fields) {
@@ -1445,16 +2443,16 @@ export class EntityType {
     }
 }
 
-export const EntityTypes = Object.freeze({
-    get(identifier) {
+export class EntityTypes {
+    static get(identifier) {
         const found = bridge.registries.entityType(identifier);
         return found === null ? undefined : new EntityType(JSON.parse(found));
-    },
+    }
 
-    getAll() {
+    static getAll() {
         return JSON.parse(bridge.registries.entityTypes()).map(fields => new EntityType(fields));
-    },
-});
+    }
+}
 
 /** A pack may build one of these itself, which is why an id nothing answers to is an error here. */
 export class EnchantmentType {
@@ -1470,16 +2468,16 @@ export class EnchantmentType {
     }
 }
 
-export const EnchantmentTypes = Object.freeze({
-    get(enchantmentId) {
+export class EnchantmentTypes {
+    static get(enchantmentId) {
         return bridge.registries.enchantment(enchantmentId) === null
             ? undefined : new EnchantmentType(enchantmentId);
-    },
+    }
 
-    getAll() {
+    static getAll() {
         return JSON.parse(bridge.registries.enchantments()).map(fields => new EnchantmentType(fields.id));
-    },
-});
+    }
+}
 
 /** An instant effect has no duration, so `durationTicks` is absent on one instead of zero. */
 export class PotionEffectType {
@@ -1489,46 +2487,56 @@ export class PotionEffectType {
     }
 }
 
-export const Potions = Object.freeze({
-    getEffectType(potionEffectId) {
+export class Potions {
+    static getEffectType(potionEffectId) {
         const found = bridge.registries.potionEffectType(potionEffectId);
         return found === null ? undefined : new PotionEffectType(JSON.parse(found));
-    },
+    }
 
-    getAllEffectTypes() {
+    static getAllEffectTypes() {
         return JSON.parse(bridge.registries.potionEffectTypes()).map(fields => new PotionEffectType(fields));
-    },
+    }
 
     // Java has no registry of potion delivery shapes: a drunk, splash or lingering potion is three
     // items. That leaves nothing to answer a delivery type with, and nothing for `resolve` to build.
-    getDeliveryType() {
+
+    static getDeliveryType() {
         return unsupported("Potions.getDeliveryType");
-    },
+    }
 
-    getAllDeliveryTypes() {
+    static getAllDeliveryTypes() {
         return unsupported("Potions.getAllDeliveryTypes");
-    },
+    }
 
-    resolve() {
+    static resolve() {
         return unsupported("Potions.resolve");
-    },
-});
+    }
+}
 
 export class BiomeType {
     constructor(id) {
         this.id = id;
     }
+
+    getTags() {
+        return list(bridge.registries.biomeTags(this.id));
+    }
+
+    hasTags(tags) {
+        const carried = this.getTags();
+        return tags.every(tag => carried.includes(namespaced(tag)));
+    }
 }
 
-export const BiomeTypes = Object.freeze({
-    get(typeName) {
+export class BiomeTypes {
+    static get(typeName) {
         return bridge.registries.hasBiomeType(typeName) ? new BiomeType(namespaced(typeName)) : undefined;
-    },
+    }
 
-    getAll() {
+    static getAll() {
         return list(bridge.registries.biomeTypes()).map(id => new BiomeType(id));
-    },
-});
+    }
+}
 
 export class EntityQueryOptions {
 }
@@ -1562,6 +2570,17 @@ export class Entity {
 
     set nameTag(value) {
         bridge.setEntityNameTag(this.id, value ?? "");
+    }
+
+    // How the name over an entity is drawn. Java draws every one of them the same way, through the
+    // renderer rather than off the entity, so neither can be asked nor set per entity.
+
+    get nameplateDepthTested() {
+        return unsupported("Entity.nameplateDepthTested");
+    }
+
+    get nameplateRenderDistance() {
+        return unsupported("Entity.nameplateRenderDistance");
     }
 
     get isSneaking() {
@@ -1801,13 +2820,24 @@ export class Entity {
     }
 
     getComponents() {
-        const names = list(bridge.entityComponents(this.id));
-        if (hasComponent(this, "minecraft:inventory")) names.push("minecraft:inventory");
-        return names.map(name => componentFor(this, name));
+        const names = new Set(list(bridge.entityComponents(this.id)));
+        if (hasComponent(this, "minecraft:inventory")) names.add("minecraft:inventory");
+        declaredComponents(this).forEach(name => names.add(name));
+        return [...names].map(name => componentFor(this, name));
+    }
+
+    /**
+     * Puts a stack into whatever the entity carries, and answers with what would not fit.
+     *
+     * An entity with no inventory of its own holds nothing, so the whole stack comes back.
+     */
+    addItem(itemStack) {
+        const container = this.getComponent(EntityInventoryComponent.componentId)?.container;
+        return container === undefined ? itemStack : container.addItem(itemStack);
     }
 
     getEffects() {
-        return JSON.parse(bridge.entityEffects(this.id)).map(effect => ({ ...effect, isValid: true }));
+        return JSON.parse(bridge.entityEffects(this.id)).map(fields => new Effect(fields));
     }
 
     getEffect(type) {
@@ -1900,50 +2930,12 @@ export class Player extends Entity {
         return bridge.players.playerPermissionLevel(this.id);
     }
 
-    // What follows describes the Bedrock client itself: the camera it draws through, the device it
-    // runs on, the buttons held on it and the parts of its heads-up display. Java Edition's server
-    // is told none of it, so each of these reports itself rather than answering something made up.
-    //
-    // The three that Bedrock hands back as an object are answered with one whose every member
-    // reports, because a pack reaching through `player.camera.setCamera(...)` for a feature Java has
-    // none of should cost that call and not the tick a TypeError would end.
-
     get camera() {
-        return {
-            isValid: true,
-            attachToEntity() {
-                unsupported("Camera.attachToEntity");
-            },
-            clear() {
-                unsupported("Camera.clear");
-            },
-            fade() {
-                unsupported("Camera.fade");
-            },
-            playAnimation() {
-                unsupported("Camera.playAnimation");
-            },
-            setCamera() {
-                unsupported("Camera.setCamera");
-            },
-            setDefaultCamera() {
-                unsupported("Camera.setDefaultCamera");
-            },
-            setFov() {
-                unsupported("Camera.setFov");
-            },
-        };
+        return new Camera(this.id);
     }
 
     get clientSystemInfo() {
-        return {
-            get maxRenderDistance() {
-                return unsupported("ClientSystemInfo.maxRenderDistance");
-            },
-            get platformType() {
-                return unsupported("ClientSystemInfo.platformType");
-            },
-        };
+        return new ClientSystemInfo(this.id);
     }
 
     get graphicsMode() {
@@ -1951,37 +2943,23 @@ export class Player extends Entity {
     }
 
     get inputInfo() {
-        return {
-            get lastInputModeUsed() {
-                return unsupported("InputInfo.lastInputModeUsed");
-            },
-            get touchOnlyAffectsHotbar() {
-                return unsupported("InputInfo.touchOnlyAffectsHotbar");
-            },
-            getButtonState() {
-                return unsupported("InputInfo.getButtonState");
-            },
-            getMovementVector() {
-                unsupported("InputInfo.getMovementVector");
-                return { x: 0, y: 0 };
-            },
-        };
+        return new InputInfo();
     }
 
     get inputPermissions() {
-        return {
-            isPermissionCategoryEnabled() {
-                unsupported("PlayerInputPermissions.isPermissionCategoryEnabled");
-                return true;
-            },
-            setPermissionCategory() {
-                unsupported("PlayerInputPermissions.setPermissionCategory");
-            },
-        };
+        return new PlayerInputPermissions();
     }
 
     get isEmoting() {
         return unsupported("Player.isEmoting");
+    }
+
+    get locatorBar() {
+        return unsupported("Player.locatorBar", new LocatorBar());
+    }
+
+    getAimAssist() {
+        return unsupported("Player.getAimAssist", new PlayerAimAssist());
     }
 
     getControlScheme() {
@@ -2008,36 +2986,7 @@ export class Player extends Entity {
     }
 
     get onScreenDisplay() {
-        const id = this.id;
-        return {
-            isValid: true,
-            setActionBar(text) {
-                bridge.players.setActionBar(id, JSON.stringify(text));
-            },
-            setTitle(text, options) {
-                bridge.players.setTitle(id, JSON.stringify(text), JSON.stringify(options ?? null));
-            },
-            updateSubtitle(text) {
-                bridge.players.updateSubtitle(id, JSON.stringify(text));
-            },
-            getHiddenHudElements() {
-                unsupported("ScreenDisplay.getHiddenHudElements");
-                return [];
-            },
-            hideAllExcept() {
-                unsupported("ScreenDisplay.hideAllExcept");
-            },
-            isForcedHidden() {
-                unsupported("ScreenDisplay.isForcedHidden");
-                return false;
-            },
-            resetHudElementsVisibility() {
-                unsupported("ScreenDisplay.resetHudElementsVisibility");
-            },
-            setHudVisibility() {
-                unsupported("ScreenDisplay.setHudVisibility");
-            },
-        };
+        return new ScreenDisplay(this.id);
     }
 
     sendMessage(message) {
@@ -2126,6 +3075,197 @@ function rawText(message) {
     return String(message);
 }
 
+/**
+ * The title, subtitle and action bar one player is being shown.
+ *
+ * The HUD members are the rest of it, and a Java server has no say over which pieces of a client's
+ * HUD are drawn, so each of those is reported rather than answered.
+ */
+export class ScreenDisplay {
+    #playerId;
+
+    constructor(playerId) {
+        this.#playerId = playerId;
+    }
+
+    get isValid() {
+        return bridge.entityIsValid(this.#playerId);
+    }
+
+    setActionBar(text) {
+        bridge.players.setActionBar(this.#playerId, JSON.stringify(text));
+    }
+
+    setTitle(title, options) {
+        bridge.players.setTitle(this.#playerId, JSON.stringify(title), JSON.stringify(options ?? null));
+    }
+
+    updateSubtitle(subtitle) {
+        bridge.players.updateSubtitle(this.#playerId, JSON.stringify(subtitle));
+    }
+
+    getHiddenHudElements() {
+        return unsupported("ScreenDisplay.getHiddenHudElements", []);
+    }
+
+    hideAllExcept() {
+        unsupported("ScreenDisplay.hideAllExcept");
+    }
+
+    isForcedHidden() {
+        return unsupported("ScreenDisplay.isForcedHidden", false);
+    }
+
+    resetHudElementsVisibility() {
+        unsupported("ScreenDisplay.resetHudElementsVisibility");
+    }
+
+    setHudVisibility() {
+        unsupported("ScreenDisplay.setHudVisibility");
+    }
+}
+
+/**
+ * The camera one player sees through.
+ *
+ * Java has one camera control, the one spectator mode rides on: the view moves to another entity and
+ * comes back. Bedrock's presets, splines, fades and field of view are drawn by its client off a
+ * packet Java has no counterpart for, so each of those reports itself rather than doing nothing.
+ */
+export class Camera {
+    #playerId;
+
+    constructor(playerId) {
+        this.#playerId = playerId;
+    }
+
+    get isValid() {
+        return bridge.entityIsValid(this.#playerId);
+    }
+
+    attachToEntity(options) {
+        const target = options?.entity?.id;
+        if (options?.locator !== undefined) unsupported("CameraAttachOptions.locator");
+        if (target !== undefined) bridge.players.attachCamera(this.#playerId, target);
+    }
+
+    clear() {
+        bridge.players.attachCamera(this.#playerId, this.#playerId);
+    }
+
+    fade() {
+        unsupported("Camera.fade");
+    }
+
+    playAnimation() {
+        unsupported("Camera.playAnimation");
+    }
+
+    setCamera() {
+        unsupported("Camera.setCamera");
+    }
+
+    setDefaultCamera() {
+        unsupported("Camera.setDefaultCamera");
+    }
+
+    setFov() {
+        unsupported("Camera.setFov");
+    }
+}
+
+/**
+ * The device one player is on.
+ *
+ * A Java client tells the server its language and its render distance and nothing else about itself,
+ * so the memory and graphics tiers Bedrock publishes have no answer here.
+ */
+export class ClientSystemInfo {
+    #playerId;
+
+    constructor(playerId) {
+        this.#playerId = playerId;
+    }
+
+    get locale() {
+        return bridge.players.locale(this.#playerId) ?? unsupported("ClientSystemInfo.locale");
+    }
+
+    get maxRenderDistance() {
+        return bridge.players.renderDistance(this.#playerId)
+            ?? unsupported("ClientSystemInfo.maxRenderDistance");
+    }
+
+    get memoryTier() {
+        return unsupported("ClientSystemInfo.memoryTier");
+    }
+
+    get platformType() {
+        return unsupported("ClientSystemInfo.platformType");
+    }
+}
+
+/** What a Bedrock client reports about the controls being held, which a Java client never sends. */
+export class InputInfo {
+    get lastInputModeUsed() {
+        return unsupported("InputInfo.lastInputModeUsed");
+    }
+
+    get touchOnlyAffectsHotbar() {
+        return unsupported("InputInfo.touchOnlyAffectsHotbar");
+    }
+
+    getButtonState() {
+        return unsupported("InputInfo.getButtonState");
+    }
+
+    getMovementVector() {
+        unsupported("InputInfo.getMovementVector");
+        return { x: 0, y: 0 };
+    }
+}
+
+/**
+ * The Molang variables a pack hands to a particle it spawns.
+ *
+ * A Bedrock particle reads these out of the emitter it is drawn from. Java's particles carry no
+ * expressions at all, so nothing downstream could read a value that was stored here and each of
+ * these says so instead.
+ */
+export class MolangVariableMap {
+    setColorRGB() {
+        unsupported("MolangVariableMap.setColorRGB");
+    }
+
+    setColorRGBA() {
+        unsupported("MolangVariableMap.setColorRGBA");
+    }
+
+    setFloat() {
+        unsupported("MolangVariableMap.setFloat");
+    }
+
+    setSpeedAndDirection() {
+        unsupported("MolangVariableMap.setSpeedAndDirection");
+    }
+
+    setVector3() {
+        unsupported("MolangVariableMap.setVector3");
+    }
+}
+
+/** Bedrock locks a player out of one kind of input at a time; Java has no packet that does this. */
+export class PlayerInputPermissions {
+    isPermissionCategoryEnabled() {
+        unsupported("PlayerInputPermissions.isPermissionCategoryEnabled");
+        return true;
+    }
+
+    setPermissionCategory() {
+        unsupported("PlayerInputPermissions.setPermissionCategory");
+    }
+}
+
 function normaliseComponent(component) {
     const name = typeof component === "string" ? component : String(component);
     return name.includes(":") ? name : "minecraft:" + name;
@@ -2136,94 +3276,47 @@ function normaliseComponent(component) {
  *
  * The inventory is answered by whether a container could be found for the entity, because a player
  * and a chest minecart hold their items in objects the entity component list knows nothing about.
+ * Everything the pack declared is answered from the pack, which is the only place it was written.
  */
 function hasComponent(entity, name) {
-    return name === "minecraft:inventory"
-        ? bridge.containers.ofEntity(entity.id) !== null
+    if (name === "minecraft:inventory") return bridge.containers.ofEntity(entity.id) !== null;
+    return DECLARED_COMPONENTS[name] !== undefined
+        ? declaredComponents(entity).includes(name)
         : bridge.entityHasComponent(entity.id, name);
 }
 
-/** Only the components real packs read are modelled; the rest report themselves as unsupported. */
+function declaredComponents(entity) {
+    return list(bridge.entityMembers.packComponents(entity.id))
+        .filter(name => DECLARED_COMPONENTS[name] !== undefined);
+}
+
+/**
+ * The component class each name is answered with.
+ *
+ * A name with no entry here is answered with the base class, which carries the entity, the name and
+ * whether it is still valid. That is everything Bedrock's own component carries for the ones that
+ * are a flag rather than a value.
+ */
+const COMPONENT_CLASSES = Object.freeze({
+    "minecraft:health": EntityHealthComponent,
+    "minecraft:movement": EntityMovementComponent,
+    "minecraft:player.hunger": EntityHungerComponent,
+    "minecraft:player.saturation": EntitySaturationComponent,
+    "minecraft:inventory": EntityInventoryComponent,
+    "minecraft:equippable": EntityEquippableComponent,
+    "minecraft:type_family": EntityTypeFamilyComponent,
+    "minecraft:riding": EntityRidingComponent,
+    "minecraft:is_baby": EntityIsBabyComponent,
+    "minecraft:item": EntityItemComponent,
+    "minecraft:onfire": EntityOnFireComponent,
+    "minecraft:variant": EntityVariantComponent,
+    "minecraft:mark_variant": EntityMarkVariantComponent,
+    "minecraft:skin_id": EntitySkinIdComponent,
+});
+
 function componentFor(entity, name) {
-    switch (name) {
-        case "minecraft:inventory":
-            return {
-                typeId: name, entity,
-                get containerType() {
-                    // The pack says what kind of container its entity carries; Java has one kind of
-                    // inventory, so the name comes back from the pack rather than from the game.
-                    const declared = bridge.entityMembers.packComponent(entity.id, "minecraft:inventory");
-                    return declared === null
-                        ? "inventory" : (JSON.parse(declared).container_type ?? "inventory");
-                },
-                additionalSlotsPerStrength: 0,
-                canBeSiphonedFrom: false,
-                private: false,
-                restrictToOwner: false,
-                get container() {
-                    const handle = bridge.containers.ofEntity(entity.id);
-                    return handle === null ? undefined : new Container(handle);
-                },
-                get inventorySize() {
-                    return this.container?.size ?? 0;
-                },
-            };
-        case "minecraft:health":
-            return {
-                typeId: name, entity,
-                get currentValue() {
-                    return bridge.entityHealth(entity.id);
-                },
-                get effectiveMax() {
-                    return bridge.entityMaxHealth(entity.id);
-                },
-                setCurrentValue(value) {
-                    bridge.setEntityHealth(entity.id, value);
-                },
-                resetToMaxValue() {
-                    bridge.setEntityHealth(entity.id, bridge.entityMaxHealth(entity.id));
-                },
-            };
-        case "minecraft:is_baby":
-        case "minecraft:is_sheared":
-        case "minecraft:is_tamed":
-        case "minecraft:is_angry":
-            return { typeId: name, entity };
-        case "minecraft:variant":
-            return { typeId: name, entity, value: bridge.entityProperty(entity.id, "variant") ?? 0 };
-        case "minecraft:mark_variant":
-            return { typeId: name, entity, value: bridge.entityProperty(entity.id, "mark_variant") ?? 0 };
-        case "minecraft:skin_id":
-            return { typeId: name, entity, value: bridge.entityProperty(entity.id, "skin_id") ?? 0 };
-        case "minecraft:type_family":
-            return {
-                typeId: name, entity,
-                getTypeFamilies() {
-                    return list(bridge.entityFamilies(entity.id));
-                },
-                hasTypeFamily(family) {
-                    return list(bridge.entityFamilies(entity.id)).includes(family);
-                },
-            };
-        case "minecraft:riding":
-            return { typeId: name, entity, get entity() {
-                const vehicle = bridge.entityVehicle(entity.id);
-                return vehicle === null ? undefined : entityFor(vehicle);
-            } };
-        case "minecraft:equippable":
-            return {
-                typeId: name, entity,
-                getEquipment(slot) {
-                    const item = bridge.equipment(entity.id, slot);
-                    return item === null ? undefined : itemFrom(JSON.parse(item));
-                },
-                setEquipment(slot, item) {
-                    return bridge.setEquipment(entity.id, slot, item?.typeId ?? null, item?.amount ?? 1);
-                },
-            };
-        default:
-            return { typeId: name, entity };
-    }
+    const build = DECLARED_COMPONENTS[name] ?? COMPONENT_CLASSES[name] ?? EntityComponent;
+    return new build(entity, name);
 }
 
 function itemFrom(handle) {
@@ -2233,6 +3326,7 @@ function itemFrom(handle) {
     stack.maxDurability = handle.maxDurability ?? 0;
     stack.lore = handle.lore ?? [];
     stack.properties = handle.properties ?? {};
+    stack.book = handle.book;
     return stack;
 }
 
@@ -2246,14 +3340,25 @@ function itemJson(stack) {
         nameTag: stack.nameTag ?? "",
         lore: stack.lore ?? [],
         properties: stack.properties ?? {},
+        book: stack.book,
     });
 }
 
-export function entityFor(id) {
+/**
+ * The one wrapper an id gets, so a pack comparing two references to one entity sees them as equal.
+ *
+ * An id may be met before the game will say whose it is: a player's arrives while they are still
+ * joining, and the player list does not have them yet. Caching that answer would leave a plain
+ * entity standing in for somebody for the rest of the session, with none of the player members on
+ * it, so a caller holding something it already knows to be a player says so and the wrapper is
+ * replaced rather than kept.
+ */
+export function entityFor(id, knownPlayer) {
     if (id === null || id === undefined) return undefined;
+
     let wrapper = entityCache.get(id);
-    if (wrapper === undefined) {
-        wrapper = bridge.entityIsPlayer(id) ? new Player(id) : new Entity(id);
+    if (wrapper === undefined || (knownPlayer && !(wrapper instanceof Player))) {
+        wrapper = knownPlayer || bridge.entityIsPlayer(id) ? new Player(id) : new Entity(id);
         entityCache.set(id, wrapper);
     }
     return wrapper;
@@ -2276,7 +3381,8 @@ export class Dimension {
     }
 
     getPlayers(options) {
-        return this.getEntities({ ...(options ?? {}), type: "minecraft:player" });
+        return list(bridge.dimensionEntities(this.id,
+            JSON.stringify({ ...(options ?? {}), type: "minecraft:player" }))).map(id => entityFor(id, true));
     }
 
     getEntitiesAtBlockLocation(location) {
@@ -2394,6 +3500,10 @@ export class Dimension {
         return id === null ? undefined : new BiomeType(id);
     }
 
+    calculateClosestBiomeFromSeed() {
+        return unsupported("Dimension.calculateClosestBiomeFromSeed");
+    }
+
     getLightLevel(location) {
         return bridge.worlds.lightLevel(this.id, Math.floor(location.x), Math.floor(location.y),
             Math.floor(location.z));
@@ -2487,14 +3597,22 @@ function dimensionOf(id) {
     return dimension;
 }
 
-export const DimensionTypes = Object.freeze({
-    get(id) {
-        return list(bridge.dimensionIds()).includes(id) ? { typeId: id } : undefined;
-    },
-    getAll() {
-        return list(bridge.dimensionIds()).map(id => ({ typeId: id }));
-    },
-});
+export class DimensionType {
+    constructor(typeId) {
+        this.typeId = typeId;
+        Object.freeze(this);
+    }
+}
+
+export class DimensionTypes {
+    static get(id) {
+        return list(bridge.dimensionIds()).includes(id) ? new DimensionType(id) : undefined;
+    }
+
+    static getAll() {
+        return list(bridge.dimensionIds()).map(id => new DimensionType(id));
+    }
+}
 
 class EventSignal {
     #listeners = [];
@@ -2514,7 +3632,8 @@ class EventSignal {
     }
 
     emit(event) {
-        const ready = this.shape ? this.shape(shapeFields(event)) : shapeFields(event);
+        const shaped = this.shape ? this.shape(shapeFields(event)) : shapeFields(event);
+        const ready = this.payload ? asPayload(this.payload, shaped) : shaped;
         for (const listener of this.#listeners.slice()) {
             try {
                 listener.callback(ready);
@@ -2528,6 +3647,39 @@ class EventSignal {
 
 function blockFrom(fields) {
     return new Block(fields.dimension, fields.x, fields.y, fields.z);
+}
+
+/**
+ * Calls one callback of one custom component and says whether the pack cancelled what happened.
+ *
+ * A component that has no callback by that name is not a mistake: Bedrock calls only what the pack
+ * wrote, so a component answering one moment and ignoring the rest is the ordinary case. A callback
+ * that throws costs its own call and nothing else, the same as any other listener.
+ */
+function runCustomComponent(registered, name, callback, argumentsJson) {
+    const component = registered.get(name);
+    const answer = component?.[callback];
+    if (typeof answer !== "function") return false;
+
+    const fields = JSON.parse(argumentsJson);
+    const event = {
+        block: fields.block === undefined ? undefined : blockFrom(fields.block),
+        dimension: fields.dimension === undefined ? undefined : dimensionOf(fields.dimension),
+        source: fields.source === undefined ? undefined : entityFor(fields.source),
+        player: fields.player === undefined ? undefined : entityFor(fields.player),
+        entity: fields.entity === undefined ? undefined : entityFor(fields.entity),
+        itemStack: undefined,
+        cancel: false,
+    };
+
+    try {
+        // The second argument is what the block or item wrote beside the component's name.
+        // Naming one without a body is the shape this reads, so there is nothing to hand over.
+        answer(event, { params: {} });
+    } catch (error) {
+        bridge.reportError(String(error && error.stack ? error.stack : error));
+    }
+    return event.cancel === true;
 }
 
 function permutationFrom(fields) {
@@ -2544,18 +3696,29 @@ function permutationFrom(fields) {
 const FIELD_SHAPES = {
     beforeItemStack: itemFrom,
     block: blockFrom,
+    blockPermutation: permutationFrom,
     brokenBlockPermutation: permutationFrom,
     dimension: dimensionOf,
+    explodedBlockPermutation: permutationFrom,
     fromDimension: dimensionOf,
+    heldItemStack: itemFrom,
+    hitBlock: blockFrom,
+    hitBlockPermutation: permutationFrom,
     itemStack: itemFrom,
     itemStackAfterBreak: itemFrom,
     itemStackBeforeBreak: itemFrom,
     toDimension: dimensionOf,
 };
 
+// Bedrock spells an absent field `undefined`, and a pack guards one by testing for exactly that.
+// Java has only null to hand across for a thing that is not there, so every field that arrived null
+// is spelled the way the pack is going to test for before any of them is shaped.
 function shapeFields(event) {
+    for (const name of Object.keys(event)) {
+        if (event[name] === null) event[name] = undefined;
+    }
     for (const name of Object.keys(FIELD_SHAPES)) {
-        if (event[name] !== undefined && event[name] !== null) event[name] = FIELD_SHAPES[name](event[name]);
+        if (event[name] !== undefined) event[name] = FIELD_SHAPES[name](event[name]);
     }
     return event;
 }
@@ -2580,6 +3743,25 @@ const EVENT_SHAPES = {
         delete event.item;
         return event;
     },
+
+    weatherChange(event) {
+        // The one event that names its dimension by id rather than handing the dimension over.
+        event.dimension = event.dimension?.id ?? event.dimension;
+        return event;
+    },
+
+    explosion(event) {
+        const blocks = (event.impactedBlocks ?? []).map(blockFrom);
+        delete event.impactedBlocks;
+        event.getImpactedBlocks = () => blocks;
+        return event;
+    },
+
+    pistonActivate(event) {
+        // The piston is the component of the block the event already carries.
+        event.piston = event.block?.getComponent(BlockPistonComponent.componentId);
+        return event;
+    },
 };
 
 /** Every event name the mod can raise. An unknown name still gets a signal, so subscribing is safe. */
@@ -2590,14 +3772,135 @@ const EVENT_SHAPES = {
  * the pack's own code runs on, but an unreported one would look like an implemented event that
  * simply never happened, which is what made the coverage report say everything was covered.
  */
-function eventGroup(raised) {
+
+/**
+ * The class each raised event is published as, against the name a pack subscribes under.
+ *
+ * A listener is handed an instance of that class rather than a plain object carrying the same
+ * fields, so a pack testing `event instanceof PlayerJoinAfterEvent` is answered the way Bedrock
+ * answers it. An event with no published class of its own is handed over as it arrives.
+ */
+
+/**
+ * The event the server sent, made an instance of the class it is published as.
+ *
+ * The object itself is kept rather than copied onto a new one. A pack cancels a before-event by
+ * writing `cancel` back, and the Java side reads that field off the very object it handed over, so
+ * a copy would take the cancellation with it. Giving the original the class as its prototype leaves
+ * every field where it is: what the server sent stays the event's own, which is what shadows the
+ * getter the class declares for a member the server did not send.
+ */
+function asPayload(kind, event) {
+    Object.setPrototypeOf(event, kind.prototype);
+    return event;
+}
+
+let payloadClasses;
+
+/**
+ * The published classes for one group of events, worked out the first time a group is asked for.
+ *
+ * Built on demand rather than at module scope: the classes are declared further down the file, and
+ * a table naming them while the module is still being evaluated reaches them before they exist.
+ */
+function payloadsFor(group) {
+    payloadClasses ??= {
+    worldAfter: {
+        dataDrivenEntityTrigger: DataDrivenEntityTriggerAfterEvent,
+        entityDie: EntityDieAfterEvent, entityHitEntity: EntityHitEntityAfterEvent,
+        entityHurt: EntityHurtAfterEvent, entityItemDrop: EntityItemDropAfterEvent,
+        entityLoad: EntityLoadAfterEvent, entityRemove: EntityRemoveAfterEvent,
+        entitySpawn: EntitySpawnAfterEvent, itemCompleteUse: ItemCompleteUseAfterEvent,
+        itemReleaseUse: ItemReleaseUseAfterEvent, itemStartUse: ItemStartUseAfterEvent,
+        itemStartUseOn: ItemStartUseOnAfterEvent, itemStopUse: ItemStopUseAfterEvent,
+        itemUse: ItemUseAfterEvent, playerBreakBlock: PlayerBreakBlockAfterEvent,
+        playerDimensionChange: PlayerDimensionChangeAfterEvent,
+        playerGameModeChange: PlayerGameModeChangeAfterEvent,
+        playerInteractWithBlock: PlayerInteractWithBlockAfterEvent,
+        playerInteractWithEntity: PlayerInteractWithEntityAfterEvent,
+        playerInventoryItemChange: PlayerInventoryItemChangeAfterEvent,
+        playerJoin: PlayerJoinAfterEvent, playerLeave: PlayerLeaveAfterEvent,
+        playerPlaceBlock: PlayerPlaceBlockAfterEvent, playerSpawn: PlayerSpawnAfterEvent,
+        worldLoad: WorldLoadAfterEvent, effectAdd: EffectAddAfterEvent,
+        entityItemPickup: EntityItemPickupAfterEvent, buttonPush: ButtonPushAfterEvent,
+        projectileHitEntity: ProjectileHitEntityAfterEvent,
+        projectileHitBlock: ProjectileHitBlockAfterEvent,
+        leverAction: LeverActionAfterEvent, entityHitBlock: EntityHitBlockAfterEvent,
+        entityHeal: EntityHealAfterEvent, entityHealthChanged: EntityHealthChangedAfterEvent,
+        weatherChange: WeatherChangeAfterEvent,
+        playerHotbarSelectedSlotChange: PlayerHotbarSelectedSlotChangeAfterEvent,
+        playerButtonInput: PlayerButtonInputAfterEvent,
+        explosion: ExplosionAfterEvent, blockExplode: BlockExplodeAfterEvent,
+        pistonActivate: PistonActivateAfterEvent, gameRuleChange: GameRuleChangeAfterEvent,
+        pressurePlatePush: PressurePlatePushAfterEvent,
+        pressurePlatePop: PressurePlatePopAfterEvent,
+        tripWireTrip: TripWireTripAfterEvent, targetBlockHit: TargetBlockHitAfterEvent,
+        playerStartBreakingBlock: PlayerStartBreakingBlockAfterEvent,
+        playerCancelBreakingBlock: PlayerCancelBreakingBlockAfterEvent,
+        playerSwingStart: PlayerSwingStartAfterEvent,
+        itemStopUseOn: ItemStopUseOnAfterEvent,
+        blockContainerOpened: BlockContainerOpenedAfterEvent,
+        blockContainerClosed: BlockContainerClosedAfterEvent,
+        entityContainerOpened: EntityContainerOpenedAfterEvent,
+        entityContainerClosed: EntityContainerClosedAfterEvent,
+    },
+    worldBefore: {
+        entityHurt: EntityHurtBeforeEvent, entityRemove: EntityRemoveBeforeEvent,
+        itemUse: ItemUseBeforeEvent, playerBreakBlock: PlayerBreakBlockBeforeEvent,
+        playerInteractWithBlock: PlayerInteractWithBlockBeforeEvent,
+        playerInteractWithEntity: PlayerInteractWithEntityBeforeEvent,
+        playerLeave: PlayerLeaveBeforeEvent, effectAdd: EffectAddBeforeEvent,
+        entityItemPickup: EntityItemPickupBeforeEvent, entityHeal: EntityHealBeforeEvent,
+        weatherChange: WeatherChangeBeforeEvent, explosion: ExplosionBeforeEvent,
+        playerGameModeChange: PlayerGameModeChangeBeforeEvent,
+    },
+    systemAfter: {
+        scriptEventReceive: ScriptEventCommandMessageAfterEvent,
+    },
+    systemBefore: {
+        startup: StartupEvent, shutdown: ShutdownEvent,
+    },
+};
+    return payloadClasses[group];
+}
+
+let unraisedSignals;
+
+/**
+ * The signal class each published event this mod does not raise is handed back as.
+ *
+ * Built on demand for the same reason the payload table is: the classes are declared further down.
+ * Subscribing to one of these reaches a signal of the class Bedrock names, so a pack keeping and
+ * testing it is answered correctly; nothing ever arrives on it, which is what the report says.
+ */
+function unraisedFor(group) {
+    unraisedSignals ??= {
+    worldAfter: {
+        entityUpgrade: EntityUpgradeAfterEventSignal,
+        playerEmote: PlayerEmoteAfterEventSignal,
+        playerInputModeChange: PlayerInputModeChangeAfterEventSignal,
+        playerInputPermissionCategoryChange: PlayerInputPermissionCategoryChangeAfterEventSignal,
+    },
+    worldBefore: {},
+    systemAfter: {},
+    systemBefore: {},
+};
+    return unraisedSignals[group];
+}
+
+function eventGroup(raised, group) {
     return new Proxy({}, {
         get(target, name) {
             if (typeof name !== "string") return undefined;
             if (target[name] === undefined) {
-                if (!raised.includes(name)) bridge.unsupported(name + " (event)");
-                target[name] = new EventSignal();
+                const known = unraisedFor(group)[name];
+                const build = Object.hasOwn(raised, name) ? raised[name] : known;
+                if (!Object.hasOwn(raised, name)) {
+                    bridge.unsupported(name + (known ? " (event, never raised)" : " (event)"));
+                }
+                target[name] = new (build ?? EventSignal)();
                 target[name].shape = EVENT_SHAPES[name];
+                target[name].payload = payloadsFor(group)[name];
             }
             return target[name];
         },
@@ -2605,27 +3908,188 @@ function eventGroup(raised) {
 }
 
 /** Every event name this mod actually raises, by the group it belongs to. */
+/*
+ * A signal per event this mod raises, so a pack holding one of these holds the class Bedrock names.
+ * Every other published signal is a name in the block further down: subscribing to one reaches a
+ * signal that works and an event that is reported as never raised.
+ */
+export class ButtonPushAfterEventSignal extends EventSignal {}
+export class DataDrivenEntityTriggerAfterEventSignal extends EventSignal {}
+export class EffectAddAfterEventSignal extends EventSignal {}
+export class EffectAddBeforeEventSignal extends EventSignal {}
+export class EntityDieAfterEventSignal extends EventSignal {}
+export class EntityHitEntityAfterEventSignal extends EventSignal {}
+export class EntityHurtAfterEventSignal extends EventSignal {}
+export class EntityHurtBeforeEventSignal extends EventSignal {}
+export class EntityItemDropAfterEventSignal extends EventSignal {}
+export class EntityItemPickupAfterEventSignal extends EventSignal {}
+export class EntityItemPickupBeforeEventSignal extends EventSignal {}
+export class EntityLoadAfterEventSignal extends EventSignal {}
+export class EntityRemoveAfterEventSignal extends EventSignal {}
+export class EntityRemoveBeforeEventSignal extends EventSignal {}
+export class EntitySpawnAfterEventSignal extends EventSignal {}
+export class ItemCompleteUseAfterEventSignal extends EventSignal {}
+export class ItemReleaseUseAfterEventSignal extends EventSignal {}
+export class ItemStartUseAfterEventSignal extends EventSignal {}
+export class ItemStartUseOnAfterEventSignal extends EventSignal {}
+export class ItemStopUseAfterEventSignal extends EventSignal {}
+export class ItemUseAfterEventSignal extends EventSignal {}
+export class ItemUseBeforeEventSignal extends EventSignal {}
+export class PlayerBreakBlockAfterEventSignal extends EventSignal {}
+export class PlayerBreakBlockBeforeEventSignal extends EventSignal {}
+export class PlayerDimensionChangeAfterEventSignal extends EventSignal {}
+export class PlayerGameModeChangeAfterEventSignal extends EventSignal {}
+export class PlayerInteractWithBlockAfterEventSignal extends EventSignal {}
+export class PlayerInteractWithBlockBeforeEventSignal extends EventSignal {}
+export class PlayerInteractWithEntityAfterEventSignal extends EventSignal {}
+export class PlayerInteractWithEntityBeforeEventSignal extends EventSignal {}
+export class PlayerInventoryItemChangeAfterEventSignal extends EventSignal {}
+export class PlayerJoinAfterEventSignal extends EventSignal {}
+export class PlayerLeaveAfterEventSignal extends EventSignal {}
+export class PlayerLeaveBeforeEventSignal extends EventSignal {}
+export class PlayerPlaceBlockAfterEventSignal extends EventSignal {}
+export class PlayerSpawnAfterEventSignal extends EventSignal {}
+export class ProjectileHitBlockAfterEventSignal extends EventSignal {}
+export class ProjectileHitEntityAfterEventSignal extends EventSignal {}
+export class ScriptEventCommandMessageAfterEventSignal extends EventSignal {}
+export class ShutdownBeforeEventSignal extends EventSignal {}
+export class StartupBeforeEventSignal extends EventSignal {}
+export class WorldLoadAfterEventSignal extends EventSignal {}
+export class LeverActionAfterEventSignal extends EventSignal {}
+export class EntityHitBlockAfterEventSignal extends EventSignal {}
+export class EntityHealAfterEventSignal extends EventSignal {}
+export class EntityHealBeforeEventSignal extends EventSignal {}
+export class EntityHealthChangedAfterEventSignal extends EventSignal {}
+export class WeatherChangeAfterEventSignal extends EventSignal {}
+export class WeatherChangeBeforeEventSignal extends EventSignal {}
+export class PlayerHotbarSelectedSlotChangeAfterEventSignal extends EventSignal {}
+export class PlayerButtonInputAfterEventSignal extends EventSignal {}
+export class BlockContainerClosedAfterEventSignal extends EventSignal {}
+export class BlockContainerOpenedAfterEventSignal extends EventSignal {}
+export class BlockExplodeAfterEventSignal extends EventSignal {}
+export class EntityContainerClosedAfterEventSignal extends EventSignal {}
+export class EntityContainerOpenedAfterEventSignal extends EventSignal {}
+export class ExplosionAfterEventSignal extends EventSignal {}
+export class ExplosionBeforeEventSignal extends EventSignal {}
+export class GameRuleChangeAfterEventSignal extends EventSignal {}
+export class ItemStopUseOnAfterEventSignal extends EventSignal {}
+export class PistonActivateAfterEventSignal extends EventSignal {}
+export class PlayerCancelBreakingBlockAfterEventSignal extends EventSignal {}
+export class PlayerStartBreakingBlockAfterEventSignal extends EventSignal {}
+export class PlayerSwingStartAfterEventSignal extends EventSignal {}
+export class PressurePlatePopAfterEventSignal extends EventSignal {}
+export class PressurePlatePushAfterEventSignal extends EventSignal {}
+export class TargetBlockHitAfterEventSignal extends EventSignal {}
+export class TripWireTripAfterEventSignal extends EventSignal {}
+export class PlayerGameModeChangeBeforeEventSignal extends EventSignal {}
+
 const RAISED = {
-    worldAfter: [
-        "dataDrivenEntityTrigger", "entityDie", "entityHitEntity", "entityHurt", "entityItemDrop",
-        "entityLoad", "entityRemove", "entitySpawn", "itemCompleteUse", "itemReleaseUse",
-        "itemStartUse", "itemStartUseOn", "itemStopUse", "itemUse", "playerBreakBlock",
-        "playerDimensionChange", "playerGameModeChange", "playerInteractWithBlock",
-        "playerInteractWithEntity", "playerInventoryItemChange", "playerJoin", "playerLeave",
-        "playerPlaceBlock", "playerSpawn", "worldLoad", "effectAdd", "entityItemPickup",
-        "buttonPush", "projectileHitEntity", "projectileHitBlock",
-    ],
-    worldBefore: [
-        "entityHurt", "entityRemove", "itemUse", "playerBreakBlock", "playerInteractWithBlock",
-        "playerInteractWithEntity", "playerLeave", "effectAdd", "entityItemPickup",
-    ],
-    systemAfter: ["scriptEventReceive"],
-    systemBefore: ["startup", "shutdown"],
+    worldAfter: {
+        dataDrivenEntityTrigger: DataDrivenEntityTriggerAfterEventSignal,
+        entityDie: EntityDieAfterEventSignal, entityHitEntity: EntityHitEntityAfterEventSignal,
+        entityHurt: EntityHurtAfterEventSignal, entityItemDrop: EntityItemDropAfterEventSignal,
+        entityLoad: EntityLoadAfterEventSignal, entityRemove: EntityRemoveAfterEventSignal,
+        entitySpawn: EntitySpawnAfterEventSignal, itemCompleteUse: ItemCompleteUseAfterEventSignal,
+        itemReleaseUse: ItemReleaseUseAfterEventSignal, itemStartUse: ItemStartUseAfterEventSignal,
+        itemStartUseOn: ItemStartUseOnAfterEventSignal, itemStopUse: ItemStopUseAfterEventSignal,
+        itemUse: ItemUseAfterEventSignal, playerBreakBlock: PlayerBreakBlockAfterEventSignal,
+        playerDimensionChange: PlayerDimensionChangeAfterEventSignal,
+        playerGameModeChange: PlayerGameModeChangeAfterEventSignal,
+        playerInteractWithBlock: PlayerInteractWithBlockAfterEventSignal,
+        playerInteractWithEntity: PlayerInteractWithEntityAfterEventSignal,
+        playerInventoryItemChange: PlayerInventoryItemChangeAfterEventSignal,
+        playerJoin: PlayerJoinAfterEventSignal, playerLeave: PlayerLeaveAfterEventSignal,
+        playerPlaceBlock: PlayerPlaceBlockAfterEventSignal,
+        playerSpawn: PlayerSpawnAfterEventSignal, worldLoad: WorldLoadAfterEventSignal,
+        effectAdd: EffectAddAfterEventSignal, entityItemPickup: EntityItemPickupAfterEventSignal,
+        buttonPush: ButtonPushAfterEventSignal,
+        projectileHitEntity: ProjectileHitEntityAfterEventSignal,
+        projectileHitBlock: ProjectileHitBlockAfterEventSignal,
+        leverAction: LeverActionAfterEventSignal, entityHitBlock: EntityHitBlockAfterEventSignal,
+        entityHeal: EntityHealAfterEventSignal,
+        entityHealthChanged: EntityHealthChangedAfterEventSignal,
+        weatherChange: WeatherChangeAfterEventSignal,
+        playerHotbarSelectedSlotChange: PlayerHotbarSelectedSlotChangeAfterEventSignal,
+        playerButtonInput: PlayerButtonInputAfterEventSignal,
+        explosion: ExplosionAfterEventSignal, blockExplode: BlockExplodeAfterEventSignal,
+        pistonActivate: PistonActivateAfterEventSignal,
+        gameRuleChange: GameRuleChangeAfterEventSignal,
+        pressurePlatePush: PressurePlatePushAfterEventSignal,
+        pressurePlatePop: PressurePlatePopAfterEventSignal,
+        tripWireTrip: TripWireTripAfterEventSignal,
+        targetBlockHit: TargetBlockHitAfterEventSignal,
+        playerStartBreakingBlock: PlayerStartBreakingBlockAfterEventSignal,
+        playerCancelBreakingBlock: PlayerCancelBreakingBlockAfterEventSignal,
+        playerSwingStart: PlayerSwingStartAfterEventSignal,
+        itemStopUseOn: ItemStopUseOnAfterEventSignal,
+        blockContainerOpened: BlockContainerOpenedAfterEventSignal,
+        blockContainerClosed: BlockContainerClosedAfterEventSignal,
+        entityContainerOpened: EntityContainerOpenedAfterEventSignal,
+        entityContainerClosed: EntityContainerClosedAfterEventSignal,
+    },
+    worldBefore: {
+        entityHurt: EntityHurtBeforeEventSignal, entityRemove: EntityRemoveBeforeEventSignal,
+        itemUse: ItemUseBeforeEventSignal, playerBreakBlock: PlayerBreakBlockBeforeEventSignal,
+        playerInteractWithBlock: PlayerInteractWithBlockBeforeEventSignal,
+        playerInteractWithEntity: PlayerInteractWithEntityBeforeEventSignal,
+        playerLeave: PlayerLeaveBeforeEventSignal, effectAdd: EffectAddBeforeEventSignal,
+        entityItemPickup: EntityItemPickupBeforeEventSignal,
+        entityHeal: EntityHealBeforeEventSignal, weatherChange: WeatherChangeBeforeEventSignal,
+        explosion: ExplosionBeforeEventSignal,
+        playerGameModeChange: PlayerGameModeChangeBeforeEventSignal,
+    },
+    systemAfter: {
+        scriptEventReceive: ScriptEventCommandMessageAfterEventSignal,
+    },
+    systemBefore: {
+        startup: StartupBeforeEventSignal, shutdown: ShutdownBeforeEventSignal,
+    },
 };
 
+/**
+ * The game rules, under the names Bedrock gives them.
+ *
+ * Each name is a property with a getter and a setter, built from the two tables below because the
+ * only thing that differs between one rule and the next is whether it holds a flag or a count. A
+ * rule Java has nothing that means the same as reads as `undefined`, and the bridge reports it.
+ */
+const GAME_RULE_FLAGS = [
+    "commandBlockOutput", "commandBlocksEnabled", "doDayLightCycle", "doEntityDrops", "doFireTick",
+    "doImmediateRespawn", "doInsomnia", "doLimitedCrafting", "doMobLoot", "doMobSpawning",
+    "doTileDrops", "doWeatherCycle", "drowningDamage", "fallDamage", "fireDamage", "freezeDamage",
+    "keepInventory", "mobGriefing", "naturalRegeneration", "projectilesCanBreakBlocks", "pvp",
+    "recipesUnlock", "respawnBlocksExplode", "sendCommandFeedback", "showBorderEffect",
+    "showCoordinates", "showDaysPlayed", "showDeathMessages", "showRecipeMessages", "showTags",
+    "tntExplodes", "tntExplosionDropDecay",
+];
+
+const GAME_RULE_COUNTS = [
+    "functionCommandLimit", "maxCommandChainLength", "playersSleepingPercentage", "randomTickSpeed",
+    "spawnRadius",
+];
+
+export class GameRules {}
+
+function defineGameRule(name, read) {
+    Object.defineProperty(GameRules.prototype, name, {
+        enumerable: true,
+        get() {
+            const answer = bridge.gameRule(name);
+            return answer === null || answer === undefined ? undefined : read(answer);
+        },
+        set(value) {
+            bridge.setGameRule(name, value);
+        },
+    });
+}
+
+GAME_RULE_FLAGS.forEach(name => defineGameRule(name, answer => answer === "true"));
+GAME_RULE_COUNTS.forEach(name => defineGameRule(name, Number));
+
 export class World {
-    #afterEvents = eventGroup(RAISED.worldAfter);
-    #beforeEvents = eventGroup(RAISED.worldBefore);
+    #afterEvents = eventGroup(RAISED.worldAfter, "worldAfter");
+    #beforeEvents = eventGroup(RAISED.worldBefore, "worldBefore");
+    #gameRules = new GameRules();
 
     get afterEvents() {
         return this.#afterEvents;
@@ -2636,27 +4100,31 @@ export class World {
     }
 
     get gameRules() {
-        return new Proxy({}, {
-            get(target, name) {
-                return bridge.gameRule(String(name));
-            },
-            set(target, name, value) {
-                bridge.setGameRule(String(name), value);
-                return true;
-            },
-        });
+        return this.#gameRules;
     }
 
     get isHardcore() {
         return bridge.isHardcore();
     }
 
+    get primitiveShapesManager() {
+        return unsupported("World.primitiveShapesManager", new PrimitiveShapesManager());
+    }
+
     get seed() {
         return bridge.worlds.seed();
     }
 
+    getAimAssist() {
+        return unsupported("World.getAimAssist", new AimAssistRegistry());
+    }
+
+    getPackSettings() {
+        return JSON.parse(bridge.worlds.packSettings());
+    }
+
     get tickingAreaManager() {
-        return unsupported("World.tickingAreaManager");
+        return tickingAreaManager;
     }
 
     getDimension(id) {
@@ -2666,13 +4134,13 @@ export class World {
     }
 
     getAllPlayers() {
-        return list(bridge.players()).map(entityFor);
+        return list(bridge.players()).map(id => entityFor(id, true));
     }
 
     getPlayers(options) {
         return options === undefined
             ? this.getAllPlayers()
-            : list(bridge.matchingPlayers(JSON.stringify(options))).map(entityFor);
+            : list(bridge.matchingPlayers(JSON.stringify(options))).map(id => entityFor(id, true));
     }
 
     getEntity(id) {
@@ -2741,7 +4209,7 @@ export class World {
     }
 
     getLootTableManager() {
-        return unsupported("World.getLootTableManager");
+        return lootTableManager;
     }
 
     getDynamicProperty(name) {
@@ -2777,42 +4245,103 @@ export class World {
     }
 
     get structureManager() {
-        return {
-            get(id) {
-                const size = bridge.structureSize(id);
-                return size[0] === 0 && size[1] === 0 && size[2] === 0
-                    ? undefined
-                    : { id, size: { x: size[0], y: size[1], z: size[2] } };
-            },
-
-            place(structure, dimension, location, options) {
-                const id = typeof structure === "string" ? structure : structure?.id;
-                return bridge.placeStructure(dimension.id, id,
-                    Math.floor(location.x), Math.floor(location.y), Math.floor(location.z),
-                    options?.rotation ?? "None", options?.mirror ?? "None");
-            },
-
-            createFromWorld(id, dimension, from, to, options) {
-                const low = {
-                    x: Math.min(Math.floor(from.x), Math.floor(to.x)),
-                    y: Math.min(Math.floor(from.y), Math.floor(to.y)),
-                    z: Math.min(Math.floor(from.z), Math.floor(to.z)),
-                };
-                const size = {
-                    x: Math.abs(Math.floor(to.x) - Math.floor(from.x)) + 1,
-                    y: Math.abs(Math.floor(to.y) - Math.floor(from.y)) + 1,
-                    z: Math.abs(Math.floor(to.z) - Math.floor(from.z)) + 1,
-                };
-                bridge.saveStructure(dimension.id, id, low.x, low.y, low.z, size.x, size.y, size.z);
-                return { id, size };
-            },
-
-            delete(structure) {
-                return bridge.deleteStructure(typeof structure === "string" ? structure : structure?.id);
-            },
-        };
+        return structureManager;
     }
 }
+
+/**
+ * One saved structure, named by its id.
+ *
+ * Java's structure templates keep their blocks in a palette nothing outside the class can reach, so
+ * the members that read or write a single block inside a structure are reported rather than
+ * answered. Everything about the structure as a whole is real.
+ */
+export class Structure {
+    constructor(id) {
+        this.id = id;
+    }
+
+    get isValid() {
+        return bridge.structureExists(this.id);
+    }
+
+    get size() {
+        return vector(bridge.structureSize(this.id));
+    }
+
+    saveToWorld() {
+        bridge.saveStructureToWorld(this.id);
+    }
+
+    saveAs() {
+        return unsupported("Structure.saveAs");
+    }
+
+    getBlockPermutation() {
+        return unsupported("Structure.getBlockPermutation");
+    }
+
+    getIsWaterlogged() {
+        return unsupported("Structure.getIsWaterlogged", false);
+    }
+
+    setBlockPermutation() {
+        unsupported("Structure.setBlockPermutation");
+    }
+}
+
+export class StructureManager {
+    get(identifier) {
+        return bridge.structureExists(identifier) ? new Structure(identifier) : undefined;
+    }
+
+    getWorldStructureIds() {
+        return list(bridge.structureIds());
+    }
+
+    /** Java keeps a data pack's structures and the world's own in one place, under one set of ids. */
+    getPackStructureIds() {
+        return unsupported("StructureManager.getPackStructureIds", []);
+    }
+
+    place(structure, dimension, location, options) {
+        bridge.placeStructure(dimension.id, idOfStructure(structure),
+            Math.floor(location.x), Math.floor(location.y), Math.floor(location.z),
+            options?.rotation ?? "None", options?.mirror ?? "None");
+    }
+
+    createFromWorld(identifier, dimension, from, to) {
+        const low = corner(from, to, Math.min);
+        const high = corner(from, to, Math.max);
+        bridge.saveStructure(dimension.id, identifier, low.x, low.y, low.z,
+            high.x - low.x + 1, high.y - low.y + 1, high.z - low.z + 1);
+        return new Structure(identifier);
+    }
+
+    /** A template with no blocks in it has nothing Java can be asked to write them into. */
+    createEmpty() {
+        return unsupported("StructureManager.createEmpty");
+    }
+
+    delete(structure) {
+        return bridge.deleteStructure(idOfStructure(structure));
+    }
+
+    placeJigsaw() {
+        return unsupported("StructureManager.placeJigsaw");
+    }
+
+    placeJigsawStructure() {
+        return unsupported("StructureManager.placeJigsawStructure");
+    }
+}
+
+/** A pack names a structure either by its id or by handing back one it was given. */
+function idOfStructure(structure) {
+    return typeof structure === "string" ? structure : structure?.id;
+}
+
+const structureManager = new StructureManager();
 
 /** A scoreboard objective, which is what a pack reads and writes scores through. */
 export class ScoreboardObjective {
@@ -2859,9 +4388,8 @@ export class ScoreboardObjective {
     }
 
     getScores() {
-        return this.getParticipants().map(participant => ({
-            participant, score: this.getScore(participant) ?? 0,
-        }));
+        return this.getParticipants()
+            .map(participant => new ScoreboardScoreInfo(participant, this.getScore(participant) ?? 0));
     }
 }
 
@@ -2909,45 +4437,196 @@ function nameOf(participant) {
     return String(participant?.displayName ?? participant);
 }
 
-const scoreboard = {
+/** One participant's score on an objective, which is what a pack reads off `getScores`. */
+export class ScoreboardScoreInfo {
+    constructor(participant, score) {
+        this.participant = participant;
+        this.score = score;
+        Object.freeze(this);
+    }
+}
+
+export class Scoreboard {
     getObjective(id) {
         return bridge.scoreboardHasObjective(id) ? new ScoreboardObjective(id) : undefined;
-    },
+    }
 
     getObjectives() {
         return list(bridge.scoreboardObjectives()).map(id => new ScoreboardObjective(id));
-    },
+    }
 
     addObjective(id, displayName) {
         bridge.addObjective(id, displayName ?? id);
         return new ScoreboardObjective(id);
-    },
+    }
 
     removeObjective(objective) {
-        bridge.removeObjective(typeof objective === "string" ? objective : objective.id);
+        bridge.removeObjective(idOfObjective(objective));
         return true;
-    },
+    }
 
     getParticipants() {
         return list(bridge.scoreboardParticipants()).map(identityFor);
-    },
+    }
 
-    getObjectiveAtDisplaySlot() {
-        return unsupported("Scoreboard.getObjectiveAtDisplaySlot");
-    },
+    // Bedrock carries a sort order alongside the objective. Java draws a slot in one fixed order, so
+    // a pack asking for the other one is told; the display itself is set either way.
+    getObjectiveAtDisplaySlot(slot) {
+        const shown = bridge.objectiveAtDisplaySlot(slot);
+        return shown === null ? undefined : { objective: new ScoreboardObjective(shown) };
+    }
 
     setObjectiveAtDisplaySlot(slot, options) {
+        if (options?.sortOrder !== undefined) {
+            unsupported("ScoreboardObjectiveDisplayOptions.sortOrder");
+        }
+
         const objective = options?.objective;
-        bridge.setDisplaySlot(slot, typeof objective === "string" ? objective : objective?.id);
-        return objective === undefined ? undefined : scoreboard.getObjective(
-            typeof objective === "string" ? objective : objective.id);
-    },
+        bridge.setDisplaySlot(slot, idOfObjective(objective));
+        return objective === undefined ? undefined : this.getObjective(idOfObjective(objective));
+    }
 
     clearObjectiveAtDisplaySlot(slot) {
+        const shown = this.getObjectiveAtDisplaySlot(slot)?.objective;
         bridge.setDisplaySlot(slot, "");
-        return undefined;
-    },
-};
+        return shown;
+    }
+}
+
+/** A pack names an objective either by its id or by handing back one it was given. */
+function idOfObjective(objective) {
+    return typeof objective === "string" ? objective : objective?.id;
+}
+
+const scoreboard = new Scoreboard();
+
+/** One area the game is keeping loaded and ticking, as the manager last described it. */
+function tickingArea(fields) {
+    return {
+        identifier: fields.identifier,
+        dimension: dimensionOf(fields.dimension),
+        chunkCount: fields.chunkCount,
+        isFullyLoaded: fields.isFullyLoaded,
+        boundingBox: { min: fields.min, max: fields.max },
+    };
+}
+
+/** A pack names an area either by its identifier or by handing back one it was given. */
+function idOfArea(area) {
+    return typeof area === "string" ? area : area?.identifier;
+}
+
+export class TickingAreaManager {
+    get chunkCount() {
+        return bridge.tickingAreas.chunkCount();
+    }
+
+    get maxChunkCount() {
+        return bridge.tickingAreas.maxChunkCount();
+    }
+
+    /**
+     * Adds an area and answers once it is held.
+     *
+     * Bedrock hands back a promise because its own areas load on a background thread. Here the
+     * ticket is placed before this returns, so the promise is already settled by the time a pack
+     * awaits it.
+     */
+    createTickingArea(identifier, options) {
+        const from = options?.from ?? {};
+        const to = options?.to ?? {};
+        const refused = bridge.tickingAreas.createTickingArea(identifier, options?.dimension?.id,
+            Math.floor(from.x), Math.floor(from.y), Math.floor(from.z),
+            Math.floor(to.x), Math.floor(to.y), Math.floor(to.z));
+        if (refused !== null) return Promise.reject(tickingAreaError(refused, identifier));
+        return Promise.resolve();
+    }
+
+    getAllTickingAreas() {
+        return JSON.parse(bridge.tickingAreas.tickingAreas()).map(tickingArea);
+    }
+
+    getTickingArea(identifier) {
+        const found = bridge.tickingAreas.tickingArea(idOfArea(identifier));
+        return found === null ? undefined : tickingArea(JSON.parse(found));
+    }
+
+    hasCapacity(options) {
+        const from = options?.from ?? {};
+        const to = options?.to ?? {};
+        return bridge.tickingAreas.hasCapacity(Math.floor(from.x), Math.floor(from.z),
+            Math.floor(to.x), Math.floor(to.z));
+    }
+
+    hasTickingArea(identifier) {
+        return bridge.tickingAreas.hasTickingArea(identifier);
+    }
+
+    removeAllTickingAreas() {
+        bridge.tickingAreas.removeAllTickingAreas();
+    }
+
+    removeTickingArea(identifier) {
+        const name = idOfArea(identifier);
+        if (!bridge.tickingAreas.removeTickingArea(name)) {
+            throw tickingAreaError("UnknownIdentifier", name);
+        }
+    }
+}
+
+function tickingAreaError(reason, identifier) {
+    return new TickingAreaError("Ticking area " + identifier + ": " + reason, reason);
+}
+
+const tickingAreaManager = new TickingAreaManager();
+
+/**
+ * What the game would drop, asked for without anything being broken or killed.
+ *
+ * Java rolls a block's loot through the block itself, which is why the three block members are real
+ * and answer with the tool in hand counted. An entity's table and a table named by path are reached
+ * through an internal registry whose entries carry none of the fields Bedrock publishes on a
+ * `LootTable`, so those members say so rather than handing back an empty table.
+ */
+export class LootTableManager {
+    generateLootFromBlock(block, tool) {
+        const dropped = bridge.blocks.dropsAt(block.dimension.id, block.x, block.y, block.z,
+            tool?.typeId ?? null);
+        return dropped === null ? undefined : JSON.parse(dropped).map(itemFrom);
+    }
+
+    generateLootFromBlockPermutation(permutation, tool) {
+        return dropsOfPermutation(permutation, tool);
+    }
+
+    generateLootFromBlockType(blockType, tool) {
+        return dropsOfPermutation(BlockPermutation.resolve(typeIdOf(blockType)), tool);
+    }
+
+    generateLootFromEntity() {
+        return unsupported("LootTableManager.generateLootFromEntity");
+    }
+
+    generateLootFromEntityType() {
+        return unsupported("LootTableManager.generateLootFromEntityType");
+    }
+
+    generateLootFromTable() {
+        return unsupported("LootTableManager.generateLootFromTable");
+    }
+
+    getLootTable() {
+        return unsupported("LootTableManager.getLootTable");
+    }
+}
+
+function dropsOfPermutation(permutation, tool) {
+    const dropped = bridge.blocks.dropsOf(permutation.type.id,
+        JSON.stringify(permutation.getAllStates()), tool?.typeId ?? null);
+    return dropped === null ? undefined : JSON.parse(dropped).map(itemFrom);
+}
+
+const lootTableManager = new LootTableManager();
 
 export const world = new World();
 
@@ -2958,12 +4637,12 @@ export const world = new World();
  * the tick budget is spent so a pack cannot stall the server indefinitely. A job is a generator the
  * pump advances while there is budget left.
  */
-class ScriptSystem {
+export class System {
     #next = 1;
     #runs = new Map();
     #jobs = new Map();
-    #afterEvents = eventGroup(RAISED.systemAfter);
-    #beforeEvents = eventGroup(RAISED.systemBefore);
+    #afterEvents = eventGroup(RAISED.systemAfter, "systemAfter");
+    #beforeEvents = eventGroup(RAISED.systemBefore, "systemBefore");
 
     get currentTick() {
         return bridge.currentTick();
@@ -2975,6 +4654,15 @@ class ScriptSystem {
 
     get beforeEvents() {
         return this.#beforeEvents;
+    }
+
+    /** The editor is a Bedrock client mode, so a world this mod serves is never one. */
+    get isEditorWorld() {
+        return false;
+    }
+
+    get serverSystemInfo() {
+        return new SystemInfo();
     }
 
     run(callback) {
@@ -3051,7 +4739,13 @@ class ScriptSystem {
     }
 }
 
-export const system = new ScriptSystem();
+export class SystemInfo {
+    get memoryTier() {
+        return bridge.memoryTier();
+    }
+}
+
+export const system = new System();
 
 /**
  * The commands a pack registers during startup.
@@ -3063,10 +4757,29 @@ export const system = new ScriptSystem();
 const customCommands = [];
 const customEnums = new Map();
 
-// What Java calls into. Kept off the module exports so a pack cannot reach it through an import.
+/*
+ * The custom components a pack registered, by the name its blocks and items name them under.
+ *
+ * A custom component is a plain object of callbacks. Bedrock calls the one whose name matches what
+ * just happened, and the block or item names the component in its own `minecraft:custom_components`
+ * rather than declaring the trigger the callback answers.
+ */
+const customBlockComponents = new Map();
+const customItemComponents = new Map();
+
+// What Java calls into, and where the other `@minecraft/*` modules read the helpers they share from.
+// Kept off the module exports so a pack cannot reach it through an import.
 globalThis.__mcaddon_runtime__ = {
+    list,
+    unsupported,
+    blockPosition,
+    typeIdOf,
+
     tick(tick) {
         system.pump(tick);
+        // Only a pack importing `@minecraft/server-gametest` installs this, so its absence means no
+        // pack ships tests and there is nothing to advance.
+        globalThis.__mcaddon_gametests__?.pump(tick);
     },
     entityFor,
     dimensionOf,
@@ -3086,24 +4799,9 @@ globalThis.__mcaddon_runtime__ = {
     /** Raises the startup event and returns what the pack registered on it, as JSON for Java. */
     startup() {
         const event = {
-            customCommandRegistry: {
-                registerEnum(name, values) {
-                    customEnums.set(name, Array.from(values ?? []));
-                },
-                registerCommand(spec, callback) {
-                    customCommands.push({ spec, callback });
-                },
-            },
-            blockComponentRegistry: {
-                registerCustomComponent(name) {
-                    bridge.unsupported("blockComponentRegistry.registerCustomComponent(" + name + ")");
-                },
-            },
-            itemComponentRegistry: {
-                registerCustomComponent(name) {
-                    bridge.unsupported("itemComponentRegistry.registerCustomComponent(" + name + ")");
-                },
-            },
+            customCommandRegistry: new CustomCommandRegistry(),
+            blockComponentRegistry: new BlockComponentRegistry(),
+            itemComponentRegistry: new ItemComponentRegistry(),
         };
         system.beforeEvents.startup.emit(event);
 
@@ -3118,6 +4816,20 @@ globalThis.__mcaddon_runtime__ = {
     },
 
     /** Runs one registered command; Java passes the origin and the parsed arguments as JSON. */
+    /**
+     * Calls one callback of one custom component, and says whether the pack cancelled what happened.
+     *
+     * Java knows which component names the block or item carries and which callback the moment it is
+     * in corresponds to; everything about what the callback then does is the pack's own.
+     */
+    runBlockComponent(name, callback, argumentsJson) {
+        return runCustomComponent(customBlockComponents, name, callback, argumentsJson);
+    },
+
+    runItemComponent(name, callback, argumentsJson) {
+        return runCustomComponent(customItemComponents, name, callback, argumentsJson);
+    },
+
     runCommand(index, originJson, argumentsJson) {
         const entry = customCommands[index];
         if (entry === undefined) return JSON.stringify({ status: 1, message: "" });
@@ -3220,95 +4932,489 @@ export const TicksPerDay = 24000;
 export const TicksPerSecond = 20;
 
 /** Named so a pack can import one to describe a value; the game answers what they describe. */
-export class BlockComponent {}
-export class BlockComponentBlockBreakEvent {}
-export class BlockComponentEntityEvent {}
-export class BlockComponentEntityFallOnEvent {}
-export class BlockComponentOnPlaceEvent {}
-export class BlockComponentPlayerBreakEvent {}
-export class BlockComponentPlayerInteractEvent {}
-export class BlockComponentPlayerPlaceBeforeEvent {}
+export class BlockComponentBlockBreakEvent {
+    get blockDestructionSource() {
+        return unsupported("BlockComponentBlockBreakEvent.blockDestructionSource");
+    }
+
+    get brokenBlockPermutation() {
+        return unsupported("BlockComponentBlockBreakEvent.brokenBlockPermutation");
+    }
+
+    get entitySource() {
+        return unsupported("BlockComponentBlockBreakEvent.entitySource");
+    }
+}
+export class BlockComponentEntityEvent {
+    get blockPermutation() {
+        return unsupported("BlockComponentEntityEvent.blockPermutation");
+    }
+
+    get entitySource() {
+        return unsupported("BlockComponentEntityEvent.entitySource");
+    }
+
+    get name() {
+        return unsupported("BlockComponentEntityEvent.name");
+    }
+}
+export class BlockComponentEntityFallOnEvent {
+    get entity() {
+        return unsupported("BlockComponentEntityFallOnEvent.entity");
+    }
+
+    get fallDistance() {
+        return unsupported("BlockComponentEntityFallOnEvent.fallDistance");
+    }
+}
+export class BlockComponentOnPlaceEvent {
+    get previousBlock() {
+        return unsupported("BlockComponentOnPlaceEvent.previousBlock");
+    }
+}
+export class BlockComponentPlayerBreakEvent {
+    get brokenBlockPermutation() {
+        return unsupported("BlockComponentPlayerBreakEvent.brokenBlockPermutation");
+    }
+
+    get player() {
+        return unsupported("BlockComponentPlayerBreakEvent.player");
+    }
+}
+export class BlockComponentPlayerInteractEvent {
+    get face() {
+        return unsupported("BlockComponentPlayerInteractEvent.face");
+    }
+
+    get faceLocation() {
+        return unsupported("BlockComponentPlayerInteractEvent.faceLocation");
+    }
+
+    get player() {
+        return unsupported("BlockComponentPlayerInteractEvent.player");
+    }
+}
+export class BlockComponentPlayerPlaceBeforeEvent {
+    get cancel() {
+        return unsupported("BlockComponentPlayerPlaceBeforeEvent.cancel");
+    }
+
+    get face() {
+        return unsupported("BlockComponentPlayerPlaceBeforeEvent.face");
+    }
+
+    get permutationToPlace() {
+        return unsupported("BlockComponentPlayerPlaceBeforeEvent.permutationToPlace");
+    }
+
+    get player() {
+        return unsupported("BlockComponentPlayerPlaceBeforeEvent.player");
+    }
+}
 export class BlockComponentRandomTickEvent {}
-export class BlockComponentRedstoneUpdateEvent {}
-export class BlockComponentRegistry {}
-export class BlockComponentStepOffEvent {}
-export class BlockComponentStepOnEvent {}
+export class BlockComponentRedstoneUpdateEvent {
+    get powerLevel() {
+        return unsupported("BlockComponentRedstoneUpdateEvent.powerLevel");
+    }
+
+    get previousPowerLevel() {
+        return unsupported("BlockComponentRedstoneUpdateEvent.previousPowerLevel");
+    }
+}
+export class BlockComponentRegistry {
+    registerCustomComponent(name, component) {
+        customBlockComponents.set(name, component ?? {});
+    }
+}
+export class BlockComponentStepOffEvent {
+    get entity() {
+        return unsupported("BlockComponentStepOffEvent.entity");
+    }
+}
+export class BlockComponentStepOnEvent {
+    get entity() {
+        return unsupported("BlockComponentStepOnEvent.entity");
+    }
+}
 export class BlockComponentTickEvent {}
-export class BlockCustomComponentInstance {}
-export class BlockEvent {}
-export class BlockExplodeAfterEvent {}
-export class BlockExplodeAfterEventSignal {}
-export class BlockFluidContainerComponent { static componentId = "minecraft:fluid_container"; }
-export class BlockInventoryComponent { static componentId = "minecraft:inventory"; }
-export class BlockMapColorComponent { static componentId = "minecraft:map_color"; }
-export class BlockMovableComponent { static componentId = "minecraft:movable"; }
-export class BlockPistonComponent { static componentId = "minecraft:piston"; }
-export class BlockPrecipitationInteractionsComponent { static componentId = "minecraft:precipitation_interactions"; }
-export class BlockRecordPlayerComponent { static componentId = "minecraft:record_player"; }
-export class BlockRedstoneProducerComponent { static componentId = "minecraft:redstone_producer"; }
-export class BlockSignComponent { static componentId = "minecraft:sign"; }
-export class BlockStateType {}
-export class BlockType {}
-export class ButtonPushAfterEvent {}
-export class ButtonPushAfterEventSignal {}
-export class Camera {}
-export class CatmullRomSpline {}
-export class ClientSystemInfo {}
-export class CommandResult {}
-export class Component {}
-export class CustomCommandOrigin {}
-export class CustomCommandRegistry {}
-export class CustomComponentParameters {}
-export class DamagedByEntityCondition {}
-export class DataDrivenEntityTriggerAfterEvent {}
-export class DataDrivenEntityTriggerAfterEventSignal {}
-export class DimensionType {}
-export class EffectAddAfterEvent {}
-export class EffectAddAfterEventSignal {}
-export class EffectAddBeforeEvent {}
-export class EffectAddBeforeEventSignal {}
+export class BlockCustomComponentInstance extends BlockComponent {
+    get customComponentParameters() {
+        return unsupported("BlockCustomComponentInstance.customComponentParameters");
+    }
+}
+export class BlockEvent {
+    get block() {
+        return unsupported("BlockEvent.block");
+    }
+
+    get dimension() {
+        return unsupported("BlockEvent.dimension");
+    }
+}
+export class BlockExplodeAfterEvent extends BlockEvent {
+    get explodedBlockPermutation() {
+        return unsupported("BlockExplodeAfterEvent.explodedBlockPermutation");
+    }
+
+    get source() {
+        return unsupported("BlockExplodeAfterEvent.source");
+    }
+}
+export class BlockFluidContainerComponent extends BlockComponent {
+    static componentId = "minecraft:fluid_container";
+
+    get fillLevel() {
+        return unsupported("BlockFluidContainerComponent.fillLevel");
+    }
+
+    get fluidColor() {
+        return unsupported("BlockFluidContainerComponent.fluidColor");
+    }
+
+    addDye() {
+        return unsupported("BlockFluidContainerComponent.addDye");
+    }
+
+    getFluidType() {
+        return unsupported("BlockFluidContainerComponent.getFluidType");
+    }
+
+    setFluidType() {
+        return unsupported("BlockFluidContainerComponent.setFluidType");
+    }
+
+    setPotion() {
+        return unsupported("BlockFluidContainerComponent.setPotion");
+    }
+}
+export class BlockPrecipitationInteractionsComponent extends BlockComponent {
+    static componentId = "minecraft:precipitation_interactions";
+
+    accumulatesSnow() {
+        return unsupported("BlockPrecipitationInteractionsComponent.accumulatesSnow");
+    }
+
+    isSnowLoggable() {
+        return unsupported("BlockPrecipitationInteractionsComponent.isSnowLoggable");
+    }
+
+    obstructsRain() {
+        return unsupported("BlockPrecipitationInteractionsComponent.obstructsRain");
+    }
+}
+export class BlockRecordPlayerComponent extends BlockComponent {
+    static componentId = "minecraft:record_player";
+
+    ejectRecord() {
+        return unsupported("BlockRecordPlayerComponent.ejectRecord");
+    }
+
+    getRecord() {
+        return unsupported("BlockRecordPlayerComponent.getRecord");
+    }
+
+    isPlaying() {
+        return unsupported("BlockRecordPlayerComponent.isPlaying");
+    }
+
+    pauseRecord() {
+        return unsupported("BlockRecordPlayerComponent.pauseRecord");
+    }
+
+    playRecord() {
+        return unsupported("BlockRecordPlayerComponent.playRecord");
+    }
+
+    setRecord() {
+        return unsupported("BlockRecordPlayerComponent.setRecord");
+    }
+}
+export class ButtonPushAfterEvent {
+    get block() {
+        return unsupported("ButtonPushAfterEvent.block");
+    }
+
+    get dimension() {
+        return unsupported("ButtonPushAfterEvent.dimension");
+    }
+
+    get source() {
+        return unsupported("ButtonPushAfterEvent.source");
+    }
+}
+export class CatmullRomSpline {
+    get controlPoints() {
+        return unsupported("CatmullRomSpline.controlPoints");
+    }
+}
+export class CommandResult {
+    get successCount() {
+        return unsupported("CommandResult.successCount");
+    }
+}
+export class Component {
+    get isValid() {
+        return unsupported("Component.isValid");
+    }
+
+    get typeId() {
+        return unsupported("Component.typeId");
+    }
+}
+export class CustomCommandOrigin {
+    get initiator() {
+        return unsupported("CustomCommandOrigin.initiator");
+    }
+
+    get sourceBlock() {
+        return unsupported("CustomCommandOrigin.sourceBlock");
+    }
+
+    get sourceEntity() {
+        return unsupported("CustomCommandOrigin.sourceEntity");
+    }
+
+    get sourceType() {
+        return unsupported("CustomCommandOrigin.sourceType");
+    }
+}
+/** What a pack registers its own commands on, handed to it by the startup event. */
+export class CustomCommandRegistry {
+    registerCommand(spec, callback) {
+        customCommands.push({ spec, callback });
+    }
+
+    registerEnum(name, values) {
+        customEnums.set(name, Array.from(values ?? []));
+    }
+}
+export class CustomComponentParameters {
+    get params() {
+        return unsupported("CustomComponentParameters.params");
+    }
+}
+export class DamagedByEntityCondition {
+    get entityType() {
+        return unsupported("DamagedByEntityCondition.entityType");
+    }
+}
+export class DataDrivenEntityTriggerAfterEvent {
+    get entity() {
+        return unsupported("DataDrivenEntityTriggerAfterEvent.entity");
+    }
+
+    get eventId() {
+        return unsupported("DataDrivenEntityTriggerAfterEvent.eventId");
+    }
+
+    getModifiers() {
+        return unsupported("DataDrivenEntityTriggerAfterEvent.getModifiers");
+    }
+}
+export class EffectAddAfterEvent {
+    get effect() {
+        return unsupported("EffectAddAfterEvent.effect");
+    }
+
+    get entity() {
+        return unsupported("EffectAddAfterEvent.entity");
+    }
+}
+export class EffectAddBeforeEvent {
+    get cancel() {
+        return unsupported("EffectAddBeforeEvent.cancel");
+    }
+
+    get duration() {
+        return unsupported("EffectAddBeforeEvent.duration");
+    }
+
+    get effectType() {
+        return unsupported("EffectAddBeforeEvent.effectType");
+    }
+
+    get entity() {
+        return unsupported("EffectAddBeforeEvent.entity");
+    }
+}
 export class EmptyLootItem {}
-export class EnchantInfo {}
-export class EnchantRandomEquipmentFunction {}
-export class EnchantRandomlyFunction {}
-export class EnchantWithLevelsFunction {}
-export class EntityAddRiderComponent {}
-export class EntityAgeableComponent {}
-export class EntityAttributeComponent {}
-export class EntityBaseMovementComponent {}
-export class EntityBreathableComponent {}
+export class EnchantInfo {
+    get enchantment() {
+        return unsupported("EnchantInfo.enchantment");
+    }
+
+    get range() {
+        return unsupported("EnchantInfo.range");
+    }
+}
+export class EnchantRandomEquipmentFunction {
+    get chance() {
+        return unsupported("EnchantRandomEquipmentFunction.chance");
+    }
+}
+export class EnchantRandomlyFunction {
+    get treasure() {
+        return unsupported("EnchantRandomlyFunction.treasure");
+    }
+}
+export class EnchantWithLevelsFunction {
+    get levels() {
+        return unsupported("EnchantWithLevelsFunction.levels");
+    }
+
+    get treasure() {
+        return unsupported("EnchantWithLevelsFunction.treasure");
+    }
+}
 export class EntityCanClimbComponent {}
 export class EntityCanFlyComponent {}
 export class EntityCanPowerJumpComponent {}
-export class EntityColor2Component {}
-export class EntityColorComponent {}
-export class EntityDefinitionFeedItem {}
-export class EntityDieAfterEvent {}
-export class EntityDieAfterEventSignal {}
+export class EntityColor2Component extends EntityComponent {
+    get value() {
+        return unsupported("EntityColor2Component.value");
+    }
+}
+export class EntityColorComponent extends EntityComponent {
+    get value() {
+        return unsupported("EntityColorComponent.value");
+    }
+}
+export class EntityDieAfterEvent {
+    get damageSource() {
+        return unsupported("EntityDieAfterEvent.damageSource");
+    }
+
+    get deadEntity() {
+        return unsupported("EntityDieAfterEvent.deadEntity");
+    }
+}
 export class EntityExhaustionComponent {}
 export class EntityFireImmuneComponent {}
 export class EntityFloatsInLiquidComponent {}
-export class EntityFlyingSpeedComponent {}
-export class EntityFrictionModifierComponent {}
-export class EntityHasMarkVariantCondition {}
-export class EntityHasVariantCondition {}
-export class EntityHealAfterEvent {}
-export class EntityHealAfterEventSignal {}
-export class EntityHealBeforeEvent {}
-export class EntityHealBeforeEventSignal {}
-export class EntityHealSource {}
-export class EntityHealableComponent {}
-export class EntityHealthChangedAfterEvent {}
-export class EntityHealthChangedAfterEventSignal {}
-export class EntityHitBlockAfterEvent {}
-export class EntityHitBlockAfterEventSignal {}
-export class EntityHitEntityAfterEvent {}
-export class EntityHitEntityAfterEventSignal {}
-export class EntityHungerComponent {}
-export class EntityHurtAfterEvent {}
-export class EntityHurtAfterEventSignal {}
-export class EntityHurtBeforeEvent {}
-export class EntityHurtBeforeEventSignal {}
+export class EntityFlyingSpeedComponent extends EntityComponent {
+    get value() {
+        return unsupported("EntityFlyingSpeedComponent.value");
+    }
+}
+export class EntityFrictionModifierComponent extends EntityComponent {
+    get value() {
+        return unsupported("EntityFrictionModifierComponent.value");
+    }
+}
+export class EntityHasMarkVariantCondition {
+    get value() {
+        return unsupported("EntityHasMarkVariantCondition.value");
+    }
+}
+export class EntityHasVariantCondition {
+    get value() {
+        return unsupported("EntityHasVariantCondition.value");
+    }
+}
+export class EntityHealAfterEvent {
+    get healedEntity() {
+        return unsupported("EntityHealAfterEvent.healedEntity");
+    }
+
+    get healing() {
+        return unsupported("EntityHealAfterEvent.healing");
+    }
+
+    get healSource() {
+        return unsupported("EntityHealAfterEvent.healSource");
+    }
+}
+export class EntityHealBeforeEvent {
+    get cancel() {
+        return unsupported("EntityHealBeforeEvent.cancel");
+    }
+
+    get healedEntity() {
+        return unsupported("EntityHealBeforeEvent.healedEntity");
+    }
+
+    get healing() {
+        return unsupported("EntityHealBeforeEvent.healing");
+    }
+
+    get healSource() {
+        return unsupported("EntityHealBeforeEvent.healSource");
+    }
+}
+export class EntityHealSource {
+    get cause() {
+        return unsupported("EntityHealSource.cause");
+    }
+}
+export class EntityHealthChangedAfterEvent {
+    get entity() {
+        return unsupported("EntityHealthChangedAfterEvent.entity");
+    }
+
+    get newValue() {
+        return unsupported("EntityHealthChangedAfterEvent.newValue");
+    }
+
+    get oldValue() {
+        return unsupported("EntityHealthChangedAfterEvent.oldValue");
+    }
+}
+export class EntityHitBlockAfterEvent {
+    get blockFace() {
+        return unsupported("EntityHitBlockAfterEvent.blockFace");
+    }
+
+    get damagingEntity() {
+        return unsupported("EntityHitBlockAfterEvent.damagingEntity");
+    }
+
+    get hitBlock() {
+        return unsupported("EntityHitBlockAfterEvent.hitBlock");
+    }
+
+    get hitBlockPermutation() {
+        return unsupported("EntityHitBlockAfterEvent.hitBlockPermutation");
+    }
+}
+export class EntityHitEntityAfterEvent {
+    get damagingEntity() {
+        return unsupported("EntityHitEntityAfterEvent.damagingEntity");
+    }
+
+    get hitEntity() {
+        return unsupported("EntityHitEntityAfterEvent.hitEntity");
+    }
+}
+export class EntityHurtAfterEvent {
+    get damage() {
+        return unsupported("EntityHurtAfterEvent.damage");
+    }
+
+    get damageSource() {
+        return unsupported("EntityHurtAfterEvent.damageSource");
+    }
+
+    get hurtEntity() {
+        return unsupported("EntityHurtAfterEvent.hurtEntity");
+    }
+}
+export class EntityHurtBeforeEvent {
+    get cancel() {
+        return unsupported("EntityHurtBeforeEvent.cancel");
+    }
+
+    get damage() {
+        return unsupported("EntityHurtBeforeEvent.damage");
+    }
+
+    get damageSource() {
+        return unsupported("EntityHurtBeforeEvent.damageSource");
+    }
+
+    get hurtEntity() {
+        return unsupported("EntityHurtBeforeEvent.hurtEntity");
+    }
+}
 export class EntityIsChargedComponent {}
 export class EntityIsChestedComponent {}
 export class EntityIsDyeableComponent {}
@@ -3321,236 +5427,1686 @@ export class EntityIsShearedComponent {}
 export class EntityIsStackableComponent {}
 export class EntityIsStunnedComponent {}
 export class EntityIsTamedComponent {}
-export class EntityItemDropAfterEvent {}
-export class EntityItemDropAfterEventSignal {}
-export class EntityItemPickupAfterEvent {}
-export class EntityItemPickupAfterEventSignal {}
-export class EntityItemPickupBeforeEvent {}
-export class EntityItemPickupBeforeEventSignal {}
-export class EntityKilledCondition {}
+export class EntityItemDropAfterEvent {
+    get entity() {
+        return unsupported("EntityItemDropAfterEvent.entity");
+    }
+
+    get items() {
+        return unsupported("EntityItemDropAfterEvent.items");
+    }
+}
+export class EntityItemPickupAfterEvent {
+    get entity() {
+        return unsupported("EntityItemPickupAfterEvent.entity");
+    }
+
+    get items() {
+        return unsupported("EntityItemPickupAfterEvent.items");
+    }
+}
+export class EntityItemPickupBeforeEvent {
+    get cancel() {
+        return unsupported("EntityItemPickupBeforeEvent.cancel");
+    }
+
+    get entity() {
+        return unsupported("EntityItemPickupBeforeEvent.entity");
+    }
+
+    get item() {
+        return unsupported("EntityItemPickupBeforeEvent.item");
+    }
+}
+export class EntityKilledCondition {
+    get entityType() {
+        return unsupported("EntityKilledCondition.entityType");
+    }
+}
 export class EntityLavaMovementComponent {}
-export class EntityLoadAfterEvent {}
-export class EntityLoadAfterEventSignal {}
-export class EntityMovementAmphibiousComponent {}
-export class EntityMovementBasicComponent {}
-export class EntityMovementComponent {}
-export class EntityMovementFlyComponent {}
-export class EntityMovementGenericComponent {}
-export class EntityMovementGlideComponent {}
-export class EntityMovementHoverComponent {}
-export class EntityMovementJumpComponent {}
-export class EntityMovementSkipComponent {}
-export class EntityMovementSwayComponent {}
-export class EntityNavigationClimbComponent {}
-export class EntityNavigationComponent {}
-export class EntityNavigationFloatComponent {}
-export class EntityNavigationFlyComponent {}
-export class EntityNavigationGenericComponent {}
-export class EntityNavigationHoverComponent {}
-export class EntityNavigationWalkComponent {}
-export class EntityOnFireComponent {}
-export class EntityPushThroughComponent {}
-export class EntityRemoveAfterEvent {}
-export class EntityRemoveAfterEventSignal {}
-export class EntityRemoveBeforeEvent {}
-export class EntityRemoveBeforeEventSignal {}
-export class EntitySaturationComponent {}
-export class EntityScaleComponent {}
-export class EntitySpawnAfterEvent {}
-export class EntitySpawnAfterEventSignal {}
-export class EntityStrengthComponent {}
-export class EntityTameMountComponent {}
-export class EntityTameableComponent {}
+export class EntityLoadAfterEvent {
+    get entity() {
+        return unsupported("EntityLoadAfterEvent.entity");
+    }
+}
+export class EntityPushThroughComponent extends EntityComponent {
+    get value() {
+        return unsupported("EntityPushThroughComponent.value");
+    }
+}
+export class EntityRemoveAfterEvent {
+    get removedEntityId() {
+        return unsupported("EntityRemoveAfterEvent.removedEntityId");
+    }
+
+    get typeId() {
+        return unsupported("EntityRemoveAfterEvent.typeId");
+    }
+}
+export class EntityRemoveBeforeEvent {
+    get removedEntity() {
+        return unsupported("EntityRemoveBeforeEvent.removedEntity");
+    }
+}
+export class EntityScaleComponent extends EntityComponent {
+    get value() {
+        return unsupported("EntityScaleComponent.value");
+    }
+}
+export class EntitySpawnAfterEvent {
+    get cause() {
+        return unsupported("EntitySpawnAfterEvent.cause");
+    }
+
+    get entity() {
+        return unsupported("EntitySpawnAfterEvent.entity");
+    }
+}
 export class EntityUnderwaterMovementComponent {}
 export class EntityWantsJockeyComponent {}
-export class ExplorationMapFunction {}
-export class ExplosionAfterEvent {}
-export class ExplosionAfterEventSignal {}
-export class ExplosionBeforeEvent {}
-export class ExplosionBeforeEventSignal {}
+export class ExplorationMapFunction {
+    get destination() {
+        return unsupported("ExplorationMapFunction.destination");
+    }
+}
+export class ExplosionAfterEvent {
+    get dimension() {
+        return unsupported("ExplosionAfterEvent.dimension");
+    }
+
+    get source() {
+        return unsupported("ExplosionAfterEvent.source");
+    }
+
+    getImpactedBlocks() {
+        return unsupported("ExplosionAfterEvent.getImpactedBlocks");
+    }
+}
+export class ExplosionBeforeEvent extends ExplosionAfterEvent {
+    get cancel() {
+        return unsupported("ExplosionBeforeEvent.cancel");
+    }
+
+    setImpactedBlocks() {
+        return unsupported("ExplosionBeforeEvent.setImpactedBlocks");
+    }
+}
 export class ExplosionDecayFunction {}
-export class FeedItem {}
-export class FeedItemEffect {}
-export class FillContainerFunction {}
+export class FillContainerFunction {
+    get lootTable() {
+        return unsupported("FillContainerFunction.lootTable");
+    }
+}
 export class FluidContainer {}
-export class GameRuleChangeAfterEvent {}
-export class GameRuleChangeAfterEventSignal {}
-export class GameRules {}
-export class InputInfo {}
+export class GameRuleChangeAfterEvent {
+    get rule() {
+        return unsupported("GameRuleChangeAfterEvent.rule");
+    }
+
+    get value() {
+        return unsupported("GameRuleChangeAfterEvent.value");
+    }
+}
 export class IsBabyCondition {}
-export class ItemBookComponent {}
-export class ItemCompleteUseAfterEvent {}
-export class ItemCompleteUseAfterEventSignal {}
-export class ItemCompleteUseEvent {}
-export class ItemComponentBeforeDurabilityDamageEvent {}
+export class ItemCompleteUseAfterEvent {
+    get itemStack() {
+        return unsupported("ItemCompleteUseAfterEvent.itemStack");
+    }
+
+    get source() {
+        return unsupported("ItemCompleteUseAfterEvent.source");
+    }
+
+    get useDuration() {
+        return unsupported("ItemCompleteUseAfterEvent.useDuration");
+    }
+}
+export class ItemCompleteUseEvent {
+    get itemStack() {
+        return unsupported("ItemCompleteUseEvent.itemStack");
+    }
+
+    get source() {
+        return unsupported("ItemCompleteUseEvent.source");
+    }
+}
+export class ItemComponentBeforeDurabilityDamageEvent {
+    get attackingEntity() {
+        return unsupported("ItemComponentBeforeDurabilityDamageEvent.attackingEntity");
+    }
+
+    get durabilityDamage() {
+        return unsupported("ItemComponentBeforeDurabilityDamageEvent.durabilityDamage");
+    }
+
+    get hitEntity() {
+        return unsupported("ItemComponentBeforeDurabilityDamageEvent.hitEntity");
+    }
+
+    get itemStack() {
+        return unsupported("ItemComponentBeforeDurabilityDamageEvent.itemStack");
+    }
+}
 export class ItemComponentCompleteUseEvent {}
-export class ItemComponentConsumeEvent {}
-export class ItemComponentHitEntityEvent {}
-export class ItemComponentMineBlockEvent {}
-export class ItemComponentRegistry {}
-export class ItemComponentUseEvent {}
-export class ItemComponentUseOnEvent {}
-export class ItemCompostableComponent {}
-export class ItemCustomComponentInstance {}
-export class ItemDyeableComponent {}
-export class ItemInventoryComponent {}
-export class ItemPotionComponent {}
-export class ItemReleaseUseAfterEvent {}
-export class ItemReleaseUseAfterEventSignal {}
-export class ItemStartUseAfterEvent {}
-export class ItemStartUseAfterEventSignal {}
-export class ItemStartUseOnAfterEvent {}
-export class ItemStartUseOnAfterEventSignal {}
-export class ItemStopUseAfterEvent {}
-export class ItemStopUseAfterEventSignal {}
-export class ItemStopUseOnAfterEvent {}
-export class ItemStopUseOnAfterEventSignal {}
-export class ItemType {}
-export class ItemUseAfterEvent {}
-export class ItemUseAfterEventSignal {}
-export class ItemUseBeforeEvent {}
-export class ItemUseBeforeEventSignal {}
-export class ItemUseOnEvent {}
-export class KilledByEntityCondition {}
+export class ItemComponentConsumeEvent {
+    get itemStack() {
+        return unsupported("ItemComponentConsumeEvent.itemStack");
+    }
+
+    get source() {
+        return unsupported("ItemComponentConsumeEvent.source");
+    }
+}
+export class ItemComponentHitEntityEvent {
+    get attackingEntity() {
+        return unsupported("ItemComponentHitEntityEvent.attackingEntity");
+    }
+
+    get hadEffect() {
+        return unsupported("ItemComponentHitEntityEvent.hadEffect");
+    }
+
+    get hitEntity() {
+        return unsupported("ItemComponentHitEntityEvent.hitEntity");
+    }
+
+    get itemStack() {
+        return unsupported("ItemComponentHitEntityEvent.itemStack");
+    }
+}
+export class ItemComponentMineBlockEvent {
+    get block() {
+        return unsupported("ItemComponentMineBlockEvent.block");
+    }
+
+    get itemStack() {
+        return unsupported("ItemComponentMineBlockEvent.itemStack");
+    }
+
+    get minedBlockPermutation() {
+        return unsupported("ItemComponentMineBlockEvent.minedBlockPermutation");
+    }
+
+    get source() {
+        return unsupported("ItemComponentMineBlockEvent.source");
+    }
+}
+export class ItemComponentRegistry {
+    registerCustomComponent(name, component) {
+        customItemComponents.set(name, component ?? {});
+    }
+}
+export class ItemComponentUseEvent {
+    get itemStack() {
+        return unsupported("ItemComponentUseEvent.itemStack");
+    }
+
+    get source() {
+        return unsupported("ItemComponentUseEvent.source");
+    }
+}
+export class ItemComponentUseOnEvent {
+    get source() {
+        return unsupported("ItemComponentUseOnEvent.source");
+    }
+
+    get usedOnBlockPermutation() {
+        return unsupported("ItemComponentUseOnEvent.usedOnBlockPermutation");
+    }
+}
+export class ItemCustomComponentInstance extends ItemComponent {
+    get customComponentParameters() {
+        return unsupported("ItemCustomComponentInstance.customComponentParameters");
+    }
+}
+export class ItemInventoryComponent extends ItemComponent {
+    get container() {
+        return unsupported("ItemInventoryComponent.container");
+    }
+}
+export class ItemReleaseUseAfterEvent {
+    get itemStack() {
+        return unsupported("ItemReleaseUseAfterEvent.itemStack");
+    }
+
+    get source() {
+        return unsupported("ItemReleaseUseAfterEvent.source");
+    }
+
+    get useDuration() {
+        return unsupported("ItemReleaseUseAfterEvent.useDuration");
+    }
+}
+export class ItemStartUseAfterEvent {
+    get itemStack() {
+        return unsupported("ItemStartUseAfterEvent.itemStack");
+    }
+
+    get source() {
+        return unsupported("ItemStartUseAfterEvent.source");
+    }
+
+    get useDuration() {
+        return unsupported("ItemStartUseAfterEvent.useDuration");
+    }
+}
+export class ItemStartUseOnAfterEvent {
+    get block() {
+        return unsupported("ItemStartUseOnAfterEvent.block");
+    }
+
+    get blockFace() {
+        return unsupported("ItemStartUseOnAfterEvent.blockFace");
+    }
+
+    get itemStack() {
+        return unsupported("ItemStartUseOnAfterEvent.itemStack");
+    }
+
+    get source() {
+        return unsupported("ItemStartUseOnAfterEvent.source");
+    }
+}
+export class ItemStopUseAfterEvent {
+    get itemStack() {
+        return unsupported("ItemStopUseAfterEvent.itemStack");
+    }
+
+    get source() {
+        return unsupported("ItemStopUseAfterEvent.source");
+    }
+
+    get useDuration() {
+        return unsupported("ItemStopUseAfterEvent.useDuration");
+    }
+}
+export class ItemStopUseOnAfterEvent {
+    get block() {
+        return unsupported("ItemStopUseOnAfterEvent.block");
+    }
+
+    get itemStack() {
+        return unsupported("ItemStopUseOnAfterEvent.itemStack");
+    }
+
+    get source() {
+        return unsupported("ItemStopUseOnAfterEvent.source");
+    }
+}
+export class ItemUseAfterEvent {
+    get itemStack() {
+        return unsupported("ItemUseAfterEvent.itemStack");
+    }
+
+    get source() {
+        return unsupported("ItemUseAfterEvent.source");
+    }
+}
+export class ItemUseBeforeEvent {
+    get cancel() {
+        return unsupported("ItemUseBeforeEvent.cancel");
+    }
+
+    get itemStack() {
+        return unsupported("ItemUseBeforeEvent.itemStack");
+    }
+
+    get source() {
+        return unsupported("ItemUseBeforeEvent.source");
+    }
+}
+export class ItemUseOnEvent {
+    get block() {
+        return unsupported("ItemUseOnEvent.block");
+    }
+
+    get blockFace() {
+        return unsupported("ItemUseOnEvent.blockFace");
+    }
+
+    get faceLocation() {
+        return unsupported("ItemUseOnEvent.faceLocation");
+    }
+
+    get itemStack() {
+        return unsupported("ItemUseOnEvent.itemStack");
+    }
+}
+export class KilledByEntityCondition {
+    get entityType() {
+        return unsupported("KilledByEntityCondition.entityType");
+    }
+}
 export class KilledByPlayerCondition {}
 export class KilledByPlayerOrPetsCondition {}
-export class LeverActionAfterEvent {}
-export class LeverActionAfterEventSignal {}
-export class LinearSpline {}
-export class LootItem {}
+export class LeverActionAfterEvent extends BlockEvent {
+    get isPowered() {
+        return unsupported("LeverActionAfterEvent.isPowered");
+    }
+
+    get player() {
+        return unsupported("LeverActionAfterEvent.player");
+    }
+}
+export class LinearSpline {
+    get controlPoints() {
+        return unsupported("LinearSpline.controlPoints");
+    }
+}
+export class LootItem {
+    get conditions() {
+        return unsupported("LootItem.conditions");
+    }
+
+    get functions() {
+        return unsupported("LootItem.functions");
+    }
+
+    get name() {
+        return unsupported("LootItem.name");
+    }
+}
 export class LootItemCondition {}
-export class LootItemFunction {}
-export class LootPool {}
-export class LootPoolEntry {}
-export class LootPoolTiers {}
-export class LootTable {}
-export class LootTableEntry {}
-export class LootTableManager {}
-export class LootTableReference {}
-export class LootingEnchantFunction {}
-export class MatchToolCondition {}
-export class MolangVariableMap {}
-export class PassengerOfEntityCondition {}
-export class PistonActivateAfterEvent {}
-export class PistonActivateAfterEventSignal {}
-export class PlayerBreakBlockAfterEvent {}
-export class PlayerBreakBlockAfterEventSignal {}
-export class PlayerBreakBlockBeforeEvent {}
-export class PlayerBreakBlockBeforeEventSignal {}
-export class PlayerButtonInputAfterEvent {}
-export class PlayerButtonInputAfterEventSignal {}
-export class PlayerCursorInventoryComponent {}
-export class PlayerDimensionChangeAfterEvent {}
-export class PlayerDimensionChangeAfterEventSignal {}
-export class PlayerEmoteAfterEvent {}
-export class PlayerEmoteAfterEventSignal {}
-export class PlayerGameModeChangeAfterEvent {}
-export class PlayerGameModeChangeAfterEventSignal {}
-export class PlayerGameModeChangeBeforeEvent {}
-export class PlayerGameModeChangeBeforeEventSignal {}
-export class PlayerHotbarSelectedSlotChangeAfterEvent {}
-export class PlayerHotbarSelectedSlotChangeAfterEventSignal {}
-export class PlayerInputModeChangeAfterEvent {}
-export class PlayerInputModeChangeAfterEventSignal {}
-export class PlayerInputPermissionCategoryChangeAfterEvent {}
-export class PlayerInputPermissionCategoryChangeAfterEventSignal {}
-export class PlayerInputPermissions {}
-export class PlayerInteractWithBlockAfterEvent {}
-export class PlayerInteractWithBlockAfterEventSignal {}
-export class PlayerInteractWithBlockBeforeEvent {}
-export class PlayerInteractWithBlockBeforeEventSignal {}
-export class PlayerInteractWithEntityAfterEvent {}
-export class PlayerInteractWithEntityAfterEventSignal {}
-export class PlayerInteractWithEntityBeforeEvent {}
-export class PlayerInteractWithEntityBeforeEventSignal {}
-export class PlayerInventoryItemChangeAfterEvent {}
-export class PlayerInventoryItemChangeAfterEventSignal {}
-export class PlayerJoinAfterEvent {}
-export class PlayerJoinAfterEventSignal {}
-export class PlayerLeaveAfterEvent {}
-export class PlayerLeaveAfterEventSignal {}
-export class PlayerLeaveBeforeEvent {}
-export class PlayerLeaveBeforeEventSignal {}
-export class PlayerPlaceBlockAfterEvent {}
-export class PlayerPlaceBlockAfterEventSignal {}
-export class PlayerSpawnAfterEvent {}
-export class PlayerSpawnAfterEventSignal {}
-export class PlayerSwingStartAfterEvent {}
-export class PlayerSwingStartAfterEventSignal {}
-export class PotionDeliveryType {}
-export class PressurePlatePopAfterEvent {}
-export class PressurePlatePopAfterEventSignal {}
-export class PressurePlatePushAfterEvent {}
-export class PressurePlatePushAfterEventSignal {}
-export class ProjectileHitBlockAfterEvent {}
-export class ProjectileHitBlockAfterEventSignal {}
-export class ProjectileHitEntityAfterEvent {}
-export class ProjectileHitEntityAfterEventSignal {}
-export class RandomAuxValueFunction {}
-export class RandomBlockStateFunction {}
-export class RandomChanceCondition {}
-export class RandomChanceWithLootingCondition {}
-export class RandomDifficultyChanceCondition {}
+export class LootItemFunction {
+    get conditions() {
+        return unsupported("LootItemFunction.conditions");
+    }
+}
+export class LootPool {
+    get bonusRolls() {
+        return unsupported("LootPool.bonusRolls");
+    }
+
+    get conditions() {
+        return unsupported("LootPool.conditions");
+    }
+
+    get entries() {
+        return unsupported("LootPool.entries");
+    }
+
+    get rolls() {
+        return unsupported("LootPool.rolls");
+    }
+
+    get tiers() {
+        return unsupported("LootPool.tiers");
+    }
+}
+export class LootPoolEntry {
+    get quality() {
+        return unsupported("LootPoolEntry.quality");
+    }
+
+    get subTable() {
+        return unsupported("LootPoolEntry.subTable");
+    }
+
+    get weight() {
+        return unsupported("LootPoolEntry.weight");
+    }
+}
+export class LootPoolTiers {
+    get bonusChance() {
+        return unsupported("LootPoolTiers.bonusChance");
+    }
+
+    get bonusRolls() {
+        return unsupported("LootPoolTiers.bonusRolls");
+    }
+
+    get initialRange() {
+        return unsupported("LootPoolTiers.initialRange");
+    }
+}
+export class LootTable {
+    get path() {
+        return unsupported("LootTable.path");
+    }
+
+    get pools() {
+        return unsupported("LootTable.pools");
+    }
+}
+export class LootTableEntry extends LootPoolEntry {
+    get lootTable() {
+        return unsupported("LootTableEntry.lootTable");
+    }
+}
+export class LootTableReference extends LootPoolEntry {
+    get path() {
+        return unsupported("LootTableReference.path");
+    }
+}
+export class LootingEnchantFunction extends LootItemFunction {
+    get count() {
+        return unsupported("LootingEnchantFunction.count");
+    }
+}
+export class MatchToolCondition extends LootItemCondition {
+    get count() {
+        return unsupported("MatchToolCondition.count");
+    }
+
+    get durability() {
+        return unsupported("MatchToolCondition.durability");
+    }
+
+    get enchantments() {
+        return unsupported("MatchToolCondition.enchantments");
+    }
+
+    get itemName() {
+        return unsupported("MatchToolCondition.itemName");
+    }
+
+    get itemTagsAll() {
+        return unsupported("MatchToolCondition.itemTagsAll");
+    }
+
+    get itemTagsAny() {
+        return unsupported("MatchToolCondition.itemTagsAny");
+    }
+
+    get itemTagsNone() {
+        return unsupported("MatchToolCondition.itemTagsNone");
+    }
+}
+export class PassengerOfEntityCondition extends LootItemCondition {
+    get entityType() {
+        return unsupported("PassengerOfEntityCondition.entityType");
+    }
+}
+export class PistonActivateAfterEvent extends BlockEvent {
+    get isExpanding() {
+        return unsupported("PistonActivateAfterEvent.isExpanding");
+    }
+
+    get piston() {
+        return unsupported("PistonActivateAfterEvent.piston");
+    }
+}
+export class PlayerBreakBlockAfterEvent {
+    get block() {
+        return unsupported("PlayerBreakBlockAfterEvent.block");
+    }
+
+    get brokenBlockPermutation() {
+        return unsupported("PlayerBreakBlockAfterEvent.brokenBlockPermutation");
+    }
+
+    get dimension() {
+        return unsupported("PlayerBreakBlockAfterEvent.dimension");
+    }
+
+    get itemStackAfterBreak() {
+        return unsupported("PlayerBreakBlockAfterEvent.itemStackAfterBreak");
+    }
+
+    get itemStackBeforeBreak() {
+        return unsupported("PlayerBreakBlockAfterEvent.itemStackBeforeBreak");
+    }
+
+    get player() {
+        return unsupported("PlayerBreakBlockAfterEvent.player");
+    }
+}
+export class PlayerBreakBlockBeforeEvent {
+    get block() {
+        return unsupported("PlayerBreakBlockBeforeEvent.block");
+    }
+
+    get cancel() {
+        return unsupported("PlayerBreakBlockBeforeEvent.cancel");
+    }
+
+    get dimension() {
+        return unsupported("PlayerBreakBlockBeforeEvent.dimension");
+    }
+
+    get itemStack() {
+        return unsupported("PlayerBreakBlockBeforeEvent.itemStack");
+    }
+
+    get player() {
+        return unsupported("PlayerBreakBlockBeforeEvent.player");
+    }
+}
+export class PlayerButtonInputAfterEvent {
+    get button() {
+        return unsupported("PlayerButtonInputAfterEvent.button");
+    }
+
+    get newButtonState() {
+        return unsupported("PlayerButtonInputAfterEvent.newButtonState");
+    }
+
+    get player() {
+        return unsupported("PlayerButtonInputAfterEvent.player");
+    }
+}
+export class PlayerCursorInventoryComponent extends EntityComponent {
+    get item() {
+        return unsupported("PlayerCursorInventoryComponent.item");
+    }
+
+    clear() {
+        return unsupported("PlayerCursorInventoryComponent.clear");
+    }
+}
+export class PlayerDimensionChangeAfterEvent {
+    get fromDimension() {
+        return unsupported("PlayerDimensionChangeAfterEvent.fromDimension");
+    }
+
+    get fromLocation() {
+        return unsupported("PlayerDimensionChangeAfterEvent.fromLocation");
+    }
+
+    get player() {
+        return unsupported("PlayerDimensionChangeAfterEvent.player");
+    }
+
+    get toDimension() {
+        return unsupported("PlayerDimensionChangeAfterEvent.toDimension");
+    }
+
+    get toLocation() {
+        return unsupported("PlayerDimensionChangeAfterEvent.toLocation");
+    }
+}
+export class PlayerEmoteAfterEvent {
+    get personaPieceId() {
+        return unsupported("PlayerEmoteAfterEvent.personaPieceId");
+    }
+
+    get player() {
+        return unsupported("PlayerEmoteAfterEvent.player");
+    }
+}
+export class PlayerEmoteAfterEventSignal extends EventSignal {}
+export class PlayerGameModeChangeAfterEvent {
+    get fromGameMode() {
+        return unsupported("PlayerGameModeChangeAfterEvent.fromGameMode");
+    }
+
+    get player() {
+        return unsupported("PlayerGameModeChangeAfterEvent.player");
+    }
+
+    get toGameMode() {
+        return unsupported("PlayerGameModeChangeAfterEvent.toGameMode");
+    }
+}
+export class PlayerGameModeChangeBeforeEvent {
+    get cancel() {
+        return unsupported("PlayerGameModeChangeBeforeEvent.cancel");
+    }
+
+    get fromGameMode() {
+        return unsupported("PlayerGameModeChangeBeforeEvent.fromGameMode");
+    }
+
+    get player() {
+        return unsupported("PlayerGameModeChangeBeforeEvent.player");
+    }
+
+    get toGameMode() {
+        return unsupported("PlayerGameModeChangeBeforeEvent.toGameMode");
+    }
+}
+export class PlayerHotbarSelectedSlotChangeAfterEvent {
+    get itemStack() {
+        return unsupported("PlayerHotbarSelectedSlotChangeAfterEvent.itemStack");
+    }
+
+    get newSlotSelected() {
+        return unsupported("PlayerHotbarSelectedSlotChangeAfterEvent.newSlotSelected");
+    }
+
+    get player() {
+        return unsupported("PlayerHotbarSelectedSlotChangeAfterEvent.player");
+    }
+
+    get previousSlotSelected() {
+        return unsupported("PlayerHotbarSelectedSlotChangeAfterEvent.previousSlotSelected");
+    }
+}
+export class PlayerInputModeChangeAfterEvent {
+    get newInputModeUsed() {
+        return unsupported("PlayerInputModeChangeAfterEvent.newInputModeUsed");
+    }
+
+    get player() {
+        return unsupported("PlayerInputModeChangeAfterEvent.player");
+    }
+
+    get previousInputModeUsed() {
+        return unsupported("PlayerInputModeChangeAfterEvent.previousInputModeUsed");
+    }
+}
+export class PlayerInputModeChangeAfterEventSignal extends EventSignal {}
+export class PlayerInputPermissionCategoryChangeAfterEvent {
+    get category() {
+        return unsupported("PlayerInputPermissionCategoryChangeAfterEvent.category");
+    }
+
+    get enabled() {
+        return unsupported("PlayerInputPermissionCategoryChangeAfterEvent.enabled");
+    }
+
+    get player() {
+        return unsupported("PlayerInputPermissionCategoryChangeAfterEvent.player");
+    }
+}
+export class PlayerInputPermissionCategoryChangeAfterEventSignal extends EventSignal {}
+export class PlayerInteractWithBlockAfterEvent {
+    get beforeItemStack() {
+        return unsupported("PlayerInteractWithBlockAfterEvent.beforeItemStack");
+    }
+
+    get block() {
+        return unsupported("PlayerInteractWithBlockAfterEvent.block");
+    }
+
+    get blockFace() {
+        return unsupported("PlayerInteractWithBlockAfterEvent.blockFace");
+    }
+
+    get faceLocation() {
+        return unsupported("PlayerInteractWithBlockAfterEvent.faceLocation");
+    }
+
+    get isFirstEvent() {
+        return unsupported("PlayerInteractWithBlockAfterEvent.isFirstEvent");
+    }
+
+    get itemStack() {
+        return unsupported("PlayerInteractWithBlockAfterEvent.itemStack");
+    }
+
+    get player() {
+        return unsupported("PlayerInteractWithBlockAfterEvent.player");
+    }
+}
+export class PlayerInteractWithBlockBeforeEvent {
+    get block() {
+        return unsupported("PlayerInteractWithBlockBeforeEvent.block");
+    }
+
+    get blockFace() {
+        return unsupported("PlayerInteractWithBlockBeforeEvent.blockFace");
+    }
+
+    get cancel() {
+        return unsupported("PlayerInteractWithBlockBeforeEvent.cancel");
+    }
+
+    get faceLocation() {
+        return unsupported("PlayerInteractWithBlockBeforeEvent.faceLocation");
+    }
+
+    get isFirstEvent() {
+        return unsupported("PlayerInteractWithBlockBeforeEvent.isFirstEvent");
+    }
+
+    get itemStack() {
+        return unsupported("PlayerInteractWithBlockBeforeEvent.itemStack");
+    }
+
+    get player() {
+        return unsupported("PlayerInteractWithBlockBeforeEvent.player");
+    }
+}
+export class PlayerInteractWithEntityAfterEvent {
+    get beforeItemStack() {
+        return unsupported("PlayerInteractWithEntityAfterEvent.beforeItemStack");
+    }
+
+    get itemStack() {
+        return unsupported("PlayerInteractWithEntityAfterEvent.itemStack");
+    }
+
+    get player() {
+        return unsupported("PlayerInteractWithEntityAfterEvent.player");
+    }
+
+    get target() {
+        return unsupported("PlayerInteractWithEntityAfterEvent.target");
+    }
+}
+export class PlayerInteractWithEntityBeforeEvent {
+    get cancel() {
+        return unsupported("PlayerInteractWithEntityBeforeEvent.cancel");
+    }
+
+    get itemStack() {
+        return unsupported("PlayerInteractWithEntityBeforeEvent.itemStack");
+    }
+
+    get player() {
+        return unsupported("PlayerInteractWithEntityBeforeEvent.player");
+    }
+
+    get target() {
+        return unsupported("PlayerInteractWithEntityBeforeEvent.target");
+    }
+}
+export class PlayerInventoryItemChangeAfterEvent {
+    get beforeItemStack() {
+        return unsupported("PlayerInventoryItemChangeAfterEvent.beforeItemStack");
+    }
+
+    get inventoryType() {
+        return unsupported("PlayerInventoryItemChangeAfterEvent.inventoryType");
+    }
+
+    get itemStack() {
+        return unsupported("PlayerInventoryItemChangeAfterEvent.itemStack");
+    }
+
+    get player() {
+        return unsupported("PlayerInventoryItemChangeAfterEvent.player");
+    }
+
+    get slot() {
+        return unsupported("PlayerInventoryItemChangeAfterEvent.slot");
+    }
+}
+export class PlayerJoinAfterEvent {
+    get playerId() {
+        return unsupported("PlayerJoinAfterEvent.playerId");
+    }
+
+    get playerName() {
+        return unsupported("PlayerJoinAfterEvent.playerName");
+    }
+}
+export class PlayerLeaveAfterEvent {
+    get playerId() {
+        return unsupported("PlayerLeaveAfterEvent.playerId");
+    }
+
+    get playerName() {
+        return unsupported("PlayerLeaveAfterEvent.playerName");
+    }
+}
+export class PlayerLeaveBeforeEvent {
+    get player() {
+        return unsupported("PlayerLeaveBeforeEvent.player");
+    }
+}
+export class PlayerPlaceBlockAfterEvent {
+    get block() {
+        return unsupported("PlayerPlaceBlockAfterEvent.block");
+    }
+
+    get dimension() {
+        return unsupported("PlayerPlaceBlockAfterEvent.dimension");
+    }
+
+    get player() {
+        return unsupported("PlayerPlaceBlockAfterEvent.player");
+    }
+}
+export class PlayerSpawnAfterEvent {
+    get initialSpawn() {
+        return unsupported("PlayerSpawnAfterEvent.initialSpawn");
+    }
+
+    get player() {
+        return unsupported("PlayerSpawnAfterEvent.player");
+    }
+}
+export class PlayerSwingStartAfterEvent {
+    get heldItemStack() {
+        return unsupported("PlayerSwingStartAfterEvent.heldItemStack");
+    }
+
+    get player() {
+        return unsupported("PlayerSwingStartAfterEvent.player");
+    }
+
+    get swingSource() {
+        return unsupported("PlayerSwingStartAfterEvent.swingSource");
+    }
+}
+export class PressurePlatePopAfterEvent extends BlockEvent {
+    get previousRedstonePower() {
+        return unsupported("PressurePlatePopAfterEvent.previousRedstonePower");
+    }
+
+    get redstonePower() {
+        return unsupported("PressurePlatePopAfterEvent.redstonePower");
+    }
+}
+export class PressurePlatePushAfterEvent extends BlockEvent {
+    get previousRedstonePower() {
+        return unsupported("PressurePlatePushAfterEvent.previousRedstonePower");
+    }
+
+    get redstonePower() {
+        return unsupported("PressurePlatePushAfterEvent.redstonePower");
+    }
+
+    get source() {
+        return unsupported("PressurePlatePushAfterEvent.source");
+    }
+}
+export class ProjectileHitBlockAfterEvent {
+    get dimension() {
+        return unsupported("ProjectileHitBlockAfterEvent.dimension");
+    }
+
+    get hitVector() {
+        return unsupported("ProjectileHitBlockAfterEvent.hitVector");
+    }
+
+    get location() {
+        return unsupported("ProjectileHitBlockAfterEvent.location");
+    }
+
+    get projectile() {
+        return unsupported("ProjectileHitBlockAfterEvent.projectile");
+    }
+
+    get source() {
+        return unsupported("ProjectileHitBlockAfterEvent.source");
+    }
+
+    getBlockHit() {
+        return unsupported("ProjectileHitBlockAfterEvent.getBlockHit");
+    }
+}
+export class ProjectileHitEntityAfterEvent {
+    get dimension() {
+        return unsupported("ProjectileHitEntityAfterEvent.dimension");
+    }
+
+    get hitVector() {
+        return unsupported("ProjectileHitEntityAfterEvent.hitVector");
+    }
+
+    get location() {
+        return unsupported("ProjectileHitEntityAfterEvent.location");
+    }
+
+    get projectile() {
+        return unsupported("ProjectileHitEntityAfterEvent.projectile");
+    }
+
+    get source() {
+        return unsupported("ProjectileHitEntityAfterEvent.source");
+    }
+
+    getEntityHit() {
+        return unsupported("ProjectileHitEntityAfterEvent.getEntityHit");
+    }
+}
+export class RandomAuxValueFunction extends LootItemFunction {
+    get values() {
+        return unsupported("RandomAuxValueFunction.values");
+    }
+}
+export class RandomBlockStateFunction extends LootItemFunction {
+    get blockState() {
+        return unsupported("RandomBlockStateFunction.blockState");
+    }
+
+    get values() {
+        return unsupported("RandomBlockStateFunction.values");
+    }
+}
+export class RandomChanceCondition extends LootItemCondition {
+    get chance() {
+        return unsupported("RandomChanceCondition.chance");
+    }
+}
+export class RandomChanceWithLootingCondition extends LootItemCondition {
+    get chance() {
+        return unsupported("RandomChanceWithLootingCondition.chance");
+    }
+
+    get lootingMultiplier() {
+        return unsupported("RandomChanceWithLootingCondition.lootingMultiplier");
+    }
+}
+export class RandomDifficultyChanceCondition extends LootItemCondition {
+    get chances() {
+        return unsupported("RandomDifficultyChanceCondition.chances");
+    }
+}
 export class RandomDyeFunction {}
-export class RandomRegionalDifficultyChanceCondition {}
-export class Scoreboard {}
-export class ScoreboardScoreInfo {}
-export class ScreenDisplay {}
-export class ScriptEventCommandMessageAfterEvent {}
-export class ScriptEventCommandMessageAfterEventSignal {}
-export class Seat {}
-export class SetArmorTrimFunction {}
+export class RandomRegionalDifficultyChanceCondition extends LootItemCondition {
+    get maxChance() {
+        return unsupported("RandomRegionalDifficultyChanceCondition.maxChance");
+    }
+}
+export class ScriptEventCommandMessageAfterEvent {
+    get id() {
+        return unsupported("ScriptEventCommandMessageAfterEvent.id");
+    }
+
+    get initiator() {
+        return unsupported("ScriptEventCommandMessageAfterEvent.initiator");
+    }
+
+    get message() {
+        return unsupported("ScriptEventCommandMessageAfterEvent.message");
+    }
+
+    get sourceBlock() {
+        return unsupported("ScriptEventCommandMessageAfterEvent.sourceBlock");
+    }
+
+    get sourceEntity() {
+        return unsupported("ScriptEventCommandMessageAfterEvent.sourceEntity");
+    }
+
+    get sourceType() {
+        return unsupported("ScriptEventCommandMessageAfterEvent.sourceType");
+    }
+}
+export class SetArmorTrimFunction extends LootItemFunction {
+    get material() {
+        return unsupported("SetArmorTrimFunction.material");
+    }
+
+    get pattern() {
+        return unsupported("SetArmorTrimFunction.pattern");
+    }
+}
 export class SetBannerDetailsFunction {}
-export class SetBookContentsFunction {}
+export class SetBookContentsFunction extends LootItemFunction {
+    get author() {
+        return unsupported("SetBookContentsFunction.author");
+    }
+
+    get pages() {
+        return unsupported("SetBookContentsFunction.pages");
+    }
+
+    get title() {
+        return unsupported("SetBookContentsFunction.title");
+    }
+}
 export class SetDataFromColorIndexFunction {}
-export class SetItemCountFunction {}
-export class SetItemDamageFunction {}
-export class SetItemDataFunction {}
-export class SetItemLoreFunction {}
-export class SetItemNameFunction {}
-export class SetOminousBottleFunction {}
-export class SetPotionFunction {}
-export class SetSpawnEggFunction {}
-export class SetStewEffectFunction {}
-export class ShutdownBeforeEventSignal {}
+export class SetItemCountFunction extends LootItemFunction {
+    get count() {
+        return unsupported("SetItemCountFunction.count");
+    }
+}
+export class SetItemDamageFunction extends LootItemFunction {
+    get damage() {
+        return unsupported("SetItemDamageFunction.damage");
+    }
+}
+export class SetItemDataFunction extends LootItemFunction {
+    get data() {
+        return unsupported("SetItemDataFunction.data");
+    }
+}
+export class SetItemLoreFunction extends LootItemFunction {
+    get lore() {
+        return unsupported("SetItemLoreFunction.lore");
+    }
+}
+export class SetItemNameFunction extends LootItemFunction {
+    get name() {
+        return unsupported("SetItemNameFunction.name");
+    }
+}
+export class SetOminousBottleFunction extends LootItemFunction {
+    get amplifier() {
+        return unsupported("SetOminousBottleFunction.amplifier");
+    }
+}
+export class SetPotionFunction extends LootItemFunction {
+    get id() {
+        return unsupported("SetPotionFunction.id");
+    }
+}
+export class SetSpawnEggFunction extends LootItemFunction {
+    get id() {
+        return unsupported("SetSpawnEggFunction.id");
+    }
+}
+export class SetStewEffectFunction extends LootItemFunction {
+    get effects() {
+        return unsupported("SetStewEffectFunction.effects");
+    }
+}
 export class ShutdownEvent {}
 export class SmeltItemFunction {}
-export class SpecificEnchantFunction {}
-export class StartupBeforeEventSignal {}
-export class StartupEvent {}
-export class Structure {}
-export class StructureManager {}
-export class System {}
+export class SpecificEnchantFunction extends LootItemFunction {
+    get enchantments() {
+        return unsupported("SpecificEnchantFunction.enchantments");
+    }
+}
+export class StartupEvent {
+    get blockComponentRegistry() {
+        return unsupported("StartupEvent.blockComponentRegistry");
+    }
+
+    get customCommandRegistry() {
+        return unsupported("StartupEvent.customCommandRegistry");
+    }
+
+    get dimensionRegistry() {
+        return unsupported("StartupEvent.dimensionRegistry");
+    }
+
+    get itemComponentRegistry() {
+        return unsupported("StartupEvent.itemComponentRegistry");
+    }
+}
 export class SystemAfterEvents {}
 export class SystemBeforeEvents {}
-export class SystemInfo {}
-export class TargetBlockHitAfterEvent {}
-export class TargetBlockHitAfterEventSignal {}
-export class TickingAreaManager {}
-export class Trigger {}
-export class TripWireTripAfterEvent {}
-export class TripWireTripAfterEventSignal {}
-export class WeatherChangeAfterEvent {}
-export class WeatherChangeAfterEventSignal {}
-export class WeatherChangeBeforeEvent {}
-export class WeatherChangeBeforeEventSignal {}
+export class TargetBlockHitAfterEvent extends BlockEvent {
+    get hitVector() {
+        return unsupported("TargetBlockHitAfterEvent.hitVector");
+    }
+
+    get previousRedstonePower() {
+        return unsupported("TargetBlockHitAfterEvent.previousRedstonePower");
+    }
+
+    get redstonePower() {
+        return unsupported("TargetBlockHitAfterEvent.redstonePower");
+    }
+
+    get source() {
+        return unsupported("TargetBlockHitAfterEvent.source");
+    }
+}
+export class TripWireTripAfterEvent extends BlockEvent {
+    get isPowered() {
+        return unsupported("TripWireTripAfterEvent.isPowered");
+    }
+
+    get sources() {
+        return unsupported("TripWireTripAfterEvent.sources");
+    }
+}
+export class WeatherChangeAfterEvent {
+    get dimension() {
+        return unsupported("WeatherChangeAfterEvent.dimension");
+    }
+
+    get newWeather() {
+        return unsupported("WeatherChangeAfterEvent.newWeather");
+    }
+
+    get previousWeather() {
+        return unsupported("WeatherChangeAfterEvent.previousWeather");
+    }
+}
+export class WeatherChangeBeforeEvent {
+    get cancel() {
+        return unsupported("WeatherChangeBeforeEvent.cancel");
+    }
+
+    get duration() {
+        return unsupported("WeatherChangeBeforeEvent.duration");
+    }
+
+    get newWeather() {
+        return unsupported("WeatherChangeBeforeEvent.newWeather");
+    }
+
+    get previousWeather() {
+        return unsupported("WeatherChangeBeforeEvent.previousWeather");
+    }
+}
 export class WorldAfterEvents {}
 export class WorldBeforeEvents {}
 export class WorldLoadAfterEvent {}
-export class WorldLoadAfterEventSignal {}
+
+// Names the newest API adds that this mod has nothing behind yet. A module is linked before any of
+// it runs, so a pack importing one of these would lose its whole script over a name rather than
+// over the one line that used it. Each is here so the import succeeds; reaching for what they would
+// do reports through the same path every other gap does.
+export class AimAssistCategory {
+    get defaultBlockPriority() {
+        return unsupported("AimAssistCategory.defaultBlockPriority");
+    }
+
+    get defaultEntityPriority() {
+        return unsupported("AimAssistCategory.defaultEntityPriority");
+    }
+
+    get identifier() {
+        return unsupported("AimAssistCategory.identifier");
+    }
+
+    getBlockPriorities() {
+        return unsupported("AimAssistCategory.getBlockPriorities");
+    }
+
+    getBlockTagPriorities() {
+        return unsupported("AimAssistCategory.getBlockTagPriorities");
+    }
+
+    getEntityPriorities() {
+        return unsupported("AimAssistCategory.getEntityPriorities");
+    }
+
+    getEntityTypeFamilyPriorities() {
+        return unsupported("AimAssistCategory.getEntityTypeFamilyPriorities");
+    }
+}
+export class AimAssistCategorySettings {
+    get defaultBlockPriority() {
+        return unsupported("AimAssistCategorySettings.defaultBlockPriority");
+    }
+
+    get defaultEntityPriority() {
+        return unsupported("AimAssistCategorySettings.defaultEntityPriority");
+    }
+
+    get identifier() {
+        return unsupported("AimAssistCategorySettings.identifier");
+    }
+
+    getBlockPriorities() {
+        return unsupported("AimAssistCategorySettings.getBlockPriorities");
+    }
+
+    getBlockTagPriorities() {
+        return unsupported("AimAssistCategorySettings.getBlockTagPriorities");
+    }
+
+    getEntityPriorities() {
+        return unsupported("AimAssistCategorySettings.getEntityPriorities");
+    }
+
+    getEntityTypeFamilyPriorities() {
+        return unsupported("AimAssistCategorySettings.getEntityTypeFamilyPriorities");
+    }
+
+    setBlockPriorities() {
+        return unsupported("AimAssistCategorySettings.setBlockPriorities");
+    }
+
+    setBlockTagPriorities() {
+        return unsupported("AimAssistCategorySettings.setBlockTagPriorities");
+    }
+
+    setEntityPriorities() {
+        return unsupported("AimAssistCategorySettings.setEntityPriorities");
+    }
+
+    setEntityTypeFamilyPriorities() {
+        return unsupported("AimAssistCategorySettings.setEntityTypeFamilyPriorities");
+    }
+}
+export class AimAssistPreset {
+    get defaultItemSettings() {
+        return unsupported("AimAssistPreset.defaultItemSettings");
+    }
+
+    get handSettings() {
+        return unsupported("AimAssistPreset.handSettings");
+    }
+
+    get identifier() {
+        return unsupported("AimAssistPreset.identifier");
+    }
+
+    getExcludedBlockTagTargets() {
+        return unsupported("AimAssistPreset.getExcludedBlockTagTargets");
+    }
+
+    getExcludedBlockTargets() {
+        return unsupported("AimAssistPreset.getExcludedBlockTargets");
+    }
+
+    getExcludedEntityTargets() {
+        return unsupported("AimAssistPreset.getExcludedEntityTargets");
+    }
+
+    getExcludedEntityTypeFamilyTargets() {
+        return unsupported("AimAssistPreset.getExcludedEntityTypeFamilyTargets");
+    }
+
+    getItemSettings() {
+        return unsupported("AimAssistPreset.getItemSettings");
+    }
+
+    getLiquidTargetingItems() {
+        return unsupported("AimAssistPreset.getLiquidTargetingItems");
+    }
+}
+export class AimAssistPresetSettings {
+    get defaultItemSettings() {
+        return unsupported("AimAssistPresetSettings.defaultItemSettings");
+    }
+
+    get handSettings() {
+        return unsupported("AimAssistPresetSettings.handSettings");
+    }
+
+    get identifier() {
+        return unsupported("AimAssistPresetSettings.identifier");
+    }
+
+    getExcludedBlockTagTargets() {
+        return unsupported("AimAssistPresetSettings.getExcludedBlockTagTargets");
+    }
+
+    getExcludedBlockTargets() {
+        return unsupported("AimAssistPresetSettings.getExcludedBlockTargets");
+    }
+
+    getExcludedEntityTargets() {
+        return unsupported("AimAssistPresetSettings.getExcludedEntityTargets");
+    }
+
+    getExcludedEntityTypeFamilyTargets() {
+        return unsupported("AimAssistPresetSettings.getExcludedEntityTypeFamilyTargets");
+    }
+
+    getItemSettings() {
+        return unsupported("AimAssistPresetSettings.getItemSettings");
+    }
+
+    getLiquidTargetingItems() {
+        return unsupported("AimAssistPresetSettings.getLiquidTargetingItems");
+    }
+
+    setExcludedBlockTagTargets() {
+        return unsupported("AimAssistPresetSettings.setExcludedBlockTagTargets");
+    }
+
+    setExcludedBlockTargets() {
+        return unsupported("AimAssistPresetSettings.setExcludedBlockTargets");
+    }
+
+    setExcludedEntityTargets() {
+        return unsupported("AimAssistPresetSettings.setExcludedEntityTargets");
+    }
+
+    setExcludedEntityTypeFamilyTargets() {
+        return unsupported("AimAssistPresetSettings.setExcludedEntityTypeFamilyTargets");
+    }
+
+    setItemSettings() {
+        return unsupported("AimAssistPresetSettings.setItemSettings");
+    }
+
+    setLiquidTargetingItems() {
+        return unsupported("AimAssistPresetSettings.setLiquidTargetingItems");
+    }
+}
+export class AimAssistRegistry {
+    addCategory() {
+        return unsupported("AimAssistRegistry.addCategory");
+    }
+
+    addPreset() {
+        return unsupported("AimAssistRegistry.addPreset");
+    }
+
+    getCategories() {
+        return unsupported("AimAssistRegistry.getCategories");
+    }
+
+    getCategory() {
+        return unsupported("AimAssistRegistry.getCategory");
+    }
+
+    getPreset() {
+        return unsupported("AimAssistRegistry.getPreset");
+    }
+
+    getPresets() {
+        return unsupported("AimAssistRegistry.getPresets");
+    }
+}
+export class BlockComponentBlockStateChangeEvent extends BlockEvent {
+    get previousPermutation() {
+        return unsupported("BlockComponentBlockStateChangeEvent.previousPermutation");
+    }
+}
+export class BlockContainerClosedAfterEvent extends BlockEvent {
+    get closeSource() {
+        return unsupported("BlockContainerClosedAfterEvent.closeSource");
+    }
+}
+export class BlockContainerOpenedAfterEvent extends BlockEvent {
+    get openSource() {
+        return unsupported("BlockContainerOpenedAfterEvent.openSource");
+    }
+}
+export class DimensionRegistry {
+    registerCustomDimension() {
+        return unsupported("DimensionRegistry.registerCustomDimension");
+    }
+}
+export class EntityContainerClosedAfterEvent {
+    get closeSource() {
+        return unsupported("EntityContainerClosedAfterEvent.closeSource");
+    }
+
+    get entity() {
+        return unsupported("EntityContainerClosedAfterEvent.entity");
+    }
+}
+export class EntityContainerOpenedAfterEvent {
+    get entity() {
+        return unsupported("EntityContainerOpenedAfterEvent.entity");
+    }
+
+    get openSource() {
+        return unsupported("EntityContainerOpenedAfterEvent.openSource");
+    }
+}
+export class EntityEnderInventoryComponent extends EntityComponent {
+    get container() {
+        return unsupported("EntityEnderInventoryComponent.container");
+    }
+}
+export class EntityUpgradeAfterEvent {
+    get entity() {
+        return unsupported("EntityUpgradeAfterEvent.entity");
+    }
+
+    get upgradeId() {
+        return unsupported("EntityUpgradeAfterEvent.upgradeId");
+    }
+
+    getModifiers() {
+        return unsupported("EntityUpgradeAfterEvent.getModifiers");
+    }
+}
+export class EntityUpgradeAfterEventSignal extends EventSignal {}
+export class ISerializable {}
+export class LocatorBar {
+    get count() {
+        return unsupported("LocatorBar.count");
+    }
+
+    get maxCount() {
+        return unsupported("LocatorBar.maxCount");
+    }
+
+    addWaypoint() {
+        return unsupported("LocatorBar.addWaypoint");
+    }
+
+    getAllWaypoints() {
+        return unsupported("LocatorBar.getAllWaypoints");
+    }
+
+    hasWaypoint() {
+        return unsupported("LocatorBar.hasWaypoint");
+    }
+
+    removeAllWaypoints() {
+        return unsupported("LocatorBar.removeAllWaypoints");
+    }
+
+    removeWaypoint() {
+        return unsupported("LocatorBar.removeWaypoint");
+    }
+}
+export class PlayerAimAssist {
+    get settings() {
+        return unsupported("PlayerAimAssist.settings");
+    }
+
+    set() {
+        return unsupported("PlayerAimAssist.set");
+    }
+}
+export class PlayerCancelBreakingBlockAfterEvent extends BlockEvent {
+    get blockPermutation() {
+        return unsupported("PlayerCancelBreakingBlockAfterEvent.blockPermutation");
+    }
+
+    get breakProgress() {
+        return unsupported("PlayerCancelBreakingBlockAfterEvent.breakProgress");
+    }
+
+    get face() {
+        return unsupported("PlayerCancelBreakingBlockAfterEvent.face");
+    }
+
+    get heldItemStack() {
+        return unsupported("PlayerCancelBreakingBlockAfterEvent.heldItemStack");
+    }
+
+    get player() {
+        return unsupported("PlayerCancelBreakingBlockAfterEvent.player");
+    }
+}
+export class PlayerSplitScreenSlot {}
+export class PlayerStartBreakingBlockAfterEvent extends BlockEvent {
+    get blockPermutation() {
+        return unsupported("PlayerStartBreakingBlockAfterEvent.blockPermutation");
+    }
+
+    get face() {
+        return unsupported("PlayerStartBreakingBlockAfterEvent.face");
+    }
+
+    get heldItemStack() {
+        return unsupported("PlayerStartBreakingBlockAfterEvent.heldItemStack");
+    }
+
+    get player() {
+        return unsupported("PlayerStartBreakingBlockAfterEvent.player");
+    }
+}
+export class PrimitiveShapesManager {
+    get maxShapes() {
+        return unsupported("PrimitiveShapesManager.maxShapes");
+    }
+
+    addText() {
+        return unsupported("PrimitiveShapesManager.addText");
+    }
+
+    removeAll() {
+        return unsupported("PrimitiveShapesManager.removeAll");
+    }
+
+    removeText() {
+        return unsupported("PrimitiveShapesManager.removeText");
+    }
+}
+export class SoundInstance {
+    stop() {
+        return unsupported("SoundInstance.stop");
+    }
+}
+export class WaypointTexture {}
+
+// A shape and a waypoint each come in kinds that carry what the base holds, and a class body reads
+// the one it extends as it is declared, so each base stands ahead of the kinds built on it.
+export class PrimitiveShape {
+    get attachedTo() {
+        return unsupported("PrimitiveShape.attachedTo");
+    }
+
+    get color() {
+        return unsupported("PrimitiveShape.color");
+    }
+
+    get dimension() {
+        return unsupported("PrimitiveShape.dimension");
+    }
+
+    get hasDuration() {
+        return unsupported("PrimitiveShape.hasDuration");
+    }
+
+    get location() {
+        return unsupported("PrimitiveShape.location");
+    }
+
+    get maximumRenderDistance() {
+        return unsupported("PrimitiveShape.maximumRenderDistance");
+    }
+
+    get rotation() {
+        return unsupported("PrimitiveShape.rotation");
+    }
+
+    get scale() {
+        return unsupported("PrimitiveShape.scale");
+    }
+
+    get timeLeft() {
+        return unsupported("PrimitiveShape.timeLeft");
+    }
+
+    get totalTimeLeft() {
+        return unsupported("PrimitiveShape.totalTimeLeft");
+    }
+
+    get visibleTo() {
+        return unsupported("PrimitiveShape.visibleTo");
+    }
+
+    remove() {
+        return unsupported("PrimitiveShape.remove");
+    }
+
+    setLocation() {
+        return unsupported("PrimitiveShape.setLocation");
+    }
+}
+export class TextPrimitive extends PrimitiveShape {
+    get backfaceVisible() {
+        return unsupported("TextPrimitive.backfaceVisible");
+    }
+
+    get backgroundColorOverride() {
+        return unsupported("TextPrimitive.backgroundColorOverride");
+    }
+
+    get depthTest() {
+        return unsupported("TextPrimitive.depthTest");
+    }
+
+    get text() {
+        return unsupported("TextPrimitive.text");
+    }
+
+    get textBackfaceVisible() {
+        return unsupported("TextPrimitive.textBackfaceVisible");
+    }
+
+    get useRotation() {
+        return unsupported("TextPrimitive.useRotation");
+    }
+
+    setText() {
+        return unsupported("TextPrimitive.setText");
+    }
+}
+export class Waypoint {
+    get color() {
+        return unsupported("Waypoint.color");
+    }
+
+    get isEnabled() {
+        return unsupported("Waypoint.isEnabled");
+    }
+
+    get isValid() {
+        return unsupported("Waypoint.isValid");
+    }
+
+    get textureSelector() {
+        return unsupported("Waypoint.textureSelector");
+    }
+
+    getDimensionLocation() {
+        return unsupported("Waypoint.getDimensionLocation");
+    }
+
+    remove() {
+        return unsupported("Waypoint.remove");
+    }
+}
+export class EntityWaypoint extends Waypoint {
+    get entity() {
+        return unsupported("EntityWaypoint.entity");
+    }
+
+    get entityRules() {
+        return unsupported("EntityWaypoint.entityRules");
+    }
+}
+export class LocationWaypoint extends Waypoint {
+    setDimensionLocation() {
+        return unsupported("LocationWaypoint.setDimensionLocation");
+    }
+}
+export class PlayerWaypoint extends EntityWaypoint {
+    get playerRules() {
+        return unsupported("PlayerWaypoint.playerRules");
+    }
+}
+
+export const AimAssistTargetMode = Object.freeze({ Angle: "Angle", Distance: "Distance" });
+export const LocatorBarErrorReason = Object.freeze({
+    InvalidPlayer: "InvalidPlayer",
+    InvalidWaypoint: "InvalidWaypoint",
+});
 
 /** A failure a pack catches by name, which is why each of these is a real error. */
 export class BlockCustomComponentAlreadyRegisteredError extends Error {}
+export class CustomDimensionAlreadyRegisteredError extends Error {}
+export class CustomDimensionInvalidRegistryError extends Error {}
+export class CustomDimensionNameError extends Error {}
+export class CustomDimensionReloadNewDimensionError extends Error {}
+export class InvalidEntityComponentError extends Error {}
+export class InvalidWaypointError extends Error {}
+export class InvalidWaypointTextureSelectorError extends Error {}
+export class LocatorBarError extends Error {
+    get reason() {
+        return unsupported("LocatorBarError.reason");
+    }
+}
+export class PrimitiveShapeError extends Error {}
 export class BlockCustomComponentReloadNewComponentError extends Error {}
 export class BlockCustomComponentReloadNewEventError extends Error {}
 export class BlockCustomComponentReloadVersionError extends Error {}
-export class BookError extends Error {}
-export class BookPageContentError extends Error {}
+export class BookError extends Error {
+    get reason() {
+        return unsupported("BookError.reason");
+    }
+}
+export class BookPageContentError extends Error {
+    constructor(message, pageIndex) {
+        super(message);
+        this.pageIndex = pageIndex;
+    }
+
+    get reason() {
+        return unsupported("BookPageContentError.reason");
+    }
+}
 export class CommandError extends Error {}
-export class ContainerRulesError extends Error {}
-export class CustomCommandError extends Error {}
+export class ContainerRulesError extends Error {
+    get reason() {
+        return unsupported("ContainerRulesError.reason");
+    }
+}
+export class CustomCommandError extends Error {
+    get reason() {
+        return unsupported("CustomCommandError.reason");
+    }
+}
 export class CustomComponentInvalidRegistryError extends Error {}
-export class CustomComponentNameError extends Error {}
+export class CustomComponentNameError extends Error {
+    get reason() {
+        return unsupported("CustomComponentNameError.reason");
+    }
+}
 export class EnchantmentLevelOutOfBoundsError extends Error {}
 export class EnchantmentTypeNotCompatibleError extends Error {}
 export class EnchantmentTypeUnknownIdError extends Error {}
@@ -3558,8 +7114,20 @@ export class EntitySpawnError extends Error {}
 export class InvalidBlockComponentError extends Error {}
 export class InvalidContainerError extends Error {}
 export class InvalidContainerSlotError extends Error {}
-export class InvalidEntityError extends Error {}
-export class InvalidItemStackError extends Error {}
+export class InvalidEntityError extends Error {
+    get id() {
+        return unsupported("InvalidEntityError.id");
+    }
+
+    get type() {
+        return unsupported("InvalidEntityError.type");
+    }
+}
+export class InvalidItemStackError extends Error {
+    get itemType() {
+        return unsupported("InvalidItemStackError.itemType");
+    }
+}
 export class InvalidIteratorError extends Error {}
 export class InvalidPotionDeliveryTypeError extends Error {}
 export class InvalidPotionEffectTypeError extends Error {}
@@ -3570,8 +7138,17 @@ export class ItemCustomComponentReloadNewEventError extends Error {}
 export class ItemCustomComponentReloadVersionError extends Error {}
 export class LocationInUnloadedChunkError extends Error {}
 export class LocationOutOfWorldBoundariesError extends Error {}
-export class NamespaceNameError extends Error {}
+export class NamespaceNameError extends Error {
+    get reason() {
+        return unsupported("NamespaceNameError.reason");
+    }
+}
 export class PlaceJigsawError extends Error {}
 export class RawMessageError extends Error {}
-export class TickingAreaError extends Error {}
+export class TickingAreaError extends Error {
+    constructor(message, reason) {
+        super(message);
+        this.reason = reason;
+    }
+}
 export class UnloadedChunksError extends Error {}

@@ -1,17 +1,24 @@
 package at.ioexception.mcaddon.client.render;
 
 import at.ioexception.mcaddon.bedrock.animation.Vector3Expression;
+import at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.bedrock.particle.Billboard;
 import at.ioexception.mcaddon.bedrock.particle.ParticleDefinition;
+import at.ioexception.mcaddon.bedrock.particle.ParticleEvent;
 import at.ioexception.mcaddon.bedrock.particle.ParticleTint;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.particle.SingleQuadParticle;
 import net.minecraft.core.BlockPos;
+import at.ioexception.mcaddon.platform.Platform;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.util.Mth;
+import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix3f;
+import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import java.util.List;
@@ -29,8 +36,17 @@ public class AddonParticle extends SingleQuadParticle {
 /*public class AddonParticle extends net.minecraft.client.particle.TextureSheetParticle {
 *///?}
 
+    /** The packed sky and block light of a particle that carries its own brightness. */
+    private static final int FULL_BRIGHT = 0xF000F0;
+
+    /** What Bedrock's aiming facing modes mean by upwards. */
+    private static final Vector3f UP = new Vector3f(0, 1, 0);
+
     private final ParticleDefinition definition;
     private final MolangEnvironment environment;
+
+    /** Which way this particle points, which is what the aiming facing modes turn the quad by. */
+    private final Vector3f direction = new Vector3f(0, 0, 1);
 
     /** The moment the pack says this one ends, which is not always when its clock runs out. */
     private final float maxLifetime;
@@ -77,6 +93,7 @@ public class AddonParticle extends SingleQuadParticle {
         this.gravity = 0f;
 
         apply(0f);
+        raise(particle.events().creation());
     }
 
     @Override
@@ -86,13 +103,18 @@ public class AddonParticle extends SingleQuadParticle {
         zo = z;
         oRoll = roll;
 
+        float was = age;
         age += 1f / 20f;
         if (over()) {
+            raise(definition.particle().events().expiration());
             remove();
             return;
         }
 
         ParticleDefinition.Particle particle = definition.particle();
+        if (particle.initialization() != null) {
+            particle.initialization().perUpdate().evaluate(environment);
+        }
         if (particle.dynamic() != null) accelerate(particle.dynamic());
         if (particle.parametric() != null) follow(particle.parametric());
         else move(xd, yd, zd);
@@ -100,9 +122,33 @@ public class AddonParticle extends SingleQuadParticle {
         spin += spinRate / 20f;
         roll = (float) Math.toRadians(spin);
         apply(age);
+        timeline(was);
 
         if (grounded()) return;
         if (beyondKillPlane() || inWrongBlock()) remove();
+    }
+
+    /** Raises the timeline events this particle passed over during this tick. */
+    private void timeline(float was) {
+        for (ParticleEvent.Moment moment : definition.particle().events().timeline()) {
+            if (moment.at() > was && moment.at() <= age) raise(moment.events());
+        }
+    }
+
+    private void raise(List<String> events) {
+        if (events.isEmpty()) return;
+        AddonEmitters.fire(definition, events, environment, new Vec3(x, y, z), null);
+    }
+
+    /**
+     * Bedrock draws a particle at full brightness unless the effect asks to be lit.
+     *
+     * Java's own particles take the light where they stand, which is what the lighting component
+     * asks for, so the override is the other way round: without it, the particle carries its own.
+     */
+    @Override
+    protected int getLightCoords(float partialTick) {
+        return definition.particle().lit() ? super.getLightCoords(partialTick) : FULL_BRIGHT;
     }
 
     /**
@@ -115,7 +161,14 @@ public class AddonParticle extends SingleQuadParticle {
         ParticleDefinition.Particle.Collision collision = definition.particle().collision();
         if (collision == null || !onGround) return false;
 
+        float speed = (float) Math.sqrt(xd * xd + yd * yd + zd * zd) * 20f;
+        raise(collision.events().stream()
+            .filter(impact -> speed >= impact.minimumSpeed())
+            .map(ParticleDefinition.Particle.Impact::event)
+            .toList());
+
         if (collision.expireOnContact()) {
+            raise(definition.particle().events().expiration());
             remove();
             return true;
         }
@@ -156,17 +209,25 @@ public class AddonParticle extends SingleQuadParticle {
         return age >= maxLifetime;
     }
 
-    /** `particle_motion_dynamic`: an acceleration and a drag, both in blocks and seconds. */
+    /**
+     * `particle_motion_dynamic`: an acceleration and a drag, both in blocks and seconds.
+     *
+     * The acceleration crosses into Java's units twice over, once for the distance and once for the
+     * time, while the drag crosses once: the pack's coefficient prices a velocity, so the second
+     * crossing cancels against the one that turned the velocity into blocks a tick.
+     *
+     * The spin keeps Bedrock's own units throughout, because nothing in Java advances it.
+     */
     private void accelerate(ParticleDefinition.Particle.Dynamic dynamic) {
         Vector3f acceleration = evaluate(dynamic.linearAcceleration());
         float drag = dynamic.linearDrag().asFloat(environment);
 
-        xd += (acceleration.x() - drag * xd) / 20f;
-        yd += (acceleration.y() - drag * yd) / 20f;
-        zd += (acceleration.z() - drag * zd) / 20f;
+        xd += BedrockUnits.blocksPerTickSquared(acceleration.x()) - drag * xd / BedrockUnits.TICKS_PER_SECOND;
+        yd += BedrockUnits.blocksPerTickSquared(acceleration.y()) - drag * yd / BedrockUnits.TICKS_PER_SECOND;
+        zd += BedrockUnits.blocksPerTickSquared(acceleration.z()) - drag * zd / BedrockUnits.TICKS_PER_SECOND;
 
         spinRate += (dynamic.rotationAcceleration().asFloat(environment)
-            - dynamic.rotationDrag().asFloat(environment) * spinRate) / 20f;
+            - dynamic.rotationDrag().asFloat(environment) * spinRate) / BedrockUnits.TICKS_PER_SECOND;
     }
 
     /** `particle_motion_parametric`: the pack says where the particle is rather than how it moves. */
@@ -184,6 +245,10 @@ public class AddonParticle extends SingleQuadParticle {
     private void apply(float at) {
         environment.setVariable("particle_age", MolangValue.of(at));
         environment.setVariable("particle_lifetime", MolangValue.of(maxLifetime));
+        AddonEmitters.evaluateCurves(definition, environment);
+
+        ParticleDefinition.Particle.Initialization start = definition.particle().initialization();
+        if (start != null) start.perRender().evaluate(environment);
 
         Billboard billboard = definition.particle().billboard();
         if (billboard != null) {
@@ -191,6 +256,7 @@ public class AddonParticle extends SingleQuadParticle {
             advanceFlipbook(billboard, at);
         }
 
+        aimDirection();
         paint(definition.particle().tint());
     }
 
@@ -312,20 +378,106 @@ public class AddonParticle extends SingleQuadParticle {
         return window == null ? super.getV1() : across(window[3], super.getV0(), super.getV1());
     }
 
+    /**
+     * The direction Bedrock's aiming facing modes are written against.
+     *
+     * A pack either states it outright or takes it off the velocity, and a particle slower than the
+     * threshold keeps whichever direction it last had rather than turning to a velocity of nothing.
+     */
+    private void aimDirection() {
+        Billboard billboard = definition.particle().billboard();
+        Billboard.Direction settings = billboard == null ? null : billboard.direction();
+        if (settings == null) return;
+
+        if (settings.custom()) {
+            Vector3f stated = evaluate(settings.customDirection());
+            if (stated.lengthSquared() > 0f) direction.set(stated).normalize();
+            return;
+        }
+        // Bedrock states the threshold in blocks a second and Java carries a velocity in blocks a tick.
+        double speed = Math.sqrt(xd * xd + yd * yd + zd * zd) * BedrockUnits.TICKS_PER_SECOND;
+        if (speed > settings.minSpeedThreshold()) {
+            direction.set((float) xd, (float) yd, (float) zd).normalize();
+        }
+    }
+
     //? if >=1.21 {
     /**
-     * Which way the quad turns to meet the camera.
+     * Which way the quad turns.
      *
-     * Bedrock offers ten modes and Java has the two that matter: turning on every axis, and turning
-     * only about the vertical one, which is what keeps a flat effect lying on the ground. A mode
-     * Java has no form of falls back to facing the camera outright.
+     * Java's own two modes are values of an interface rather than the whole vocabulary, so the
+     * aiming modes are supplied here instead of being turned into one of them: `direction_x`,
+     * `direction_y` and `direction_z` put the named local axis along the particle's direction and
+     * `lookat_direction` stands the quad up along it while still turning its face to the camera.
+     * The three `emitter_transform_*` modes are reported, because the emitter's own transform is not
+     * carried on to the particles it made.
      */
     @Override
     public FacingCameraMode getFacingCameraMode() {
+        return facing;
+    }
+
+    private final FacingCameraMode facing = this::orient;
+
+    private void orient(Quaternionf store, net.minecraft.client.Camera camera, float partialTick) {
         Billboard billboard = definition.particle().billboard();
-        return billboard != null && billboard.facing() == at.ioexception.mcaddon.bedrock.particle
-            .FacingCameraMode.ROTATE_Y
-            ? FacingCameraMode.LOOKAT_Y : FacingCameraMode.LOOKAT_XYZ;
+        at.ioexception.mcaddon.bedrock.particle.FacingCameraMode mode = billboard == null
+            ? at.ioexception.mcaddon.bedrock.particle.FacingCameraMode.ROTATE_XYZ : billboard.facing();
+
+        if (aim(store, mode, partialTick)) return;
+        if (mode == at.ioexception.mcaddon.bedrock.particle.FacingCameraMode.ROTATE_Y
+            || mode == at.ioexception.mcaddon.bedrock.particle.FacingCameraMode.LOOKAT_Y) {
+            FacingCameraMode.LOOKAT_Y.setRotation(store, camera, partialTick);
+            return;
+        }
+        FacingCameraMode.LOOKAT_XYZ.setRotation(store, camera, partialTick);
+    }
+
+    /**
+     * Puts the quad's own axes where one of Bedrock's aiming modes asks for them.
+     *
+     * Each mode names the quad axis that lies along the particle's direction and says the remaining
+     * pair attempts to aim upwards, which is the world up made perpendicular to the direction;
+     * `lookat_direction` aims the same pair at the camera instead. False for a mode that aims
+     * nothing, and for a direction parallel to what the other axes are built from, which leaves
+     * nothing to build a rotation out of.
+     */
+    private boolean aim(Quaternionf store, at.ioexception.mcaddon.bedrock.particle.FacingCameraMode mode,
+        float partialTick) {
+        Vector3f made = switch (mode) {
+            case DIRECTION_X, DIRECTION_Y, DIRECTION_Z -> perpendicular(UP, direction);
+            case LOOKAT_DIRECTION -> perpendicular(towardsCamera(partialTick), direction);
+            default -> null;
+        };
+        if (made == null) return false;
+
+        return switch (mode) {
+            case DIRECTION_X -> set(store, direction, made, new Vector3f(direction).cross(made));
+            case DIRECTION_Y -> set(store, made, direction, new Vector3f(made).cross(direction));
+            case DIRECTION_Z -> set(store, new Vector3f(made).cross(direction), made, direction);
+            case LOOKAT_DIRECTION -> set(store, new Vector3f(direction).cross(made), direction, made);
+            default -> false;
+        };
+    }
+
+    /** A rotation whose local x, y and z axes are the three unit vectors given, in that order. */
+    private static boolean set(Quaternionf store, Vector3f x, Vector3f y, Vector3f z) {
+        store.setFromNormalized(new Matrix3f().set(x, y, z));
+        return true;
+    }
+
+    /** The part of one vector at right angles to a unit axis, or null where there is none. */
+    private static Vector3f perpendicular(Vector3f vector, Vector3f axis) {
+        Vector3f apart = new Vector3f(vector).sub(new Vector3f(axis).mul(vector.dot(axis)));
+        return apart.lengthSquared() < 1.0e-6f ? null : apart.normalize();
+    }
+
+    private Vector3f towardsCamera(float partialTick) {
+        Vec3 eye = Platform.cameraPosition();
+        return new Vector3f(
+            (float) (eye.x - Mth.lerp(partialTick, xo, x)),
+            (float) (eye.y - Mth.lerp(partialTick, yo, y)),
+            (float) (eye.z - Mth.lerp(partialTick, zo, z))).normalize();
     }
     //?}
 

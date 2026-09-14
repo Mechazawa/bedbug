@@ -5,10 +5,12 @@
     "description": "Resource half of the add-on the verify harness runs against.",
     "uuid": "32e0d039-0df5-408f-99bb-fa898f5d1fc2",
     "version": [1, 0, 0],
-    "min_engine_version": [1, 20, 0]
+    "min_engine_version": [1, 20, 0],
+    "pack_scope": "world"
   },
   "modules": [
     {
+      "description": "Textures, models and the controllers drawing them.",
       "type": "resources",
       "uuid": "5b9423f2-0096-493f-a12d-dbca12e1d5fb",
       "version": [1, 0, 0]
@@ -18,6 +20,27 @@
     {
       "uuid": "19ac580e-f30a-4942-ae7e-712153db0685",
       "version": [1, 0, 0]
+    }
+  ],
+  "capabilities": ["pbr", "experimental_custom_ui"],
+  "metadata": {
+    "authors": ["mcaddon-fabric"],
+    "license": "MIT",
+    "url": "https://github.com/Bas-Bieling/mcaddon-fabric",
+    "product_type": "addon"
+  },
+  "subpacks": [
+    {
+      "folder_name": "plain",
+      "name": "Plain sprite",
+      "memory_tier": 6,
+      "memory_performance_tier": 1
+    },
+    {
+      "folder_name": "bright",
+      "name": "Bright sprite",
+      "memory_tier": 64,
+      "memory_performance_tier": 5
     }
   ]
 }

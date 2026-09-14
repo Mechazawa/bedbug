@@ -1,0 +1,18 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "tp:spark",
+      "materials": {
+        "default": "entity_alphatest"
+      },
+      "textures": {
+        "default": "textures/entity/sprite"
+      },
+      "geometry": {
+        "default": "geometry.tp.sprite"
+      },
+      "render_controllers": ["controller.render.tp.sprite"]
+    }
+  }
+}

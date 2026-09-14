@@ -1,0 +1,33 @@
+{
+  "format_version": "1.21.20",
+  "minecraft:item": {
+    "description": {
+      "identifier": "tp:pouch"
+    },
+    "components": {
+      "minecraft:icon": {
+        "textures": {
+          "default": "pouch"
+        }
+      },
+      "minecraft:max_stack_size": 1,
+      "minecraft:storage_item": {
+        "max_slots": 64,
+        "max_weight_limit": 64,
+        "allow_nested_storage_items": false
+      },
+      "minecraft:storage_weight_limit": {
+        "max_weight_limit": 48
+      },
+      "minecraft:storage_weight_modifier": {
+        "weight_in_storage_item": 8
+      },
+      "minecraft:bundle_interaction": {
+        "num_viewable_slots": 8
+      },
+      "minecraft:display_name": {
+        "value": "item.tp:pouch.name"
+      }
+    }
+  }
+}

@@ -6,14 +6,42 @@
   "mixins": [
     "PackRepositoryMixin",
     "LivingEntityMixin",
+    "JumpingAccessor",
+    "BiomeSeedAccessor",
     "ItemEntityMixin",
     "ProjectileMixin",
-    "ButtonBlockMixin"
+    "ButtonBlockMixin",
+    "LeverBlockMixin",
+    "PrimaryLevelDataMixin",
+    "ChestBlockMixin",
+    "BlockConnectionMixin",
+    "ItemStackMixin",
+    "SlotMixin",
+    "PlayerActionMixin",
+    "EntityPickMixin",
+    "BasePressurePlateBlockMixin",
+    "TripWireBlockMixin",
+    "TargetBlockMixin",
+    "PistonBaseBlockMixin",
+    "ExplosionMixin",
+    "ServerPlayerGameModeMixin",
+    "ServerGamePacketListenerMixin",
+    "ServerPlayerMixin",
+    "ServerLevelGameEventMixin",
+    "FoodDataAccessor",
+    "FoodDataMixin",
+    "BlockMinedExhaustionMixin",
+    "PlayerAttackExhaustionMixin",
+    "PlayerJumpExhaustionMixin",
+    "PlayerMovementExhaustionMixin",
+    "LungeExhaustionMixin"
   ],
   "injectors": {
     "defaultRequire": 1
   },
   "client": [
+    "CameraMixin",
+    "FogRendererMixin",
     "LivingEntityRendererMixin"
   ]
 }

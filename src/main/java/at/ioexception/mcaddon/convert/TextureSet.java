@@ -30,7 +30,7 @@ public record TextureSet(String colour, String normal, String heightmap, String 
             JsonObject body = Json.parseObject(file).getAsJsonObject("minecraft:texture_set");
             if (body == null) return null;
 
-            String relative = pack.root().relativize(file).toString().replace('\\', '/');
+            String relative = pack.relative(file).toString().replace('\\', '/');
             String directory = relative.substring(0, relative.lastIndexOf('/') + 1);
 
             String combined = Json.text(body, "metalness_emissive_roughness", null);

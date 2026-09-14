@@ -1,0 +1,12 @@
+{
+  "format_version": "1.13.0",
+  "minecraft:weighted_random_feature": {
+    "description": {
+      "identifier": "tp:bloom_patch"
+    },
+    "features": [
+      ["tp:glow_bloom", 3],
+      ["tp:pale_bloom", 1]
+    ]
+  }
+}

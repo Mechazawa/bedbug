@@ -1,6 +1,9 @@
 package at.ioexception.mcaddon.client.render;
 
 import at.ioexception.mcaddon.bedrock.entity.EntityAnimator;
+import at.ioexception.mcaddon.bedrock.entity.EntityQueries;
+import at.ioexception.mcaddon.entity.AddonEntity;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.entity.Entity;
 
 import java.util.HashMap;
@@ -13,7 +16,7 @@ import java.util.Map;
  * removes from grows for the whole session.
  */
 public final class Animators {
-    private record Entry(EntityAnimator animator, AddonQueries queries, float[] lastTime) {
+    private record Entry(EntityAnimator animator, EntityQueries queries, float[] lastTime) {
     }
 
     private static final Map<String, Entry> ANIMATORS = new HashMap<>();
@@ -23,22 +26,27 @@ public final class Animators {
 
     /** Null when the entity's pack never described how it looks. */
     public static EntityAnimator of(Entity entity, String identifier, float partialTick, float ageInTicks) {
-        return of(entity, AddonClientAssets.of(identifier), identifier, partialTick, ageInTicks);
+        return of(entity, AddonClientAssets.of(identifier), identifier, null, partialTick, ageInTicks);
     }
 
     /**
      * One animator per entity and per thing drawn on it.
      *
      * A worn attachable runs its own animation script beside the entity's, so it needs a clock and a
-     * set of variables of its own rather than sharing the wearer's.
+     * set of variables of its own rather than sharing the wearer's. `itemSlot` names the slot such a
+     * thing is worn in and is null for the entity itself, which is what Bedrock answers
+     * `query.is_attached`, `query.owner_identifier` and `context.item_slot` from.
      */
     public static EntityAnimator of(Entity entity, AddonClientAssets.Binding binding, String key,
-        float partialTick, float ageInTicks) {
+        String itemSlot, float partialTick, float ageInTicks) {
         if (binding == null) return null;
 
+        boolean attached = itemSlot != null;
         Entry entry = ANIMATORS.computeIfAbsent(entity.getId() + "/" + key, id -> {
-            EntityAnimator animator = new EntityAnimator(binding.models().assets(), binding.definition());
-            AddonQueries queries = new AddonQueries(entity, animator);
+            EntityAnimator animator = new EntityAnimator(binding.models().assets(), entity, binding.definition());
+            EntityQueries queries = new EntityQueries(entity, animator.player(),
+                new DrawnModel(animator, entity.getId(), attached),
+                () -> EntityProperties.of(entity.getId()), attached);
             animator.environment().setQueries(queries);
             animator.setEffects(AddonEffects.of(entity, animator, binding.models().converted().namespace()));
             return new Entry(animator, queries, new float[] {ageInTicks});
@@ -48,8 +56,32 @@ public final class Animators {
         float delta = Math.max(0, now - entry.lastTime()[0]) / 20f;
         entry.lastTime()[0] = now;
         entry.queries().setPartialTick(partialTick);
+        entry.queries().setItemSlot(attached ? itemSlot : "");
         entry.animator().tick(delta, now / 20f);
         return entry.animator();
+    }
+
+    /**
+     * Advances the entities whose packs asked to keep running while nobody is looking at them.
+     *
+     * An animator is otherwise made and advanced by the renderer, so an entity out of view holds
+     * its pose, its state machine stops where it stood and its emitters fall silent. A pack writing
+     * either offscreen field in its scripts block is saying that is the wrong answer for this
+     * entity, which anything with a trail, an aura or a clock of its own depends on.
+     *
+     * An entity in view is advanced by whichever of the two runs first in a frame, because the
+     * animator takes its step from how far the clock has moved since it last ran.
+     */
+    public static void tickOffscreen(ClientLevel level) {
+        for (Entity entity : level.entitiesForRendering()) {
+            if (!(entity instanceof AddonEntity addon)) continue;
+
+            String identifier = AddonEntityRenderer.identifierOf(addon);
+            AddonClientAssets.Binding binding = AddonClientAssets.of(identifier);
+            if (binding == null || !binding.definition().runsOffscreen()) continue;
+
+            of(addon, binding, identifier, null, 0f, addon.tickCount);
+        }
     }
 
     /**
@@ -64,6 +96,22 @@ public final class Animators {
                 entry.animator().playDirect(animation, stopExpression, blendOut);
             }
         });
+    }
+
+    /**
+     * The animator drawing the entity itself, which is what Bedrock calls the root model.
+     *
+     * Null for an entity Java draws with its own model, because then nothing an add-on described is
+     * underneath whatever is worn on it.
+     */
+    public static EntityAnimator rootOf(int entityId) {
+        return ANIMATORS.entrySet().stream()
+            .filter(entry -> entry.getKey().startsWith(entityId + "/"))
+            .map(Map.Entry::getValue)
+            .filter(entry -> !entry.queries().attached())
+            .map(Entry::animator)
+            .findFirst()
+            .orElse(null);
     }
 
     public static void forget(int entityId) {

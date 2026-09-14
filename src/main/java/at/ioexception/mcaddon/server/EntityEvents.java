@@ -27,6 +27,11 @@ import java.util.Map;
  * behaviour happen at all rather than only its models being drawn.
  */
 public final class EntityEvents {
+    /** The events this mod raises on every entity, declared or not, as the game gives it cause. */
+    private static final java.util.Set<String> RAISED_ON_EVERY_ENTITY = java.util.Set.of(
+        "minecraft:entity_spawned", "minecraft:on_spawn", "minecraft:entity_born",
+        "minecraft:entity_transformed", "minecraft:on_hurt", "minecraft:on_death");
+
     /** An event that triggers another, that triggers the first, would otherwise not return. */
     private static final int MAX_DEPTH = 8;
 
@@ -39,7 +44,10 @@ public final class EntityEvents {
 
         EntityEvent event = definition.events().get(name);
         if (event == null) {
-            AddonEntities.unsupported("event " + name);
+            // An entity that never declared the event simply has nothing to do when it happens. Only
+            // an event a pack asked for by name is a gap; the ones this mod raises on every entity
+            // are not, or every entity would report the ones it had no reason to declare.
+            if (!RAISED_ON_EVERY_ENTITY.contains(name)) AddonEntities.unsupported("event " + name);
             return false;
         }
         run(entity, definition, event, other, state, 0);
@@ -77,7 +85,7 @@ public final class EntityEvents {
     private static void apply(Entity entity, ServerEntityDefinition definition, EntityEvent.Action action,
         Entity other, AddonState state, int depth) {
         switch (action) {
-            case EntityEvent.ChangeGroups groups -> changeGroups(entity, definition, groups, state);
+            case EntityEvent.ChangeGroups groups -> changeGroups(entity, definition, groups, other, state);
             case EntityEvent.SetProperties properties -> setProperties(entity, properties, state);
             case EntityEvent.RunCommands commands -> runCommands(entity, commands);
             case EntityEvent.TriggerEvent trigger -> trigger(entity, trigger.event(), other, state);
@@ -90,8 +98,25 @@ public final class EntityEvents {
                     run(entity, definition, step, other, state, depth + 1);
                 }
             }
+            // The first entry whose own filters hold, and nothing after it. An entry carrying no
+            // filters of its own always holds, which is how a pack writes the last resort.
+            case EntityEvent.FirstValid first -> {
+                Filter.Context context =
+                    new Filter.Context(entity, other == null ? entity : other, null, state);
+                for (EntityEvent option : first.options()) {
+                    if (!holds(option, context)) continue;
+
+                    run(entity, definition, option, other, state, depth + 1);
+                    break;
+                }
+            }
             default -> { }
         }
+    }
+
+    /** Whether any of an option's own responses would run, which is what makes it the valid one. */
+    private static boolean holds(EntityEvent option, Filter.Context context) {
+        return option.actions().stream().anyMatch(action -> action.condition().matches(context));
     }
 
     /**
@@ -101,22 +126,39 @@ public final class EntityEvents {
      * still tracked in full, because a pack's filters and its own later events read it.
      */
     private static void changeGroups(Entity entity, ServerEntityDefinition definition,
-        EntityEvent.ChangeGroups change, AddonState state) {
+        EntityEvent.ChangeGroups change, Entity other, AddonState state) {
         if (!(entity instanceof AddonEntity addon)) return;
 
         addon.activeGroups().removeAll(change.remove());
         addon.activeGroups().addAll(change.add());
+        // `q.had_component_group` is how a pack's render controller branches on a group, so the
+        // drawing side is told which are on.
+        change.remove().forEach(group -> addon.setValue(AddonEntity.GROUP + group, false));
+        change.add().forEach(group -> addon.setValue(AddonEntity.GROUP + group, true));
+        // Whether the entity is still its rider's to steer is decided by the set of groups rather
+        // than by any one of them, so it is answered once the whole swap is done.
+        if (AddonEntities.anyoneDeclares("minecraft:out_of_control")) {
+            addon.setValue("out_of_control", addon.declaresNow("minecraft:out_of_control"));
+        }
 
         for (String group : change.add()) {
             JsonObject components = definition.componentGroups().get(group);
             if (components == null) continue;
             for (Map.Entry<String, JsonElement> component : components.entrySet()) {
-                applyComponent(entity, component.getKey(), component.getValue(), state);
+                applyComponent(entity, component.getKey(), component.getValue(), other, state);
             }
         }
+        // A marker is a fact about the whole entity rather than about the group that brought it, and
+        // a group leaving takes its markers with it, so they are worked out again over the new set.
+        // The age count is built first, because whether the entity is young is one of the flags and
+        // because the size the entity is drawn at is read through it.
+        addon.refreshAge();
+        addon.refreshComponents();
+        addon.publishMarkers();
     }
 
-    private static void applyComponent(Entity entity, String name, JsonElement body, AddonState state) {
+    private static void applyComponent(Entity entity, String name, JsonElement body, Entity other,
+        AddonState state) {
         JsonObject values = body.isJsonObject() ? body.getAsJsonObject() : new JsonObject();
         switch (name) {
             case "minecraft:variant", "minecraft:mark_variant", "minecraft:skin_id" -> {
@@ -135,10 +177,94 @@ public final class EntityEvents {
                         ServerEntityDefinition.number(values, "value", ceiling)));
                 }
             }
-            case "minecraft:is_sheared", "minecraft:is_baby", "minecraft:is_dyeable" ->
+            case "minecraft:hide" -> hide(entity);
+            case "minecraft:spell_effects" -> cast(entity, values);
+            case "minecraft:trust" -> {
+                if (entity instanceof AddonEntity addon && other != null) addon.trust(other.getUUID());
+            }
+            // The markers beside this one are published over the whole live set once the swap is
+            // done, because each of them has to go false again when its group leaves.
+            case "minecraft:is_baby" ->
                 state.setProperty(entity.getUUID(), name.substring("minecraft:".length()), true);
-            default -> AddonEntities.unsupported(name);
+            // A group can hand the entity a different table, so what it drops belongs to the entity
+            // rather than to its type.
+            case "minecraft:loot" -> {
+                String table = at.ioexception.mcaddon.util.Json.text(values, "table", null);
+                if (entity instanceof AddonEntity addon && table != null) {
+                    addon.setLootTable(
+                        at.ioexception.mcaddon.registry.AddonEntities.lootTable(entity.getType(), table));
+                }
+            }
+            // A component this does nothing about at the moment a group brings it in may still be
+            // one the entity honours from the moment it was built, so the register is asked rather
+            // than told: reporting it here would name a gap that is not there.
+            default -> {
+                if (!AddonEntities.implemented(name)) AddonEntities.unsupported(name);
+            }
         }
+    }
+
+    /**
+     * `minecraft:spell_effects` is what a group puts on the entity and takes off it again.
+     *
+     * Bedrock writes the effects to add as a list carrying a duration and a strength each, and the
+     * ones to take away as a name or a list of names, which is how a pack turns one omen into
+     * another. A group carrying the component with nothing in it clears what an earlier one added.
+     */
+    private static void cast(Entity entity, JsonObject values) {
+        if (!(entity instanceof LivingEntity living)) return;
+
+        for (JsonElement element : at.ioexception.mcaddon.util.Json.list(values, "add_effects")) {
+            if (!element.isJsonObject()) continue;
+
+            JsonObject added = element.getAsJsonObject();
+            net.minecraft.resources.Identifier id =
+                effect(at.ioexception.mcaddon.util.Json.text(added, "effect", null));
+            if (id == null) continue;
+
+            Platform.addEffect(living, id, (int) (number(added, "duration", 1) * TICKS_PER_SECOND),
+                (int) number(added, "amplifier", 0), true);
+        }
+        for (JsonElement element : at.ioexception.mcaddon.util.Json.list(values, "remove_effects")) {
+            if (!element.isJsonPrimitive()) continue;
+
+            net.minecraft.resources.Identifier id = effect(element.getAsString());
+            if (id != null) Platform.removeEffect(living, id);
+        }
+    }
+
+    /** An effect a spell names, which a pack writes as often without its namespace as with it. */
+    private static net.minecraft.resources.Identifier effect(String named) {
+        return named == null ? null
+            : net.minecraft.resources.Identifier.tryParse(named.contains(":") ? named : "minecraft:" + named);
+    }
+
+    private static double number(JsonObject body, String key, double fallback) {
+        JsonElement value = body.get(key);
+        return value == null || !value.isJsonPrimitive() ? fallback : value.getAsDouble();
+    }
+
+    /** Bedrock states a spell's duration in seconds, where an effect is measured in ticks. */
+    private static final int TICKS_PER_SECOND = 20;
+
+    /**
+     * `minecraft:hide` sends the entity to whatever it calls home and leaves it there.
+     *
+     * Bedrock brings this in through a component group when a raid starts rather than declaring it
+     * on the entity, which is why it acts the moment the group arrives instead of every tick. An
+     * entity with nowhere to call home stops what it was doing and stays where it is.
+     */
+    private static void hide(Entity entity) {
+        if (!(entity instanceof AddonEntity addon)) return;
+
+        addon.setTarget(null);
+        addon.setValue("is_hiding", true);
+        net.minecraft.core.BlockPos home = Platform.home(addon);
+        if (home == null) {
+            addon.getNavigation().stop();
+            return;
+        }
+        addon.getNavigation().moveTo(home.getX() + 0.5, home.getY(), home.getZ() + 0.5, 1);
     }
 
     /**

@@ -3,6 +3,7 @@ package at.ioexception.mcaddon.bedrock.animation;
 import at.ioexception.mcaddon.bedrock.BedrockAssets;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
+import net.minecraft.world.entity.Entity;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
@@ -19,6 +20,9 @@ import java.util.Map;
  * weight each clip declares.
  */
 public final class AnimationPlayer {
+    /** Clip names already reported as missing, so the log names each of them once. */
+    private static final java.util.Set<String> MISSING = new java.util.HashSet<>();
+
     private static final float TICKS_PER_SECOND = 20f;
 
     /** One clip in flight, with its own clock. */
@@ -27,12 +31,24 @@ public final class AnimationPlayer {
         float animTime;
         float lastFiredTime = -1;
 
+        /** Where in the clip its clock currently leaves it, which is what the pose is read at. */
+        float position;
+
+        /** Seconds left of a start or loop delay, during which the clip holds where it stands. */
+        float waiting;
+
         /** When this holds, the clip starts blending out. Null for a clip nothing is watching for. */
         MolangExpression stopExpression;
         float blendOutSeconds;
 
         /** Full strength until the clip is on its way out, then down to zero over `blendOutSeconds`. */
         float fade = 1f;
+
+        /** How strongly the controller state asking for this clip currently applies. */
+        float stateWeight = 1f;
+
+        /** What the controller state asking for this clip declared, which the poses read back. */
+        boolean shortestPath;
 
         Running(BedrockAnimation animation) {
             this.animation = animation;
@@ -47,6 +63,14 @@ public final class AnimationPlayer {
     }
 
     private final BedrockAssets assets;
+
+    /**
+     * Whoever the clips are playing on, which is what a timeline statement acts through.
+     *
+     * Null where a clip is run with nothing standing in a world, which leaves its Molang the only
+     * part of a timeline with anywhere to land.
+     */
+    private final Entity entity;
     private final MolangEnvironment environment = new MolangEnvironment();
     private final Map<String, Running> running = new HashMap<>();
     private final Map<String, BonePose> poses = new HashMap<>();
@@ -80,8 +104,9 @@ public final class AnimationPlayer {
         this.effects = effects;
     }
 
-    public AnimationPlayer(BedrockAssets assets) {
+    public AnimationPlayer(BedrockAssets assets, Entity entity) {
         this.assets = assets;
+        this.entity = entity;
     }
 
     public MolangEnvironment environment() {
@@ -97,11 +122,19 @@ public final class AnimationPlayer {
      */
     public void play(String name, MolangExpression stopExpression, float blendOutSeconds) {
         BedrockAnimation animation = assets.animation(name);
-        if (animation == null) return;
+        if (animation == null) {
+            // A model whose pose comes from a clip is authored wherever the clip puts it, so a clip
+            // that never plays leaves those bones wherever the geometry left them.
+            if (MISSING.add(name)) {
+                at.ioexception.mcaddon.McAddon.LOGGER.warn("No animation named {}.", name);
+            }
+            return;
+        }
 
         Running clip = new Running(animation);
         clip.stopExpression = stopExpression;
         clip.blendOutSeconds = blendOutSeconds;
+        clip.waiting = animation.startDelaySeconds(environment);
         running.put(name, clip);
     }
 
@@ -128,9 +161,20 @@ public final class AnimationPlayer {
         return running.containsKey(name);
     }
 
-    /** Keeps a looping clip running without restarting it each frame. */
-    public void ensurePlaying(String name) {
+    /**
+     * Keeps a looping clip running without restarting it each frame, at the weight asked for.
+     *
+     * The weight is what a controller crossing out of one state and into another sets on the clips
+     * of each, so the two are lerped rather than swapped.
+     */
+    public void ensurePlaying(String name, float weight, boolean shortestPath) {
         if (!running.containsKey(name)) play(name, null, 0f);
+
+        Running clip = running.get(name);
+        if (clip == null) return;
+
+        clip.stateWeight = weight;
+        clip.shortestPath = shortestPath;
     }
 
     public void stopAll() {
@@ -163,25 +207,63 @@ public final class AnimationPlayer {
         }
     }
 
+    /**
+     * Moves one clip's clock on and works out where in the clip that leaves it.
+     *
+     * A clip driving its own clock through `anim_time_update` decides its time outright, and reads
+     * back whatever it last produced rather than the wrapped position, so an expression counting up
+     * keeps counting. Neither delay applies to a clip like that.
+     */
     private void advance(Running clip, float deltaSeconds) {
         MolangExpression update = clip.animation.animTimeUpdate();
-        if (update == null) {
+        if (update != null) {
+            environment.setAnimTime(clip.animTime);
+            clip.animTime = update.asFloat(environment);
+        } else if (clip.waiting > 0f) {
+            waitOut(clip, deltaSeconds);
+        } else {
             clip.animTime += deltaSeconds;
+            loopOver(clip);
+        }
+
+        // A clip waiting out a loop delay holds the last frame it drew rather than the first.
+        clip.position = clip.waiting > 0f && clip.animTime > 0f
+            ? clip.animation.length()
+            : clip.animation.positionAt(clip.animTime);
+    }
+
+    /** Counts a start or loop delay down, and starts the clip on whatever is left of the frame. */
+    private static void waitOut(Running clip, float deltaSeconds) {
+        clip.waiting -= deltaSeconds;
+        if (clip.waiting > 0f) return;
+
+        clip.animTime = -clip.waiting;
+        clip.waiting = 0f;
+        clip.lastFiredTime = -1;
+    }
+
+    /** Sends a looping clip round again once it passes its end, after the delay it asks for. */
+    private void loopOver(Running clip) {
+        float length = clip.animation.length();
+        if (clip.animation.loop() != BedrockAnimation.Loop.LOOP || length <= 0 || clip.animTime < length) {
             return;
         }
-        // The clip drives its own clock, so `q.anim_time` has to read as where it currently is.
-        environment.setAnimTime(clip.animTime);
-        clip.animTime = update.asFloat(environment);
+
+        clip.waiting = clip.animation.loopDelaySeconds(environment);
+        if (clip.waiting > 0f) return;
+
+        clip.animTime -= length * (float) Math.floor(clip.animTime / length);
+        clip.lastFiredTime = -1;
     }
 
     private void fireTimeline(Running clip) {
-        float position = clip.animation.positionAt(clip.animTime);
+        float position = clip.position;
         environment.setAnimTime(position);
         if (position < clip.lastFiredTime) clip.lastFiredTime = -1;
 
         for (BedrockAnimation.TimelineEntry entry : clip.animation.timeline()) {
             if (entry.time() > position || entry.time() <= clip.lastFiredTime) continue;
-            for (MolangExpression statement : entry.statements()) statement.evaluate(environment);
+            for (AnimationAction statement : entry.statements()) statement.run(entity, environment);
         }
         for (BedrockAnimation.EffectEntry entry : clip.animation.soundEffects()) {
             if (due(entry, position, clip.lastFiredTime)) effects.sound(entry.effect());
@@ -203,8 +285,8 @@ public final class AnimationPlayer {
     private void applyBones(Running clip) {
         if (!clip.animation.hasBones()) return;
 
-        float position = clip.animation.positionAt(clip.animTime);
-        float weight = clip.fade * (clip.animation.blendWeight() == null
+        float position = clip.position;
+        float weight = clip.fade * clip.stateWeight * (clip.animation.blendWeight() == null
             ? 1f
             : clip.animation.blendWeight().asFloat(environment));
         if (weight == 0f) return;
@@ -216,7 +298,8 @@ public final class AnimationPlayer {
             BoneAnimation channels = bone.getValue();
 
             if (!channels.rotation().isEmpty()) {
-                pose.addRotation(channels.rotation().evaluate(position, environment, pose.rotation, scratch), weight);
+                pose.addRotation(channels.rotation().evaluate(position, environment, pose.rotation, scratch),
+                    weight, clip.shortestPath);
                 pose.rotationRelativeToEntity |= channels.rotationRelativeToEntity();
             }
             if (!channels.position().isEmpty()) {

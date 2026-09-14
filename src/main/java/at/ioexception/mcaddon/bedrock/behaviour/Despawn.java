@@ -13,16 +13,15 @@ public record Despawn(double minDistance, double maxDistance, int randomChance, 
     boolean fromDistance, boolean fromChance, boolean fromInactivity, boolean removeChildren,
     boolean filtered, Filter filters) {
 
-    public static Despawn tryFrom(ServerEntityDefinition definition) {
-        JsonObject body = definition.component("minecraft:despawn");
-        if (body == null) return null;
-
+    /** Read off the component the entity carries now, because a group may bring one in. */
+    public static Despawn from(JsonObject body) {
         JsonObject distance = body.getAsJsonObject("despawn_from_distance");
         return new Despawn(
             ServerEntityDefinition.number(distance, "min_distance", 32),
             ServerEntityDefinition.number(distance, "max_distance", 128),
             (int) ServerEntityDefinition.number(body, "min_range_random_chance", 800),
-            (int) Math.round(ServerEntityDefinition.number(body, "min_range_inactivity_timer", 30) * 20),
+            (int) Math.round(ServerEntityDefinition.number(body, "min_range_inactivity_timer", 30)
+                * BedrockUnits.TICKS_PER_SECOND),
             ServerEntityDefinition.flag(body, "despawn_from_distance", true),
             ServerEntityDefinition.flag(body, "despawn_from_chance", true),
             ServerEntityDefinition.flag(body, "despawn_from_inactivity", true),

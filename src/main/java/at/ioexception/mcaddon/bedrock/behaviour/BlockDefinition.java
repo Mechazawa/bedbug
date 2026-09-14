@@ -19,14 +19,17 @@ import java.util.Map;
  * `minecraft:material_instances` names a face or `*` for all of them, and the texture it names is a
  * key in the resource pack's `terrain_texture.json` rather than a path, the same indirection items
  * use.
+ *
+ * The components are kept as the pack wrote them, because Bedrock allows most of them in two
+ * shapes: the bare value, and an object wrapping it. {@link at.ioexception.mcaddon.block.BlockComponents}
+ * is what reads them.
  */
 public record BlockDefinition(String identifier, Map<String, String> faceTextures, String geometry,
-    float hardness, float resistance, int lightEmission, boolean transparent,
-    Map<String, JsonObject> components, Map<String, List<JsonElement>> states,
-    List<Permutation> permutations) {
+    boolean transparent, JsonObject components, Map<String, List<JsonElement>> states,
+    List<Permutation> permutations, JsonObject events) {
 
     /** One `permutations` entry: the components that apply while its Molang condition holds. */
-    public record Permutation(String condition, Map<String, JsonObject> components) {
+    public record Permutation(String condition, JsonObject components) {
     }
 
     public static List<BlockDefinition> readAll(BedrockPack pack) {
@@ -51,87 +54,60 @@ public record BlockDefinition(String identifier, Map<String, String> faceTexture
         String identifier = description == null ? null : Json.text(description, "identifier", null);
         if (identifier == null) return null;
 
-        Map<String, JsonObject> components = new LinkedHashMap<>();
-        JsonObject declared = body.getAsJsonObject("components");
-        if (declared != null) {
-            for (Map.Entry<String, JsonElement> entry : declared.entrySet()) {
-                components.put(entry.getKey(), entry.getValue().isJsonObject()
-                    ? entry.getValue().getAsJsonObject() : new JsonObject());
-            }
-        }
+        JsonObject components = object(body, "components");
 
         Map<String, String> faces = new LinkedHashMap<>();
         boolean transparent = false;
-        JsonObject instances = components.get("minecraft:material_instances");
-        if (instances != null) {
-            for (Map.Entry<String, JsonElement> entry : instances.entrySet()) {
-                if (!entry.getValue().isJsonObject()) continue;
-                JsonObject instance = entry.getValue().getAsJsonObject();
-                String texture = Json.text(instance, "texture", null);
-                if (texture != null) faces.put(entry.getKey(), texture);
-                transparent |= !"opaque".equals(Json.text(instance, "render_method", "opaque"));
-            }
+        for (Map.Entry<String, JsonElement> entry
+            : object(components, "minecraft:material_instances").entrySet()) {
+            if (!entry.getValue().isJsonObject()) continue;
+            JsonObject instance = entry.getValue().getAsJsonObject();
+            String texture = Json.text(instance, "texture", null);
+            if (texture != null) faces.put(entry.getKey(), texture);
+            transparent |= !"opaque".equals(Json.text(instance, "render_method", "opaque"));
         }
 
         Map<String, List<JsonElement>> states = new LinkedHashMap<>();
-        JsonObject declaredStates = description.getAsJsonObject("states");
-        if (declaredStates != null) {
-            for (Map.Entry<String, JsonElement> entry : declaredStates.entrySet()) {
-                List<JsonElement> values = new ArrayList<>();
-                if (entry.getValue().isJsonArray()) {
-                    entry.getValue().getAsJsonArray().forEach(values::add);
-                } else if (entry.getValue().isJsonObject()) {
-                    // A range is written as `{"values": {"min": 0, "max": 3}}`.
-                    JsonObject range = entry.getValue().getAsJsonObject().getAsJsonObject("values");
-                    if (range != null && range.has("min") && range.has("max")) {
-                        for (int value = range.get("min").getAsInt(); value <= range.get("max").getAsInt();
-                            value++) {
-                            values.add(new com.google.gson.JsonPrimitive(value));
-                        }
+        for (Map.Entry<String, JsonElement> entry : object(description, "states").entrySet()) {
+            List<JsonElement> values = new ArrayList<>();
+            if (entry.getValue().isJsonArray()) {
+                entry.getValue().getAsJsonArray().forEach(values::add);
+            } else if (entry.getValue().isJsonObject()) {
+                // A range is written as `{"values": {"min": 0, "max": 3}}`.
+                JsonObject range = object(entry.getValue().getAsJsonObject(), "values");
+                if (range.has("min") && range.has("max")) {
+                    for (int value = range.get("min").getAsInt(); value <= range.get("max").getAsInt();
+                        value++) {
+                        values.add(new com.google.gson.JsonPrimitive(value));
                     }
                 }
-                if (!values.isEmpty()) states.put(entry.getKey(), values);
             }
+            if (!values.isEmpty()) states.put(entry.getKey(), values);
         }
 
         List<Permutation> permutations = new ArrayList<>();
         for (JsonElement element : Json.list(body, "permutations")) {
             if (!element.isJsonObject()) continue;
             JsonObject permutation = element.getAsJsonObject();
-            Map<String, JsonObject> applied = new LinkedHashMap<>();
-            JsonObject inside = permutation.getAsJsonObject("components");
-            if (inside != null) {
-                for (Map.Entry<String, JsonElement> entry : inside.entrySet()) {
-                    applied.put(entry.getKey(), entry.getValue().isJsonObject()
-                        ? entry.getValue().getAsJsonObject() : new JsonObject());
-                }
-            }
-            permutations.add(new Permutation(Json.text(permutation, "condition", "1"), applied));
+            permutations.add(new Permutation(Json.text(permutation, "condition", "1"),
+                object(permutation, "components")));
         }
 
-        return new BlockDefinition(identifier, faces,
-            text(declared, "minecraft:geometry"),
-            number(components.get("minecraft:destructible_by_mining"), "seconds_to_destroy", 1f),
-            number(components.get("minecraft:destructible_by_explosion"), "explosion_resistance", 1f),
-            (int) number(declared, "minecraft:light_emission", 0),
-            transparent,
-            components, states, permutations);
+        return new BlockDefinition(identifier, faces, geometry(components), transparent,
+            components, states, permutations, object(body, "events"));
     }
 
-    /** A component is written either as the bare value or as an object wrapping it. */
-    private static String text(JsonObject components, String name) {
-        JsonElement value = components == null ? null : components.get(name);
+    /** The named member, or an empty object when the pack left it out or wrote something else. */
+    private static JsonObject object(JsonObject json, String name) {
+        JsonElement value = json == null ? null : json.get(name);
+        return value != null && value.isJsonObject() ? value.getAsJsonObject() : new JsonObject();
+    }
+
+    /** The geometry is written either as the bare identifier or as an object carrying it. */
+    public static String geometry(JsonObject components) {
+        JsonElement value = components.get("minecraft:geometry");
         if (value == null) return null;
         if (value.isJsonPrimitive()) return value.getAsString();
         return value.isJsonObject() ? Json.text(value.getAsJsonObject(), "identifier", null) : null;
-    }
-
-    private static float number(JsonObject json, String key, float fallback) {
-        JsonElement value = json == null ? null : json.get(key);
-        if (value == null) return fallback;
-        if (value.isJsonPrimitive()) return value.getAsFloat();
-
-        JsonElement inner = value.isJsonObject() ? value.getAsJsonObject().get(key) : null;
-        return inner != null && inner.isJsonPrimitive() ? inner.getAsFloat() : fallback;
     }
 }

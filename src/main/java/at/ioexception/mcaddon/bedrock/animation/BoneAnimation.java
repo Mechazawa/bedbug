@@ -1,5 +1,7 @@
 package at.ioexception.mcaddon.bedrock.animation;
 
+import java.util.List;
+
 /**
  * The three channels an animation can drive on one bone.
  *
@@ -12,4 +14,7 @@ public record BoneAnimation(
     AnimationChannel scale,
     boolean rotationRelativeToEntity
 ) {
+    public List<AnimationChannel> channels() {
+        return List.of(rotation, position, scale);
+    }
 }

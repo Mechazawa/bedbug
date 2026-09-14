@@ -36,6 +36,11 @@ public abstract class Surface {
         return null;
     }
 
+    /** A name the way the registries spell it, so a pack writing `dirt` names `minecraft:dirt`. */
+    protected static String namespaced(String id) {
+        return id == null || id.indexOf(':') >= 0 ? id : "minecraft:" + id;
+    }
+
     protected static String dimensionOf(Level level) {
         return at.ioexception.mcaddon.platform.Platform.idOf(level.dimension()).toString();
     }
