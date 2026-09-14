@@ -307,7 +307,6 @@ public class AddonEntity extends PathfinderMob
         return damage != null && damage.isJsonPrimitive() ? damage.getAsDouble() : 1;
     }
 
-    /** A number a component carries, or the fallback when the pack declared neither. */
     /**
      * The number a component holds under one field.
      *
@@ -316,9 +315,22 @@ public class AddonEntity extends PathfinderMob
      */
     private static double number(ServerEntityDefinition definition, String component, String field,
         double fallback) {
-        com.google.gson.JsonObject body = definition.components().get(component);
+        return number(definition.components().get(component), field, fallback);
+    }
+
+    /**
+     * The number one field of a component body holds, whichever of the shapes it was written in.
+     *
+     * Bedrock writes a field that is on or off as a boolean and a field that varies per entity as a
+     * range, and a caller comparing against zero wants an answer for all three. Asking Gson for the
+     * number behind `false` throws, so the two states are counted as one and nothing instead.
+     */
+    private static double number(com.google.gson.JsonObject body, String field, double fallback) {
         com.google.gson.JsonElement value = body == null ? null : body.get(field);
         if (value == null) return fallback;
+        if (value.isJsonPrimitive() && value.getAsJsonPrimitive().isBoolean()) {
+            return value.getAsBoolean() ? 1 : 0;
+        }
         if (value.isJsonPrimitive()) return value.getAsDouble();
         if (!value.isJsonObject()) return fallback;
 
@@ -348,15 +360,6 @@ public class AddonEntity extends PathfinderMob
             setAbsorptionAmount((float) number(definition, "minecraft:absorption", "value", 0));
         }
 
-        // `color` and `color2` name a dye, which is the number a pack's own render controller reads
-        // back as `q.color`. Java has no colour of its own for an arbitrary mob, so it is kept as
-        // the property the pack asks about.
-        for (String named : new String[] {"minecraft:color", "minecraft:color2"}) {
-            if (!declares(named)) continue;
-
-            setInitialValue(named.substring("minecraft:".length()),
-                number(definition, named, "value", 0));
-        }
         if (declares("minecraft:is_hidden_when_invisible")) setInvisible(isInvisible());
 
         refreshComponents();
@@ -368,25 +371,8 @@ public class AddonEntity extends PathfinderMob
             ground.setCanOpenDoors(declares("minecraft:annotation.open_door"));
             ground.setCanFloat(declares("minecraft:navigation.swim") || declares("minecraft:navigation.generic"));
         }
-        // `home` and `dweller` both say the entity belongs somewhere and should stay near it.
-        if (declares("minecraft:home") || declares("minecraft:dweller")) {
-            int radius = (int) number(definition,
-                declares("minecraft:home") ? "minecraft:home" : "minecraft:dweller",
-                "restriction_radius", 16);
-            Platform.setHome(this, blockPosition(), Math.max(1, radius));
-        }
-
         String table = liveText("minecraft:loot", "table");
         if (table != null) lootTable = AddonEntities.lootTable(getType(), table);
-
-        if (declares("minecraft:inventory")) {
-            carried = new net.minecraft.world.SimpleContainer(
-                Math.max(1, (int) number(definition, "minecraft:inventory", "inventory_size", 5)));
-        } else if (declares("minecraft:strength")) {
-            // A llama's strength is how much it carries, three slots per point in both editions.
-            carried = new net.minecraft.world.SimpleContainer(
-                Math.max(1, (int) number(definition, "minecraft:strength", "value", 1) * 3));
-        }
 
         //? if <1.21 {
         /*if (declares("minecraft:variable_max_auto_step")) {
@@ -507,17 +493,32 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
+     * A number a component the entity carries at this moment holds, or the fallback where it carries
+     * none.
+     *
+     * A component group is where Bedrock states a number the entity takes on partway through: the
+     * blast of a primed creeper, the reach of a mount's dash and the gap between a mob's idle sounds
+     * all arrive with the group that describes that state and go again with it.
+     */
+    private double liveNumber(String component, String field, double fallback) {
+        return number(liveComponent(component), field, fallback);
+    }
+
+    /**
      * The body of a component the entity carries at this moment, or null where it carries none.
      *
      * A group the entity has not been given answers nothing here, which is the difference from
      * {@link #componentBody}: this is for a component whose presence is itself the state, where
      * reading one out of a group that is off says the entity is something it is not.
+     *
+     * A live group outranks the top level, which is how a pack says the entity has changed rather
+     * than gained something: a camel sitting has a shorter `minecraft:collision_box` than the one on
+     * the entity and a mooshroom's `minecraft:variant` is redeclared per colour. Thirty-four
+     * components are written both ways in Mojang's own behaviour pack, and reading the top level
+     * first would make every one of those group declarations say nothing.
      */
     public com.google.gson.JsonObject liveComponent(String component) {
         if (definition == null) return null;
-
-        com.google.gson.JsonObject declared = definition.components().get(component);
-        if (declared != null) return declared;
 
         return activeGroups.stream()
             .map(definition.componentGroups()::get)
@@ -525,7 +526,7 @@ public class AddonEntity extends PathfinderMob
                 && group.get(component).isJsonObject())
             .map(group -> group.getAsJsonObject(component))
             .findFirst()
-            .orElse(null);
+            .orElseGet(() -> definition.components().get(component));
     }
 
     /**
@@ -576,7 +577,82 @@ public class AddonEntity extends PathfinderMob
         // Java has no way back: a mob told to stay cannot be told to despawn again.
         if (liveComponent("minecraft:persistent") != null) setPersistenceRequired();
 
+        refreshHome();
+        refreshContainer();
         publishAnger();
+        publishLiveFlags();
+    }
+
+    /**
+     * Where the entity is held, which `minecraft:home` and `minecraft:dweller` both state as a radius.
+     *
+     * Both say the entity belongs somewhere rather than wandering, and Bedrock brings either in with
+     * the group that gives the entity its place: a villager is a dweller of the village it took a job
+     * in. So the centre is wherever the entity stands as the group arrives, and it wanders again once
+     * the group has gone. A place it already has is left alone, because walking away from home is not
+     * the same as moving house.
+     */
+    private void refreshHome() {
+        String component = declaresNow("minecraft:home") ? "minecraft:home"
+            : declaresNow("minecraft:dweller") ? "minecraft:dweller" : null;
+        if (component == null) {
+            Platform.clearHome(this);
+            return;
+        }
+        if (Platform.hasHome(this)) return;
+
+        Platform.setHome(this, blockPosition(),
+            Math.max(1, (int) liveNumber(component, "restriction_radius", 16)));
+    }
+
+    /**
+     * The container the entity carries, sized by whichever component asks for one at this moment.
+     *
+     * `minecraft:inventory` states the number of slots outright and `minecraft:strength` states how
+     * much the entity can carry, three slots per point in both editions. Either arrives with the
+     * group that gives the entity something to carry things for, so the container is built again
+     * whenever the number of slots the pack asks for has moved. What was in it is carried across,
+     * because the items belong to the entity rather than to the group that asked for the room.
+     */
+    private void refreshContainer() {
+        int slots = 0;
+        if (declaresNow("minecraft:inventory")) {
+            slots = Math.max(1, (int) liveNumber("minecraft:inventory", "inventory_size", 5));
+        } else if (declaresNow("minecraft:strength")) {
+            slots = Math.max(1, (int) liveNumber("minecraft:strength", "value", 1) * 3);
+        }
+        if (slots == 0 || (carried != null && carried.getContainerSize() == slots)) return;
+
+        net.minecraft.world.SimpleContainer sized = new net.minecraft.world.SimpleContainer(slots);
+        if (carried != null) {
+            for (int slot = 0; slot < Math.min(slots, carried.getContainerSize()); slot++) {
+                sized.setItem(slot, carried.getItem(slot));
+            }
+        }
+        carried = sized;
+    }
+
+    /**
+     * The flags a pack's own Molang reads back off a component whose group can come and go.
+     *
+     * Each is a fact about what the entity may do rather than a number Java holds anywhere, so the
+     * flag is the whole of what the component is worth on this side: a mount gains its dash and its
+     * power jump with the group that saddles it, and the fuse a primed entity carries is what its
+     * controllers count down over its head.
+     */
+    private void publishLiveFlags() {
+        setValue("can_power_jump", declaresNow("minecraft:can_power_jump"));
+        for (String dye : new String[] {"minecraft:color", "minecraft:color2"}) {
+            if (declaresNow(dye)) {
+                setValue(dye.substring("minecraft:".length()), liveNumber(dye, "value", 0));
+            }
+        }
+        if (declaresNow("minecraft:explode")) {
+            setValue("fuse_time", liveNumber("minecraft:explode", "fuse_length", 1.5));
+        }
+        if (declaresNow("minecraft:dash_action") && value("can_dash") == null) {
+            setValue("can_dash", true);
+        }
     }
 
     /**
@@ -721,12 +797,12 @@ public class AddonEntity extends PathfinderMob
      */
     @Override
     protected boolean canAddPassenger(net.minecraft.world.entity.Entity passenger) {
-        if (definition == null || !declares("minecraft:rideable")) return false;
+        if (definition == null || !declaresNow("minecraft:rideable")) return false;
         if (passenger instanceof Player && ownerUuid() == null
             && definition.behaviours().contains("minecraft:behavior.player_ride_tamed")) {
             return false;
         }
-        return getPassengers().size() < (int) number(definition, "minecraft:rideable", "seat_count", 1);
+        return getPassengers().size() < (int) liveNumber("minecraft:rideable", "seat_count", 1);
     }
 
     /**
@@ -753,9 +829,9 @@ public class AddonEntity extends PathfinderMob
     }
 
     private boolean steerable() {
-        return declares("minecraft:input_ground_controlled")
-            || declares("minecraft:free_camera_controlled")
-            || declares("minecraft:item_controllable")
+        return declaresNow("minecraft:input_ground_controlled")
+            || declaresNow("minecraft:free_camera_controlled")
+            || declaresNow("minecraft:item_controllable")
             || definition.behaviours().contains("minecraft:behavior.controlled_by_player");
     }
 
@@ -766,11 +842,12 @@ public class AddonEntity extends PathfinderMob
      * every rider does.
      */
     private boolean holdsTheReins(Player rider) {
-        if (!declares("minecraft:item_controllable")) return true;
+        com.google.gson.JsonObject reins = liveComponent("minecraft:item_controllable");
+        if (reins == null) return true;
 
         String held = BuiltInRegistries.ITEM.getKey(rider.getMainHandItem().getItem()).toString();
-        for (com.google.gson.JsonElement item : at.ioexception.mcaddon.util.Json.list(
-            componentBody("minecraft:item_controllable"), "control_items")) {
+        for (com.google.gson.JsonElement item
+            : at.ioexception.mcaddon.util.Json.list(reins, "control_items")) {
             if (item.isJsonPrimitive() && names(item.getAsString(), held)) return true;
         }
         return false;
@@ -788,15 +865,15 @@ public class AddonEntity extends PathfinderMob
         net.minecraft.world.phys.Vec3 asked) {
         if (definition == null || !steerable()) return super.getRiddenInput(rider, asked);
 
-        double sideways = asked.x * number(definition, "minecraft:free_camera_controlled",
-            "strafe_speed_modifier", 0.4) * 2.5;
+        double sideways = asked.x
+            * liveNumber("minecraft:free_camera_controlled", "strafe_speed_modifier", 0.4) * 2.5;
         double forward = asked.z < 0
-            ? asked.z * number(definition, "minecraft:free_camera_controlled",
+            ? asked.z * liveNumber("minecraft:free_camera_controlled",
                 "backwards_movement_modifier", 0.5) * 2
             : asked.z;
-        double vertical = declares("minecraft:vertical_movement_action")
+        double vertical = declaresNow("minecraft:vertical_movement_action")
             && ((at.ioexception.mcaddon.mixin.JumpingAccessor) rider).mcaddon$jumping()
-            ? number(definition, "minecraft:vertical_movement_action", "vertical_velocity", 0.5) : 0;
+            ? liveNumber("minecraft:vertical_movement_action", "vertical_velocity", 0.5) : 0;
         return new net.minecraft.world.phys.Vec3(sideways, vertical, forward);
     }
 
@@ -813,7 +890,7 @@ public class AddonEntity extends PathfinderMob
 
     /** `minecraft:underwater_mount_breathing` keeps a rider's air up for as long as they stay on. */
     private void breatheForRider() {
-        if (!declares("minecraft:underwater_mount_breathing")) return;
+        if (!declaresNow("minecraft:underwater_mount_breathing")) return;
 
         getPassengers().stream()
             .filter(net.minecraft.world.entity.LivingEntity.class::isInstance)
@@ -902,7 +979,7 @@ public class AddonEntity extends PathfinderMob
 
     /** Whether the pack's `shareables` list allows this item, which allows everything when absent. */
     private boolean shareable(net.minecraft.world.item.ItemStack stack) {
-        com.google.gson.JsonObject body = definition.components().get("minecraft:shareables");
+        com.google.gson.JsonObject body = liveComponent("minecraft:shareables");
         com.google.gson.JsonArray items = body == null ? null : body.getAsJsonArray("items");
         if (items == null) return true;
 
@@ -1132,10 +1209,13 @@ public class AddonEntity extends PathfinderMob
      * keeps its place, which is what persistence means on both editions.
      */
     private void despawn() {
-        if (!declares("minecraft:despawn") || isPersistenceRequired()) return;
-        if (!(level() instanceof net.minecraft.server.level.ServerLevel)) return;
+        if (isPersistenceRequired() || !(level() instanceof net.minecraft.server.level.ServerLevel)) {
+            return;
+        }
 
-        com.google.gson.JsonObject body = definition.components().get("minecraft:despawn");
+        com.google.gson.JsonObject body = liveComponent("minecraft:despawn");
+        if (body == null) return;
+
         Filter filter = body.has("filters") ? Filter.parse(body.get("filters")) : null;
         if (filter == null || !filter.matches(new Filter.Context(this, null, null, ServerHooks.state()))) {
             return;
@@ -1448,8 +1528,8 @@ public class AddonEntity extends PathfinderMob
     @Override
     //?}
     public boolean canBeLeashed() {
-        return definition == null || !definition.components().containsKey("minecraft:leashable")
-            || number(definition, "minecraft:leashable", "can_be_stolen", 1) != 0;
+        return definition == null || !declaresNow("minecraft:leashable")
+            || liveNumber("minecraft:leashable", "can_be_stolen", 1) != 0;
     }
 
     /**
@@ -2293,7 +2373,6 @@ public class AddonEntity extends PathfinderMob
             || declares("minecraft:movement.amphibious"));
         setValue("can_walk", declares("minecraft:navigation.walk")
             || declares("minecraft:navigation.generic"));
-        setValue("can_power_jump", declares("minecraft:can_power_jump"));
 
         // `minecraft:area_attack` is the whole of hurting whatever stands against the entity, so
         // declaring it is what makes the entity able to damage the mobs around it.
@@ -2307,9 +2386,6 @@ public class AddonEntity extends PathfinderMob
         if (declares("minecraft:heartbeat")) {
             setValue("heartbeat_interval", number(definition, "minecraft:heartbeat", "interval", 1));
         }
-        if (declares("minecraft:explode")) {
-            setValue("fuse_time", number(definition, "minecraft:explode", "fuse_length", 1.5));
-        }
 
         // `minecraft:walk_animation_speed` scales how fast a pack's own walk animation runs, which
         // its controllers read back off the entity's speed, so the number goes with the speed.
@@ -2317,7 +2393,6 @@ public class AddonEntity extends PathfinderMob
             setValue("walk_animation_speed",
                 number(definition, "minecraft:walk_animation_speed", "value", 1));
         }
-        if (declares("minecraft:dash_action")) setValue("can_dash", true);
         if (declares("minecraft:out_of_control")) setValue("out_of_control", true);
     }
 
@@ -3053,17 +3128,17 @@ public class AddonEntity extends PathfinderMob
      * attribute is moved as the entity enters and leaves, and put back on land.
      */
     private void swimAtItsOwnSpeed() {
-        if (!declares("minecraft:lava_movement") && !declares("minecraft:underwater_movement")
-            && !declares("minecraft:water_movement")) {
+        if (!declaresNow("minecraft:lava_movement") && !declaresNow("minecraft:underwater_movement")
+            && !declaresNow("minecraft:water_movement")) {
             return;
         }
 
         String component = null;
-        if (isInLava() && declares("minecraft:lava_movement")) {
+        if (isInLava() && declaresNow("minecraft:lava_movement")) {
             component = "minecraft:lava_movement";
-        } else if (isInWater() && declares("minecraft:underwater_movement")) {
+        } else if (isInWater() && declaresNow("minecraft:underwater_movement")) {
             component = "minecraft:underwater_movement";
-        } else if (isInWater() && declares("minecraft:water_movement")) {
+        } else if (isInWater() && declaresNow("minecraft:water_movement")) {
             component = "minecraft:water_movement";
         }
 
@@ -3072,7 +3147,7 @@ public class AddonEntity extends PathfinderMob
         if (speed == null) return;
 
         double wanted = component == null ? definition.movementSpeed()
-            : number(definition, component, "value", definition.movementSpeed());
+            : liveNumber(component, "value", definition.movementSpeed());
         if (speed.getBaseValue() != wanted) speed.setBaseValue(wanted);
     }
 
@@ -3167,7 +3242,7 @@ public class AddonEntity extends PathfinderMob
      * jump is read and the mount jumps for them.
      */
     private void jumpForRider() {
-        if (!declares("minecraft:can_power_jump") || !onGround()) return;
+        if (!declaresNow("minecraft:can_power_jump") || !onGround()) return;
         if (!(getControllingPassenger() instanceof Player rider)) return;
         if (!((at.ioexception.mcaddon.mixin.JumpingAccessor) rider).mcaddon$jumping()) return;
 
@@ -3182,7 +3257,9 @@ public class AddonEntity extends PathfinderMob
      */
     @Override
     protected float getJumpPower() {
-        if (definition == null || !declares("minecraft:can_power_jump")) return super.getJumpPower();
+        if (definition == null || !declaresNow("minecraft:can_power_jump")) {
+            return super.getJumpPower();
+        }
 
         return (float) getAttributeValue(Attributes.JUMP_STRENGTH);
     }
@@ -3195,9 +3272,9 @@ public class AddonEntity extends PathfinderMob
      * draw the recovery from, so it is published while it runs down rather than only at its ends.
      */
     private void dash() {
-        if (!declares("minecraft:dash_action")) return;
+        if (!declaresNow("minecraft:dash_action")) return;
 
-        int wait = (int) (number(definition, "minecraft:dash_action", "cooldown_time", 1)
+        int wait = (int) (liveNumber("minecraft:dash_action", "cooldown_time", 1)
             * Goals.TICKS_PER_SECOND);
         if (dashReadyAt > tickCount) {
             if (tickCount % Goals.TICKS_PER_SECOND == 0 && wait > 0) {
@@ -3212,11 +3289,11 @@ public class AddonEntity extends PathfinderMob
         if (!onGround() || !(getControllingPassenger() instanceof Player rider)) return;
         if (!((at.ioexception.mcaddon.mixin.JumpingAccessor) rider).mcaddon$jumping()) return;
 
-        double forward = number(definition, "minecraft:dash_action", "horizontal_momentum", 20)
+        double forward = liveNumber("minecraft:dash_action", "horizontal_momentum", 20)
             / Goals.TICKS_PER_SECOND;
         double facing = Math.toRadians(getYRot());
         setDeltaMovement(getDeltaMovement().add(-Math.sin(facing) * forward,
-            number(definition, "minecraft:dash_action", "vertical_momentum", 0.6),
+            liveNumber("minecraft:dash_action", "vertical_momentum", 0.6),
             Math.cos(facing) * forward));
         dashReadyAt = tickCount + wait;
         setValue("can_dash", false);
@@ -3302,7 +3379,7 @@ public class AddonEntity extends PathfinderMob
 
     /** `minecraft:rotation_axis_aligned` keeps the entity square to the world rather than turning freely. */
     private void faceTheGrid() {
-        if (!declares("minecraft:rotation_axis_aligned")) return;
+        if (!declaresNow("minecraft:rotation_axis_aligned")) return;
 
         float square = Math.round(getYRot() / 90f) * 90f;
         setYRot(square);
@@ -3556,10 +3633,10 @@ public class AddonEntity extends PathfinderMob
         String id = BuiltInRegistries.ITEM.getKey(held.getItem()).toString();
         for (String component
             : new String[] {"minecraft:tameable", "minecraft:tamemount", "minecraft:trusting"}) {
-            if (!declares(component) || !foodOf(component, id)) continue;
+            if (!declaresNow(component) || !foodOf(component, id)) continue;
 
             if (!player.getAbilities().instabuild) held.shrink(1);
-            if (random.nextDouble() > number(definition, component, "probability", 0.33)) return true;
+            if (random.nextDouble() > liveNumber(component, "probability", 0.33)) return true;
 
             ServerHooks.state().setProperty(getUUID(), "is_tamed", true);
             setOwner(player);
@@ -3571,9 +3648,12 @@ public class AddonEntity extends PathfinderMob
 
     /** Whether the item offered is one of the foods a taming or trusting component named. */
     private boolean foodOf(String component, String offered) {
+        com.google.gson.JsonObject body = liveComponent(component);
+        if (body == null) return false;
+
         for (String key : new String[] {"tame_items", "feed_items", "trust_items", "items"}) {
             for (com.google.gson.JsonElement element
-                : at.ioexception.mcaddon.util.Json.list(componentBody(component), key)) {
+                : at.ioexception.mcaddon.util.Json.list(body, key)) {
                 if (element.isJsonPrimitive() && names(element.getAsString(), offered)) return true;
                 if (!element.isJsonObject()) continue;
 
@@ -3588,7 +3668,8 @@ public class AddonEntity extends PathfinderMob
 
     /** The event named under one of a component's own `*_event` objects, or null when it names none. */
     private String namedEvent(String component, String key) {
-        com.google.gson.JsonObject wrapper = componentBody(component).getAsJsonObject(key);
+        com.google.gson.JsonObject body = liveComponent(component);
+        com.google.gson.JsonObject wrapper = body == null ? null : body.getAsJsonObject(key);
         return wrapper == null ? null : at.ioexception.mcaddon.util.Json.text(wrapper, "event", null);
     }
 
@@ -3669,7 +3750,8 @@ public class AddonEntity extends PathfinderMob
 
     /** `minecraft:sittable` is an entity a player sits down and stands up again by clicking it. */
     private boolean satDown(Player player) {
-        if (!declares("minecraft:sittable") || !player.getItemInHand(InteractionHand.MAIN_HAND).isEmpty()) {
+        if (!declaresNow("minecraft:sittable")
+            || !player.getItemInHand(InteractionHand.MAIN_HAND).isEmpty()) {
             return false;
         }
 
@@ -3708,9 +3790,9 @@ public class AddonEntity extends PathfinderMob
      * the two ends of what Java otherwise eases between.
      */
     private void holdBody() {
-        if (declares("minecraft:body_rotation_blocked")) {
+        if (declaresNow("minecraft:body_rotation_blocked")) {
             setYBodyRot(yBodyRotO);
-        } else if (declares("minecraft:body_rotation_always_follows_head")) {
+        } else if (declaresNow("minecraft:body_rotation_always_follows_head")) {
             setYBodyRot(getYHeadRot());
         }
     }
@@ -3938,12 +4020,12 @@ public class AddonEntity extends PathfinderMob
     }
 
     private void explode(net.minecraft.server.level.ServerLevel level) {
-        if (!declares("minecraft:explode")) return;
+        if (!declaresNow("minecraft:explode")) return;
 
-        boolean breaks = number(definition, "minecraft:explode", "breaks_blocks", 1) != 0;
-        boolean burns = number(definition, "minecraft:explode", "causes_fire", 0) != 0;
+        boolean breaks = liveNumber("minecraft:explode", "breaks_blocks", 1) != 0;
+        boolean burns = liveNumber("minecraft:explode", "causes_fire", 0) != 0;
         level.explode(this, getX(), getY(), getZ(),
-            (float) number(definition, "minecraft:explode", "power", 3), burns,
+            (float) liveNumber("minecraft:explode", "power", 3), burns,
             breaks ? Level.ExplosionInteraction.MOB : Level.ExplosionInteraction.NONE);
     }
 
@@ -3992,6 +4074,51 @@ public class AddonEntity extends PathfinderMob
         return declaredScale() * (age == null ? super.getScale() : age.scale());
     }
     *///?}
+
+    /**
+     * The box the entity collides in, which `minecraft:collision_box` states as a width and a height.
+     *
+     * A scale multiplies both axes together and this is the only place either can move on its own,
+     * which is what a pack asks for when its entity changes shape rather than size: a shell closed is
+     * square and open is tall. The entity type was built from whatever the top level said and cannot
+     * move once the registries are frozen, so a box a component group brings reaches the entity here.
+     *
+     * The scale that grows with age is what Java applies over the type's own box, so an answer of
+     * this mod's own has to apply it again over the pack's.
+     */
+    //? if >=1.21 {
+    @Override
+    protected net.minecraft.world.entity.EntityDimensions getDefaultDimensions(
+        net.minecraft.world.entity.Pose pose) {
+        net.minecraft.world.entity.EntityDimensions declared = declaredBox();
+        return declared == null ? super.getDefaultDimensions(pose) : declared.scale(getAgeScale());
+    }
+    //?} else {
+    /*@Override
+    public net.minecraft.world.entity.EntityDimensions getDimensions(
+        net.minecraft.world.entity.Pose pose) {
+        net.minecraft.world.entity.EntityDimensions declared = declaredBox();
+        return declared == null || pose == net.minecraft.world.entity.Pose.SLEEPING
+            ? super.getDimensions(pose) : declared.scale(getScale());
+    }
+    *///?}
+
+    /**
+     * The box the entity carries a `minecraft:collision_box` for, unscaled, or null while it has none.
+     *
+     * Null through the whole of the mob constructor, because the definition is assigned after it and
+     * Java asks for the box while it runs. The type's own is the right answer there: it was built
+     * from the same numbers.
+     */
+    private net.minecraft.world.entity.EntityDimensions declaredBox() {
+        com.google.gson.JsonObject box = definition == null
+            ? null : liveComponent("minecraft:collision_box");
+        if (box == null) return null;
+
+        return net.minecraft.world.entity.EntityDimensions.scalable(
+            (float) number(box, "width", definition.width()) * definition.scale(),
+            (float) number(box, "height", definition.height()) * definition.scale());
+    }
 
     /**
      * `minecraft:custom_hit_test` widens what a melee swing and an arrow may land on.
@@ -4046,26 +4173,26 @@ public class AddonEntity extends PathfinderMob
      * ones, and this runs on the sensor interval, so a gap shorter than that interval becomes it.
      */
     private void hurtOverTime() {
-        if (!declares("minecraft:damage_over_time")
+        if (!declaresNow("minecraft:damage_over_time")
             || !(level() instanceof net.minecraft.server.level.ServerLevel level)) {
             return;
         }
 
-        double seconds = number(definition, "minecraft:damage_over_time", "time_between_hurt", 0);
+        double seconds = liveNumber("minecraft:damage_over_time", "time_between_hurt", 0);
         int interval = Math.max(Sensors.INTERVAL_TICKS,
             (int) Math.round(seconds * Goals.TICKS_PER_SECOND));
         if (tickCount % interval >= Sensors.INTERVAL_TICKS) return;
 
         Platform.hurt(this, level, damageSources().magic(),
-            (float) number(definition, "minecraft:damage_over_time", "damage_per_hurt", 1));
+            (float) liveNumber("minecraft:damage_over_time", "damage_per_hurt", 1));
     }
 
     /** Bedrock states the gap between idle sounds in seconds; Java counts it in ticks. */
     @Override
     public int getAmbientSoundInterval() {
-        return definition == null || !declares("minecraft:ambient_sound_interval")
+        return definition == null || !declaresNow("minecraft:ambient_sound_interval")
             ? super.getAmbientSoundInterval()
-            : (int) (number(definition, "minecraft:ambient_sound_interval", "value", 8) * 20);
+            : (int) (liveNumber("minecraft:ambient_sound_interval", "value", 8) * 20);
     }
 
     @Override
@@ -4275,7 +4402,7 @@ public class AddonEntity extends PathfinderMob
     @Override
     public InteractionResult mobInteract(Player player, InteractionHand hand) {
         // `minecraft:not_pickable_from_inside` is an entity a rider cannot reach from the seat.
-        if (definition != null && declares("minecraft:not_pickable_from_inside")
+        if (definition != null && declaresNow("minecraft:not_pickable_from_inside")
             && player.getVehicle() == this) {
             return InteractionResult.PASS;
         }

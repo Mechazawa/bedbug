@@ -1598,6 +1598,24 @@ public final class Platform {
         *///?}
     }
 
+    /** Whether the mob is already held to somewhere, so a place it was given is not moved. */
+    public static boolean hasHome(net.minecraft.world.entity.Mob mob) {
+        //? if >=26 {
+        return mob.hasHome();
+        //?} else {
+        /*return mob.hasRestriction();
+        *///?}
+    }
+
+    /** Lets the mob wander again, which is what taking the component away amounts to. */
+    public static void clearHome(net.minecraft.world.entity.Mob mob) {
+        //? if >=26 {
+        mob.clearHome();
+        //?} else {
+        /*mob.clearRestriction();
+        *///?}
+    }
+
     /**
      * Multiplies how fast a mob moves, or puts it back when the multiplier is one.
      *

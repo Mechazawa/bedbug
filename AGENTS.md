@@ -175,6 +175,14 @@ These are the checks it runs, and what each one catches:
   shrank, an attribute that never moved or a reaction that never ran. The timer's group is switched
   off partway through its wait and on again after the deadline has gone by, which is the one
   assertion a live read alone does not satisfy.
+
+  Three more carry what an entity takes on rather than what it is. The laden group holds a collision
+  box wider and shorter than the one on the entity, an inventory beside the shareables list saying
+  what may go in it, an idle sound interval, a dye, a dweller's radius, a leashable refusing to be
+  stolen, a ground control and a sittable; the primed group holds an explosion, and the warded group
+  a damage sensor refusing the blow and raising an event about it. The box is the one that proves a
+  group moves the width and the height apart from each other, which no scale can do, and the laden
+  group's components are otherwise unrelated so that each assertion names one of them alone.
   Two more entities are there for what a mob walking about never reaches. One is a projectile with
   hit boxes wider than the box it collides in; the other shoots it, rides rails, remembers what comes
   near it and dies the ender dragon's long death. A third file describes `minecraft:player`, which is
@@ -822,6 +830,16 @@ clips staying at a falling weight while the state it moved to comes up.
 
   **The `read` column ranks the work rather than deciding it.** `elsewhere` means only that no
   recognised call names that literal.
+
+  **Two indirections are worked out rather than listed.** A name walked over in a `new String[]` or
+  a `List.of` is read through the loop's own variable, so the line carrying the name carries no call
+  and the line carrying the call carries no name; the loop body decides for every name in the list.
+  And a helper taking the name as a parameter and handing it to one of the recognised calls reads it
+  exactly as widely, so `raise("minecraft:on_hurt", ...)` is a live read that looks like a bare
+  string. Each such helper is found by its own parameter reaching a recognised call inside its body,
+  which is why a helper written in the source counts the moment it is written. Only the `IMPLEMENTED`
+  list itself is cut out of `AddonEntities.java`; the rest of that file reads components like any
+  other.
 
   **A value the entity type was built from is still on the list.** The type being frozen bounds
   where a group's value may be applied rather than whether it can move at all: Java holds a size,

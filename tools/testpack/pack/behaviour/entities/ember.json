@@ -36,6 +36,16 @@
           "type": "bool",
           "default": false,
           "client_sync": true
+        },
+        "tp:scratched": {
+          "type": "bool",
+          "default": false,
+          "client_sync": true
+        },
+        "tp:sat": {
+          "type": "bool",
+          "default": false,
+          "client_sync": true
         }
       },
       "animations": {
@@ -107,6 +117,18 @@
       },
       "minecraft:flying_speed": {
         "value": 0.25
+      },
+      "minecraft:behavior.pickup_items": {
+        "priority": 6,
+        "max_dist": 4.0
+      },
+      "minecraft:rideable": {
+        "seat_count": 1,
+        "seats": [
+          {
+            "position": [0.0, 0.4, 0.0]
+          }
+        ]
       }
     },
     "component_groups": {
@@ -148,6 +170,61 @@
             "event": "tp:ember_calmed",
             "target": "self"
           }
+        }
+      },
+      "tp:ember_laden": {
+        "minecraft:collision_box": {
+          "width": 1.4,
+          "height": 0.25
+        },
+        "minecraft:inventory": {
+          "inventory_size": 9
+        },
+        "minecraft:shareables": {
+          "items": [
+            {
+              "item": "minecraft:gold_ingot"
+            }
+          ]
+        },
+        "minecraft:ambient_sound_interval": {
+          "value": 3.0
+        },
+        "minecraft:can_power_jump": {},
+        "minecraft:color": {
+          "value": 11
+        },
+        "minecraft:dweller": {
+          "restriction_radius": 5
+        },
+        "minecraft:leashable": {
+          "can_be_stolen": false
+        },
+        "minecraft:input_ground_controlled": {},
+        "minecraft:sittable": {
+          "sit_event": {
+            "event": "tp:ember_sat"
+          }
+        }
+      },
+      "tp:ember_primed": {
+        "minecraft:explode": {
+          "fuse_length": 2.5,
+          "power": 3,
+          "breaks_blocks": false,
+          "causes_fire": false
+        }
+      },
+      "tp:ember_warded": {
+        "minecraft:damage_sensor": {
+          "triggers": [
+            {
+              "deals_damage": false,
+              "on_damage": {
+                "event": "tp:ember_scratched"
+              }
+            }
+          ]
         }
       },
       "tp:ember_alert": {
@@ -253,6 +330,36 @@
       "tp:ember_sensed": {
         "set_property": {
           "tp:sensed": true
+        }
+      },
+      "tp:ember_load": {
+        "add": {
+          "component_groups": ["tp:ember_laden"]
+        }
+      },
+      "tp:ember_unload": {
+        "remove": {
+          "component_groups": ["tp:ember_laden"]
+        }
+      },
+      "tp:ember_sat": {
+        "set_property": {
+          "tp:sat": true
+        }
+      },
+      "tp:ember_prime": {
+        "add": {
+          "component_groups": ["tp:ember_primed"]
+        }
+      },
+      "tp:ember_ward_on": {
+        "add": {
+          "component_groups": ["tp:ember_warded"]
+        }
+      },
+      "tp:ember_scratched": {
+        "set_property": {
+          "tp:scratched": true
         }
       },
       "tp:ember_look_for_saddle": {
