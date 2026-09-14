@@ -165,6 +165,15 @@ These are the checks it runs, and what each one catches:
   tests ask what a group is worth: that the marker is published while the group is on and cleared
   when it goes, that a filter asking `has_component` sees it, and that the live set is built again
   from what was stored rather than lost with the chunk.
+
+  Five more groups carry the components a group brings that Java holds on the entity: a size, an
+  experience reward written the way Mojang writes one, an attack and a knockback resistance beside
+  a `minecraft:persistent`, an anger that calms itself down again, and a timer beside an
+  environment sensor. Each is switched on by an event of its own and read back through what Java
+  does with it, so a reader that went back to asking the definition shows up as a box that never
+  shrank, an attribute that never moved or a reaction that never ran. The timer's group is switched
+  off partway through its wait and on again after the deadline has gone by, which is the one
+  assertion a live read alone does not satisfy.
   Two more entities are there for what a mob walking about never reaches. One is a projectile with
   hit boxes wider than the box it collides in; the other shoots it, rides rails, remembers what comes
   near it and dies the ender dragon's long death. A third file describes `minecraft:player`, which is
@@ -787,9 +796,16 @@ clips staying at a falling weight while the state it moved to comes up.
   `collectBehaviours` takes the union of both sides before the entity exists, and so is a marker,
   because the markers are published together off one list.
 
-  **The `read` column ranks the work rather than deciding it.** A component read as the entity type
-  is built, such as its size, can be read no other way, and `elsewhere` means only that no recognised
-  call names that literal.
+  **The `read` column ranks the work rather than deciding it.** `elsewhere` means only that no
+  recognised call names that literal.
+
+  **A value the entity type was built from is still on the list.** The type being frozen bounds
+  where a group's value may be applied rather than whether it can move at all: Java holds a size,
+  an attribute and a navigator on the entity as well as on its type, so `minecraft:scale` reaches
+  the entity through the same scale `minecraft:scale_by_age` moves, and `minecraft:attack` through
+  the attribute instance rather than the supplier. What is left off is a name with no read at all,
+  taken from the same set `components.py` prints as implemented with no reader of its own: those
+  are the components Java does for every mob anyway, so where a pack declared one decides nothing.
 
 ## Conventions
 

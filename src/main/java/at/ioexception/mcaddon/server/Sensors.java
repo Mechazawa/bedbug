@@ -1,7 +1,6 @@
 package at.ioexception.mcaddon.server;
 
 import at.ioexception.mcaddon.bedrock.behaviour.Filter;
-import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
 import at.ioexception.mcaddon.entity.AddonEntity;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
@@ -36,6 +35,11 @@ import java.util.concurrent.ThreadLocalRandom;
  *
  * Bedrock has no Java equivalent for these: they are evaluators rather than goals. A pack leans on
  * them heavily, so without them an entity has its models and none of its reactions.
+ *
+ * Every one is read off the live set rather than off the definition, because a sensor is how a pack
+ * arms a reaction it wants for a while: eighteen of the nineteen `minecraft:timer` declarations in
+ * Mojang's own behaviour pack sit inside a component group, and a sensor read from the definition
+ * runs for an entity whose group is off and never runs for one whose group brought it in.
  */
 public final class Sensors {
     /** How often the sensors are evaluated. Bedrock's own rate is not exact either. */
@@ -51,16 +55,43 @@ public final class Sensors {
     }
 
     public static void tick(AddonEntity entity, AddonState state) {
-        ServerEntityDefinition definition = entity.definition();
-        if (definition == null || state == null) return;
+        if (entity.definition() == null || state == null) return;
 
-        environment(entity, definition, state);
-        nearby(entity, definition, state);
-        timer(entity, definition, state);
-        scheduler(entity, definition, state);
-        hurtOnCondition(entity, definition, state);
-        dryingOut(entity, definition, state);
-        spawnEntity(entity, definition, state);
+        environment(entity, state);
+        nearby(entity, state);
+        timer(entity, state);
+        scheduler(entity, state);
+        hurtOnCondition(entity, state);
+        dryingOut(entity, state);
+        spawnEntity(entity, state);
+        calmDown(entity, state);
+    }
+
+    /**
+     * `minecraft:angry` keeps the entity angry for the time it names and then calms it down again.
+     *
+     * The event a pack names is what removes the group, so the count has to end even for an entity
+     * nothing provokes again: without it a bee stung once stays angry for as long as it lives.
+     * `duration_delta` spreads the calm over a crowd so a swarm does not settle on the same tick.
+     */
+    private static void calmDown(AddonEntity entity, AddonState state) {
+        JsonObject angry = entity.liveComponent("minecraft:angry");
+        if (angry == null) {
+            entity.setCalmAtTick(-1);
+            return;
+        }
+
+        if (entity.calmAtTick() < 0) {
+            double seconds = number(angry, "duration", 25);
+            double spread = number(angry, "duration_delta", 0);
+            entity.setCalmAtTick(entity.tickCount + (int) ((seconds
+                + (spread > 0 ? ThreadLocalRandom.current().nextDouble(-spread, spread) : 0)) * 20));
+            return;
+        }
+        if (entity.tickCount < entity.calmAtTick()) return;
+
+        entity.setCalmAtTick(-1);
+        raise(entity, eventName(angry, "calm_event"), null, state);
     }
 
     /**
@@ -69,9 +100,8 @@ public final class Sensors {
      * The wait is in seconds and randomised between its two bounds, which is what keeps a group of
      * the same entity from all producing something on the same tick.
      */
-    private static void spawnEntity(AddonEntity entity, ServerEntityDefinition definition,
-        AddonState state) {
-        JsonObject component = definition.components().get("minecraft:spawn_entity");
+    private static void spawnEntity(AddonEntity entity, AddonState state) {
+        JsonObject component = entity.liveComponent("minecraft:spawn_entity");
         if (component == null || !(entity.level() instanceof ServerLevel level)) return;
 
         int index = 0;
@@ -164,8 +194,8 @@ public final class Sensors {
      * raises depends on whether the drying had finished: one event for interrupting it, another for
      * recovering from having dried out.
      */
-    private static void dryingOut(AddonEntity entity, ServerEntityDefinition definition, AddonState state) {
-        JsonObject component = definition.components().get("minecraft:drying_out_timer");
+    private static void dryingOut(AddonEntity entity, AddonState state) {
+        JsonObject component = entity.liveComponent("minecraft:drying_out_timer");
         if (component == null) return;
 
         int total = (int) (number(component, "total_time", 300) * 20);
@@ -193,8 +223,8 @@ public final class Sensors {
      * The delay fields hold it back between runs, so a pack's villager schedule is not re-decided
      * every time the sensors come round.
      */
-    private static void scheduler(AddonEntity entity, ServerEntityDefinition definition, AddonState state) {
-        JsonObject scheduler = definition.components().get("minecraft:scheduler");
+    private static void scheduler(AddonEntity entity, AddonState state) {
+        JsonObject scheduler = entity.liveComponent("minecraft:scheduler");
         if (scheduler == null || entity.tickCount < entity.schedulerDueTick()) return;
 
         int low = (int) (number(scheduler, "min_delay_secs", 0) * 20);
@@ -216,9 +246,8 @@ public final class Sensors {
     }
 
     /** `minecraft:hurt_on_condition` is how a pack makes its entity take damage from where it is. */
-    private static void hurtOnCondition(AddonEntity entity, ServerEntityDefinition definition,
-        AddonState state) {
-        JsonObject component = definition.components().get("minecraft:hurt_on_condition");
+    private static void hurtOnCondition(AddonEntity entity, AddonState state) {
+        JsonObject component = entity.liveComponent("minecraft:hurt_on_condition");
         if (component == null || !(entity.level() instanceof ServerLevel level)) return;
 
         for (JsonElement element : Json.list(component, "damage_conditions")) {
@@ -259,9 +288,14 @@ public final class Sensors {
      * The delay is a number, a range to pick from, or a weighted list of choices, which is how a
      * pack staggers a crowd of the same entity rather than having all of them act on the same tick.
      */
-    private static void timer(AddonEntity entity, ServerEntityDefinition definition, AddonState state) {
-        JsonObject timer = definition.components().get("minecraft:timer");
-        if (timer == null) return;
+    private static void timer(AddonEntity entity, AddonState state) {
+        JsonObject timer = entity.liveComponent("minecraft:timer");
+        // A group leaving takes the count with it, so the group arriving again starts a fresh wait
+        // rather than firing at once on a deadline the entity passed while the timer was off.
+        if (timer == null) {
+            entity.setTimerDueTick(-1);
+            return;
+        }
 
         String event = eventName(timer, "time_down_event");
         if (event == null) return;
@@ -315,8 +349,8 @@ public final class Sensors {
     }
 
     /** `minecraft:environment_sensor` fires an event whenever its own filters hold. */
-    private static void environment(AddonEntity entity, ServerEntityDefinition definition, AddonState state) {
-        JsonObject sensor = definition.components().get("minecraft:environment_sensor");
+    private static void environment(AddonEntity entity, AddonState state) {
+        JsonObject sensor = entity.liveComponent("minecraft:environment_sensor");
         if (sensor == null) return;
 
         for (JsonElement element : Json.list(sensor, "triggers")) {
@@ -339,8 +373,8 @@ public final class Sensors {
      * so an entity with nothing to hunt raises neither. `must_see` is what separates a creeper that
      * stops swelling because the player walked away from one that lost sight of them.
      */
-    private static void target(AddonEntity entity, ServerEntityDefinition definition, AddonState state) {
-        JsonObject sensor = definition.components().get("minecraft:target_nearby_sensor");
+    private static void target(AddonEntity entity, AddonState state) {
+        JsonObject sensor = entity.liveComponent("minecraft:target_nearby_sensor");
         if (sensor == null || entity.getTarget() == null) return;
 
         LivingEntity target = entity.getTarget();
@@ -371,12 +405,12 @@ public final class Sensors {
      * rather than one per candidate, and a subsensor naming a cooldown is skipped outright while it
      * is still running.
      */
-    private static void nearby(AddonEntity entity, ServerEntityDefinition definition, AddonState state) {
+    private static void nearby(AddonEntity entity, AddonState state) {
         // `target_nearby_sensor` is the same question asked about whatever the entity is hunting,
         // and Bedrock writes it as a component of its own rather than as one more subsensor.
-        target(entity, definition, state);
+        target(entity, state);
 
-        JsonObject sensor = definition.components().get("minecraft:entity_sensor");
+        JsonObject sensor = entity.liveComponent("minecraft:entity_sensor");
         if (sensor == null) return;
 
         boolean playersOnly = flag(sensor, "find_players_only", false);
@@ -463,8 +497,7 @@ public final class Sensors {
         String name = BuiltInRegistries.BLOCK.getKey(broken.getBlock()).toString();
         AABB box = new AABB(pos).inflate(BLOCK_SENSOR_REACH);
         for (AddonEntity entity : level.getEntitiesOfClass(AddonEntity.class, box)) {
-            JsonObject sensor = entity.definition() == null
-                ? null : entity.definition().components().get("minecraft:block_sensor");
+            JsonObject sensor = entity.liveComponent("minecraft:block_sensor");
             if (sensor == null) continue;
 
             double radius = number(sensor, "sensor_radius", 16);

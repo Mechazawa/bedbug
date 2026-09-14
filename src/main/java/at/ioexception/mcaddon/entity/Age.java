@@ -45,11 +45,14 @@ public final class Age {
 
         JsonObject growUp = ageable.getAsJsonObject("grow_up");
         JsonObject scaling = entity.liveComponent("minecraft:scale_by_age");
+        // Both scales default to one, which is what Bedrock documents. A pack that wants its baby
+        // drawn small says so with `minecraft:scale` in the group that makes it young, which is
+        // what all forty-two of the vanilla entities that age at a different size do.
         return new Age(
             (int) (number(ageable, "duration", 1200) * 20),
             feedItems(ageable),
             growUp == null ? null : Json.text(growUp, "event", null),
-            (float) number(scaling, "start_scale", 0.5),
+            (float) number(scaling, "start_scale", 1),
             (float) number(scaling, "end_scale", 1));
     }
 

@@ -13,6 +13,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
@@ -500,4 +501,234 @@ public final class BehaviourGameTests {
     /** The item the synthetic pack declares dyeable, and the colour it declares it. */
     private static final String DYED_ITEM = "tp:shard";
     private static final int DYED_COLOUR = 0x4C8FD1;
+
+    /**
+     * A group carrying `minecraft:scale` changes how big the entity is.
+     *
+     * The entity type was built at whatever size the top level asked for, and that cannot move once
+     * the registries are frozen, so the scale a group brings has to reach the entity itself. Every
+     * one of the forty-two vanilla entities that scales in a group does it in the group that makes
+     * it young, and none of them carries `minecraft:scale_by_age`, so a read of the definition alone
+     * draws a pack's baby at its grown size and gives it a grown entity's box to collide in.
+     */
+    @GameTest()
+    public void aGroupCarryingAScaleResizesTheEntity(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        float grown = ember.getBbWidth();
+        EntityEvents.trigger(ember, "tp:ember_shrink", null, ServerHooks.state());
+        helper.assertTrue(ember.getBbWidth() < grown * SHRUNK_BELOW,
+            ENTITY + " gained minecraft:scale from a group and is still its grown size.");
+
+        EntityEvents.trigger(ember, "tp:ember_unshrink", null, ServerHooks.state());
+        helper.assertTrue(ember.getBbWidth() >= grown,
+            ENTITY + " lost the group carrying minecraft:scale and stayed small.");
+        helper.succeed();
+    }
+
+    /**
+     * A group brings the entity the attributes it carries, and taking it away takes them back.
+     *
+     * Bedrock switches the damage with the difficulty and with whatever mood the entity is in, so
+     * eighteen vanilla entities write `minecraft:attack` into a group and three write
+     * `minecraft:knockback_resistance` into one. Java fixes both as attributes on the type, which
+     * are read once and frozen, so a number a group brings only arrives if the entity is given it:
+     * without that a bee is as gentle angry as it is calm. `minecraft:persistent` is the same shape
+     * and one way only, because Java cannot tell a mob to start despawning again.
+     */
+    @GameTest()
+    public void aGroupBringsTheAttributesItCarries(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        double calm = ember.getAttributeValue(Attributes.ATTACK_DAMAGE);
+        helper.assertTrue(ember.getAttributeValue(Attributes.KNOCKBACK_RESISTANCE) == 0,
+            ENTITY + " resists knockback before any group said it should.");
+        helper.assertTrue(!ember.isPersistenceRequired(),
+            ENTITY + " refuses to despawn before any group said it should.");
+
+        EntityEvents.trigger(ember, "tp:ember_enrage", null, ServerHooks.state());
+        helper.assertTrue(ember.getAttributeValue(Attributes.ATTACK_DAMAGE) > calm,
+            ENTITY + " gained minecraft:attack from a group and hits no harder.");
+        helper.assertTrue(ember.getAttributeValue(Attributes.KNOCKBACK_RESISTANCE) > 0,
+            ENTITY + " gained minecraft:knockback_resistance from a group and is pushed as easily.");
+        helper.assertTrue(ember.isPersistenceRequired(),
+            ENTITY + " gained minecraft:persistent from a group and can still despawn.");
+
+        EntityEvents.trigger(ember, "tp:ember_soothe", null, ServerHooks.state());
+        helper.assertTrue(ember.getAttributeValue(Attributes.ATTACK_DAMAGE) == calm,
+            ENTITY + " lost the group carrying minecraft:attack and kept hitting that hard.");
+        helper.assertTrue(ember.getAttributeValue(Attributes.KNOCKBACK_RESISTANCE) == 0,
+            ENTITY + " lost the group carrying minecraft:knockback_resistance and still resists.");
+        helper.succeed();
+    }
+
+    /**
+     * A group carrying `minecraft:experience_reward` decides what killing the entity is worth.
+     *
+     * Bedrock puts the reward in the group that makes an entity grown, a baby being worth nothing,
+     * and writes it as Molang: eighty-six of the eighty-seven `on_death` rewards in Mojang's own
+     * behaviour pack ask whether a player struck the last blow rather than naming a number.
+     */
+    @GameTest()
+    public void aGroupCarryingTheExperienceRewardDecidesWhatAKillIsWorth(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_mature", null, ServerHooks.state());
+        Player killer = Platform.mockPlayer(helper);
+        Platform.placeAt(killer, ember.getX(), ember.getY(), ember.getZ(), 0f, 0f);
+        Platform.hurt(ember, helper.getLevel(),
+            helper.getLevel().damageSources().playerAttack(killer), KILLING_BLOW);
+
+        helper.assertTrue(!ember.isAlive(), ENTITY + " survived a killing blow.");
+        int awarded = helper.getLevel().getEntitiesOfClass(
+                net.minecraft.world.entity.ExperienceOrb.class, ember.getBoundingBox().inflate(8))
+            .stream().mapToInt(net.minecraft.world.entity.ExperienceOrb::getValue).sum();
+        helper.assertTrue(awarded >= GROWN_REWARD,
+            ENTITY + " was killed carrying a group worth " + GROWN_REWARD
+                + " and left " + awarded + " experience.");
+        helper.succeed();
+    }
+
+    /**
+     * A group carrying `minecraft:angry` makes the entity angry, and its own event calms it again.
+     *
+     * All twenty uses in Mojang's own behaviour pack are inside a group and none is at the top,
+     * because being angry is a state something put the entity into. The calm event is what takes the
+     * group away, so an entity read from the definition is never angry and one whose anger nothing
+     * counts stays angry for as long as it lives.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 120)
+    public void aGroupCarryingAngerCalmsDownAgainOnItsOwn(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.assertTrue(!ember.isAngry(), ENTITY + " reads as angry before anything provoked it.");
+        EntityEvents.trigger(ember, "tp:ember_provoke", null, ServerHooks.state());
+        helper.assertTrue(ember.isAngry(),
+            ENTITY + " gained minecraft:angry from a group and still reads as calm.");
+        helper.assertTrue(Boolean.TRUE.equals(ember.value("is_angry")),
+            ENTITY + " is angry and never told the clients drawing it.");
+
+        helper.runAfterDelay(CALM_TICKS, () -> {
+            helper.assertTrue(!ember.isAngry(),
+                ENTITY + " stayed angry past the duration minecraft:angry names.");
+            helper.assertTrue(Boolean.TRUE.equals(ember.value("tp:calmed")),
+                ENTITY + " never raised the calm event minecraft:angry names.");
+            helper.succeed();
+        });
+    }
+
+    /**
+     * A group is what arms a sensor, and an entity carrying no such group runs none.
+     *
+     * `minecraft:timer` and `minecraft:environment_sensor` are both how a pack arms a reaction it
+     * wants for a while, so eighteen of the nineteen vanilla timers and seventeen environment
+     * sensors are written into a group. A sensor read off the definition never runs for either one.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 120)
+    public void aGroupIsWhatArmsASensor(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.runAfterDelay(SENSOR_TICKS, () -> {
+            helper.assertTrue(!Boolean.TRUE.equals(ember.value("tp:sensed")),
+                ENTITY + " ran an environment sensor no group of its had brought in.");
+            helper.assertTrue(!Boolean.TRUE.equals(ember.value("tp:timed")),
+                ENTITY + " ran a timer no group of its had brought in.");
+
+            EntityEvents.trigger(ember, "tp:ember_alert_on", null, ServerHooks.state());
+            helper.runAfterDelay(SENSOR_TICKS, () -> {
+                helper.assertTrue(Boolean.TRUE.equals(ember.value("tp:sensed")),
+                    ENTITY + " never ran the environment sensor its live group carries.");
+                helper.assertTrue(Boolean.TRUE.equals(ember.value("tp:timed")),
+                    ENTITY + " never ran the timer its live group carries.");
+                helper.succeed();
+            });
+        });
+    }
+
+    /**
+     * A timer armed a second time waits afresh rather than firing on the deadline before it.
+     *
+     * The count belongs to the entity and the component naming it belongs to the group, so a group
+     * taken away partway through a wait leaves a deadline the entity walks past while nothing is
+     * watching. Firing on that one costs the pack its whole wait every time the group comes back.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 120)
+    public void aTimerArmedAgainStartsItsWaitAfresh(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_alert_on", null, ServerHooks.state());
+        helper.runAfterDelay(PART_WAY, () -> {
+            helper.assertTrue(!Boolean.TRUE.equals(ember.value("tp:timed")),
+                ENTITY + " ran its timer before the wait the pack asked for was up.");
+            EntityEvents.trigger(ember, "tp:ember_alert_off", null, ServerHooks.state());
+
+            // Long enough for the deadline the first wait set to go by with the group away.
+            helper.runAfterDelay(SENSOR_TICKS, () -> {
+                EntityEvents.trigger(ember, "tp:ember_alert_on", null, ServerHooks.state());
+                helper.runAfterDelay(PART_WAY, () -> {
+                    helper.assertTrue(!Boolean.TRUE.equals(ember.value("tp:timed")),
+                        ENTITY + " armed a timer again and it fired on the deadline before it.");
+                    helper.succeed();
+                });
+            });
+        });
+    }
+
+    /** One of the pack's own entities, in the world and ready to assert about. */
+    private static AddonEntity spawn(GameTestHelper helper, String identifier) {
+        EntityType<?> type = AddonEntities.typeOf(identifier);
+        if (type == null) return null;
+
+        ServerLevel level = helper.getLevel();
+        Entity spawned = Platform.createMob(type, level);
+        BlockPos at = helper.absolutePos(STAND);
+        Platform.placeAt(spawned, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        level.addFreshEntity(spawned);
+        helper.assertTrue(spawned instanceof AddonEntity, identifier + " is not an add-on entity.");
+        // Still, so a test the server ticks keeps its subject inside the structure.
+        ((AddonEntity) spawned).setNoAi(true);
+        return (AddonEntity) spawned;
+    }
+
+    /** Under the half the pack's own group scales the ember to, clear of rounding. */
+    private static final float SHRUNK_BELOW = 0.75f;
+
+    /** More than the ember's four health, so one blow is the whole of it. */
+    private static final float KILLING_BLOW = 40f;
+
+    /** What the pack's grown group is worth to a player who struck the last blow. */
+    private static final int GROWN_REWARD = 7;
+
+    /** Past the quarter second the pack's anger runs for, plus the sensor pass that notices. */
+    private static final int CALM_TICKS = 30;
+
+    /** Past the second the pack's timer waits, plus the pass that arms it. */
+    private static final int SENSOR_TICKS = 40;
+
+    /** Under the second the pack's timer waits, so one that started afresh has not reached it. */
+    private static final int PART_WAY = 15;
 }

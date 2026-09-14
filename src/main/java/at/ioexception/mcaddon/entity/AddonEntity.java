@@ -70,6 +70,7 @@ public class AddonEntity extends PathfinderMob
     private final java.util.Map<String, Integer> sensorReady = new java.util.HashMap<>();
     private final java.util.Set<String> spent = new java.util.HashSet<>();
     private int timerDueTick = -1;
+    private int calmAtTick = -1;
     private int admireUntilTick = -1;
     private String lastBlockInside;
     private int celebrateUntilTick = -1;
@@ -188,6 +189,7 @@ public class AddonEntity extends PathfinderMob
             if (Boolean.TRUE.equals(value(GROUP + group))) activeGroups.add(group);
         }
         refreshAge();
+        refreshComponents();
         publishMarkers();
     }
 
@@ -291,10 +293,12 @@ public class AddonEntity extends PathfinderMob
      */
     private static double attackDamage(ServerEntityDefinition definition) {
         com.google.gson.JsonObject attack = definition.components().get("minecraft:attack");
-        if (attack == null) {
-            return number(definition, "minecraft:attack_damage", "value", 1);
-        }
+        return attack == null
+            ? number(definition, "minecraft:attack_damage", "value", 1) : attackDamage(attack);
+    }
 
+    /** The one number `minecraft:attack` names, whichever of the two shapes a pack wrote it in. */
+    private static double attackDamage(com.google.gson.JsonObject attack) {
         com.google.gson.JsonElement damage = attack.get("damage");
         if (damage != null && damage.isJsonArray() && damage.getAsJsonArray().size() >= 2) {
             return (damage.getAsJsonArray().get(0).getAsDouble()
@@ -337,9 +341,6 @@ public class AddonEntity extends PathfinderMob
             setInvisible(isInvisible());
         }
 
-        if (definition.components().containsKey("minecraft:experience_reward")) {
-            xpReward = (int) number(definition, "minecraft:experience_reward", "on_death", xpReward);
-        }
         if (definition.components().containsKey("minecraft:persistent")) {
             setPersistenceRequired();
         }
@@ -358,6 +359,7 @@ public class AddonEntity extends PathfinderMob
         }
         if (declares("minecraft:is_hidden_when_invisible")) setInvisible(isInvisible());
 
+        refreshComponents();
         publishMarkers();
 
         // Bedrock names the kind of pathfinding; Java asks whether the navigator may take each route.
@@ -374,7 +376,7 @@ public class AddonEntity extends PathfinderMob
             Platform.setHome(this, blockPosition(), Math.max(1, radius));
         }
 
-        String table = text("minecraft:loot", "table");
+        String table = liveText("minecraft:loot", "table");
         if (table != null) lootTable = AddonEntities.lootTable(getType(), table);
 
         if (declares("minecraft:inventory")) {
@@ -491,9 +493,16 @@ public class AddonEntity extends PathfinderMob
             .anyMatch(group -> group != null && group.has(component));
     }
 
-    /** A string a component carries, or null when the pack declared neither. */
-    private String text(String component, String field) {
-        com.google.gson.JsonObject body = definition.components().get(component);
+    /**
+     * A string a component the entity carries at this moment holds, or null where it carries none.
+     *
+     * Each of these names an event the entity raises or something it reaches for, which is what a
+     * pack switches on and off with a component group: `minecraft:on_target_acquired` and
+     * `minecraft:shooter` are each written into a group about as often as at the top, and
+     * `minecraft:addrider` and `minecraft:tamemount` are never written anywhere else.
+     */
+    private String liveText(String component, String field) {
+        com.google.gson.JsonObject body = liveComponent(component);
         return body == null ? null : at.ioexception.mcaddon.util.Json.text(body, field, null);
     }
 
@@ -534,6 +543,98 @@ public class AddonEntity extends PathfinderMob
         } else if (age == null) {
             age = Age.tryFrom(this);
         }
+    }
+
+    /**
+     * The components Java holds on the entity rather than on its type, worked out over the live set.
+     *
+     * Each of these is something the entity becomes, so Bedrock states it inside a component group
+     * as readily as at the top: a young entity is smaller, a grown one is worth killing, and a bee
+     * in its angry group hits harder than the same bee calm. Java keeps all three on the entity, so
+     * each can move while the entity lives and a group leaving takes its value away again.
+     */
+    public void refreshComponents() {
+        // The size feeds both the box the entity collides in and the size it is drawn at, and Java
+        // caches it, so it has to be asked for again rather than left to the next pose change.
+        refreshDimensions();
+
+        com.google.gson.JsonObject attack = liveComponent("minecraft:attack");
+        net.minecraft.world.entity.ai.attributes.AttributeInstance damage =
+            getAttribute(Attributes.ATTACK_DAMAGE);
+        if (damage != null) {
+            damage.setBaseValue(attack == null ? attackDamage(definition) : attackDamage(attack));
+        }
+
+        com.google.gson.JsonObject footing = liveComponent("minecraft:knockback_resistance");
+        net.minecraft.world.entity.ai.attributes.AttributeInstance knockback =
+            getAttribute(Attributes.KNOCKBACK_RESISTANCE);
+        if (knockback != null) {
+            knockback.setBaseValue(footing == null ? 0
+                : at.ioexception.mcaddon.util.Json.number(footing, "value", 0));
+        }
+
+        // Java has no way back: a mob told to stay cannot be told to despawn again.
+        if (liveComponent("minecraft:persistent") != null) setPersistenceRequired();
+
+        publishAnger();
+    }
+
+    /**
+     * How far the whole entity is grown, beyond the scale its type was registered at.
+     *
+     * `minecraft:scale` sizes the entity, and its type was built from whatever the top level said,
+     * which cannot move once the registries are frozen. Of the forty-two vanilla entities that put
+     * the component in a group, every one uses the group that makes it young and none of them
+     * carries `minecraft:scale_by_age`, so this is how a pack's baby is drawn small. Dividing by the
+     * scale already in the type is what keeps a top level `minecraft:scale` from counting twice.
+     */
+    private float declaredScale() {
+        com.google.gson.JsonObject live = liveComponent("minecraft:scale");
+        float baked = definition == null ? 1f : definition.scale();
+        if (live == null || baked <= 0) return 1f;
+
+        return (float) at.ioexception.mcaddon.util.Json.number(live, "value", baked) / baked;
+    }
+
+    /**
+     * Tells everything reading the entity whether the group holding `minecraft:angry` is on.
+     *
+     * Bedrock has no other place for it: all twenty vanilla uses are inside a group and none is at
+     * the top, because being angry is a state something put the entity into. A pack branches on
+     * `query.is_angry` in its render controllers and its filters, so the flag is published from the
+     * live set the same way a marker is, and goes false again when the group leaves. An entity
+     * counting `minecraft:anger_level` publishes the same flag off its own count instead.
+     */
+    private void publishAnger() {
+        if (anger != null || definition == null) return;
+
+        boolean mentioned = definition.components().containsKey("minecraft:angry")
+            || definition.componentGroups().values().stream()
+                .anyMatch(group -> group.has("minecraft:angry"));
+        if (mentioned) setValue("is_angry", declaresNow("minecraft:angry"));
+    }
+
+    /**
+     * What killing this entity is worth, which Bedrock states as Molang.
+     *
+     * Eighty-six of the eighty-seven `on_death` rewards in Mojang's own behaviour pack are an
+     * expression asking whether a player struck the last blow, so the field is parsed as one and a
+     * bare number is the case the parser also covers. The component itself sits in the group that
+     * makes the entity grown as often as on the entity, a baby being worth nothing, which is why
+     * the live set is what answers.
+     */
+    private int experienceReward(boolean killedByPlayer) {
+        com.google.gson.JsonObject reward = liveComponent("minecraft:experience_reward");
+        com.google.gson.JsonElement onDeath = reward == null ? null : reward.get("on_death");
+        if (onDeath == null || !onDeath.isJsonPrimitive()) return 0;
+
+        at.ioexception.mcaddon.bedrock.molang.MolangEnvironment environment =
+            new at.ioexception.mcaddon.bedrock.molang.MolangEnvironment();
+        environment.setQueries((query, arguments) -> query.equals("last_hit_by_player")
+            ? at.ioexception.mcaddon.bedrock.molang.MolangValue.of(killedByPlayer)
+            : at.ioexception.mcaddon.bedrock.molang.MolangValue.ZERO);
+        return Math.max(0, (int) at.ioexception.mcaddon.bedrock.molang.MolangParser
+            .parse(onDeath.getAsString()).asFloat(environment));
     }
 
     /**
@@ -1172,9 +1273,24 @@ public class AddonEntity extends PathfinderMob
     /** The players `minecraft:trust` has added, which is a set rather than the one owner. */
     private final java.util.Set<java.util.UUID> trusted = new java.util.LinkedHashSet<>();
 
-    /** Bedrock says an entity is angry; Java asks the entity, so the flag is kept here. */
+    /**
+     * Bedrock says an entity is angry; Java asks the entity, so the flag is kept here.
+     *
+     * Being angry is a state something put the entity into, so a pack writes `minecraft:angry` into
+     * the group it switches on and never at the top: all twenty uses in Mojang's own behaviour pack
+     * are inside a group. An entity counting `minecraft:anger_level` answers off its count instead.
+     */
     public boolean isAngry() {
-        return declares("minecraft:angry");
+        return anger == null ? declaresNow("minecraft:angry") : anger.angry();
+    }
+
+    /** When `minecraft:angry` runs out, in ticks of this entity's own age. Negative until set. */
+    public int calmAtTick() {
+        return calmAtTick;
+    }
+
+    public void setCalmAtTick(int tick) {
+        calmAtTick = tick;
     }
 
     /**
@@ -1355,7 +1471,7 @@ public class AddonEntity extends PathfinderMob
         if (!declares("minecraft:mob_effect")) return;
         if (!(level() instanceof net.minecraft.server.level.ServerLevel)) return;
 
-        String effect = text("minecraft:mob_effect", "mob_effect");
+        String effect = liveText("minecraft:mob_effect", "mob_effect");
         Identifier id = effect == null ? null : Identifier.tryParse(
             effect.contains(":") ? effect : "minecraft:" + effect);
         if (id == null) return;
@@ -1407,7 +1523,7 @@ public class AddonEntity extends PathfinderMob
         if (!declares("minecraft:trail")) return;
         if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
 
-        String named = text("minecraft:trail", "block_type");
+        String named = liveText("minecraft:trail", "block_type");
         Identifier id = named == null ? null : Identifier.tryParse(named);
         net.minecraft.world.level.block.Block block = id == null ? null
             : BuiltInRegistries.BLOCK.getOptional(id).orElse(null);
@@ -1456,7 +1572,7 @@ public class AddonEntity extends PathfinderMob
     private void noticeBeingWatched() {
         if (!declares("minecraft:looked_at")) return;
 
-        String event = text("minecraft:looked_at", "looked_at_event");
+        String event = liveText("minecraft:looked_at", "looked_at_event");
         if (event == null) return;
 
         double reach = number(definition, "minecraft:looked_at", "search_radius", 10);
@@ -1509,13 +1625,13 @@ public class AddonEntity extends PathfinderMob
         if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
 
         if (isInWater()) {
-            if (dryingFor > 0) fire(text("minecraft:drying_out_timer", "stopped_drying_out_event"));
+            if (dryingFor > 0) fire(liveText("minecraft:drying_out_timer", "stopped_drying_out_event"));
             dryingFor = 0;
             return;
         }
 
         int allowed = (int) (number(definition, "minecraft:drying_out_timer", "total_time", 60) * 20);
-        if (dryingFor == 0) fire(text("minecraft:drying_out_timer", "dried_out_event"));
+        if (dryingFor == 0) fire(liveText("minecraft:drying_out_timer", "dried_out_event"));
 
         dryingFor += Sensors.INTERVAL_TICKS;
         if (dryingFor < allowed) return;
@@ -1629,7 +1745,7 @@ public class AddonEntity extends PathfinderMob
             return;
         }
 
-        String named = text("minecraft:shooter", "def");
+        String named = liveText("minecraft:shooter", "def");
         net.minecraft.world.entity.EntityType<?> type =
             AddonEntities.typeOf(named == null ? "minecraft:arrow" : named);
         net.minecraft.world.entity.Entity shot = type == null ? null : Platform.createMob(type, level);
@@ -2183,7 +2299,7 @@ public class AddonEntity extends PathfinderMob
      * table handing out a helmet and a sword dresses the entity in both.
      */
     private void wearWhatThePackRolled() {
-        String table = text("minecraft:equipment", "table");
+        String table = liveText("minecraft:equipment", "table");
         if (table == null || !(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
 
         Identifier named = AddonEntities.lootTable(getType(), table);
@@ -2313,7 +2429,7 @@ public class AddonEntity extends PathfinderMob
             .anyMatch(kin -> kin != this && kin.getType() == getType() && kin.getTarget() != null);
         boolean rising = angry && !sawKinAngry;
         sawKinAngry = angry;
-        if (rising) fire(text("minecraft:on_friendly_anger", "event"));
+        if (rising) fire(liveText("minecraft:on_friendly_anger", "event"));
     }
 
     private boolean sawKinAngry;
@@ -2665,7 +2781,7 @@ public class AddonEntity extends PathfinderMob
             * Goals.TICKS_PER_SECOND);
         if (interval <= 0 || tickCount % interval != 0) return;
 
-        playSound(sound(text("minecraft:heartbeat", "sound_event"), SoundEvents.WARDEN_HEARTBEAT),
+        playSound(sound(liveText("minecraft:heartbeat", "sound_event"), SoundEvents.WARDEN_HEARTBEAT),
             getSoundVolume(), getVoicePitch());
     }
 
@@ -2755,7 +2871,7 @@ public class AddonEntity extends PathfinderMob
         }
         if (tickCount % Goals.TICKS_PER_SECOND != 0) return;
 
-        playSound(sound(text("minecraft:celebrate_hunt", "celebrate_sound"),
+        playSound(sound(liveText("minecraft:celebrate_hunt", "celebrate_sound"),
             SoundEvents.VILLAGER_CELEBRATE), getSoundVolume(), getVoicePitch());
     }
 
@@ -2880,7 +2996,7 @@ public class AddonEntity extends PathfinderMob
         boolean alight = getRemainingFireTicks() > 0;
         boolean caught = alight && !wasAlight;
         wasAlight = alight;
-        if (caught) fire(text("minecraft:on_ignite", "event"));
+        if (caught) fire(liveText("minecraft:on_ignite", "event"));
     }
 
     private boolean wasAlight;
@@ -2897,7 +3013,7 @@ public class AddonEntity extends PathfinderMob
         if (grounded == wasOnGround) return;
 
         wasOnGround = grounded;
-        fire(text(grounded ? "minecraft:on_start_landing" : "minecraft:on_start_takeoff", "event"));
+        fire(liveText(grounded ? "minecraft:on_start_landing" : "minecraft:on_start_takeoff", "event"));
     }
 
     /**
@@ -3331,7 +3447,7 @@ public class AddonEntity extends PathfinderMob
         if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
 
         carriesRider = true;
-        String named = text("minecraft:addrider", "entity_type");
+        String named = liveText("minecraft:addrider", "entity_type");
         net.minecraft.world.entity.EntityType<?> type = named == null
             ? null : AddonEntities.typeOf(named);
         net.minecraft.world.entity.Entity rider = type == null ? null : Platform.createMob(type, level);
@@ -3341,7 +3457,7 @@ public class AddonEntity extends PathfinderMob
         level.addFreshEntity(rider);
         rider.startRiding(this);
 
-        String event = text("minecraft:addrider", "spawn_event");
+        String event = liveText("minecraft:addrider", "spawn_event");
         if (event != null) EntityEvents.trigger(rider, event, this, ServerHooks.state());
     }
 
@@ -3481,7 +3597,7 @@ public class AddonEntity extends PathfinderMob
         }
 
         net.minecraft.world.entity.EquipmentSlot mapped =
-            equipmentSlot(text("minecraft:entity_armor_equipment_slot_mapping", "slot"));
+            equipmentSlot(liveText("minecraft:entity_armor_equipment_slot_mapping", "slot"));
         return mapped == null ? net.minecraft.world.entity.EquipmentSlot.CHEST : mapped;
     }
 
@@ -3693,7 +3809,7 @@ public class AddonEntity extends PathfinderMob
 
     /** Runs the event a component names, against whoever brought it about. */
     private void raise(String component, net.minecraft.world.entity.Entity other) {
-        String event = text(component, "event");
+        String event = liveText(component, "event");
         if (event != null) EntityEvents.trigger(this, event, other, ServerHooks.state());
     }
 
@@ -3742,12 +3858,16 @@ public class AddonEntity extends PathfinderMob
      */
     @Override
     public void die(net.minecraft.world.damagesource.DamageSource source) {
+        // What the kill is worth is settled before the death itself, because dropping the
+        // experience is part of what dying does and it reads this number on the way past.
+        if (definition != null) xpReward = experienceReward(source.getEntity() instanceof Player);
+
         super.die(source);
         if (definition == null || !(level() instanceof net.minecraft.server.level.ServerLevel level)) {
             return;
         }
 
-        String event = text("minecraft:on_death", "event");
+        String event = liveText("minecraft:on_death", "event");
         if (event != null) EntityEvents.trigger(this, event, source.getEntity(), ServerHooks.state());
 
         // What a mob was hauling belongs on the ground once it is dead, the same as a chest's does.
@@ -3758,7 +3878,7 @@ public class AddonEntity extends PathfinderMob
 
     /** `minecraft:spawn_on_death` leaves another entity where this one fell. */
     private void spawnOnDeath(net.minecraft.server.level.ServerLevel level) {
-        String named = text("minecraft:spawn_on_death", "id");
+        String named = liveText("minecraft:spawn_on_death", "id");
         net.minecraft.world.entity.EntityType<?> type = named == null
             ? null : AddonEntities.typeOf(named);
         net.minecraft.world.entity.Entity born = type == null ? null : Platform.createMob(type, level);
@@ -3809,15 +3929,18 @@ public class AddonEntity extends PathfinderMob
         if (target == null && had != null) startAttackCooldown();
 
         String event = target != null
-            ? text("minecraft:on_target_acquired", "event")
-            : text("minecraft:on_target_escape", "event");
+            ? liveText("minecraft:on_target_acquired", "event")
+            : liveText("minecraft:on_target_escape", "event");
         if (event != null) {
             EntityEvents.trigger(this, event, target == null ? had : target, ServerHooks.state());
         }
     }
 
     /**
-     * How big the entity is drawn, which `minecraft:scale_by_age` moves as it grows up.
+     * How big the entity is drawn and how big a box it collides in.
+     *
+     * Two components multiply here: `minecraft:scale` sizes the whole entity, and
+     * `minecraft:scale_by_age` moves it between two sizes while the entity grows up.
      *
      * 1.20.1 has one scale for the whole entity; from 1.21 the part that grows with age is asked
      * for on its own, and the whole scale is final from 26.
@@ -3825,12 +3948,12 @@ public class AddonEntity extends PathfinderMob
     //? if >=1.21 {
     @Override
     public float getAgeScale() {
-        return age == null ? super.getAgeScale() : age.scale();
+        return declaredScale() * (age == null ? super.getAgeScale() : age.scale());
     }
     //?} else {
     /*@Override
     public float getScale() {
-        return age == null ? super.getScale() : age.scale();
+        return declaredScale() * (age == null ? super.getScale() : age.scale());
     }
     *///?}
 
