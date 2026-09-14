@@ -71,7 +71,7 @@ public final class Json {
 
     /** Bedrock writes a single value where a list is allowed, so both shapes reach this. */
     public static List<JsonElement> list(JsonObject json, String key) {
-        JsonElement value = json.get(key);
+        JsonElement value = json == null ? null : json.get(key);
         if (value == null || value.isJsonNull()) return List.of();
         if (!value.isJsonArray()) return List.of(value);
         return value.getAsJsonArray().asList();

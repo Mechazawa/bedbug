@@ -57,8 +57,8 @@ public final class Sensors {
             String identifier = Json.text(spawn, "spawn_entity", null);
             if (identifier == null) continue;
 
-            int minimum = spawn.has("min_wait_time") ? spawn.get("min_wait_time").getAsInt() : 300;
-            int maximum = spawn.has("max_wait_time") ? spawn.get("max_wait_time").getAsInt() : 600;
+            int minimum = (int) ServerEntityDefinition.number(spawn, "min_wait_time", 300);
+            int maximum = (int) ServerEntityDefinition.number(spawn, "max_wait_time", 600);
             // Chance per evaluation rather than a countdown per entity, which needs no state of its
             // own and averages out to the wait the pack asked for.
             double expected = Math.max(1, (minimum + maximum) / 2.0) * 20 / INTERVAL_TICKS;
@@ -84,22 +84,36 @@ public final class Sensors {
     /**
      * `minecraft:scheduler` fires its events when their filters hold, which a pack uses for the
      * things that should happen at a time of day or in certain weather.
+     *
+     * The delays are stated in seconds and hold the whole component back rather than one event, so
+     * an entity that has just fired one waits before any of them can fire again.
      */
     private static void scheduler(AddonEntity entity, ServerEntityDefinition definition, AddonState state) {
         JsonObject scheduler = definition.components().get("minecraft:scheduler");
-        if (scheduler == null) return;
+        if (scheduler == null || entity.tickCount < entity.scheduledFromTick()) return;
 
         for (JsonElement element : Json.list(scheduler, "scheduled_events")) {
             if (!element.isJsonObject()) continue;
             JsonObject scheduled = element.getAsJsonObject();
-            String event = Json.text(scheduled, "event", null);
+            String event = ServerEntityDefinition.event(scheduled, "event");
             if (event == null) continue;
 
             if (Filter.parse(scheduled.get("filters")).matches(
                 new Filter.Context(entity, entity, null, state))) {
+                entity.setScheduledFromTick(entity.tickCount + scheduleDelay(scheduler));
                 EntityEvents.trigger(entity, event, null, state);
+                return;
             }
         }
+    }
+
+    /** `min_delay_secs` and `max_delay_secs` are seconds, as every wait in a component is. */
+    private static int scheduleDelay(JsonObject scheduler) {
+        double shortest = ServerEntityDefinition.number(scheduler, "min_delay_secs", 0);
+        double longest = Math.max(shortest,
+            ServerEntityDefinition.number(scheduler, "max_delay_secs", shortest));
+        return (int) ((shortest + java.util.concurrent.ThreadLocalRandom.current().nextDouble()
+            * (longest - shortest)) * 20);
     }
 
     /** `minecraft:hurt_on_condition` is how a pack makes its entity take damage from where it is. */
@@ -118,8 +132,7 @@ public final class Sensors {
                 continue;
             }
 
-            double perTick = condition.has("damage_per_tick")
-                ? condition.get("damage_per_tick").getAsDouble() : 1;
+            double perTick = ServerEntityDefinition.number(condition, "damage_per_tick", 1);
             at.ioexception.mcaddon.platform.Platform.hurt(entity, level,
                 level.damageSources().generic(), (float) (perTick * INTERVAL_TICKS));
         }
@@ -135,8 +148,7 @@ public final class Sensors {
         JsonObject timer = definition.components().get("minecraft:timer");
         if (timer == null) return;
 
-        JsonObject trigger = timer.getAsJsonObject("time_down_event");
-        String event = trigger == null ? null : Json.text(trigger, "event", null);
+        String event = ServerEntityDefinition.event(timer, "time_down_event");
         if (event == null) return;
 
         if (entity.timerDueTick() < 0) {
@@ -146,22 +158,49 @@ public final class Sensors {
         if (entity.tickCount < entity.timerDueTick()) return;
 
         EntityEvents.trigger(entity, event, null, state);
-        boolean looping = !timer.has("looping") || timer.get("looping").getAsBoolean();
-        entity.setTimerDueTick(looping ? entity.tickCount + delay(timer) : Integer.MAX_VALUE);
+        entity.setTimerDueTick(ServerEntityDefinition.flag(timer, "looping", true)
+            ? entity.tickCount + delay(timer) : Integer.MAX_VALUE);
     }
 
-    /** `time` is seconds, as a number or as the range to pick from. */
+    /**
+     * `time` is seconds, as a number or as the range to pick from.
+     *
+     * `randomInterval` decides what a range means: with it off the timer takes the lower bound every
+     * time, which is how a pack asks a crowd of the same entity to act together rather than apart.
+     * `random_time_choices` replaces the range with a weighted list of waits to draw from.
+     */
     private static int delay(JsonObject timer) {
+        List<JsonElement> choices = Json.list(timer, "random_time_choices");
+        if (!choices.isEmpty()) return (int) (choose(choices) * 20);
+
         JsonElement time = timer.get("time");
         if (time == null) return 20;
         if (time.isJsonPrimitive()) return (int) (time.getAsDouble() * 20);
+        if (!time.isJsonArray() || time.getAsJsonArray().size() < 2) return 20;
 
-        if (time.isJsonArray() && time.getAsJsonArray().size() >= 2) {
-            double low = time.getAsJsonArray().get(0).getAsDouble();
-            double high = time.getAsJsonArray().get(1).getAsDouble();
-            return (int) ((low + java.util.concurrent.ThreadLocalRandom.current().nextDouble() * (high - low)) * 20);
+        double low = time.getAsJsonArray().get(0).getAsDouble();
+        double high = time.getAsJsonArray().get(1).getAsDouble();
+        if (!ServerEntityDefinition.flag(timer, "randomInterval", true)) return (int) (low * 20);
+        return (int) ((low + java.util.concurrent.ThreadLocalRandom.current().nextDouble()
+            * (high - low)) * 20);
+    }
+
+    /** One wait out of a weighted list, in seconds. */
+    private static double choose(List<JsonElement> choices) {
+        double total = choices.stream()
+            .filter(JsonElement::isJsonObject)
+            .mapToDouble(choice -> ServerEntityDefinition.number(choice.getAsJsonObject(), "weight", 1))
+            .sum();
+
+        double roll = java.util.concurrent.ThreadLocalRandom.current().nextDouble() * total;
+        double value = 1;
+        for (JsonElement choice : choices) {
+            if (!choice.isJsonObject()) continue;
+            value = ServerEntityDefinition.number(choice.getAsJsonObject(), "value", 1);
+            roll -= ServerEntityDefinition.number(choice.getAsJsonObject(), "weight", 1);
+            if (roll <= 0) return value;
         }
-        return 20;
+        return value;
     }
 
     /** `minecraft:environment_sensor` fires an event whenever its own filters start holding. */
@@ -198,12 +237,20 @@ public final class Sensors {
         JsonObject sensor = definition.components().get("minecraft:target_nearby_sensor");
         if (sensor == null || entity.getTarget() == null) return;
 
-        double distance = entity.distanceTo(entity.getTarget());
-        double inside = sensor.has("inside_range") ? sensor.get("inside_range").getAsDouble() : 1;
-        double outside = sensor.has("outside_range") ? sensor.get("outside_range").getAsDouble() : 5;
+        // A pack asking for sight is asking for the loss of it to raise its own event instead.
+        if (ServerEntityDefinition.flag(sensor, "must_see", false)
+            && !entity.hasLineOfSight(entity.getTarget())) {
+            String lost = ServerEntityDefinition.event(sensor, "on_vision_lost_inside_range");
+            if (lost != null) EntityEvents.trigger(entity, lost, entity.getTarget(), state);
+            return;
+        }
 
-        String near = Json.text(sensor, "on_inside_range", null);
-        String far = Json.text(sensor, "on_outside_range", null);
+        double distance = entity.distanceTo(entity.getTarget());
+        double inside = ServerEntityDefinition.number(sensor, "inside_range", 1);
+        double outside = ServerEntityDefinition.number(sensor, "outside_range", 5);
+
+        String near = ServerEntityDefinition.event(sensor, "on_inside_range");
+        String far = ServerEntityDefinition.event(sensor, "on_outside_range");
         if (near != null && distance <= inside) {
             EntityEvents.trigger(entity, near, entity.getTarget(), state);
         } else if (far != null && distance >= outside) {
@@ -225,8 +272,16 @@ public final class Sensors {
             String event = Json.text(subsensor, "event", null);
             if (event == null) continue;
 
+            // `relative_range` measures from the entity's own edge rather than from its middle,
+            // which is what keeps a wide entity's reach the same as a narrow one's.
             double range = subsensor.has("range") ? radius(subsensor.get("range")) : 10;
-            int required = subsensor.has("minimum_count") ? subsensor.get("minimum_count").getAsInt() : 1;
+            if (ServerEntityDefinition.flag(sensor, "relative_range", true)) {
+                range += entity.getBbWidth() / 2;
+            }
+
+            int required = (int) ServerEntityDefinition.number(subsensor, "minimum_count", 1);
+            int allowed = (int) ServerEntityDefinition.number(subsensor, "maximum_count", Integer.MAX_VALUE);
+            boolean playersOnly = ServerEntityDefinition.flag(sensor, "find_players_only", false);
             Filter filter = Filter.parse(subsensor.get("event_filters"));
 
             AABB box = entity.getBoundingBox().inflate(range);
@@ -235,11 +290,14 @@ public final class Sensors {
             int found = 0;
             Entity first = null;
             for (Entity candidate : candidates) {
+                if (playersOnly && !(candidate instanceof net.minecraft.world.entity.player.Player)) {
+                    continue;
+                }
                 if (!filter.matches(new Filter.Context(entity, candidate, candidate, state))) continue;
                 found++;
                 if (first == null) first = candidate;
             }
-            if (found >= required) EntityEvents.trigger(entity, event, first, state);
+            if (found >= required && found <= allowed) EntityEvents.trigger(entity, event, first, state);
         }
     }
 

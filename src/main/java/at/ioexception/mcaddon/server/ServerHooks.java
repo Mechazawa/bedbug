@@ -96,6 +96,7 @@ public final class ServerHooks {
         WorldEvents.register();
         ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> {
             damageSensor(entity, source);
+            if (entity instanceof at.ioexception.mcaddon.entity.AddonEntity addon) addon.provoke();
             return !hurtRefused(entity, source, amount);
         });
         Channels.receiveFormResponse((formId, answer) -> {

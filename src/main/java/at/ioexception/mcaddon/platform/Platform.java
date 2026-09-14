@@ -666,21 +666,44 @@ public final class Platform {
     }
 
     /**
-     * A goal that follows whoever is holding food.
+     * A goal that follows whoever is holding what the pack named.
      *
-     * Bedrock names the items in the component; Java took an ingredient until 1.21.2 and a test on
-     * the stack after. Anything edible tempts, which is what a pack's own list usually amounts to.
+     * Bedrock names the items in the component and Java asks a different question in each version:
+     * an ingredient until 1.21.2 and a test on the stack after. A pack naming nothing is tempted by
+     * anything edible, which is what such a list amounts to.
      */
     public static net.minecraft.world.entity.ai.goal.Goal temptGoal(
-        net.minecraft.world.entity.PathfinderMob mob) {
+        net.minecraft.world.entity.PathfinderMob mob, double speed, Set<String> items) {
         //? if >=1.21.2 {
-        return new net.minecraft.world.entity.ai.goal.TemptGoal(mob, 1.0,
-            stack -> stack.has(net.minecraft.core.component.DataComponents.FOOD), false);
+        return new net.minecraft.world.entity.ai.goal.TemptGoal(mob, speed,
+            stack -> items.isEmpty()
+                ? stack.has(net.minecraft.core.component.DataComponents.FOOD)
+                : tempts(items, stack), false);
         //?} else {
-        /*return new net.minecraft.world.entity.ai.goal.TemptGoal(mob, 1.0,
-            net.minecraft.world.item.crafting.Ingredient.of(net.minecraft.world.item.Items.WHEAT), false);
+        /*return new net.minecraft.world.entity.ai.goal.TemptGoal(mob, speed,
+            ingredient(items), false);
         *///?}
     }
+
+    /** Whether a stack is one of the items a pack's goal named, under either spelling of the id. */
+    public static boolean tempts(Set<String> items, net.minecraft.world.item.ItemStack stack) {
+        String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+        return items.stream().anyMatch(name -> name.equals(id) || ("minecraft:" + name).equals(id));
+    }
+
+    //? if <1.21.2 {
+    /*private static net.minecraft.world.item.crafting.Ingredient ingredient(Set<String> items) {
+        net.minecraft.world.item.ItemStack[] stacks = items.stream()
+            .map(name -> Identifier.tryParse(name.contains(":") ? name : "minecraft:" + name))
+            .filter(java.util.Objects::nonNull)
+            .flatMap(id -> BuiltInRegistries.ITEM.getOptional(id).stream())
+            .map(net.minecraft.world.item.ItemStack::new)
+            .toArray(net.minecraft.world.item.ItemStack[]::new);
+        return stacks.length == 0
+            ? net.minecraft.world.item.crafting.Ingredient.of(net.minecraft.world.item.Items.WHEAT)
+            : net.minecraft.world.item.crafting.Ingredient.of(stacks);
+    }
+    *///?}
 
     /**
      * Ties a mob to a place it will not wander far from.

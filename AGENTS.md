@@ -117,6 +117,11 @@ These are the checks that catch things:
   whose spawn eggs take each of the two forms, an animation firing a sound and a particle off its
   timeline, three `particles/*.json` in the 1.10.0 format, a texture set whose emissive channel has
   pixels in it, and a function using the commands and selector arguments that need translating.
+
+  A third entity, `tp:wisp`, states the numbers whose unit differs between the two editions: a
+  health `value` below its `max`, an anger duration in seconds with an event at the end of it, a
+  teleport cube in blocks beside a teleport interval in seconds, and an experience reward written as
+  Molang rather than as a number.
 - **`tools/testpack/build_modules.py`** builds a second add-on, whose script imports every
   `@minecraft/*` module the mod provides and calls one thing from each. Its sources are a manifest
   and one script under `tools/testpack/modules/`.
@@ -174,6 +179,37 @@ These are the checks that catch things:
 - **`./gradlew :26.2:runServer`** for the same check by hand: grep the log for `Bedrock Add-ons`,
   `Done (`, `ERROR` and `Caused by`. Mixin failures fail the server, so a clean start proves
   registration, conversion and mixins applied.
+- **`tools/census/fields.py`** counts the fields inside each entity component rather than the
+  components themselves, which is the gap every other measure here leaves. A component whose name is
+  handled and whose body is never opened reads as implemented and does nothing; so does one whose
+  field is read in the wrong unit.
+
+  ```bash
+  python3 tools/census/fields.py                       # the whole table
+  python3 tools/census/fields.py --strict              # non-zero while a used field has no reader
+  python3 tools/census/fields.py --component minecraft:teleport
+  ```
+
+  The published side is the field list in Mojang's own JSON schemas under
+  `metadata/json_schemas/server/entity` in `scratchpad/bedrock/bedrock-samples`, together with how
+  many of Mojang's own entities declare each field, which is what says whether a gap matters: a
+  field a hundred entities declare is worth more than ten with one each. The mod's side is the field
+  names that reach a `has`, a `get` or one of the JSON helpers inside the reader that names the
+  component, following the helpers that reader calls. That side is an upper bound, so a field the
+  census calls unread is one no reader mentions anywhere.
+
+  `--strict` fails while a field with declarations behind it has neither a reader nor a reason in the
+  `REASONS` table at the top of the script. A reason states what Java holds instead, so "Java's look
+  goal picks how long it looks" closes `look_time` and nothing else.
+
+  With no `scratchpad/bedrock/bedrock-samples` checkout it reports that there is nothing to measure
+  and passes, the way the rest of the harness does with no add-on present.
+- **`tools/checkall.sh`** runs every check that needs no game, then the build:
+
+  ```bash
+  bash tools/checkall.sh --quick   # everything but ./gradlew build
+  bash tools/checkall.sh
+  ```
 - **`tools/molang/MolangCheck.java`** parses every expression a real pack contains and checks the
   answers that can be worked out by hand. Molang fails silently by design, so zero throws is not the
   measurement; the assertions are.
@@ -234,6 +270,8 @@ build.named.gradle.kts       26.2, which Mojang ships unobfuscated
 gradle/mod.gradle.kts        Shared build logic: toolchain, GraalJS bundling, checkstyle, checkTools
 config/checkstyle/           Lint rules and the Stonecutter suppressions
 
+tools/checkall.sh            Every check, in the order that fails fastest
+tools/census/fields.py       Per-component field census: what a pack may write and what is read
 tools/testpack/              The two add-ons the harness checks against, and the scripts building them
 tools/verify/verify.py       End to end harness: drives a dev server and checks a conversion
 tools/preview/render.py      Offline model renderer

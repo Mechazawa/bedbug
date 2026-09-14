@@ -29,6 +29,9 @@ public final class PackGameTests {
 
     /** The entity the synthetic pack declares, which every assertion about one uses. */
     private static final String ENTITY = "tp:ember";
+
+    /** The entity whose components state a value and a ceiling that differ. */
+    private static final String HURT_ENTITY = "tp:wisp";
     private static final String BLOCK = "tp:lamp";
 
     /**
@@ -181,6 +184,68 @@ public final class PackGameTests {
             helper.assertTrue(AddonParticles.typeOf(identifier) != null,
                 identifier + " was read but never registered."));
         helper.succeed();
+    }
+
+    /**
+     * The health a pack states as two numbers reaches the entity as two numbers.
+     *
+     * Bedrock's `value` is where the entity starts and its `max` is the ceiling it can be healed to.
+     * Reading `value` as the ceiling gives a mob that can never be healed past what it spawned with,
+     * and nothing reports it because the component is named as implemented either way.
+     */
+    @GameTest()
+    public void aPackEntityStartsBelowTheCeilingItsPackGaveIt(GameTestHelper helper) {
+        EntityType<?> type = AddonEntities.typeOf(HURT_ENTITY);
+        if (type == null) {
+            helper.succeed();
+            return;
+        }
+
+        Entity spawned = Platform.createMob(type, helper.getLevel());
+        helper.assertTrue(spawned instanceof net.minecraft.world.entity.LivingEntity,
+            HURT_ENTITY + " is not something that can be hurt.");
+
+        net.minecraft.world.entity.LivingEntity living = (net.minecraft.world.entity.LivingEntity) spawned;
+        helper.assertTrue(living.getMaxHealth() == 20f,
+            HURT_ENTITY + " asked for a ceiling of 20 and got " + living.getMaxHealth() + ".");
+        helper.assertTrue(living.getHealth() == 6f,
+            HURT_ENTITY + " asked to start at 6 and started at " + living.getHealth() + ".");
+        helper.succeed();
+    }
+
+    /**
+     * Anger runs out, and the pack's own event is what ends it.
+     *
+     * Bedrock states the anger as a countdown in seconds with an event at the end of it. An entity
+     * whose component is read as a flag alone is angry for the rest of its life, and `calm_event`
+     * never runs, which no count of components can see.
+     */
+    @GameTest(structure = "mcaddon:platform", maxTicks = 200)
+    public void aPackEntitysAngerRunsOutAndFiresItsCalmEvent(GameTestHelper helper) {
+        EntityType<?> type = AddonEntities.typeOf(HURT_ENTITY);
+        if (type == null) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        Entity spawned = Platform.createMob(type, level);
+        BlockPos at = helper.absolutePos(STAND);
+        Platform.placeAt(spawned, at.getX() + 0.5, at.getY() + 1, at.getZ() + 0.5, 0f, 0f);
+        level.addFreshEntity(spawned);
+
+        at.ioexception.mcaddon.entity.AddonEntity addon =
+            (at.ioexception.mcaddon.entity.AddonEntity) spawned;
+        addon.provoke();
+        helper.assertTrue(addon.isAngry(), HURT_ENTITY + " would not be provoked.");
+
+        // The component asks for one second of anger and the sensors run every ten ticks, so the
+        // entity's own clock decides when this holds rather than the world's.
+        helper.succeedWhen(() -> {
+            helper.assertFalse(addon.isAngry(), HURT_ENTITY + " is still angry.");
+            helper.assertTrue(addon.activeGroups().contains("tp:calmed"),
+                HURT_ENTITY + " calmed down without running the event its pack wrote for it.");
+        });
     }
 
     /**

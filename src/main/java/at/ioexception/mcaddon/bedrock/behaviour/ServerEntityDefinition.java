@@ -29,6 +29,7 @@ public record ServerEntityDefinition(
     float width,
     float height,
     float maxHealth,
+    float startingHealth,
     float movementSpeed,
     float scale,
     Set<String> families,
@@ -36,11 +37,114 @@ public record ServerEntityDefinition(
     Map<String, JsonObject> components,
     Map<String, JsonObject> componentGroups,
     Map<String, EntityEvent> events,
-    Set<String> behaviours
+    Map<String, JsonObject> behaviours
 ) {
     /** A data-driven entity property, which is how a behaviour pack tells a resource pack what to draw. */
     public record Property(String name, String type, double min, double max, List<String> values,
         Object initial, boolean clientSync) {
+    }
+
+    public boolean has(String component) {
+        return components.containsKey(component);
+    }
+
+    /** Null when the pack never declared it, at the top level or in one of its component groups. */
+    public JsonObject component(String component) {
+        return components.get(component);
+    }
+
+    public double number(String component, String field, double fallback) {
+        return number(components.get(component), field, fallback);
+    }
+
+    public boolean flag(String component, String field, boolean fallback) {
+        return flag(components.get(component), field, fallback);
+    }
+
+    public String text(String component, String field, String fallback) {
+        JsonObject body = components.get(component);
+        return body == null ? fallback : Json.text(body, field, fallback);
+    }
+
+    /**
+     * A number a component's field carries, whatever shape the pack wrote it in.
+     *
+     * A pack writes `true` where a number is expected and a Molang expression where a constant is,
+     * and Gson answers either with a thrown exception rather than a value, which would cost the
+     * entity the whole read. A range is answered by its lower bound, because a caller wanting the
+     * spread asks for both ends by name.
+     */
+    public static double number(JsonObject body, String field, double fallback) {
+        JsonElement value = body == null ? null : body.get(field);
+        if (value == null) return fallback;
+        if (value.isJsonArray()) {
+            return value.getAsJsonArray().isEmpty()
+                ? fallback : number(value.getAsJsonArray().get(0), fallback);
+        }
+        return number(value, fallback);
+    }
+
+    private static double number(JsonElement value, double fallback) {
+        if (!value.isJsonPrimitive()) return fallback;
+        if (value.getAsJsonPrimitive().isNumber()) return value.getAsDouble();
+        if (value.getAsJsonPrimitive().isBoolean()) return value.getAsBoolean() ? 1 : 0;
+        try {
+            return Double.parseDouble(value.getAsString().trim());
+        } catch (NumberFormatException notANumber) {
+            return fallback;
+        }
+    }
+
+    /**
+     * The experience `minecraft:experience_reward` says this entity is worth.
+     *
+     * Bedrock writes the amount as Molang rather than as a number, and the expression every entity
+     * uses asks whether a player landed the last hit. Java pays experience only for a player's kill
+     * anyway, so the question is answered yes here and Java decides whether to hand it over.
+     */
+    public int experienceOnDeath(int fallback) {
+        JsonObject reward = components.get("minecraft:experience_reward");
+        return amount(reward == null ? null : reward.get("on_death"), fallback);
+    }
+
+    /** What a successful breeding pays out, which Bedrock states in the same component. */
+    public int experienceWhenBred() {
+        JsonObject reward = components.get("minecraft:experience_reward");
+        return amount(reward == null ? null : reward.get("on_bred"), 0);
+    }
+
+    private static int amount(JsonElement written, int fallback) {
+        if (written == null || !written.isJsonPrimitive()) return fallback;
+        if (written.getAsJsonPrimitive().isNumber()) return written.getAsInt();
+
+        at.ioexception.mcaddon.bedrock.molang.MolangEnvironment environment =
+            new at.ioexception.mcaddon.bedrock.molang.MolangEnvironment();
+        environment.setQueries((name, arguments) ->
+            at.ioexception.mcaddon.bedrock.molang.MolangValue.of(
+                name.equals("last_hit_by_player") || name.equals("is_alive")));
+        return (int) at.ioexception.mcaddon.bedrock.molang.MolangParser
+            .parse(written.getAsString()).asFloat(environment);
+    }
+
+    /**
+     * The event a trigger field names.
+     *
+     * A pack writes a trigger either as the event's bare name or as an object carrying it under
+     * `event` beside the target and the filters, and the two forms sit side by side in Mojang's own
+     * entities, so a reader taking only the string form finds nothing in half of them.
+     */
+    public static String event(JsonObject body, String field) {
+        JsonElement value = body == null ? null : body.get(field);
+        if (value == null) return null;
+        if (value.isJsonPrimitive()) return value.getAsString();
+        return value.isJsonObject() ? Json.text(value.getAsJsonObject(), "event", null) : null;
+    }
+
+    public static boolean flag(JsonObject body, String field, boolean fallback) {
+        JsonElement value = body == null ? null : body.get(field);
+        if (value == null || !value.isJsonPrimitive()) return fallback;
+        if (value.getAsJsonPrimitive().isBoolean()) return value.getAsBoolean();
+        return number(value, fallback ? 1 : 0) != 0;
     }
 
     public static List<ServerEntityDefinition> readAll(BedrockPack pack) {
@@ -75,7 +179,7 @@ public record ServerEntityDefinition(
             }
         }
 
-        Set<String> behaviours = new LinkedHashSet<>();
+        Map<String, JsonObject> behaviours = new LinkedHashMap<>();
         collectBehaviours(declared, behaviours);
 
         Map<String, JsonObject> componentGroups = new LinkedHashMap<>();
@@ -93,15 +197,21 @@ public record ServerEntityDefinition(
         JsonObject movement = components.get("minecraft:movement");
         JsonObject scale = components.get("minecraft:scale");
 
+        // Bedrock states a starting health and a ceiling; Java's attribute is the ceiling and the
+        // entity is spawned at it, so an entity declaring only one of the two gets it for both.
+        double value = number(health, "value", 20);
+        double ceiling = number(health, "max", value);
+
         return new ServerEntityDefinition(
             identifier,
             bool(description, "is_spawnable", true),
             bool(description, "is_summonable", true),
-            number(collision, "width", 0.6f),
-            number(collision, "height", 1.8f),
-            number(health, "value", 20f),
-            number(movement, "value", 0.23f),
-            number(scale, "value", 1f),
+            (float) number(collision, "width", 0.6),
+            (float) number(collision, "height", 1.8),
+            (float) Math.max(1, ceiling),
+            (float) Math.min(value, Math.max(1, ceiling)),
+            (float) number(movement, "value", 0.23),
+            (float) number(scale, "value", 1),
             families(components.get("minecraft:type_family")),
             properties(description.getAsJsonObject("properties")),
             components,
@@ -110,10 +220,20 @@ public record ServerEntityDefinition(
             behaviours);
     }
 
-    private static void collectBehaviours(JsonObject components, Set<String> into) {
+    /**
+     * The goals a pack declares, with the body each one carries.
+     *
+     * A goal's `priority` and `speed_multiplier` live in that body, so the name alone is half the
+     * declaration. A goal a component group adds is kept as well, under the same name as the one at
+     * the top level when both declare it: the top-level body wins, which is what Bedrock does until
+     * the group is switched on.
+     */
+    private static void collectBehaviours(JsonObject components, Map<String, JsonObject> into) {
         if (components == null) return;
-        for (String key : components.keySet()) {
-            if (key.startsWith("minecraft:behavior.")) into.add(key);
+        for (Map.Entry<String, JsonElement> entry : components.entrySet()) {
+            if (!entry.getKey().startsWith("minecraft:behavior.")) continue;
+            into.putIfAbsent(entry.getKey(), entry.getValue().isJsonObject()
+                ? entry.getValue().getAsJsonObject() : new JsonObject());
         }
     }
 
@@ -178,13 +298,5 @@ public record ServerEntityDefinition(
     private static boolean bool(JsonObject json, String key, boolean fallback) {
         return json != null && json.has(key) && json.get(key).isJsonPrimitive()
             ? json.get(key).getAsBoolean() : fallback;
-    }
-
-    private static float number(JsonObject json, String key, float fallback) {
-        if (json == null) return fallback;
-        JsonElement value = json.get(key);
-        if (value != null && value.isJsonPrimitive()) return value.getAsFloat();
-        // A component is often written as the bare value it would otherwise wrap.
-        return fallback;
     }
 }

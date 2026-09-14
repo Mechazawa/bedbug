@@ -1,0 +1,84 @@
+{
+  "format_version": "1.20.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:wisp",
+      "is_spawnable": true,
+      "is_summonable": true,
+      "is_experimental": false,
+      "properties": {
+        "tp:settled": {
+          "type": "bool",
+          "default": false,
+          "client_sync": true
+        }
+      }
+    },
+    "component_groups": {
+      "tp:calmed": {
+        "minecraft:scale": {
+          "value": 0.75
+        }
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": ["tp_wisp", "mob"]
+      },
+      "minecraft:collision_box": {
+        "width": 0.4,
+        "height": 0.6
+      },
+      "minecraft:health": {
+        "value": 6,
+        "max": 20
+      },
+      "minecraft:movement": {
+        "value": 0.25
+      },
+      "minecraft:physics": {},
+      "minecraft:movement.basic": {},
+      "minecraft:navigation.walk": {
+        "can_path_over_water": true,
+        "can_open_doors": true
+      },
+      "minecraft:jump.static": {},
+      "minecraft:experience_reward": {
+        "on_death": "query.last_hit_by_player ? 7 : 0"
+      },
+      "minecraft:angry": {
+        "duration": 1,
+        "broadcast_anger": false,
+        "calm_event": {
+          "event": "tp:settle",
+          "target": "self"
+        }
+      },
+      "minecraft:leashable": {
+        "can_be_stolen": true
+      },
+      "minecraft:teleport": {
+        "random_teleports": true,
+        "min_random_teleport_time": 2,
+        "max_random_teleport_time": 4,
+        "random_teleport_cube": [3, 1, 3],
+        "light_teleport_chance": 1.0,
+        "dark_teleport_chance": 1.0
+      },
+      "minecraft:behavior.random_stroll": {
+        "priority": 3,
+        "speed_multiplier": 0.7
+      }
+    },
+    "events": {
+      "tp:settle": {
+        "set_property": {
+          "tp:settled": true
+        },
+        "add": {
+          "component_groups": ["tp:calmed"]
+        }
+      }
+    }
+  }
+}

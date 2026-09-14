@@ -120,15 +120,19 @@ public final class EntityEvents {
         JsonObject values = body.isJsonObject() ? body.getAsJsonObject() : new JsonObject();
         switch (name) {
             case "minecraft:variant", "minecraft:mark_variant", "minecraft:skin_id" -> {
-                double value = values.has("value") ? values.get("value").getAsDouble() : 0;
-                state.setProperty(entity.getUUID(), name.substring("minecraft:".length()), value);
+                state.setProperty(entity.getUUID(), name.substring("minecraft:".length()),
+                    ServerEntityDefinition.number(values, "value", 0));
                 EntityPropertySync.broadcast(entity, state);
             }
             case "minecraft:instant_despawn" -> entity.discard();
             case "minecraft:transformation" -> transform(entity, values, state);
             case "minecraft:health" -> {
-                if (entity instanceof LivingEntity living && values.has("value")) {
-                    living.setHealth(values.get("value").getAsFloat());
+                // `max` is the ceiling and `value` what the entity is at, so a group raising the
+                // ceiling alone heals the entity to it rather than leaving it where it was.
+                if (entity instanceof LivingEntity living && (values.has("value") || values.has("max"))) {
+                    double ceiling = ServerEntityDefinition.number(values, "max", living.getMaxHealth());
+                    living.setHealth((float) Math.min(ceiling,
+                        ServerEntityDefinition.number(values, "value", ceiling)));
                 }
             }
             case "minecraft:is_sheared", "minecraft:is_baby", "minecraft:is_dyeable" ->
@@ -159,10 +163,37 @@ public final class EntityEvents {
         Platform.placeAt(replacement, entity.getX(), entity.getY(), entity.getZ(),
             entity.getYRot(), entity.getXRot());
         if (entity.getCustomName() != null) replacement.setCustomName(entity.getCustomName());
+        carryOver(entity, replacement, values);
         level.addFreshEntity(replacement);
 
         state.forget(entity.getUUID());
         entity.discard();
+    }
+
+    /**
+     * What the new entity keeps of the old one.
+     *
+     * Bedrock drops the equipment and the inventory on the ground unless the pack asks otherwise,
+     * and `preserve_equipment` is the pack asking for it to be worn by what it became instead.
+     */
+    private static void carryOver(Entity before, Entity after, JsonObject values) {
+        if (!(before instanceof LivingEntity old) || !(after instanceof LivingEntity fresh)) return;
+
+        boolean kept = ServerEntityDefinition.flag(values, "preserve_equipment", false);
+        boolean dropped = ServerEntityDefinition.flag(values, "drop_equipment", false);
+        if (!kept && !dropped) return;
+
+        for (net.minecraft.world.entity.EquipmentSlot slot
+            : net.minecraft.world.entity.EquipmentSlot.values()) {
+            net.minecraft.world.item.ItemStack worn = old.getItemBySlot(slot);
+            if (worn.isEmpty()) continue;
+
+            if (kept) fresh.setItemSlot(slot, worn.copy());
+            if (dropped) {
+                old.level().addFreshEntity(new net.minecraft.world.entity.item.ItemEntity(
+                    old.level(), old.getX(), old.getY(), old.getZ(), worn.copy()));
+            }
+        }
     }
 
     private static void setProperties(Entity entity, EntityEvent.SetProperties properties, AddonState state) {

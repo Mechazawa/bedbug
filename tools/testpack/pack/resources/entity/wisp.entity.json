@@ -1,0 +1,22 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "tp:wisp",
+      "materials": {
+        "default": "entity_alphatest"
+      },
+      "textures": {
+        "default": "textures/entity/ember"
+      },
+      "geometry": {
+        "default": "geometry.tp.ember"
+      },
+      "render_controllers": ["controller.render.tp.sprite"],
+      "spawn_egg": {
+        "base_color": "#7FB3FF",
+        "overlay_color": "#FFFFFF"
+      }
+    }
+  }
+}

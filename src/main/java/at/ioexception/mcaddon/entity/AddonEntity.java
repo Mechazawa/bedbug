@@ -1,7 +1,11 @@
 package at.ioexception.mcaddon.entity;
 
+import at.ioexception.mcaddon.bedrock.behaviour.Anger;
+import at.ioexception.mcaddon.bedrock.behaviour.Despawn;
 import at.ioexception.mcaddon.bedrock.behaviour.Filter;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
+import at.ioexception.mcaddon.bedrock.behaviour.TargetSelection;
+import at.ioexception.mcaddon.bedrock.behaviour.Teleport;
 import at.ioexception.mcaddon.bedrock.behaviour.TradeTable;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
@@ -43,6 +47,9 @@ import net.minecraft.world.level.Level;
  */
 public class AddonEntity extends PathfinderMob implements Merchant {
     private final ServerEntityDefinition definition;
+    private Teleport teleport;
+    private Anger anger;
+    private Despawn despawn;
     private final java.util.Set<String> activeGroups = new java.util.LinkedHashSet<>();
     private int timerDueTick = -1;
     private Player tradingPlayer;
@@ -81,6 +88,17 @@ public class AddonEntity extends PathfinderMob implements Merchant {
         timerDueTick = tick;
     }
 
+    /** The tick `minecraft:scheduler` may fire again from, which its own delays hold back. */
+    public int scheduledFromTick() {
+        return scheduledFromTick;
+    }
+
+    public void setScheduledFromTick(int tick) {
+        scheduledFromTick = tick;
+    }
+
+    private int scheduledFromTick;
+
     /**
      * The attributes a pack's components describe, which Java fixes when the type is registered.
      *
@@ -91,9 +109,9 @@ public class AddonEntity extends PathfinderMob implements Merchant {
         AttributeSupplier.Builder built = PathfinderMob.createMobAttributes()
             .add(Attributes.MAX_HEALTH, definition.maxHealth())
             .add(Attributes.MOVEMENT_SPEED, definition.movementSpeed())
-            .add(Attributes.FOLLOW_RANGE, number(definition, "minecraft:follow_range", "value", 16))
+            .add(Attributes.FOLLOW_RANGE, definition.number("minecraft:follow_range", "value", 16))
             .add(Attributes.KNOCKBACK_RESISTANCE,
-                number(definition, "minecraft:knockback_resistance", "value", 0));
+                definition.number("minecraft:knockback_resistance", "value", 0));
 
         // 26 moved how far food tempts a mob out of the goal and onto the mob itself, and a goal
         // reading an attribute the type never declared fails the tick it runs in.
@@ -103,13 +121,6 @@ public class AddonEntity extends PathfinderMob implements Merchant {
         return built;
     }
 
-    /** A number a component carries, or the fallback when the pack declared neither. */
-    private static double number(ServerEntityDefinition definition, String component, String field,
-        double fallback) {
-        com.google.gson.JsonObject body = definition.components().get(component);
-        return body == null || !body.has(field) ? fallback : body.get(field).getAsDouble();
-    }
-
     /**
      * The components that change the entity itself rather than how it decides what to do.
      *
@@ -117,43 +128,37 @@ public class AddonEntity extends PathfinderMob implements Merchant {
      * the entity that Java holds on the entity rather than on its type.
      */
     private void applyComponents() {
-        if (definition.components().containsKey("minecraft:fire_immune")) {
-            setRemainingFireTicks(0);
-        }
-        if (definition.components().containsKey("minecraft:is_hidden_when_invisible")) {
-            setInvisible(isInvisible());
-        }
+        teleport = Teleport.tryFrom(definition);
+        anger = Anger.tryFrom(definition);
+        despawn = Despawn.tryFrom(definition);
 
-        if (definition.components().containsKey("minecraft:experience_reward")) {
-            xpReward = (int) number(definition, "minecraft:experience_reward", "on_death", xpReward);
-        }
-        if (definition.components().containsKey("minecraft:persistent")) {
-            setPersistenceRequired();
-        }
+        if (has("minecraft:fire_immune")) setRemainingFireTicks(0);
+        if (has("minecraft:is_hidden_when_invisible")) setInvisible(isInvisible());
+        if (has("minecraft:persistent")) setPersistenceRequired();
+
+        setHealth(definition.startingHealth());
+        xpReward = definition.experienceOnDeath(xpReward);
 
         // `color` and `color2` name a dye, which is the number a pack's own render controller reads
         // back as `q.color`. Java has no colour of its own for an arbitrary mob, so it is kept as
         // the property the pack asks about.
-        for (String named : new String[] {"minecraft:color", "minecraft:color2"}) {
-            if (!has(named)) continue;
-
-            ServerHooks.state().setProperty(getUUID(),
-                named.substring("minecraft:".length()), number(definition, named, "value", 0));
+        if (has("minecraft:color")) {
+            ServerHooks.state().setProperty(getUUID(), "color",
+                definition.number("minecraft:color", "value", 0));
         }
-        if (has("minecraft:is_hidden_when_invisible")) setInvisible(isInvisible());
-
-        // Bedrock names the kind of pathfinding; Java asks whether the navigator may take each route.
-        net.minecraft.world.entity.ai.navigation.PathNavigation navigation = getNavigation();
-        if (navigation instanceof net.minecraft.world.entity.ai.navigation.GroundPathNavigation ground) {
-            ground.setCanOpenDoors(has("minecraft:annotation.open_door"));
-            ground.setCanFloat(has("minecraft:navigation.swim") || has("minecraft:navigation.generic"));
+        if (has("minecraft:color2")) {
+            ServerHooks.state().setProperty(getUUID(), "color2",
+                definition.number("minecraft:color2", "value", 0));
         }
+
+        navigate();
         // `home` and `dweller` both say the entity belongs somewhere and should stay near it.
-        if (has("minecraft:home") || has("minecraft:dweller")) {
-            int radius = (int) number(definition,
-                has("minecraft:home") ? "minecraft:home" : "minecraft:dweller",
-                "restriction_radius", 16);
-            Platform.setHome(this, blockPosition(), Math.max(1, radius));
+        if (has("minecraft:home")) {
+            Platform.setHome(this, blockPosition(),
+                (int) Math.max(1, definition.number("minecraft:home", "restriction_radius", 16)));
+        } else if (has("minecraft:dweller")) {
+            Platform.setHome(this, blockPosition(),
+                (int) Math.max(1, definition.number("minecraft:dweller", "restriction_radius", 16)));
         }
 
         if (has("minecraft:preferred_path")) {
@@ -166,20 +171,82 @@ public class AddonEntity extends PathfinderMob implements Merchant {
         }
     }
 
+    /**
+     * The routes a pack's navigation component allows, which Java asks the navigator about one by one.
+     *
+     * Bedrock states the kind of pathfinding in the component's name and the allowances inside it,
+     * and an entity that may not float sinks where one that may swims, so the flags decide as much
+     * as the name does.
+     */
+    private void navigate() {
+        // A pack writing two of these means the last one, which is the order Bedrock reads them in.
+        com.google.gson.JsonObject walking = null;
+        for (String component : java.util.List.of(
+            "minecraft:navigation.float", "minecraft:navigation.climb", "minecraft:navigation.fly",
+            "minecraft:navigation.hover", "minecraft:navigation.swim", "minecraft:navigation.generic",
+            "minecraft:navigation.walk")) {
+            if (has(component)) walking = definition.component(component);
+        }
+
+        net.minecraft.world.entity.ai.navigation.PathNavigation navigation = getNavigation();
+        if (!(navigation instanceof net.minecraft.world.entity.ai.navigation.GroundPathNavigation ground)) {
+            return;
+        }
+
+        ground.setCanOpenDoors(has("minecraft:annotation.open_door")
+            || ServerEntityDefinition.flag(walking, "can_open_doors", false)
+            || ServerEntityDefinition.flag(walking, "can_pass_doors", false));
+        ground.setCanFloat(has("minecraft:navigation.swim") || has("minecraft:navigation.generic")
+            || ServerEntityDefinition.flag(walking, "can_float", false)
+            || ServerEntityDefinition.flag(walking, "can_swim", false)
+            || ServerEntityDefinition.flag(walking, "can_path_over_water", false)
+            || ServerEntityDefinition.flag(walking, "is_amphibious", false));
+        ground.setAvoidSun(ServerEntityDefinition.flag(walking, "avoid_sun", false));
+
+        if (!ServerEntityDefinition.flag(walking, "avoid_water", false)) return;
+
+        // The enum naming a kind of ground was renamed in 1.21.
+        //? if >=1.21 {
+        setPathfindingMalus(net.minecraft.world.level.pathfinder.PathType.WATER, 8f);
+        //?} else {
+        /*setPathfindingMalus(net.minecraft.world.level.pathfinder.BlockPathTypes.WATER, 8f);
+        *///?}
+    }
+
+
     private boolean has(String component) {
         return definition.components().containsKey(component);
     }
 
     /**
-     * How many riders the pack allows, which is what makes an entity rideable at all.
+     * Who the pack allows on, and how many of them.
      *
-     * Bedrock states the seats and Java asks the entity each time somebody tries to get on, so the
-     * count is read back out of the component rather than kept.
+     * Bedrock states the seat count and the families that may use them; Java asks the entity each
+     * time somebody tries to get on, so both are read back out of the component rather than kept.
      */
     @Override
     protected boolean canAddPassenger(net.minecraft.world.entity.Entity passenger) {
         if (definition == null || !has("minecraft:rideable")) return false;
-        return getPassengers().size() < (int) number(definition, "minecraft:rideable", "seat_count", 1);
+        if (getPassengers().size() >= (int) definition.number("minecraft:rideable", "seat_count", 1)) {
+            return false;
+        }
+        return ridableBy(passenger);
+    }
+
+    /** A pack listing `family_types` is naming who may ride; listing none allows anyone. */
+    private boolean ridableBy(net.minecraft.world.entity.Entity passenger) {
+        com.google.gson.JsonObject body = definition.component("minecraft:rideable");
+        java.util.List<com.google.gson.JsonElement> families =
+            at.ioexception.mcaddon.util.Json.list(body, "family_types");
+        if (families.isEmpty()) return true;
+
+        java.util.Set<String> carried = passenger instanceof AddonEntity addon
+            ? addon.definition().families() : Platform.tagsOf(passenger);
+        return families.stream()
+            .filter(com.google.gson.JsonElement::isJsonPrimitive)
+            .map(com.google.gson.JsonElement::getAsString)
+            .anyMatch(family -> carried.contains(family)
+                || (family.equals("player") && passenger instanceof Player));
     }
 
     /**
@@ -214,33 +281,58 @@ public class AddonEntity extends PathfinderMob implements Merchant {
         if (!has("minecraft:behavior.pickup_items") || level().isClientSide()) return;
         if (!getMainHandItem().isEmpty()) return;
 
-        double range = number(definition, "minecraft:behavior.pickup_items", "max_dist", 3);
+        com.google.gson.JsonObject goal = definition.behaviours().get("minecraft:behavior.pickup_items");
+        double range = ServerEntityDefinition.number(goal, "max_dist", 3);
+        boolean anything = ServerEntityDefinition.flag(goal, "can_pickup_any_item", false);
+
         for (net.minecraft.world.entity.item.ItemEntity dropped
             : level().getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
                 getBoundingBox().inflate(range))) {
             if (!dropped.isAlive() || dropped.hasPickUpDelay()) continue;
-            if (!shareable(dropped.getItem())) continue;
+            if (named(goal, "excluded_items", dropped.getItem())) continue;
+            if (!anything && !shareable(dropped.getItem())) continue;
 
-            setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, dropped.getItem().copy());
-            dropped.discard();
+            // `singular_pickup` is the pack asking for one of the stack rather than all of it.
+            com.google.gson.JsonObject shareables = definition.component("minecraft:shareables");
+            net.minecraft.world.item.ItemStack taken = dropped.getItem().copy();
+            if (ServerEntityDefinition.flag(shareables, "singular_pickup", false)) {
+                taken.setCount(1);
+                dropped.getItem().shrink(1);
+            }
+
+            setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, taken);
+            if (dropped.getItem().isEmpty()) dropped.discard();
             return;
         }
     }
 
-    /** Whether the pack's `shareables` list allows this item, which allows everything when absent. */
+    /**
+     * Whether the pack's `shareables` list allows this item, which allows everything when absent.
+     *
+     * `all_items` is the pack saying the list is a preference rather than a gate, so an entity
+     * declaring it takes whatever it finds.
+     */
     private boolean shareable(net.minecraft.world.item.ItemStack stack) {
-        com.google.gson.JsonObject body = definition.components().get("minecraft:shareables");
-        com.google.gson.JsonArray items = body == null ? null : body.getAsJsonArray("items");
-        if (items == null) return true;
+        com.google.gson.JsonObject body = definition.component("minecraft:shareables");
+        if (body == null) return true;
+        if (ServerEntityDefinition.flag(body, "all_items", false)) return true;
+        return named(body, "items", stack);
+    }
 
-        String id = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
-        for (com.google.gson.JsonElement item : items) {
-            if (!item.isJsonObject()) continue;
+    /** Whether an item list a component carries names this stack, in either spelling of an entry. */
+    private static boolean named(com.google.gson.JsonObject body, String field,
+        net.minecraft.world.item.ItemStack stack) {
+        java.util.List<com.google.gson.JsonElement> listed =
+            at.ioexception.mcaddon.util.Json.list(body, field);
+        if (listed.isEmpty()) return false;
 
-            String named = at.ioexception.mcaddon.util.Json.text(item.getAsJsonObject(), "item", null);
-            if (named != null && (named.equals(id) || ("minecraft:" + named).equals(id))) return true;
-        }
-        return false;
+        String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+        return listed.stream()
+            .map(entry -> entry.isJsonObject()
+                ? at.ioexception.mcaddon.util.Json.text(entry.getAsJsonObject(), "item", null)
+                : entry.isJsonPrimitive() ? entry.getAsString() : null)
+            .filter(java.util.Objects::nonNull)
+            .anyMatch(name -> name.equals(id) || ("minecraft:" + name).equals(id));
     }
 
     /**
@@ -264,20 +356,90 @@ public class AddonEntity extends PathfinderMob implements Merchant {
     /**
      * Moves the entity somewhere else nearby, the way Bedrock's teleport component does.
      *
-     * A pack gives a chance and a distance; what it is describing is a mob that blinks about rather
-     * than walks, which Java has no component for but can be asked to do outright.
+     * A pack states the reach as a cube in blocks and the rate as a time in seconds, so the wait is
+     * counted in ticks and the jump is measured against the cube.
      */
     private void teleportAbout() {
-        if (!has("minecraft:teleport") || level().isClientSide()) return;
+        if (teleport == null || level().isClientSide()) return;
 
-        double chance = number(definition, "minecraft:teleport", "random_teleport_chance", 0.01);
-        if (random.nextDouble() > chance) return;
+        if (teleportDueTick < 0 || tickCount < teleportDueTick) {
+            if (teleportDueTick < 0) {
+                teleportDueTick = tickCount + teleport.nextDelayTicks(random.nextDouble());
+            }
+            return;
+        }
+        teleportDueTick = tickCount + teleport.nextDelayTicks(random.nextDouble());
+        if (random.nextDouble() > teleport.chanceAt(level().getMaxLocalRawBrightness(blockPosition()))) {
+            return;
+        }
 
-        double range = number(definition, "minecraft:teleport", "max_random_teleport_time", 16);
-        double x = getX() + (random.nextDouble() - 0.5) * range * 2;
-        double y = getY() + (random.nextInt(8) - 4);
-        double z = getZ() + (random.nextDouble() - 0.5) * range * 2;
+        double x = getX() + (random.nextDouble() * 2 - 1) * teleport.reachX();
+        double y = getY() + (random.nextDouble() * 2 - 1) * teleport.reachY();
+        double z = getZ() + (random.nextDouble() * 2 - 1) * teleport.reachZ();
         Platform.placeAt(this, x, y, z, getYRot(), getXRot());
+    }
+
+    /** When the next teleport is due, in ticks of this entity's own age. Negative until armed. */
+    private int teleportDueTick = -1;
+
+    /**
+     * Counts down a pack's anger and fires the event it wrote for the moment it ends.
+     *
+     * Bedrock states the anger's length in seconds; an entity whose component is read as a flag is
+     * angry for the rest of its life and the pack's `calm_event` never runs.
+     */
+    private void calmDown() {
+        if (anger == null || angryUntilTick < 0) return;
+        if (tickCount < angryUntilTick) return;
+
+        angryUntilTick = -1;
+        if (anger.calmEvent() != null) {
+            EntityEvents.trigger(this, anger.calmEvent(), null, ServerHooks.state());
+        }
+    }
+
+    /**
+     * Makes this entity angry for as long as its pack says, and its neighbours with it.
+     *
+     * `broadcast_range` is blocks, and the entities it reaches are the ones sharing this definition,
+     * which is what Bedrock spreads anger to.
+     */
+    public void provoke() {
+        if (anger == null) return;
+
+        int lifetime = anger.lifetimeTicks(random.nextDouble());
+        angryUntilTick = lifetime < 0 ? Integer.MAX_VALUE : tickCount + lifetime;
+        if (!anger.broadcastAnger() || !(level() instanceof net.minecraft.server.level.ServerLevel level)) {
+            return;
+        }
+
+        level.getEntitiesOfClass(AddonEntity.class, getBoundingBox().inflate(anger.broadcastRange()),
+            other -> other != this && other.getType() == getType() && !other.isAngry())
+            .forEach(AddonEntity::provoke);
+    }
+
+    private int angryUntilTick = -1;
+
+    /**
+     * Whether a pack's despawn rules would remove this entity.
+     *
+     * Bedrock states the two distances in blocks and the idle wait in seconds, and asks the same
+     * pair of questions Java asks of a vanilla mob, so the rules are answered here rather than left
+     * to Java's own defaults.
+     */
+    @Override
+    public void checkDespawn() {
+        if (despawn == null || isPersistenceRequired()) {
+            super.checkDespawn();
+            return;
+        }
+
+        Player nearest = level().getNearestPlayer(this, -1);
+        if (nearest == null) return;
+        if (despawn.despawnsAt(Math.sqrt(distanceToSqr(nearest)), noActionTime, random.nextDouble())) {
+            if (despawn.removeChildren()) getPassengers().forEach(net.minecraft.world.entity.Entity::discard);
+            discard();
+        }
     }
 
     /** The first seat a `minecraft:rideable` component names, or null when it names none. */
@@ -325,32 +487,24 @@ public class AddonEntity extends PathfinderMob implements Merchant {
      * describes is carried out here.
      */
     private boolean fed(Player player, InteractionHand hand) {
-        com.google.gson.JsonObject breedable = definition.components().get("minecraft:breedable");
-        if (breedable == null || !breedsWith(breedable, player.getItemInHand(hand))) return false;
+        com.google.gson.JsonObject breedable = definition.component("minecraft:breedable");
+        if (breedable == null || !named(breedable, "breed_items", player.getItemInHand(hand))) {
+            return false;
+        }
+        // A pack asking for a healthy parent means an entity at anything less is not tempted at all.
+        if (ServerEntityDefinition.flag(breedable, "require_full_health", false)
+            && getHealth() < getMaxHealth()) {
+            return false;
+        }
 
         if (!player.getAbilities().instabuild) player.getItemInHand(hand).shrink(1);
-        inLoveUntil = tickCount + 600;
+        inLoveUntil = tickCount
+            + (int) (ServerEntityDefinition.number(breedable, "breed_cooldown", 30) * 20);
         for (int i = 0; i < 7; i++) {
             level().addParticle(net.minecraft.core.particles.ParticleTypes.HEART,
                 getRandomX(1), getRandomY() + 0.5, getRandomZ(1), 0, 0, 0);
         }
         return true;
-    }
-
-    /** Whether one of the items the pack named as breeding food is what was offered. */
-    private static boolean breedsWith(com.google.gson.JsonObject breedable,
-        net.minecraft.world.item.ItemStack offered) {
-        com.google.gson.JsonArray items = breedable.getAsJsonArray("breed_items");
-        if (items == null || offered.isEmpty()) return false;
-
-        String id = BuiltInRegistries.ITEM.getKey(offered.getItem()).toString();
-        for (com.google.gson.JsonElement item : items) {
-            if (!item.isJsonPrimitive()) continue;
-
-            String named = item.getAsString();
-            if (named.equals(id) || ("minecraft:" + named).equals(id)) return true;
-        }
-        return false;
     }
 
     /**
@@ -378,16 +532,44 @@ public class AddonEntity extends PathfinderMob implements Merchant {
             Platform.placeAt(child, getX(), getY(), getZ(), getYRot(), 0f);
             if (child instanceof AddonEntity young) young.setYoung();
             level.addFreshEntity(child);
+            EntityEvents.trigger(child, "minecraft:entity_born", this, ServerHooks.state());
+
+            // Bedrock pays for a birth out of the same component that pays for a death.
+            int paid = definition.experienceWhenBred();
+            if (paid > 0) {
+                net.minecraft.world.entity.ExperienceOrb.award(level,
+                    new net.minecraft.world.phys.Vec3(getX(), getY(), getZ()), paid);
+            }
             return;
         }
     }
 
-    /** What a pack says is born, or another of the same kind when it says nothing. */
+    /**
+     * What a pack says is born, or another of the same kind when it says nothing.
+     *
+     * A pack names the child in three places: `minecraft:offspring` names it outright, its
+     * `offspring_pairs` name one per pair of parents, and `minecraft:breedable` names one per mate.
+     * All three are the same statement, so whichever the pack wrote is taken.
+     */
     private net.minecraft.world.entity.EntityType<?> offspring() {
-        com.google.gson.JsonObject component = definition.components().get("minecraft:offspring");
-        String named = component == null ? null
-            : at.ioexception.mcaddon.util.Json.text(component, "identifier", null);
-        return named == null ? getType() : AddonEntities.typeOf(named);
+        com.google.gson.JsonObject component = definition.component("minecraft:offspring");
+        String named = component == null
+            ? null : at.ioexception.mcaddon.util.Json.text(component, "identifier", null);
+
+        com.google.gson.JsonObject breedable = definition.component("minecraft:breedable");
+        if (named == null) named = firstNamed(component, "offspring_pairs", "baby");
+        if (named == null) named = firstNamed(breedable, "breeds_with", "baby_type");
+        return named == null ? getType() : AddonEntities.typeOf(named.split("<")[0]);
+    }
+
+    /** The first entity a list of entries names under the given field. */
+    private static String firstNamed(com.google.gson.JsonObject body, String list, String field) {
+        return at.ioexception.mcaddon.util.Json.list(body, list).stream()
+            .filter(com.google.gson.JsonElement::isJsonObject)
+            .map(entry -> at.ioexception.mcaddon.util.Json.text(entry.getAsJsonObject(), field, null))
+            .filter(java.util.Objects::nonNull)
+            .findFirst()
+            .orElse(null);
     }
 
     /**
@@ -398,7 +580,7 @@ public class AddonEntity extends PathfinderMob implements Merchant {
      * sun is up again.
      */
     private void rest() {
-        if (!definition.behaviours().contains("minecraft:behavior.sleep")) return;
+        if (!definition.behaviours().containsKey("minecraft:behavior.sleep")) return;
         if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
 
         long time = Platform.dayTime(level) % 24000L;
@@ -417,8 +599,8 @@ public class AddonEntity extends PathfinderMob implements Merchant {
      * uses either for is an entity that does not stay poisoned, so the harmful ones are cleared.
      */
     private void drink() {
-        boolean drinks = definition.behaviours().contains("minecraft:behavior.drink_milk")
-            || definition.behaviours().contains("minecraft:behavior.drink_potion");
+        boolean drinks = definition.behaviours().containsKey("minecraft:behavior.drink_milk")
+            || definition.behaviours().containsKey("minecraft:behavior.drink_potion");
         if (!drinks || getActiveEffects().isEmpty()) return;
 
         getActiveEffects().stream()
@@ -435,9 +617,9 @@ public class AddonEntity extends PathfinderMob implements Merchant {
         ServerHooks.state().setProperty(getUUID(), "is_baby", true);
     }
 
-    /** Bedrock says an entity is angry; Java asks the entity, so the flag is kept here. */
+    /** Angry until the countdown the pack's `minecraft:angry` component set has run out. */
     public boolean isAngry() {
-        return has("minecraft:angry");
+        return angryUntilTick > tickCount;
     }
 
     /**
@@ -488,68 +670,148 @@ public class AddonEntity extends PathfinderMob implements Merchant {
         return false;
     }
 
+    /**
+     * Whether a lead holds this entity at all.
+     *
+     * `can_be_stolen` says whether a second player may take the lead off the first, not whether the
+     * entity may be leashed, so an entity is leashable whenever the component is there: Java allows
+     * a mob to be leashed by default and the component says the same thing.
+     */
     // A mob could always be leashed before 1.21.2, where the question moved onto the entity.
     //? if >=1.21.2 {
     @Override
     //?}
     public boolean canBeLeashed() {
-        return definition == null || !definition.components().containsKey("minecraft:leashable")
-            || number(definition, "minecraft:leashable", "can_be_stolen", 1) != 0;
+        return definition == null || has("minecraft:leashable")
+            || !definition.components().containsKey("minecraft:leashable_to");
     }
 
+    /**
+     * Fires the events a pack wrote for a lead going on and coming off.
+     *
+     * Bedrock writes each as a trigger, which is the bare event name or the object carrying it, and
+     * a reader taking only one of the two forms finds nothing in Mojang's own entities.
+     */
+    private void leashChanged(boolean leashed) {
+        if (leashed == wasLeashed) return;
+        wasLeashed = leashed;
+
+        com.google.gson.JsonObject body = definition.component("minecraft:leashable");
+        String event = leashed
+            ? ServerEntityDefinition.event(body, "on_leash")
+            : ServerEntityDefinition.event(body, "on_unleash");
+        if (event != null) EntityEvents.trigger(this, event, null, ServerHooks.state());
+    }
+
+    private boolean wasLeashed;
+
+    /**
+     * The goals a pack declared, at the priority and the speed it asked for.
+     *
+     * Bedrock and Java both order goals by a number where lower wins, and both state a goal's speed
+     * as a multiplier of the entity's own movement speed, so each carries straight across. A goal
+     * read without them runs in the order the components happened to be written in, at whatever
+     * speed the mod chose, which is what makes a panicking mob amble and a strolling one sprint.
+     */
     private void addGoals() {
-        int priority = 0;
-        for (String behaviour : definition.behaviours()) {
-            priority++;
-            switch (behaviour) {
-                case "minecraft:behavior.float" -> goalSelector.addGoal(priority, new FloatGoal(this));
-                case "minecraft:behavior.panic" -> goalSelector.addGoal(priority, new PanicGoal(this, 1.25));
-                case "minecraft:behavior.random_stroll", "minecraft:behavior.move_outdoors",
-                     "minecraft:behavior.explore_outskirts" ->
-                    goalSelector.addGoal(priority, new WaterAvoidingRandomStrollGoal(this, 0.6));
-                case "minecraft:behavior.look_at_player", "minecraft:behavior.look_at_trading_player" ->
-                    goalSelector.addGoal(priority, new LookAtPlayerGoal(this, Player.class, 8f));
-                case "minecraft:behavior.random_look_around" ->
-                    goalSelector.addGoal(priority, new RandomLookAroundGoal(this));
+        definition.behaviours().forEach(this::addGoal);
+    }
 
-                // Bedrock names the kind of wandering; Java has one stroll goal and a speed.
-                case "minecraft:behavior.move_indoors",
-                     "minecraft:behavior.move_towards_dwelling_restriction",
-                     "minecraft:behavior.move_towards_home_restriction",
-                     "minecraft:behavior.move_towards_restriction" ->
-                    goalSelector.addGoal(priority, new MoveTowardsRestrictionGoal(this, 0.6));
-                case "minecraft:behavior.mount_pathing", "minecraft:behavior.follow_owner",
-                     "minecraft:behavior.play", "minecraft:behavior.stroll_towards_village" ->
-                    goalSelector.addGoal(priority, new WaterAvoidingRandomStrollGoal(this, 0.6));
+    private void addGoal(String behaviour, com.google.gson.JsonObject body) {
+        int priority = (int) ServerEntityDefinition.number(body, "priority", 0);
+        double speed = ServerEntityDefinition.number(body, "speed_multiplier", 1);
 
-                // Hiding and playing are both a Bedrock villager moving somewhere for a reason Java
-                // writes into its own villager. What carries across is the moving.
-                case "minecraft:behavior.avoid_mob_type", "minecraft:behavior.hide",
-                     "minecraft:behavior.avoid_block" ->
-                    goalSelector.addGoal(priority,
-                        new AvoidEntityGoal<>(this, Monster.class, 8f, 1.0, 1.2));
-                case "minecraft:behavior.panic_on_fire" ->
-                    goalSelector.addGoal(priority, new PanicGoal(this, 1.25));
+        switch (behaviour) {
+            case "minecraft:behavior.float" -> goalSelector.addGoal(priority, new FloatGoal(this));
+            case "minecraft:behavior.panic", "minecraft:behavior.panic_on_fire" ->
+                goalSelector.addGoal(priority, new PanicGoal(this, speed));
+            case "minecraft:behavior.random_stroll", "minecraft:behavior.move_outdoors",
+                 "minecraft:behavior.explore_outskirts" -> {
+                // `interval` is the one in N chance of choosing the goal, which Java counts the same way.
+                WaterAvoidingRandomStrollGoal stroll = new WaterAvoidingRandomStrollGoal(this, speed);
+                stroll.setInterval((int) ServerEntityDefinition.number(body, "interval", 120));
+                goalSelector.addGoal(priority, stroll);
+            }
+            case "minecraft:behavior.look_at_player", "minecraft:behavior.look_at_trading_player" ->
+                goalSelector.addGoal(priority, new LookAtPlayerGoal(this, Player.class,
+                    (float) ServerEntityDefinition.number(body, "look_distance", 8),
+                    (float) ServerEntityDefinition.number(body, "probability", 0.02)));
+            case "minecraft:behavior.random_look_around" ->
+                goalSelector.addGoal(priority, new RandomLookAroundGoal(this));
 
-                case "minecraft:behavior.tempt" ->
-                    goalSelector.addGoal(priority, Platform.temptGoal(this));
-                case "minecraft:behavior.open_door", "minecraft:annotation.open_door" ->
-                    goalSelector.addGoal(priority, new OpenDoorGoal(this, true));
+            // Bedrock names the kind of wandering; Java has one stroll goal and a speed.
+            case "minecraft:behavior.move_indoors",
+                 "minecraft:behavior.move_towards_dwelling_restriction",
+                 "minecraft:behavior.move_towards_home_restriction",
+                 "minecraft:behavior.move_towards_restriction" ->
+                goalSelector.addGoal(priority, new MoveTowardsRestrictionGoal(this, speed));
+            case "minecraft:behavior.mount_pathing", "minecraft:behavior.follow_owner",
+                 "minecraft:behavior.play", "minecraft:behavior.stroll_towards_village",
+                 "minecraft:behavior.breed", "minecraft:behavior.follow_parent",
+                 "minecraft:behavior.share_items" ->
+                goalSelector.addGoal(priority, new WaterAvoidingRandomStrollGoal(this, speed));
 
-                case "minecraft:behavior.melee_attack", "minecraft:behavior.melee_box_attack" ->
-                    goalSelector.addGoal(priority,
-                        new net.minecraft.world.entity.ai.goal.MeleeAttackGoal(this, 1.0, false));
-                case "minecraft:behavior.nearest_attackable_target" ->
-                    targetSelector.addGoal(priority,
-                        new net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal<>(
-                            this, Player.class, true));
-                case "minecraft:behavior.hurt_by_target" ->
-                    targetSelector.addGoal(priority,
-                        new net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal(this));
+            // Hiding and playing are both a Bedrock villager moving somewhere for a reason Java
+            // writes into its own villager. What carries across is the moving.
+            case "minecraft:behavior.avoid_mob_type", "minecraft:behavior.hide",
+                 "minecraft:behavior.avoid_block" -> {
+                TargetSelection avoided = TargetSelection.from(body, Monster.class, 8);
+                goalSelector.addGoal(priority, new AvoidEntityGoal<>(this, avoided.kind(),
+                    (float) avoided.maxDistance(),
+                    ServerEntityDefinition.number(body, "walk_speed_modifier", 1),
+                    ServerEntityDefinition.number(body, "sprint_speed_modifier", 1.2)));
+            }
 
-                default -> AddonEntities.unsupported(behaviour);
+            case "minecraft:behavior.tempt" -> goalSelector.addGoal(priority,
+                Platform.temptGoal(this, speed, tempting(body)));
+            case "minecraft:behavior.open_door", "minecraft:annotation.open_door" ->
+                goalSelector.addGoal(priority, new OpenDoorGoal(this,
+                    ServerEntityDefinition.flag(body, "close_door_after", true)));
+
+            case "minecraft:behavior.melee_attack", "minecraft:behavior.melee_box_attack" ->
+                goalSelector.addGoal(priority,
+                    new net.minecraft.world.entity.ai.goal.MeleeAttackGoal(this, speed,
+                        ServerEntityDefinition.flag(body, "track_target", false)));
+            case "minecraft:behavior.nearest_attackable_target" -> {
+                TargetSelection hunted = TargetSelection.from(body, Player.class,
+                    ServerEntityDefinition.number(body, "within_radius", 0));
+                targetSelector.addGoal(priority,
+                    new net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal<>(
+                        this, hunted.kind(),
+                        (int) ServerEntityDefinition.number(body, "scan_interval", 10),
+                        ServerEntityDefinition.flag(body, "must_see", false),
+                        ServerEntityDefinition.flag(body, "must_reach", false), null));
+            }
+            case "minecraft:behavior.hurt_by_target" -> {
+                net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal hurt =
+                    new net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal(this);
+                if (ServerEntityDefinition.flag(body, "alert_same_type", false)) hurt.setAlertOthers();
+                targetSelector.addGoal(priority, hurt);
+            }
+
+            // Each of these is carried out on this entity's own clock rather than as a Java goal,
+            // so the goal selector has nothing to add and the component is still honoured.
+            case "minecraft:behavior.pickup_items", "minecraft:behavior.sleep",
+                 "minecraft:behavior.drink_milk", "minecraft:behavior.drink_potion",
+                 "minecraft:behavior.trade_with_player", "minecraft:behavior.trade_interest" -> { }
+
+            default -> AddonEntities.unsupported(behaviour);
+        }
+    }
+
+    /** What a `minecraft:behavior.tempt` goal says tempts this entity, by item id. */
+    private static java.util.Set<String> tempting(com.google.gson.JsonObject body) {
+        java.util.Set<String> items = new java.util.LinkedHashSet<>();
+        for (com.google.gson.JsonElement item
+            : at.ioexception.mcaddon.util.Json.list(body, "items")) {
+            if (item.isJsonPrimitive()) {
+                items.add(item.getAsString());
+            } else if (item.isJsonObject()) {
+                String named = at.ioexception.mcaddon.util.Json.text(item.getAsJsonObject(), "item", null);
+                if (named != null) items.add(named);
             }
         }
+        return items;
     }
 
     /**
@@ -570,6 +832,8 @@ public class AddonEntity extends PathfinderMob implements Merchant {
             breed();
             rest();
             drink();
+            calmDown();
+            leashChanged(isLeashed());
         }
     }
 
@@ -611,6 +875,15 @@ public class AddonEntity extends PathfinderMob implements Merchant {
      */
     @Override
     public InteractionResult mobInteract(Player player, InteractionHand hand) {
+        // `crouching_skip_interact` is a rideable entity asking to be mounted rather than used when
+        // the player is crouching, which is the opposite of what Java does for its own mounts.
+        com.google.gson.JsonObject rideable = definition == null
+            ? null : definition.component("minecraft:rideable");
+        if (rideable != null && player.isCrouching()
+            && ServerEntityDefinition.flag(rideable, "crouching_skip_interact", true)) {
+            return super.mobInteract(player, hand);
+        }
+
         if (!isClientSide() && bredBySpawnEgg(player, hand)) return InteractionResult.SUCCESS;
         if (!isClientSide() && fed(player, hand)) return InteractionResult.SUCCESS;
         if (!isClientSide() && interact(player)) return InteractionResult.SUCCESS;
