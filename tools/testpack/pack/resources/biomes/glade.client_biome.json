@@ -17,6 +17,18 @@
       "minecraft:precipitation": {
         "white_ash": 2.0
       },
+      "minecraft:lighting_identifier": {
+        "lighting_identifier": "tp:glade_lighting"
+      },
+      "minecraft:atmosphere_identifier": {
+        "atmosphere_identifier": "tp:glade_atmospherics"
+      },
+      "minecraft:water_identifier": {
+        "water_identifier": "minecraft:default_water"
+      },
+      "minecraft:color_grading_identifier": {
+        "color_grading_identifier": "minecraft:default_color_grading"
+      },
       "minecraft:ambient_sounds": {
         "loop": "tp:ambient.glade.loop",
         "mood": "ambient.soulsand_valley.mood",

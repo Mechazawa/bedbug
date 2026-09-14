@@ -169,6 +169,19 @@ server decides what happens; the client draws it.
   the same method calls a world experimental as soon as it holds a fourth dimension, and a client
   then asks the player whether to load it at all on every open, so 1.20.1 and 1.21.1 name each
   dimension through `/mcaddon entities` and write none of them.
+- How a resource pack lights the sky across the day, from 26 on. A `lighting/` file states the
+  ambient colour, the sky intensity, how far the sun and moon orbits are turned and the colour and
+  strength of each of them at every hour; an `atmospherics/` file states the colour of the zenith and
+  of the horizon. All of it is a keyframe table, and 26 reads one: a `Timeline` is a keyframe track
+  per environment attribute, which is what the ambient light colour, the sky light factor, the sun
+  and moon angles, the sky light colour and level, the sky colour and the sunrise band all are. So
+  the file becomes a timeline entry in the converted data pack and is named in the overworld's own
+  timeline tag, which merges rather than replaces, and the game's day, moon and early game timelines
+  stay where they are. The two orbital lights fold into Java's one sky light, each measured against
+  the brightest the file itself makes it, so a sun of a hundred lux beside a moon of half a lux comes
+  out as full daylight and a night at the level Java already runs one at. Bedrock hangs these
+  settings off each biome and Java hangs a timeline off a dimension, so the collection Bedrock gives
+  every biome that names no other is the one that lands and a collection one biome names is reported.
 - Attachables: what any entity wears or holds, players and vanilla mobs included, animating on its
   own clock. A pack picks between several models for one item on a condition of its own, and what an
   attachable writes into whoever carries it reaches that entity's variables, so the layer it stands
@@ -457,6 +470,29 @@ off that variable later is told rather than handed a zero.
 count what belongs to the particle effect whose own Molang is being evaluated, and a query asked
 while an entity is drawn belongs to no effect, so both are named by `/mcaddon entities`.
 `total_emitter_count` and `total_particle_count` count the whole world and are answered.
+
+**The water and the colour grading a resource pack writes for the deferred renderer.** A `water/`
+file states the concentration of three optical particles in milligrams per litre, the texture and
+scale of the caustics, and the frequency, depth, speed and shape of the waves. None of the three is
+a colour: the water surface colour is `minecraft:water_appearance` on the client biome, which is
+read, and Java draws the surface itself from a texture and an animation with no term any of these
+would feed. A `color_grading/` file states the contrast, gamma, gain, saturation and offset of the
+shadows, midtones and highlights, a colour temperature in kelvin, and which of six tonemapping
+operators maps the finished frame back into range, all of it a post-process Java has no data-driven
+form of. Each setting is counted and named by `/mcaddon entities` rather than the directory alone,
+so an author is told which of the ones they wrote is dropped.
+
+**The scattering terms of an atmosphere, and a sky one biome states.** `rayleigh_strength`, the two
+mie strengths, `sun_glare_shape` and `horizon_blend_stops` are the model Bedrock scatters light
+through to draw its sky. Java draws no atmosphere: its sky is the colours `SKY_COLOR` and
+`SUNRISE_SUNSET_COLOR` are given, which is where the zenith and horizon colours go, and the five
+terms have nothing to feed. `ambient.illuminance` is a strength in lux beside a colour Java states
+on its own, `emissive.desaturation` shapes the light an emissive pixel gives off and this mod draws
+that through a labPBR sidecar instead, and `directional_lights.flash` colours the light a lightning
+bolt throws, which Java draws from no value a pack states. A lighting or atmosphere collection one
+biome names is reported as well, because `HolderSet<Timeline>` is a field of `DimensionType` and a
+`Biome` carries an `EnvironmentAttributeMap` of constants rather than of curves. 1.20.1 and 1.21.1
+have no timeline registry at all and name both directories instead.
 
 **Stencil-masked material passes.** A material's alpha testing, blending, culling and emissiveness
 all become the render type the pass is drawn with. What cannot follow is the stencil buffer itself:

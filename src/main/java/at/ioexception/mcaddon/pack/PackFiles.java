@@ -11,9 +11,11 @@ import java.util.Set;
  * Every other coverage measurement this repository makes is about the vocabulary inside a file kind
  * the mod already reads. This is about the file kinds themselves: a whole directory an add-on ships
  * that nothing here opens draws no complaint from any of them. `DEFINED` names what Bedrock lets a
- * pack ship, `READ` names the part a reader opens, and the difference is reported against the pack
- * that shipped it, so `/mcaddon entities` says which directory went unread rather than leaving the
- * author to work it out from a world that came up short.
+ * pack ship, `READ` names the part this mod converts, and the difference is reported against the
+ * pack that shipped it, so `/mcaddon entities` says which directory went unread rather than leaving
+ * the author to work it out from a world that came up short. A directory outside `READ` may still
+ * be opened to name what is in it, which is what tells an author which setting of theirs is dropped
+ * rather than only which directory.
  *
  * A name here is a path relative to the pack root: a top level directory, a top level file, or an
  * index file inside a directory whose other contents are not JSON. `sounds/` holds a pack's audio
@@ -52,10 +54,10 @@ public final class PackFiles {
 
     /** The resource pack paths a reader opens. */
     private static final Set<String> RESOURCE_READ = Set.of(
-        "manifest.json", "pack_icon.png", "animations", "animation_controllers", "attachables",
-        "biomes", "biomes_client.json", "blocks.json", "entity", "fogs", "font", "materials",
-        "models", "particles", "render_controllers", "sounds", "sounds.json", "subpacks", "texts",
-        "textures",
+        "manifest.json", "pack_icon.png", "animations", "animation_controllers", "atmospherics",
+        "attachables", "biomes", "biomes_client.json", "blocks.json", "entity", "fogs", "font",
+        "lighting", "materials", "models", "particles", "render_controllers", "sounds",
+        "sounds.json", "subpacks", "texts", "textures",
         "sounds/music_definitions.json", "sounds/sound_definitions.json",
         "textures/flipbook_textures.json", "textures/item_texture.json",
         "textures/terrain_texture.json",

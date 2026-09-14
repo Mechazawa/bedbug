@@ -27,6 +27,7 @@ import net.minecraft.world.level.block.state.properties.Property;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
@@ -484,6 +485,42 @@ public final class PackGameTests {
             helper.assertTrue(line.contains("minecraft:") || line.contains("tp:") || line.contains(" x"),
                 "A reported gap does not name what was missing: " + line));
         helper.succeed();
+    }
+
+    /**
+     * A pack's lighting and atmospherics reach the world they were written for.
+     *
+     * Writing a timeline file proves nothing on its own. What this asks is the rest of the path: the
+     * registry decoded the entry, the tag the pack ships merged with the one the game ships rather
+     * than replacing it, and the dimension type resolved that tag into the set it samples the day
+     * from. A tag that failed to merge leaves the files on disk and the world lit the way it always
+     * was, which no count of written files would show.
+     */
+    @GameTest()
+    public void aPackSkyReachesTheWorld(GameTestHelper helper) {
+        for (ConvertedPack pack : AddonPacks.all()) {
+            long written = timelinesWritten(pack);
+            if (written == 0) continue;
+
+            int given = Platform.overworldTimelines(helper.getLevel(), pack.namespace());
+            if (given < 0) continue;
+
+            helper.assertTrue(given == written, pack.namespace() + " wrote " + written
+                + " timelines and the overworld was given " + given + " of them.");
+        }
+        helper.succeed();
+    }
+
+    /** How many timeline entries a converted pack put in the registry's own directory. */
+    private static long timelinesWritten(ConvertedPack pack) {
+        Path directory = pack.root().resolve("data").resolve(pack.namespace()).resolve("timeline");
+        if (!Files.isDirectory(directory)) return 0;
+
+        try (java.util.stream.Stream<Path> entries = Files.list(directory)) {
+            return entries.filter(file -> file.getFileName().toString().endsWith(".json")).count();
+        } catch (IOException unreadable) {
+            return 0;
+        }
     }
 
     /** The image a pack's texture was written as, or null where nothing wrote one. */

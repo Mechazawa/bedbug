@@ -2223,6 +2223,47 @@ public final class Platform {
     }
 
     /**
+     * Whether a pack's lighting and atmospherics are converted at all on this version.
+     *
+     * A settings file states a value against the time of day, and the registry that holds such a
+     * table is `Registries.TIMELINE`, which 26 added along with `EnvironmentAttribute` and the
+     * `HolderSet<Timeline>` a `DimensionType` names. Before that a data pack has nowhere to write a
+     * curve to: the sky colour, the sun angle and the sky light level are worked out in code from
+     * the time of day and no file reaches them. Both directories are named through
+     * `/mcaddon entities` there instead.
+     */
+    public static boolean convertsTimelines() {
+        //? if >=26 {
+        return true;
+        //?} else {
+        /*return false;
+        *///?}
+    }
+
+    /**
+     * How many timelines of a namespace's own the overworld is given, or -1 where there are none.
+     *
+     * The answer is what proves a converted timeline reached the game rather than merely being
+     * written: the registry decoded it, the tag merged with the one the game ships, and the
+     * dimension type resolved that tag. Versions before 26 have no such registry and answer -1.
+     */
+    public static int overworldTimelines(net.minecraft.server.level.ServerLevel level,
+        String namespace) {
+        //? if >=26 {
+        int found = 0;
+        for (net.minecraft.core.Holder<net.minecraft.world.timeline.Timeline> timeline
+            : level.dimensionType().timelines()) {
+            java.util.Optional<net.minecraft.resources.ResourceKey<
+                net.minecraft.world.timeline.Timeline>> key = timeline.unwrapKey();
+            if (key.isPresent() && key.get().identifier().getNamespace().equals(namespace)) found++;
+        }
+        return found;
+        //?} else {
+        /*return -1;
+        *///?}
+    }
+
+    /**
      * The empty carver list a converted biome carries.
      *
      * A Bedrock biome states no carvers, and the field is required either way. 26 made it one list;

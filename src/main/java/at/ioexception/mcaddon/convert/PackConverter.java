@@ -117,6 +117,12 @@ public final class PackConverter {
         Map<String, String> icons = new TreeMap<>();
         List<String> sounds = new ArrayList<>();
         BedrockAssets assets = BedrockAssets.read(pack);
+        Map<String, at.ioexception.mcaddon.bedrock.LightingDefinition> lightings =
+            at.ioexception.mcaddon.bedrock.LightingDefinition.readAll(pack);
+        Map<String, at.ioexception.mcaddon.bedrock.AtmosphereDefinition> atmospheres =
+            at.ioexception.mcaddon.bedrock.AtmosphereDefinition.readAll(pack);
+        at.ioexception.mcaddon.bedrock.RendererSettings.WATER.report(pack);
+        at.ioexception.mcaddon.bedrock.RendererSettings.COLOR_GRADING.report(pack);
         Map<String, SpawnEggAppearance> eggs = new LinkedHashMap<>();
         assets.entities().forEach((identifier, definition) -> {
             if (definition.spawnEgg() != null) eggs.put(identifier, definition.spawnEgg());
@@ -155,6 +161,7 @@ public final class PackConverter {
                     at.ioexception.mcaddon.bedrock.ClientBiomeDefinition.readAll(pack,
                         name -> BedrockSoundNames.java(name, namespace, sounds)),
                     features, featureRules, dimensions);
+                Timelines.write(root, namespace, lightings, atmospheres);
             }
 
             if (fresh) {
