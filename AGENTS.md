@@ -179,10 +179,23 @@ These are the checks it runs, and what each one catches:
   Three more carry what an entity takes on rather than what it is. The laden group holds a collision
   box wider and shorter than the one on the entity, an inventory beside the shareables list saying
   what may go in it, an idle sound interval, a dye, a dweller's radius, a leashable refusing to be
-  stolen, a ground control and a sittable; the primed group holds an explosion, and the warded group
+  stolen, a ground control, a sittable and a hopper drawing from whatever stands over the entity;
+  the primed group holds an explosion, and the warded group
   a damage sensor refusing the blow and raising an event about it. The box is the one that proves a
   group moves the width and the height apart from each other, which no scale can do, and the laden
   group's components are otherwise unrelated so that each assertion names one of them alone.
+
+  Five more carry what the entity was built as. The airborne group holds a navigation and a movement
+  that put it in the air, the clinging group a `minecraft:can_climb`, the ghostly group an
+  `is_collidable` and a `pushable` that both say no, the shod group a step height beside a preferred
+  path and an effect immunity, and the stocked group a trade table of its own naming a second file.
+  Java builds the navigator and the move control inside the mob constructor and keeps a field for
+  each, reads the step height off an attribute, asks the entity itself whether an effect may land,
+  and can only open a trade table's file while the pack is still in hand, so each of the five is
+  read back through the thing Java holds rather than through the definition. The sprite carries one
+  more, a `minecraft:fire_immune`, because the ember declares that at the top level and an entity
+  already immune shows nothing about a group.
+
   Two more entities are there for what a mob walking about never reaches. One is a projectile with
   hit boxes wider than the box it collides in; the other shoots it, rides rails, remembers what comes
   near it and dies the ender dragon's long death. A third file describes `minecraft:player`, which is
@@ -213,6 +226,8 @@ These are the checks it runs, and what each one catches:
   experience threshold, a trade whose result is enchanted, one whose result is dyed, one selling an
   enchanted book priced by its own result and one selling an explorer map. Each also names something
   this mod reports rather than converts, so a run says both halves of the reporting path still work.
+  A second trade table sits beside the first, holding one trade and named by the stocked group
+  alone, which is what says both tables were read while the pack was open.
 
   The worldgen side is a biome, five features and two rules. The biome carries the components a Java
   biome has a field for and four it has none of, so both halves of the reporting path run. The

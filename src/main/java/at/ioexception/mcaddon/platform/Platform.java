@@ -1598,6 +1598,45 @@ public final class Platform {
         *///?}
     }
 
+    /** How high the mob steps, which 1.21 took off the entity and made an attribute of. */
+    public static float stepHeight(net.minecraft.world.entity.Mob mob) {
+        //? if >=1.21 {
+        return (float) mob.getAttributeValue(
+            net.minecraft.world.entity.ai.attributes.Attributes.STEP_HEIGHT);
+        //?} else {
+        /*return mob.maxUpStep();
+        *///?}
+    }
+
+    /** Sets how high the mob steps, on whichever of the two the version holds it. */
+    public static void setStepHeight(net.minecraft.world.entity.Mob mob, float height) {
+        //? if >=1.21 {
+        net.minecraft.world.entity.ai.attributes.AttributeInstance step = mob.getAttribute(
+            net.minecraft.world.entity.ai.attributes.Attributes.STEP_HEIGHT);
+        if (step != null) step.setBaseValue(height);
+        //?} else {
+        /*mob.setMaxUpStep(height);
+        *///?}
+    }
+
+    /** What water costs the mob's pathfinder. The enum naming a kind of ground was renamed in 1.21. */
+    public static float waterMalus(net.minecraft.world.entity.Mob mob) {
+        //? if >=1.21 {
+        return mob.getPathfindingMalus(net.minecraft.world.level.pathfinder.PathType.WATER);
+        //?} else {
+        /*return mob.getPathfindingMalus(net.minecraft.world.level.pathfinder.BlockPathTypes.WATER);
+        *///?}
+    }
+
+    /** Prices water for the mob's pathfinder, which is what keeps a mob to the path it was given. */
+    public static void setWaterMalus(net.minecraft.world.entity.Mob mob, float malus) {
+        //? if >=1.21 {
+        mob.setPathfindingMalus(net.minecraft.world.level.pathfinder.PathType.WATER, malus);
+        //?} else {
+        /*mob.setPathfindingMalus(net.minecraft.world.level.pathfinder.BlockPathTypes.WATER, malus);
+        *///?}
+    }
+
     /** Whether the mob is already held to somewhere, so a place it was given is not moved. */
     public static boolean hasHome(net.minecraft.world.entity.Mob mob) {
         //? if >=26 {

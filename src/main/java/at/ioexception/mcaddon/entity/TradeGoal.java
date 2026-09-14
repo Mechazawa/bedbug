@@ -2,7 +2,6 @@ package at.ioexception.mcaddon.entity;
 
 import at.ioexception.mcaddon.bedrock.behaviour.Filter;
 import at.ioexception.mcaddon.bedrock.behaviour.TradeTable;
-import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.server.ServerHooks;
 import com.google.gson.JsonObject;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -113,7 +112,7 @@ public final class TradeGoal extends Goal {
 
     /** Whether the player is holding something one of the trader's own offers asks for. */
     private boolean carriesSomethingWanted(Player player) {
-        TradeTable trades = AddonEntities.tradesOf(mob.getType());
+        TradeTable trades = mob.trades();
         if (trades == null || player.getMainHandItem().isEmpty()) return false;
 
         String held = BuiltInRegistries.ITEM.getKey(player.getMainHandItem().getItem()).toString();
@@ -124,7 +123,7 @@ public final class TradeGoal extends Goal {
 
     /** The first thing the trader sells, which is what it holds up to be noticed. */
     private java.util.Optional<ItemStack> forSale() {
-        TradeTable trades = AddonEntities.tradesOf(mob.getType());
+        TradeTable trades = mob.trades();
         if (trades == null) return java.util.Optional.empty();
 
         return trades.offers().stream()

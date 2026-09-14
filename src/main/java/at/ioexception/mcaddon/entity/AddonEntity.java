@@ -82,7 +82,11 @@ public class AddonEntity extends PathfinderMob
     private Player tradingPlayer;
     private MerchantOffers offers;
     private java.util.List<TradeTable.Offer> shown = new java.util.ArrayList<>();
+    /** Which of Bedrock's ways of getting about the move control standing on the entity was built for. */
+    private String mover = "";
     private int offeredTiers = -1;
+    /** The table the offers on the screen were built out of, so a group naming another rebuilds them. */
+    private TradeTable offered;
     private boolean offersOverridden;
     private int tradeExperience;
     private Identifier lootTable;
@@ -112,7 +116,6 @@ public class AddonEntity extends PathfinderMob
                 setNoGravity(true);
             }
             addGoals();
-            applyMoveControl();
             applyComponents();
         }
     }
@@ -346,9 +349,6 @@ public class AddonEntity extends PathfinderMob
      * the entity that Java holds on the entity rather than on its type.
      */
     private void applyComponents() {
-        if (definition.components().containsKey("minecraft:fire_immune")) {
-            setRemainingFireTicks(0);
-        }
         if (definition.components().containsKey("minecraft:is_hidden_when_invisible")) {
             setInvisible(isInvisible());
         }
@@ -365,20 +365,8 @@ public class AddonEntity extends PathfinderMob
         refreshComponents();
         publishMarkers();
 
-        // Bedrock names the kind of pathfinding; Java asks whether the navigator may take each route.
-        PathNavigation navigation = getNavigation();
-        if (navigation instanceof GroundPathNavigation ground) {
-            ground.setCanOpenDoors(declares("minecraft:annotation.open_door"));
-            ground.setCanFloat(declares("minecraft:navigation.swim") || declares("minecraft:navigation.generic"));
-        }
         String table = liveText("minecraft:loot", "table");
         if (table != null) lootTable = AddonEntities.lootTable(getType(), table);
-
-        //? if <1.21 {
-        /*if (declares("minecraft:variable_max_auto_step")) {
-            setMaxUpStep((float) number(definition, "minecraft:variable_max_auto_step", "base_value", 0.6));
-        }
-        *///?}
 
         wearWhatThePackRolled();
         publishWhatItIs();
@@ -394,14 +382,6 @@ public class AddonEntity extends PathfinderMob
         }
 
         wearTheSkinOfAnNpc();
-        if (declares("minecraft:preferred_path")) {
-            // The enum naming a kind of ground was renamed in 1.21.
-            //? if >=1.21 {
-            setPathfindingMalus(net.minecraft.world.level.pathfinder.PathType.WATER, 8f);
-            //?} else {
-            /*setPathfindingMalus(net.minecraft.world.level.pathfinder.BlockPathTypes.WATER, 8f);
-            *///?}
-        }
     }
 
     /**
@@ -477,6 +457,21 @@ public class AddonEntity extends PathfinderMob
         return activeGroups.stream()
             .map(definition.componentGroups()::get)
             .anyMatch(group -> group != null && group.has(component));
+    }
+
+    /**
+     * Whether the entity carries a component at this moment, answered before the definition as well.
+     *
+     * Java builds the navigator and the move control inside the mob constructor, which runs before
+     * the definition field is assigned, so what the type was registered with is the only answer
+     * available there. Everywhere else the live set decides, which is how a group that puts an
+     * entity in the air takes the navigator with it.
+     */
+    private boolean carriesNow(String component) {
+        if (definition != null) return declaresNow(component);
+
+        ServerEntityDefinition declared = AddonEntities.definitionOf(getType());
+        return declared != null && declared.components().containsKey(component);
     }
 
     /**
@@ -558,6 +553,7 @@ public class AddonEntity extends PathfinderMob
         // The size feeds both the box the entity collides in and the size it is drawn at, and Java
         // caches it, so it has to be asked for again rather than left to the next pose change.
         refreshDimensions();
+        refreshNavigation();
 
         com.google.gson.JsonObject attack = liveComponent("minecraft:attack");
         net.minecraft.world.entity.ai.attributes.AttributeInstance damage =
@@ -576,6 +572,15 @@ public class AddonEntity extends PathfinderMob
 
         // Java has no way back: a mob told to stay cannot be told to despawn again.
         if (liveComponent("minecraft:persistent") != null) setPersistenceRequired();
+
+        // `minecraft:preferred_path` is the entity keeping to the ground it was given, so water
+        // costs it what water costs a villager. Nought is what a pathfinding mob starts at.
+        Platform.setWaterMalus(this, declaresNow("minecraft:preferred_path") ? 8f : 0f);
+
+        // `minecraft:variable_max_auto_step` arrives with the group that lets an entity climb what
+        // it otherwise could not. Six tenths of a block is what a Java mob steps otherwise.
+        Platform.setStepHeight(this,
+            (float) liveNumber("minecraft:variable_max_auto_step", "base_value", 0.6));
 
         refreshHome();
         refreshContainer();
@@ -642,6 +647,16 @@ public class AddonEntity extends PathfinderMob
      */
     private void publishLiveFlags() {
         setValue("can_power_jump", declaresNow("minecraft:can_power_jump"));
+
+        // How a mob gets about is something it takes on, so the four ways of saying it move with
+        // the group that granted them and a controller asking is answered about the entity now.
+        setValue("can_climb", declaresNow("minecraft:can_climb"));
+        setValue("can_fly", declaresNow("minecraft:navigation.fly")
+            || declaresNow("minecraft:movement.fly"));
+        setValue("can_swim", declaresNow("minecraft:navigation.swim")
+            || declaresNow("minecraft:movement.amphibious"));
+        setValue("can_walk", declaresNow("minecraft:navigation.walk")
+            || declaresNow("minecraft:navigation.generic"));
         for (String dye : new String[] {"minecraft:color", "minecraft:color2"}) {
             if (declaresNow(dye)) {
                 setValue(dye.substring("minecraft:".length()), liveNumber(dye, "value", 0));
@@ -653,6 +668,25 @@ public class AddonEntity extends PathfinderMob
         if (declaresNow("minecraft:dash_action") && value("can_dash") == null) {
             setValue("can_dash", true);
         }
+
+        // Java's merchant screen has one list of offers, so how many tiers the table was written in
+        // survives only as the number a pack's own controllers read back.
+        TradeTable trades = trades();
+        if (trades != null) setValue("max_trade_tier", (double) trades.tiers());
+    }
+
+    /**
+     * The trade table the entity offers at this moment, or null while it names none.
+     *
+     * Bedrock states the table inside the group that gives a trader its stock, so which file is
+     * offered moves with the group that arrived. Every table either component names was read while
+     * the pack was in hand, so what is left here is picking between them.
+     */
+    public TradeTable trades() {
+        String table = liveText("minecraft:trade_table", "table");
+        if (table == null) table = liveText("minecraft:economy_trade_table", "table");
+
+        return AddonEntities.tradeTable(getType(), table);
     }
 
     /**
@@ -733,32 +767,56 @@ public class AddonEntity extends PathfinderMob
     /**
      * The navigator the pack's `minecraft:navigation.*` component names.
      *
-     * Java builds this inside the mob constructor, before the definition field is assigned, so the
-     * components are reached through the registry by type instead. An entity whose pack asked to
-     * fly and got a ground navigator walks under whatever it was supposed to fly over, which is
-     * why this is chosen per entity rather than left at the default.
+     * An entity whose pack asked to fly and got a ground navigator walks under whatever it was
+     * supposed to fly over, which is why this is chosen per entity rather than left at the default.
+     * Bedrock states the kind inside a component group as readily as at the top, because how a mob
+     * gets about is something it takes on: a strider in lava and a fish out of water each change.
      */
     @Override
     protected PathNavigation createNavigation(Level level) {
-        ServerEntityDefinition declared = AddonEntities.definitionOf(getType());
-        if (declared == null) return super.createNavigation(level);
-
-        java.util.Set<String> components = declared.components().keySet();
-        if (components.contains("minecraft:navigation.fly")
-            || components.contains("minecraft:navigation.hover")
-            || components.contains("minecraft:navigation.float")
-            || components.contains("minecraft:can_fly")) {
+        if (carriesNow("minecraft:navigation.fly") || carriesNow("minecraft:navigation.hover")
+            || carriesNow("minecraft:navigation.float") || carriesNow("minecraft:can_fly")) {
             return new FlyingPathNavigation(this, level);
         }
-        if (components.contains("minecraft:navigation.swim")) {
+        if (carriesNow("minecraft:navigation.swim")) {
             return new WaterBoundPathNavigation(this, level);
         }
-        if (components.contains("minecraft:navigation.climb")
-            || components.contains("minecraft:can_climb")
-            || components.contains("minecraft:block_climber")) {
+        if (carriesNow("minecraft:navigation.climb") || carriesNow("minecraft:can_climb")
+            || carriesNow("minecraft:block_climber")) {
             return new WallClimberNavigation(this, level);
         }
         return super.createNavigation(level);
+    }
+
+    /**
+     * The navigator and the move control the entity's live components describe.
+     *
+     * Both are fields on the mob rather than on its type, so a group arriving swaps them the way it
+     * swaps a size or an attribute. The navigator is left standing while the kind it is already of
+     * is the kind asked for, because building another one throws away the path the entity is on.
+     */
+    private void refreshNavigation() {
+        PathNavigation asked = createNavigation(level());
+        if (asked.getClass() != navigation.getClass()) navigation = asked;
+
+        // Bedrock names the kind of pathfinding; Java asks whether the navigator may take each route.
+        if (navigation instanceof GroundPathNavigation ground) {
+            ground.setCanOpenDoors(carriesNow("minecraft:annotation.open_door"));
+            ground.setCanFloat(carriesNow("minecraft:navigation.swim")
+                || carriesNow("minecraft:navigation.generic"));
+        }
+        applyMoveControl();
+    }
+
+    /** Which way of getting about the entity's `minecraft:movement.*` names at this moment. */
+    private String moverKind() {
+        if (carriesNow("minecraft:movement.hover")) return "hover";
+        if (carriesNow("minecraft:movement.fly") || carriesNow("minecraft:movement.glide")) return "fly";
+        // Swimming that banks into its turns, which is what Bedrock's dolphin and its sway both are.
+        if (carriesNow("minecraft:movement.dolphin") || carriesNow("minecraft:movement.sway")) return "swim";
+        if (carriesNow("minecraft:movement.jump") || carriesNow("minecraft:movement.skip")) return "hop";
+
+        return "walk";
     }
 
     /**
@@ -766,25 +824,23 @@ public class AddonEntity extends PathfinderMob
      *
      * Java's default move control pulls a mob back to the ground between steps, so a flying
      * navigator on its own produces a path the mob cannot follow. Hovering differs from flying only
-     * in whether the entity stops in place when it has nowhere to be.
+     * in whether the entity stops in place when it has nowhere to be. A control already of the kind
+     * asked for is left where it is, because a new one drops the step the entity is part way
+     * through.
      */
     private void applyMoveControl() {
-        boolean hovers = declares("minecraft:movement.hover");
-        if (hovers || declares("minecraft:movement.fly") || declares("minecraft:movement.glide")) {
-            moveControl = new net.minecraft.world.entity.ai.control.FlyingMoveControl(this, 20, hovers);
-            return;
-        }
+        String asked = moverKind();
+        if (asked.equals(mover)) return;
 
-        // Swimming that banks into its turns, which is what Bedrock's dolphin and its sway both are.
-        if (declares("minecraft:movement.dolphin") || declares("minecraft:movement.sway")) {
-            moveControl = new net.minecraft.world.entity.ai.control.SmoothSwimmingMoveControl(
+        mover = asked;
+        moveControl = switch (asked) {
+            case "hover" -> new net.minecraft.world.entity.ai.control.FlyingMoveControl(this, 20, true);
+            case "fly" -> new net.minecraft.world.entity.ai.control.FlyingMoveControl(this, 20, false);
+            case "swim" -> new net.minecraft.world.entity.ai.control.SmoothSwimmingMoveControl(
                 this, 85, 10, 0.02f, 0.1f, true);
-            return;
-        }
-
-        if (declares("minecraft:movement.jump") || declares("minecraft:movement.skip")) {
-            moveControl = new HopMoveControl(this);
-        }
+            case "hop" -> new HopMoveControl(this);
+            default -> new net.minecraft.world.entity.ai.control.MoveControl(this);
+        };
     }
 
     /**
@@ -1000,7 +1056,7 @@ public class AddonEntity extends PathfinderMob
      * twenty-four thousand ticks the game already measures one by.
      */
     private void resupply() {
-        if (offers == null || !declares("minecraft:trade_resupply")) return;
+        if (offers == null || !declaresNow("minecraft:trade_resupply")) return;
 
         long day = level().getGameTime() / 24000L;
         if (day == lastResupplyDay) return;
@@ -1323,7 +1379,7 @@ public class AddonEntity extends PathfinderMob
      * leaves when it runs out.
      */
     private void manageAsTrader() {
-        if (!declares("minecraft:managed_wandering_trader") || isPersistenceRequired()) return;
+        if (!declaresNow("minecraft:managed_wandering_trader") || isPersistenceRequired()) return;
 
         // Bedrock's own manager gives a trader two game days before it wanders off.
         if (tickCount > 48000) discard();
@@ -1501,7 +1557,7 @@ public class AddonEntity extends PathfinderMob
     *///?}
 
     private boolean bound() {
-        return definition != null && definition.components().containsKey("minecraft:dimension_bound");
+        return definition != null && declaresNow("minecraft:dimension_bound");
     }
 
     /**
@@ -1646,15 +1702,15 @@ public class AddonEntity extends PathfinderMob
      * than a table of crops.
      */
     private void growCrops() {
-        if (!declares("minecraft:grows_crop")) return;
+        if (!declaresNow("minecraft:grows_crop")) return;
         if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
 
         if (cropCharges < 0) {
-            cropCharges = (int) number(definition, "minecraft:grows_crop", "charges", 10);
+            cropCharges = (int) liveNumber("minecraft:grows_crop", "charges", 10);
         }
         if (cropCharges == 0) return;
 
-        double chance = number(definition, "minecraft:grows_crop", "chance", 0);
+        double chance = liveNumber("minecraft:grows_crop", "chance", 0);
         if (random.nextDouble()
             > at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.chanceOverTicks(
                 chance, Sensors.INTERVAL_TICKS)) {
@@ -1710,10 +1766,10 @@ public class AddonEntity extends PathfinderMob
 
     /** Rises through the liquid it is in, which is the whole of what a buoyant entity does. */
     private void rideLiquid() {
-        if (!declares("minecraft:buoyant") && !declares("minecraft:floats_in_liquid")) return;
+        if (!declaresNow("minecraft:buoyant") && !declaresNow("minecraft:floats_in_liquid")) return;
         if (!isInWater() && !isInLava()) return;
 
-        double lift = number(definition, "minecraft:buoyant", "liquid_blocks_scale", 1) * 0.03;
+        double lift = liveNumber("minecraft:buoyant", "liquid_blocks_scale", 1) * 0.03;
         setDeltaMovement(getDeltaMovement().add(0, lift, 0));
         fallDistance = 0;
     }
@@ -2070,7 +2126,7 @@ public class AddonEntity extends PathfinderMob
                     MoveToMatchingBlockGoal.anywhere(this, componentBody(behaviour)));
 
                 case "minecraft:behavior.equip_item" -> goalSelector.addGoal(priority,
-                    new EquipItemGoal(this, definition.components().get("minecraft:equip_item")));
+                    new EquipItemGoal(this, componentBody("minecraft:equip_item")));
                 case "minecraft:behavior.hold_ground" ->
                     goalSelector.addGoal(priority, HoldGroundGoal.standing(this));
                 case "minecraft:behavior.look_at_target" ->
@@ -2367,21 +2423,9 @@ public class AddonEntity extends PathfinderMob
             if (family.isJsonPrimitive()) setValue("family." + family.getAsString(), true);
         }
 
-        setValue("can_climb", declares("minecraft:can_climb"));
-        setValue("can_fly", declares("minecraft:navigation.fly") || declares("minecraft:movement.fly"));
-        setValue("can_swim", declares("minecraft:navigation.swim")
-            || declares("minecraft:movement.amphibious"));
-        setValue("can_walk", declares("minecraft:navigation.walk")
-            || declares("minecraft:navigation.generic"));
-
         // `minecraft:area_attack` is the whole of hurting whatever stands against the entity, so
         // declaring it is what makes the entity able to damage the mobs around it.
         if (declares("minecraft:area_attack")) setValue("can_damage_nearby_mobs", true);
-
-        // Java's merchant screen has one list of offers, so how many tiers the table was written in
-        // survives only as the number a pack's own controllers read back.
-        TradeTable trades = AddonEntities.tradesOf(getType());
-        if (trades != null) setValue("max_trade_tier", (double) trades.tiers());
 
         if (declares("minecraft:heartbeat")) {
             setValue("heartbeat_interval", number(definition, "minecraft:heartbeat", "interval", 1));
@@ -2580,7 +2624,7 @@ public class AddonEntity extends PathfinderMob
      * pull, out of whatever is directly overhead, into the inventory the pack gave the entity.
      */
     private void drawFromHopper() {
-        if (!declares("minecraft:item_hopper") || carried == null) return;
+        if (!declaresNow("minecraft:item_hopper") || carried == null) return;
         if (!(level().getBlockEntity(blockPosition().above())
             instanceof net.minecraft.world.Container above)) {
             return;
@@ -3159,11 +3203,11 @@ public class AddonEntity extends PathfinderMob
      * a mob going sideways is applied upwards too.
      */
     private void dragThroughAir() {
-        boolean uniform = declares("minecraft:uses_uniform_air_drag");
-        if (!declares("minecraft:air_drag_modifier") && !uniform) return;
+        boolean uniform = declaresNow("minecraft:uses_uniform_air_drag");
+        if (!declaresNow("minecraft:air_drag_modifier") && !uniform) return;
         if (onGround()) return;
 
-        double kept = number(definition, "minecraft:air_drag_modifier", "value", 1);
+        double kept = liveNumber("minecraft:air_drag_modifier", "value", 1);
         setDeltaMovement(getDeltaMovement().multiply(kept, uniform ? kept * AIR_DRAG : 1, kept));
     }
 
@@ -3178,9 +3222,9 @@ public class AddonEntity extends PathfinderMob
      * sooner than the ground alone would stop it, and below one it slides further.
      */
     private void rubAlongTheGround() {
-        if (!declares("minecraft:friction_modifier") || !onGround()) return;
+        if (!declaresNow("minecraft:friction_modifier") || !onGround()) return;
 
-        double modifier = number(definition, "minecraft:friction_modifier", "value", 1);
+        double modifier = liveNumber("minecraft:friction_modifier", "value", 1);
         if (modifier == 1 || modifier < 0) return;
 
         double kept = Math.max(0, Math.min(1, 1 - (modifier - 1) * FRICTION_PER_STEP));
@@ -3799,12 +3843,12 @@ public class AddonEntity extends PathfinderMob
 
     /** Throws the entity back up off the ground by as much as `minecraft:bounciness` asks. */
     private void bounce() {
-        if (!declares("minecraft:bounciness") || !onGround()) return;
+        if (!declaresNow("minecraft:bounciness") || !onGround()) return;
 
         double fell = -getDeltaMovement().y;
         if (fell <= 0.1) return;
 
-        double kept = number(definition, "minecraft:bounciness", "bounciness_value", 0.9);
+        double kept = liveNumber("minecraft:bounciness", "bounciness_value", 0.9);
         setDeltaMovement(getDeltaMovement().x, fell * kept, getDeltaMovement().z);
         fallDistance = 0;
     }
@@ -4322,8 +4366,7 @@ public class AddonEntity extends PathfinderMob
      */
     @Override
     public boolean canBeAffected(net.minecraft.world.effect.MobEffectInstance effect) {
-        com.google.gson.JsonObject component = definition == null
-            ? null : definition.components().get("minecraft:mob_effect_immunity");
+        com.google.gson.JsonObject component = liveComponent("minecraft:mob_effect_immunity");
         if (component == null) return super.canBeAffected(effect);
 
         String id = Platform.effectId(effect);
@@ -4338,6 +4381,18 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
+     * Whether fire and lava leave the entity alone, which `minecraft:fire_immune` states.
+     *
+     * Java asks the entity rather than its type every time something would burn it, so a group
+     * bringing the component in makes the entity immune while it is on and lets it burn once it is
+     * gone. Bedrock writes it inside a group for the entities that are only sometimes safe.
+     */
+    @Override
+    public boolean fireImmune() {
+        return definition != null && declaresNow("minecraft:fire_immune") || super.fireImmune();
+    }
+
+    /**
      * Whether other entities walk into this one or through it.
      *
      * Bedrock splits the question in two: `is_collidable` decides whether anything collides at all,
@@ -4347,12 +4402,12 @@ public class AddonEntity extends PathfinderMob
     @Override
     public boolean isPushable() {
         if (definition == null) return super.isPushable();
-        if (declares("minecraft:is_collidable")
-            && number(definition, "minecraft:is_collidable", "value", 1) == 0) {
+        if (declaresNow("minecraft:is_collidable")
+            && liveNumber("minecraft:is_collidable", "value", 1) == 0) {
             return false;
         }
-        return !declares("minecraft:pushable")
-            || number(definition, "minecraft:pushable", "is_pushable", 1) != 0;
+        return !declaresNow("minecraft:pushable")
+            || liveNumber("minecraft:pushable", "is_pushable", 1) != 0;
     }
 
     /** True when one of the pack's interactions applied, which is what consumes the click. */
@@ -4417,7 +4472,7 @@ public class AddonEntity extends PathfinderMob
         if (!isClientSide() && satDown(player)) return InteractionResult.SUCCESS;
         if (!isClientSide() && interact(player)) return InteractionResult.SUCCESS;
 
-        if (AddonEntities.tradesOf(getType()) == null || isClientSide()) {
+        if (trades() == null || isClientSide()) {
             return super.mobInteract(player, hand);
         }
 
@@ -4445,10 +4500,13 @@ public class AddonEntity extends PathfinderMob
      */
     @Override
     public MerchantOffers getOffers() {
-        TradeTable trades = AddonEntities.tradesOf(getType());
+        TradeTable trades = trades();
         int reached = trades == null ? 0 : trades.reached(tradeExperience);
-        if (offers != null && (offersOverridden || reached == offeredTiers)) return offers;
+        if (offers != null && (offersOverridden || reached == offeredTiers && trades == offered)) {
+            return offers;
+        }
 
+        offered = trades;
         offeredTiers = reached;
         offers = new MerchantOffers();
         shown = new java.util.ArrayList<>();

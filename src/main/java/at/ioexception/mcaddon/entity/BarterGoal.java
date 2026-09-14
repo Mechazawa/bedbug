@@ -47,13 +47,11 @@ public final class BarterGoal extends Goal {
     private BarterGoal(AddonEntity mob, JsonObject component, boolean admires) {
         this.mob = mob;
         this.admires = admires;
-        this.admireTicks = (int) (Goals.number(
-            mob.definition().components().get("minecraft:admire_item"), "duration", 8)
+        this.admireTicks = (int) (Goals.number(mob.componentBody("minecraft:admire_item"), "duration", 8)
             * Goals.TICKS_PER_SECOND);
         this.onStart = Goals.event(component, "on_admire_item_start");
         this.onStop = Goals.event(component, "on_admire_item_stop");
-        this.table = Goals.text(
-            mob.definition().components().get("minecraft:barter"), "barter_table");
+        this.table = Goals.text(mob.componentBody("minecraft:barter"), "barter_table");
         setFlags(admires ? EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK) : EnumSet.of(Goal.Flag.MOVE));
     }
 

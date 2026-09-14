@@ -38,7 +38,8 @@ public final class AddonEntities {
     private static final Map<EntityType<?>, ServerEntityDefinition> DEFINITIONS = new LinkedHashMap<>();
     private static final Map<String, EntityType<?>> BY_IDENTIFIER = new LinkedHashMap<>();
     private static final Map<String, AtomicInteger> UNSUPPORTED = new TreeMap<>();
-    private static final Map<EntityType<?>, TradeTable> TRADES = new LinkedHashMap<>();
+    /** Per type, every trade table any of its declarations names, kept under the path it was read from. */
+    private static final Map<EntityType<?>, Map<String, TradeTable>> TRADES = new LinkedHashMap<>();
     private static final Map<EntityType<?>, String> NAMESPACES = new LinkedHashMap<>();
     private static final Map<EntityType<?>, EntitySounds> SOUNDS = new LinkedHashMap<>();
 
@@ -72,14 +73,15 @@ public final class AddonEntities {
         return CLIPS.get(type);
     }
 
-    /** Null when the entity does not trade. */
+    /** Null where no declaration of this type named that table, and where the entity names none. */
     /** What `sounds.json` says this entity makes, or null where no resource pack named it. */
     public static EntitySounds soundsOf(EntityType<?> type) {
         return SOUNDS.get(type);
     }
 
-    public static TradeTable tradesOf(EntityType<?> type) {
-        return TRADES.get(type);
+    public static TradeTable tradeTable(EntityType<?> type, String table) {
+        Map<String, TradeTable> tables = TRADES.get(type);
+        return tables == null || table == null ? null : tables.get(table);
     }
 
     /**
@@ -189,7 +191,8 @@ public final class AddonEntities {
         namespaceOf(pack).ifPresent(namespace -> NAMESPACES.put(type, namespace));
         EntitySounds noises = EntitySounds.of(sounds, definition.identifier());
         if (noises != null) SOUNDS.put(type, noises);
-        readTrades(pack, definition).ifPresent(trades -> TRADES.put(type, trades));
+        Map<String, TradeTable> trades = readTrades(pack, definition);
+        if (!trades.isEmpty()) TRADES.put(type, trades);
         Registry.register(BuiltInRegistries.ENTITY_TYPE, id, type);
         FabricDefaultAttributeRegistry.register(type, AddonEntity.attributes(definition));
     }
@@ -481,19 +484,28 @@ public final class AddonEntities {
         "minecraft:memory_behavior.move_to_position");
 
     /**
-     * The trade table an entity names, read while the pack it came from is still in hand.
+     * Every trade table an entity names, read while the pack it came from is still in hand.
      *
      * Bedrock has two components for this and they differ only in whether the trades cost emeralds,
-     * which Java's merchant screen does not distinguish.
+     * which Java's merchant screen does not distinguish. Either is written inside the component
+     * group that gives a trader its stock as readily as at the top, so every table any declaration
+     * names is read and kept under its own path. Which of them the entity offers is the entity's to
+     * decide; a file can only be opened here, while the pack is still open.
      */
-    private static java.util.Optional<TradeTable> readTrades(BedrockPack pack,
+    private static Map<String, TradeTable> readTrades(BedrockPack pack,
         ServerEntityDefinition definition) {
+        Map<String, TradeTable> tables = new LinkedHashMap<>();
         for (String component : List.of("minecraft:trade_table", "minecraft:economy_trade_table")) {
-            com.google.gson.JsonObject body = definition.components().get(component);
-            String table = body == null ? null : at.ioexception.mcaddon.util.Json.text(body, "table", null);
-            if (table != null) return java.util.Optional.of(TradeTable.read(pack, table));
+            java.util.stream.Stream.concat(
+                    java.util.stream.Stream.ofNullable(definition.components().get(component)),
+                    definition.componentGroups().values().stream()
+                        .filter(group -> group.has(component) && group.get(component).isJsonObject())
+                        .map(group -> group.getAsJsonObject(component)))
+                .map(body -> at.ioexception.mcaddon.util.Json.text(body, "table", null))
+                .filter(java.util.Objects::nonNull)
+                .forEach(table -> tables.computeIfAbsent(table, named -> TradeTable.read(pack, named)));
         }
-        return java.util.Optional.empty();
+        return tables;
     }
 
     /**
