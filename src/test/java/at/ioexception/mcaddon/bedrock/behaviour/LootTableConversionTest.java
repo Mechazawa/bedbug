@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.bedrock.behaviour;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.Bootstrap;
 import org.junit.jupiter.api.BeforeAll;
@@ -83,13 +84,126 @@ class LootTableConversionTest {
     void dropsAFunctionNothingReadsRatherThanWritingOneTheGameWouldRefuse() throws IOException {
         JsonObject entry = firstEntry("""
             {"pools": [{"rolls": 1, "entries": [{"type": "item", "name": "minecraft:stick",
-              "functions": [{"function": "set_data", "data": 4},
+              "functions": [{"function": "random_block_state", "block_state": "facing"},
                             {"function": "set_count", "count": 2}]}]}]}
             """);
 
         assertEquals(1, entry.getAsJsonArray("functions").size());
         assertEquals("minecraft:set_count", entry.getAsJsonArray("functions").get(0)
             .getAsJsonObject().get("function").getAsString());
+    }
+
+    /**
+     * A stated data value picks the item outright, and nothing is left of the function.
+     *
+     * Java has one id per item, so the pair has to be settled before the table is written: a Java
+     * table naming `minecraft:dye` is one the game refuses to read at all.
+     */
+    @Test
+    void namesTheItemAStatedDataValuePicksAndLeavesNoFunctionBehind() throws IOException {
+        JsonObject entry = firstEntry("""
+            {"pools": [{"rolls": 1, "entries": [{"type": "item", "name": "minecraft:dye",
+              "functions": [{"function": "set_data", "data": 4}]}]}]}
+            """);
+
+        assertEquals("minecraft:lapis_lazuli", entry.get("name").getAsString());
+        assertFalse(entry.has("functions"));
+    }
+
+    /** A Bedrock id with no data value beside it means the first of what Java split it into. */
+    @Test
+    void readsABedrockIdWithNoDataValueAsTheFirstOfItsFamily() throws IOException {
+        assertEquals("minecraft:white_wool", firstEntry("""
+            {"pools": [{"rolls": 1, "entries": [{"type": "item", "name": "minecraft:wool"}]}]}
+            """).get("name").getAsString());
+    }
+
+    /**
+     * A range is picked as the table is rolled, out of the items the conversion worked out.
+     *
+     * The entry names the first of them so the game will read the table at all, and the list
+     * travels with the function because a Java id no longer says which family it came out of.
+     */
+    @Test
+    void carriesWhatARangeOfDataValuesCouldNameToTheLootRoll() throws IOException {
+        JsonObject entry = firstEntry("""
+            {"pools": [{"rolls": 1, "entries": [{"type": "item", "name": "minecraft:wool",
+              "functions": [{"function": "random_aux_value", "values": {"min": 1, "max": 3}}]}]}]}
+            """);
+
+        assertEquals("minecraft:orange_wool", entry.get("name").getAsString());
+        JsonObject function = entry.getAsJsonArray("functions").get(0).getAsJsonObject();
+        assertEquals(BedrockFunction.NAME, function.get("function").getAsString());
+        assertTrue(function.get("bedrock").getAsString().contains("minecraft:magenta_wool"));
+    }
+
+    /** A colour index counts along the whole family, so every place in it has to be kept. */
+    @Test
+    void carriesEverySixteenthOfAColourIndexedFamilyToTheLootRoll() throws IOException {
+        JsonObject function = firstFunction("""
+            {"pools": [{"rolls": 1, "entries": [{"type": "item", "name": "minecraft:wool",
+              "functions": [{"function": "minecraft:set_data_from_color_index"}]}]}]}
+            """);
+
+        assertEquals(BedrockFunction.NAME, function.get("function").getAsString());
+        assertEquals(16, JsonParser.parseString(function.get("bedrock").getAsString())
+            .getAsJsonObject().getAsJsonArray("items").size());
+    }
+
+    /**
+     * A stew keeps one id and carries the effect its number picked inside the stack.
+     *
+     * Java's own function takes a list and picks one of it as the stack is made, which is the same
+     * thing Bedrock says with a range, so a stated number is that list with one effect on it.
+     */
+    @Test
+    void turnsAStewDataValueIntoTheEffectJavaCarriesInsideTheStack() throws IOException {
+        JsonObject function = firstFunction("""
+            {"pools": [{"rolls": 1, "entries": [{"type": "item", "name": "minecraft:suspicious_stew",
+              "functions": [{"function": "set_data", "data": 4}]}]}]}
+            """);
+
+        assertEquals("minecraft:set_stew_effect", function.get("function").getAsString());
+        assertEquals(1, function.getAsJsonArray("effects").size());
+        assertEquals("minecraft:poison", function.getAsJsonArray("effects").get(0)
+            .getAsJsonObject().get("type").getAsString());
+    }
+
+    @Test
+    void listsEveryEffectARangeOverTheStewNumbersCouldLandOn() throws IOException {
+        assertEquals(7, firstFunction("""
+            {"pools": [{"rolls": 1, "entries": [{"type": "item", "name": "minecraft:suspicious_stew",
+              "functions": [{"function": "random_aux_value", "values": {"min": 0, "max": 6}}]}]}]}
+            """).getAsJsonArray("effects").size());
+    }
+
+    /**
+     * The four goat horns a range covers are the ones Java ships a tag of.
+     *
+     * Java keeps all eight under one id and picks between them by a tag of instruments, so the
+     * numbers Bedrock gives them are answerable where they line up with one.
+     */
+    @Test
+    void picksAGoatHornOutOfTheTagCoveringTheValuesTheRangeRuns() throws IOException {
+        JsonObject function = firstFunction("""
+            {"pools": [{"rolls": 1, "entries": [{"type": "item", "name": "minecraft:goat_horn",
+              "functions": [{"function": "set_data", "data": {"min": 0, "max": 3}}]}]}]}
+            """);
+
+        assertEquals("minecraft:set_instrument", function.get("function").getAsString());
+        assertEquals("#minecraft:regular_goat_horns", function.get("options").getAsString());
+    }
+
+    /** A data value nothing answers leaves the item the pack named and reports itself. */
+    @Test
+    void keepsTheItemWhenTheDataValueBesideItNamesNothing() throws IOException {
+        JsonObject entry = firstEntry("""
+            {"pools": [{"rolls": 1, "entries": [{"type": "item", "name": "minecraft:oak_sign",
+              "functions": [{"function": "set_data", "data": 1}]}]}]}
+            """);
+
+        assertEquals("minecraft:oak_sign", entry.get("name").getAsString());
+        assertFalse(entry.has("functions"));
     }
 
     @Test

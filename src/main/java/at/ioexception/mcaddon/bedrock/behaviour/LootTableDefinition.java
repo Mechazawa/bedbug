@@ -9,6 +9,8 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -20,7 +22,9 @@ import java.util.Map;
  * A Bedrock loot table, rewritten as a Java one.
  *
  * The two formats share their shape: pools with rolls and weighted entries. What differs is naming,
- * so the conversion is a rename of a handful of fields rather than a translation.
+ * so the conversion is a rename of a handful of fields rather than a translation. The data value
+ * beside a Bedrock item is the exception: Java split the id it sits on into an item per value, so
+ * the pair has to be read as the one item it names.
  *
  * @param path the pack-relative path, which is how an entity's `minecraft:loot` names it
  */
@@ -125,8 +129,9 @@ public record LootTableDefinition(String path, JsonObject java) {
         switch (type) {
             case "item" -> {
                 if (name == null) return null;
-                entry.addProperty("type", "minecraft:item");
-                entry.addProperty("name", name);
+                String dropped = dropped(name, bedrock);
+                entry.addProperty("type", dropped == null ? "minecraft:empty" : "minecraft:item");
+                if (dropped != null) entry.addProperty("name", dropped);
             }
             case "loot_table" -> {
                 if (name == null) return null;
@@ -146,7 +151,7 @@ public record LootTableDefinition(String path, JsonObject java) {
         JsonArray functions = new JsonArray();
         for (JsonElement element : Json.list(bedrock, "functions")) {
             if (!element.isJsonObject()) continue;
-            JsonObject function = function(element.getAsJsonObject());
+            JsonObject function = function(element.getAsJsonObject(), name);
             if (function != null) functions.add(function);
         }
         if (!functions.isEmpty()) entry.add("functions", functions);
@@ -156,8 +161,13 @@ public record LootTableDefinition(String path, JsonObject java) {
         return entry;
     }
 
-    /** Only the functions whose Java equivalent takes the same arguments are carried across. */
-    private static JsonObject function(JsonObject bedrock) {
+    /**
+     * Only the functions whose Java equivalent takes the same arguments are carried across.
+     *
+     * A function naming a data value is about the entry's own item, so which item that is travels
+     * with it: the number picks one out of the family Java split that Bedrock id into.
+     */
+    private static JsonObject function(JsonObject bedrock, String item) {
         String name = bare(Json.text(bedrock, "function", ""));
         JsonObject function = new JsonObject();
 
@@ -250,13 +260,195 @@ public record LootTableDefinition(String path, JsonObject java) {
             case "enchant_book_for_trading" -> {
                 return answeredHere(bedrock, BedrockFunction.NAME, "function");
             }
-            // set_data, random_aux_value, set_data_from_color_index and random_block_state each pick
-            // an item's data value, which Java has not had since blocks and items were flattened.
+            case "set_data", "random_aux_value", "set_data_from_color_index" -> {
+                return dataValue(bedrock, item);
+            }
             default -> {
                 AddonEntities.unsupported("loot function " + name);
                 return null;
             }
         }
+        return function;
+    }
+
+    /** The values a data value may land on, which a pack writes as a number, a `{min, max}` or a pair. */
+    private record Span(int lowest, int highest) {
+        static Span tryFrom(JsonElement stated) {
+            if (stated == null) return null;
+            if (stated.isJsonPrimitive()) {
+                int value = (int) stated.getAsDouble();
+                return new Span(value, value);
+            }
+            if (stated.isJsonArray() && stated.getAsJsonArray().size() == 2) {
+                return new Span(stated.getAsJsonArray().get(0).getAsInt(),
+                    stated.getAsJsonArray().get(1).getAsInt());
+            }
+            if (!stated.isJsonObject()) return null;
+
+            JsonObject range = stated.getAsJsonObject();
+            int lowest = (int) Json.number(range, "min", 0);
+            return new Span(lowest, (int) Json.number(range, "max", lowest));
+        }
+
+        @Override
+        public String toString() {
+            return lowest == highest ? String.valueOf(lowest) : lowest + "-" + highest;
+        }
+    }
+
+    /** The three functions that name a data value, and where each of them states what it says. */
+    private static final List<String> DATA_FUNCTIONS =
+        List.of("set_data", "random_aux_value", "set_data_from_color_index");
+
+    /** `random_aux_value` states what it may land on under `values`, and `set_data` under `data`. */
+    private static JsonElement statedData(JsonObject function) {
+        return function.has("values") ? function.get("values") : function.get("data");
+    }
+
+    /** The one function on an entry that names a data value, of which a pack writes at most one. */
+    private static JsonObject dataFunction(JsonObject entry) {
+        for (JsonElement element : Json.list(entry, "functions")) {
+            if (!element.isJsonObject()) continue;
+
+            JsonObject function = element.getAsJsonObject();
+            if (DATA_FUNCTIONS.contains(bare(Json.text(function, "function", "")))) return function;
+        }
+        return null;
+    }
+
+    /**
+     * The item an entry hands out, or null for one this version of the game has no id for.
+     *
+     * A data value picks one item out of the family Java split a Bedrock id into, so an entry
+     * stating a number outright is settled here rather than as the table is rolled. A range and a
+     * colour index name the first of what they could land on, and the roll swaps in the rest.
+     */
+    private static String dropped(String name, JsonObject bedrock) {
+        JsonObject stated = dataFunction(bedrock);
+        Span span = stated == null ? null : Span.tryFrom(statedData(stated));
+
+        String flattened = DataValues.item(name, span == null ? 0 : span.lowest());
+        return flattened == null ? name : shipped(flattened);
+    }
+
+    /**
+     * The item, or null when this version ships none by that id, which is reported as it is read.
+     *
+     * The families span versions that do not hold the same items: Java made an item of the field
+     * masoned and the bordure indented banner pattern later than the rest, and the pale oak sapling
+     * later still, while the families around them answer everywhere.
+     */
+    private static String shipped(String item) {
+        Identifier id = Identifier.tryParse(item);
+        if (id != null && BuiltInRegistries.ITEM.getOptional(id).isPresent()) return item;
+
+        AddonEntities.unsupported("loot item " + item);
+        return null;
+    }
+
+    /**
+     * What a data value leaves behind once the entry's own item has taken the settled part of it.
+     *
+     * A stew and a goat horn keep one id whatever the number says, because Java carries what the
+     * number picked inside the stack, so each becomes the Java function that puts it there. Every
+     * other family is a different item per value: a number stated outright is the entry's own item
+     * already, and a range or a colour index is picked as the table is rolled.
+     */
+    private static JsonObject dataValue(JsonObject bedrock, String item) {
+        String name = bare(Json.text(bedrock, "function", ""));
+        boolean fromColour = name.equals("set_data_from_color_index");
+        Span span = fromColour ? new Span(0, DataValues.COLOURS - 1)
+            : Span.tryFrom(statedData(bedrock));
+        if (span == null) return null;
+
+        String family = DataValues.vanilla(item);
+        if ("suspicious_stew".equals(family)) return stew(span);
+        if ("goat_horn".equals(family)) return instrument(span);
+
+        if (!fromColour && span.lowest() == span.highest()) {
+            // A zero is what a Bedrock id means with no data value beside it at all, so an id Java
+            // never split keeps the item the entry named and says nothing about the zero.
+            if (span.lowest() != 0 && DataValues.item(item, span.lowest()) == null) {
+                AddonEntities.unsupported("loot function " + name + " " + item + " " + span);
+            }
+            return null;
+        }
+
+        JsonArray choices = choices(item, span);
+        if (choices.isEmpty()) {
+            AddonEntities.unsupported("loot function " + name + " " + item + " " + span);
+            return null;
+        }
+
+        JsonObject picked = new JsonObject();
+        picked.addProperty("function", name);
+        picked.add("items", choices);
+        return answeredHere(picked, BedrockFunction.NAME, "function");
+    }
+
+    /**
+     * What each value in the range names, in the order the values run, for the loot roll to pick from.
+     *
+     * The list travels with the function because a Java id no longer says which Bedrock family the
+     * item came out of, and the position has to keep as a colour index counts along it, so a value
+     * nothing answers is a hole rather than a gap closed up. A range answering nowhere is empty.
+     */
+    private static JsonArray choices(String item, Span span) {
+        JsonArray choices = new JsonArray();
+        boolean answered = false;
+        for (int data = span.lowest(); data <= span.highest(); data++) {
+            String named = DataValues.item(item, data);
+            String flattened = named == null ? null : shipped(named);
+            answered |= flattened != null;
+            choices.add(flattened);
+        }
+        return answered ? choices : new JsonArray();
+    }
+
+    /**
+     * The goat horn a data value names, as the tag Java's own function picks one out of.
+     *
+     * Java keeps all eight horns under one id and names the instrument inside the stack, and a tag
+     * of instruments is the only thing that picks one, so the numbers Bedrock gives them are
+     * answerable where they line up with a tag: the four regular horns, the four screaming ones, or
+     * all eight together.
+     */
+    private static final Map<Span, String> GOAT_HORNS = Map.of(
+        new Span(0, 3), "#minecraft:regular_goat_horns",
+        new Span(4, 7), "#minecraft:screaming_goat_horns",
+        new Span(0, 7), "#minecraft:goat_horns");
+
+    private static JsonObject instrument(Span span) {
+        String tag = GOAT_HORNS.get(span);
+        if (tag == null) {
+            AddonEntities.unsupported("loot function set_data goat_horn " + span);
+            return null;
+        }
+
+        JsonObject function = new JsonObject();
+        function.addProperty("function", "minecraft:set_instrument");
+        function.addProperty("options", tag);
+        return function;
+    }
+
+    /**
+     * The effects a stew data value could carry, as the Java function that picks one of them.
+     *
+     * Java lists the effects a stew may come out with and takes one at random, so a range over
+     * Bedrock's numbering is that list, and a number stated outright is the same list with one
+     * effect on it.
+     */
+    private static JsonObject stew(Span span) {
+        JsonArray effects = new JsonArray();
+        for (int id = span.lowest(); id <= span.highest(); id++) {
+            JsonObject effect = stewEffect(id, null);
+            if (effect != null) effects.add(effect);
+        }
+        if (effects.isEmpty()) return null;
+
+        JsonObject function = new JsonObject();
+        function.addProperty("function", "minecraft:set_stew_effect");
+        function.add("effects", effects);
         return function;
     }
 
@@ -399,20 +591,26 @@ public record LootTableDefinition(String path, JsonObject java) {
             if (!element.isJsonObject()) continue;
 
             JsonObject stated = element.getAsJsonObject();
-            int id = (int) Json.number(stated, "id", -1);
-            if (id < 0 || id >= STEW_EFFECTS.size()) {
-                AddonEntities.unsupported("loot function set_stew_effect id " + id);
-                continue;
-            }
-
-            Map.Entry<String, Integer> known = STEW_EFFECTS.get(id);
-            JsonObject effect = new JsonObject();
-            effect.addProperty("type", "minecraft:" + known.getKey());
-            effect.add("duration", stated.has("duration")
-                ? range(stated.get("duration")) : new JsonPrimitive(known.getValue()));
-            effects.add(effect);
+            JsonObject effect = stewEffect((int) Json.number(stated, "id", -1),
+                stated.get("duration"));
+            if (effect != null) effects.add(effect);
         }
         return effects;
+    }
+
+    /** One stew effect, lasting as long as the pack said or as long as that stew lasts by default. */
+    private static JsonObject stewEffect(int id, JsonElement duration) {
+        if (id < 0 || id >= STEW_EFFECTS.size()) {
+            AddonEntities.unsupported("loot function set_stew_effect id " + id);
+            return null;
+        }
+
+        Map.Entry<String, Integer> known = STEW_EFFECTS.get(id);
+        JsonObject effect = new JsonObject();
+        effect.addProperty("type", "minecraft:" + known.getKey());
+        effect.add("duration", duration == null
+            ? new JsonPrimitive(known.getValue()) : range(duration));
+        return effect;
     }
 
     /** `specific_enchants` names each enchantment and the level, or the level range, it is given. */

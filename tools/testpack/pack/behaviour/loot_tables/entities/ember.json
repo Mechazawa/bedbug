@@ -122,7 +122,7 @@
         },
         {
           "type": "item",
-          "name": "minecraft:white_dye",
+          "name": "minecraft:dye",
           "weight": 1,
           "functions": [
             {

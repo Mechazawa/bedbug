@@ -11,7 +11,9 @@ import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.loot.LootContext;
 import net.minecraft.world.level.storage.loot.functions.LootItemFunction;
@@ -27,6 +29,10 @@ import java.util.List;
  * of a whole set, and neither picks one name out of a list and then rolls its own range, so the
  * Bedrock object reaches a function of this mod's own type and is answered here. The type goes in
  * the loot function registry, which the game builds itself rather than reading from a data pack.
+ *
+ * A data value that is settled per roll is the other kind: a range covers several of the items Java
+ * split one Bedrock id into, and a colour index names the one the entity being rolled for is
+ * wearing, and neither is a question a Java function asks of the stack it is handed.
  */
 public final class BedrockFunction implements LootItemFunction {
 
@@ -105,8 +111,48 @@ public final class BedrockFunction implements LootItemFunction {
         return switch (Json.text(bedrock, "function", "").replaceFirst("^minecraft:", "")) {
             case "enchant_book_for_trading" ->
                 book(stack, context.getRandom(), context.getLevel().registryAccess());
+            case "set_data", "random_aux_value", "set_data_from_color_index" -> picked(stack, context);
             default -> stack;
         };
+    }
+
+    /**
+     * The item a data value landed on, for the values that are not settled until the table is rolled.
+     *
+     * What each value in the range names was worked out as the table was converted, because a Java
+     * id no longer says which Bedrock family the item came out of. A range picks one of them at
+     * random, and a colour index picks the one the entity's own colour points at. Only the count
+     * carries over from whatever ran before, which is what a Bedrock table sets beside a data value.
+     */
+    private ItemStack picked(ItemStack stack, LootContext context) {
+        List<JsonElement> choices = Json.list(bedrock, "items");
+        if (choices.isEmpty()) return stack;
+
+        String name = Json.text(bedrock, "function", "");
+        int index = name.endsWith("set_data_from_color_index")
+            ? colour(Platform.lootSubject(context)) : context.getRandom().nextInt(choices.size());
+
+        JsonElement named = index >= 0 && index < choices.size() ? choices.get(index) : null;
+        Identifier id = named != null && named.isJsonPrimitive()
+            ? Identifier.tryParse(named.getAsString()) : null;
+        Item item = id == null ? null : BuiltInRegistries.ITEM.getOptional(id).orElse(null);
+        if (item == null) {
+            AddonEntities.unsupported("loot function " + name + " value " + index);
+            return stack;
+        }
+        return new ItemStack(item, stack.getCount());
+    }
+
+    /**
+     * The colour index the entity carries, which is what Bedrock's `minecraft:color` puts on it.
+     *
+     * An entity that was never given one reads as zero, the first of the family, which is the answer
+     * Mojang's own tables are written for: a sheared mooshroom rolls one of these for a mushroom
+     * that has a single form.
+     */
+    private static int colour(net.minecraft.world.entity.Entity subject) {
+        return subject instanceof at.ioexception.mcaddon.entity.AddonEntity addon
+            && addon.value("color") instanceof Number dye ? dye.intValue() : 0;
     }
 
     /**
