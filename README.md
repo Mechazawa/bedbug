@@ -55,7 +55,10 @@ server decides what happens; the client draws it.
   breeding, riding, leashing, home ranges, navigation and item pickup, and the sensors that fire
   their events: environment, entity, target-nearby, block, timer, scheduler, drying-out, damage,
   interact, spawn-entity and hurt-on-condition. Their properties reach every client, so a model
-  looks the same in multiplayer as it does alone.
+  looks the same in multiplayer as it does alone. A component group is where Bedrock states what an
+  entity becomes rather than what it is, so a group arriving changes how it gets about: the
+  navigator and the move control are built again, and the step it takes, the height it climbs, what
+  pushes it, what burns it, what effects land on it and what it has for sale all move with it.
 - The clips and controllers a behaviour pack declares, which animate what an entity is rather than
   where its bones are. A moment on a clip's timeline, and a controller state's entry and its exit,
   each raise one of the entity's own events, run a command as the entity, or assign a Molang
@@ -110,7 +113,9 @@ server decides what happens; the client draws it.
   and one that dyes it hands over a dyed one. A trade selling an enchanted book picks the
   enchantment, rolls its level and charges the emeralds that level is worth, and one selling an
   explorer map hands over a map pointing at the nearest structure of the kind it names, or is left
-  off the screen where the world has none.
+  off the screen where the world has none. Which table a trader offers is whichever its live
+  component groups name, because Bedrock states the table inside the group that gives a trader its
+  stock, and every table any of an entity's declarations names is read while its pack is still open.
 - Brewing. A pack's own brewing stand recipes are added to the list the game builds in code, so a
   mix turning one potion into another over a reagent, and a container recipe turning one bottle into
   another, both work at an ordinary brewing stand. A bottle of the pack's own is accepted as a

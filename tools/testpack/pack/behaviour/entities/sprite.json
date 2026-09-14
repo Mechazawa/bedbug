@@ -26,6 +26,9 @@
         "minecraft:scale": {
           "value": 1.25
         }
+      },
+      "tp:tempered": {
+        "minecraft:fire_immune": {}
       }
     },
     "components": {
@@ -75,6 +78,16 @@
         },
         "add": {
           "component_groups": ["tp:bright"]
+        }
+      },
+      "tp:temper": {
+        "add": {
+          "component_groups": ["tp:tempered"]
+        }
+      },
+      "tp:cool": {
+        "remove": {
+          "component_groups": ["tp:tempered"]
         }
       },
       "tp:calm": {

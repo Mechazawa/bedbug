@@ -9,11 +9,15 @@ import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.ai.control.FlyingMoveControl;
+import net.minecraft.world.entity.ai.navigation.FlyingPathNavigation;
+import net.minecraft.world.entity.ai.navigation.WallClimberNavigation;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
@@ -984,6 +988,266 @@ public final class BehaviourGameTests {
             helper.succeed();
         });
     }
+
+    /**
+     * A group carrying `minecraft:navigation.*` and `minecraft:movement.*` puts the entity in the air.
+     *
+     * Java builds both the navigator and the move control inside the mob constructor and keeps each
+     * as a field, so an entity born walking keeps a ground navigator and a control that pulls it back
+     * down however many groups arrive afterwards. Bedrock states how a mob gets about as freely
+     * inside a group as at the top, because being airborne is something a mob becomes.
+     */
+    @GameTest()
+    public void aGroupCarryingTheNavigationPutsTheEntityInTheAir(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.assertTrue(!(ember.getNavigation() instanceof FlyingPathNavigation),
+            ENTITY + " flies before any group put it in the air.");
+        helper.assertTrue(!(ember.getMoveControl() instanceof FlyingMoveControl),
+            ENTITY + " hovers before any group put it in the air.");
+
+        EntityEvents.trigger(ember, "tp:ember_take_off", null, ServerHooks.state());
+        helper.assertTrue(ember.getNavigation() instanceof FlyingPathNavigation,
+            ENTITY + " gained minecraft:navigation.float from a group and still paths along the ground.");
+        helper.assertTrue(ember.getMoveControl() instanceof FlyingMoveControl,
+            ENTITY + " gained minecraft:movement.hover from a group and is still pulled to the ground.");
+
+        EntityEvents.trigger(ember, "tp:ember_land", null, ServerHooks.state());
+        helper.assertTrue(!(ember.getNavigation() instanceof FlyingPathNavigation),
+            ENTITY + " lost the group that put it in the air and kept the flying navigator.");
+        helper.assertTrue(!(ember.getMoveControl() instanceof FlyingMoveControl),
+            ENTITY + " lost the group that put it in the air and goes on hovering.");
+        helper.succeed();
+    }
+
+    /**
+     * A group saying the entity climbs gives it a navigator that goes up walls, and says so.
+     *
+     * `minecraft:can_climb` decides the navigator and is also one of the flags a pack's own render
+     * controllers read back off the entity, so both halves move with the group that granted it.
+     */
+    @GameTest()
+    public void aGroupSayingTheEntityClimbsGivesItAClimbersNavigator(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.assertTrue(!(ember.getNavigation() instanceof WallClimberNavigation),
+            ENTITY + " climbs walls before any group said it could.");
+        helper.assertTrue(Boolean.FALSE.equals(ember.value("can_climb")),
+            ENTITY + " reads as a climber before any group said it was one.");
+
+        EntityEvents.trigger(ember, "tp:ember_cling", null, ServerHooks.state());
+        helper.assertTrue(ember.getNavigation() instanceof WallClimberNavigation,
+            ENTITY + " gained minecraft:can_climb from a group and still paths along the ground.");
+        helper.assertTrue(Boolean.TRUE.equals(ember.value("can_climb")),
+            ENTITY + " gained minecraft:can_climb from a group and reads as no climber.");
+
+        EntityEvents.trigger(ember, "tp:ember_let_go", null, ServerHooks.state());
+        helper.assertTrue(!(ember.getNavigation() instanceof WallClimberNavigation),
+            ENTITY + " lost the group carrying minecraft:can_climb and goes on climbing.");
+        helper.succeed();
+    }
+
+    /**
+     * A group refusing collision takes the entity out of everything else's way.
+     *
+     * Bedrock asks two questions where Java asks one: `minecraft:is_collidable` says whether anything
+     * collides with the entity at all and `minecraft:pushable` says whether a collision moves it.
+     * Both arrive with the group that makes an entity something to walk through.
+     */
+    @GameTest()
+    public void aGroupRefusingCollisionMakesTheEntityUnpushable(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.assertTrue(ember.isPushable(),
+            ENTITY + " stands its ground before any group said nothing could push it.");
+
+        EntityEvents.trigger(ember, "tp:ember_fade", null, ServerHooks.state());
+        helper.assertTrue(!ember.isPushable(),
+            ENTITY + " gained minecraft:is_collidable from a group and is still pushed about.");
+        helper.succeed();
+    }
+
+    /**
+     * A group raising `minecraft:variable_max_auto_step` lets the entity climb a taller step.
+     *
+     * Java holds the height on the entity, as an attribute from 1.21 and as a field before it, so it
+     * can move while the entity lives. The group that raises it is the one that puts a rider on a
+     * mount or a mount on a road.
+     */
+    @GameTest()
+    public void aGroupRaisingTheStepHeightLetsTheEntityClimbHigher(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        float born = Platform.stepHeight(ember);
+        EntityEvents.trigger(ember, "tp:ember_shoe", null, ServerHooks.state());
+        helper.assertTrue(Platform.stepHeight(ember) > born,
+            ENTITY + " gained minecraft:variable_max_auto_step from a group and steps no higher.");
+
+        EntityEvents.trigger(ember, "tp:ember_unshoe", null, ServerHooks.state());
+        helper.assertTrue(Platform.stepHeight(ember) == born,
+            ENTITY + " lost the group raising its step and kept the taller one.");
+        helper.succeed();
+    }
+
+    /**
+     * A group carrying `minecraft:preferred_path` prices water for the entity's pathfinder.
+     *
+     * A pathfinding mob starts out costing water nothing, which is what lets it wade across rather
+     * than walk around. The component is the entity keeping to the ground it was given.
+     */
+    @GameTest()
+    public void aGroupCarryingThePreferredPathPricesWater(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.assertTrue(Platform.waterMalus(ember) == 0,
+            ENTITY + " avoids water before any group said it kept to a path.");
+
+        EntityEvents.trigger(ember, "tp:ember_shoe", null, ServerHooks.state());
+        helper.assertTrue(Platform.waterMalus(ember) > 0,
+            ENTITY + " gained minecraft:preferred_path from a group and wades as freely as before.");
+
+        EntityEvents.trigger(ember, "tp:ember_unshoe", null, ServerHooks.state());
+        helper.assertTrue(Platform.waterMalus(ember) == 0,
+            ENTITY + " lost the group carrying minecraft:preferred_path and still avoids water.");
+        helper.succeed();
+    }
+
+    /**
+     * A group carrying `minecraft:mob_effect_immunity` turns the effects it names away.
+     *
+     * Java asks the entity every time something would apply an effect, so the list can move while
+     * the entity lives, and the group that carries it is the one that makes the entity proof
+     * against something it was not proof against a moment ago.
+     */
+    @GameTest()
+    public void aGroupCarryingAnEffectImmunityTurnsThatEffectAway(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        Identifier poison = Platform.id("minecraft", "poison");
+        helper.assertTrue(Platform.addEffect(ember, poison, IMMUNITY_TICKS, 0, false),
+            ENTITY + " refused poison before any group said it was immune.");
+        Platform.removeEffect(ember, poison);
+
+        EntityEvents.trigger(ember, "tp:ember_shoe", null, ServerHooks.state());
+        helper.assertTrue(!Platform.addEffect(ember, poison, IMMUNITY_TICKS, 0, false),
+            ENTITY + " gained minecraft:mob_effect_immunity from a group and took the effect anyway.");
+        helper.succeed();
+    }
+
+    /**
+     * A group carrying `minecraft:trade_table` changes what is on the counter.
+     *
+     * Bedrock states the table inside the group that gives a trader its stock, which is how a
+     * villager's profession decides what it sells, so which file is offered has to move with the
+     * group. Every table any declaration names is read while the pack is open, because a file
+     * cannot be opened afterwards.
+     */
+    @GameTest()
+    public void aGroupCarryingATradeTableChangesWhatIsOnOffer(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.assertTrue(ember.getOffers().size() > RESTOCKED_OFFERS,
+            ENTITY + " offers nothing out of the table written at the top level.");
+
+        EntityEvents.trigger(ember, "tp:ember_stock", null, ServerHooks.state());
+        helper.assertTrue(ember.getOffers().size() == RESTOCKED_OFFERS,
+            ENTITY + " gained a minecraft:trade_table from a group and kept the offers it was born with.");
+        helper.succeed();
+    }
+
+    /**
+     * A group carrying `minecraft:fire_immune` keeps the flames off while it is on.
+     *
+     * Java asks the entity rather than its type whenever something would burn it, so the answer can
+     * move, and Bedrock writes the component in a group for the entities that are only sometimes
+     * safe in fire.
+     */
+    @GameTest()
+    public void aGroupCarryingFireImmunityKeepsTheFlamesOff(GameTestHelper helper) {
+        AddonEntity sprite = spawn(helper, YOUNG_ENTITY);
+        if (sprite == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.assertTrue(!sprite.fireImmune(),
+            YOUNG_ENTITY + " shrugs off fire before any group said it should.");
+
+        EntityEvents.trigger(sprite, "tp:temper", null, ServerHooks.state());
+        helper.assertTrue(sprite.fireImmune(),
+            YOUNG_ENTITY + " gained minecraft:fire_immune from a group and still burns.");
+
+        EntityEvents.trigger(sprite, "tp:cool", null, ServerHooks.state());
+        helper.assertTrue(!sprite.fireImmune(),
+            YOUNG_ENTITY + " lost the group carrying minecraft:fire_immune and stayed safe.");
+        helper.succeed();
+    }
+
+    /**
+     * A group carrying `minecraft:item_hopper` draws from whatever container stands over the entity.
+     *
+     * A Bedrock hopper minecart is described this way, and what it hauls arrives with the group that
+     * gives the entity somewhere to put it. Everything about the pull is asked of the entity on the
+     * sensor's own pass, so nothing happens until a group has brought both halves in.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 120)
+    public void aGroupCarryingAHopperDrawsFromWhatIsOverhead(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        BlockPos overhead = STAND.above();
+        helper.setBlock(overhead, net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
+        if (!(helper.getLevel().getBlockEntity(helper.absolutePos(overhead))
+            instanceof net.minecraft.world.Container above)) {
+            helper.fail("No container stood over " + ENTITY + ".");
+            return;
+        }
+
+        above.setItem(0, new ItemStack(net.minecraft.world.item.Items.GOLD_INGOT));
+        EntityEvents.trigger(ember, "tp:ember_load", null, ServerHooks.state());
+        helper.runAfterDelay(PICKED_UP_BY, () -> {
+            helper.assertTrue(above.getItem(0).isEmpty(),
+                ENTITY + " gained minecraft:item_hopper from a group and drew nothing from overhead.");
+            helper.succeed();
+        });
+    }
+
+    /** Long enough that an effect which did apply is still standing on the next line. */
+    private static final int IMMUNITY_TICKS = 200;
+
+    /** The one trade the table the pack's stocked group names holds. */
+    private static final int RESTOCKED_OFFERS = 1;
 
     /** An item lying where the entity stands, ready to be picked up on the next pass. */
     private static ItemEntity drop(GameTestHelper helper, AddonEntity beside, Item item) {

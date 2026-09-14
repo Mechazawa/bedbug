@@ -190,6 +190,7 @@
         "minecraft:ambient_sound_interval": {
           "value": 3.0
         },
+        "minecraft:item_hopper": {},
         "minecraft:can_power_jump": {},
         "minecraft:color": {
           "value": 11
@@ -225,6 +226,36 @@
               }
             }
           ]
+        }
+      },
+      "tp:ember_airborne": {
+        "minecraft:navigation.float": {},
+        "minecraft:movement.hover": {}
+      },
+      "tp:ember_clinging": {
+        "minecraft:can_climb": {}
+      },
+      "tp:ember_ghostly": {
+        "minecraft:is_collidable": {
+          "value": false
+        },
+        "minecraft:pushable": {
+          "is_pushable": false
+        }
+      },
+      "tp:ember_shod": {
+        "minecraft:variable_max_auto_step": {
+          "base_value": 2.0
+        },
+        "minecraft:preferred_path": {},
+        "minecraft:mob_effect_immunity": {
+          "mob_effects": ["poison"]
+        }
+      },
+      "tp:ember_stocked": {
+        "minecraft:trade_table": {
+          "display_name": "Ember",
+          "table": "trading/ember_restock.json"
         }
       },
       "tp:ember_alert": {
@@ -360,6 +391,46 @@
       "tp:ember_scratched": {
         "set_property": {
           "tp:scratched": true
+        }
+      },
+      "tp:ember_take_off": {
+        "add": {
+          "component_groups": ["tp:ember_airborne"]
+        }
+      },
+      "tp:ember_land": {
+        "remove": {
+          "component_groups": ["tp:ember_airborne"]
+        }
+      },
+      "tp:ember_cling": {
+        "add": {
+          "component_groups": ["tp:ember_clinging"]
+        }
+      },
+      "tp:ember_let_go": {
+        "remove": {
+          "component_groups": ["tp:ember_clinging"]
+        }
+      },
+      "tp:ember_fade": {
+        "add": {
+          "component_groups": ["tp:ember_ghostly"]
+        }
+      },
+      "tp:ember_shoe": {
+        "add": {
+          "component_groups": ["tp:ember_shod"]
+        }
+      },
+      "tp:ember_unshoe": {
+        "remove": {
+          "component_groups": ["tp:ember_shod"]
+        }
+      },
+      "tp:ember_stock": {
+        "add": {
+          "component_groups": ["tp:ember_stocked"]
         }
       },
       "tp:ember_look_for_saddle": {
