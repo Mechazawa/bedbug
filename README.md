@@ -78,6 +78,19 @@ server decides what happens; the client draws it.
   place it chose. One given the ender dragon's death takes the dragon's two hundred ticks over it
   rather than a mob's twenty. And one declaring hit boxes wider than the box it collides in is hit
   where it looks hit, by a swing and by an arrow alike, while still fitting through the same gap.
+- What a pack writes on the player rather than on an entity of its own. Bedrock reads
+  `minecraft:player.hunger`, `player.saturation`, `player.exhaustion`, `player.level` and
+  `player.experience` on nothing but the player, so a pack states them in its own
+  `entities/player.json`, and each states a `value` and a `max`. The values are a starting state, the
+  same one Bedrock builds into a player it makes, so they are written at a first join and at every
+  respawn and a later login reads back what the last one left. The ceilings are held wherever the
+  value is next looked at, because Java keeps its own inside `FoodData` as literals and keeps none at
+  all for the level. `minecraft:exhaustion_values` prices ten moments against the food bar, and each
+  is charged where Java charges its own: attacking, being hurt, healing off a full bar, jumping,
+  sprint-jumping, mining, sprinting, swimming, walking or crouching, and lunging on the versions
+  that have the enchantment. A price is met by scaling what Java was about to spend, so the distance
+  in a movement charge and the weight of the damage type in a damage charge both survive it. A field
+  the pack leaves out stays Java's own.
 - Items, including edible and wearable ones, spawn eggs, and a creative tab per add-on. A dyeable
   item takes the colour the pack painted it and the one a player dyes it. A bow draws and fires
   whatever the pack loads it with. A bag holds other items. A drop the pack asks to keep lies there.
@@ -265,7 +278,7 @@ compare what they read against the names this mod acts on:
 
 | Surface | Answered |
 | --- | --- |
-| Entity components | 97% |
+| Entity components | 99% |
 | Entity AI goals | 100% |
 | Entity filters | 100% |
 | Molang queries | 100% |
@@ -295,21 +308,11 @@ get the current figures; the ones above are a snapshot.
 
 ## What does not work
 
-**What a pack writes on the player rather than on an entity of its own.** `minecraft:player.hunger`,
-`player.saturation`, `player.exhaustion`, `player.level` and `player.experience` each state a `max`
-and a `value`, and `minecraft:exhaustion_values` prices each of ten actions against the food bar.
-Bedrock ignores all six anywhere but on the player, so the only place a pack can write them is its
-own `entities/player.json`. Java holds every one of the numbers: `FoodData.setFoodLevel`,
-`setSaturation` and `addExhaustion` are public, and `Player.experienceLevel` and `experienceProgress`
-are fields, so what stands in the way is where the numbers are applied rather than whether Java has
-them. The five values are a player's starting state, which belongs to a first join and a respawn
-rather than to every login; the five `max` fields are caps `FoodData` holds as literals; and the ten
-exhaustion prices are constants at the call sites of `Player.causeFoodExhaustion`, one per action,
-which is a mixin each and a different method name on each of the four versions. Mojang's own
-`player.json` writes the numbers Java already uses, 0.1 for a sprint, 0.005 for mining and 6.0 for
-healing among them, so a pack that changes none of them is served correctly today. This mod keeps
-the game's definition of such an entity and names every component written on the pack's, these six
-included, so a pack overriding a vanilla entity is told which of its components went unread.
+**One exhaustion price, on the two older versions.** `minecraft:exhaustion_values` prices
+`lunge` for the enchantment of that name. 26 added `minecraft:lunge` to Java, which spends 4
+exhaustion per level through `ApplyExhaustion`, so the price is charged there; 1.20.1 and 1.21.1
+have neither the enchantment nor that effect, and on those two it is counted and named by `/mcaddon
+entities` as `minecraft:exhaustion_values lunge`. The other nine prices are charged on all four.
 
 **An entity in a bucket.** `minecraft:bucketable` would make a mob one a bucket picks up, which Java
 has an interface for: a mob implementing `Bucketable` answers `getBucketItemStack()` with the item

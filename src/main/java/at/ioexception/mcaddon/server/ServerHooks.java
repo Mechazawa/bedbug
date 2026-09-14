@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.server;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.behaviour.PlayerDefinition;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.network.PackList;
@@ -128,6 +129,7 @@ public final class ServerHooks {
         });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             Channels.sendPacks(handler.player, PackList.of(McAddon.packs()).encode());
+            startState(handler.player);
             playerJoined(handler.player);
         });
         // A connection is dropped on the thread reading it, and a script belongs to the server
@@ -137,7 +139,28 @@ public final class ServerHooks {
             server.execute(() -> playerLeft(left));
         });
         // A respawn is the other way into the world, and the flag is how a pack tells the two apart.
-        ServerPlayerEvents.AFTER_RESPAWN.register((from, to, alive) -> playerSpawned(to, false));
+        ServerPlayerEvents.AFTER_RESPAWN.register((from, to, alive) -> {
+            PlayerDefinition player = PlayerDefinition.declared();
+            if (player != null) player.applyTo(to);
+            playerSpawned(to, false);
+        });
+    }
+
+    /**
+     * The food and experience a pack's own `entities/player.json` says a player starts with.
+     *
+     * Bedrock builds these into the player the moment it makes one, so they belong to a first join
+     * and to a respawn rather than to every login: a second login has to read back what the last one
+     * left. Nothing in Java writes down that a player has been here before, so the state store this
+     * mod already keeps per player is what remembers it.
+     */
+    private static void startState(ServerPlayer player) {
+        PlayerDefinition declared = PlayerDefinition.declared();
+        if (declared == null || state == null) return;
+        if (state.property(player.getUUID(), "player_start") != null) return;
+
+        state.setProperty(player.getUUID(), "player_start", true);
+        declared.applyTo(player);
     }
 
     /** A block a pack gave a store of its own takes that store with it when it is broken. */

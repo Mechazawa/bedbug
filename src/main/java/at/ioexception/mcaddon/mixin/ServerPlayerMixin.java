@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.mixin;
 
+import at.ioexception.mcaddon.bedrock.behaviour.PlayerDefinition;
 import at.ioexception.mcaddon.server.WorldEvents;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
@@ -55,5 +56,18 @@ public abstract class ServerPlayerMixin {
     @Inject(method = "setGameMode", at = @At("HEAD"), cancellable = true)
     private void mcaddon$changingGameMode(GameType mode, CallbackInfoReturnable<Boolean> info) {
         if (WorldEvents.gameModeRefused((ServerPlayer) (Object) this, mode)) info.setReturnValue(false);
+    }
+
+    /**
+     * The ceilings a pack put on the food and experience a player may hold.
+     *
+     * Java keeps its own as literals inside `FoodData` and keeps none at all for the level, so there
+     * is nothing to hand a lower one to and the value has to be held under it where it is next
+     * looked at. A world whose packs write no player definition reads one field and stops.
+     */
+    @Inject(method = "tick", at = @At("TAIL"))
+    private void mcaddon$capped(CallbackInfo info) {
+        PlayerDefinition declared = PlayerDefinition.declared();
+        if (declared != null) declared.capped((ServerPlayer) (Object) this);
     }
 }
