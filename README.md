@@ -132,9 +132,12 @@ server decides what happens; the client draws it.
   the gear a mob spawns in enchanted by the rule Java's own spawning enchants it with. A condition
   Java has a predicate for becomes that predicate; one it has none for is asked by this mod as the
   loot is rolled, which is how an entity's variant, a property a pack declared, the world and the
-  regional difficulty, a kill by a player's pet and a Bedrock biome tag all still decide a drop. A
-  function Java has none of is answered the same way: a book drops carrying one of the enchantments
-  the pack listed, at a level out of that enchantment's own range.
+  regional difficulty, a kill by a player's pet, a Bedrock biome tag and what a mob has just
+  swallowed all still decide a drop. That last one is `entity_killed`, which belongs to the table
+  `minecraft:behavior.eat_mob` names rather than to a death drop: the goal rolls it as the meal goes
+  down, so the mob doing the killing is the entity the loot is about. A function Java has none of is
+  answered the same way: a book drops carrying one of the enchantments the pack listed, at a level
+  out of that enchantment's own range.
 - `.mcfunction` files translated into Java's command dialect with a `tick` function tag.
 - Natural spawning from a pack's `spawn_rules`, with each alternative the rule lists becoming a
   biome spawn entry of its own. The weight, the group size and the biome tags decide which biomes
@@ -168,7 +171,15 @@ server decides what happens; the client draws it.
   attachable writes into whoever carries it reaches that entity's variables, so the layer it stands
   in for switches off. A pack's own entity wears what it has equipped where its client definition
   says it may, and a definition hiding armour hides what is in an armour slot and keeps what is in a
-  hand.
+  hand. A model whose root bone declares a `binding` hangs off the bone of the wearer that binding
+  names, so a shield stays in the hand as the arm swings; the name is worked out from the
+  attachable's own scope, where `context.item_slot` is the slot it is worn in, which is what every
+  binding Mojang publishes hands to `query.item_slot_to_bone_name`.
+- The item an entity holds that no attachable draws for it. A Bedrock model says where its hands are
+  by carrying a `rightItem` or a `leftItem` bone, which forty of Mojang's own entity geometries do,
+  and the item is drawn there at the size `held_item_scale` works out, at full brightness where
+  `held_item_ignores_lighting` asks for it, and not at all while `hide_held_items` holds. A model
+  carrying neither bone has nowhere to put an item and draws none, which is what Bedrock does too.
 - The sounds and particles an animation, an animation controller state or an entity's own definition
   fires, played at the bone the pack anchored them to.
 - Particle effects a pack describes itself: the emitter runs on its own clock at the rate and
@@ -179,7 +190,9 @@ server decides what happens; the client draws it.
   events run as well: at its creation, at its expiration, along its timeline, every so many blocks
   travelled and on a collision, each one able to play a sound, start another effect, evaluate an
   expression, run a sequence or pick one of several by weight. A Bedrock id naming a vanilla effect
-  is shown as the Java one instead.
+  is shown as the Java one instead. A quad turns the way the effect asked: to the camera on every
+  axis or about the vertical one, or along the particle's own direction, which the pack either
+  states outright or takes off the velocity once it is moving faster than the threshold it named.
 - The conversations an NPC opens. A scene under `dialogue/` states a name, a body of text and a row
   of buttons, which is what one of Bedrock's own forms states, so it is drawn by the screen this mod
   already turns a form into. Each button runs the commands the scene gave it with the NPC's own
@@ -243,19 +256,19 @@ compare what they read against the names this mod acts on:
 | Molang maths | 100% |
 | Block components | 100% |
 | Item components | 88% |
-| Command names | 76% |
-| Command keywords | 60% |
+| Command names | 78% |
+| Command keywords | 63% |
 | Game rules | 78% |
 | Particle components | 100% |
-| Particle component fields | 97% |
+| Particle component fields | 100% |
 | Particle curves and Molang variables | 100% |
 | Loot table functions | 83% |
-| Loot table conditions | 94% |
+| Loot table conditions | 100% |
 | Recipe types | 100% |
 | Recipe fields | 100% |
 | Trade table fields | 100% |
 | Trade item functions | 80% |
-| Geometry, animation and controller fields | 93% |
+| Geometry, animation and controller fields | 97% |
 | Pack file kinds | 88% |
 | Manifest fields | 58% |
 | `@minecraft/server` and friends | 100% |
@@ -267,20 +280,28 @@ get the current figures; the ones above are a snapshot.
 ## What does not work
 
 **What a pack writes on the player rather than on an entity of its own.** `minecraft:player.hunger`,
-`player.saturation`, `player.exhaustion`, `player.level` and `player.experience` set the five numbers
-a player carries, and `minecraft:exhaustion_values` prices each action against the food bar. Bedrock
-ignores all six anywhere but on the player, so the only place a pack can write them is its own
-`entities/player.json`, a definition of an entity the game already has rather than one it is adding.
-This mod keeps the game's definition of such an entity and names every component written on the
-pack's, these six included, so a pack overriding a vanilla entity is told which of its components
-went unread rather than finding out by watching.
+`player.saturation`, `player.exhaustion`, `player.level` and `player.experience` each state a `max`
+and a `value`, and `minecraft:exhaustion_values` prices each of ten actions against the food bar.
+Bedrock ignores all six anywhere but on the player, so the only place a pack can write them is its
+own `entities/player.json`. Java holds every one of the numbers: `FoodData.setFoodLevel`,
+`setSaturation` and `addExhaustion` are public, and `Player.experienceLevel` and `experienceProgress`
+are fields, so what stands in the way is where the numbers are applied rather than whether Java has
+them. The five values are a player's starting state, which belongs to a first join and a respawn
+rather than to every login; the five `max` fields are caps `FoodData` holds as literals; and the ten
+exhaustion prices are constants at the call sites of `Player.causeFoodExhaustion`, one per action,
+which is a mixin each and a different method name on each of the four versions. Mojang's own
+`player.json` writes the numbers Java already uses, 0.1 for a sprint, 0.005 for mining and 6.0 for
+healing among them, so a pack that changes none of them is served correctly today. This mod keeps
+the game's definition of such an entity and names every component written on the pack's, these six
+included, so a pack overriding a vanilla entity is told which of its components went unread.
 
 **An entity in a bucket.** `minecraft:bucketable` would make a mob one a bucket picks up, which Java
 has an interface for: a mob implementing `Bucketable` answers `getBucketItemStack()` with the item
-the player is left holding. What the component does not say is which item that is. Mojang publishes
-the name with an empty body, no field of any kind and no documentation, and no entity in the vanilla
-behaviour pack declares it, so there is nothing in a pack to build the bucket out of. It is counted
-and named.
+the player is left holding. What the component does not say is which item that is. Its whole
+published schema is `{"title": "minecraft:bucketable", "type": "object"}` with no `properties` and
+the one-line description "Defines interactions with this entity", no entity in the vanilla behaviour
+pack declares it, and no documentation names a field, so there is nothing in a pack to build the
+bucket out of. It is counted and named.
 
 **Aim assist and the device memory tier a client reports** describe a Bedrock client rather than a
 world, and are counted and named the same way.
@@ -312,22 +333,27 @@ writes as labPBR sidecars, and the third asks for `eval`, which the script host 
 permission of its own to grant.
 
 **An item's data value.** `set_data`, `random_aux_value`, `set_data_from_color_index` and
-`random_block_state` all pick one of the things a Bedrock id stands for by number. Java gave every
-one of those its own id when it flattened blocks and items, so there is no number left to set, and
-the entry naming `minecraft:bed` or `minecraft:wool` beside one is already naming an item Java has
-none of. The same is why a recipe's `data` beside an item, and a result naming one, are read and
-reported. `minecraft:stacked_by_data` is the same absence on the item itself: it says whether two
-stacks of one id but different numbers may merge, and in Java two stacks of one id are the same
-item, so both answers to it describe what already happens.
+`random_block_state` all pick one of the things a Bedrock id stands for by number: `minecraft:dye`
+at 0 is an ink sac, `minecraft:wool` at a sheep's colour index is that colour of wool, and
+`minecraft:bed` and `minecraft:banner` at 0 to 15 are the sixteen of each. Java has every one of
+those under an id of its own, because that is what flattening did, so the number is a lookup into a
+published family rather than a value with nowhere to go. What is missing here is the table: sixteen
+entries per family for the families Bedrock still writes, and, for the colour index, the colour of
+the entity the loot is about. Until it exists the entry naming `minecraft:bed` or `minecraft:wool`
+names an item Java has none of, and the function is counted. The same is why a recipe's `data`
+beside an item, and a result naming one, are read and reported. `minecraft:stacked_by_data` is a
+different thing: it says whether two stacks of one id but different numbers may merge, and in Java
+two stacks of one id are the same item, so both answers to it describe what already happens.
 
-**What a bag may hold.** `minecraft:storage_weight_limit` caps what a bag carries and
-`minecraft:storage_weight_modifier` prices one item inside one. Java counts the same two numbers and
-keeps both inside `BundleContents`: the cap is the literal `Fraction.ONE` that
-`BundleContents.Mutable.getMaxAmountToAdd` subtracts from, and an item's weight is
-`BundleContents.getWeight`, one over its stack size. Neither can be asked which bundle it is
-counting for, because `Mutable` holds the contents and their total and no reference to the item
-carrying them, so there is nowhere to read a pack's own cap from. 1.20.1 has no `BundleContents` at
-all. A bag from a pack is a Java bundle of the ordinary size, and both components are counted.
+**What a bag may hold.** `minecraft:storage_weight_limit` caps what a bag carries at up to 64 and
+`minecraft:storage_weight_modifier` prices one item inside one at 4 by default. Java counts the same
+two numbers and keeps both inside `BundleContents`: `BundleContents.Mutable.getMaxAmountToAdd`
+returns `(Fraction.ONE - weight) / perItem`, and an item's weight is the private static
+`BundleContents.getWeight`, one over its stack size. `Mutable` holds the items, their total and the
+selected index, and no reference to the stack carrying them, so a cap of a pack's own cannot be
+handed to the arithmetic; it needs the whole insertion path replaced, which is a mixin on both of
+`BundleItem`'s `override*` methods and on `getWeight`. 1.20.1 has no `BundleContents` at all. A bag
+from a pack is a Java bundle of the ordinary size, and both components are counted.
 
 **A camera and a touch button.** `minecraft:camera` times the black bars, the shutter and the
 photograph sliding away, which is a full-screen animation the Bedrock client plays while a player
@@ -335,23 +361,23 @@ takes a picture in a world. Java has neither the picture nor the screen. `minecr
 writes the word on the button a touchscreen shows for using what is held, and Java has no touch
 controls to put one on.
 
-**The sounds a swing makes.** `minecraft:swing_sounds` names three members of Bedrock's own level
-sound event list, which the Bedrock client resolves through a catalogue of its own. That list and
-the sound definitions a pack ships are two vocabularies: of its 570 names only 219 are also
-definition names, and the three the component is written with, `attack`, `attack.strong` and
-`attack.critical`, are none of them. A pack's sound definitions are what this mod registers, so
-there is nothing to name a Java sound with.
+**The sounds a swing makes.** `minecraft:swing_sounds` states `attack_miss`, `attack_hit` and
+`attack_critical_hit`, and Java plays exactly those three: `SoundEvents.PLAYER_ATTACK_NODAMAGE`,
+`PLAYER_ATTACK_STRONG` and `PLAYER_ATTACK_CRIT`, from the method `Player.attack` hands its visual
+effects to. What each field takes is a member of Bedrock's own level sound event list, 570 names the
+engine resolves through a catalogue of its own, and only some of those are spelled the same as a
+Java sound event; the rest would need the name mapping this mod already keeps for the 70 ambient and
+music names a biome may write, widened to a list four times longer. The three sounds have a Java
+home, the naming does not, and the component is counted.
 
 **What prices a trade, read out of a loot table.** `enchant_book_for_trading` states four costs
 beside the enchantments it picks between: a base, a base spread, and both again per level. In a trade
 those decide the emeralds the offer charges, and this mod charges them. In a loot table there is no
 other side to put a price on, so the book is enchanted and the four costs are counted.
 
-**One loot condition with nothing to ask.** `entity_killed` asks what the dropping mob itself
-killed, and a Java loot context holds the victim and whoever killed it and no record of what the
-victim did. It is counted by `/mcaddon entities` rather than dropped without a word. A Bedrock biome
-tag with no Java biome carrying the same idea, `sulfur_caves` among them, is named the same way, and
-a `biome_has_tag` asking for one then reads as false.
+**A Bedrock biome tag with no Java biome carrying the same idea**, `sulfur_caves` among them, is
+counted by `/mcaddon entities` rather than dropped without a word, and a `biome_has_tag` asking for
+one then reads as false.
 
 **The material reducer.** `recipe_material_reduction` describes the Education Edition material
 reducer, which the Java game does not have as a block.
@@ -377,9 +403,10 @@ instead.
 **What a trade runs over the item it hands over.** `enchant_with_levels` and `enchant_randomly`
 enchant it, `set_count` counts it, `random_dye` paints it one of the sixteen dyes,
 `enchant_book_for_trading` makes it an enchanted book and prices the trade, and `exploration_map`
-points it at a structure. `random_aux_value` is the one left: it picks one of the things a Bedrock
-id stands for by number, which Java has not had since it flattened items, so the item the trade
-names is already the wrong one and there is no number to pick. It is counted instead.
+points it at a structure. `random_aux_value` is the one left, for the same reason as in a loot
+table: the shepherd offers `minecraft:bed` and `minecraft:banner` at a number between 0 and 15, and
+picking the right one of Java's sixteen needs the flattening table nothing here holds yet. It is
+counted instead.
 
 **A filter on a trade item.** Bedrock checks it as the trade is offered, out of the filter
 vocabulary. A Java offer is built once and sent to the client, which leaves nothing to ask again.
@@ -403,16 +430,18 @@ can give runs: a command, a block state, dying, a sound, a particle, an effect a
 a teleport, a swing, a loot table, a spent or swapped held item, and a block replaced here or one
 step away.
 
-**Two ways of building a bone.** `texture_meshes` builds geometry out of a texture's opaque pixels,
-and `binding` names a bone of whatever entity is carrying the model and hangs this one off it. Every
-one Mojang ships is `q.item_slot_to_bone_name(...)` on an attachable, and an entity Java draws with a
-model of its own has parts rather than bones, with no two models naming theirs alike. A bone written
-either way is drawn as the boxes it also declares.
+**A bone built out of a texture.** `texture_meshes` extrudes geometry from a texture's opaque pixels,
+placing the sheet by a `local_pivot`, a `position` and a `rotation`. That is the same construction
+Java's own `ItemModelGenerator` performs for a flat item model, so nothing about Java stands in the
+way; what is missing is the reader, because the geometry pipeline here bakes boxes out of JSON and
+never opens an image. Eleven of Mojang's declarations use it, every one of them an item attachable,
+the bow and the crossbow among them. A bone written that way is drawn as the boxes it also declares,
+which for those eleven is nothing.
 
-**The item an engine puts in a hand.** `held_item_scale`, `held_item_ignores_lighting` and
-`hide_held_items` size, light and hide what Bedrock draws in an entity's hand by itself. The only
-thing drawn in an add-on entity's hand here is the attachable a pack describes for that item, which
-carries its own scale and its own material, so all three are counted and named.
+**A bone bound to an entity Java draws with a model of its own.** A `binding` names a bone of
+whoever carries the model, which works for a pack's own entity and has nowhere to land on a player
+or a vanilla mob, whose Java model has parts rather than bones with no two models naming theirs
+alike. Such a binding is reported by the bone name it asked for, the same way `parent_setup` is.
 
 **What a Molang value can be.** A value is a number or a string, which is what every expression in a
 pack computes with. Two queries answer with neither: `bone_orientation_matrix` gives a matrix and
@@ -431,18 +460,27 @@ all become the render type the pass is drawn with. What cannot follow is the ste
 a pass that exists only to write a mask is left out rather than drawn as a shape that does not
 belong there.
 
-**Eight of a particle's ten facing modes.** Java turns a particle to the camera on every axis or
-about the vertical one only, which is what `rotate_xyz`, `rotate_y`, `lookat_xyz` and `lookat_y`
-ask for. The three that aim the quad along the particle's own direction and the three that match the
-emitter's transform have no Java form, so they fall back to facing the camera, and the direction
-settings those modes read are not used.
+**Three of a particle's facing modes.** `emitter_transform_xy`, `emitter_transform_xz` and
+`emitter_transform_yz` lay the quad in a plane of the emitter's own transform, and a particle here
+carries the position it was born at and nothing of the emitter it came from, so there is no
+transform to match. They fall back to facing the camera and are counted. The other eight all work
+from 1.21 on: `SingleQuadParticle.FacingCameraMode` became an interface with two values rather than
+the whole vocabulary, so the four that aim a quad along the particle's direction are supplied here
+instead of being turned into one of Java's. 1.20.1 has no such interface and turns every quad to the
+camera, so those four are counted and named there.
 
-**A quarter of Bedrock's commands.** `fog`, `camera`, `camerashake`, `hud`,
-`inputpermission`, `aimassist`, `controlscheme`, `project` and the rest of the twenty-two name a
-renderer feature Java has none of, a marketplace or a server Java does not speak to, or a word both
-editions use for different things: Bedrock's `schedule` waits for an area to load and Java's delays
-a function. A function using one keeps its other lines and the dropped command is reported, and so
-is a line whose selector asks for something Java cannot select on, such as `hasitem`.
+**A fifth of Bedrock's commands.** The twenty left divide three ways. `aimassist`, `controlscheme`
+and `inputpermission` describe a controller, a touchscreen and what a Bedrock client lets a player
+do, and `packstack` and `project` describe that client's pack list and the Bedrock Editor.
+`connect`, `wsserver`, `sendshowstoreoffer`, `setmaxplayers`, `ops`, `permission`,
+`editor-allowlist`, `reloadconfig` and `reloadpacketlimitconfig` speak to a websocket server, a
+marketplace or a Bedrock server's own configuration. `camera`, `camerashake`, `fog` and `hud` name a
+client the server drives through a packet Java has no counterpart of; the last two are the nearest of
+the twenty to being possible here, because Java does draw fog, this mod already reads a pack's own
+`fogs` files into biomes, and Java does draw a heads-up display whose pieces a client mixin can skip.
+What each would take is a payload of this mod's own and a client that acts on it. A function using
+any of them keeps its other lines and the dropped command is reported, and so is a line whose
+selector asks for something Java cannot select on, such as `hasitem`.
 
 **One form of a command the rest of which translates.** A `ride` that summons what it mounts or
 empties a vehicle, a `music` that loops, a `structure` mirrored on both axes or placed a block at a
@@ -457,9 +495,18 @@ Everything else is translated or registered. `effect`, `xp`, `playsound`, `stops
 `changesetting`, `damage`, `locate`, `loot`, `place`, `summon`, `title`, `tellraw`, `titleraw`,
 `daylock`, `allowlist`, `testfor`, `testforblock`, `testforblocks` and both forms of `execute` are
 rewritten into what Java reads, including the command behind `execute ... run` and the dimension
-Bedrock calls the nether. `playanimation`, `event`, `scriptevent`, `music`, `toggledownfall`,
-`structure`, `mobevent`, `particle`, `dialogue` and `gametest` are registered by this mod, and a line
-using one is written out in the form the command built here reads. Of Bedrock's thirty-seven game rules, the
+Bedrock calls the nether. `schedule` is rewritten too, because the two editions agree about more of
+it than the word suggests: Bedrock's `schedule delay add <function> <time> <replace|append>` is
+Java's `schedule function <function> <time> [append|replace]` with one keyword moved and the same two
+words at the end, and `schedule clear` is spelled alike in both. `schedule on_area_loaded`, which
+waits for chunks, is the form Java keeps no queue for and the one that is reported.
+`playanimation`, `event`, `scriptevent`, `music`, `toggledownfall`, `structure`, `mobevent`,
+`particle`, `dialogue`, `gametest` and `transfer` are registered by this mod, and a line using one is
+written out in the form the command built here reads. `transfer` hands a player to another server,
+which Java carries as `ClientboundTransferPacket` from 1.20.5 rather than as a command of its own; a
+line naming no port means the port a Java server listens on, because a Java client sent to Bedrock's
+own 19132 reaches nothing. 1.20.1 has no such packet and the command says so rather than reporting a
+move that never happened. Of Bedrock's thirty-seven game rules, the
 twenty-five every supported version of Java has are set under the name that version knows them by,
 which 26 changed, and four more reach a rule only the newer versions hold. The remaining eight name
 a Bedrock heads-up display or a limit Java keeps no rule for, and are reported.
@@ -525,11 +572,14 @@ states, and both of those are drawn.
 **A camera that is somewhere the player is not.** `cameras` holds the presets `/camera` picks
 between, and a preset a pack writes inherits from `minecraft:free` or from another of its own, so
 every one of them is a camera standing at a position and a rotation while the player stays where they
-are. Java's one camera control is not that. `ServerPlayer.setCamera` teleports the player to whatever
-entity it is given and then tells the client to draw from it, which is why `Camera.attachToEntity`
-works here and a preset cannot: the view and the player cannot be in two places. Of the fourteen
-things a preset states beside its identifier and what it inherits from, `pos_x`, `pos_y`, `pos_z`,
-`rot_x` and `rot_y` are the only ones naming anything Java holds at all. `player_effects`,
+are. The server has no way to say that: `ServerPlayer.setCamera` calls `teleportTo` with the camera
+entity's own position before it sends `ClientboundSetCameraPacket`, which is why
+`Camera.attachToEntity` works here and a preset does not. A client can say it, because
+`net.minecraft.client.Camera` keeps its `position`, `xRot`, `yRot` and `detached` as fields a mixin
+on `setup` may overwrite, which is what a free camera mod does; that is a payload of this mod's own,
+a client that acts on it, and the easing `/camera` states, and none of the three is built. Of the
+fourteen things a preset states beside its identifier and what it inherits from, `pos_x`, `pos_y`,
+`pos_z`, `rot_x` and `rot_y` are the only ones naming anything Java holds at all. `player_effects`,
 `listener`, `extend_player_rendering`, `rotation_speed`, `snap_to_target`, `continue_targeting`,
 `tracking_radius` and the two rotation limits each describe the Bedrock client's own renderer, its
 audio or the input it takes away while a camera is up, and Java has none of the three.
@@ -549,20 +599,46 @@ naming one of the pack's own biomes is named too and the world is made of the vo
 on 26.2, a `dimension` entry referring to a biome out of the same pack loads on a dedicated server
 and stops a client on the screen asking the player to fix their packs.
 
-**Four of the renderer directories, field by field.** `atmospherics` states a Rayleigh and Mie
-scattering model: `rayleigh_strength`, `sun_mie_strength`, `moon_mie_strength`, `sun_glare_shape`
-and the four `horizon_blend_stops`, each keyframed over the day. Java simulates no scattering and
-draws its sun as one textured quad, and its sky colour is a single value with Java's own time curve
-over it, so there is no keyframe table to put anywhere. `lighting` states a sun and a moon colour
-and illuminance as curves over the day, a lightning `flash` tint, an `orbital_offset_degrees`, an
-ambient colour and illuminance, an `emissive.desaturation` and a `sky.intensity`; Java holds one sky
-light colour and one ambient light colour per dimension from 26 and neither before, has no emissive
-pass and no lightning tint. `color_grading` states `contrast`, `gain`, `gamma`, `offset` and
-`saturation` per tonal band, a Kelvin `temperature` and a tonemapping operator, and a Java post
-effect file holds targets, passes and samplers with no grading term in it and nothing binding a
-chain to a biome. `water` states particle concentrations in milligrams per litre, a caustic
-projection and an eleven field wave model, where Java water is a flipbook texture tinted by one
-colour. Each of the four is read by Bedrock only under Vibrant Visuals, its deferred pipeline.
+**Four of the renderer directories, field by field.** Bedrock reads all four only under Vibrant
+Visuals, its deferred pipeline, and a client biome names each through
+`minecraft:atmosphere_identifier`, `minecraft:lighting_identifier`,
+`minecraft:color_grading_identifier` and `minecraft:water_identifier`. Of their 47 published fields,
+six have a Java home and all six of those arrived in 26.
+
+That 26 answer is `EnvironmentAttributes` with the `timeline` registry beside it.
+`RegistryDataLoader` loads `Registries.TIMELINE` from a data pack, a `Timeline` is an
+`AttributeTrack` per attribute made of a `KeyframeTrack` and a modifier, and a `DimensionType` names
+a `HolderSet<Timeline>` while a `Biome` carries a flat `EnvironmentAttributeMap` of its own. So 26
+does hold a keyframe table over the day that a pack may write, which is the shape both `atmospherics`
+and `lighting` are written in. Before 26 there is no such table and no such vocabulary.
+
+`atmospherics` states `sky_zenith_color` and `sky_horizon_color`, each keyframed. The zenith colour
+is `EnvironmentAttributes.SKY_COLOR` on 26 and `BiomeSpecialEffects.skyColor` before it, as one value
+rather than a curve; the horizon colour is nearest to `SUNRISE_SUNSET_COLOR`, which Java paints at
+dawn and dusk only. Its other eight fields are the scattering model itself, `rayleigh_strength`,
+`sun_mie_strength`, `moon_mie_strength`, `sun_glare_shape` and the four `horizon_blend_stops`, and
+Java simulates no scattering and draws its sun as one textured quad.
+
+`lighting` states four fields Java holds: `ambient.color` is `AMBIENT_LIGHT_COLOR`, `sky.intensity`
+is `SKY_LIGHT_FACTOR`, `orbital_offset_degrees` is `SUN_ANGLE` and `MOON_ANGLE`, and the sun and moon
+`color` and `illuminance` curves fold into the one `SKY_LIGHT_COLOR` and `SKY_LIGHT_LEVEL` Java
+carries, which is four curves crossing into two. `ambient.illuminance` is nearest to
+`DimensionType.ambientLight`, one float for a whole dimension. What has no home is the lightning
+`flash` colour and illuminance, which Java computes in its renderer with no data behind it, and
+`emissive.desaturation`, because Java has no emissive pass to desaturate.
+
+`color_grading` has nothing. Its `contrast`, `gain`, `gamma`, `offset` and `saturation` per tonal
+band, its Kelvin `temperature` and its tonemapping `operator` all describe a grade, and a Java post
+effect is `PostChainConfig`, which is internal targets and passes and no grading term at all, with
+nothing binding a chain to a biome or to a dimension.
+
+`water` has nothing either. Its `particle_concentrations` in milligrams per litre, its five
+`caustics` fields and its ten `waves` fields are a deferred water model, where Java water is a
+flipbook texture tinted by one colour. The nearest is `biome_water_color_contribution`, which weights
+how much of a client biome's own `surface_color` reaches that model, and that surface colour is
+already read here in full; a weight of anything but the whole of it has no Java field. The water a
+pack paints comes out of `minecraft:water_appearance` on the client biome rather than out of this
+directory.
 
 **The half of a fog a biome has no field for.** `fogs` states a `distance` block per camera
 location. The `air` and `water` colours become a biome's own fog colour and water fog colour, and

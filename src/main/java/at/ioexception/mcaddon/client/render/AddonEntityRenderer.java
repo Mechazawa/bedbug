@@ -1,21 +1,25 @@
 package at.ioexception.mcaddon.client.render;
 
 import at.ioexception.mcaddon.bedrock.entity.EntityAnimator;
+import at.ioexception.mcaddon.bedrock.model.BakedGeometry;
 import at.ioexception.mcaddon.bedrock.model.MaterialDefinition;
 import at.ioexception.mcaddon.entity.AddonEntity;
 import at.ioexception.mcaddon.platform.Platform;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import org.joml.Vector3f;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
+import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.texture.OverlayTexture;
@@ -23,6 +27,7 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 //? if >=1.21.2 {
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
+import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 //?} else {
 /*import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -69,22 +74,31 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
             && entity.declares("minecraft:renders_when_invisible"));
     }
 
+    /** Everything drawn on one entity this frame: its model with what it wears, and what it holds. */
+    private record Drawing(List<Attachables.Drawn> passes, List<HeldItems.Held> held) {
+        static final Drawing NOTHING = new Drawing(List.of(), List.of());
+    }
+
     /**
      * Everything drawn on the entity: its own model, then whatever it is wearing or holding.
      *
      * What it is wearing is collected first, because an attachable writes into the entity's own
-     * variables and its model has to be resolved after that rather than before.
+     * variables and its model has to be resolved after that rather than before. A slot an attachable
+     * drew holds no item of its own afterwards, which is how Bedrock chooses between the two.
      */
-    private static List<Attachables.Drawn> drawn(AddonEntity entity, AddonClientAssets.Binding binding,
+    private static Drawing drawn(AddonEntity entity, AddonClientAssets.Binding binding,
         EntityAnimator animator, float partialTick) {
         List<Attachables.Drawn> worn = Attachables.on(entity, animator, partialTick);
 
         List<Attachables.Drawn> passes = new ArrayList<>();
         for (AddonModels.Pass pass : binding.models().resolve(animator)) {
-            passes.add(new Attachables.Drawn(pass, animator));
+            passes.add(new Attachables.Drawn(pass, animator, null));
         }
-        passes.addAll(worn);
-        return passes;
+        BakedGeometry own = passes.isEmpty() ? null : passes.get(0).pass().geometry();
+        worn.stream().map(each -> each.hungFrom(own, animator)).forEach(passes::add);
+
+        return new Drawing(passes, HeldItems.on(entity, animator, own,
+            worn.stream().map(Attachables.Drawn::slot).collect(Collectors.toSet())));
     }
 
 
@@ -126,7 +140,8 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
     /** What drawing needs, pulled off the entity while the entity is still safe to touch. */
     public static class State extends EntityRenderState {
         EntityAnimator animator;
-        List<Attachables.Drawn> passes = new ArrayList<>();
+        Drawing drawing = Drawing.NOTHING;
+        List<ItemStackRenderState> heldModels = new ArrayList<>();
         float bodyRotation;
         Vector3f scale = new Vector3f(1, 1, 1);
     }
@@ -145,26 +160,39 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
         state.animator = binding == null
             ? null
             : Animators.of(entity, identifier, partialTick, entity.tickCount + partialTick);
-        state.passes = new ArrayList<>();
+        state.drawing = Drawing.NOTHING;
+        state.heldModels = new ArrayList<>();
         if (state.animator == null || !visible(entity)) return;
 
-        state.passes = drawn(entity, binding, state.animator, partialTick);
+        state.drawing = drawn(entity, binding, state.animator, partialTick);
+        state.heldModels = state.drawing.held().stream().map(held -> itemModel(entity, held)).toList();
         state.bodyRotation = Mth.rotLerp(partialTick, entity.yBodyRotO, entity.yBodyRot);
         state.scale = state.animator.scale();
+    }
+
+    /** The item's own model, resolved while the entity it belongs to is still in hand. */
+    private static ItemStackRenderState itemModel(AddonEntity entity, HeldItems.Held held) {
+        ItemStackRenderState item = new ItemStackRenderState();
+        Minecraft.getInstance().getItemModelResolver().updateForLiving(item, held.stack(),
+            held.offHand() ? ItemDisplayContext.THIRD_PERSON_LEFT_HAND
+                : ItemDisplayContext.THIRD_PERSON_RIGHT_HAND, entity);
+        return item;
     }
 
     @Override
     public void submit(State state, PoseStack poseStack, SubmitNodeCollector collector, CameraRenderState camera) {
         super.submit(state, poseStack, collector, camera);
-        if (state.passes.isEmpty()) return;
+        if (state.drawing.passes().isEmpty()) return;
 
         poseStack.pushPose();
         applyModelSpace(poseStack, state.bodyRotation, state.scale);
 
         int light = state.lightCoords;
-        for (Attachables.Drawn each : state.passes) {
+        for (Attachables.Drawn each : state.drawing.passes()) {
             AddonModels.Pass pass = each.pass();
             EntityAnimator animator = each.animator();
+            poseStack.pushPose();
+            if (each.anchor() != null) Platform.mulPose(poseStack, each.anchor());
             collector.submitCustomGeometry(poseStack, renderTypeOf(pass),
                 (pose, buffer) -> {
                     PoseStack local = new PoseStack();
@@ -172,6 +200,14 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
                     BedrockModelRenderer.render(pass.geometry(), animator, pass.visibility()::hides, pass.shift(),
                         local, buffer, pass.light(light), OverlayTexture.NO_OVERLAY, pass.colour());
                 });
+            poseStack.popPose();
+        }
+        for (int index = 0; index < state.heldModels.size(); index++) {
+            HeldItems.Held held = state.drawing.held().get(index);
+            intoHand(poseStack, held);
+            state.heldModels.get(index).submit(poseStack, collector, held.lit() ? FULL_BRIGHT : light,
+                OverlayTexture.NO_OVERLAY, 0);
+            poseStack.popPose();
         }
         poseStack.popPose();
     }
@@ -193,17 +229,47 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
         EntityAnimator animator = Animators.of(entity, identifier, partialTick, entity.tickCount + partialTick);
         if (animator == null) return;
 
+        Drawing drawing = drawn(entity, binding, animator, partialTick);
         poseStack.pushPose();
         applyModelSpace(poseStack, Mth.rotLerp(partialTick, entity.yBodyRotO, entity.yBodyRot), animator.scale());
-        for (Attachables.Drawn each : drawn(entity, binding, animator, partialTick)) {
+        for (Attachables.Drawn each : drawing.passes()) {
             AddonModels.Pass pass = each.pass();
             VertexConsumer buffer = buffers.getBuffer(renderTypeOf(pass));
+            poseStack.pushPose();
+            if (each.anchor() != null) Platform.mulPose(poseStack, each.anchor());
             BedrockModelRenderer.render(pass.geometry(), each.animator(), pass.visibility()::hides, pass.shift(),
                 poseStack, buffer, pass.light(light), OverlayTexture.NO_OVERLAY, pass.colour());
+            poseStack.popPose();
+        }
+        for (HeldItems.Held held : drawing.held()) {
+            intoHand(poseStack, held);
+            Minecraft.getInstance().getItemRenderer().renderStatic(entity, held.stack(),
+                held.offHand() ? ItemDisplayContext.THIRD_PERSON_LEFT_HAND
+                    : ItemDisplayContext.THIRD_PERSON_RIGHT_HAND,
+                held.offHand(), poseStack, buffers, entity.level(),
+                held.lit() ? FULL_BRIGHT : light, OverlayTexture.NO_OVERLAY, entity.getId());
+            poseStack.popPose();
         }
         poseStack.popPose();
     }
     *///?}
+
+    /**
+     * Puts the pose on the bone the item hangs off, turned the way Java holds a third person item.
+     *
+     * Bedrock's item bone rests unrotated in the same space a vanilla arm does, so the two rotations
+     * vanilla's own hand layer applies after reaching the hand apply here as well. The caller pops.
+     */
+    private static void intoHand(PoseStack poseStack, HeldItems.Held held) {
+        poseStack.pushPose();
+        Platform.mulPose(poseStack, held.anchor());
+        poseStack.mulPose(Axis.XP.rotationDegrees(-90f));
+        poseStack.mulPose(Axis.YP.rotationDegrees(180f));
+        poseStack.scale(held.scale(), held.scale(), held.scale());
+    }
+
+    /** Both light channels at their maximum, which is what `held_item_ignores_lighting` asks for. */
+    private static final int FULL_BRIGHT = 0xF000F0;
 
     /**
      * The transform vanilla puts a mob's model into, reproduced so a baked Bedrock model lands in it.

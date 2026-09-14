@@ -78,6 +78,7 @@ public final class EatMobGoal extends Goal {
 
         if (++eaten < eatTime || !(mob.level() instanceof ServerLevel level)) return;
 
+        mob.setKilled(meal);
         Platform.kill(meal, level);
         dropMeal(level);
         meal = null;

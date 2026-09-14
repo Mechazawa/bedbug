@@ -206,6 +206,14 @@ These are the checks it runs, and what each one catches:
   `/mcaddon entities`. `verify.py` leaves a `minecraft:` definition out of both the identifiers it
   summons and the entity types it counts, for the same reason.
 
+  The sprite's geometry also carries the two bones a Bedrock model says where its hands and its head
+  are with, `rightItem` and `helmet`, and its client definition asks for an item in that hand at
+  twice the size and lit by nothing around it. Beside it is the pack's one attachable, whose root
+  bone binds with `q.item_slot_to_bone_name(c.item_slot)`, which is the spelling every binding Mojang
+  publishes uses and the one that needs `context.item_slot` answered. The warden shares the sprite's
+  geometry and declares neither `enable_attachables` nor a held item scale, so a picture of the two
+  side by side is the same model with and without each. The `held` scene is where they are looked at.
+
   Four of those carry the drawing fields that are only visible in a picture. The sprite's geometry
   declares the extent it is culled against. The ember is drawn through a controller that dims the
   light reaching it and animated by a controller crossing between two states on a blend transition,
@@ -229,7 +237,10 @@ These are the checks it runs, and what each one catches:
   enchanted book priced by its own result and one selling an explorer map. Each also names something
   this mod reports rather than converts, so a run says both halves of the reporting path still work.
   A second trade table sits beside the first, holding one trade and named by the stocked group
-  alone, which is what says both tables were read while the pack was open.
+  alone, which is what says both tables were read while the pack was open. A fifth table is the meal
+  one, whose two pools each ask `entity_killed` about a different kind of mob: that condition is
+  about the moment `minecraft:behavior.eat_mob` rolls a table rather than about a death, so the game
+  test writes down what the entity swallowed and reads back which of the two pools fired.
 
   The worldgen side is a biome, five features and two rules. The biome carries the components a Java
   biome has a field for and four it has none of, so both halves of the reporting path run. The
@@ -573,6 +584,13 @@ These are the checks it runs, and what each one catches:
   what draws an item icon, its tint and its model in the world. The heads-up display is off while
   the picture is taken, so an item in a hotbar or in a hand would not be in it.
 
+  The `held` scene stands one copy of every entity the packs declare, puts the first item in each
+  one's main hand and puts the first item any attachable is described for on each one's head. Only
+  a model carrying a `rightItem` bone draws the first and only one whose definition enables
+  attachables draws the second, so the row is what says which entities do. The items an attachable
+  belongs to are read out of the archive's own `attachables/` rather than named here, for the same
+  reason the entity and item lists are.
+
   The `fog` scene paints the stage with the first biome a pack declares and floods half of it, so one
   frame holds the fog colour a pack's `fogs` file puts over the distance and the water colour its
   biome tints the pool with. Every scene starts by putting the stage's biome back, because
@@ -721,25 +739,34 @@ what the census calls missing is what `/mcaddon entities` names. The field names
 beside the reader rather than inside it, because the census reads a reader's own string literals to
 decide what it acts on and a reported field is still a dropped one.
 
-- **`texture_meshes` and `binding`** on a bone build geometry from a texture's opaque pixels and hang
-  the bone off a named bone of whatever entity is carrying the model. Every published `binding` is
-  `q.item_slot_to_bone_name(...)` on an attachable, and an entity Java draws with a model of its own
-  has parts rather than bones, with no two models naming theirs alike.
-- **`rebuild_animation_matrices` and `filter_lighting`** describe how Bedrock's own renderer
-  schedules and lights a pass. Every pass here reads one skeleton posed for the frame out of the
-  same variables, so a rebuild between passes would change nothing, and Java lights a whole entity
-  from the one value at its position, so there is no second way of sampling to pick.
+- **`texture_meshes`** on a bone extrudes geometry from a texture's opaque pixels, placed by a
+  `local_pivot`, a `position` and a `rotation`. Java performs the same construction in
+  `ItemModelGenerator` for a flat item model, so what is absent is a reader rather than a Java form:
+  the geometry pipeline here bakes boxes out of JSON and never opens an image. All eleven published
+  declarations are item attachables, the bow and the crossbow among them.
+- **`rebuild_animation_matrices`** is declared by nine render controllers and Mojang documents none
+  of them. Every one is a second pass over a *different* geometry than the first, the cape over the
+  player, the clothes over a stray, the robes over a villager, which says it asks for the bone
+  matrices to be worked out again for that geometry rather than taken from the previous pass's
+  cache. `BedrockModelRenderer` poses every pass from `animator.poseOf` as it walks it, so the pass
+  it names is already built that way and the flag asks for what happens anyway.
+- **`filter_lighting`** is declared by ten render controllers and Mojang documents it nowhere, in
+  the schemas, the doc modules or `Entities.html`. Every one of the ten is a flat or thrown thing:
+  an arrow, an egg, a fireball, both potions, a leash knot, an item sprite, an experience bottle and
+  a fireworks rocket. What it does to a pass is not established from the published material, so
+  nothing is done with it rather than something guessed at.
 - **`blend_via_shortest_path`** on a controller state picks which way round the circle a rotation
-  travels while one state crosses into the next. A bone's rotation is the weighted sum of every clip
-  contributing to it rather than a pair of angles with a route between them.
-- **`held_item_scale`, `held_item_ignores_lighting` and `hide_held_items`** size, light and hide the
-  item the engine puts in an entity's hand. Nothing is drawn in an add-on entity's hand but the
-  attachable a pack describes for it, which carries its own scale and its own material.
-- **`parent_setup`** is reported only for the wearer it cannot reach. An attachable writes it into
-  whoever is carrying it, which works for a pack's own entity and has nowhere to land on one Java
-  draws with a model of its own.
+  travels while one state crosses into the next. It does have an effect to have here:
+  `BonePose.addRotation` adds each clip's Euler angles scaled by its weight, so two clips at 350 and
+  10 degrees at equal weight leave the bone at 180 rather than at 0. What is missing is the thread
+  from the state that declared the flag, through the clips it contributes, to the accumulation,
+  which would wrap each contribution into the half turn nearest the running total.
+- **`parent_setup` and `binding`** are reported only for the wearer they cannot reach. An attachable
+  writes the first into whoever is carrying it and hangs itself off the bone the second names, which
+  both work for a pack's own entity and have nowhere to land on one Java draws with a model of its
+  own, since such a model has parts rather than bones with no two naming theirs alike.
 
-Five fields are read outside the renderer itself, which is where to look for them:
+Seven fields are read outside the renderer itself, which is where to look for them:
 
 - **`visible_bounds_width`, `visible_bounds_height` and `visible_bounds_offset`** are the box Bedrock
   culls a model against. `EntityRenderer.shouldRender` carries the same spelling on all four
@@ -753,6 +780,12 @@ Five fields are read outside the renderer itself, which is where to look for the
 - **`enable_attachables` and `hide_armor`** gate `Attachables.on`. An entity a pack described wears
   what it has equipped only where its own definition says it may; one Java draws with a model of its
   own carries no such definition and always wears it.
+- **`held_item_scale`, `held_item_ignores_lighting` and `hide_held_items`** size, light and hide the
+  item an entity holds that no attachable draws for it, in `HeldItems.on`. The bone it hangs off is
+  `rightitem` or `leftitem`, which is what `query.item_slot_to_bone_name` answers and what forty of
+  Mojang's own entity geometries carry; `BedrockModelRenderer.anchorOf` finds it in the posed model,
+  matching the name without regard to case because Bedrock does. A model carrying neither bone draws
+  no item, which is Bedrock's answer too.
 - **`light_color_multiplier`** multiplies the light reaching a pass, in `AddonModels.Pass.light`.
   Java carries the two light channels as levels packed in an integer, so the multiplier moves both
   and stops at the brightest level there is.

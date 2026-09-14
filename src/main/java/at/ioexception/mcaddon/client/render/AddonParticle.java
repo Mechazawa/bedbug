@@ -12,9 +12,13 @@ import at.ioexception.mcaddon.bedrock.particle.ParticleTint;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.particle.SingleQuadParticle;
 import net.minecraft.core.BlockPos;
+import at.ioexception.mcaddon.platform.Platform;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix3f;
+import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import java.util.List;
@@ -35,8 +39,14 @@ public class AddonParticle extends SingleQuadParticle {
     /** The packed sky and block light of a particle that carries its own brightness. */
     private static final int FULL_BRIGHT = 0xF000F0;
 
+    /** What Bedrock's aiming facing modes mean by upwards. */
+    private static final Vector3f UP = new Vector3f(0, 1, 0);
+
     private final ParticleDefinition definition;
     private final MolangEnvironment environment;
+
+    /** Which way this particle points, which is what the aiming facing modes turn the quad by. */
+    private final Vector3f direction = new Vector3f(0, 0, 1);
 
     /** The moment the pack says this one ends, which is not always when its clock runs out. */
     private final float maxLifetime;
@@ -246,6 +256,7 @@ public class AddonParticle extends SingleQuadParticle {
             advanceFlipbook(billboard, at);
         }
 
+        aimDirection();
         paint(definition.particle().tint());
     }
 
@@ -367,20 +378,106 @@ public class AddonParticle extends SingleQuadParticle {
         return window == null ? super.getV1() : across(window[3], super.getV0(), super.getV1());
     }
 
+    /**
+     * The direction Bedrock's aiming facing modes are written against.
+     *
+     * A pack either states it outright or takes it off the velocity, and a particle slower than the
+     * threshold keeps whichever direction it last had rather than turning to a velocity of nothing.
+     */
+    private void aimDirection() {
+        Billboard billboard = definition.particle().billboard();
+        Billboard.Direction settings = billboard == null ? null : billboard.direction();
+        if (settings == null) return;
+
+        if (settings.custom()) {
+            Vector3f stated = evaluate(settings.customDirection());
+            if (stated.lengthSquared() > 0f) direction.set(stated).normalize();
+            return;
+        }
+        // Bedrock states the threshold in blocks a second and Java carries a velocity in blocks a tick.
+        double speed = Math.sqrt(xd * xd + yd * yd + zd * zd) * BedrockUnits.TICKS_PER_SECOND;
+        if (speed > settings.minSpeedThreshold()) {
+            direction.set((float) xd, (float) yd, (float) zd).normalize();
+        }
+    }
+
     //? if >=1.21 {
     /**
-     * Which way the quad turns to meet the camera.
+     * Which way the quad turns.
      *
-     * Bedrock offers ten modes and Java has the two that matter: turning on every axis, and turning
-     * only about the vertical one, which is what keeps a flat effect lying on the ground. A mode
-     * Java has no form of falls back to facing the camera outright.
+     * Java's own two modes are values of an interface rather than the whole vocabulary, so the
+     * aiming modes are supplied here instead of being turned into one of them: `direction_x`,
+     * `direction_y` and `direction_z` put the named local axis along the particle's direction and
+     * `lookat_direction` stands the quad up along it while still turning its face to the camera.
+     * The three `emitter_transform_*` modes are reported, because the emitter's own transform is not
+     * carried on to the particles it made.
      */
     @Override
     public FacingCameraMode getFacingCameraMode() {
+        return facing;
+    }
+
+    private final FacingCameraMode facing = this::orient;
+
+    private void orient(Quaternionf store, net.minecraft.client.Camera camera, float partialTick) {
         Billboard billboard = definition.particle().billboard();
-        return billboard != null && billboard.facing() == at.ioexception.mcaddon.bedrock.particle
-            .FacingCameraMode.ROTATE_Y
-            ? FacingCameraMode.LOOKAT_Y : FacingCameraMode.LOOKAT_XYZ;
+        at.ioexception.mcaddon.bedrock.particle.FacingCameraMode mode = billboard == null
+            ? at.ioexception.mcaddon.bedrock.particle.FacingCameraMode.ROTATE_XYZ : billboard.facing();
+
+        if (aim(store, mode, partialTick)) return;
+        if (mode == at.ioexception.mcaddon.bedrock.particle.FacingCameraMode.ROTATE_Y
+            || mode == at.ioexception.mcaddon.bedrock.particle.FacingCameraMode.LOOKAT_Y) {
+            FacingCameraMode.LOOKAT_Y.setRotation(store, camera, partialTick);
+            return;
+        }
+        FacingCameraMode.LOOKAT_XYZ.setRotation(store, camera, partialTick);
+    }
+
+    /**
+     * Puts the quad's own axes where one of Bedrock's aiming modes asks for them.
+     *
+     * Each mode names the quad axis that lies along the particle's direction and says the remaining
+     * pair attempts to aim upwards, which is the world up made perpendicular to the direction;
+     * `lookat_direction` aims the same pair at the camera instead. False for a mode that aims
+     * nothing, and for a direction parallel to what the other axes are built from, which leaves
+     * nothing to build a rotation out of.
+     */
+    private boolean aim(Quaternionf store, at.ioexception.mcaddon.bedrock.particle.FacingCameraMode mode,
+        float partialTick) {
+        Vector3f made = switch (mode) {
+            case DIRECTION_X, DIRECTION_Y, DIRECTION_Z -> perpendicular(UP, direction);
+            case LOOKAT_DIRECTION -> perpendicular(towardsCamera(partialTick), direction);
+            default -> null;
+        };
+        if (made == null) return false;
+
+        return switch (mode) {
+            case DIRECTION_X -> set(store, direction, made, new Vector3f(direction).cross(made));
+            case DIRECTION_Y -> set(store, made, direction, new Vector3f(made).cross(direction));
+            case DIRECTION_Z -> set(store, new Vector3f(made).cross(direction), made, direction);
+            case LOOKAT_DIRECTION -> set(store, new Vector3f(direction).cross(made), direction, made);
+            default -> false;
+        };
+    }
+
+    /** A rotation whose local x, y and z axes are the three unit vectors given, in that order. */
+    private static boolean set(Quaternionf store, Vector3f x, Vector3f y, Vector3f z) {
+        store.setFromNormalized(new Matrix3f().set(x, y, z));
+        return true;
+    }
+
+    /** The part of one vector at right angles to a unit axis, or null where there is none. */
+    private static Vector3f perpendicular(Vector3f vector, Vector3f axis) {
+        Vector3f apart = new Vector3f(vector).sub(new Vector3f(axis).mul(vector.dot(axis)));
+        return apart.lengthSquared() < 1.0e-6f ? null : apart.normalize();
+    }
+
+    private Vector3f towardsCamera(float partialTick) {
+        Vec3 eye = Platform.cameraPosition();
+        return new Vector3f(
+            (float) (eye.x - Mth.lerp(partialTick, xo, x)),
+            (float) (eye.y - Mth.lerp(partialTick, yo, y)),
+            (float) (eye.z - Mth.lerp(partialTick, zo, z))).normalize();
     }
     //?}
 

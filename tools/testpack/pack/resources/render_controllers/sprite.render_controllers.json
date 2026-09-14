@@ -18,6 +18,15 @@
         }
       ],
       "textures": ["texture.default"]
+    },
+    "controller.render.tp.visor": {
+      "geometry": "geometry.default",
+      "materials": [
+        {
+          "*": "material.default"
+        }
+      ],
+      "textures": ["texture.default"]
     }
   }
 }

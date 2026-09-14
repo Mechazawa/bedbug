@@ -99,6 +99,7 @@ public final class GeometryBaker {
             bone.name(),
             new Vector3f(pivot).sub(parentPivot),
             toModelRotation(bone.rotation()),
+            bone.binding(),
             List.copyOf(quads),
             List.copyOf(children));
         byName.put(bone.name(), baked);

@@ -26,20 +26,22 @@ public final class Animators {
 
     /** Null when the entity's pack never described how it looks. */
     public static EntityAnimator of(Entity entity, String identifier, float partialTick, float ageInTicks) {
-        return of(entity, AddonClientAssets.of(identifier), identifier, false, partialTick, ageInTicks);
+        return of(entity, AddonClientAssets.of(identifier), identifier, null, partialTick, ageInTicks);
     }
 
     /**
      * One animator per entity and per thing drawn on it.
      *
      * A worn attachable runs its own animation script beside the entity's, so it needs a clock and a
-     * set of variables of its own rather than sharing the wearer's. `attached` says which of the two
-     * this is, which is what Bedrock answers `query.is_attached` and `query.owner_identifier` from.
+     * set of variables of its own rather than sharing the wearer's. `itemSlot` names the slot such a
+     * thing is worn in and is null for the entity itself, which is what Bedrock answers
+     * `query.is_attached`, `query.owner_identifier` and `context.item_slot` from.
      */
     public static EntityAnimator of(Entity entity, AddonClientAssets.Binding binding, String key,
-        boolean attached, float partialTick, float ageInTicks) {
+        String itemSlot, float partialTick, float ageInTicks) {
         if (binding == null) return null;
 
+        boolean attached = itemSlot != null;
         Entry entry = ANIMATORS.computeIfAbsent(entity.getId() + "/" + key, id -> {
             EntityAnimator animator = new EntityAnimator(binding.models().assets(), entity, binding.definition());
             EntityQueries queries = new EntityQueries(entity, animator.player(),
@@ -54,6 +56,7 @@ public final class Animators {
         float delta = Math.max(0, now - entry.lastTime()[0]) / 20f;
         entry.lastTime()[0] = now;
         entry.queries().setPartialTick(partialTick);
+        entry.queries().setItemSlot(attached ? itemSlot : "");
         entry.animator().tick(delta, now / 20f);
         return entry.animator();
     }
@@ -77,7 +80,7 @@ public final class Animators {
             AddonClientAssets.Binding binding = AddonClientAssets.of(identifier);
             if (binding == null || !binding.definition().runsOffscreen()) continue;
 
-            of(addon, binding, identifier, false, 0f, addon.tickCount);
+            of(addon, binding, identifier, null, 0f, addon.tickCount);
         }
     }
 

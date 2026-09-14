@@ -128,6 +128,9 @@ class FunctionsTest {
         "'dialogue change @e[type=tp:ember] tp:greeting', "
             + "'dialogue change @e[type=tp:ember] \"tp:greeting\"'",
         "'dialogue change @e tp:greeting @a', 'dialogue change @e \"tp:greeting\"'",
+        "'schedule delay add tp:tick 20 append', 'schedule function tp:tick 20 append'",
+        "'schedule delay clear tp:tick', 'schedule clear tp:tick'",
+        "'schedule clear tp:tick', 'schedule clear tp:tick'",
     })
     void rewritesTheCommandsJavaSpellsDifferently(String source, String expected) throws IOException {
         assertEquals(expected, only(source));
@@ -153,6 +156,8 @@ class FunctionsTest {
         "'mobevent minecraft:ender_dragon_event true', "
             + "'command mobevent minecraft:ender_dragon_event, which Java has no form of'",
         "'place featurerule tp:rule ~ ~ ~', 'command place featurerule, which Java has no form of'",
+        "'schedule on_area_loaded add 0 0 0 8 8 8 tp:tick', "
+            + "'command schedule on_area_loaded, which Java has no form of'",
     })
     void dropsAFormOfATranslatedCommandJavaCannotSay(String source, String reported) throws IOException {
         assertEquals(List.of(), translate(source));

@@ -1,0 +1,36 @@
+{
+  "pools": [
+    {
+      "rolls": 1,
+      "conditions": [
+        {
+          "condition": "entity_killed",
+          "entity_type": "tp:sprite"
+        }
+      ],
+      "entries": [
+        {
+          "type": "item",
+          "name": "minecraft:porkchop",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "rolls": 1,
+      "conditions": [
+        {
+          "condition": "entity_killed",
+          "entity_type": "minecraft:pig"
+        }
+      ],
+      "entries": [
+        {
+          "type": "item",
+          "name": "minecraft:slime_ball",
+          "weight": 1
+        }
+      ]
+    }
+  ]
+}

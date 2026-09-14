@@ -162,6 +162,50 @@ class ParticleAppearanceTest {
             """.formatted(colour)).particle().tint();
     }
 
+    /**
+     * Where the direction the aiming facing modes turn a quad by comes from.
+     *
+     * The schema spells the second mode `custom` and the documentation spells it `custom_direction`,
+     * so the velocity mode is the one matched by name and anything else is the stated vector.
+     */
+    @Test
+    void readsTheStatedDirectionAQuadIsAimedAlong() throws IOException {
+        Billboard.Direction direction = effect("""
+            {"minecraft:particle_appearance_billboard": {
+              "size": [0.5, 0.5],
+              "facing_camera_mode": "direction_y",
+              "direction": {"mode": "custom_direction", "custom_direction": [0, "1 + 1", 0]}
+            }}
+            """).particle().billboard().direction();
+
+        assertTrue(direction.custom());
+        assertEquals(2f, value(direction.customDirection().y()), 1e-5);
+    }
+
+    @Test
+    void readsTheSpeedBelowWhichAVelocityDecidesNothing() throws IOException {
+        Billboard.Direction direction = effect("""
+            {"minecraft:particle_appearance_billboard": {
+              "size": [0.5, 0.5],
+              "direction": {"mode": "derive_from_velocity", "min_speed_threshold": 0.5}
+            }}
+            """).particle().billboard().direction();
+
+        assertFalse(direction.custom());
+        assertEquals(0.5f, direction.minSpeedThreshold(), 1e-5);
+    }
+
+    /** Mojang publishes the velocity mode at a threshold of a hundredth for a billboard writing none. */
+    @Test
+    void givesABillboardWithNoDirectionBlockThePublishedDefault() throws IOException {
+        Billboard.Direction direction = effect("""
+            {"minecraft:particle_appearance_billboard": {"size": [0.5, 0.5]}}
+            """).particle().billboard().direction();
+
+        assertFalse(direction.custom());
+        assertEquals(0.01f, direction.minSpeedThreshold(), 1e-5);
+    }
+
     private ParticleDefinition effect(String components) throws IOException {
         Path file = directory.resolve("particles/sparkle.json");
         Files.createDirectories(file.getParent());

@@ -8,6 +8,7 @@ public enum FacingCameraMode {
     ROTATE_Y,
     LOOKAT_XYZ,
     LOOKAT_Y,
+    LOOKAT_DIRECTION,
     DIRECTION_X,
     DIRECTION_Y,
     DIRECTION_Z,

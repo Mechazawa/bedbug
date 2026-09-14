@@ -4,7 +4,6 @@ import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import at.ioexception.mcaddon.convert.SpawnEggAppearance;
 import at.ioexception.mcaddon.pack.SemVer;
-import at.ioexception.mcaddon.registry.AddonEntities;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -21,31 +20,11 @@ import java.util.Set;
 /** Reads one client entity definition, which is the `description` of a `minecraft:client_entity`. */
 public final class ClientEntityParser {
 
-    /**
-     * The two description fields about the item an engine puts in an entity's hand.
-     *
-     * `held_item_scale` and `held_item_ignores_lighting` size and light it, and the only thing
-     * drawn in a hand here is the attachable a pack describes for it, which carries its own scale
-     * and its own material.
-     */
-    private static final List<String> UNREAD = List.of(
-        "held_item_scale", "held_item_ignores_lighting");
-
-    /**
-     * A script field with nothing to decide here.
-     *
-     * `hide_held_items` hides the item the engine puts in an entity's hand, and the only thing
-     * drawn in a hand here is the attachable a pack describes for it.
-     */
-    private static final List<String> UNREAD_SCRIPTS = List.of("hide_held_items");
-
     private ClientEntityParser() {
     }
 
     public static ClientEntityDefinition read(String name, JsonObject json) {
         JsonObject scripts = json.has("scripts") ? json.getAsJsonObject("scripts") : new JsonObject();
-        AddonEntities.unsupportedFields("client entity", json, UNREAD);
-        AddonEntities.unsupportedFields("client entity", scripts, UNREAD_SCRIPTS);
 
         // A definition naming no engine is as old as a pack goes, so it yields to any that names one.
         SemVer engine = SemVer.tryFrom(json.get("min_engine_version"));
@@ -55,6 +34,10 @@ public final class ClientEntityParser {
             engine == null ? SemVer.ZERO : engine,
             json.has("enable_attachables") && json.get("enable_attachables").getAsBoolean(),
             json.has("hide_armor") && json.get("hide_armor").getAsBoolean(),
+            expression(scripts, "hide_held_items"),
+            json.has("held_item_ignores_lighting")
+                && json.get("held_item_ignores_lighting").getAsBoolean(),
+            expression(json, "held_item_scale"),
             scripts.has("should_update_effects_offscreen")
                 && scripts.get("should_update_effects_offscreen").getAsBoolean(),
             scripts.has("should_update_bones_and_effects_offscreen")
@@ -82,13 +65,14 @@ public final class ClientEntityParser {
     }
 
     /**
-     * The first of these Molang fields of the scripts block, null where the pack wrote none.
+     * The first of these Molang fields, null where the pack wrote none.
      *
-     * Packs write the per axis scales in either case, which is why each is looked for twice.
+     * Packs write the per axis scales in either case, which is why each is looked for twice. A
+     * number and a boolean are both valid Molang, which is how `held_item_scale` is usually written.
      */
-    private static MolangExpression expression(JsonObject scripts, String... fields) {
+    private static MolangExpression expression(JsonObject json, String... fields) {
         for (String field : fields) {
-            JsonElement value = scripts.get(field);
+            JsonElement value = json.get(field);
             if (value != null && !value.isJsonNull()) return MolangParser.parse(primitive(value));
         }
         return null;

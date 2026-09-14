@@ -182,6 +182,24 @@ class LootTableConversionTest {
         assertTrue(condition.get("bedrock").getAsString().contains("has_mark_variant"));
     }
 
+    /**
+     * `entity_killed` asks what the mob the table belongs to just swallowed.
+     *
+     * Bedrock names such a table on `minecraft:behavior.eat_mob` rather than on `minecraft:loot`,
+     * so it is rolled as the meal goes down and the mob doing the killing is the loot's own entity.
+     */
+    @Test
+    void keepsTheMealAConditionAsksAbout() throws IOException {
+        JsonObject condition = firstPool("""
+            {"pools": [{"rolls": 1, "conditions": [{"condition": "entity_killed",
+              "entity_type": "minecraft:slime"}],
+              "entries": [{"type": "item", "name": "minecraft:slime_ball"}]}]}
+            """).getAsJsonArray("conditions").get(0).getAsJsonObject();
+
+        assertEquals(BedrockCondition.NAME, condition.get("condition").getAsString());
+        assertTrue(condition.get("bedrock").getAsString().contains("minecraft:slime"));
+    }
+
     private JsonObject firstFunction(String table) throws IOException {
         return firstEntry(table).getAsJsonArray("functions").get(0).getAsJsonObject();
     }

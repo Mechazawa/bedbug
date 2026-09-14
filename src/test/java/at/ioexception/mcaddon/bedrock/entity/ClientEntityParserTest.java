@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -124,6 +125,38 @@ class ClientEntityParserTest {
         player.setQueries((name, arguments) -> MolangValue.of("minecraft:player"));
         assertEquals(Set.of("minecraft:stick"), definition.items().keySet());
         assertTrue(definition.items().get("minecraft:stick").evaluate(player).truthy());
+    }
+
+    /**
+     * What a pack says about the item an entity holds.
+     *
+     * Mojang writes the scale as a bare number on the sulfur cube and as `variable.held_item_scale`
+     * in the documented example, so both have to read as an expression.
+     */
+    @Test
+    void readsTheSizeAndTheLightOfWhatIsHeld() {
+        ClientEntityDefinition definition = read("""
+            {"held_item_scale": 2.678, "held_item_ignores_lighting": true}
+            """);
+
+        assertNotNull(definition.heldItemScale());
+        assertEquals(2.678f, definition.heldItemScale().asFloat(new MolangEnvironment()), 1.0e-4f);
+        assertTrue(definition.heldItemLit());
+        assertNull(definition.heldItemsHidden());
+    }
+
+    /** `hide_held_items` is asked every frame, which is how the sulfur cube swallows a block of TNT. */
+    @Test
+    void readsHidingWhatIsHeldAsAnExpression() {
+        ClientEntityDefinition definition = read("""
+            {"scripts": {"hide_held_items": "variable.has_absorbed_tnt"}}
+            """);
+
+        MolangEnvironment swallowed = new MolangEnvironment();
+        swallowed.setVariable("has_absorbed_tnt", MolangValue.of(1));
+        assertNotNull(definition.heldItemsHidden());
+        assertTrue(definition.heldItemsHidden().evaluate(swallowed).truthy());
+        assertFalse(definition.heldItemsHidden().evaluate(new MolangEnvironment()).truthy());
     }
 
     private static ClientEntityDefinition read(String body) {

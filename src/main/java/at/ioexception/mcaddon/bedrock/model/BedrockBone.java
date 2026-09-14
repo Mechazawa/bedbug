@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.bedrock.model;
 
+import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import org.joml.Vector3f;
 
 import java.util.List;
@@ -18,6 +19,8 @@ public record BedrockBone(
     Vector3f pivot,
     Vector3f rotation,
     boolean neverRender,
+    /** Names a bone of whoever is carrying this model, which this bone hangs off instead. */
+    MolangExpression binding,
     List<BedrockCube> cubes,
     Map<String, Vector3f> locators
 ) {

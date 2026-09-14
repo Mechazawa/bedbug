@@ -23,6 +23,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 import java.util.List;
 
@@ -94,6 +95,50 @@ public final class BehaviourGameTests {
             Platform.id("minecraft", "entities/cow"), Platform.mockPlayer(helper));
         helper.assertTrue(rolled.stream().anyMatch(stack -> !stack.isEmpty()),
             "A table every version ships handed out nothing.");
+        helper.succeed();
+    }
+
+    /**
+     * A table asks what the mob it belongs to just swallowed, and drops what that meal is worth.
+     *
+     * `entity_killed` is the one Bedrock condition about a moment rather than about a death: the
+     * table `minecraft:behavior.eat_mob` names is rolled as the meal goes down, so what the
+     * condition asks about is the mob that goal just took. The pack's table holds one pool per kind
+     * of meal, so a condition answering the wrong way shows up as the other pool's drop.
+     */
+    @GameTest()
+    public void aBedrockLootConditionAsksWhatTheMobSwallowed(GameTestHelper helper) {
+        EntityType<?> type = AddonEntities.typeOf(ENTITY);
+        if (type == null) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        Entity spawned = Platform.createMob(type, level);
+        helper.assertTrue(spawned instanceof AddonEntity, ENTITY + " is not an add-on entity.");
+
+        BlockPos at = helper.absolutePos(STAND);
+        Platform.placeAt(spawned, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        level.addFreshEntity(spawned);
+
+        EntityType<?> mealType = AddonEntities.typeOf(YOUNG_ENTITY);
+        if (mealType == null) {
+            helper.succeed();
+            return;
+        }
+
+        AddonEntity hunter = (AddonEntity) spawned;
+        Identifier table = Platform.id("tp", "entities/meal");
+        helper.assertTrue(Platform.rollLoot(level, table, hunter).isEmpty(),
+            "A table conditioned on a meal dropped something before anything was eaten.");
+
+        hunter.setKilled(Platform.createMob(mealType, level));
+        List<ItemStack> rolled = Platform.rollLoot(level, table, hunter);
+        helper.assertTrue(rolled.stream().anyMatch(stack -> stack.is(Items.PORKCHOP)),
+            "The pool the swallowed " + YOUNG_ENTITY + " unlocks dropped nothing.");
+        helper.assertTrue(rolled.stream().noneMatch(stack -> stack.is(Items.SLIME_BALL)),
+            "The pool for a meal that was never eaten dropped anyway.");
         helper.succeed();
     }
 

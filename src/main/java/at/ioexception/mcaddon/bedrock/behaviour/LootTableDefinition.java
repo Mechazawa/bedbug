@@ -308,13 +308,14 @@ public record LootTableDefinition(String path, JsonObject java) {
             // properties, its variant, a property a pack declared, the world difficulty, who tamed
             // the killer, a Bedrock biome tag. This mod answers them itself as the loot is rolled,
             // so the condition keeps the object the pack wrote and names a condition type of its own.
+            // `entity_killed` is the same again, asking what the entity the table belongs to just
+            // killed. Bedrock names such a table on `minecraft:behavior.eat_mob` and rolls it as the
+            // meal goes down, so the answer is the mob that goal just swallowed.
             case "entity_properties", "has_variant", "has_mark_variant", "bool_property",
                 "random_difficulty_chance", "random_regional_difficulty_chance",
-                "killed_by_player_or_pets", "biome_has_tag" -> {
+                "killed_by_player_or_pets", "biome_has_tag", "entity_killed" -> {
                 return answeredHere(bedrock);
             }
-            // entity_killed asks what the dropping mob itself killed, and a Java loot context holds
-            // the victim and whoever killed it and no record of what the victim did.
             default -> {
                 AddonEntities.unsupported("loot condition " + name);
                 return null;
