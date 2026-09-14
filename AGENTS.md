@@ -605,10 +605,16 @@ These are the checks it runs, and what each one catches:
   `EntityEvents.applyComponent`, `Filter.evaluate`, `EntityQueries.query` and `MolangMath.call`. A
   name added to one of those switches counts the moment it is added.
 
-  The run ends with two lists worth reading. Names in the source that the published vocabulary does
-  not contain are stale or misspelt. Names an `IMPLEMENTED` declaration carries with no reader of
-  their own are either a component Java does for every mob anyway, which is why the declaration
-  names it, or a coverage claim nothing backs; each declaration's docblock says which it allows.
+  The run ends with the lists worth reading. **Names in the source that the published vocabulary
+  does not contain are stale or misspelt**, and that list means nothing else, so it is empty while
+  the source is right. A spelling read on purpose because packs older than the current schemas ship
+  it goes in a `LEGACY` declaration beside `IMPLEMENTED`, which the census subtracts and then lists
+  under its own heading, so a tolerance stays visible without standing in the alarm. Such a
+  declaration may only carry a name `IMPLEMENTED` also carries and no published schema has; one that
+  is published today or read by nothing is named in a list of its own. Names an `IMPLEMENTED`
+  declaration carries with no reader of their own are either a component Java does for every mob
+  anyway, which is why the declaration names it, or a coverage claim nothing backs; each
+  declaration's docblock says which it allows.
 - **`tools/census/model.py`** does the same for the drawing side: geometry, animations, animation
   controllers, render controllers and client entity definitions. Mojang publishes a JSON schema per
   behaviour pack component and none for any of these, so this measures against the files instead.
@@ -842,6 +848,24 @@ pack it came from, because two add-ons can name a geometry the same thing.
 is missing, a command that does not parse: each is counted and shown, never thrown and never
 silently dropped.
 
+**A unit is named where a number crosses.** Bedrock counts in seconds, blocks a second and whole
+blocks; Java counts in ticks, blocks a tick and, inside a model, sixteenths. Both sides of every one
+of those is a plain decimal, so a conversion that is missing or applied once too often costs no error
+and no warning: it reads as a number the pack could have written. `bedrock.behaviour.BedrockUnits`
+holds the crossings that more than one reader needs, and its unit tests are the measurement. What to
+check when reading a component for the first time:
+
+- **A field whose name says a unit may not carry it.** `seconds_to_destroy` is a hardness, and
+  `damage_per_tick` is the damage of one hit rather than a rate. Mojang's own numbers settle it: every
+  vanilla entity writes four against lava, and four is what lava takes off each time it lands.
+- **An acceleration crosses twice**, once for the distance and once for the time, so a particle's
+  gravity of 9.8 blocks a second each second is 0.0245 blocks a tick each tick.
+- **A chance stated per tick, asked once per interval, fires a fraction as often.** The sensors run
+  every ten ticks, so what carries over is the chance of at least one success across the ten.
+- **A default a pack leaves out is where a wrong value hides**, because nothing in any pack ever
+  disagrees with it. The doc modules under `metadata/doc_modules/` carry Mojang's own default and
+  type per field, which is what to read it against.
+
 **A gap and an answer are counted apart.** A command the game read and then declined, a selector that
 matched nothing, a structure holding a chest this cannot fill: those are listed after the verdict
 line rather than among the gaps, because counting them would make a pack asking an ordinary question
@@ -888,7 +912,8 @@ src/main/java/at/ioexception/mcaddon/
   bedrock/model/             Geometry parsing, baking, render controllers
   bedrock/animation/         Animations, channels, player, controllers
   bedrock/entity/            Entity definitions, the animator that runs them, the query answers
-  bedrock/behaviour/         Entities, items, blocks, recipes, loot, trading, spawn rules, filters
+  bedrock/behaviour/         Entities, items, blocks, recipes, loot, trading, spawn rules, filters,
+                             and BedrockUnits, where a Bedrock quantity crosses into a Java one
   script/                    GraalJS host, the bridge, pack-declared commands, coverage
   structure/                 Bedrock `.mcstructure` reading, whose NBT is little endian
   entity/                    The one mob class every add-on entity uses

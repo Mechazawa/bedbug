@@ -42,7 +42,14 @@ import java.util.concurrent.ThreadLocalRandom;
  * runs for an entity whose group is off and never runs for one whose group brought it in.
  */
 public final class Sensors {
-    /** How often the sensors are evaluated. Bedrock's own rate is not exact either. */
+    /**
+     * How often the sensors are evaluated. Bedrock's own rate is not exact either.
+     *
+     * It is also the half second a hurt entity is invulnerable for, so a sensor that hurts something
+     * lands once per window and needs no pacing of its own. A sensor reading a rate Bedrock states
+     * per tick converts it through `BedrockUnits`, because asking a per-tick number once per
+     * interval is a tenth of what the pack wrote.
+     */
     public static final int INTERVAL_TICKS = 10;
 
     /** The widest a `minecraft:block_sensor` may watch, which bounds the search a break costs. */
@@ -245,7 +252,14 @@ public final class Sensors {
         }
     }
 
-    /** `minecraft:hurt_on_condition` is how a pack makes its entity take damage from where it is. */
+    /**
+     * `minecraft:hurt_on_condition` is how a pack makes its entity take damage from where it is.
+     *
+     * `damage_per_tick` is the damage of one hit rather than a rate: every vanilla entity writes
+     * four against lava, and four is what lava takes off in both editions each time it lands. What
+     * paces it is the half second a hurt entity is invulnerable for, which is also the interval this
+     * runs on.
+     */
     private static void hurtOnCondition(AddonEntity entity, AddonState state) {
         JsonObject component = entity.liveComponent("minecraft:hurt_on_condition");
         if (component == null || !(entity.level() instanceof ServerLevel level)) return;
@@ -258,9 +272,8 @@ public final class Sensors {
                 continue;
             }
 
-            double perTick = number(condition, "damage_per_tick", 1);
             Platform.hurt(entity, level, cause(level, Json.text(condition, "cause", null)),
-                (float) (perTick * INTERVAL_TICKS));
+                (float) number(condition, "damage_per_tick", 1));
         }
     }
 

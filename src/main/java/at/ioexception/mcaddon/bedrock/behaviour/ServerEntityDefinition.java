@@ -90,6 +90,8 @@ public record ServerEntityDefinition(
             }
         }
 
+        // A collision box a pack leaves out is one block each way, which is Bedrock's own default
+        // rather than the player-shaped box Java falls back to.
         JsonObject collision = components.get("minecraft:collision_box");
         JsonObject health = components.get("minecraft:health");
         JsonObject movement = components.get("minecraft:movement");
@@ -99,8 +101,8 @@ public record ServerEntityDefinition(
             identifier,
             bool(description, "is_spawnable", true),
             bool(description, "is_summonable", true),
-            number(collision, "width", 0.6f),
-            number(collision, "height", 1.8f),
+            number(collision, "width", 1f),
+            number(collision, "height", 1f),
             number(health, "value", 20f),
             number(movement, "value", 0.23f),
             number(scale, "value", 1f),

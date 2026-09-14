@@ -902,9 +902,6 @@ public final class AddonItems {
      * counting a gap that is still a gap, so nothing is listed on the grounds that Java cannot
      * express it.
      *
-     * `minecraft:armor` and `minecraft:weapon` are not in the schemas Mojang publishes today. Packs
-     * written against the older format versions still ship them, and both are read.
-     *
      * `minecraft:record` reaches a jukebox two ways. From 1.21 the song is an entry in a registry a
      * data pack writes into, which the converter writes as a file and the item names; before that
      * the item is a `RecordItem` carrying the sound itself and joins the tag a jukebox accepts.
@@ -926,6 +923,21 @@ public final class AddonItems {
         "minecraft:swing_duration", "minecraft:custom_components",
         "minecraft:piercing_weapon", "minecraft:kinetic_weapon", "minecraft:damage_absorption",
         "minecraft:allow_off_hand", "minecraft:liquid_clipped", "minecraft:durability_sensor");
+
+    /**
+     * Item components read on purpose that the schemas Mojang publishes today do not carry.
+     *
+     * `minecraft:armor` states the protection `minecraft:wearable` states instead, and
+     * `minecraft:weapon` the swing `minecraft:damage` states instead. A pack written against an
+     * older format version ships the older spelling, so both are read and both are listed in
+     * `IMPLEMENTED` beside the current ones.
+     *
+     * `tools/census/components.py` reads this declaration to tell a name kept for such a pack from
+     * one that has gone stale, so the list it ends with means a name nothing published has and
+     * nobody meant. A name here has to be one `IMPLEMENTED` carries and one no published schema
+     * does, and the census says so when it is neither.
+     */
+    public static final Set<String> LEGACY = Set.of("minecraft:armor", "minecraft:weapon");
 
     private static Identifier identifier(String bedrock) {
         Names.Identifier split = Names.split(bedrock, "minecraft");
