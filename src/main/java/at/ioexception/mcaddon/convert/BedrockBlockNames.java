@@ -520,10 +520,21 @@ public final class BedrockBlockNames {
 
         /** The block as Java's command parser reads it, naming only the stated properties. */
         public String command() {
-            String id = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
-            if (stated.isEmpty()) return id;
-            return id + stated.stream().map(property -> property.getName() + "=" + nameOf(state, property))
+            if (stated.isEmpty()) return id();
+            return id() + properties().entrySet().stream()
+                .map(property -> property.getKey() + "=" + property.getValue())
                 .collect(Collectors.joining(",", "[", "]"));
+        }
+
+        public String id() {
+            return BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
+        }
+
+        /** The stated properties under Java's names and values, in the order they were stated. */
+        public Map<String, String> properties() {
+            Map<String, String> properties = new LinkedHashMap<>();
+            stated.forEach(property -> properties.put(property.getName(), nameOf(state, property)));
+            return properties;
         }
 
         /**

@@ -41,6 +41,14 @@ import java.util.Set;
  */
 public final class AddonItems {
     private static final Map<String, Item> BY_IDENTIFIER = new LinkedHashMap<>();
+
+    /**
+     * The answers of the two `identifierOf`, which an entity asks of what it is offered and which
+     * never change once a name has an item. A name no item answers yet is asked again, because a
+     * pack's own items are registered after the first packs are read.
+     */
+    private static final Map<Item, String> REPORTED = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final Map<String, String> NAMED = new java.util.concurrent.ConcurrentHashMap<>();
     private static final List<Item> DYEABLE = new ArrayList<>();
     private static final Set<Item> KEPT = new HashSet<>();
     private static final Map<Item, String> PROJECTILES = new LinkedHashMap<>();
@@ -92,7 +100,8 @@ public final class AddonItems {
      * one the game has, and the registered one for a pack's own.
      */
     public static String identifierOf(Item item) {
-        return BedrockItemNames.bedrock(BuiltInRegistries.ITEM.getKey(item).toString());
+        return REPORTED.computeIfAbsent(item,
+            asked -> BedrockItemNames.bedrock(BuiltInRegistries.ITEM.getKey(asked).toString()));
     }
 
     /**
@@ -100,8 +109,15 @@ public final class AddonItems {
      * so that two names for one item compare equal. A name no item answers comes back as written.
      */
     public static String identifierOf(String bedrock) {
+        String known = bedrock == null ? null : NAMED.get(bedrock);
+        if (known != null) return known;
+
         Item item = bedrock == null ? null : named(bedrock);
-        return item == null ? bedrock : identifierOf(item);
+        if (item == null) return bedrock;
+
+        String identifier = identifierOf(item);
+        NAMED.put(bedrock, identifier);
+        return identifier;
     }
 
     /**

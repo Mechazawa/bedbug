@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.convert;
 
 import at.ioexception.mcaddon.bedrock.ClientBiomeDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.BiomeDefinition;
+import at.ioexception.mcaddon.bedrock.behaviour.DataValues;
 import at.ioexception.mcaddon.bedrock.behaviour.DimensionDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.FeatureDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.FeatureRuleDefinition;
@@ -237,7 +238,10 @@ public final class Worldgen {
             targets.add(target(alwaysTrue(), state));
             return;
         }
-        named.forEach(one -> targets.add(target(blockMatch(blockName(one)), state)));
+        named.forEach(one -> {
+            JsonObject replaced = blockState(one);
+            if (replaced != null) targets.add(target(blockMatch(replaced.get("Name").getAsString()), state));
+        });
     }
 
     private static JsonObject target(JsonObject predicate, JsonObject state) {
@@ -556,36 +560,46 @@ public final class Worldgen {
         Files.writeString(file, content.toString(), StandardCharsets.UTF_8);
     }
 
-    /** A Bedrock block reference as the state Java writes one with. */
+    /**
+     * A Bedrock block reference as the state Java writes one with, or null for a vanilla block Java
+     * has nothing for, which is reported.
+     *
+     * A reference is a name or an object carrying a name and the states beside it, in Bedrock's
+     * spelling of both, so `golden_rail` is a powered rail and `log` with `old_log_type` set to
+     * `spruce` is a spruce log. A pack's own block is registered after its features are written,
+     * so its name is written as it stands and its states, which are its own, are named instead.
+     */
     private static JsonObject blockState(JsonElement declared) {
-        String name = blockName(declared);
+        String name = declared == null ? null : declared.isJsonPrimitive() ? declared.getAsString()
+            : declared.isJsonObject() ? Json.text(declared.getAsJsonObject(), "name", null) : null;
         if (name == null) return null;
 
+        JsonObject written = declared.isJsonObject() ? declared.getAsJsonObject().getAsJsonObject("states") : null;
+        Map<String, String> states = new LinkedHashMap<>();
+        if (written != null) {
+            written.entrySet().forEach(state -> states.put(state.getKey(), state.getValue().getAsString()));
+        }
+
         JsonObject state = new JsonObject();
-        state.addProperty("Name", name);
+        if (DataValues.vanilla(name) == null) {
+            if (!states.isEmpty()) AddonEntities.unsupported("feature block states");
+            state.addProperty("Name", BedrockBlockNames.packOwn(name));
+            return state;
+        }
+
+        BedrockBlockNames.Resolved resolved = BedrockBlockNames.state(name, states,
+            detail -> AddonEntities.unsupported("feature " + detail));
+        if (resolved == null) {
+            AddonEntities.unsupported("feature block " + name);
+            return null;
+        }
+
+        state.addProperty("Name", resolved.id());
+        if (!resolved.stated().isEmpty()) {
+            JsonObject properties = new JsonObject();
+            resolved.properties().forEach(properties::addProperty);
+            state.add("Properties", properties);
+        }
         return state;
-    }
-
-    /**
-     * The name out of a Bedrock block reference, which is a string or an object naming one.
-     *
-     * The states such an object may carry beside the name are Bedrock's own property vocabulary,
-     * which shares neither its names nor its values with Java's, so a reference carrying them is
-     * named against the pack and read as the bare block.
-     */
-    private static String blockName(JsonElement declared) {
-        if (declared == null) return null;
-        if (declared.isJsonPrimitive()) return qualified(declared.getAsString());
-
-        if (!declared.isJsonObject()) return null;
-        JsonObject body = declared.getAsJsonObject();
-        if (body.has("states")) AddonEntities.unsupported("feature block states");
-
-        String name = Json.text(body, "name", null);
-        return name == null ? null : qualified(name);
-    }
-
-    private static String qualified(String name) {
-        return name.indexOf(':') > 0 ? name : "minecraft:" + name;
     }
 }

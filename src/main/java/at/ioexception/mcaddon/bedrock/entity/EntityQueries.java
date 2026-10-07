@@ -1445,12 +1445,15 @@ public final class EntityQueries implements MolangEnvironment.Queries {
         return held.getMaxDamage() - held.getDamageValue();
     }
 
-    /** Bedrock leaves the namespace off a name unless the caller asks for the full one. */
+    /**
+     * The name Bedrock gives the item, which leaves the namespace off unless the caller asks for the
+     * full one. A game item is named the way Bedrock spells it, so a powered rail is `golden_rail`.
+     */
     private static String itemName(ItemStack stack, boolean full) {
         if (stack.isEmpty()) return "";
 
-        Identifier key = BuiltInRegistries.ITEM.getKey(stack.getItem());
-        return full ? key.toString() : key.getPath();
+        String name = AddonItems.identifierOf(stack.getItem());
+        return full ? name : name.substring(name.indexOf(':') + 1);
     }
 
     /**
@@ -1466,7 +1469,8 @@ public final class EntityQueries implements MolangEnvironment.Queries {
         String name = itemName(worn(slot), true);
         int firstName = arguments.get(1).isText() ? 1 : 2;
         return MolangValue.of(arguments.stream().skip(firstName)
-            .anyMatch(value -> value.isText() && value.text().equals(name)));
+            .anyMatch(value -> value.isText() && (value.text().isEmpty()
+                ? name.isEmpty() : AddonItems.identifierOf(value.text()).equals(name))));
     }
 
     /**

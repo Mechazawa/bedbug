@@ -7,6 +7,7 @@ import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
@@ -330,13 +331,12 @@ public final class BlockEvents {
 
     /** `set_block` and `set_block_at_pos` both replace a block with one the pack named. */
     private static void setBlock(SetBlock response, ServerLevel level, BlockPos position) {
-        Block block = net.minecraft.core.registries.BuiltInRegistries.BLOCK
-            .getOptional(response.block()).orElse(null);
-        if (block == null) {
+        BlockState placed = AddonBlocks.stateOf(response.block(), response.states(), AddonEntities::unsupported);
+        if (placed == null) {
             AddonEntities.unsupported("block event set_block " + response.block());
             return;
         }
-        level.setBlockAndUpdate(position.offset(response.offset()), block.defaultBlockState());
+        level.setBlockAndUpdate(position.offset(response.offset()), placed);
     }
 
     /** `set_block_state` writes Molang into the pack's own states, which are Java properties here. */
@@ -474,10 +474,8 @@ public final class BlockEvents {
                 : number(body, "max_range"), flag(body, "avoid_water"), flag(body, "land_on_block"));
             case "spawn_loot" -> Json.text(body, "table", null) == null ? null
                 : new SpawnLoot(Json.text(body, "table", null));
-            case "set_block" -> blockNamed(body) == null ? null
-                : new SetBlock(blockNamed(body), net.minecraft.core.Vec3i.ZERO);
-            case "set_block_at_pos" -> blockNamed(body) == null ? null
-                : new SetBlock(blockNamed(body), offset(body));
+            case "set_block" -> SetBlock.of(body, net.minecraft.core.Vec3i.ZERO);
+            case "set_block_at_pos" -> SetBlock.of(body, offset(body));
             default -> null;
         };
     }
@@ -496,17 +494,6 @@ public final class BlockEvents {
                 text.contains(":") ? text : "minecraft:" + text);
     }
 
-    /** The block a `set_block` names, which a pack writes as an object carrying its name. */
-    private static net.minecraft.resources.Identifier blockNamed(JsonObject body) {
-        JsonElement declared = body.get("block_type");
-        if (declared == null) return null;
-        if (declared.isJsonPrimitive()) {
-            String text = declared.getAsString();
-            return net.minecraft.resources.Identifier.tryParse(
-                text.contains(":") ? text : "minecraft:" + text);
-        }
-        return declared.isJsonObject() ? named(declared.getAsJsonObject(), "name") : null;
-    }
 
     /** How far from the block a `set_block_at_pos` reaches, which a pack writes as three numbers. */
     private static net.minecraft.core.Vec3i offset(JsonObject body) {
@@ -589,8 +576,28 @@ public final class BlockEvents {
     private record SpawnLoot(String table) implements Response {
     }
 
-    private record SetBlock(net.minecraft.resources.Identifier block, net.minecraft.core.Vec3i offset)
+    /**
+     * The block a `set_block` names, which a pack writes bare or as an object carrying its name and
+     * states, in Bedrock's spelling of either.
+     */
+    private record SetBlock(String block, Map<String, String> states, net.minecraft.core.Vec3i offset)
         implements Response {
+        static SetBlock of(JsonObject body, net.minecraft.core.Vec3i offset) {
+            JsonElement declared = body.get("block_type");
+            if (declared != null && declared.isJsonPrimitive()) {
+                return new SetBlock(declared.getAsString(), Map.of(), offset);
+            }
+            if (declared == null || !declared.isJsonObject()) return null;
+
+            JsonObject descriptor = declared.getAsJsonObject();
+            String name = Json.text(descriptor, "name", null);
+            Map<String, String> states = new java.util.LinkedHashMap<>();
+            JsonObject written = descriptor.getAsJsonObject("states");
+            if (written != null) {
+                written.entrySet().forEach(state -> states.put(state.getKey(), state.getValue().getAsString()));
+            }
+            return name == null ? null : new SetBlock(name, states, offset);
+        }
     }
 
     private record Standing(BlockEvents events, ResourceKey<Level> dimension, BlockPos position,

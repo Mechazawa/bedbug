@@ -1,10 +1,9 @@
 package at.ioexception.mcaddon.entity;
 
+import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.player.Player;
@@ -81,11 +80,11 @@ public final class BegGoal extends Goal {
         return false;
     }
 
-    /** A pack writes an item name with the namespace as often as without it, so both are matched. */
+    /** A pack writes an item name in either edition's spelling, with or without the namespace. */
     private boolean named(ItemStack stack) {
         if (stack.isEmpty() || liked.isEmpty()) return false;
 
-        Identifier id = BuiltInRegistries.ITEM.getKey(stack.getItem());
-        return liked.contains(id.toString()) || liked.contains(id.getPath());
+        String id = AddonItems.identifierOf(stack.getItem());
+        return liked.stream().anyMatch(name -> AddonItems.identifierOf(name).equals(id));
     }
 }

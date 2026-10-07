@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.bedrock.behaviour;
 
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.state.AddonState;
@@ -205,9 +206,8 @@ public sealed interface Filter {
                 case "is_humid" -> flag(entity.level()
                     .getBiome(entity.blockPosition()).value().hasPrecipitation());
                 case "is_waterlogged" -> flag(waterlogged(entity));
-                case "is_block" -> BuiltInRegistries.BLOCK
-                    .getKey(entity.getBlockStateOn().getBlock()).toString()
-                    .equals(text().contains(":") ? text() : "minecraft:" + text());
+                case "is_block" -> AddonBlocks.identifierOf(entity.getBlockStateOn())
+                    .equals(AddonBlocks.identifierOf(text()));
                 case "surface_mob" -> flag(entity.level().canSeeSky(entity.blockPosition()));
                 case "is_in_village" -> entity.level() instanceof net.minecraft.server.level.ServerLevel
                     server ? flag(server.isVillage(entity.blockPosition())) : null;
@@ -435,9 +435,7 @@ public sealed interface Filter {
             ItemStack held = living.getItemBySlot(slot());
             if (held.isEmpty()) return text().isEmpty();
 
-            Identifier id = BuiltInRegistries.ITEM.getKey(held.getItem());
-            String wanted = text();
-            return id.toString().equals(wanted) || id.getPath().equals(wanted);
+            return AddonItems.identifierOf(held.getItem()).equals(AddonItems.identifierOf(text()));
         }
 
         private EquipmentSlot slot() {
@@ -628,9 +626,8 @@ public sealed interface Filter {
         }
 
         private boolean blockAt(Entity entity) {
-            Identifier id = BuiltInRegistries.BLOCK.getKey(
-                entity.level().getBlockState(entity.blockPosition()).getBlock());
-            return id.toString().equals(text()) || id.getPath().equals(text());
+            return AddonBlocks.identifierOf(entity.level().getBlockState(entity.blockPosition()))
+                .equals(AddonBlocks.identifierOf(text()));
         }
 
         /** The number a pack's own component put on the entity, which the server holds for it. */

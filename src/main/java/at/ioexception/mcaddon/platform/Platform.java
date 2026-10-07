@@ -1611,18 +1611,17 @@ public final class Platform {
         *///?}
     }
 
-    /** Whether a stack is one of the items a pack's goal named, under either spelling of the id. */
+    /** Whether a stack is one of the items a pack's goal named, in either edition's spelling. */
     public static boolean tempts(Set<String> items, net.minecraft.world.item.ItemStack stack) {
-        String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
-        return items.stream().anyMatch(name -> name.equals(id) || ("minecraft:" + name).equals(id));
+        net.minecraft.world.item.Item held = stack.getItem();
+        return items.stream().anyMatch(name -> at.ioexception.mcaddon.registry.AddonItems.named(name) == held);
     }
 
     //? if <1.21.2 {
     /*private static net.minecraft.world.item.crafting.Ingredient ingredient(Set<String> items) {
         net.minecraft.world.item.ItemStack[] stacks = items.stream()
-            .map(name -> Identifier.tryParse(name.contains(":") ? name : "minecraft:" + name))
+            .map(at.ioexception.mcaddon.registry.AddonItems::named)
             .filter(java.util.Objects::nonNull)
-            .flatMap(id -> BuiltInRegistries.ITEM.getOptional(id).stream())
             .map(net.minecraft.world.item.ItemStack::new)
             .toArray(net.minecraft.world.item.ItemStack[]::new);
         return stacks.length == 0

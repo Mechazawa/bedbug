@@ -1,12 +1,11 @@
 package at.ioexception.mcaddon.entity;
 
 import at.ioexception.mcaddon.bedrock.behaviour.Filter;
+import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 
 import java.util.LinkedHashSet;
@@ -129,8 +128,8 @@ final class Goals {
         for (JsonElement element : Json.list(component, key)) {
             String id = element.isJsonPrimitive() ? element.getAsString()
                 : element.isJsonObject() ? blockName(element.getAsJsonObject()) : null;
-            Identifier parsed = id == null ? null : Identifier.tryParse(id);
-            if (parsed != null) BuiltInRegistries.BLOCK.getOptional(parsed).ifPresent(named::add);
+            Block block = id == null ? null : AddonBlocks.named(id);
+            if (block != null) named.add(block);
         }
         return named;
     }

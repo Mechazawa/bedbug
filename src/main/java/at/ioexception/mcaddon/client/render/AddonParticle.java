@@ -9,11 +9,11 @@ import at.ioexception.mcaddon.bedrock.particle.Billboard;
 import at.ioexception.mcaddon.bedrock.particle.ParticleDefinition;
 import at.ioexception.mcaddon.bedrock.particle.ParticleEvent;
 import at.ioexception.mcaddon.bedrock.particle.ParticleTint;
+import at.ioexception.mcaddon.registry.AddonBlocks;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.particle.SingleQuadParticle;
 import net.minecraft.core.BlockPos;
 import at.ioexception.mcaddon.platform.Platform;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
@@ -194,9 +194,9 @@ public class AddonParticle extends SingleQuadParticle {
         List<String> outside = definition.particle().expireNotInBlocks();
         if (inside.isEmpty() && outside.isEmpty()) return false;
 
-        String here = BuiltInRegistries.BLOCK
-            .getKey(level.getBlockState(BlockPos.containing(x, y, z)).getBlock()).toString();
-        return inside.contains(here) || (!outside.isEmpty() && !outside.contains(here));
+        String here = AddonBlocks.identifierOf(level.getBlockState(BlockPos.containing(x, y, z)));
+        return inside.stream().anyMatch(name -> AddonBlocks.identifierOf(name).equals(here))
+            || (!outside.isEmpty() && outside.stream().noneMatch(name -> AddonBlocks.identifierOf(name).equals(here)));
     }
 
     /** Whether the pack says this one is finished, by its clock or by its own expression. */

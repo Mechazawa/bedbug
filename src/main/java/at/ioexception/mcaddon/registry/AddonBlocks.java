@@ -42,6 +42,14 @@ import java.util.function.Consumer;
 public final class AddonBlocks {
     private static final Map<String, Block> BY_IDENTIFIER = new LinkedHashMap<>();
 
+    /**
+     * The answers of the two `identifierOf`, which a filter or a sensor asks every tick and which
+     * never change once a name has a block. A name no block answers yet is asked again, because a
+     * pack's own blocks are registered after the first packs are read.
+     */
+    private static final Map<BlockState, String> REPORTED = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final Map<String, String> NAMED = new java.util.concurrent.ConcurrentHashMap<>();
+
     private AddonBlocks() {
     }
 
@@ -73,7 +81,7 @@ public final class AddonBlocks {
      * the state the game holds it in, and the registered one for a pack's own.
      */
     public static String identifierOf(BlockState state) {
-        return BedrockBlockNames.bedrock(state);
+        return REPORTED.computeIfAbsent(state, BedrockBlockNames::bedrock);
     }
 
     /**
@@ -81,8 +89,15 @@ public final class AddonBlocks {
      * so that two names for one block compare equal. A name no block answers comes back as written.
      */
     public static String identifierOf(String bedrock) {
+        String known = NAMED.get(bedrock);
+        if (known != null) return known;
+
         BlockState state = stateOf(bedrock, Map.of(), ignored -> { });
-        return state == null ? bedrock : identifierOf(state);
+        if (state == null) return bedrock;
+
+        String identifier = identifierOf(state);
+        NAMED.put(bedrock, identifier);
+        return identifier;
     }
 
     /** A block and the named shapes of the pack it came from, which two packs may spell alike. */
