@@ -142,13 +142,28 @@ These are the checks it runs, and what each one catches:
   Only the 26.x targets ship that API, so the tests are a source set of their own (`gametest`, with
   its own `fabric.mod.json` listing them) that the two older targets never compile, and `check`
   runs them for the checked-out version only. The two 26.x test APIs differ in a few spellings,
-  which `Worlds` holds. A test world is in creative on peaceful unless a test says otherwise, and
-  Java's avoid and target goals ignore a creative player and every player on peaceful.
+  which `Worlds` holds. A world built with the builder's consistent settings is on peaceful, so a
+  test about a mob reacting to the player sets the game mode and the difficulty itself: Java's
+  avoid and target goals ignore a creative player and every player on peaceful.
 
   `-Paddons=<directory>` installs every `.mcaddon` in that directory beside the synthetic one, for
   either game test task, so the same tests can be run against a real pack that may never be
   committed here. Both tasks delete their world before running, because each run of the server
   tests places them somewhere new and a kept world only grows.
+
+  `VillageClientGameTest` makes a normal world with structures, teleports to the nearest village and
+  waits for villagers to be standing in it, which is what a player calls a village. Two traps met
+  while writing it:
+
+  - **A survival player teleported into the air dies of the fall, and a dead player holds no
+    chunk.** The overworld then has nothing loaded, `areEntitiesLoaded` answers false everywhere and
+    no entity is found, which reads exactly like entity loading being broken. A world made with
+    `setUseConsistentSettings(false)` starts in survival, so put the player in creative or somewhere
+    they can stand.
+  - **`/locate poi #minecraft:village` finds job sites, not villages.** The tag holds every job
+    site, bed and bell, and a barrel is the fisherman's, so it answers with the nearest trial
+    chamber or Terralith refinery as readily as a village. `/locate structure #minecraft:village` is
+    the question about villages.
 - **`tools/testpack/build.py`** builds a small add-on to check the mod against, so a clean checkout
   has something to verify itself with. Put it where the game reads packs from:
 
