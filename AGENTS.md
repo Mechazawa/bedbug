@@ -6,12 +6,14 @@ one source tree. Read `README.md` first for what the mod does; this file is abou
 ## Commands
 
 ```bash
-export JAVA_HOME=/opt/homebrew/opt/openjdk@25   # required: the 26.2 target needs Gradle on Java 25
+export JAVA_HOME=/opt/homebrew/opt/openjdk@25   # macOS; Gradle has to run on Java 25 or newer
+export JAVA_HOME=/usr/lib/jvm/java-27-openjdk   # the Linux equivalent; the tools read it too
 
 ./gradlew build                 # all four versions, plus checkstyle and the tool parse gate
 ./gradlew check                 # verification only
 ./gradlew :26.2:compileJava     # one version, for fast iteration
 ./gradlew :26.2:runGameTest     # the in-game tests, headless, part of check
+./gradlew :26.2:runClientGameTest   # the client game tests, in a window, part of check
 ./gradlew :26.2:runServer       # loads the mod headless
 ./gradlew :26.2:runClient       # opens a window
 ```
@@ -127,6 +129,26 @@ These are the checks it runs, and what each one catches:
   `FunctionGameTestInstance` straight into the `test_instance` registry as that registry loads,
   behind the `fabric-api.gametest` property. 1.20.1 and 1.21.1 have neither registry and neither
   class, so those two targets run the annotation framework Mojang shipped before 1.21.5.
+- **`./gradlew :26.2:runClientGameTest`** runs the client game tests in
+  `src/gametest/java/at/ioexception/mcaddon/clientgametest/`, which drive a real client through a
+  real world with Fabric's `fabric-client-gametest-api-v1`: they create worlds, run server
+  commands, wait on the client's copy of an entity, click a screen's buttons by label and measure
+  what the renderer would draw (`client/render/DrawnBounds` in the same source set builds the render
+  state the renderer builds and keeps the vertex positions instead of drawing them). This is where
+  anything only a player reaches is asserted: a form that stays open across a button press, a model
+  standing on its feet at its pack's scale, a goal that runs only while its group is on. A picture is
+  not a test; assert on the state that produced it.
+
+  Only the 26.x targets ship that API, so the tests are a source set of their own (`gametest`, with
+  its own `fabric.mod.json` listing them) that the two older targets never compile, and `check`
+  runs them for the checked-out version only. The two 26.x test APIs differ in a few spellings,
+  which `Worlds` holds. A test world is in creative on peaceful unless a test says otherwise, and
+  Java's avoid and target goals ignore a creative player and every player on peaceful.
+
+  `-Paddons=<directory>` installs every `.mcaddon` in that directory beside the synthetic one, for
+  either game test task, so the same tests can be run against a real pack that may never be
+  committed here. Both tasks delete their world before running, because each run of the server
+  tests places them somewhere new and a kept world only grows.
 - **`tools/testpack/build.py`** builds a small add-on to check the mod against, so a clean checkout
   has something to verify itself with. Put it where the game reads packs from:
 
@@ -590,8 +612,10 @@ These are the checks it runs, and what each one catches:
 
   **The versions run at the same time and the scenes of one version run in turn**, because a version's
   scenes share one saved world. Each version's client is told not to pause when it loses the focus,
-  because a picture is taken by bringing one window to the front and a paused game draws its menu
-  instead of the world, and only one picture is taken at a time.
+  because only one window has it and a paused game draws its menu instead of the world. A picture is
+  asked for by writing `screenshot.request` into the version's run directory, which a development
+  client watches for: it hides the heads-up display, saves a screenshot and deletes the file. No
+  window has to be brought to the front and no key sent, so the versions are photographed at once.
 
   A scene is a list of commands and the lines that have to appear afterwards. The commands are
   written into a datapack in the world's own `datapacks/`, in a function tagged `minecraft:load`, so
