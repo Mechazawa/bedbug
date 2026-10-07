@@ -119,12 +119,169 @@ public final class DataValues {
             "stone_brick_wall", "mossy_stone_brick_wall", "nether_brick_wall",
             "end_stone_brick_wall", "prismarine_wall", "red_sandstone_wall",
             "red_nether_brick_wall")),
+        // Bedrock's block went on to be called `stone_block_slab`, keeping the numbering.
+        Map.entry("stone_block_slab", List.of("smooth_stone_slab", "sandstone_slab",
+            "petrified_oak_slab", "cobblestone_slab", "brick_slab", "stone_brick_slab", "quartz_slab",
+            "nether_brick_slab")),
+        Map.entry("stone_block_slab2", List.of("red_sandstone_slab", "purpur_slab", "prismarine_slab",
+            "dark_prismarine_slab", "prismarine_brick_slab", "mossy_cobblestone_slab",
+            "smooth_sandstone_slab", "red_nether_brick_slab")),
+        Map.entry("stone_block_slab3", List.of("end_stone_brick_slab", "smooth_red_sandstone_slab",
+            "polished_andesite_slab", "andesite_slab", "diorite_slab", "polished_diorite_slab",
+            "granite_slab", "polished_granite_slab")),
+        Map.entry("stone_block_slab4", List.of("mossy_stone_brick_slab", "smooth_quartz_slab",
+            "stone_slab", "cut_sandstone_slab", "cut_red_sandstone_slab")),
+        // A dead coral is the live one's number with eight added, which is its `dead_bit`.
         Map.entry("coral", List.of("tube_coral", "brain_coral", "bubble_coral", "fire_coral",
-            "horn_coral")),
+            "horn_coral", "", "", "", "dead_tube_coral", "dead_brain_coral", "dead_bubble_coral",
+            "dead_fire_coral", "dead_horn_coral")),
+        Map.entry("coral_block", List.of("tube_coral_block", "brain_coral_block",
+            "bubble_coral_block", "fire_coral_block", "horn_coral_block", "", "", "",
+            "dead_tube_coral_block", "dead_brain_coral_block", "dead_bubble_coral_block",
+            "dead_fire_coral_block", "dead_horn_coral_block")),
         Map.entry("coral_fan", List.of("tube_coral_fan", "brain_coral_fan", "bubble_coral_fan",
             "fire_coral_fan", "horn_coral_fan")),
-        Map.entry("coral_block", List.of("tube_coral_block", "brain_coral_block",
-            "bubble_coral_block", "fire_coral_block", "horn_coral_block")));
+        Map.entry("coral_fan_dead", List.of("dead_tube_coral_fan", "dead_brain_coral_fan",
+            "dead_bubble_coral_fan", "dead_fire_coral_fan", "dead_horn_coral_fan")),
+        // The fans on a wall come two kinds to a block, told apart by one bit, and dead by a second.
+        Map.entry("coral_fan_hang", List.of("tube_coral_wall_fan", "brain_coral_wall_fan",
+            "dead_tube_coral_wall_fan", "dead_brain_coral_wall_fan")),
+        Map.entry("coral_fan_hang2", List.of("bubble_coral_wall_fan", "fire_coral_wall_fan",
+            "dead_bubble_coral_wall_fan", "dead_fire_coral_wall_fan")),
+        Map.entry("coral_fan_hang3", List.of("horn_coral_wall_fan", "", "dead_horn_coral_wall_fan")),
+        // A stripped wood is the plain one's number with eight added, which is its `stripped_bit`.
+        Map.entry("wood", List.of("oak_wood", "spruce_wood", "birch_wood", "jungle_wood",
+            "acacia_wood", "dark_oak_wood", "", "", "stripped_oak_wood", "stripped_spruce_wood",
+            "stripped_birch_wood", "stripped_jungle_wood", "stripped_acacia_wood",
+            "stripped_dark_oak_wood")),
+        Map.entry("fence", List.of("oak_fence", "spruce_fence", "birch_fence", "jungle_fence",
+            "acacia_fence", "dark_oak_fence")),
+        Map.entry("tallgrass", List.of("short_grass", "short_grass", "fern")),
+        Map.entry("boat", List.of("oak_boat", "spruce_boat", "birch_boat", "jungle_boat",
+            "acacia_boat", "dark_oak_boat", "mangrove_boat")),
+        Map.entry("chest_boat", List.of("oak_chest_boat", "spruce_chest_boat", "birch_chest_boat",
+            "jungle_chest_boat", "acacia_chest_boat", "dark_oak_chest_boat", "mangrove_chest_boat")),
+        Map.entry("bucket", List.of("bucket", "milk_bucket", "cod_bucket", "salmon_bucket",
+            "tropical_fish_bucket", "pufferfish_bucket", "", "", "water_bucket", "", "lava_bucket")));
+
+    /** The colours as a Bedrock block state names them, which calls light grey `silver`. */
+    private static final List<String> COLOUR_STATES = IntStream.range(0, COLOURS)
+        .mapToObj(index -> index == 8 ? "silver" : DyeColor.byId(index).getName())
+        .toList();
+
+    private static final List<String> WOODS =
+        List.of("oak", "spruce", "birch", "jungle", "acacia", "dark_oak");
+
+    private static final List<String> CORALS = List.of("blue", "pink", "purple", "red", "yellow");
+
+    /**
+     * The block state that picks a member out of a family, its values in data value order.
+     *
+     * Bedrock moved from the number to a named state before it gave each member an id of its own,
+     * so a pack written in between says `["color"="red"]` where an older one wrote fourteen. A flag
+     * adds its weight to the number, which is how a dead coral and a stripped wood are counted.
+     */
+    private record Keyed(String state, List<String> values, Map<String, Integer> flags) {
+        static Keyed by(String state, List<String> values) {
+            return new Keyed(state, values, Map.of());
+        }
+
+        static Keyed by(String state, String... values) {
+            return by(state, List.of(values));
+        }
+
+        static Keyed flags(Map<String, Integer> flags) {
+            return new Keyed(null, List.of(), flags);
+        }
+
+        /** The data value the states name, or null where they name a value the family lacks. */
+        Integer data(Map<String, String> states) {
+            String chosen = state == null ? null : states.get(state);
+            int index = chosen == null ? 0 : values.indexOf(chosen);
+            if (index < 0) return null;
+
+            for (Map.Entry<String, Integer> flag : flags.entrySet()) {
+                String set = states.get(flag.getKey());
+                if ("true".equals(set) || "1".equals(set)) index += flag.getValue();
+            }
+            return index;
+        }
+
+        boolean names(String name) {
+            return name.equals(state) || flags.containsKey(name);
+        }
+    }
+
+    private static final Map<String, Keyed> STATES = Map.ofEntries(
+        Map.entry("wool", Keyed.by("color", COLOUR_STATES)),
+        Map.entry("carpet", Keyed.by("color", COLOUR_STATES)),
+        Map.entry("concrete", Keyed.by("color", COLOUR_STATES)),
+        Map.entry("concrete_powder", Keyed.by("color", COLOUR_STATES)),
+        Map.entry("stained_glass", Keyed.by("color", COLOUR_STATES)),
+        Map.entry("stained_glass_pane", Keyed.by("color", COLOUR_STATES)),
+        Map.entry("stained_hardened_clay", Keyed.by("color", COLOUR_STATES)),
+        Map.entry("shulker_box", Keyed.by("color", COLOUR_STATES)),
+        Map.entry("log", Keyed.by("old_log_type", "oak", "spruce", "birch", "jungle")),
+        Map.entry("log2", Keyed.by("new_log_type", "acacia", "dark_oak")),
+        Map.entry("leaves", Keyed.by("old_leaf_type", "oak", "spruce", "birch", "jungle")),
+        Map.entry("leaves2", Keyed.by("new_leaf_type", "acacia", "dark_oak")),
+        Map.entry("planks", Keyed.by("wood_type", WOODS)),
+        Map.entry("wooden_slab", Keyed.by("wood_type", WOODS)),
+        Map.entry("fence", Keyed.by("wood_type", WOODS)),
+        Map.entry("wood", new Keyed("wood_type", WOODS, Map.of("stripped_bit", 8))),
+        Map.entry("sapling", Keyed.by("sapling_type", WOODS)),
+        Map.entry("stone", Keyed.by("stone_type", "stone", "granite", "granite_smooth", "diorite",
+            "diorite_smooth", "andesite", "andesite_smooth")),
+        Map.entry("stonebrick", Keyed.by("stone_brick_type", "default", "mossy", "cracked",
+            "chiseled")),
+        Map.entry("sandstone", Keyed.by("sand_stone_type", "default", "heiroglyphs", "cut", "smooth")),
+        Map.entry("red_sandstone", Keyed.by("sand_stone_type", "default", "heiroglyphs", "cut",
+            "smooth")),
+        Map.entry("quartz_block", Keyed.by("chisel_type", "default", "chiseled", "lines", "smooth")),
+        Map.entry("purpur_block", Keyed.by("chisel_type", "default", "chiseled", "lines", "smooth")),
+        Map.entry("prismarine", Keyed.by("prismarine_block_type", "default", "dark", "bricks")),
+        Map.entry("sand", Keyed.by("sand_type", "normal", "red")),
+        Map.entry("dirt", Keyed.by("dirt_type", "normal", "coarse")),
+        Map.entry("sponge", Keyed.by("sponge_type", "dry", "wet")),
+        Map.entry("red_flower", Keyed.by("flower_type", "poppy", "orchid", "allium", "houstonia",
+            "tulip_red", "tulip_orange", "tulip_white", "tulip_pink", "oxeye", "cornflower",
+            "lily_of_the_valley")),
+        Map.entry("double_plant", Keyed.by("double_plant_type", "sunflower", "syringa", "grass",
+            "fern", "rose", "paeonia")),
+        Map.entry("tallgrass", Keyed.by("tall_grass_type", "default", "tall", "fern")),
+        Map.entry("monster_egg", Keyed.by("monster_egg_stone_type", "stone", "cobblestone",
+            "stone_brick", "mossy_stone_brick", "cracked_stone_brick", "chiseled_stone_brick")),
+        Map.entry("stone_slab", Keyed.by("stone_slab_type", "smooth_stone", "sandstone", "wood",
+            "cobblestone", "brick", "stone_brick", "quartz", "nether_brick")),
+        Map.entry("stone_slab2", Keyed.by("stone_slab_type_2", "red_sandstone", "purpur",
+            "prismarine_rough", "prismarine_dark", "prismarine_brick", "mossy_cobblestone",
+            "smooth_sandstone", "red_nether_brick")),
+        Map.entry("stone_slab3", Keyed.by("stone_slab_type_3", "end_stone_brick",
+            "smooth_red_sandstone", "polished_andesite", "andesite", "diorite", "polished_diorite",
+            "granite", "polished_granite")),
+        Map.entry("stone_slab4", Keyed.by("stone_slab_type_4", "mossy_stone_brick", "smooth_quartz",
+            "stone", "cut_sandstone", "cut_red_sandstone")),
+        Map.entry("stone_block_slab", Keyed.by("stone_slab_type", "smooth_stone", "sandstone", "wood",
+            "cobblestone", "brick", "stone_brick", "quartz", "nether_brick")),
+        Map.entry("stone_block_slab2", Keyed.by("stone_slab_type_2", "red_sandstone", "purpur",
+            "prismarine_rough", "prismarine_dark", "prismarine_brick", "mossy_cobblestone",
+            "smooth_sandstone", "red_nether_brick")),
+        Map.entry("stone_block_slab3", Keyed.by("stone_slab_type_3", "end_stone_brick",
+            "smooth_red_sandstone", "polished_andesite", "andesite", "diorite", "polished_diorite",
+            "granite", "polished_granite")),
+        Map.entry("stone_block_slab4", Keyed.by("stone_slab_type_4", "mossy_stone_brick",
+            "smooth_quartz", "stone", "cut_sandstone", "cut_red_sandstone")),
+        Map.entry("cobblestone_wall", Keyed.by("wall_block_type", "cobblestone", "mossy_cobblestone",
+            "granite", "diorite", "andesite", "sandstone", "brick", "stone_brick",
+            "mossy_stone_brick", "nether_brick", "end_brick", "prismarine", "red_sandstone",
+            "red_nether_brick")),
+        Map.entry("coral", new Keyed("coral_color", CORALS, Map.of("dead_bit", 8))),
+        Map.entry("coral_block", new Keyed("coral_color", CORALS, Map.of("dead_bit", 8))),
+        Map.entry("coral_fan", Keyed.by("coral_color", CORALS)),
+        Map.entry("coral_fan_dead", Keyed.by("coral_color", CORALS)),
+        Map.entry("coral_fan_hang", Keyed.flags(Map.of("coral_hang_type_bit", 1, "dead_bit", 2))),
+        Map.entry("coral_fan_hang2", Keyed.flags(Map.of("coral_hang_type_bit", 1, "dead_bit", 2))),
+        Map.entry("coral_fan_hang3", Keyed.flags(Map.of("dead_bit", 2))));
 
     /**
      * The Java item a Bedrock id and its data value name, or null where the pair names none.
@@ -138,6 +295,32 @@ public final class DataValues {
         List<String> family = named == null ? null : FAMILIES.get(named);
         if (family == null || data < 0 || data >= family.size()) return null;
         return family.get(data).isEmpty() ? null : "minecraft:" + family.get(data);
+    }
+
+    /** Whether Java split this id into one item per data value. */
+    public static boolean split(String bedrock) {
+        String named = vanilla(bedrock);
+        return named != null && FAMILIES.containsKey(named);
+    }
+
+    /**
+     * The member of a family its block states pick, or null where they pick none.
+     *
+     * A state the family is not keyed on is left for the caller to apply to the member, so
+     * `["color"="red","facing_direction"=2]` on a glazed family would pick by colour alone.
+     */
+    public static String block(String bedrock, Map<String, String> states) {
+        String named = vanilla(bedrock);
+        Keyed keyed = named == null ? null : STATES.get(named);
+        Integer data = keyed == null ? Integer.valueOf(0) : keyed.data(states);
+        return data == null ? null : item(bedrock, data);
+    }
+
+    /** Whether this state is one the family picks its member by, rather than one the member has. */
+    public static boolean picks(String bedrock, String state) {
+        String named = vanilla(bedrock);
+        Keyed keyed = named == null ? null : STATES.get(named);
+        return keyed != null && keyed.names(state);
     }
 
     /**

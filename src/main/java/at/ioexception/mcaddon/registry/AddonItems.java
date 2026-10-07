@@ -3,6 +3,7 @@ package at.ioexception.mcaddon.registry;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.behaviour.ItemDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
+import at.ioexception.mcaddon.convert.BedrockItemNames;
 import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.convert.SpawnEggAppearance;
 import at.ioexception.mcaddon.item.AddonScriptedItem;
@@ -77,10 +78,21 @@ public final class AddonItems {
         return DYEABLE;
     }
 
-    /** The item a Bedrock name refers to, a pack's own or the game's. */
+    /**
+     * The item a Bedrock name refers to, a pack's own or the game's, under either edition's
+     * spelling and with any data value written after it.
+     */
     public static Item named(String bedrock) {
         Item own = BY_IDENTIFIER.get(bedrock);
         return own != null ? own : itemNamed(bedrock);
+    }
+
+    /**
+     * The identifier a pack knows this item by, which `named` reads back: Bedrock's spelling for
+     * one the game has, and the registered one for a pack's own.
+     */
+    public static String identifierOf(Item item) {
+        return BedrockItemNames.bedrock(BuiltInRegistries.ITEM.getKey(item).toString());
     }
 
     /**
@@ -816,12 +828,12 @@ public final class AddonItems {
     }
 
     private static Block blockNamed(String name) {
-        Identifier id = identifier(name);
-        return id == null ? null : BuiltInRegistries.BLOCK.getOptional(id).orElse(null);
+        return AddonBlocks.named(name);
     }
 
     private static Item itemNamed(String name) {
-        Identifier id = identifier(name);
+        String java = BedrockItemNames.java(name);
+        Identifier id = java == null ? null : Identifier.tryParse(java);
         return id == null ? null : BuiltInRegistries.ITEM.getOptional(id).orElse(null);
     }
 
