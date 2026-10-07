@@ -46,11 +46,14 @@ dependencies {
     companionMods().forEach { localRuntime(it) }
 }
 
-// The game tests live in the main source set, so there is no second one to create for them, and
-// every one of them is a server test.
+// The server game tests live in the main source set, because every supported version runs them.
+// The client game tests drive a real client and need an API only these versions ship, so they get a
+// source set of their own under `src/gametest/` that the older targets never compile.
 fabricApi.configureTests {
-    createSourceSet = false
-    enableClientGameTests = false
+    createSourceSet = true
+    modId = "mcaddon-gametest"
+    eula = true
+    enableClientGameTests = true
 }
 
 apply(from = rootProject.file("gradle/mod.gradle.kts"))

@@ -123,12 +123,12 @@ project.tasks.named<JavaCompile>("compileTestJava") {
  * of the conversion untested in a running world. The pack is this repository's own, built from
  * `tools/testpack`, so nothing anybody else authored is copied anywhere.
  */
-val installTestPack = project.tasks.register("installTestPack") {
+fun installTestPackInto(name: String, runDirectory: String) = project.tasks.register(name) {
     group = "verification"
-    description = "Build the synthetic add-on into this version's game test directory."
+    description = "Build the synthetic add-on into $runDirectory."
 
     val generator = rootProject.layout.projectDirectory.file("tools/testpack/build.py").asFile
-    val addons = project.layout.buildDirectory.dir("run/gameTest/addons")
+    val addons = project.layout.buildDirectory.dir("$runDirectory/addons")
     inputs.dir(rootProject.layout.projectDirectory.dir("tools/testpack"))
     outputs.dir(addons)
 
@@ -145,8 +145,16 @@ val installTestPack = project.tasks.register("installTestPack") {
     }
 }
 
+val installTestPack = installTestPackInto("installTestPack", "run/gameTest")
+val installClientTestPack = installTestPackInto("installClientTestPack", "run/clientGameTest")
+
 project.tasks.named("runGameTest") {
     dependsOn(installTestPack)
+}
+
+// The client game tests read their packs from a run directory of their own.
+project.tasks.matching { it.name == "runClientGameTest" }.configureEach {
+    dependsOn(installClientTestPack)
 }
 
 /**

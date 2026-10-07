@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "mcaddon-gametest",
+  "version": "1.0.0",
+  "name": "Bedrock Add-ons client game tests",
+  "environment": "client",
+  "entrypoints": {
+    "fabric-client-gametest": [
+      "at.ioexception.mcaddon.clientgametest.WorldClientGameTest"
+    ]
+  },
+  "depends": {
+    "mcaddon": "*",
+    "fabric-client-gametest-api-v1": "*"
+  }
+}
