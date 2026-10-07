@@ -1,4 +1,4 @@
-// Two things a behaviour pack's script does, each read back by a client game test.
+// What a behaviour pack's script does, each part read back by a client game test.
 //
 // A two-page handbook built the way a 2.x pack builds one: a single CustomForm holding every page,
 // each page's components shown through an observable, and buttons whose handlers turn the page by
@@ -6,12 +6,16 @@
 // on the screen while its pages turn, so the tag left on the player once `show` resolves says the
 // promise outlived every press and settled only when the form went away.
 //
+// A shop's catalogue: an ActionFormData of eight hundred buttons, whose description is longer than
+// the 32767 characters a plain network string carries. `/scriptevent "tp:catalogue"` run as a player
+// opens it, and a tag on the player names the button that answered it.
+//
 // A watch on the game's own villagers, written the way a pack that replaces them writes it: in
 // Bedrock's ids throughout, so a Java villager is `minecraft:villager_v2` and an experience orb is
 // `minecraft:xp_orb`. Every answer is a tag on the entity it is about.
 
 import { system, world } from "@minecraft/server";
-import { CustomForm, ObservableBoolean, ObservableString } from "@minecraft/server-ui";
+import { ActionFormData, CustomForm, ObservableBoolean, ObservableString } from "@minecraft/server-ui";
 
 const VILLAGER = "minecraft:villager_v2";
 
@@ -36,10 +40,19 @@ function openHandbook(player) {
     form.show().then(reason => player.addTag("tp:handbook_" + reason));
 }
 
+const WARES = 800;
+
+function openCatalogue(player) {
+    const catalogue = new ActionFormData().title("Catalogue");
+    for (let ware = 1; ware <= WARES; ware++) catalogue.button("Ware " + ware + " of the catalogue");
+    catalogue.show(player).then(response => player.addTag("tp:catalogue_" + response.selection));
+}
+
 system.afterEvents.scriptEventReceive.subscribe(event => {
     const player = event.sourceEntity;
     if (player === undefined) return;
     if (event.id === "tp:handbook") openHandbook(player);
+    if (event.id === "tp:catalogue") openCatalogue(player);
     if (event.id === "tp:villager") {
         const { x, y, z } = player.location;
         player.dimension.spawnEntity(VILLAGER, { x: x - 3, y, z }).addTag("tp:spawned_as_villager_v2");

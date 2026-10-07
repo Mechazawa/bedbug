@@ -164,6 +164,34 @@ These are the checks it runs, and what each one catches:
     site, bed and bell, and a barrel is the fisherman's, so it answers with the nearest trial
     chamber or Terralith refinery as readily as a village. `/locate structure #minecraft:village` is
     the question about villages.
+
+  **Multiplayer is asserted against a dedicated server.** The three `Server*ClientGameTest`s call
+  `worldBuilder().createServer()` and `connect()`, so the client reaches the server over a real TCP
+  connection on which every message is encoded, which a single player world's in-memory connection
+  never does. `ServerRegistryClientGameTest` compares every add-on entity type, item, block, sound
+  event and biome by number on both sides and sends an item stack and a block state across;
+  `ServerEntityClientGameTest` follows a wisp's type, a `client_sync` property, a component group's
+  box and drawn size, a wisp settled before the client could see it, and `/playanimation` on a wisp
+  and a villager; `ServerPlayerClientGameTest` adds a second player, `Bystander`, and asserts a form,
+  `/camera`, `/camerashake` and `/fog` reach the player they name and nobody else, that a form's
+  answer counts only from its own player, and that the test pack's eight hundred button catalogue
+  arrives whole.
+
+  What the dedicated server runs on: Fabric starts it with `net.minecraft.server.Main` inside the
+  client's own process and in the same run directory, so it has the same mods, reads the same
+  `addons/` that `installClientTestPack` fills, and writes its world to `world/`, which Fabric
+  deletes before each one. Three things follow:
+
+  - **The built-in registries and every static field are one copy shared by both sides.** A
+    registry id cannot disagree here and a client reading server state by mistake would pass, so
+    assert on what crossed the connection (an entity, a stack, a payload) rather than on statics.
+  - **C2ME ends the whole process once a dedicated server shuts down**, which ended the run after
+    the first of these tests and still reported success. `runClientGameTest` writes
+    `config/c2me.toml` with `fixes.disableLoggingShutdownHook = false` first, which turns that off.
+  - **Fabric's client `DISCONNECT` is raised on the network thread** when a remote connection drops.
+    Anything a handler clears that the render thread also reads has to be handed to the client
+    thread, which is what the first of these tests to disconnect found as a
+    `ConcurrentModificationException`; the server's own `DISCONNECT` is handed over the same way.
 - **`tools/testpack/build.py`** builds a small add-on to check the mod against, so a clean checkout
   has something to verify itself with. Put it where the game reads packs from:
 
@@ -339,7 +367,12 @@ These are the checks it runs, and what each one catches:
   `FormClientGameTest`, run by `./gradlew :26.2:runClientGameTest` and part of `check`, opens it,
   turns the page and asserts the same screen now draws the second page and not the first, then
   closes it both ways and reads the tag back: a form whose button press closed the screen, or whose
-  observables reached the screen only once, fails there.
+  observables reached the screen only once, fails there. The same script answers
+  `/scriptevent "tp:catalogue"` with an `ActionFormData` of eight hundred buttons, whose description
+  is longer than the 32767 characters a plain network string carries.
+
+  `animation.tp.wisp.lift` raises the wisp's one bone by four pixels for two seconds, which is what
+  `/playanimation` on an add-on entity is measured by.
 
   The same script watches the game's own villagers the way a pack replacing them does, in Bedrock's
   ids throughout: it compares `typeId` against `minecraft:villager_v2` and `minecraft:xp_orb` as

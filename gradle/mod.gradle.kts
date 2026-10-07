@@ -173,6 +173,16 @@ project.tasks.matching { it.name == "runClientGameTest" }.configureEach {
     onlyIf { project.name == activeName }
     val saves = project.layout.buildDirectory.dir("run/clientGameTest/saves")
     doFirst { project.delete(saves) }
+
+    // The multiplayer tests start a dedicated server inside the client's own process. C2ME ends the
+    // whole process once a dedicated server has shut down, unless its configuration says otherwise,
+    // which would end the run after the first of them.
+    val c2meConfig = project.layout.buildDirectory.file("run/clientGameTest/config/c2me.toml")
+    doFirst {
+        val file = c2meConfig.get().asFile
+        file.parentFile.mkdirs()
+        file.writeText("version = 3\n\n[fixes]\n\tdisableLoggingShutdownHook = false\n")
+    }
 }
 project.tasks.named("check") {
     dependsOn(project.tasks.matching { it.name == "runClientGameTest" })
