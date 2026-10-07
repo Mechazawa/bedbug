@@ -36,7 +36,7 @@ public final class PackCommandClientGameTest implements FabricClientGameTest {
             Assert.that(carried == 1,
                 "hasitem did not see the " + GIVEN + " the player carries, which now holds " + carried + ".");
 
-            world.getServer().runCommand("scoreboard objectives add tp.dialogue dummy");
+            int levels = world.getServer().computeOnServer(server -> player(server).experienceLevel);
             world.getServer().runCommand("execute as @p at @s run summon tp:ember ~2 ~ ~ {NoAI:1b}");
             context.waitTicks(5);
             world.getServer().runCommand("dialogue open @e[type=tp:ember,limit=1] @p \"tp:greeting\"");
@@ -44,7 +44,7 @@ public final class PackCommandClientGameTest implements FabricClientGameTest {
             context.clickScreenButton("Feed it");
             context.waitForScreen(null);
 
-            Worlds.waitForServer(context, world, server -> player(server).experienceLevel == 1, WAIT_TICKS,
+            Worlds.waitForServer(context, world, server -> player(server).experienceLevel == levels + 1, WAIT_TICKS,
                 "The dialogue button's xp 1L never raised the player a level.");
         }
     }
