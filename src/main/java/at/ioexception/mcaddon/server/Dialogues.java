@@ -216,11 +216,14 @@ public final class Dialogues {
      * What the player did with the screen.
      *
      * A pressed button runs its own commands and then the scene's closing ones, because pressing
-     * one closes the screen as surely as walking away from it does.
+     * one closes the screen as surely as walking away from it does. Only the player the scene was
+     * shown to answers it: the id is all an answer names, and any client can send any id.
      */
-    public static void respond(int form, String answer) {
-        Reading reading = READING.remove(form);
-        if (reading == null || reading.npc().isRemoved()) return;
+    public static void respond(ServerPlayer player, int form, String answer) {
+        Reading reading = READING.get(form);
+        if (reading == null || !reading.viewer().getUUID().equals(player.getUUID())) return;
+        READING.remove(form);
+        if (reading.npc().isRemoved()) return;
 
         // The answer arrives from a client, so it is whatever that client sent rather than whatever
         // this mod's own screen would have written.
