@@ -127,6 +127,19 @@ These are the checks it runs, and what each one catches:
   `FunctionGameTestInstance` straight into the `test_instance` registry as that registry loads,
   behind the `fabric-api.gametest` property. 1.20.1 and 1.21.1 have neither registry and neither
   class, so those two targets run the annotation framework Mojang shipped before 1.21.5.
+- **`./gradlew :26.2:runClientGameTest`** runs the client game tests in `src/gametest/java/`, each
+  opening a window and a single player world, for the 26.x targets only. `VillageClientGameTest`
+  makes a normal world with structures, teleports to the nearest village and waits for villagers to
+  be standing in it, which is what a player calls a village. Two traps met while writing it:
+
+  - **A survival player teleported into the air dies of the fall, and a dead player holds no
+    chunk.** The overworld then has nothing loaded, `areEntitiesLoaded` answers false everywhere and
+    no entity is found, which reads exactly like entity loading being broken. Put the player in
+    creative, or somewhere they can stand.
+  - **`/locate poi #minecraft:village` finds job sites, not villages.** The tag holds every job
+    site, bed and bell, and a barrel is the fisherman's, so it answers with the nearest trial
+    chamber or Terralith refinery as readily as a village. `/locate structure #minecraft:village` is
+    the question about villages.
 - **`tools/testpack/build.py`** builds a small add-on to check the mod against, so a clean checkout
   has something to verify itself with. Put it where the game reads packs from:
 
