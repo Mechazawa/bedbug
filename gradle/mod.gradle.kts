@@ -155,8 +155,11 @@ fun installTestPackInto(name: String, runDirectory: String) = project.tasks.regi
 val installTestPack = installTestPackInto("installTestPack", "run/gameTest")
 val installClientTestPack = installTestPackInto("installClientTestPack", "run/clientGameTest")
 
+// Each run places its tests somewhere new, so a world kept between runs only ever grows.
 project.tasks.named("runGameTest") {
     dependsOn(installTestPack)
+    val world = project.layout.buildDirectory.dir("run/gameTest/world")
+    doFirst { project.delete(world) }
 }
 
 /**
@@ -168,6 +171,8 @@ project.tasks.named("runGameTest") {
 project.tasks.matching { it.name == "runClientGameTest" }.configureEach {
     dependsOn(installClientTestPack)
     onlyIf { project.name == activeName }
+    val saves = project.layout.buildDirectory.dir("run/clientGameTest/saves")
+    doFirst { project.delete(saves) }
 }
 project.tasks.named("check") {
     dependsOn(project.tasks.matching { it.name == "runClientGameTest" })
