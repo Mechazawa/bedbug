@@ -854,6 +854,19 @@ clips staying at a falling weight while the state it moved to comes up. `blend_v
 rides on that crossing: a bone's rotation is the weighted sum of every clip reaching it, so 350 and
 10 degrees at equal weight otherwise leave the bone at 180, and a state declaring the flag has each
 later angle turned to within half a circle of the first one before it is weighed.
+
+**A clip played on a mob Java draws moves Java's model of it.** `/playanimation` on a vanilla
+villager names the bones of Bedrock's own villager geometry, so `JavaModelPoses` runs the clip on an
+animator of its own and `JavaModelParts` finds each bone among the model's parts: the same name
+compared without case or underscores first, then the short `ALIASES` table for what Bedrock numbers
+and Java names (`leg0` to `leg7`, a cat's `backLegL`, the villagers' `helmet` and `brim`), then
+`root` for the model's root. The pose goes on after the model's own `setupAnim` and comes off once
+that draw is done, because one model draws every entity of its kind. From 1.21.9 the body is posed
+again where it is finally drawn, so `ModelFeatureRendererMixin` lays the clip on there and
+`LivingEntityRendererMixin` lays it on for the layers; before that `render` does both in one call.
+A bone with no part is reported once per kind of entity. Nothing is stored on the server, so a
+player who starts watching later sees whatever the pack plays next, as on an add-on entity, and
+`next_state` is not acted on for either. `JavaModelPoseClientGameTest` reads the posed parts back.
 - **`tools/census/commands.py`** does the same for the command dialect. A `.mcfunction` is the one
   part of a pack Java refuses by halves, one bad line costing the whole file, so knowing which
   commands survive translation matters more here than anywhere else.
