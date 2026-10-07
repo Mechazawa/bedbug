@@ -142,8 +142,9 @@ These are the checks it runs, and what each one catches:
   Only the 26.x targets ship that API, so the tests are a source set of their own (`gametest`, with
   its own `fabric.mod.json` listing them) that the two older targets never compile, and `check`
   runs them for the checked-out version only. The two 26.x test APIs differ in a few spellings,
-  which `Worlds` holds. A test world is in creative on peaceful unless a test says otherwise, and
-  Java's avoid and target goals ignore a creative player and every player on peaceful.
+  which `Worlds` holds. A world built with the builder's consistent settings is on peaceful, so a
+  test about a mob reacting to the player sets the game mode and the difficulty itself: Java's
+  avoid and target goals ignore a creative player and every player on peaceful.
 
   `-Paddons=<directory>` installs every `.mcaddon` in that directory beside the synthetic one, for
   either game test task, so the same tests can be run against a real pack that may never be
