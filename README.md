@@ -237,7 +237,8 @@ server decides what happens; the client draws it.
   `/dialogue open` shows one now, and interacting with an NPC that has been given a scene opens it.
 - Behaviour pack scripts against `@minecraft/server`, sandboxed: a script sees its own pack's files
   and nothing else on disk. Commands a script registers on startup become real commands,
-  `@minecraft/server-ui` forms become real screens, and the world, system, entity, dimension, block,
+  `@minecraft/server-ui` forms become real screens (a 2.x `CustomForm` stays open while its buttons
+  run their handlers and redraws as its observables change), and the world, system, entity, dimension, block,
   scoreboard, game rule and structure surfaces are answered by the game.
 - The world events a script subscribes to, raised out of the game rather than out of a pack's own
   data: what a player breaks, places, uses, picks up and swings at, where they go and what they

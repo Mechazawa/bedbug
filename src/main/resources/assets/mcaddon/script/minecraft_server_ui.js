@@ -6,8 +6,9 @@
 //
 // Two generations of the API are in the wild and both are served. The 1.x classes build a
 // description, are shown to a player and read their answer out of `formValues`. The 2.x `CustomForm`
-// and `MessageBox` take the player up front and carry their values in observables the answer writes
-// back into. Where a call was respelled between the two, the arguments themselves say which one the
+// and `MessageBox` take the player up front and carry their values in observables the screen writes
+// back into. A 2.x form follows every observable it reads and is described to the screen again when
+// one changes, and a `CustomForm` button runs its handler with the form left open. Where a call was respelled between the two, the arguments themselves say which one the
 // pack meant, so no pack has to declare which generation it was written against.
 
 const bridge = globalThis.__mcaddon_bridge__;
@@ -42,12 +43,7 @@ export const TextFilteringError = Object.freeze({
     Unknown: "Unknown",
 });
 
-/**
- * Observables a pack declared the client may not write to.
- *
- * The screen writes every input it drew back into whatever the form bound there, so this is the one
- * case that cannot be served, and binding one of these to an input is reported when it happens.
- */
+/** Observables a pack declared the client may not write to, whose inputs are drawn disabled. */
 const readOnly = new WeakSet();
 
 class Observable {
@@ -98,9 +94,17 @@ export class ObservableString extends Observable {
 export class ObservableUIRawMessage extends Observable {
 }
 
+/**
+ * The observables the description being built has read so far, so a showing form can follow every
+ * one of them. Undefined outside a build.
+ */
+let reading;
+
 /** A value a pack passed as an observable, read at the moment it is needed. */
 function plain(value) {
-    return value instanceof Observable ? value.getData() : value;
+    if (!(value instanceof Observable)) return value;
+    reading?.add(value);
+    return value.getData();
 }
 
 function text(value) {
@@ -127,6 +131,9 @@ function isText(value) {
 const pending = new Map();
 let nextFormId = 1;
 
+/** The member a press or a change on a form that stays open is handed to. */
+const answerOpen = Symbol("answerOpen");
+
 function settle(formId, response) {
     const waiting = pending.get(formId);
     if (waiting === undefined) return;
@@ -143,124 +150,192 @@ function serverClosed() {
     };
 }
 
-/** Called from Java when the player closes the screen. */
+/**
+ * Called from Java with what the client sent. An answer marked `open` is a press or a change on a
+ * form that stays on the screen; anything else is the form going away.
+ */
 globalThis.__mcaddon_forms__ = {
     respond(formId, response) {
-        settle(formId, JSON.parse(response));
+        const parsed = JSON.parse(response);
+        if (parsed.open === true) {
+            pending.get(formId)?.form[answerOpen](parsed);
+        } else {
+            settle(formId, parsed);
+        }
     },
 };
 
 /**
- * Collects what a form shows, then hands it over as one description.
+ * Collects what a form shows, and describes it to the screen again whenever it changes.
  *
  * Every form class differs in how a pack builds it and in what its answer looks like, and not in
  * what reaches the screen, so one builder collects for all of them and each class shapes the answer
  * its own way in `show`.
+ *
+ * A component is kept as a way of describing it rather than as its description, because any part of
+ * it may be an observable. Each one's place in `components` is its id, which the screen answers
+ * with, so a press is matched to the button that was drawn even after the layout around it moved.
  */
 class FormBuilder {
     #buttons = [];
+    #followed = new Set();
+    #sent = undefined;
+    #scheduled = false;
 
     constructor(player, title) {
         this.player = player;
-        this.heading = text(title);
-        this.elements = [];
-        this.bound = [];
-        this.clicks = [];
+        this.heading = title;
+        this.components = [];
         this.showing = false;
         this.formId = 0;
     }
 
-    #add(type, fields) {
-        this.elements.push({ type, ...fields });
+    #add(type, describe, fields = {}) {
+        this.components.push({ type, describe, ...fields });
         return this;
     }
 
     /**
-     * Reads the options a component carries, and answers whether the component is drawn at all.
-     *
-     * A hidden component is left out of the description, and its value is left out of the answer
-     * with it, which keeps the answer in step with the inputs the screen drew. The rest of the
-     * options describe styling this screen has no room for, so each is reported where it is asked
-     * for rather than dropped.
+     * Reports the options a component carries that the screen has no room for. Visibility and the
+     * disabled state are read each time the form is described, because either may be an observable.
      */
     #options(component, options) {
-        if (options === undefined || options === null) return true;
+        if (options === undefined || options === null) return undefined;
 
         const member = this.constructor.name + "." + component + " ";
         if (options.tooltip !== undefined) unsupported(member + "tooltip");
         if (options.description !== undefined) unsupported(member + "description");
-        if (options.disabled !== undefined && options.disabled !== false) unsupported(member + "disabled");
-        if (options.visible instanceof Observable) unsupported(member + "visible");
-        return plain(options.visible) !== false;
+        return options;
     }
 
-    /** Remembers what an input writes its answer into, in the order the screen reports answers. */
-    #bind(component, target, values) {
-        if (target !== undefined && readOnly.has(target)) {
-            unsupported(this.constructor.name + "." + component + " clientWritable");
+    /**
+     * Describes every component that is visible, in the order they were added, and collects every
+     * observable the description read on the way.
+     */
+    #describe() {
+        reading = new Set();
+        try {
+            const elements = this.components.flatMap((component, id) => {
+                if (plain(component.options?.visible) === false) return [];
+
+                const element = { type: component.type, id, ...component.describe() };
+                const readOnlyTarget = component.target !== undefined && readOnly.has(component.target);
+                if (plain(component.options?.disabled) === true || readOnlyTarget) element.disabled = true;
+                if (component.target !== undefined) element.bound = true;
+                if (component.click !== undefined) element.stay = true;
+                return [element];
+            });
+            return { description: { title: text(this.heading), elements }, observed: reading };
+        } finally {
+            reading = undefined;
         }
-        this.bound.push({ target, values });
+    }
+
+    /**
+     * Sends the description, and follows every observable it read so a change reaches the screen.
+     * An update the screen already shows is not sent, which is what an input's own value written
+     * back into its observable comes to.
+     */
+    #publish(update) {
+        const { description, observed } = this.#describe();
+        observed.forEach(observable => {
+            if (this.#followed.has(observable)) return;
+            this.#followed.add(observable);
+            observable.subscribe(this.#changed);
+        });
+
+        const encoded = JSON.stringify(description);
+        if (update && encoded === this.#sent) return true;
+        this.#sent = encoded;
+        return bridge.showForm(this.player?.id ?? "", this.formId,
+            update ? JSON.stringify({ ...description, update: true }) : encoded);
+    }
+
+    /** One update per burst of changes, because a handler usually sets several observables at once. */
+    #changed = () => {
+        if (this.#scheduled) return;
+        this.#scheduled = true;
+        Promise.resolve().then(() => {
+            this.#scheduled = false;
+            if (pending.has(this.formId)) this.#publish(true);
+        });
+    };
+
+    #unfollow() {
+        this.#followed.forEach(observable => observable.unsubscribe(this.#changed));
+        this.#followed.clear();
+    }
+
+    /** Writes what the screen's inputs hold into whatever the form bound to them. */
+    #write(values) {
+        Object.entries(values ?? {}).forEach(([id, value]) => {
+            const component = this.components[Number(id)];
+            if (component?.target === undefined || readOnly.has(component.target)) return;
+            component.target.setData(component.values?.[value] ?? value);
+        });
+    }
+
+    [answerOpen](response) {
+        this.#write(response.values);
+        this.components[response.button]?.click?.();
     }
 
     title(value) {
-        this.heading = text(value);
+        this.heading = value;
         return this;
     }
 
     body(value) {
-        return this.#add("label", { text: text(value) });
+        return this.#add("label", () => ({ text: text(value) }));
     }
 
     header(value, options) {
-        return this.#options("header", options) ? this.#add("header", { text: text(value) }) : this;
+        return this.#add("header", () => ({ text: text(value) }), { options: this.#options("header", options) });
     }
 
     label(value, options) {
-        return this.#options("label", options) ? this.#add("label", { text: text(value) }) : this;
+        return this.#add("label", () => ({ text: text(value) }), { options: this.#options("label", options) });
     }
 
     divider(options) {
-        return this.#options("divider", options) ? this.#add("divider", {}) : this;
+        return this.#add("divider", () => ({}), { options: this.#options("divider", options) });
     }
 
     spacer(options) {
-        return this.#options("spacer", options) ? this.#add("spacer", {}) : this;
+        return this.#add("spacer", () => ({}), { options: this.#options("spacer", options) });
     }
 
     /**
      * Both generations of a button, told apart by the second argument: a function there is the 2.x
-     * handler the press calls, anything else is the 1.x path to the icon beside the label.
+     * handler the press calls with the form left open, anything else is the 1.x path to the icon
+     * beside the label, whose press answers the form.
      */
     button(label, onClick, options) {
-        const handler = typeof onClick === "function" ? onClick : undefined;
-        const icon = handler === undefined ? text(onClick) : "";
-        if (!this.#options("button", options)) return this;
-
+        const click = typeof onClick === "function" ? onClick : undefined;
+        const icon = click === undefined ? text(onClick) : "";
         if (icon !== "") unsupported(this.constructor.name + ".button icon");
-        this.clicks.push(handler);
-        return this.#add("button", { text: text(label), icon });
+        return this.#add("button", () => ({ text: text(label), icon }),
+            { options: this.#options("button", options), click });
     }
 
     /** The way out of a form that counts as the player closing it rather than answering it. */
     closeButton() {
-        this.clicks.push(undefined);
-        return this.#add("button", { text: "Close", icon: "" });
+        return this.#add("button", () => ({ text: "Close", icon: "" }));
     }
 
     submitButton(label) {
-        this.clicks.push(undefined);
-        return this.#add("submit", { text: text(label) });
+        return this.#add("submit", () => ({ text: text(label) }));
     }
 
     button1(label, tooltip) {
         if (tooltip !== undefined) unsupported(this.constructor.name + ".button1 tooltip");
-        this.#buttons[0] = text(label);
+        this.#buttons[0] = label;
         return this.#positionButtons();
     }
 
     button2(label, tooltip) {
         if (tooltip !== undefined) unsupported(this.constructor.name + ".button2 tooltip");
-        this.#buttons[1] = text(label);
+        this.#buttons[1] = label;
         return this.#positionButtons();
     }
 
@@ -269,8 +344,8 @@ class FormBuilder {
      * are laid out again whenever either is named and the order holds whichever was set first.
      */
     #positionButtons() {
-        this.elements = this.elements.filter(element => element.type !== "button");
-        this.#buttons.forEach(label => this.elements.push({ type: "button", text: label ?? "", icon: "" }));
+        this.components = this.components.filter(component => component.type !== "button");
+        this.#buttons.forEach(label => this.#add("button", () => ({ text: text(label ?? ""), icon: "" })));
         return this;
     }
 
@@ -279,15 +354,13 @@ class FormBuilder {
      * 2.x state the toggle writes into, a boolean is the 1.x starting state.
      */
     toggle(label, toggled, options) {
-        const bound = toggled instanceof Observable ? toggled : undefined;
-        const settings = bound === undefined && typeof toggled !== "boolean" ? toggled : options;
-        if (!this.#options("toggle", settings)) return this;
-
-        const start = bound === undefined
-            ? (typeof toggled === "boolean" ? toggled : plain(settings?.defaultValue)) === true
-            : bound.getData() === true;
-        this.#bind("toggle", bound);
-        return this.#add("toggle", { text: text(label), value: start });
+        const target = toggled instanceof Observable ? toggled : undefined;
+        const settings = target === undefined && typeof toggled !== "boolean" ? toggled : options;
+        const start = () => (target === undefined
+            ? (typeof toggled === "boolean" ? toggled : plain(settings?.defaultValue))
+            : plain(target)) === true;
+        return this.#add("toggle", () => ({ text: text(label), value: start() }),
+            { options: this.#options("toggle", settings), target });
     }
 
     /**
@@ -296,23 +369,22 @@ class FormBuilder {
      * along by one.
      */
     slider(label, value, minimum, maximum, options) {
-        const bound = value instanceof Observable ? value : undefined;
-        const low = plain(bound === undefined ? value : minimum) ?? 0;
-        const high = plain(bound === undefined ? minimum : maximum) ?? 1;
-        const trailing = bound === undefined ? maximum : options;
+        const target = value instanceof Observable ? value : undefined;
+        const trailing = target === undefined ? maximum : options;
         const settings = typeof trailing === "number" ? undefined : trailing;
-        if (!this.#options("slider", settings)) return this;
-
         const step = plain(typeof trailing === "number" ? trailing : settings?.step ?? settings?.valueStep) ?? 1;
-        const start = bound === undefined
-            ? plain(settings === undefined ? options : settings.defaultValue) ?? low
-            : bound.getData();
 
         // The screen's slider runs the whole range, so a pack asking for coarser stops gets finer ones.
         if (step !== 1) unsupported(this.constructor.name + ".slider step");
 
-        this.#bind("slider", bound);
-        return this.#add("slider", { text: text(label), min: low, max: high, step, value: start });
+        return this.#add("slider", () => {
+            const low = plain(target === undefined ? value : minimum) ?? 0;
+            const high = plain(target === undefined ? minimum : maximum) ?? 1;
+            const start = target === undefined
+                ? plain(settings === undefined ? options : settings.defaultValue) ?? low
+                : plain(target);
+            return { text: text(label), min: low, max: high, step, value: start };
+        }, { options: this.#options("slider", settings), target });
     }
 
     /**
@@ -321,12 +393,11 @@ class FormBuilder {
      */
     dropdown(label, value, items, options) {
         const older = Array.isArray(value);
-        const bound = value instanceof Observable ? value : undefined;
+        const target = value instanceof Observable ? value : undefined;
         const source = older ? value : items;
         const choices = Array.isArray(source) ? source : [];
         const trailing = older ? items : options;
         const settings = typeof trailing === "number" ? undefined : trailing;
-        if (!this.#options("dropdown", settings)) return this;
 
         if (choices.some(item => item?.description !== undefined)) {
             unsupported(this.constructor.name + ".dropdown item description");
@@ -334,14 +405,14 @@ class FormBuilder {
 
         // A 2.x item carries the number the selection stands for, so the answer is looked up rather
         // than taken as the index a 1.x item list answers with.
-        const answers = bound === undefined ? undefined : choices.map(item => plain(item?.value));
-        const labels = choices.map(item => text(item?.label === undefined ? item : item.label));
-        const start = bound === undefined
-            ? plain(typeof trailing === "number" ? trailing : settings?.defaultValueIndex) ?? 0
-            : Math.max(0, answers.indexOf(bound.getData()));
-
-        this.#bind("dropdown", bound, answers);
-        return this.#add("dropdown", { text: text(label), options: labels, value: start });
+        const answers = target === undefined ? undefined : choices.map(item => plain(item?.value));
+        return this.#add("dropdown", () => ({
+            text: text(label),
+            options: choices.map(item => text(item?.label === undefined ? item : item.label)),
+            value: target === undefined
+                ? plain(typeof trailing === "number" ? trailing : settings?.defaultValueIndex) ?? 0
+                : Math.max(0, answers.indexOf(plain(target))),
+        }), { options: this.#options("dropdown", settings), target, values: answers });
     }
 
     /**
@@ -349,16 +420,14 @@ class FormBuilder {
      * there is the 2.x text the field writes into, anything else is the 1.x placeholder.
      */
     textField(label, value, options) {
-        const bound = value instanceof Observable ? value : undefined;
+        const target = value instanceof Observable ? value : undefined;
         const settings = isText(options) ? undefined : options;
-        if (!this.#options("textField", settings)) return this;
-
-        const start = bound === undefined ? text(settings === undefined ? options : settings.defaultValue)
-            : text(bound.getData());
-        this.#bind("textField", bound);
-        return this.#add("textField", {
-            text: text(label), placeholder: bound === undefined ? text(value) : "", value: start,
-        });
+        return this.#add("textField", () => ({
+            text: text(label),
+            placeholder: target === undefined ? text(value) : "",
+            value: target === undefined ? text(settings === undefined ? options : settings.defaultValue)
+                : text(target),
+        }), { options: this.#options("textField", settings), target });
     }
 
     image(source, pack, options) {
@@ -384,11 +453,11 @@ class FormBuilder {
     }
 
     /**
-     * Shows the form and waits for the answer.
+     * Shows the form and waits for it to go away.
      *
-     * The values come back in the order the inputs were added, which is the order Bedrock's
-     * `formValues` uses, so each is written into whatever the form bound at that position and the
-     * handler of the button that was pressed is called.
+     * What the inputs held is written into whatever the form bound to them, and the handler of the
+     * button that answered the form is called. A 1.x pack reads its answer out of `selection` and
+     * `formValues`, which the screen counts among what it drew, the order Bedrock uses.
      */
     show(player) {
         if (this.showing) {
@@ -399,8 +468,8 @@ class FormBuilder {
         const id = nextFormId++;
         this.formId = id;
 
-        const description = JSON.stringify({ title: this.heading, elements: this.elements });
-        if (!bridge.showForm(this.player?.id ?? "", id, description)) {
+        if (!this.#publish(false)) {
+            this.#unfollow();
             return Promise.resolve({
                 canceled: true,
                 cancelationReason: FormCancelationReason.UserBusy,
@@ -411,13 +480,9 @@ class FormBuilder {
         this.showing = true;
         return new Promise(resolve => pending.set(id, { resolve, form: this })).then(response => {
             try {
-                if (response.canceled) return response;
-
-                const answers = response.formValues ?? [];
-                this.bound.forEach((binding, index) => {
-                    if (index < answers.length) binding.target?.setData(binding.values?.[answers[index]] ?? answers[index]);
-                });
-                this.clicks[response.selection]?.();
+                this.#unfollow();
+                this.#write(response.values);
+                if (!response.canceled) this.components[response.button]?.click?.();
                 return response;
             } finally {
                 // A button's handler runs while the form still counts as open, because closing the
@@ -428,7 +493,6 @@ class FormBuilder {
     }
 }
 
-/** What a pack gets back from a form, named so it can be tested with `instanceof`. */
 /** What every form answers with: whether the player closed it, and why if they did. */
 export class FormResponse {
     canceled = false;
