@@ -76,6 +76,15 @@ public final class AddonBlocks {
         return BedrockBlockNames.bedrock(state);
     }
 
+    /**
+     * The identifier a block a pack names is reported under, whichever edition's spelling it wrote,
+     * so that two names for one block compare equal. A name no block answers comes back as written.
+     */
+    public static String identifierOf(String bedrock) {
+        BlockState state = stateOf(bedrock, Map.of(), ignored -> { });
+        return state == null ? bedrock : identifierOf(state);
+    }
+
     /** A block and the named shapes of the pack it came from, which two packs may spell alike. */
     private record Declared(BlockDefinition definition, PackShapes shapes) {
     }

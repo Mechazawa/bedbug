@@ -96,6 +96,15 @@ public final class AddonItems {
     }
 
     /**
+     * The identifier an item a pack names is reported under, whichever edition's spelling it wrote,
+     * so that two names for one item compare equal. A name no item answers comes back as written.
+     */
+    public static String identifierOf(String bedrock) {
+        Item item = bedrock == null ? null : named(bedrock);
+        return item == null ? bedrock : identifierOf(item);
+    }
+
+    /**
      * The component names a pack wrote on an item, which its filters ask about by name.
      *
      * Java keeps no such list on an item, and only the components this mod acts on leave any trace

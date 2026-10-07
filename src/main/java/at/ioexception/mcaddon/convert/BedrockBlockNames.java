@@ -520,12 +520,18 @@ public final class BedrockBlockNames {
                 .collect(Collectors.joining(",", "[", "]"));
         }
 
+        /**
+         * The property a state names: under its own spelling, then as a pack's own block registered
+         * it, then under the Java names its rule offers. A pack's block carries its states under
+         * sanitised names, so `custom:facing` is the property `custom_facing`.
+         */
         private static Property<?> translated(BlockState state, String name) {
             String bare = name.toLowerCase(Locale.ROOT);
             String stripped = bare.endsWith("_bit") ? bare.substring(0, bare.length() - 4) : bare;
             StateRule rule = STATE_RULES.getOrDefault(bare, STATE_RULES.get(stripped));
 
-            List<String> candidates = new ArrayList<>(List.of(bare, stripped));
+            String sanitised = Names.sanitise(name).replace('.', '_').replace('/', '_');
+            List<String> candidates = new ArrayList<>(List.of(name, sanitised, bare, stripped));
             if (rule != null) candidates.addAll(rule.properties());
             return candidates.stream().distinct()
                 .map(candidate -> state.getBlock().getStateDefinition().getProperty(candidate))
