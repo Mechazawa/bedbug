@@ -1,4 +1,4 @@
-// Two things a behaviour pack's script does, each read back by a client game test.
+// What a behaviour pack's script does, each read back by a game test.
 //
 // A two-page handbook built the way a 2.x pack builds one: a single CustomForm holding every page,
 // each page's components shown through an observable, and buttons whose handlers turn the page by
@@ -36,9 +36,26 @@ function openHandbook(player) {
     form.show().then(reason => player.addTag("tp:handbook_" + reason));
 }
 
+// Commands written the way a pack writes them, none of which Java's parser reads as they stand: a
+// selector asking about an inventory, a selector naming Bedrock's villager, a function named by its
+// path alone and a command Java has nothing like. Each answer is a tag on the entity running them.
+function runBedrockCommands(entity) {
+    entity.runCommand("execute if entity @s[hasitem={item=diamond_sword,location=slot.weapon.mainhand}] "
+        + "run tag @s add tp_holds_a_sword");
+    entity.runCommand("execute unless entity @s[hasitem={item=diamond}] run tag @s add tp_has_no_diamond");
+    entity.runCommand("tag @e[type=villager_v2,r=4] add tp_selected_as_villager_v2");
+    entity.runCommand("function tp/relay");
+    entity.runCommand("hud @s hide hotbar");
+}
+
 system.afterEvents.scriptEventReceive.subscribe(event => {
     const player = event.sourceEntity;
     if (player === undefined) return;
+    if (event.id === "tp:commands") runBedrockCommands(player);
+    // A pack handing out one of its own items unless the player already carries it.
+    if (event.id === "tp:stock_up") {
+        player.runCommand("execute unless entity @s[hasitem={item=tp:dust}] run give @s tp:dust");
+    }
     if (event.id === "tp:handbook") openHandbook(player);
     if (event.id === "tp:villager") {
         const { x, y, z } = player.location;

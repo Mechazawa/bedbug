@@ -1,10 +1,13 @@
 package at.ioexception.mcaddon.server;
 
 import at.ioexception.mcaddon.convert.Functions;
+import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.resource.AddonPacks;
 import com.mojang.brigadier.ParseResults;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.network.chat.Component;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -67,24 +70,55 @@ public final class PackCommand {
         return new PackCommand(line.startsWith("/") ? line.substring(1) : line, List.of());
     }
 
-    /** What the command returned, and zero for one that could not be run at all. */
+    /**
+     * What the command returned, and zero for one that could not be run at all.
+     *
+     * It runs with the authority Java gives a function, and says nothing to whoever runs it.
+     */
     public int run(CommandSourceStack source, CommandReport report) {
         untranslatable.forEach(report::untranslatable);
         if (java == null) return 0;
 
-        CommandSourceStack quiet = source.withSuppressedOutput();
-        var dispatcher = source.getServer().getCommands().getDispatcher();
-        ParseResults<CommandSourceStack> parsed = dispatcher.parse(java, quiet);
+        Heard heard = new Heard();
+        ParseResults<CommandSourceStack> parsed = source.getServer().getCommands().getDispatcher()
+            .parse(java, Platform.withFunctionPermission(source).withSource(heard));
         if (!parsed.getExceptions().isEmpty() || parsed.getReader().canRead()) {
             report.unreadable(java, unreadable(parsed));
             return 0;
         }
 
         try {
-            return dispatcher.execute(parsed);
+            int returned = Platform.runToEnd(parsed, java);
+            if (heard.failure != null) report.declined(java, heard.failure);
+            return returned;
         } catch (CommandSyntaxException declined) {
             report.declined(java, declined.getMessage());
             return 0;
+        }
+    }
+
+    /** Keeps the first failure a command reports and drops everything else it says. */
+    private static final class Heard implements CommandSource {
+        private String failure;
+
+        @Override
+        public void sendSystemMessage(Component message) {
+            if (failure == null) failure = message.getString();
+        }
+
+        @Override
+        public boolean acceptsSuccess() {
+            return false;
+        }
+
+        @Override
+        public boolean acceptsFailure() {
+            return true;
+        }
+
+        @Override
+        public boolean shouldInformAdmins() {
+            return false;
         }
     }
 
