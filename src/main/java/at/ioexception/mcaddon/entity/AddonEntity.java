@@ -608,9 +608,40 @@ public class AddonEntity extends PathfinderMob
 
         refreshHome();
         refreshContainer();
+        releaseLeadsAGroupTook();
         publishAnger();
         publishLiveFlags();
     }
+
+    /**
+     * Lets go of the leads a group took with it, which `unleash_on_removal` asks for by default.
+     *
+     * `minecraft:leashable` going takes the lead off this entity, and `minecraft:leashable_to` going
+     * frees whatever was tied to it. Each is compared with what the entity carried before the groups
+     * changed, so an entity read back from storage lets go of nothing.
+     */
+    private void releaseLeadsAGroupTook() {
+        com.google.gson.JsonObject leashable = liveComponent("minecraft:leashable");
+        if (leashable == null && releases(heldLeashable) && isLeashed()) Platform.unleash(this);
+        heldLeashable = leashable;
+
+        com.google.gson.JsonObject leashableTo = liveComponent("minecraft:leashable_to");
+        if (leashableTo == null && releases(heldLeashableTo)) {
+            level().getEntities(this, getBoundingBox().inflate(LEASH_REACH),
+                other -> Platform.leashHolder(other) == this).forEach(Platform::unleash);
+        }
+        heldLeashableTo = leashableTo;
+    }
+
+    private static boolean releases(com.google.gson.JsonObject held) {
+        return held != null && ServerEntityDefinition.flag(held, "unleash_on_removal", true);
+    }
+
+    private com.google.gson.JsonObject heldLeashable;
+    private com.google.gson.JsonObject heldLeashableTo;
+
+    /** Past the distance at which Java snaps a lead on any supported version. */
+    private static final double LEASH_REACH = 16;
 
     /**
      * Where the entity is held, which `minecraft:home` and `minecraft:dweller` both state as a radius.
@@ -4546,10 +4577,30 @@ public class AddonEntity extends PathfinderMob
         return noises == null ? null : sound(noises.event(moment), null);
     }
 
+    /** Public so a test can ask which idle sound the entity would make where it stands. */
     @Override
-    protected net.minecraft.sounds.SoundEvent getAmbientSound() {
-        net.minecraft.sounds.SoundEvent named = noise("ambient");
+    public net.minecraft.sounds.SoundEvent getAmbientSound() {
+        net.minecraft.sounds.SoundEvent named = noise(ambientMoment());
+        if (named == null) named = noise("ambient");
         return named == null ? super.getAmbientSound() : named;
+    }
+
+    /**
+     * Which of its idle sounds the entity makes, which `minecraft:uses_legacy_ambient_sounds` picks
+     * by where the entity is and how old.
+     *
+     * Mojang names four moments: in the air, with the head under water, young, and otherwise. A
+     * swimmer is never on the ground, so the water is asked about before the air; the other order
+     * would never play the water moment Mojang's own swimmers name in `sounds.json`. A moment the
+     * pack names no sound for falls back to the plain one.
+     */
+    private String ambientMoment() {
+        if (definition == null || !declaresNow("minecraft:uses_legacy_ambient_sounds")) {
+            return "ambient";
+        }
+        if (isEyeInFluid(net.minecraft.tags.FluidTags.WATER)) return "ambient.in.water";
+        if (!onGround()) return "ambient.in.air";
+        return isBaby() ? "ambient.baby" : "ambient";
     }
 
     @Override
@@ -4681,6 +4732,91 @@ public class AddonEntity extends PathfinderMob
     @Override
     public boolean fireImmune() {
         return definition != null && declaresNow("minecraft:fire_immune") || super.fireImmune();
+    }
+
+    /**
+     * Whether powder snow freezes the entity, which `minecraft:freezing_immune` says it never does.
+     *
+     * Java asks the entity each tick it stands in powder snow, and answers from a tag for its own
+     * mobs, so a group bringing the component in thaws the entity for as long as it is on.
+     */
+    @Override
+    public boolean canFreeze() {
+        return !(definition != null && declaresNow("minecraft:freezing_immune")) && super.canFreeze();
+    }
+
+    /**
+     * The cold hurting five times over, which `minecraft:freezing_vulnerable` asks for.
+     *
+     * Java multiplies a freezing blow by five for the mobs its `freeze_hurts_extra_types` tag names,
+     * the blaze, the magma cube and the strider, which are the three Mojang writes the component on.
+     */
+    //? if >=1.21.2 {
+    @Override
+    public boolean hurtServer(net.minecraft.server.level.ServerLevel level,
+        net.minecraft.world.damagesource.DamageSource source, float amount) {
+        return super.hurtServer(level, source, coldScaled(source, amount));
+    }
+    //?} else {
+    /*@Override
+    public boolean hurt(net.minecraft.world.damagesource.DamageSource source, float amount) {
+        return super.hurt(source, coldScaled(source, amount));
+    }
+    *///?}
+
+    private float coldScaled(net.minecraft.world.damagesource.DamageSource source, float amount) {
+        boolean vulnerable = definition != null && declaresNow("minecraft:freezing_vulnerable")
+            && source.is(net.minecraft.tags.DamageTypeTags.IS_FREEZING);
+        return vulnerable ? amount * FREEZE_VULNERABILITY : amount;
+    }
+
+    /** What Java multiplies a freezing blow by for the mobs the cold hurts more. */
+    private static final float FREEZE_VULNERABILITY = 5f;
+
+    /** Whether powder snow bears the entity's weight, which `minecraft:can_stand_on_powder_snow` says. */
+    public boolean standsOnPowderSnow() {
+        return definition != null && declaresNow("minecraft:can_stand_on_powder_snow");
+    }
+
+    /**
+     * Inside a block that holds back whatever is in it, unless the entity is immune to that block.
+     *
+     * Java slows an entity inside a cobweb, a sweet berry bush or powder snow through this one call,
+     * and lets a spider through a cobweb by refusing it, which is what
+     * `minecraft:block_movement_slowdown_immunity` asks for the blocks it lists.
+     */
+    @Override
+    public void makeStuckInBlock(net.minecraft.world.level.block.state.BlockState state,
+        net.minecraft.world.phys.Vec3 multiplier) {
+        if (definition == null || !slowedNeverBy(state)) super.makeStuckInBlock(state, multiplier);
+    }
+
+    private boolean slowedNeverBy(net.minecraft.world.level.block.state.BlockState state) {
+        com.google.gson.JsonObject immunity =
+            liveComponent("minecraft:block_movement_slowdown_immunity");
+        if (immunity == null) return false;
+
+        String id = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
+        return at.ioexception.mcaddon.util.Json.list(immunity, "blocks").stream()
+            .map(AddonEntity::slowingBlockName)
+            .anyMatch(id::equals);
+    }
+
+    /**
+     * A block descriptor's name in Java's spelling.
+     *
+     * Bedrock calls the cobweb `web`, which makes it the one block holding back what is inside it
+     * that the two editions name differently.
+     */
+    private static String slowingBlockName(com.google.gson.JsonElement descriptor) {
+        String named = descriptor.isJsonPrimitive() ? descriptor.getAsString()
+            : descriptor.isJsonObject()
+                ? at.ioexception.mcaddon.util.Json.text(descriptor.getAsJsonObject(), "name", null)
+                : null;
+        if (named == null) return null;
+
+        String qualified = named.contains(":") ? named : "minecraft:" + named;
+        return qualified.equals("minecraft:web") ? "minecraft:cobweb" : qualified;
     }
 
     /**

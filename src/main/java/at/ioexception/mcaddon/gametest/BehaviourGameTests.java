@@ -990,6 +990,208 @@ public final class BehaviourGameTests {
     }
 
     /**
+     * A group going takes the leads its `minecraft:leashable` and `minecraft:leashable_to` held.
+     *
+     * The ember's laden group carries both with `unleash_on_removal`, so while it is on the ember is
+     * tied to one entity and has another tied to it, and unloading it lets go of both ends. Java
+     * keeps a lead until something breaks it, so a reader that never compares the groups before and
+     * after leaves both tied.
+     */
+    @GameTest()
+    public void aGroupGoingLetsGoOfTheLeadsItHeld(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        AddonEntity post = spawn(helper, ENTITY);
+        AddonEntity tied = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_load", null, ServerHooks.state());
+        Platform.leashTo(ember, post);
+        Platform.leashTo(tied, ember);
+        helper.assertTrue(Platform.leashHolder(ember) == post, ENTITY + " could not be tied to a post.");
+        helper.assertTrue(Platform.leashHolder(tied) == ember, "Nothing could be tied to " + ENTITY + ".");
+
+        EntityEvents.trigger(ember, "tp:ember_unload", null, ServerHooks.state());
+        helper.assertTrue(Platform.leashHolder(ember) == null,
+            ENTITY + " lost the group carrying minecraft:leashable and is still tied.");
+        helper.assertTrue(Platform.leashHolder(tied) == null,
+            ENTITY + " lost the group carrying minecraft:leashable_to and still holds a lead.");
+        helper.succeed();
+    }
+
+    /**
+     * Powder snow freezes an ember and leaves one in its wintry group alone.
+     *
+     * `minecraft:freezing_immune` arrives with a group, so the entity has to be asked each tick
+     * rather than its type once. The plain ember beside it is what says the snow froze anything.
+     */
+    @GameTest(structure = "mcaddon:platform")
+    public void aWintryGroupKeepsPowderSnowFromFreezingTheEntity(GameTestHelper helper) {
+        helper.setBlock(ON_FLOOR, net.minecraft.world.level.block.Blocks.POWDER_SNOW);
+        AddonEntity plain = spawn(helper, ENTITY, ON_FLOOR);
+        AddonEntity wintry = spawn(helper, ENTITY, ON_FLOOR);
+        if (plain == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(wintry, "tp:ember_winter", null, ServerHooks.state());
+        helper.runAfterDelay(FREEZING_TICKS, () -> {
+            helper.assertTrue(plain.getTicksFrozen() > 0, "Powder snow froze no ember at all.");
+            helper.assertTrue(wintry.getTicksFrozen() == 0, ENTITY + " carries "
+                + "minecraft:freezing_immune and froze for " + wintry.getTicksFrozen() + " ticks.");
+            helper.succeed();
+        });
+    }
+
+    /**
+     * The cold hurts an ember in its thawing group five times over.
+     *
+     * `minecraft:freezing_vulnerable` is what Java's `freeze_hurts_extra_types` tag says about its
+     * own mobs, so the same freezing blow lands on a plain ember and on one in the group.
+     */
+    @GameTest()
+    public void aThawingGroupMakesTheColdHurtMore(GameTestHelper helper) {
+        AddonEntity plain = spawn(helper, ENTITY);
+        AddonEntity thawing = spawn(helper, ENTITY);
+        if (plain == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(thawing, "tp:ember_thaw", null, ServerHooks.state());
+        ServerLevel level = helper.getLevel();
+        Platform.hurt(plain, level, level.damageSources().freeze(), CHILL);
+        Platform.hurt(thawing, level, level.damageSources().freeze(), CHILL);
+        float plainLoss = plain.getMaxHealth() - plain.getHealth();
+        float thawingLoss = thawing.getMaxHealth() - thawing.getHealth();
+        helper.assertTrue(Math.abs(plainLoss - CHILL) < 0.001f,
+            "A plain ember lost " + plainLoss + " to a freezing blow of " + CHILL + ".");
+        helper.assertTrue(Math.abs(thawingLoss - CHILL * 5) < 0.001f, ENTITY + " carries "
+            + "minecraft:freezing_vulnerable and lost " + thawingLoss + " to a blow of " + CHILL + ".");
+        helper.succeed();
+    }
+
+    /**
+     * Powder snow bears an ember in its wintry group and lets a plain one sink.
+     *
+     * Java decides by the shape the block hands back to the entity standing on it, which it gives
+     * only to what may walk on powder snow, so that shape is what is asked for.
+     */
+    @GameTest(structure = "mcaddon:platform")
+    public void aWintryGroupStandsOnPowderSnow(GameTestHelper helper) {
+        helper.setBlock(ON_FLOOR, net.minecraft.world.level.block.Blocks.POWDER_SNOW);
+        AddonEntity plain = spawn(helper, ENTITY, ON_FLOOR.above());
+        AddonEntity wintry = spawn(helper, ENTITY, ON_FLOOR.above());
+        if (plain == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(wintry, "tp:ember_winter", null, ServerHooks.state());
+        BlockPos snow = helper.absolutePos(ON_FLOOR);
+        net.minecraft.world.level.block.state.BlockState state = helper.getLevel().getBlockState(snow);
+        helper.assertTrue(state.getCollisionShape(helper.getLevel(), snow,
+                net.minecraft.world.phys.shapes.CollisionContext.of(plain)).isEmpty(),
+            "Powder snow bore a plain ember's weight.");
+        helper.assertFalse(state.getCollisionShape(helper.getLevel(), snow,
+                net.minecraft.world.phys.shapes.CollisionContext.of(wintry)).isEmpty(),
+            ENTITY + " carries minecraft:can_stand_on_powder_snow and sinks into it.");
+        helper.succeed();
+    }
+
+    /**
+     * A cobweb holds back a plain ember and lets one in its wintry group through at full speed.
+     *
+     * The group's `minecraft:block_movement_slowdown_immunity` names the cobweb as Bedrock spells
+     * it, `minecraft:web`, so a name read without turning it into Java's leaves the ember stuck.
+     */
+    @GameTest()
+    public void aWintryGroupWalksThroughACobwebAtFullSpeed(GameTestHelper helper) {
+        AddonEntity plain = spawn(helper, ENTITY);
+        AddonEntity wintry = spawn(helper, ENTITY);
+        if (plain == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(wintry, "tp:ember_winter", null, ServerHooks.state());
+        net.minecraft.world.level.block.state.BlockState web =
+            net.minecraft.world.level.block.Blocks.COBWEB.defaultBlockState();
+        net.minecraft.world.phys.Vec3 step = new net.minecraft.world.phys.Vec3(0, 0, 1);
+        for (AddonEntity ember : List.of(plain, wintry)) {
+            ember.makeStuckInBlock(web, new net.minecraft.world.phys.Vec3(0.25, 0.05, 0.25));
+        }
+        double before = plain.getZ();
+        plain.move(net.minecraft.world.entity.MoverType.SELF, step);
+        wintry.move(net.minecraft.world.entity.MoverType.SELF, step);
+        helper.assertTrue(plain.getZ() - before < 0.5, "A cobweb did not hold back a plain ember.");
+        helper.assertTrue(wintry.getZ() - before > 0.99, ENTITY + " is immune to the cobweb's "
+            + "slowdown and moved " + (wintry.getZ() - before) + " of a block.");
+        helper.succeed();
+    }
+
+    /**
+     * An ember in its chatty group picks its idle sound by where it is and how old.
+     *
+     * `minecraft:uses_legacy_ambient_sounds` chooses between the four idle moments the pack's
+     * `sounds.json` names for the ember, and an ember without it makes the plain one wherever it is.
+     */
+    @GameTest(structure = "mcaddon:platform")
+    public void aChattyGroupPicksItsIdleSoundByWhereItIs(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY, ON_FLOOR);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        ember.setOnGround(false);
+        helper.assertTrue(idle(ember).equals("tp:ember.idle"),
+            ENTITY + " makes " + idle(ember) + " off the ground before anything asks it to.");
+        EntityEvents.trigger(ember, "tp:ember_chatter", null, ServerHooks.state());
+        helper.assertTrue(idle(ember).equals("tp:ember.idle_aloft"),
+            ENTITY + " makes " + idle(ember) + " off the ground.");
+        ember.setOnGround(true);
+        helper.assertTrue(idle(ember).equals("tp:ember.idle"),
+            ENTITY + " makes " + idle(ember) + " standing on the ground.");
+        EntityEvents.trigger(ember, "tp:ember_grow_young", null, ServerHooks.state());
+        helper.assertTrue(idle(ember).equals("tp:ember.idle_young"),
+            ENTITY + " makes " + idle(ember) + " while young.");
+
+        helper.setBlock(ON_FLOOR, net.minecraft.world.level.block.Blocks.WATER);
+        helper.setBlock(ON_FLOOR.above(), net.minecraft.world.level.block.Blocks.WATER);
+        helper.runAfterDelay(2, () -> {
+            helper.assertTrue(idle(ember).equals("tp:ember.idle_submerged"),
+                ENTITY + " makes " + idle(ember) + " under water.");
+            helper.succeed();
+        });
+    }
+
+    private static String idle(AddonEntity entity) {
+        net.minecraft.sounds.SoundEvent sound = entity.getAmbientSound();
+        return sound == null ? "nothing"
+            : String.valueOf(net.minecraft.core.registries.BuiltInRegistries.SOUND_EVENT.getKey(sound));
+    }
+
+    /** The floor of `mcaddon:platform`, which the older versions place one block higher. */
+    //? if >=26 {
+    private static final int FLOOR = 0;
+    //?} else {
+    /*private static final int FLOOR = 1;
+    *///?}
+
+    /** Standing on the platform's floor. */
+    private static final BlockPos ON_FLOOR = new BlockPos(1, FLOOR + 1, 1);
+
+    /** Long enough for powder snow to have frozen anything it can. */
+    private static final int FREEZING_TICKS = 20;
+
+    /** A freezing blow small enough that five of it still leaves the ember alive. */
+    private static final float CHILL = 0.5f;
+
+    /**
      * The flags a group brings reach the clients drawing the entity.
      *
      * `minecraft:can_power_jump` and `minecraft:color` are each read back through Molang rather than
@@ -1488,12 +1690,16 @@ public final class BehaviourGameTests {
 
     /** One of the pack's own entities, in the world and ready to assert about. */
     private static AddonEntity spawn(GameTestHelper helper, String identifier) {
+        return spawn(helper, identifier, STAND);
+    }
+
+    private static AddonEntity spawn(GameTestHelper helper, String identifier, BlockPos where) {
         EntityType<?> type = AddonEntities.typeOf(identifier);
         if (type == null) return null;
 
         ServerLevel level = helper.getLevel();
         Entity spawned = Platform.createMob(type, level);
-        BlockPos at = helper.absolutePos(STAND);
+        BlockPos at = helper.absolutePos(where);
         Platform.placeAt(spawned, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
         level.addFreshEntity(spawned);
         helper.assertTrue(spawned instanceof AddonEntity, identifier + " is not an add-on entity.");

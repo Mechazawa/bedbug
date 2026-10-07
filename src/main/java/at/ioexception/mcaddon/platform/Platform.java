@@ -2113,18 +2113,29 @@ public final class Platform {
     }
 
     /**
-     * The same roll inside a blast of this radius, which is what a table's explosion decay reads.
+     * The same table rolled the way a block a blast broke is, which is what explosion decay reads.
      *
-     * No set a table is rolled with by the game carries both an entity and a blast, so the roll
-     * is made against the set that allows every parameter.
+     * A block's roll is the one that carries the blast's radius, so the table is asked as though
+     * an air block at the entity's feet had been blown apart.
      */
     public static java.util.List<net.minecraft.world.item.ItemStack> rollLootInBlast(
         ServerLevel level, Identifier table, Entity about, float radius) {
-        return java.util.List.copyOf(lootTable(level, table).getRandomItems(lootAbout(level, about)
-            .withParameter(net.minecraft.world.level.storage.loot.parameters
-                .LootContextParams.EXPLOSION_RADIUS, radius)
-            .create(net.minecraft.world.level.storage.loot.parameters
-                .LootContextParamSets.ALL_PARAMS)));
+        net.minecraft.world.level.storage.loot.LootParams asked =
+            new net.minecraft.world.level.storage.loot.LootParams.Builder(level)
+                .withParameter(net.minecraft.world.level.storage.loot.parameters
+                    .LootContextParams.BLOCK_STATE,
+                    net.minecraft.world.level.block.Blocks.AIR.defaultBlockState())
+                .withParameter(net.minecraft.world.level.storage.loot.parameters
+                    .LootContextParams.ORIGIN, about.position())
+                .withParameter(net.minecraft.world.level.storage.loot.parameters
+                    .LootContextParams.TOOL, net.minecraft.world.item.ItemStack.EMPTY)
+                .withParameter(net.minecraft.world.level.storage.loot.parameters
+                    .LootContextParams.THIS_ENTITY, about)
+                .withParameter(net.minecraft.world.level.storage.loot.parameters
+                    .LootContextParams.EXPLOSION_RADIUS, radius)
+                .create(net.minecraft.world.level.storage.loot.parameters
+                    .LootContextParamSets.BLOCK);
+        return java.util.List.copyOf(lootTable(level, table).getRandomItems(asked));
     }
 
     private static net.minecraft.world.level.storage.loot.LootTable lootTable(ServerLevel level,

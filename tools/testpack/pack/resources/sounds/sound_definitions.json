@@ -23,6 +23,50 @@
         }
       ]
     },
+    "tp:ember.idle": {
+      "category": "neutral",
+      "sounds": [
+        {
+          "name": "sounds/tp/chime",
+          "volume": 0.5,
+          "pitch": 1.0,
+          "weight": 1
+        }
+      ]
+    },
+    "tp:ember.idle_aloft": {
+      "category": "neutral",
+      "sounds": [
+        {
+          "name": "sounds/tp/chime",
+          "volume": 0.5,
+          "pitch": 1.2,
+          "weight": 1
+        }
+      ]
+    },
+    "tp:ember.idle_submerged": {
+      "category": "neutral",
+      "sounds": [
+        {
+          "name": "sounds/tp/chime",
+          "volume": 0.5,
+          "pitch": 0.6,
+          "weight": 1
+        }
+      ]
+    },
+    "tp:ember.idle_young": {
+      "category": "neutral",
+      "sounds": [
+        {
+          "name": "sounds/tp/chime",
+          "volume": 0.5,
+          "pitch": 1.5,
+          "weight": 1
+        }
+      ]
+    },
     "record.13": {
       "category": "record",
       "sounds": [

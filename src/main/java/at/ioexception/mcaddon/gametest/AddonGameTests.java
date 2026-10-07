@@ -123,7 +123,7 @@ public final class AddonGameTests {
             Platform.respawnAt(player, helper.getLevel(), helper.absolutePos(STAND));
             helper.assertTrue(Platform.respawnPosition(player) != null,
                 "The player was given no spawn point to clear.");
-            helper.assertTrue(run(helper, "clearspawnpoint " + player.getStringUUID()) == 1,
+            helper.assertTrue(run(helper, "clearspawnpoint " + player.getScoreboardName()) == 1,
                 "/clearspawnpoint reached no player.");
             helper.assertTrue(Platform.respawnPosition(player) == null,
                 "/clearspawnpoint left the player's spawn point where it was.");

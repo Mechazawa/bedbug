@@ -150,6 +150,46 @@ public final class PackGameTests {
     }
 
     /**
+     * A projectile that turns `isolated_physics` off is held back by the cobwebs it flies through.
+     *
+     * The pack's spark turns the flag off, as Mojang's own arrows do, which puts its flight on the
+     * path every other entity is moved along. A flight still teleported along its arc crosses the
+     * webs at the speed it was fired at.
+     */
+    @GameTest()
+    public void aProjectileOffItsIsolatedPathIsHeldBackByCobwebs(GameTestHelper helper) {
+        EntityType<?> type = AddonEntities.typeOf(PROJECTILE);
+        if (type == null) {
+            helper.succeed();
+            return;
+        }
+
+        for (int z = STAND.getZ(); z < STAND.getZ() + WEBS; z++) {
+            helper.setBlock(new BlockPos(STAND.getX(), STAND.getY(), z),
+                net.minecraft.world.level.block.Blocks.COBWEB);
+        }
+        ServerLevel level = helper.getLevel();
+        Entity shot = Platform.createMob(type, level);
+        BlockPos at = helper.absolutePos(STAND);
+        Platform.placeAt(shot, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        helper.assertTrue(level.addFreshEntity(shot), PROJECTILE + " was refused by the world.");
+
+        double from = shot.getZ();
+        ((AddonEntity) shot).launchAsProjectile(null, new net.minecraft.world.phys.Vec3(0, 0, 1));
+        helper.runAfterDelay(3, () -> {
+            double flown = shot.getZ() - from;
+            helper.assertTrue(flown > 0, PROJECTILE + " did not move through the webs at all.");
+            helper.assertTrue(flown < WEBBED_REACH,
+                PROJECTILE + " flew " + flown + " blocks through cobwebs in three ticks.");
+            helper.succeed();
+        });
+    }
+
+    /** The cobwebs laid in the spark's path, and less than three unhindered ticks of its flight. */
+    private static final int WEBS = 6;
+    private static final double WEBBED_REACH = 3;
+
+    /**
      * `minecraft:custom_hit_test` widens what a hit may land on and leaves the collision box alone.
      *
      * The two are separate components in Bedrock and one question in Java, so the check is that the

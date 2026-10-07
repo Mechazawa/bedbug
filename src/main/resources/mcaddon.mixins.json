@@ -22,6 +22,7 @@
     "BasePressurePlateBlockMixin",
     "TripWireBlockMixin",
     "TargetBlockMixin",
+    "PowderSnowBlockMixin",
     "PistonBaseBlockMixin",
     "ExplosionMixin",
     "ServerPlayerGameModeMixin",

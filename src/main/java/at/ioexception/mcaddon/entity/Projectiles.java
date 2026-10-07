@@ -126,7 +126,14 @@ public final class Projectiles {
             movement = movement.add(mob.getTarget().getEyePosition().subtract(mob.position())
                 .normalize().scale(HOMING_PULL * movement.length()));
         }
-        mob.setPos(mob.position().add(movement));
+        // `isolated_physics` keeps the arc off the path every other entity moves along. Turned
+        // off, the projectile is moved the way Java moves any entity: stopped by what it collides
+        // with and slowed by the blocks that hold back whatever is inside them, such as a cobweb.
+        if (Json.bool(body, "isolated_physics", true)) {
+            mob.setPos(mob.position().add(movement));
+        } else {
+            mob.move(net.minecraft.world.entity.MoverType.SELF, movement);
+        }
         double inertia = mob.isInWater()
             ? Json.number(body, "liquid_inertia", DEFAULT_LIQUID_INERTIA)
             : Json.number(body, "inertia", DEFAULT_INERTIA);

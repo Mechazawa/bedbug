@@ -1,0 +1,15 @@
+{
+  "entity_sounds": {
+    "entities": {
+      "tp:ember": {
+        "volume": 0.8,
+        "events": {
+          "ambient": "tp:ember.idle",
+          "ambient.in.air": "tp:ember.idle_aloft",
+          "ambient.in.water": "tp:ember.idle_submerged",
+          "ambient.baby": "tp:ember.idle_young"
+        }
+      }
+    }
+  }
+}

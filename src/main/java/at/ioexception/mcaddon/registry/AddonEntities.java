@@ -278,6 +278,7 @@ public final class AddonEntities {
      */
     private static final Map<String, Set<String>> UNREAD_FIELDS = Map.of(
         "minecraft:experience_reward", Set.of("on_bred"),
+        "minecraft:block_movement_slowdown_immunity", Set.of("tags"),
         "minecraft:angry", Set.of("broadcastAnger", "broadcast_anger", "broadcast_range",
             "broadcast_filters", "broadcast_targets", "broadcast_anger_when_dying",
             "broadcast_anger_on_attack", "broadcast_anger_on_being_attacked", "angry_sound",
@@ -354,6 +355,9 @@ public final class AddonEntities {
         "minecraft:shareables",
         "minecraft:home", "minecraft:dweller", "minecraft:target_nearby_sensor",
         "minecraft:color", "minecraft:color2", "minecraft:breedable", "minecraft:offspring",
+        "minecraft:freezing_immune", "minecraft:freezing_vulnerable",
+        "minecraft:can_stand_on_powder_snow", "minecraft:block_movement_slowdown_immunity",
+        "minecraft:uses_legacy_ambient_sounds",
         "minecraft:leashable_to", "minecraft:spawn_egg_interaction",
         "minecraft:behavior.breed", "minecraft:behavior.sleep",
         "minecraft:behavior.drink_milk", "minecraft:behavior.drink_potion",
