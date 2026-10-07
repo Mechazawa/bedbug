@@ -76,3 +76,20 @@ system.runInterval(() => {
         companion.addTag("tp:villager_companion");
     }
 });
+
+// A pack keys its own maps by the objects `spawnEntity` hands back and finds them again through a
+// query, so a sprite this script spawned has to come back from `getEntities` as that same object,
+// whatever its place in the list.
+const spawnedSprites = new Set();
+system.afterEvents.scriptEventReceive.subscribe(event => {
+    if (event.id !== "tp:sprites" || event.sourceEntity === undefined) return;
+    const { x, y, z } = event.sourceEntity.location;
+    for (let offset = 2; offset <= 6; offset += 2) {
+        spawnedSprites.add(event.sourceEntity.dimension.spawnEntity("tp:sprite", { x: x + offset, y, z: z - 6 }));
+    }
+});
+system.runInterval(() => {
+    for (const sprite of world.getDimension("overworld").getEntities({ type: "tp:sprite" })) {
+        if (spawnedSprites.has(sprite)) sprite.addTag("tp:same_object_as_spawned");
+    }
+});
