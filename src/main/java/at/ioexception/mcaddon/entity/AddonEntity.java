@@ -66,7 +66,12 @@ import net.minecraft.world.level.Level;
  */
 public class AddonEntity extends PathfinderMob
     implements Merchant, net.minecraft.world.entity.monster.RangedAttackMob,
-        net.minecraft.world.entity.OwnableEntity {
+        net.minecraft.world.entity.OwnableEntity,
+        //? if >=26.2 {
+        net.minecraft.world.entity.Bucketable {
+        //?} else {
+        /*net.minecraft.world.entity.animal.Bucketable {
+        *///?}
     private final ServerEntityDefinition definition;
     private final java.util.Set<String> activeGroups = new java.util.LinkedHashSet<>();
     private final java.util.Map<String, Integer> sensorReady = new java.util.HashMap<>();
@@ -4901,6 +4906,10 @@ public class AddonEntity extends PathfinderMob
             && ServerEntityDefinition.flag(rideable, "crouching_skip_interact", true)) {
             return super.mobInteract(player, hand);
         }
+        if (definition != null && declaresNow("minecraft:bucketable")) {
+            java.util.Optional<InteractionResult> scooped = Platform.scoop(player, hand, this);
+            if (scooped.isPresent()) return scooped.get();
+        }
         if (!isClientSide() && bredBySpawnEgg(player, hand)) return InteractionResult.SUCCESS;
         if (!isClientSide() && fed(player, hand)) return InteractionResult.SUCCESS;
         if (!isClientSide() && bribed(player, hand)) return InteractionResult.SUCCESS;
@@ -4919,6 +4928,69 @@ public class AddonEntity extends PathfinderMob
         setTradingPlayer(player);
         openTradingScreen(player, getDisplayName(), 1);
         return InteractionResult.SUCCESS;
+    }
+
+    // `minecraft:bucketable`: Java's own bucket carries the entity away and lets it go again.
+
+    private boolean fromBucket;
+
+    @Override
+    public boolean fromBucket() {
+        return fromBucket;
+    }
+
+    /** An entity let out of a bucket stays, the way Java's fish do. */
+    @Override
+    public void setFromBucket(boolean fromBucket) {
+        this.fromBucket = fromBucket;
+        if (fromBucket) setPersistenceRequired();
+    }
+
+    /**
+     * What the bucket keeps of the entity: what Java keeps of any mob it carries, and which of the
+     * pack's component groups were on, since those are what the pack changed about this one.
+     */
+    @Override
+    public void saveToBucketTag(ItemStack bucket) {
+        Platform.saveBucketDefaults(this, bucket);
+        Platform.putBucketText(bucket, BUCKET_GROUPS, String.join(",", activeGroups));
+    }
+
+    @Override
+    public void loadFromBucketTag(net.minecraft.nbt.CompoundTag kept) {
+        Platform.loadBucketDefaults(this, kept);
+        String groups = Platform.bucketText(kept, BUCKET_GROUPS);
+        if (groups == null) return;
+        takeGroups(groups.isEmpty() ? java.util.Set.of() : java.util.Set.of(groups.split(",")));
+    }
+
+    @Override
+    public ItemStack getBucketItemStack() {
+        net.minecraft.world.item.Item bucket = AddonEntities.bucketOf(getType());
+        return bucket == null ? ItemStack.EMPTY : new ItemStack(bucket);
+    }
+
+    @Override
+    public SoundEvent getPickupSound() {
+        return SoundEvents.BUCKET_FILL_FISH;
+    }
+
+    /** Where in the bucket the groups that were on are written. */
+    private static final String BUCKET_GROUPS = "mcaddon:groups";
+
+    /** Puts the entity in exactly these of its component groups, with what each one brings. */
+    private void takeGroups(java.util.Set<String> groups) {
+        if (definition == null) return;
+
+        activeGroups.clear();
+        for (String group : definition.componentGroups().keySet()) {
+            boolean on = groups.contains(group);
+            setValue(GROUP + group, on);
+            if (on) activeGroups.add(group);
+        }
+        refreshAge();
+        refreshComponents();
+        publishMarkers();
     }
 
     @Override

@@ -2086,6 +2086,62 @@ public final class Platform {
         *///?}
     }
 
+    /**
+     * Scoops a pack's entity into the bucket the player holds, which Java's own fish do the same way.
+     * Empty when the player holds no water bucket. The interface moved into `entity` in 26.2.
+     */
+    public static java.util.Optional<net.minecraft.world.InteractionResult> scoop(
+        net.minecraft.world.entity.player.Player player, net.minecraft.world.InteractionHand hand,
+        at.ioexception.mcaddon.entity.AddonEntity entity) {
+        //? if >=26.2 {
+        return net.minecraft.world.entity.Bucketable.bucketMobPickup(player, hand, entity);
+        //?} else {
+        /*return net.minecraft.world.entity.animal.Bucketable.bucketMobPickup(player, hand, entity);
+        *///?}
+    }
+
+    /** What Java keeps of every mob it carries in a bucket: its name, its health and its flags. */
+    public static void saveBucketDefaults(net.minecraft.world.entity.Mob mob,
+        net.minecraft.world.item.ItemStack bucket) {
+        //? if >=26.2 {
+        net.minecraft.world.entity.Bucketable.saveDefaultDataToBucketTag(mob, bucket);
+        //?} else {
+        /*net.minecraft.world.entity.animal.Bucketable.saveDefaultDataToBucketTag(mob, bucket);
+        *///?}
+    }
+
+    public static void loadBucketDefaults(net.minecraft.world.entity.Mob mob,
+        net.minecraft.nbt.CompoundTag kept) {
+        //? if >=26.2 {
+        net.minecraft.world.entity.Bucketable.loadDefaultDataFromBucketTag(mob, kept);
+        //?} else {
+        /*net.minecraft.world.entity.animal.Bucketable.loadDefaultDataFromBucketTag(mob, kept);
+        *///?}
+    }
+
+    /**
+     * Writes one text into what a bucket keeps of the mob inside it, which is handed back to the mob
+     * as it is let go. From 1.20.5 that is a component of its own; before, the stack's own tag.
+     */
+    public static void putBucketText(net.minecraft.world.item.ItemStack bucket, String key, String text) {
+        //? if >=1.21 {
+        net.minecraft.world.item.component.CustomData.update(
+            net.minecraft.core.component.DataComponents.BUCKET_ENTITY_DATA, bucket,
+            tag -> tag.putString(key, text));
+        //?} else {
+        /*bucket.getOrCreateTag().putString(key, text);
+        *///?}
+    }
+
+    /** Null where nothing was written under that key. 26 made a missing key an empty answer. */
+    public static String bucketText(net.minecraft.nbt.CompoundTag kept, String key) {
+        //? if >=26 {
+        return kept.getString(key).orElse(null);
+        //?} else {
+        /*return kept.contains(key) ? kept.getString(key) : null;
+        *///?}
+    }
+
     /** Where the player respawns, or null while they respawn wherever the world says. */
     public static net.minecraft.core.BlockPos respawnPosition(
         net.minecraft.server.level.ServerPlayer player) {

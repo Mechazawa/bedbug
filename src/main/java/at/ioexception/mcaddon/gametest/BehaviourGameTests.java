@@ -1213,6 +1213,64 @@ public final class BehaviourGameTests {
         });
     }
 
+    /**
+     * A player scoops an ember in its scoopable group into a bucket and lets it out again as itself.
+     *
+     * `minecraft:bucketable` arrives with a group, so a plain ember refuses the bucket, and the one
+     * let out of the bucket is in the same groups as the one scooped up: those are what the pack
+     * changed about it, and a bucket keeping only what Java keeps of a fish would lose them.
+     */
+    @GameTest()
+    public void aScoopableGroupLetsAPlayerCarryTheEntityInABucket(GameTestHelper helper) {
+        AddonEntity plain = spawn(helper, ENTITY);
+        AddonEntity scoopable = spawn(helper, ENTITY, STAND.east(2));
+        if (plain == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(scoopable, "tp:ember_make_scoopable", null, ServerHooks.state());
+        ServerLevel level = helper.getLevel();
+        net.minecraft.server.level.ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        try {
+            player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.WATER_BUCKET));
+            plain.mobInteract(player, InteractionHand.MAIN_HAND);
+            helper.assertFalse(plain.isRemoved(), "A plain " + ENTITY + " was scooped into a bucket.");
+
+            player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.WATER_BUCKET));
+            scoopable.mobInteract(player, InteractionHand.MAIN_HAND);
+            helper.assertTrue(scoopable.isRemoved(),
+                ENTITY + " carries minecraft:bucketable and was not scooped up.");
+            Item bucketItem = AddonEntities.bucketOf(scoopable.getType());
+            ItemStack bucket = carried(player, bucketItem);
+            helper.assertTrue(!bucket.isEmpty(), "The player holds no bucket of " + ENTITY + ".");
+
+            BlockPos at = helper.absolutePos(STAND.east(4));
+            ((net.minecraft.world.item.MobBucketItem) bucketItem).checkExtraContent(player, level,
+                bucket, at);
+            AddonEntity released = level.getEntitiesOfClass(AddonEntity.class,
+                new net.minecraft.world.phys.AABB(at.getX() - 1, at.getY() - 1, at.getZ() - 1,
+                    at.getX() + 2, at.getY() + 2, at.getZ() + 2)).stream()
+                .findFirst().orElse(null);
+            helper.assertTrue(released != null, "Emptying the bucket let no " + ENTITY + " out.");
+            helper.assertTrue(released.activeGroups().contains("tp:ember_scoopable"),
+                ENTITY + " was let out of the bucket in " + released.activeGroups()
+                    + " rather than the groups it was scooped up in.");
+        } finally {
+            level.getServer().getPlayerList().remove(player);
+        }
+        helper.succeed();
+    }
+
+    /** The stack of this item in the player's hand or inventory, or an empty one. */
+    private static ItemStack carried(Player player, Item item) {
+        if (player.getMainHandItem().is(item)) return player.getMainHandItem();
+        for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
+            if (player.getInventory().getItem(slot).is(item)) return player.getInventory().getItem(slot);
+        }
+        return ItemStack.EMPTY;
+    }
+
     private static String idle(AddonEntity entity) {
         net.minecraft.sounds.SoundEvent sound = entity.getAmbientSound();
         return sound == null ? "nothing"

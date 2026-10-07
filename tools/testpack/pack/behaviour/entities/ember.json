@@ -289,6 +289,9 @@
       "tp:ember_chatty": {
         "minecraft:uses_legacy_ambient_sounds": {}
       },
+      "tp:ember_scoopable": {
+        "minecraft:bucketable": {}
+      },
       "tp:ember_alert": {
         "minecraft:timer": {
           "time": 1.0,
@@ -417,6 +420,11 @@
       "tp:ember_chatter": {
         "add": {
           "component_groups": ["tp:ember_chatty"]
+        }
+      },
+      "tp:ember_make_scoopable": {
+        "add": {
+          "component_groups": ["tp:ember_scoopable"]
         }
       },
       "tp:ember_load": {
