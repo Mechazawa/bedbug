@@ -1,0 +1,31 @@
+{
+  "format_version": "1.8.0",
+  "animations": {
+    "animation.tp.vanilla.duck": {
+      "animation_length": 2.0,
+      "bones": {
+        "head": {
+          "scale": [0, 0, 0]
+        },
+        "leg0": {
+          "rotation": [45, 0, 0]
+        },
+        "helmet": {
+          "position": [0, 2, 0]
+        },
+        "held_item": {
+          "scale": [0, 0, 0]
+        }
+      }
+    },
+    "animation.tp.vanilla.sway": {
+      "loop": true,
+      "animation_length": 4.0,
+      "bones": {
+        "leg1": {
+          "rotation": [0, 0, 30]
+        }
+      }
+    }
+  }
+}

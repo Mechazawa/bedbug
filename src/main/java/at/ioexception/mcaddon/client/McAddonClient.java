@@ -7,6 +7,7 @@ import at.ioexception.mcaddon.client.render.AddonClientAssets;
 import at.ioexception.mcaddon.client.render.AddonEntityRenderer;
 import at.ioexception.mcaddon.client.render.AddonParticleProvider;
 import at.ioexception.mcaddon.client.render.Animators;
+import at.ioexception.mcaddon.client.render.JavaModelPoses;
 import at.ioexception.mcaddon.client.render.EntityProperties;
 import at.ioexception.mcaddon.client.render.PlayerCamera;
 import at.ioexception.mcaddon.client.render.PlayerFog;
@@ -68,10 +69,12 @@ public final class McAddonClient implements ClientModInitializer {
         ClientEntityEvents.ENTITY_LOAD.register((entity, level) -> mirrorGroups(entity));
         ClientEntityEvents.ENTITY_UNLOAD.register((entity, level) -> {
             Animators.forget(entity.getId());
+            JavaModelPoses.forget(entity.getId());
             EntityProperties.forget(entity.getId());
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             Animators.clear();
+            JavaModelPoses.clear();
             EntityProperties.clear();
             PlayerCamera.clear();
             PlayerFog.clear();

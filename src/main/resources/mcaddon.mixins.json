@@ -42,6 +42,8 @@
   "client": [
     "CameraMixin",
     "FogRendererMixin",
-    "LivingEntityRendererMixin"
+    "LivingEntityRendererMixin",
+    "ModelFeatureRendererMixin",
+    "ModelPartMixin"
   ]
 }

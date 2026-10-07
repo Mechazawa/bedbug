@@ -67,6 +67,18 @@ public record ClientEntityDefinition(
     }
 
     /**
+     * The definition of an entity no pack described, which Java draws with a model of its own.
+     *
+     * It names no geometry, no script and no short names, so a clip played on such an entity is
+     * found under its own full name and runs alone.
+     */
+    public static ClientEntityDefinition drawnByJava(String identifier) {
+        return new ClientEntityDefinition(identifier, SemVer.ZERO, true, false, null, false, null, false, false,
+            Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(),
+            List.of(), List.of(), List.of(), List.of(), List.of(), Set.of(), null, null, null, null, null);
+    }
+
+    /**
      * Whether this entity's animation script runs while it is out of view.
      *
      * One pass advances the clips, fires their effects and poses the bones, so an entity asking
