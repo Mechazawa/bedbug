@@ -239,7 +239,13 @@ server decides what happens; the client draws it.
   and nothing else on disk. Commands a script registers on startup become real commands,
   `@minecraft/server-ui` forms become real screens (a 2.x `CustomForm` stays open while its buttons
   run their handlers and redraws as its observables change), and the world, system, entity, dimension, block,
-  scoreboard, game rule and structure surfaces are answered by the game.
+  scoreboard, game rule and structure surfaces are answered by the game. The game's own mobs reach a
+  script under Bedrock's ids, so a Java villager's `typeId` is `minecraft:villager_v2` and every
+  query, spawn and event filter accepts that spelling as well as Java's.
+- The options a listener subscribes with narrow what it hears, as Bedrock's do: the entities, entity
+  types, entity filter, event ids and damage or heal causes an entity event names. `entitySpawn`
+  and `entityLoad` arrive on the tick after the entity came into the world, so a script that spawns
+  one and then marks it has done both before a listener asks.
 - The world events a script subscribes to, raised out of the game rather than out of a pack's own
   data: what a player breaks, places, uses, picks up and swings at, where they go and what they
   hold, the weather turning and a game rule being set, an explosion and each block it takes, a

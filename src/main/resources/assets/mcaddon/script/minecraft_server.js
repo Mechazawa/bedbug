@@ -792,7 +792,8 @@ export class Block {
     }
 
     getDynamicProperty(name) {
-        return bridge.blockDynamicProperty(...blockAt(this), name);
+        // A property never set crosses as null, and Bedrock answers undefined.
+        return bridge.blockDynamicProperty(...blockAt(this), name) ?? undefined;
     }
 
     setDynamicProperty(name, value) {
@@ -2783,7 +2784,8 @@ export class Entity {
     }
 
     getDynamicProperty(name) {
-        return bridge.entityDynamicProperty(this.id, name);
+        // A property never set crosses as null, and Bedrock answers undefined.
+        return bridge.entityDynamicProperty(this.id, name) ?? undefined;
     }
 
     setDynamicProperty(name, value) {
@@ -3614,11 +3616,70 @@ export class DimensionTypes {
     }
 }
 
+/**
+ * What a listener asked to hear about, from the options it subscribed with.
+ *
+ * Bedrock narrows an event before the listener runs, and a pack relies on that: a listener on
+ * `dataDrivenEntityTrigger` subscribed for one entity type often never checks the type itself. A
+ * type a pack names is compared under the id `Entity.typeId` reports, so `minecraft:villager` and
+ * `minecraft:villager_v2` name the same listener.
+ */
+class Subscription {
+    #options;
+    #types;
+
+    constructor(callback, options, event) {
+        this.callback = callback;
+        this.#options = options ?? undefined;
+        this.#types = options?.entityTypes?.map(type => EntityTypes.get(type)?.id ?? namespaced(type));
+        for (const name of ["itemFilter", "accessSourceFilter"]) {
+            if (options?.[name] !== undefined) bridge.unsupported(event + " options." + name);
+        }
+    }
+
+    admits(event, subjectOf) {
+        const options = this.#options;
+        if (options === undefined || subjectOf === undefined) return true;
+
+        const subject = subjectOf(event);
+        if (options.entities !== undefined && !options.entities.some(one => one?.id === subject?.id)) return false;
+        if (this.#types !== undefined && !this.#types.includes(subject?.typeId)) return false;
+        if (options.entityFilter !== undefined && !(subject?.matches?.(options.entityFilter) ?? false)) return false;
+        if (options.eventTypes !== undefined && !options.eventTypes.includes(event.eventId)) return false;
+        if (options.allowedDamageCauses !== undefined
+            && !options.allowedDamageCauses.includes(event.damageSource?.cause)) return false;
+        if (options.allowedHealCauses !== undefined
+            && !options.allowedHealCauses.includes(event.healSource?.cause)) return false;
+        return true;
+    }
+}
+
+/**
+ * The entity each event is about, which is what a listener's options are measured against. An
+ * event with no entry here takes no options in Bedrock, so whatever a pack passed it is ignored.
+ * The after event of a removal names an entity that is gone, so its id and type stand in for it.
+ */
+const EVENT_SUBJECTS = {
+    dataDrivenEntityTrigger: event => event.entity,
+    effectAdd: event => event.entity,
+    entityContainerClosed: event => event.entity,
+    entityContainerOpened: event => event.entity,
+    entityDie: event => event.deadEntity,
+    entityHeal: event => event.healedEntity,
+    entityHealthChanged: event => event.entity,
+    entityHitBlock: event => event.damagingEntity,
+    entityHitEntity: event => event.damagingEntity,
+    entityHurt: event => event.hurtEntity,
+    entityItemDrop: event => event.entity,
+    entityItemPickup: event => event.entity,
+    entityRemove: event => event.removedEntity ?? { id: event.removedEntityId, typeId: event.typeId },
+};
+
 class EventSignal {
     #listeners = [];
 
     subscribe(callback, options) {
-        this.#listeners.push({ callback, options });
+        this.#listeners.push(new Subscription(callback, options, this.name));
         return callback;
     }
 
@@ -3635,6 +3696,7 @@ class EventSignal {
         const shaped = this.shape ? this.shape(shapeFields(event)) : shapeFields(event);
         const ready = this.payload ? asPayload(this.payload, shaped) : shaped;
         for (const listener of this.#listeners.slice()) {
+            if (!listener.admits(ready, this.subject)) continue;
             try {
                 listener.callback(ready);
             } catch (error) {
@@ -3899,6 +3961,8 @@ function eventGroup(raised, group) {
                     bridge.unsupported(name + (known ? " (event, never raised)" : " (event)"));
                 }
                 target[name] = new (build ?? EventSignal)();
+                target[name].name = name;
+                target[name].subject = EVENT_SUBJECTS[name];
                 target[name].shape = EVENT_SHAPES[name];
                 target[name].payload = payloadsFor(group)[name];
             }
@@ -4213,7 +4277,8 @@ export class World {
     }
 
     getDynamicProperty(name) {
-        return bridge.worldDynamicProperty(name);
+        // A property never set crosses as null, and Bedrock answers undefined.
+        return bridge.worldDynamicProperty(name) ?? undefined;
     }
 
     setDynamicProperty(name, value) {

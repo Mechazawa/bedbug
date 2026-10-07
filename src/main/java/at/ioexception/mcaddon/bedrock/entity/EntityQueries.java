@@ -693,7 +693,7 @@ public final class EntityQueries implements MolangEnvironment.Queries {
      * whoever tamed it, which the server syncs across as a property.
      */
     private String ownerIdentifier() {
-        if (attached) return BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString();
+        if (attached) return at.ioexception.mcaddon.registry.AddonEntities.identifierOf(entity.getType());
 
         return properties.get().get("owner") instanceof String owner ? owner : "";
     }

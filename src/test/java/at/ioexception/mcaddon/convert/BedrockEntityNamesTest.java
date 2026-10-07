@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.convert;
 
 import net.minecraft.SharedConstants;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.Bootstrap;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -62,5 +63,36 @@ class BedrockEntityNamesTest {
     @ValueSource(strings = {"balloon", "agent", "npc", "zombie_pigman_v9"})
     void answersNullWhenJavaHasNoSuchEntity(String bedrock) {
         assertNull(BedrockEntityNames.java(bedrock));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "minecraft:villager, minecraft:villager_v2",
+        "minecraft:zombie_villager, minecraft:zombie_villager_v2",
+        "minecraft:experience_orb, minecraft:xp_orb",
+        "minecraft:vindicator, minecraft:vindicator",
+        "minecraft:wither_skull, minecraft:wither_skull",
+        "minecraft:birch_boat, minecraft:boat",
+        "minecraft:bamboo_chest_raft, minecraft:chest_boat",
+        "minecraft:oak_chest_boat, minecraft:chest_boat",
+        "minecraft:potion, minecraft:splash_potion",
+        "minecraft:zombie, minecraft:zombie",
+        "oreville_vn:villager, oreville_vn:villager",
+    })
+    void namesTheBedrockEntity(String java, String expected) {
+        assertEquals(expected, BedrockEntityNames.bedrock(java));
+    }
+
+    /** Each way back has to lead to the type it came from, or a pack spawning what it found gets another mob. */
+    @Test
+    void everyJavaTypeComesBackToItselfOrToItsOnlyBedrockForm() {
+        BuiltInRegistries.ENTITY_TYPE.keySet().stream()
+            .filter(id -> id.getNamespace().equals("minecraft"))
+            .map(Object::toString)
+            .filter(id -> !id.endsWith("_boat") && !id.endsWith("_raft"))
+            .forEach(java -> {
+                String bedrock = BedrockEntityNames.bedrock(java);
+                assertEquals(java, BedrockEntityNames.java(bedrock), java + " reads back from " + bedrock);
+            });
     }
 }

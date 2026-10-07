@@ -303,13 +303,18 @@ public final class ServerHooks {
         if (state != null && server.getTickCount() % 1200 == 0) state.save();
     }
 
+    /**
+     * Held until the next tick rather than raised in place, the way Bedrock delivers it. A pack's
+     * `spawnEntity` returns before its listeners hear about the entity, so a pack that spawns one and
+     * then marks it as its own has done both by the time a listener asks whether it is marked.
+     */
     private static void raiseEntityEvent(String event, Entity entity) {
         if (scripts == null) return;
 
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("entity", ScriptHost.EntityHandle.of(entity));
         fields.put("cause", event.equals("entitySpawn") ? "Spawned" : "Loaded");
-        scripts.raiseWorldEvent(event, fields);
+        scripts.queueWorldEvent(event, fields);
     }
 
     /** The after event names an entity that no longer exists, so it carries its id and its type. */
@@ -322,8 +327,7 @@ public final class ServerHooks {
 
         Map<String, Object> removed = new LinkedHashMap<>();
         removed.put("removedEntityId", entity.getStringUUID());
-        removed.put("typeId",
-            net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString());
+        removed.put("typeId", AddonEntities.identifierOf(entity.getType()));
         scripts.raiseWorldEvent("entityRemove", removed);
     }
 

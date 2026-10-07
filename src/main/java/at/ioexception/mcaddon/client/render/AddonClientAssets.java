@@ -26,6 +26,7 @@ public final class AddonClientAssets {
 
     private static final Map<String, Binding> BY_IDENTIFIER = new LinkedHashMap<>();
     private static final Map<String, List<Binding>> ATTACHABLES = new LinkedHashMap<>();
+    private static final List<AddonModels> PACKS = new ArrayList<>();
 
     private AddonClientAssets() {
     }
@@ -33,9 +34,11 @@ public final class AddonClientAssets {
     public static void load() {
         BY_IDENTIFIER.clear();
         ATTACHABLES.clear();
+        PACKS.clear();
         for (ConvertedPack converted : AddonPacks.all()) {
             BedrockAssets assets = BedrockAssets.read(converted.pack());
             AddonModels models = new AddonModels(assets, converted);
+            PACKS.add(models);
             assets.entities().forEach((identifier, definition) ->
                 BY_IDENTIFIER.put(identifier, new Binding(models, definition)));
             assets.attachables().forEach((identifier, definition) ->
@@ -50,6 +53,19 @@ public final class AddonClientAssets {
     /** Null when a behaviour pack declares an entity its resource pack never described. */
     public static Binding of(String identifier) {
         return BY_IDENTIFIER.get(identifier);
+    }
+
+    /**
+     * The first pack, in the order the packs were read, that carries a clip of this full name.
+     *
+     * Null when none does. A clip played on an entity Java draws is named in full, because no
+     * definition of that entity maps a short name onto it.
+     */
+    public static AddonModels withAnimation(String animation) {
+        return PACKS.stream()
+            .filter(models -> models.assets().animation(animation) != null)
+            .findFirst()
+            .orElse(null);
     }
 
     /**
