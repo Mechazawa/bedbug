@@ -152,9 +152,21 @@ project.tasks.named("runGameTest") {
     dependsOn(installTestPack)
 }
 
-// The client game tests read their packs from a run directory of their own.
+/**
+ * The client game tests, run for the checked-out version only.
+ *
+ * Each one opens a window and drives a real client through a world, which is what reaches a screen,
+ * a model and a key press. Only the 26.x targets ship the API they are written against.
+ */
 project.tasks.matching { it.name == "runClientGameTest" }.configureEach {
     dependsOn(installClientTestPack)
+    onlyIf { project.name == activeName }
+}
+project.tasks.named("check") {
+    dependsOn(project.tasks.matching { it.name == "runClientGameTest" })
+}
+project.tasks.matching { it.name == "checkstyleGametest" }.configureEach {
+    onlyIf { project.name == activeName }
 }
 
 /**
