@@ -44,7 +44,7 @@ from threading import Thread
 USAGE = (__doc__ or "").splitlines()[0]
 
 VERSIONS = ("1.20.1", "1.21.1", "26.1.2", "26.2")
-JAVA_HOME = "/opt/homebrew/opt/openjdk@25"
+JAVA_HOME = os.environ.get("JAVA_HOME", "/opt/homebrew/opt/openjdk@25")
 
 IMAGE_SUFFIXES = (".png", ".tga", ".jpg", ".jpeg")
 

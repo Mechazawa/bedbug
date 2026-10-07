@@ -1897,6 +1897,25 @@ public final class Platform {
         *///?}
     }
 
+    /** The picture the game draws into, which 26.2 moved from the client onto its renderer. */
+    public static com.mojang.blaze3d.pipeline.RenderTarget mainRenderTarget(
+        net.minecraft.client.Minecraft client) {
+        //? if >=26.2 {
+        return client.gameRenderer.mainRenderTarget();
+        //?} else {
+        /*return client.getMainRenderTarget();
+        *///?}
+    }
+
+    /** What F1 does. 26.2 keeps it on the heads-up display as a toggle rather than as an option. */
+    public static void hideHud(net.minecraft.client.Minecraft client, boolean hidden) {
+        //? if >=26.2 {
+        if (client.gui.hud.isHidden() != hidden) client.gui.hud.toggle();
+        //?} else {
+        /*client.options.hideGui = hidden;
+        *///?}
+    }
+
     /** Opens a screen, or closes whatever is open when given null. Renamed in 26. */
     public static void setScreen(net.minecraft.client.gui.screens.Screen screen) {
         //? if >=26 {

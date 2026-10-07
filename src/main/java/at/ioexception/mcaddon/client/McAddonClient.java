@@ -20,6 +20,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientEntityEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.world.entity.EntityType;
 
 import java.util.List;
@@ -57,6 +58,10 @@ public final class McAddonClient implements ClientModInitializer {
                 at.ioexception.mcaddon.client.render.AddonEmitters.tick();
                 if (client.level != null) Animators.tickOffscreen(client.level);
             });
+        if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
+            net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK
+                .register(ScreenshotRequests::tick);
+        }
 
         ClientEntityEvents.ENTITY_UNLOAD.register((entity, level) -> {
             Animators.forget(entity.getId());

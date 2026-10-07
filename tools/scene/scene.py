@@ -37,10 +37,10 @@ import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from threading import Lock, Thread
+from threading import Thread
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-JAVA_HOME = "/opt/homebrew/opt/openjdk@25"
+JAVA_HOME = os.environ.get("JAVA_HOME", "/opt/homebrew/opt/openjdk@25")
 
 # Big enough that what a scene placed can be made out in the picture it leaves behind.
 WINDOW = "1600x900"
@@ -449,17 +449,12 @@ def datapack(world: pathlib.Path, commands: list[str], checks: list[str], format
     return pack
 
 
-# F1 takes the heads-up display off the screen, F2 makes the game save a picture of itself.
-HIDE_HUD = 122
-SCREENSHOT = 120
-
-
 def dontPauseOnLostFocus(version: str) -> None:
     """Tells this version's client to keep playing when another window takes the focus.
 
-    Four games are photographed at the same time and each picture is taken by bringing one of them
-    to the front, which takes the focus from the other three. A single player game stops and opens
-    its menu when that happens, and a picture of the menu says nothing about what was drawn.
+    Four games are open at the same time and only one of them can have the focus. A single player
+    game without it stops and opens its menu, and a picture of the menu says nothing about what was
+    drawn.
     """
     options = ROOT / "versions" / version / "run" / "options.txt"
     lines = []
@@ -471,103 +466,27 @@ def dontPauseOnLostFocus(version: str) -> None:
     options.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-# One picture at a time, whichever version is being photographed: taking one means bringing a window
-# to the front, and two of those at once would each leave the other's picture showing the wrong game.
-PHOTOGRAPHING = Lock()
-
-
-@contextmanager
-def photographing():
-    """The front of the screen, held against every scene run on this machine rather than only ours.
-
-    A run started from another checkout brings its own window forward, and a picture taken while it
-    does is of that game. The file lock reaches those runs; the thread lock is what orders the four
-    versions inside one run.
-    """
-    with PHOTOGRAPHING:
-        handle = (lockDirectory() / "mcaddon-scene-screen.lock").open("a+")
-        try:
-            fcntl.flock(handle, fcntl.LOCK_EX)
-            yield
-        finally:
-            fcntl.flock(handle, fcntl.LOCK_UN)
-            handle.close()
-
-
-def gamePid(version: str) -> int | None:
-    """The game this version is running, picked out from however many are up at once.
-
-    Four versions are photographed at the same time, so a key sent to whichever java process came
-    first would reach the wrong window. Each game carries the directory it was started from in the
-    paths it was given, which tells apart both the versions and the checkouts.
-    """
-    found = subprocess.run(["pgrep", "-f", "fabric.dli.env=client"],
-                           check=False, capture_output=True, text=True)
-    for line in found.stdout.split():
-        if not line.isdigit():
-            continue
-        command = subprocess.run(["ps", "-o", "command=", "-p", line],
-                                 check=False, capture_output=True, text=True).stdout
-        if f"{ROOT}/versions/{version}/" in command:
-            return int(line)
-    return None
-
-
-def frontmost(pid: int, wait: float = 5.0) -> bool:
-    """Brings one game to the front and waits until it really is there.
-
-    Four games are up at once and a key reaches whichever window has the focus, so sending one
-    after a fixed sleep hands it to whatever happened to be in front. Asking the system which
-    process is frontmost is the only answer that cannot be raced.
-    """
-    subprocess.run(["osascript", "-e",
-                    "tell application \"System Events\" to set frontmost of "
-                    f"(first process whose unix id is {pid}) to true"], check=False)
-
-    deadline = time.monotonic() + wait
-    while time.monotonic() < deadline:
-        answer = subprocess.run(
-            ["osascript", "-e", "tell application \"System Events\" to get unix id of "
-             "(first process whose frontmost is true)"],
-            check=False, capture_output=True, text=True).stdout.strip()
-        if answer == str(pid):
-            return True
-        time.sleep(0.2)
-    return False
-
-
-def press(pid: int, code: int) -> bool:
-    """Sends one key to one game, which is the only interaction this tool has with it."""
-    if not frontmost(pid):
-        return False
-
-    subprocess.run(["osascript", "-e",
-                    "tell application \"System Events\" to tell "
-                    f"(first process whose unix id is {pid}) to key code {code}"], check=False)
-    time.sleep(0.8)
-    return True
-
-
 def capture(version: str, target: pathlib.Path) -> str | None:
     """Has the game photograph itself, and leaves one picture that is ready to look at.
 
-    The game's own screenshot holds what it drew and nothing else: no title bar, no cursor, and no
-    doubling from a display that draws two pixels per point. It also does not care whether the window
-    is in front, which photographing the screen does.
+    The game takes the picture when `screenshot.request` appears in its directory, which a
+    development client watches for. Its own screenshot holds what it drew and nothing else, and
+    asking for it this way needs no window brought to the front and no key sent from outside.
 
     Answers why there is no picture, or nothing when there is one. A scene whose whole purpose is to
     be looked at has not run if nobody can look at it, so the caller fails on what comes back.
     """
-    shots = ROOT / "versions" / version / "run" / "screenshots"
+    run = ROOT / "versions" / version / "run"
+    shots = run / "screenshots"
     before = set(shots.glob("*.png")) if shots.is_dir() else set()
 
-    with photographing():
-        pid = gamePid(version)
-        if pid is None:
-            return "no game of this version was running to photograph"
-        if not press(pid, HIDE_HUD) or not press(pid, SCREENSHOT):
-            return "the game would not come to the front, so no key could reach it"
-        time.sleep(1.5)
+    request = run / "screenshot.request"
+    request.write_text("", encoding="utf-8")
+    deadline = time.monotonic() + 20
+    while request.exists() and time.monotonic() < deadline:
+        time.sleep(0.2)
+    request.unlink(missing_ok=True)
+    time.sleep(1.5)
 
     taken = sorted(set(shots.glob("*.png")) - before) if shots.is_dir() else []
     if not taken:
@@ -591,9 +510,8 @@ def lockDirectory() -> pathlib.Path:
     """Where the locks live, which is one place for every checkout of this repository.
 
     A worktree is a checkout of its own with a `scratchpad/` of its own, so a lock kept there locks
-    nothing against a run started from somewhere else, and a picture is taken by bringing a window
-    to the front, which every game on the machine shares. Git's common directory is the same path
-    from every worktree.
+    nothing against a run started from somewhere else. Git's common directory is the same path from
+    every worktree.
     """
     try:
         common = subprocess.run(["git", "rev-parse", "--git-common-dir"], cwd=ROOT,
