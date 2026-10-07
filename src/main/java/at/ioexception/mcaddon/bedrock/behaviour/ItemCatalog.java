@@ -21,13 +21,13 @@ import java.util.Map;
  * Java's creative menu has the categories as tabs and nothing below them, so the category decides
  * which tab an item joins and the order the catalog writes is the order the items appear in.
  *
+ * An item or a block may instead name its category in its own `description.menu_category`, which is
+ * how most packs file what they add. The catalog wins where both name one.
+ *
  * @param categoryOf the Bedrock category each item was filed under
  * @param order      every item the catalog names, in the order it names them
  */
 public record ItemCatalog(Map<String, String> categoryOf, List<String> order) {
-    /** A catalog naming nothing, for an add-on that ships none. */
-    public static final ItemCatalog EMPTY = new ItemCatalog(Map.of(), List.of());
-
     /** Every catalog the pack ships, folded into one. */
     public static ItemCatalog readAll(BedrockPack pack) {
         Map<String, String> categoryOf = new LinkedHashMap<>();
@@ -40,7 +40,42 @@ public record ItemCatalog(Map<String, String> categoryOf, List<String> order) {
                 McAddon.LOGGER.warn("Could not read {}: {}", file.getFileName(), error.toString());
             }
         }
+        for (String directory : List.of("items", "blocks")) {
+            for (Path file : pack.list(directory, ".json")) {
+                try {
+                    readMenuCategory(Json.parseObject(file), categoryOf);
+                } catch (IOException | RuntimeException error) {
+                    McAddon.LOGGER.warn("Could not read {}: {}", file.getFileName(), error.toString());
+                }
+            }
+        }
         return new ItemCatalog(Map.copyOf(categoryOf), List.copyOf(order));
+    }
+
+    /**
+     * The category one item or block files itself under, unless a catalog already filed it.
+     *
+     * `none` keeps it out of every category, which is where an item no category names already is.
+     * The group a category is divided into has no Java form, and neither has hiding a name from the
+     * command suggestions, so both are reported.
+     */
+    private static void readMenuCategory(JsonObject root, Map<String, String> categoryOf) {
+        JsonElement body = root.has("minecraft:item") ? root.get("minecraft:item") : root.get("minecraft:block");
+        if (body == null || !body.isJsonObject()) return;
+
+        JsonElement description = body.getAsJsonObject().get("description");
+        if (description == null || !description.isJsonObject()) return;
+        String identifier = Json.text(description.getAsJsonObject(), "identifier", null);
+        JsonElement menu = description.getAsJsonObject().get("menu_category");
+        if (identifier == null || menu == null || !menu.isJsonObject()) return;
+
+        JsonObject category = menu.getAsJsonObject();
+        if (category.has("group")) AddonEntities.unsupported("menu_category group");
+        if (Json.bool(category, "is_hidden_in_commands", false)) {
+            AddonEntities.unsupported("menu_category is_hidden_in_commands");
+        }
+        String named = Json.text(category, "category", null);
+        if (named != null && !named.equals("none")) categoryOf.putIfAbsent(identifier, named);
     }
 
     private static void read(JsonObject root, Map<String, String> categoryOf, List<String> order) {

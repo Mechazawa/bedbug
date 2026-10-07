@@ -57,15 +57,18 @@ public final class AddonCreativeTab {
         joinVanillaTabs(ordered, catalog);
     }
 
+    /** Every behaviour pack's catalog, in pack order, the first to file an item deciding where it goes. */
     private static ItemCatalog catalogOf(PackSet packs) {
-        ItemCatalog found = ItemCatalog.EMPTY;
+        Map<String, String> categoryOf = new LinkedHashMap<>();
+        List<String> order = new ArrayList<>();
         for (BedrockPack pack : packs.packs()) {
             if (pack.role() != PackRole.BEHAVIOUR) continue;
 
             ItemCatalog one = ItemCatalog.readAll(pack);
-            if (!one.order().isEmpty()) found = one;
+            one.categoryOf().forEach(categoryOf::putIfAbsent);
+            one.order().stream().filter(identifier -> !order.contains(identifier)).forEach(order::add);
         }
-        return found;
+        return new ItemCatalog(Map.copyOf(categoryOf), List.copyOf(order));
     }
 
     /**
