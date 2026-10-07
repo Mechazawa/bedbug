@@ -176,6 +176,12 @@ public final class BedrockBlockNames {
         return named == null ? null : named.id();
     }
 
+    /** Whether a data value beside this id picks one of the blocks Java split it into. */
+    public static boolean family(String bedrock) {
+        String name = bare(bedrock);
+        return name != null && DataValues.split(stripDouble(name));
+    }
+
     /** Whether Bedrock has this block and Java has nothing to stand in for it. */
     public static boolean bedrockOnly(String bedrock) {
         String name = bare(bedrock);

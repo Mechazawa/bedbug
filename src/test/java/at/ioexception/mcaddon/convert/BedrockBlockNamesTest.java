@@ -96,10 +96,12 @@ class BedrockBlockNamesTest {
     /** A command testing for a block may ask only about what the pack named, or it matches less. */
     @Test
     void writesOnlyTheStatedPropertiesForACommand() {
-        assertEquals("minecraft:powered_rail", BedrockBlockNames.state("golden_rail", Map.of(), reported::add).command());
+        assertEquals("minecraft:powered_rail",
+            BedrockBlockNames.state("golden_rail", Map.of(), reported::add).command());
         assertEquals("minecraft:furnace[lit=true,facing=south]",
             BedrockBlockNames.state("lit_furnace", Map.of("facing_direction", 3), reported::add).command());
-        assertEquals("minecraft:red_wool", BedrockBlockNames.state("wool", Map.of("color", "red"), reported::add).command());
+        assertEquals("minecraft:red_wool",
+            BedrockBlockNames.state("wool", Map.of("color", "red"), reported::add).command());
     }
 
     @Test
