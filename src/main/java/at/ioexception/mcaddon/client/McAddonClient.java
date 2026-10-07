@@ -40,7 +40,11 @@ public final class McAddonClient implements ClientModInitializer {
 
         Platform.registerDyeTint(at.ioexception.mcaddon.registry.AddonItems.dyeable());
 
-        Channels.receiveProperties(EntityProperties::accept);
+        Channels.receiveProperties((entityId, json) -> {
+            EntityProperties.accept(entityId, json);
+            mirrorGroups(net.minecraft.client.Minecraft.getInstance().level == null
+                ? null : net.minecraft.client.Minecraft.getInstance().level.getEntity(entityId));
+        });
         Channels.receiveCameraView(encoded -> PlayerCamera.accept(CameraView.decode(encoded)));
         Channels.receiveCameraShake(encoded -> PlayerCamera.shake(CameraShake.decode(encoded)));
         Channels.receiveFog(encoded -> PlayerFog.accept(FogDefinition.decode(encoded)));
@@ -63,6 +67,7 @@ public final class McAddonClient implements ClientModInitializer {
                 .register(ScreenshotRequests::tick);
         }
 
+        ClientEntityEvents.ENTITY_LOAD.register((entity, level) -> mirrorGroups(entity));
         ClientEntityEvents.ENTITY_UNLOAD.register((entity, level) -> {
             Animators.forget(entity.getId());
             EntityProperties.forget(entity.getId());
@@ -74,6 +79,13 @@ public final class McAddonClient implements ClientModInitializer {
             PlayerFog.clear();
             at.ioexception.mcaddon.client.render.AddonEmitters.clear();
         });
+    }
+
+    /** Properties can arrive before the entity they belong to, so both arrivals apply them. */
+    private static void mirrorGroups(net.minecraft.world.entity.Entity entity) {
+        if (entity instanceof at.ioexception.mcaddon.entity.AddonEntity addon) {
+            addon.mirrorGroups(EntityProperties.of(entity.getId()));
+        }
     }
 
     /**

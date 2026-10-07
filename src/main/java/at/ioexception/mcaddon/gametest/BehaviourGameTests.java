@@ -43,6 +43,10 @@ public final class BehaviourGameTests {
     /** The entity the synthetic pack declares young without giving it anything to grow into. */
     private static final String YOUNG_ENTITY = "tp:sprite";
 
+    /** The collision box `tp:sprite` declares beside `minecraft:is_baby`, with no scale. */
+    private static final float YOUNG_WIDTH = 0.6f;
+    private static final float YOUNG_HEIGHT = 0.8f;
+
     /**
      * Taming an entity writes down whose it is, and the writing survives being read back.
      *
@@ -354,6 +358,34 @@ public final class BehaviourGameTests {
 
         helper.assertTrue(spawned instanceof AddonEntity young && young.isBaby(),
             YOUNG_ENTITY + " declares minecraft:is_baby and reads as grown.");
+        helper.succeed();
+    }
+
+    /**
+     * Being young does not shrink an entity by itself.
+     *
+     * Java halves the size of anything that answers `isBaby`, and Bedrock sizes a young entity only
+     * through the `minecraft:scale` its pack puts beside `minecraft:is_baby`, so applying both draws
+     * and boxes a pack's baby at a quarter of its grown size.
+     */
+    @GameTest()
+    public void anEntityDeclaredYoungCollidesInTheBoxItsPackDeclares(GameTestHelper helper) {
+        EntityType<?> type = AddonEntities.typeOf(YOUNG_ENTITY);
+        if (type == null) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        Entity spawned = Platform.createMob(type, level);
+        BlockPos at = helper.absolutePos(STAND);
+        Platform.placeAt(spawned, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        level.addFreshEntity(spawned);
+
+        helper.assertTrue(Math.abs(spawned.getBbWidth() - YOUNG_WIDTH) < 0.001f
+                && Math.abs(spawned.getBbHeight() - YOUNG_HEIGHT) < 0.001f,
+            YOUNG_ENTITY + " declares a " + YOUNG_WIDTH + " by " + YOUNG_HEIGHT + " box and collides in "
+                + spawned.getBbWidth() + " by " + spawned.getBbHeight() + ".");
         helper.succeed();
     }
 

@@ -198,6 +198,26 @@ public class AddonEntity extends PathfinderMob
         publishMarkers();
     }
 
+    /**
+     * Takes the live component groups from the properties a server sent this client.
+     *
+     * The server decides which groups are on and stores each as a property; a client copy of the
+     * entity holds no state of its own, so this is what lets its size, its box and every read of a
+     * group on the drawing side agree with the server.
+     */
+    public void mirrorGroups(java.util.Map<String, Object> properties) {
+        if (!isClientSide() || definition == null) return;
+
+        java.util.Set<String> on = definition.componentGroups().keySet().stream()
+            .filter(group -> Boolean.TRUE.equals(properties.get(GROUP + group)))
+            .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+        if (on.equals(activeGroups)) return;
+
+        activeGroups.clear();
+        activeGroups.addAll(on);
+        refreshDimensions();
+    }
+
     /** When `minecraft:timer` next fires, in ticks of this entity's own age. Negative until set. */
     public int timerDueTick() {
         return timerDueTick;
@@ -4325,7 +4345,9 @@ public class AddonEntity extends PathfinderMob
      * How big the entity is drawn and how big a box it collides in.
      *
      * Two components multiply here: `minecraft:scale` sizes the whole entity, and
-     * `minecraft:scale_by_age` moves it between two sizes while the entity grows up.
+     * `minecraft:scale_by_age` moves it between two sizes while the entity grows up. Java's own
+     * halving of anything young is left out, because a Bedrock pack sizes its young through the
+     * `minecraft:scale` it writes beside `minecraft:is_baby`.
      *
      * 1.20.1 has one scale for the whole entity; from 1.21 the part that grows with age is asked
      * for on its own, and the whole scale is final from 26.
@@ -4333,14 +4355,29 @@ public class AddonEntity extends PathfinderMob
     //? if >=1.21 {
     @Override
     public float getAgeScale() {
-        return declaredScale() * (age == null ? super.getAgeScale() : age.scale());
+        return declaredScale() * (age == null ? 1f : age.scale());
     }
     //?} else {
     /*@Override
     public float getScale() {
-        return declaredScale() * (age == null ? super.getScale() : age.scale());
+        return declaredScale() * (age == null ? 1f : age.scale());
     }
     *///?}
+
+    /**
+     * How big the entity is drawn, against the size its geometry was written at.
+     *
+     * Bedrock documents `minecraft:scale` as the visual size, so the top level scale the type was
+     * built with counts here as well as whatever a group or growing up adds over it.
+     */
+    public float visualScale() {
+        float baked = definition == null ? 1f : definition.scale();
+        //? if >=1.21 {
+        return baked * getScale() * getAgeScale();
+        //?} else {
+        /*return baked * getScale();
+        *///?}
+    }
 
     /**
      * The box the entity collides in, which `minecraft:collision_box` states as a width and a height.

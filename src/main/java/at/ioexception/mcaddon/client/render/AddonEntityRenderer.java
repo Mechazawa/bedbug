@@ -50,7 +50,7 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
 /*public class AddonEntityRenderer extends EntityRenderer<AddonEntity> {
 *///?}
 
-    /** How far the model origin sits above the feet, which is what a scale turns about. */
+    /** How far the model origin sits above the feet. */
     private static final float MODEL_ORIGIN_BLOCKS = 1.501f;
 
     public AddonEntityRenderer(EntityRendererProvider.Context context) {
@@ -75,7 +75,7 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
     }
 
     /** Everything drawn on one entity this frame: its model with what it wears, and what it holds. */
-    private record Drawing(List<Attachables.Drawn> passes, List<HeldItems.Held> held) {
+    record Drawing(List<Attachables.Drawn> passes, List<HeldItems.Held> held) {
         static final Drawing NOTHING = new Drawing(List.of(), List.of());
     }
 
@@ -167,7 +167,7 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
         state.drawing = drawn(entity, binding, state.animator, partialTick);
         state.heldModels = state.drawing.held().stream().map(held -> itemModel(entity, held)).toList();
         state.bodyRotation = Mth.rotLerp(partialTick, entity.yBodyRotO, entity.yBodyRot);
-        state.scale = state.animator.scale();
+        state.scale = drawnScale(entity, state.animator);
     }
 
     /** The item's own model, resolved while the entity it belongs to is still in hand. */
@@ -231,7 +231,8 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
 
         Drawing drawing = drawn(entity, binding, animator, partialTick);
         poseStack.pushPose();
-        applyModelSpace(poseStack, Mth.rotLerp(partialTick, entity.yBodyRotO, entity.yBodyRot), animator.scale());
+        applyModelSpace(poseStack, Mth.rotLerp(partialTick, entity.yBodyRotO, entity.yBodyRot),
+            drawnScale(entity, animator));
         for (Attachables.Drawn each : drawing.passes()) {
             AddonModels.Pass pass = each.pass();
             VertexConsumer buffer = buffers.getBuffer(renderTypeOf(pass));
@@ -272,15 +273,23 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
     private static final int FULL_BRIGHT = 0xF000F0;
 
     /**
+     * How big the model is drawn: the client definition's own `scale` script times the entity's
+     * `minecraft:scale`, which Bedrock documents as the entity's visual size.
+     */
+    static Vector3f drawnScale(AddonEntity entity, EntityAnimator animator) {
+        return animator.scale().mul(entity.visualScale());
+    }
+
+    /**
      * The transform vanilla puts a mob's model into, reproduced so a baked Bedrock model lands in it.
      *
-     * A scale turns about the model origin rather than the feet, so it has to be compensated, or the
-     * entity floats above or sinks into the hitbox it can still be hit in.
+     * The translation comes after the scale, as it does in vanilla, so the scale turns about the
+     * feet and the model stands on the ground at any size.
      */
     static void applyModelSpace(PoseStack poseStack, float bodyRotation, Vector3f scale) {
         poseStack.mulPose(Axis.YP.rotationDegrees(180f - bodyRotation));
         poseStack.scale(-1f, -1f, 1f);
         poseStack.scale(scale.x, scale.y, scale.z);
-        poseStack.translate(0, -MODEL_ORIGIN_BLOCKS / scale.y, 0);
+        poseStack.translate(0, -MODEL_ORIGIN_BLOCKS, 0);
     }
 }
