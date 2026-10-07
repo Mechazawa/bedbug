@@ -66,6 +66,7 @@ class FunctionsTest {
         "'kill @e[]', 'kill @e'",
         "'kill @e[type=zombie]', 'kill @e[type=minecraft:zombie]'",
         "'kill @e[type=!zombie]', 'kill @e[type=!minecraft:zombie]'",
+        "'kill @e[hasitem={item=stone,quantity=2..}]', 'kill @e[hasitem={item=stone,quantity=2..}]'",
     })
     void rewritesTheSelectorArgumentsJavaSpellsDifferently(String source, String expected) throws IOException {
         assertEquals(expected, only(source));
@@ -300,9 +301,33 @@ class FunctionsTest {
 
     @Test
     void dropsALineSelectingOnSomethingJavaCannotSelectOn() throws IOException {
-        assertEquals(List.of(), translate("kill @e[hasitem={item=stone}]"));
-        assertTrue(problems.contains("the selector argument hasitem, which Java has no form of"),
+        assertEquals(List.of(), translate("kill @e[haspermission={movement=enabled}]"));
+        assertTrue(problems.contains("the selector argument haspermission, which Java has no form of"),
             problems.toString());
+    }
+
+    /**
+     * Bedrock names a function by its path alone and Java reads a bare name as one under
+     * `minecraft`, where no add-on's function is written, so a call left alone runs nothing.
+     */
+    @ParameterizedTest
+    @CsvSource({
+        "'function greet', 'function ns:greet'",
+        "'function GREET', 'function ns:greet'",
+        "'execute as @a run function greet', 'execute as @a run function ns:greet'",
+        "'execute @a ~ ~ ~ function greet', 'execute as @a at @s positioned ~ ~ ~ run function ns:greet'",
+        "'schedule delay add greet 20 append', 'schedule function ns:greet 20 append'",
+        "'schedule clear greet', 'schedule clear ns:greet'",
+        "'function other:greet', 'function other:greet'",
+    })
+    void namesTheAddOnShippingTheFunctionACallNames(String source, String expected) throws IOException {
+        assertEquals(expected, only(source));
+    }
+
+    @Test
+    void dropsACallToAFunctionNoPackShips() throws IOException {
+        assertEquals(List.of("say before"), translate("function nowhere", "say before"));
+        assertTrue(problems.contains("function nowhere, which no installed pack ships"), problems.toString());
     }
 
     /** Java rejects a selector naming the same argument twice, so the two halves become one range. */

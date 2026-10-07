@@ -11,7 +11,9 @@
       "at.ioexception.mcaddon.clientgametest.FormClientGameTest",
       "at.ioexception.mcaddon.clientgametest.GroupGoalClientGameTest",
       "at.ioexception.mcaddon.clientgametest.JavaModelPoseClientGameTest",
-      "at.ioexception.mcaddon.clientgametest.VanillaNamesClientGameTest"
+      "at.ioexception.mcaddon.clientgametest.VanillaNamesClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.VillageClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.PackCommandClientGameTest"
     ]
   },
   "depends": {

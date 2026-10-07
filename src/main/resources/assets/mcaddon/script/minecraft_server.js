@@ -2878,7 +2878,7 @@ export class Entity {
     }
 
     getRiders() {
-        return list(bridge.entityRiders(this.id)).map(entityFor);
+        return list(bridge.entityRiders(this.id)).map(id => entityFor(id));
     }
 
     addRider(rider) {
@@ -3379,8 +3379,8 @@ export function entityFor(id, knownPlayer) {
     if (id === null || id === undefined) return undefined;
 
     let wrapper = entityCache.get(id);
-    if (wrapper === undefined || (knownPlayer && !(wrapper instanceof Player))) {
-        wrapper = knownPlayer || bridge.entityIsPlayer(id) ? new Player(id) : new Entity(id);
+    if (wrapper === undefined || (knownPlayer === true && !(wrapper instanceof Player))) {
+        wrapper = knownPlayer === true || bridge.entityIsPlayer(id) ? new Player(id) : new Entity(id);
         entityCache.set(id, wrapper);
     }
     return wrapper;
@@ -3399,7 +3399,7 @@ export class Dimension {
     }
 
     getEntities(options) {
-        return list(bridge.dimensionEntities(this.id, JSON.stringify(options ?? {}))).map(entityFor);
+        return list(bridge.dimensionEntities(this.id, JSON.stringify(options ?? {}))).map(id => entityFor(id));
     }
 
     getPlayers(options) {

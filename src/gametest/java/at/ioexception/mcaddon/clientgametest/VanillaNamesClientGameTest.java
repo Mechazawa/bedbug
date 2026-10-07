@@ -59,6 +59,13 @@ public final class VanillaNamesClientGameTest implements FabricClientGameTest {
                 .computeOnServer(server -> javaId(tagged(server, "tp:spawned_as_villager_v2").get(0)));
             Assert.that(spawned.equals("minecraft:villager"),
                 "spawnEntity(\"minecraft:villager_v2\") spawned a " + spawned + " rather than a villager.");
+
+            // Three sprites spawned by the script come back from a query each tick, and each has to be
+            // the object spawnEntity answered with, the second and third as much as the first.
+            world.getServer().runCommand("execute as @a run scriptevent \"tp:sprites\"");
+            Worlds.waitForServer(context, world,
+                server -> tagged(server, "tp:same_object_as_spawned").size() >= 3, WAIT_TICKS,
+                "A sprite the script spawned came back from getEntities as a different object.");
         }
     }
 

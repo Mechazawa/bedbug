@@ -8,12 +8,12 @@ import at.ioexception.mcaddon.script.ScriptBridge;
 import at.ioexception.mcaddon.script.ScriptCoverage;
 import at.ioexception.mcaddon.script.ScriptHost;
 import at.ioexception.mcaddon.server.EntityEvents;
+import at.ioexception.mcaddon.server.PackCommand;
 import at.ioexception.mcaddon.server.ServerHooks;
 import com.google.gson.JsonArray;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.server.MinecraftServer;
@@ -727,14 +727,9 @@ public final class Worlds extends Surface {
         return track.replaceAll("[^A-Za-z0-9_.:/-]", "");
     }
 
-    /** Zero when the command did not parse, which is the same nothing-happened a pack reads. */
+    /** Zero when the command did not run, which is the same nothing-happened a pack reads. */
     private int run(ServerLevel level, String command) {
-        try {
-            return server.getCommands().getDispatcher().execute(command,
-                server.createCommandSourceStack().withLevel(level).withSuppressedOutput());
-        } catch (CommandSyntaxException ignored) {
-            return 0;
-        }
+        return PackCommand.java(command).run(server.createCommandSourceStack().withLevel(level), coverage);
     }
 
     // Reading an option bag a script passed as JSON. A key the pack left out is absent, not null.

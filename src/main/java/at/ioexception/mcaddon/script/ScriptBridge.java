@@ -17,12 +17,12 @@ import at.ioexception.mcaddon.script.surface.Registries;
 import at.ioexception.mcaddon.script.surface.TickingAreas;
 import at.ioexception.mcaddon.script.surface.Worlds;
 import at.ioexception.mcaddon.server.DamageSources;
+import at.ioexception.mcaddon.server.PackCommand;
 import at.ioexception.mcaddon.state.AddonState;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
-import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -82,6 +82,14 @@ public final class ScriptBridge {
     private final MinecraftServer server;
     private final AddonState state;
     private final ScriptCoverage coverage;
+
+    /**
+     * The namespace of the add-on whose script runs here, or null when several add-ons ship one.
+     *
+     * Every pack's script shares one bridge and calls it through one module, so a command a script
+     * runs carries nothing saying which of several packs wrote it.
+     */
+    private final String namespace;
     private long tickDeadline;
     private final Map<Integer, String> openForms = new java.util.LinkedHashMap<>();
 
@@ -112,10 +120,11 @@ public final class ScriptBridge {
     @HostAccess.Export
     public final TickingAreas tickingAreas;
 
-    ScriptBridge(MinecraftServer server, AddonState state, ScriptCoverage coverage) {
+    ScriptBridge(MinecraftServer server, AddonState state, ScriptCoverage coverage, String namespace) {
         this.server = server;
         this.state = state;
         this.coverage = coverage;
+        this.namespace = namespace;
         this.blocks = new Blocks(server, coverage);
         this.containers = new Containers(server, coverage);
         this.players = new Players(server, coverage);
@@ -981,13 +990,19 @@ public final class ScriptBridge {
         Entity entity = entity(id);
         if (entity == null) return 0;
         if (!(entity.level() instanceof ServerLevel level)) return 0;
-        return run(Platform.commandSourceOf(entity, level), command);
+        return runPacks(Platform.commandSourceOf(entity, level), command);
     }
 
     @HostAccess.Export
     public int runCommandIn(String dimension, String command) {
         ServerLevel level = level(dimension);
-        return level == null ? 0 : run(server.createCommandSourceStack().withLevel(level), command);
+        return level == null ? 0 : runPacks(server.createCommandSourceStack().withLevel(level), command);
+    }
+
+    /** A line the pack's script wrote, which is in Bedrock's dialect. */
+    private int runPacks(CommandSourceStack source, String command) {
+        PackCommand line = PackCommand.tryFrom(namespace, command);
+        return line == null ? 0 : line.run(source, coverage);
     }
 
     // Scoreboard. Reads go through the game's own objects; writes go through the command, whose
@@ -1277,37 +1292,9 @@ public final class ScriptBridge {
         return null;
     }
 
-    /**
-     * Brigadier's dispatcher rather than `performPrefixedCommand`, whose return type changed twice
-     * across the supported versions while the dispatcher's has not.
-     */
+    /** A line this bridge built in Java's dialect. */
     private int run(CommandSourceStack source, String command) {
-        String trimmed = command.startsWith("/") ? command.substring(1) : command;
-        CommandSourceStack quiet = source.withSuppressedOutput();
-
-        // Brigadier raises the same kind of failure for a command it cannot read and one that read
-        // fine and then declined. Only the first says this mod is missing something, so the two are
-        // counted apart: a selector matching nothing is the game answering, not a gap.
-        com.mojang.brigadier.ParseResults<CommandSourceStack> parsed =
-            server.getCommands().getDispatcher().parse(trimmed, quiet);
-        if (!parsed.getExceptions().isEmpty() || parsed.getReader().canRead()) {
-            coverage.failedCommand(trimmed, unreadable(parsed));
-            return 0;
-        }
-
-        try {
-            return server.getCommands().getDispatcher().execute(parsed);
-        } catch (CommandSyntaxException declined) {
-            coverage.refusedCommand(trimmed, declined.getMessage());
-            return 0;
-        }
-    }
-
-    /** What Brigadier objected to, or where it stopped reading when it said nothing. */
-    private static String unreadable(com.mojang.brigadier.ParseResults<CommandSourceStack> parsed) {
-        return parsed.getExceptions().values().stream().findFirst()
-            .map(CommandSyntaxException::getMessage)
-            .orElseGet(() -> "unread from position " + parsed.getReader().getCursor());
+        return PackCommand.java(command).run(source, coverage);
     }
 
     private ItemStack stack(String itemId, int amount) {

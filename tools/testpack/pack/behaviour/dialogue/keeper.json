@@ -11,7 +11,7 @@
         "buttons": [
           {
             "name": "Feed it",
-            "commands": ["/scoreboard players add @initiator tp.dialogue 100"]
+            "commands": ["/scoreboard players add @initiator tp.dialogue 100", "/xp 1L @initiator"]
           },
           {
             "name": "Walk away",

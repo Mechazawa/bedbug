@@ -167,7 +167,7 @@ public final class Functions {
      * would match more entities than the pack asked for. The line is left out instead.
      */
     private static final Set<String> BEDROCK_ONLY_SELECTOR_ARGUMENTS = Set.of(
-        "hasitem", "haspermission", "has_property");
+        "haspermission", "has_property");
 
     /**
      * The rules both editions have, under the name {@link Platform} looks one up by.
@@ -273,20 +273,26 @@ public final class Functions {
     private Functions() {
     }
 
-    /** The names of the functions that ran, so the caller can build the tick tag from them. */
+    /** A pack's functions, calling only one another. */
     public static List<String> convert(BedrockPack pack, Path root, String namespace,
         Set<String> unsupported) throws IOException {
+        return convert(pack, root, namespace, FunctionNames.of(Map.of(namespace, List.of(pack))), unsupported);
+    }
+
+    /** The names of the functions that ran, so the caller can build the tick tag from them. */
+    public static List<String> convert(BedrockPack pack, Path root, String namespace,
+        FunctionNames functions, Set<String> unsupported) throws IOException {
         List<String> converted = new ArrayList<>();
         String directory = Platform.singularDataDirectories()
             ? "function" : "functions";
+        FunctionNames calls = functions.issuedBy(namespace);
 
         for (Path file : pack.list("functions", ".mcfunction")) {
-            String relative = pack.relative(file).toString().replace('\\', '/');
-            String inside = Names.sanitise(relative.substring("functions/".length(), relative.length() - 11));
+            String inside = FunctionNames.pathOf(pack, file);
 
             List<String> lines = new ArrayList<>();
             for (String line : new String(Files.readAllBytes(file), StandardCharsets.UTF_8).split("\n")) {
-                String rewritten = line(line.strip(), unsupported);
+                String rewritten = line(line.strip(), calls, unsupported);
                 if (rewritten != null) lines.add(rewritten);
             }
 
@@ -301,11 +307,17 @@ public final class Functions {
         return converted;
     }
 
-    /** Null for a line Java would reject: a blank, or one whose command or selector cannot follow. */
-    private static String line(String source, Set<String> unsupported) {
+    /**
+     * One line of a pack's in Java's dialect, written by the add-on `functions` is issued by.
+     *
+     * Null for a line Java would reject: a blank, or one whose command or selector cannot follow.
+     * What could not be said is added to `unsupported`, including for a line that still translates.
+     */
+    public static String line(String source, FunctionNames functions, Set<String> unsupported) {
         if (source.isEmpty() || source.startsWith("#")) return source.isEmpty() ? null : source;
 
-        String translated = translate(source.startsWith("/") ? source.substring(1) : source, unsupported);
+        String translated = translate(source.startsWith("/") ? source.substring(1) : source, functions,
+            unsupported);
         return translated == null ? null : selectors(translated, unsupported);
     }
 
@@ -315,7 +327,7 @@ public final class Functions {
      * The selectors are left for the caller, because a nested command is translated through here as
      * well and its selectors are rewritten once with the line they sit in.
      */
-    private static String translate(String command, Set<String> unsupported) {
+    private static String translate(String command, FunctionNames functions, Set<String> unsupported) {
         String[] parts = SPACE.split(command.strip(), 2);
         String name = parts[0].toLowerCase(Locale.ROOT);
         String rest = parts.length > 1 ? parts[1].strip() : "";
@@ -324,11 +336,28 @@ public final class Functions {
             unsupported.add("command " + name);
             return null;
         }
+        if (name.equals("function")) return function(rest, functions, unsupported);
         String renamed = RENAMED.getOrDefault(name, SHARED_WITH_JAVA.contains(name)
             || REGISTERED_WHOLE_LINE.contains(name) ? name : null);
         if (renamed != null) return rest.isEmpty() ? renamed : renamed + " " + rest;
 
-        return rewrite(name, rest, unsupported);
+        return rewrite(name, rest, functions, unsupported);
+    }
+
+    /**
+     * `function <name>`, naming the add-on that ships the function as well as its path.
+     *
+     * Java reads a name with no namespace as one under `minecraft`, where no add-on's function is,
+     * so a call left as Bedrock wrote it runs nothing and says nothing.
+     */
+    private static String function(String rest, FunctionNames functions, Set<String> unsupported) {
+        String[] parts = SPACE.split(rest, 2);
+        String named = functions.qualify(parts[0]);
+        if (named == null) {
+            unsupported.add("function " + parts[0] + ", which no installed pack ships");
+            return null;
+        }
+        return "function " + named + (parts.length > 1 ? " " + parts[1] : "");
     }
 
     /**
@@ -338,7 +367,8 @@ public final class Functions {
      * extra wrapper around it. The rest move an argument, replace a keyword, or fill in one Java
      * asks for and Bedrock works out for itself.
      */
-    private static String rewrite(String name, String rest, Set<String> unsupported) {
+    private static String rewrite(String name, String rest, FunctionNames functions,
+        Set<String> unsupported) {
         return switch (name) {
             case "summon" -> summon(rest, unsupported);
             case "give" -> give(rest, unsupported);
@@ -347,7 +377,7 @@ public final class Functions {
             case "fill" -> fill(rest, unsupported);
             case "testforblock" -> testForBlock(rest, unsupported);
             case "clone" -> cloneBlocks(rest, unsupported);
-            case "execute" -> execute(rest, unsupported);
+            case "execute" -> execute(rest, functions, unsupported);
             case "damage" -> damage(rest, unsupported);
             case "locate" -> locate(rest, unsupported);
             case "loot" -> loot(rest, unsupported);
@@ -378,7 +408,7 @@ public final class Functions {
             case "particle" -> "particle " + quotedName(rest);
             case "scriptevent" -> "scriptevent " + quotedName(rest);
             case "dialogue" -> dialogue(rest, unsupported);
-            case "schedule" -> schedule(rest, unsupported);
+            case "schedule" -> schedule(rest, functions, unsupported);
             case "camera" -> camera(rest, unsupported);
             default -> {
                 unsupported.add("command " + name);
@@ -721,14 +751,14 @@ public final class Functions {
      * The command behind `run` is translated in its own right, so a chain ending in something Java
      * has no counterpart for costs the line rather than being written out unreadable.
      */
-    private static String execute(String rest, Set<String> unsupported) {
+    private static String execute(String rest, FunctionNames functions, Set<String> unsupported) {
         String[] parts = SPACE.split(rest, 2);
         if (rest.isEmpty()) {
             unsupported.add("command execute with nothing to run");
             return null;
         }
         if (!EXECUTE_CLAUSES.contains(parts[0].toLowerCase(Locale.ROOT))) {
-            return legacyExecute(rest, unsupported);
+            return legacyExecute(rest, functions, unsupported);
         }
 
         int run = rest.indexOf(" run ");
@@ -736,7 +766,7 @@ public final class Functions {
         if (clauses == null) return null;
         if (run < 0) return "execute " + dimensions(clauses);
 
-        String inner = translate(rest.substring(run + " run ".length()), unsupported);
+        String inner = translate(rest.substring(run + " run ".length()), functions, unsupported);
         return inner == null ? null : "execute " + dimensions(clauses) + " run " + inner;
     }
 
@@ -781,7 +811,7 @@ public final class Functions {
      * modern form says with `as`, `at` and `positioned`. The block's data value is read the way a
      * `testforblock` reads one: `-1` is any state and a family member is its own Java block.
      */
-    private static String legacyExecute(String rest, Set<String> unsupported) {
+    private static String legacyExecute(String rest, FunctionNames functions, Set<String> unsupported) {
         String[] parts = SPACE.split(rest);
         if (parts.length < 5) {
             unsupported.add("command execute in a form with no command behind it");
@@ -803,7 +833,8 @@ public final class Functions {
             at += 6;
         }
 
-        String inner = translate(String.join(" ", Arrays.copyOfRange(parts, at, parts.length)), unsupported);
+        String inner = translate(String.join(" ", Arrays.copyOfRange(parts, at, parts.length)), functions,
+            unsupported);
         return inner == null ? null : "execute " + clauses + " run " + inner;
     }
 
@@ -1259,20 +1290,29 @@ public final class Functions {
      * spelled alike in both and `schedule delay clear` is the same thing said the longer way.
      * `on_area_loaded` waits for chunks to be loaded, which Java keeps no queue for.
      */
-    private static String schedule(String rest, Set<String> unsupported) {
+    private static String schedule(String rest, FunctionNames functions, Set<String> unsupported) {
         String[] parts = SPACE.split(rest, 2);
         String mode = parts[0].toLowerCase(Locale.ROOT);
         String tail = parts.length > 1 ? parts[1] : "";
 
-        if (mode.equals("clear")) return "schedule clear " + tail;
+        if (mode.equals("clear")) return scheduled("schedule clear", tail, functions, unsupported);
         if (!mode.equals("delay")) return dropped("schedule", mode, unsupported);
 
         String[] action = SPACE.split(tail, 2);
         return switch (action[0].toLowerCase(Locale.ROOT)) {
-            case "add" -> action.length > 1 ? "schedule function " + action[1] : null;
-            case "clear" -> action.length > 1 ? "schedule clear " + action[1] : null;
+            case "add" -> action.length > 1
+                ? scheduled("schedule function", action[1], functions, unsupported) : null;
+            case "clear" -> action.length > 1
+                ? scheduled("schedule clear", action[1], functions, unsupported) : null;
             default -> dropped("schedule", action[0].toLowerCase(Locale.ROOT), unsupported);
         };
+    }
+
+    /** A schedule whose function is named the way `function` names one. */
+    private static String scheduled(String form, String rest, FunctionNames functions,
+        Set<String> unsupported) {
+        String called = function(rest, functions, unsupported);
+        return called == null ? null : form + called.substring("function".length());
     }
 
     /**
@@ -1424,6 +1464,8 @@ public final class Functions {
                     arguments.add("gamemode=" + mode);
                 }
                 case "family" -> arguments.add("tag=" + value);
+                // Read by the option `server.HasItem` adds to Java's own selector parser.
+                case "hasitem" -> arguments.add("hasitem=" + value);
                 default -> {
                     if (SHARED_SELECTOR_ARGUMENTS.contains(key)) {
                         arguments.add(key + "=" + value);

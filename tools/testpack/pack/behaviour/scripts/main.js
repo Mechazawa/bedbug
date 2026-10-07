@@ -50,9 +50,26 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
     if (readAsGoldenRail) dimension.getBlock({ x, y: y + 2, z })?.setType("minecraft:gold_block");
 });
 
+// Commands written the way a pack writes them, none of which Java's parser reads as they stand: a
+// selector asking about an inventory, a selector naming Bedrock's villager, a function named by its
+// path alone and a command Java has nothing like. Each answer is a tag on the entity running them.
+function runBedrockCommands(entity) {
+    entity.runCommand("execute if entity @s[hasitem={item=diamond_sword,location=slot.weapon.mainhand}] "
+        + "run tag @s add tp_holds_a_sword");
+    entity.runCommand("execute unless entity @s[hasitem={item=diamond}] run tag @s add tp_has_no_diamond");
+    entity.runCommand("tag @e[type=villager_v2,r=4] add tp_selected_as_villager_v2");
+    entity.runCommand("function tp/relay");
+    entity.runCommand("hud @s hide hotbar");
+}
+
 system.afterEvents.scriptEventReceive.subscribe(event => {
     const player = event.sourceEntity;
     if (player === undefined) return;
+    if (event.id === "tp:commands") runBedrockCommands(player);
+    // A pack handing out one of its own items unless the player already carries it.
+    if (event.id === "tp:stock_up") {
+        player.runCommand("execute unless entity @s[hasitem={item=tp:dust}] run give @s tp:dust");
+    }
     if (event.id === "tp:handbook") openHandbook(player);
     if (event.id === "tp:villager") {
         const { x, y, z } = player.location;
@@ -88,5 +105,22 @@ system.runInterval(() => {
         const companion = villager.dimension.spawnEntity("tp:sprite", villager.location);
         companion.setDynamicProperty("tp:companion_of", villager.id);
         companion.addTag("tp:villager_companion");
+    }
+});
+
+// A pack keys its own maps by the objects `spawnEntity` hands back and finds them again through a
+// query, so a sprite this script spawned has to come back from `getEntities` as that same object,
+// whatever its place in the list.
+const spawnedSprites = new Set();
+system.afterEvents.scriptEventReceive.subscribe(event => {
+    if (event.id !== "tp:sprites" || event.sourceEntity === undefined) return;
+    const { x, y, z } = event.sourceEntity.location;
+    for (let offset = 2; offset <= 6; offset += 2) {
+        spawnedSprites.add(event.sourceEntity.dimension.spawnEntity("tp:sprite", { x: x + offset, y, z: z - 6 }));
+    }
+});
+system.runInterval(() => {
+    for (const sprite of world.getDimension("overworld").getEntities({ type: "tp:sprite" })) {
+        if (spawnedSprites.has(sprite)) sprite.addTag("tp:same_object_as_spawned");
     }
 });

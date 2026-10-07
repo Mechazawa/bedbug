@@ -1,6 +1,5 @@
 package at.ioexception.mcaddon.server;
 
-import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.behaviour.BlockDefinition;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
@@ -12,7 +11,6 @@ import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
@@ -193,21 +191,15 @@ public final class BlockEvents {
         }
     }
 
-    /** Bedrock's commands are Java's apart from the leading slash, the way an entity event runs them. */
-    private static void runCommands(RunCommands response, ServerLevel level, BlockPos position,
-        Entity actor) {
-        MinecraftServer server = level.getServer();
+    /** The event's commands, written by the add-on whose namespace the block carries. */
+    private void runCommands(RunCommands response, ServerLevel level, BlockPos position, Entity actor) {
         CommandSourceStack source = response.onActor() && actor != null
             ? Platform.commandSourceOf(actor, level)
-            : server.createCommandSourceStack().withLevel(level).withPosition(Vec3.atCenterOf(position));
+            : level.getServer().createCommandSourceStack().withLevel(level).withPosition(Vec3.atCenterOf(position));
 
         for (String command : response.commands()) {
-            String trimmed = command.startsWith("/") ? command.substring(1) : command;
-            try {
-                server.getCommands().getDispatcher().execute(trimmed, source.withSuppressedOutput());
-            } catch (CommandSyntaxException error) {
-                McAddon.LOGGER.debug("A block event ran a command that did not parse: {}", trimmed);
-            }
+            PackCommand line = PackCommand.tryFrom(namespace, command);
+            if (line != null) line.run(source, CommandReport.DATA);
         }
     }
 
