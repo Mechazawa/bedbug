@@ -49,6 +49,10 @@ final class Stage {
         server.runCommand("clear @a");
         server.runCommand("tp @a 0.5 " + (FLOOR + 1) + " 0.5 0 0");
         Worlds.waitForChunks(world);
+        // The teleport turns the view as well, so a view set before it reaches the client is lost.
+        context.waitFor(client -> client.player.blockPosition().equals(CENTRE.above())
+            && client.player.getYRot() == 0 && client.player.getXRot() == 0);
+        context.waitTick();
     }
 
     /**

@@ -13,7 +13,8 @@
       "at.ioexception.mcaddon.clientgametest.JavaModelPoseClientGameTest",
       "at.ioexception.mcaddon.clientgametest.ItemUseClientGameTest",
       "at.ioexception.mcaddon.clientgametest.BlockClientGameTest",
-      "at.ioexception.mcaddon.clientgametest.CreativeTabClientGameTest"
+      "at.ioexception.mcaddon.clientgametest.CreativeTabClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.CraftingClientGameTest"
     ]
   },
   "depends": {
