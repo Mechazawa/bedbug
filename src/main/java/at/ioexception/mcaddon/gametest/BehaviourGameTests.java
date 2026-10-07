@@ -1169,6 +1169,50 @@ public final class BehaviourGameTests {
         });
     }
 
+    /**
+     * The queries about where an entity stands answer for the place it is standing in.
+     *
+     * `query.head_is_in_water` turns with the water poured over the entity, and the two biome tag
+     * queries ask about the biome under it: one of that biome's own tags beside one nobody carries
+     * is enough for one of them and too little for all of them.
+     */
+    @GameTest(structure = "mcaddon:platform")
+    public void theQueriesAboutWhereAnEntityStandsAnswerForThatPlace(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY, ON_FLOOR);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        at.ioexception.mcaddon.bedrock.entity.EntityQueries asked =
+            new at.ioexception.mcaddon.bedrock.entity.EntityQueries(ember,
+                new at.ioexception.mcaddon.bedrock.animation.AnimationPlayer(null, ember),
+                at.ioexception.mcaddon.bedrock.entity.EntityQueries.Drawn.NONE,
+                java.util.Map::of, false);
+        String tag = helper.getLevel().getBiome(ember.blockPosition()).tags()
+            .map(key -> key.location().toString()).findFirst().orElse(null);
+        helper.assertTrue(tag != null, "The biome under the test carries no tag to ask about.");
+        List<at.ioexception.mcaddon.bedrock.molang.MolangValue> tags = List.of(
+            at.ioexception.mcaddon.bedrock.molang.MolangValue.of(tag),
+            at.ioexception.mcaddon.bedrock.molang.MolangValue.of("tp:carried_by_nothing"));
+        helper.assertTrue(asked.query("has_any_biome_tags", tags).truthy(),
+            "query.has_any_biome_tags denied the biome carries " + tag + ".");
+        helper.assertFalse(asked.query("has_all_biome_tags", tags).truthy(),
+            "query.has_all_biome_tags said the biome carries a tag nothing carries.");
+        helper.assertTrue(asked.query("has_all_biome_tags", tags.subList(0, 1)).truthy(),
+            "query.has_all_biome_tags denied the biome carries " + tag + ".");
+
+        helper.assertFalse(asked.query("head_is_in_water", List.of()).truthy(),
+            "query.head_is_in_water said yes on dry land.");
+        helper.setBlock(ON_FLOOR, net.minecraft.world.level.block.Blocks.WATER);
+        helper.setBlock(ON_FLOOR.above(), net.minecraft.world.level.block.Blocks.WATER);
+        helper.runAfterDelay(2, () -> {
+            helper.assertTrue(asked.query("head_is_in_water", List.of()).truthy(),
+                "query.head_is_in_water said no with two blocks of water over " + ENTITY + ".");
+            helper.succeed();
+        });
+    }
+
     private static String idle(AddonEntity entity) {
         net.minecraft.sounds.SoundEvent sound = entity.getAmbientSound();
         return sound == null ? "nothing"

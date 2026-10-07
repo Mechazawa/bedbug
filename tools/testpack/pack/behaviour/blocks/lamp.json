@@ -25,6 +25,9 @@
         "explosion_resistance": 2
       },
       "minecraft:light_emission": 0,
+      "minecraft:sound": {
+        "sound": "glass"
+      },
       "minecraft:geometry": {
         "identifier": "geometry.lamp",
         "culling_shape": "tp:lamp_shape"

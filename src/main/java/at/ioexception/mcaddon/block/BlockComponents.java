@@ -382,7 +382,7 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
         BlockBehaviour.OffsetType offset = offsetType(components);
         if (offset != BlockBehaviour.OffsetType.NONE) properties = properties.offsetType(offset);
 
-        SoundType sound = appearance == null ? null : BlockSounds.of(appearance.soundGroup());
+        SoundType sound = BlockSounds.of(soundGroup(components, appearance));
         if (sound != null) properties = properties.sound(sound);
 
         NoteBlockInstrument instrument = instrument(components);
@@ -390,6 +390,18 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
 
         MapColor colour = mapColour(components);
         return colour == null ? properties : properties.mapColor(colour);
+    }
+
+    /**
+     * The sound group the block makes its noises from.
+     *
+     * `minecraft:sound` names it in the behaviour pack, which is where a block states it from 1.26.20
+     * on and what outranks the group the resource pack's `blocks.json` names for the same block.
+     */
+    private static String soundGroup(JsonObject components, ClientBlockDefinition appearance) {
+        String stated = text(components, "minecraft:sound", "sound");
+        if (stated != null && !stated.isEmpty()) return stated;
+        return appearance == null ? null : appearance.soundGroup();
     }
 
     /**

@@ -339,6 +339,27 @@ public final class PackGameTests {
     }
 
     /**
+     * A pack's block makes the sounds of the group its own `minecraft:sound` names.
+     *
+     * The lamp names glass in its behaviour definition and the pack ships no `blocks.json`, so a
+     * block made from the definition alone keeps the stone a block falls back on.
+     */
+    @GameTest()
+    public void aPackBlockSoundsLikeTheGroupItNames(GameTestHelper helper) {
+        net.minecraft.world.level.block.Block block = BuiltInRegistries.BLOCK
+            .getOptional(Platform.id("tp", "lamp")).orElse(null);
+        if (block == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.assertTrue(block.defaultBlockState().getSoundType()
+                == net.minecraft.world.level.block.SoundType.GLASS,
+            BLOCK + " names the glass sound group and does not sound like glass.");
+        helper.succeed();
+    }
+
+    /**
      * A pack's block runs the event its own clock asks for.
      *
      * `minecraft:queued_ticking` names an interval and an event, and none of that chain exists
