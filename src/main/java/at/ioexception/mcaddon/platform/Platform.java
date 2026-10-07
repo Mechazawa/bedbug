@@ -638,6 +638,39 @@ public final class Platform {
     }
 
     /**
+     * What a crafting grid one square wide makes out of these stacks, by the recipes the data packs
+     * loaded, or an empty stack when no recipe takes them.
+     *
+     * 1.21 replaced the container a recipe matched against with an input of its own, and 26 stopped
+     * handing the registries to `assemble`.
+     */
+    public static net.minecraft.world.item.ItemStack crafted(ServerLevel level,
+        List<net.minecraft.world.item.ItemStack> column) {
+        net.minecraft.world.item.crafting.RecipeManager recipes = level.getServer().getRecipeManager();
+        //? if >=26 {
+        net.minecraft.world.item.crafting.CraftingInput input =
+            net.minecraft.world.item.crafting.CraftingInput.of(1, column.size(), column);
+        return recipes.getRecipeFor(net.minecraft.world.item.crafting.RecipeType.CRAFTING, input, level)
+            .map(found -> found.value().assemble(input))
+            .orElse(net.minecraft.world.item.ItemStack.EMPTY);
+        //?} else if >=1.21 {
+        /*net.minecraft.world.item.crafting.CraftingInput input =
+            net.minecraft.world.item.crafting.CraftingInput.of(1, column.size(), column);
+        return recipes.getRecipeFor(net.minecraft.world.item.crafting.RecipeType.CRAFTING, input, level)
+            .map(found -> found.value().assemble(input, level.registryAccess()))
+            .orElse(net.minecraft.world.item.ItemStack.EMPTY);
+        *///?} else {
+        /*net.minecraft.world.inventory.TransientCraftingContainer grid =
+            new net.minecraft.world.inventory.TransientCraftingContainer(null, 1, column.size(),
+                net.minecraft.core.NonNullList.of(net.minecraft.world.item.ItemStack.EMPTY,
+                    column.toArray(new net.minecraft.world.item.ItemStack[0])));
+        return recipes.getRecipeFor(net.minecraft.world.item.crafting.RecipeType.CRAFTING, grid, level)
+            .map(found -> found.assemble(grid, level.registryAccess()))
+            .orElse(net.minecraft.world.item.ItemStack.EMPTY);
+        *///?}
+    }
+
+    /**
      * What a recipe result names its item under.
      *
      * 1.21 renamed the field from `item` to `id`, a version before the ingredient changed shape.
