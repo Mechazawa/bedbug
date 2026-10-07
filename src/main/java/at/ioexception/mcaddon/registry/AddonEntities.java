@@ -101,6 +101,26 @@ public final class AddonEntities {
         return id == null ? null : BuiltInRegistries.ENTITY_TYPE.getOptional(id).orElse(null);
     }
 
+    /**
+     * The identifier a pack knows this type by, which is what `typeOf` reads back: the add-on's own
+     * for a type a pack declared, and Bedrock's spelling for one the game has.
+     */
+    public static String identifierOf(EntityType<?> type) {
+        ServerEntityDefinition own = DEFINITIONS.get(type);
+        return own != null ? own.identifier()
+            : at.ioexception.mcaddon.convert.BedrockEntityNames.bedrock(
+                BuiltInRegistries.ENTITY_TYPE.getKey(type).toString());
+    }
+
+    /**
+     * The identifier a type a pack names is reported under, whichever edition's spelling it wrote,
+     * so that two names for one type compare equal. A name no type answers to comes back as written.
+     */
+    public static String identifierOf(String identifier) {
+        EntityType<?> named = typeOf(identifier);
+        return named == null ? identifier : identifierOf(named);
+    }
+
     public static Map<EntityType<?>, ServerEntityDefinition> all() {
         return DEFINITIONS;
     }

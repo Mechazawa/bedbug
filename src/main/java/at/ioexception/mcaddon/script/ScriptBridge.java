@@ -1,8 +1,10 @@
 package at.ioexception.mcaddon.script;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.script.surface.Blocks;
 import at.ioexception.mcaddon.script.surface.Containers;
 import at.ioexception.mcaddon.script.surface.EntityMembers;
@@ -298,7 +300,7 @@ public final class ScriptBridge {
     @HostAccess.Export
     public String entityTypeId(String id) {
         Entity entity = entity(id);
-        return entity == null ? null : EntityType.getKey(entity.getType()).toString();
+        return entity == null ? null : AddonEntities.identifierOf(entity.getType());
     }
 
     @HostAccess.Export
@@ -517,7 +519,8 @@ public final class ScriptBridge {
 
     @HostAccess.Export
     public String[] entityFamilies(String id) {
-        return EntityFamilies.of(entityTypeId(id));
+        Entity entity = entity(id);
+        return entity == null ? new String[0] : EntityFamilies.of(entity);
     }
 
     @HostAccess.Export
@@ -909,11 +912,8 @@ public final class ScriptBridge {
     @HostAccess.Export
     public String spawnEntity(String dimension, String typeId, double x, double y, double z) {
         ServerLevel level = level(dimension);
-        Identifier parsed = Identifier.tryParse(typeId);
-        if (level == null || parsed == null) return null;
-
-        EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getOptional(parsed).orElse(null);
-        if (type == null) return null;
+        EntityType<?> type = typeId == null ? null : AddonEntities.typeOf(typeId);
+        if (level == null || type == null) return null;
 
         Entity spawned = Platform.createMob(type, level);
         if (spawned == null) return null;
@@ -1396,24 +1396,34 @@ public final class ScriptBridge {
             location.get("x").getAsDouble(), location.get("y").getAsDouble(), location.get("z").getAsDouble()};
     }
 
-    /** Bedrock type families come from the behaviour pack; nothing declares them for vanilla types. */
+    /**
+     * Bedrock type families come from the behaviour pack, so an add-on's own type answers with what
+     * its definition declares. Nothing declares them for the game's types, which are keyed here by
+     * the id Bedrock gives them.
+     */
     private static final class EntityFamilies {
-        private static final Map<String, String[]> VANILLA = Map.of(
-            "minecraft:player", new String[] {"player", "mob"},
-            "minecraft:villager", new String[] {"villager", "mob"},
-            "minecraft:zombie", new String[] {"zombie", "undead", "monster", "mob"},
-            "minecraft:skeleton", new String[] {"skeleton", "undead", "monster", "mob"},
-            "minecraft:creeper", new String[] {"creeper", "monster", "mob"},
-            "minecraft:sheep", new String[] {"sheep", "animal", "mob"},
-            "minecraft:cow", new String[] {"cow", "animal", "mob"},
-            "minecraft:wandering_trader", new String[] {"wandering_trader", "mob"},
-            "minecraft:iron_golem", new String[] {"irongolem", "mob"});
+        private static final Map<String, String[]> VANILLA = Map.ofEntries(
+            Map.entry("minecraft:player", new String[] {"player", "mob"}),
+            Map.entry("minecraft:villager_v2", new String[] {"villager", "mob"}),
+            Map.entry("minecraft:zombie_villager_v2",
+                new String[] {"zombie_villager", "zombie", "undead", "monster", "mob"}),
+            Map.entry("minecraft:zombie", new String[] {"zombie", "undead", "monster", "mob"}),
+            Map.entry("minecraft:skeleton", new String[] {"skeleton", "undead", "monster", "mob"}),
+            Map.entry("minecraft:creeper", new String[] {"creeper", "monster", "mob"}),
+            Map.entry("minecraft:sheep", new String[] {"sheep", "animal", "mob"}),
+            Map.entry("minecraft:cow", new String[] {"cow", "animal", "mob"}),
+            Map.entry("minecraft:wandering_trader", new String[] {"wandering_trader", "mob"}),
+            Map.entry("minecraft:iron_golem", new String[] {"irongolem", "mob"}),
+            Map.entry("minecraft:boat", new String[] {"boat", "inanimate"}),
+            Map.entry("minecraft:chest_boat", new String[] {"boat", "inanimate"}));
 
         private EntityFamilies() {
         }
 
-        static String[] of(String typeId) {
-            return VANILLA.getOrDefault(typeId, new String[] {"mob"});
+        static String[] of(Entity entity) {
+            ServerEntityDefinition own = AddonEntities.definitionOf(entity.getType());
+            if (own != null) return own.families().toArray(String[]::new);
+            return VANILLA.getOrDefault(AddonEntities.identifierOf(entity.getType()), new String[] {"mob"});
         }
     }
 
@@ -1458,22 +1468,27 @@ public final class ScriptBridge {
         /** What the entity is: its registered type, and the Bedrock families that type belongs to. */
         private void kinds(JsonObject options) {
             String type = text(options, "type");
-            if (type != null) tests.add(entity -> typeId(entity).equals(qualify(type)));
+            if (type != null) {
+                String wanted = identifier(type);
+                tests.add(entity -> typeId(entity).equals(wanted));
+            }
 
             Set<String> excludeTypes = strings(options, "excludeTypes");
             if (!excludeTypes.isEmpty()) {
-                tests.add(entity -> excludeTypes.stream().noneMatch(one -> typeId(entity).equals(qualify(one))));
+                Set<String> unwanted = new java.util.HashSet<>();
+                excludeTypes.forEach(one -> unwanted.add(identifier(one)));
+                tests.add(entity -> !unwanted.contains(typeId(entity)));
             }
 
             Set<String> families = strings(options, "families");
             if (!families.isEmpty()) {
-                tests.add(entity -> Set.of(EntityFamilies.of(typeId(entity))).containsAll(families));
+                tests.add(entity -> Set.of(EntityFamilies.of(entity)).containsAll(families));
             }
 
             Set<String> excludeFamilies = strings(options, "excludeFamilies");
             if (!excludeFamilies.isEmpty()) {
                 tests.add(entity -> java.util.Collections.disjoint(
-                    Set.of(EntityFamilies.of(typeId(entity))), excludeFamilies));
+                    Set.of(EntityFamilies.of(entity)), excludeFamilies));
             }
         }
 
@@ -1637,7 +1652,11 @@ public final class ScriptBridge {
         }
 
         private static String typeId(Entity entity) {
-            return EntityType.getKey(entity.getType()).toString();
+            return AddonEntities.identifierOf(entity.getType());
+        }
+
+        private static String identifier(String type) {
+            return AddonEntities.identifierOf(qualify(type));
         }
 
         private static String nameOf(Entity entity) {

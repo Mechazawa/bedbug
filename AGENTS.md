@@ -303,6 +303,16 @@ These are the checks it runs, and what each one catches:
   turns the page and asserts the same screen now draws the second page and not the first, then
   closes it both ways and reads the tag back: a form whose button press closed the screen, or whose
   observables reached the screen only once, fails there.
+
+  The same script watches the game's own villagers the way a pack replacing them does, in Bedrock's
+  ids throughout: it compares `typeId` against `minecraft:villager_v2` and `minecraft:xp_orb` as
+  each entity spawns, queries the overworld for `minecraft:villager_v2` every tick and spawns a
+  sprite it then marks beside each one found, hears `entityHurt` through listeners narrowed to a
+  villager and to a zombie, and answers `/scriptevent "tp:villager"` with
+  `spawnEntity("minecraft:villager_v2")`. Every answer is a tag, which `VanillaNamesClientGameTest`
+  reads back after summoning a Java villager and an experience orb: a surface reporting or accepting
+  only Java's ids, a listener whose options are ignored, or an `entitySpawn` raised before
+  `spawnEntity` has returned each fails there.
 - **`tools/testpack/build_modules.py`** builds a second add-on, whose script imports every
   `@minecraft/*` module the mod provides and calls one thing from each. Its sources are a manifest
   and one script under `tools/testpack/modules/`.
@@ -1152,3 +1162,11 @@ src/main/resources/assets/mcaddon/script/
 of it runs, so a specifier a pack imports that is not in that map, or a named export missing from
 one that is, ends that pack's whole script rather than the line that asked for it. Add the name
 even when the mod cannot act on what the module offers.
+
+**An entity type crosses the bridge under its Bedrock id.** `AddonEntities.identifierOf` is what
+the surface reports (`typeId`, `EntityTypes`, event payloads, families) and `AddonEntities.typeOf`
+is what it accepts (spawns, queries, filters), with `BedrockEntityNames` holding the vanilla ids
+the two editions spell differently in both directions. Compare two names through `identifierOf`,
+never the raw registry key, or `minecraft:villager` and `minecraft:villager_v2` read as two types.
+Item and block ids cross unchanged, so Bedrock-only spellings such as `minecraft:golden_rail` do
+not resolve in a script.

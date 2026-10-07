@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.script.surface;
 
 import at.ioexception.mcaddon.pack.PackSettings;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.script.ScriptBridge;
 import at.ioexception.mcaddon.script.ScriptCoverage;
 import at.ioexception.mcaddon.script.ScriptHost;
@@ -392,9 +393,7 @@ public final class Worlds extends Surface {
             name = name.substring(0, opened);
         }
 
-        Identifier parsed = Identifier.tryParse(name.contains(":") ? name : "minecraft:" + name);
-        EntityType<?> type = parsed == null ? null
-            : BuiltInRegistries.ENTITY_TYPE.getOptional(parsed).orElse(null);
+        EntityType<?> type = AddonEntities.typeOf(name);
         if (type == null) return null;
 
         Entity spawned = Platform.createMob(type, level);
