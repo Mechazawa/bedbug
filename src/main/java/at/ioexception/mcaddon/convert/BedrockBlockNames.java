@@ -398,8 +398,14 @@ public final class BedrockBlockNames {
         }
     }
 
-    /** The Java name, state included, that a bare lower-cased Bedrock name stands for. */
-    private static String javaName(String name) {
+    /**
+     * The Java name, state included, that a bare lower-cased Bedrock name stands for.
+     *
+     * Bedrock once named the block form of an item kept apart from it `item.` and the item's name,
+     * as `item.soul_campfire` and `item.reeds`, which packs still write in a block list.
+     */
+    private static String javaName(String bedrock) {
+        String name = bedrock.startsWith("item.") ? bedrock.substring("item.".length()) : bedrock;
         String renamed = RENAMED.getOrDefault(name, STATED.get(name));
         if (renamed != null) return renamed;
 

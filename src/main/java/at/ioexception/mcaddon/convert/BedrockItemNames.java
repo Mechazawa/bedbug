@@ -7,6 +7,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -67,6 +68,8 @@ public final class BedrockItemNames {
         Map.entry("turtle_shell_piece", "turtle_scute"),
         Map.entry("yellow_flower", "dandelion"));
 
+    private static final Set<String> ITEMLESS = Set.of("frosted_ice", "spawn_egg");
+
     private static final Map<String, String> BEDROCK = RENAMED.entrySet().stream()
         .collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
 
@@ -106,9 +109,16 @@ public final class BedrockItemNames {
         return shipped(javaName(name));
     }
 
-    /** Whether Bedrock has this item and Java has nothing to stand in for it. */
+    /**
+     * Whether Bedrock has this item and Java has nothing to stand in for it.
+     *
+     * Beyond the blocks Java lacks, Java keeps no item for frosted ice, and Bedrock's one
+     * `spawn_egg` names its mob by a number from before Bedrock's mobs had ids.
+     */
     public static boolean bedrockOnly(String bedrock) {
-        return BedrockBlockNames.bedrockOnly(bedrock);
+        String name = DataValues.vanilla(bedrock);
+        return name != null && (ITEMLESS.contains(name.toLowerCase(Locale.ROOT))
+            || BedrockBlockNames.bedrockOnly(bedrock));
     }
 
     /**

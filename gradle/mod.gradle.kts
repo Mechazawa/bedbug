@@ -105,6 +105,24 @@ project.tasks.named<JavaCompile>("compileTestJava") {
 }
 
 /**
+ * Runs Bedrock item and block ids through the mod's own mapping, for `tools/census/ids.py`.
+ *
+ * The mapping asks the registry which spellings a version has, so it runs on the unit tests'
+ * classpath, which can bootstrap one without a game. `-PidsIn` and `-PidsOut` name the two files.
+ */
+project.tasks.register<JavaExec>("idCensus") {
+    group = "verification"
+    description = "Answer the id census's Bedrock ids with this mod's Java ones."
+    onlyIf { project.name == activeName }
+    dependsOn("testClasses")
+
+    val sourceSets = project.extensions.getByType(SourceSetContainer::class.java)
+    classpath = sourceSets.getByName("test").runtimeClasspath
+    mainClass.set("at.ioexception.mcaddon.convert.IdCensus")
+    args(project.findProperty("idsIn")?.toString() ?: "", project.findProperty("idsOut")?.toString() ?: "")
+}
+
+/**
  * The game tests, run for every version.
  *
  * `fabricApi.configureTests` hangs these off `check`, so a failing one fails the build. They start a
