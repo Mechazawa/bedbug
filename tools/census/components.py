@@ -328,14 +328,14 @@ def surfaces(samples):
     found.append(Surface(
         "block components",
         schema_properties(
-            (metadata / "json_schemas/server/block_components").glob("*/Block Components.json"))
+            (metadata / "json_schemas/server/block").glob("*/Components.json"))
         | block_doc_names(samples)
         | vanilla_components(samples, "behavior_pack/blocks", "minecraft:block"),
         literal_set(JAVA / "registry/AddonBlocks.java", "IMPLEMENTED = List.of"),
         "the block component schema, the block docs and the vanilla blocks"))
     found.append(Surface(
         "item components",
-        schema_properties((metadata / "json_schemas/server/item").glob("*/Components.json"))
+        schema_properties((metadata / "json_schemas/server/item").glob("*/Item Components*.json"))
         | vanilla_components(samples, "behavior_pack/items", "minecraft:item"),
         literal_set(JAVA / "registry/AddonItems.java", "IMPLEMENTED = List.of"),
         "the item component schemas and the vanilla items",
