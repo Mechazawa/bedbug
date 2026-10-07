@@ -79,7 +79,10 @@ public final class AddonBlocks {
         if (id == null || BuiltInRegistries.BLOCK.containsKey(id)) return;
 
         for (String component : definition.components().keySet()) {
-            if (!IMPLEMENTED.contains(component)) AddonEntities.unsupported(component);
+            if (!IMPLEMENTED.contains(component)
+                && !at.ioexception.mcaddon.bedrock.behaviour.CustomComponents.isCustom(component)) {
+                AddonEntities.unsupported(component);
+            }
         }
         if (definition.components().has("minecraft:crafting_table")) {
             // Java has one crafting grid and it makes every recipe, so the tags choosing which

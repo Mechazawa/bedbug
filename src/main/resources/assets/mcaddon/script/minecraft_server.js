@@ -3857,9 +3857,9 @@ function runCustomComponent(registered, name, callback, argumentsJson) {
     };
 
     try {
-        // The second argument is what the block or item wrote beside the component's name.
-        // Naming one without a body is the shape this reads, so there is nothing to hand over.
-        answer(event, { params: {} });
+        // The second argument is what the block or item wrote as the component's body, which
+        // a name listed under `minecraft:custom_components` has none of.
+        answer(event, { params: fields.params ?? {} });
     } catch (error) {
         bridge.reportError(String(error && error.stack ? error.stack : error));
     }

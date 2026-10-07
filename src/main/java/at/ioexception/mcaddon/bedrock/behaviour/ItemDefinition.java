@@ -59,12 +59,15 @@ public record ItemDefinition(String identifier, String iconKey, String displayNa
             stackSize(declared), components);
     }
 
-    /** A component written as a bare value keeps it under `value`, where the object form puts it. */
+    /**
+     * A component written as a bare value or a list keeps it under `value`, where the object form
+     * puts it.
+     */
     private static JsonObject component(JsonElement declared) {
         if (declared.isJsonObject()) return declared.getAsJsonObject();
 
         JsonObject wrapped = new JsonObject();
-        if (declared.isJsonPrimitive()) wrapped.add("value", declared);
+        if (declared.isJsonPrimitive() || declared.isJsonArray()) wrapped.add("value", declared);
         return wrapped;
     }
 
@@ -241,19 +244,14 @@ public record ItemDefinition(String identifier, String iconKey, String displayNa
     /**
      * The components a pack's own script registered that this item asks for.
      *
-     * `minecraft:custom_components` is a list of names rather than a component with a body: what
-     * each name does lives in the pack's script, which registers it as the world starts up.
+     * Each component here is held the way `component` holds it, so the older list comes back out
+     * from under `value` before the two spellings are read together.
      */
-    public List<String> scriptedComponents() {
-        JsonObject declared = components.get("minecraft:custom_components");
-        JsonElement named = declared == null ? null
-            : declared.has("value") ? declared.get("value") : null;
-        if (named == null || !named.isJsonArray()) return List.of();
-
-        return named.getAsJsonArray().asList().stream()
-            .filter(JsonElement::isJsonPrimitive)
-            .map(JsonElement::getAsString)
-            .toList();
+    public CustomComponents scriptedComponents() {
+        JsonObject declared = new JsonObject();
+        components.forEach((name, body) -> declared.add(name,
+            name.equals(CustomComponents.LISTED) && body.has("value") ? body.get("value") : body));
+        return CustomComponents.of(declared);
     }
 
     /** How far along the view vector a weapon component hits, and how wide its raycast is. */

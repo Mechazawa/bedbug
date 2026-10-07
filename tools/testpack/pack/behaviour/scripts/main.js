@@ -98,6 +98,16 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
     }
 });
 
+// `tp:tally` names this component the way a 1.21.90 pack does, as a key of its own with its
+// parameters as the body, and using the item tags whoever used it with the step it was given.
+system.beforeEvents.startup.subscribe(event => {
+    event.itemComponentRegistry.registerCustomComponent("tp:counting", {
+        onUse(use, { params }) {
+            use.source.addTag("tp:counted_" + params.step);
+        },
+    });
+});
+
 world.beforeEvents.entityTamed.subscribe(event => {
     if (event.entity.hasTag("tp:untameable")) event.cancel = true;
 });

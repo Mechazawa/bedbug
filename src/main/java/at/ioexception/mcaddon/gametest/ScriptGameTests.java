@@ -171,6 +171,30 @@ public final class ScriptGameTests {
         });
     }
 
+    /**
+     * Using an item reaches the custom component it names as a key of its own, with its parameters.
+     *
+     * `tp:tally` writes `tp:counting` the way a pack does from 1.21.90, and the pack's script tags
+     * whoever used the item with the step the item gave the component.
+     */
+    @GameTest()
+    public void anItemsOwnComponentRunsWithItsParameters(GameTestHelper helper) {
+        net.minecraft.world.item.Item tally = BuiltInRegistries.ITEM
+            .getOptional(Platform.id("tp", "tally")).orElse(null);
+        if (tally == null || ServerHooks.scripts() == null) {
+            helper.succeed();
+            return;
+        }
+
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        net.minecraft.world.item.ItemStack held = new net.minecraft.world.item.ItemStack(tally);
+        player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, held);
+        held.use(helper.getLevel(), player, net.minecraft.world.InteractionHand.MAIN_HAND);
+        helper.getLevel().getServer().getPlayerList().remove(player);
+        expectTag(helper, player, "tp:counted_3");
+        helper.succeed();
+    }
+
     private static TamableAnimal wolf(GameTestHelper helper) {
         EntityType<?> type = BuiltInRegistries.ENTITY_TYPE
             .getOptional(Platform.id("minecraft", "wolf")).orElseThrow();
