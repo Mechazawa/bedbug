@@ -21,7 +21,11 @@ public final class WorldClientGameTest implements FabricClientGameTest {
         }
 
         try (TestSingleplayerContext world = context.worldBuilder().create()) {
+            //? if >=26.2 {
             world.getConnection().waitForChunksRender();
+            //?} else {
+            /*world.getClientLevel().waitForChunksRender();
+            *///?}
             world.getServer().runCommand("summon tp:sprite ~ ~ ~3");
             context.waitFor(client -> client.level != null && seen(client.level.entitiesForRendering()));
         }

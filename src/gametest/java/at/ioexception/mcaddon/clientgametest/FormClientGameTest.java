@@ -22,7 +22,11 @@ public final class FormClientGameTest implements FabricClientGameTest {
     @Override
     public void runTest(ClientGameTestContext context) {
         try (TestSingleplayerContext world = context.worldBuilder().create()) {
+            //? if >=26.2 {
             world.getConnection().waitForChunksRender();
+            //?} else {
+            /*world.getClientLevel().waitForChunksRender();
+            *///?}
             world.getServer().runCommand("execute as @a run scriptevent \"tp:handbook\"");
 
             context.waitForScreen(AddonFormScreen.class);
@@ -44,15 +48,24 @@ public final class FormClientGameTest implements FabricClientGameTest {
 
             context.clickScreenButton("Put the book away");
             context.waitForScreen(null);
-            world.getServer().waitFor(server -> tagged(server).contains("tp:handbook_ServerClosed"));
+            waitForTag(context, world, "tp:handbook_ServerClosed");
 
             // The close button is the player closing the form rather than the pack.
             world.getServer().runCommand("execute as @a run scriptevent \"tp:handbook\"");
             context.waitForScreen(AddonFormScreen.class);
             context.clickScreenButton("Close");
             context.waitForScreen(null);
-            world.getServer().waitFor(server -> tagged(server).contains("tp:handbook_ClientClosed"));
+            waitForTag(context, world, "tp:handbook_ClientClosed");
         }
+    }
+
+    /** Asked from the test thread a tick at a time, because a server-side wait is not on every version. */
+    private static void waitForTag(ClientGameTestContext context, TestSingleplayerContext world, String tag) {
+        for (int tick = 0; tick < ClientGameTestContext.DEFAULT_TIMEOUT; tick++) {
+            if (world.getServer().computeOnServer(server -> tagged(server).contains(tag))) return;
+            context.waitTick();
+        }
+        throw new AssertionError("The form's promise never settled with " + tag);
     }
 
     /** The handbook tags a player carries, which the script writes once the form's promise settles. */
