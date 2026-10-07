@@ -335,6 +335,18 @@ These are the checks it runs, and what each one catches:
   reads back after summoning a Java villager and an experience orb: a surface reporting or accepting
   only Java's ids, a listener whose options are ignored, or an `entitySpawn` raised before
   `spawnEntity` has returned each fails there.
+
+  Every command line in the pack that runs while the game is going is written so Java's parser
+  refuses it as it stands. On `/scriptevent "tp:commands"` the script runs, as whatever sent it, a
+  selector asking with `hasitem` about the main hand and about everything carried, a selector naming
+  `villager_v2`, `function tp/relay` by its path alone (which calls `tp/relayed` the same way inside
+  the file) and `hud`, which nothing translates. The ember's `tp:ember_command` event tags it through
+  a Bedrock radius and asks for `hud` as well, and its controller's command tags it through a Bedrock
+  radius. `CommandGameTests` reads each of those back as a tag, and finds `hud` among what
+  `/mcaddon scripts` and `/mcaddon entities` say cannot be translated rather than among what did not
+  parse. The dialogue's first button runs `xp 1L`, and `/scriptevent "tp:stock_up"` gives the player
+  `tp:dust` unless `hasitem` finds one on them; `PackCommandClientGameTest` presses the button and
+  asks for the dust twice, and reads back one level gained and one dust carried.
 - **`tools/testpack/build_modules.py`** builds a second add-on, whose script imports every
   `@minecraft/*` module the mod provides and calls one thing from each. Its sources are a manifest
   and one script under `tools/testpack/modules/`.
@@ -1119,6 +1131,15 @@ check when reading a component for the first time:
 - **A default a pack leaves out is where a wrong value hides**, because nothing in any pack ever
   disagrees with it. The doc modules under `metadata/doc_modules/` carry Mojang's own default and
   type per field, which is what to read it against.
+
+**A command a pack runs goes through `server.PackCommand`.** A script, an entity event, a timeline,
+a dialogue scene and a block all hand over Bedrock's dialect, which `Functions.line` translates
+exactly as it does a function file's line, as the add-on that wrote it so a bare function name
+reaches that add-on's function. `FunctionNames` is what a bare name is looked up in: every add-on's
+functions, the caller's first. The line then runs in an execution context of its own, because from
+1.20.3 the dispatcher alone refuses a `function` and the server's context runs a line queued during
+another command only once that command is done. A new path that runs a pack's commands takes the
+issuing add-on's namespace and a `CommandReport`, never the dispatcher directly.
 
 **A gap and an answer are counted apart.** A command the game read and then declined, a selector that
 matched nothing, a structure holding a chest this cannot fill: those are listed after the verdict
