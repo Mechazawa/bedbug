@@ -6,7 +6,8 @@
   "environment": "client",
   "entrypoints": {
     "fabric-client-gametest": [
-      "at.ioexception.mcaddon.clientgametest.WorldClientGameTest"
+      "at.ioexception.mcaddon.clientgametest.WorldClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.FormClientGameTest"
     ]
   },
   "depends": {

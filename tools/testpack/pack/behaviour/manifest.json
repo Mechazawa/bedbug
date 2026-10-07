@@ -12,13 +12,22 @@
       "type": "data",
       "uuid": "3c926817-26cd-429d-b589-baad5ea0b841",
       "version": [1, 0, 0]
+    },
+    {
+      "type": "script",
+      "language": "javascript",
+      "uuid": "6d1f3b52-8c4e-4a7d-9e21-5b0c7f3a9d14",
+      "version": [1, 0, 0],
+      "entry": "scripts/main.js"
     }
   ],
   "dependencies": [
     {
       "uuid": "32e0d039-0df5-408f-99bb-fa898f5d1fc2",
       "version": [1, 0, 0]
-    }
+    },
+    { "module_name": "@minecraft/server", "version": "2.0.0" },
+    { "module_name": "@minecraft/server-ui", "version": "2.0.0" }
   ],
   "has_education_metadata": false,
   "metadata": {

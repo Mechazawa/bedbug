@@ -1925,6 +1925,15 @@ public final class Platform {
         *///?}
     }
 
+    /** The screen open on this client, or null. 26.2 moved it onto the heads-up display. */
+    public static net.minecraft.client.gui.screens.Screen currentScreen() {
+        //? if >=26.2 {
+        return net.minecraft.client.Minecraft.getInstance().gui.screen();
+        //?} else {
+        /*return net.minecraft.client.Minecraft.getInstance().screen;
+        *///?}
+    }
+
     /**
      * Where the player is looking from.
      *
