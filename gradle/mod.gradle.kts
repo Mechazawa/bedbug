@@ -132,9 +132,16 @@ fun installTestPackInto(name: String, runDirectory: String) = project.tasks.regi
     inputs.dir(rootProject.layout.projectDirectory.dir("tools/testpack"))
     outputs.dir(addons)
 
+    // `-Paddons=<directory>` adds every `.mcaddon` in it beside the synthetic one, so the same tests
+    // can be run against a real pack that may not be committed here.
+    val extra = (project.findProperty("addons") as String?)?.let { File(it) }
+    if (extra != null) inputs.dir(extra)
+
     doLast {
         val target = addons.get().asFile
         target.mkdirs()
+        target.listFiles { file -> file.name != "test-addon.mcaddon" }?.forEach { it.delete() }
+        extra?.listFiles { file -> file.name.endsWith(".mcaddon") }?.forEach { it.copyTo(File(target, it.name)) }
 
         val archive = File(target, "test-addon.mcaddon")
         val process = ProcessBuilder("python3", generator.absolutePath, "--out", archive.absolutePath)

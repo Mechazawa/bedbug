@@ -132,6 +132,20 @@
       }
     },
     "component_groups": {
+      "tp:ember_wary": {
+        "minecraft:behavior.avoid_mob_type": {
+          "priority": 1,
+          "max_dist": 3,
+          "entity_types": [
+            {
+              "filters": { "test": "is_family", "subject": "other", "value": "player" },
+              "max_dist": 10,
+              "walk_speed_multiplier": 1.0,
+              "sprint_speed_multiplier": 1.2
+            }
+          ]
+        }
+      },
       "tp:ember_saddled": {
         "minecraft:is_saddled": {}
       },
@@ -299,6 +313,16 @@
       "tp:ember_grow_young": {
         "add": {
           "component_groups": ["tp:ember_young"]
+        }
+      },
+      "tp:ember_wary_on": {
+        "add": {
+          "component_groups": ["tp:ember_wary"]
+        }
+      },
+      "tp:ember_wary_off": {
+        "remove": {
+          "component_groups": ["tp:ember_wary"]
         }
       },
       "tp:ember_shrink": {

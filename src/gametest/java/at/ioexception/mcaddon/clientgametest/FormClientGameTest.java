@@ -22,11 +22,7 @@ public final class FormClientGameTest implements FabricClientGameTest {
     @Override
     public void runTest(ClientGameTestContext context) {
         try (TestSingleplayerContext world = context.worldBuilder().create()) {
-            //? if >=26.2 {
-            world.getConnection().waitForChunksRender();
-            //?} else {
-            /*world.getClientLevel().waitForChunksRender();
-            *///?}
+            Worlds.waitForChunks(world);
             world.getServer().runCommand("execute as @a run scriptevent \"tp:handbook\"");
 
             context.waitForScreen(AddonFormScreen.class);

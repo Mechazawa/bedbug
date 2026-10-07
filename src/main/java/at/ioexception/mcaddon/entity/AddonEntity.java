@@ -911,7 +911,7 @@ public class AddonEntity extends PathfinderMob
     protected boolean canAddPassenger(net.minecraft.world.entity.Entity passenger) {
         if (definition == null || !declaresNow("minecraft:rideable")) return false;
         if (passenger instanceof Player && ownerUuid() == null
-            && definition.behaviours().contains("minecraft:behavior.player_ride_tamed")) {
+            && declaresNow("minecraft:behavior.player_ride_tamed")) {
             return false;
         }
         if (getPassengers().size() >= (int) liveNumber("minecraft:rideable", "seat_count", 1)) {
@@ -962,7 +962,7 @@ public class AddonEntity extends PathfinderMob
         return declaresNow("minecraft:input_ground_controlled")
             || declaresNow("minecraft:free_camera_controlled")
             || declaresNow("minecraft:item_controllable")
-            || definition.behaviours().contains("minecraft:behavior.controlled_by_player");
+            || declaresNow("minecraft:behavior.controlled_by_player");
     }
 
     /**
@@ -1011,7 +1011,7 @@ public class AddonEntity extends PathfinderMob
     @Override
     protected float getRiddenSpeed(Player rider) {
         if (definition == null
-            || !definition.behaviours().contains("minecraft:behavior.controlled_by_player")) {
+            || !declaresNow("minecraft:behavior.controlled_by_player")) {
             return super.getRiddenSpeed(rider);
         }
         return (float) (getAttributeValue(Attributes.MOVEMENT_SPEED) * number(definition,
@@ -1373,7 +1373,7 @@ public class AddonEntity extends PathfinderMob
      * sun is up again.
      */
     private void rest() {
-        if (!definition.behaviours().contains("minecraft:behavior.sleep")) return;
+        if (!declaresNow("minecraft:behavior.sleep")) return;
         if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
 
         long time = Platform.dayTime(level) % 24000L;
@@ -1428,8 +1428,8 @@ public class AddonEntity extends PathfinderMob
      * uses either for is an entity that does not stay poisoned, so the harmful ones are cleared.
      */
     private void drink() {
-        boolean drinks = definition.behaviours().contains("minecraft:behavior.drink_milk")
-            || definition.behaviours().contains("minecraft:behavior.drink_potion");
+        boolean drinks = declaresNow("minecraft:behavior.drink_milk")
+            || declaresNow("minecraft:behavior.drink_potion");
         if (!drinks || getActiveEffects().isEmpty()) return;
 
         getActiveEffects().stream()
@@ -1445,7 +1445,7 @@ public class AddonEntity extends PathfinderMob
      * and made to take it, which is the whole of what the behaviour describes.
      */
     private void takeOfferedFlower() {
-        if (!definition.behaviours().contains("minecraft:behavior.take_flower")) return;
+        if (!declaresNow("minecraft:behavior.take_flower")) return;
 
         net.minecraft.world.entity.Entity golem = Platform.offeredFlower(this, 8);
         if (golem == null) return;
@@ -1471,7 +1471,7 @@ public class AddonEntity extends PathfinderMob
      * every tick the win is still there.
      */
     private void celebrate() {
-        if (!definition.behaviours().contains("minecraft:behavior.celebrate_survive")) return;
+        if (!declaresNow("minecraft:behavior.celebrate_survive")) return;
         if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
 
         boolean won = Platform.raidWon(level, blockPosition());
@@ -2170,440 +2170,18 @@ public class AddonEntity extends PathfinderMob
     private void addGoals() {
         int order = 0;
         int priority = 0;
-        for (String behaviour : definition.behaviours()) {
-            com.google.gson.JsonObject goal = componentBody(behaviour);
-            priority = (int) Goals.number(goal, "priority", ++order);
-            double speed = Goals.number(goal, "speed_multiplier", 1);
+        java.util.Map<String, com.google.gson.JsonObject> sites = new java.util.LinkedHashMap<>();
+        sites.put(null, new com.google.gson.JsonObject());
+        definition.components().forEach((component, body) -> sites.get(null).add(component, body));
+        sites.putAll(definition.componentGroups());
 
-            goalPriorities.add(priority);
-            switch (behaviour) {
-                case "minecraft:behavior.float" -> goalSelector.addGoal(priority, new FloatGoal(this));
-                case "minecraft:behavior.panic" -> goalSelector.addGoal(priority, new PanicGoal(this, speed));
-                case "minecraft:behavior.swell" ->
-                    goalSelector.addGoal(priority, new SwellGoal(this, componentBody(behaviour)));
-                case "minecraft:behavior.beg" ->
-                    goalSelector.addGoal(priority, new BegGoal(this, componentBody(behaviour)));
+        for (java.util.Map.Entry<String, com.google.gson.JsonObject> site : sites.entrySet()) {
+            for (String behaviour : site.getValue().keySet()) {
+                if (!definition.behaviours().contains(behaviour)) continue;
 
-                // One squid moves five ways, and Bedrock names each of them separately.
-                case "minecraft:behavior.squid_idle" ->
-                    goalSelector.addGoal(priority, SquidGoal.idling(this));
-                case "minecraft:behavior.squid_dive" ->
-                    goalSelector.addGoal(priority, SquidGoal.diving(this));
-                case "minecraft:behavior.squid_flee" ->
-                    goalSelector.addGoal(priority, SquidGoal.fleeing(this));
-                case "minecraft:behavior.squid_move_away_from_ground" ->
-                    goalSelector.addGoal(priority, SquidGoal.leavingGround(this));
-                case "minecraft:behavior.squid_out_of_water" ->
-                    goalSelector.addGoal(priority, SquidGoal.flopping(this));
-                // A slime turns, hops, floats and closes on a target, and Bedrock names each of the
-                // four separately.
-                case "minecraft:behavior.slime_random_direction" ->
-                    goalSelector.addGoal(priority, SlimeGoal.turning(this, componentBody(behaviour)));
-                case "minecraft:behavior.slime_keep_on_jumping" ->
-                    goalSelector.addGoal(priority, SlimeGoal.hopping(this, componentBody(behaviour)));
-                case "minecraft:behavior.slime_float" ->
-                    goalSelector.addGoal(priority, SlimeGoal.floating(this, componentBody(behaviour)));
-                case "minecraft:behavior.slime_attack" ->
-                    goalSelector.addGoal(priority, SlimeGoal.attacking(this, componentBody(behaviour)));
-
-                case "minecraft:behavior.random_stroll", "minecraft:behavior.move_outdoors",
-                     "minecraft:behavior.explore_outskirts" -> {
-                    // `interval` is the one in N chance of choosing the goal, which Java counts the
-                    // same way.
-                    WaterAvoidingRandomStrollGoal stroll = new WaterAvoidingRandomStrollGoal(this, speed);
-                    stroll.setInterval((int) Goals.number(goal, "interval", 120));
-                    goalSelector.addGoal(priority, stroll);
-                }
-                case "minecraft:behavior.look_at_player", "minecraft:behavior.look_at_trading_player" ->
-                    goalSelector.addGoal(priority, new LookAtPlayerGoal(this, Player.class,
-                        (float) Goals.number(goal, "look_distance", 8),
-                        (float) Goals.number(goal, "probability", 0.02)));
-                case "minecraft:behavior.random_look_around",
-                     "minecraft:behavior.random_look_around_and_sit" ->
-                    goalSelector.addGoal(priority, new RandomLookAroundGoal(this));
-
-                // Bedrock names the kind of entity to watch; Java's goal takes a class, and the
-                // widest class that still means a creature is every living thing.
-                case "minecraft:behavior.look_at_entity" -> goalSelector.addGoal(priority,
-                    new LookAtPlayerGoal(this, net.minecraft.world.entity.LivingEntity.class, 8f));
-
-                // Bedrock names the kind of wandering; Java has one stroll goal and a speed.
-                case "minecraft:behavior.move_indoors",
-                     "minecraft:behavior.move_towards_dwelling_restriction",
-                     "minecraft:behavior.move_towards_home_restriction",
-                     "minecraft:behavior.move_towards_restriction",
-                     "minecraft:behavior.go_home" ->
-                    goalSelector.addGoal(priority, new MoveTowardsRestrictionGoal(this, speed));
-
-                case "minecraft:behavior.move_to_village" ->
-                    goalSelector.addGoal(priority, new MoveBackToVillageGoal(this, 0.6, false));
-                // Java's goal asks separately whether the route may run at night and whether the mob
-                // can get through a door. Bedrock states neither, so the walk is allowed at any
-                // hour and doors are left to the navigator.
-                case "minecraft:behavior.move_through_village" ->
-                    goalSelector.addGoal(priority,
-                        new MoveThroughVillageGoal(this, 0.6, false, 4, () -> false));
-                case "minecraft:behavior.mingle" ->
-                    goalSelector.addGoal(priority, new StrollThroughVillageGoal(this, 60));
-                case "minecraft:behavior.move_towards_target" ->
-                    goalSelector.addGoal(priority, new MoveTowardsTargetGoal(this, 0.9, 32f));
-
-                case "minecraft:behavior.random_fly", "minecraft:behavior.random_hover",
-                     "minecraft:behavior.hover", "minecraft:behavior.float_wander" ->
-                    goalSelector.addGoal(priority, new WaterAvoidingRandomFlyingGoal(this, 1.0));
-                // `interval` is the one in N chance of choosing the goal, which Java counts the
-                // same way.
-                case "minecraft:behavior.random_swim", "minecraft:behavior.swim_wander" ->
-                    goalSelector.addGoal(priority, new RandomSwimmingGoal(this, speed,
-                        (int) Goals.number(goal, "interval", 120)));
-                case "minecraft:behavior.move_to_water", "minecraft:behavior.move_to_liquid" ->
-                    goalSelector.addGoal(priority, new TryFindWaterGoal(this));
-                case "minecraft:behavior.swim_up_for_breath" ->
-                    goalSelector.addGoal(priority, new BreathAirGoal(this));
-
-                case "minecraft:behavior.eat_block" ->
-                    goalSelector.addGoal(priority, new EatBlockGoal(this));
-                // Bedrock's find_cover and flee_sun both end with the mob standing out of the light.
-                case "minecraft:behavior.flee_sun", "minecraft:behavior.find_cover" ->
-                    goalSelector.addGoal(priority, new FleeSunGoal(this, 1.0));
-                case "minecraft:behavior.restrict_sun" ->
-                    goalSelector.addGoal(priority, new RestrictSunGoal(this));
-                // Java asks per difficulty whether a door may be broken; Bedrock states the ability
-                // once and leaves the difficulty out of it.
-                case "minecraft:behavior.break_door", "minecraft:annotation.break_door" ->
-                    goalSelector.addGoal(priority, new BreakDoorGoal(this, difficulty -> true));
-                case "minecraft:behavior.follow_mob" ->
-                    goalSelector.addGoal(priority, new FollowMobGoal(this, 1.0, 3f, 7f));
-                case "minecraft:behavior.leap_at_target",
-                     "minecraft:behavior.stalk_and_pounce_on_target" ->
-                    goalSelector.addGoal(priority, new LeapAtTargetGoal(this, 0.4f));
-                case "minecraft:behavior.mount_pathing", "minecraft:behavior.follow_owner",
-                     "minecraft:behavior.play", "minecraft:behavior.stroll_towards_village" ->
-                    goalSelector.addGoal(priority, new WaterAvoidingRandomStrollGoal(this, speed));
-
-                case "minecraft:behavior.avoid_mob_type" ->
-                    goalSelector.addGoal(priority, new AvoidMobsGoal(this));
-                // Hiding and playing are both a Bedrock villager moving somewhere for a reason Java
-                // writes into its own villager. What carries across is the moving.
-                case "minecraft:behavior.hide" -> {
-                    TargetSelection avoided = TargetSelection.from(goal, Monster.class, 8);
-                    goalSelector.addGoal(priority, new AvoidEntityGoal<>(this, avoided.kind(),
-                        (float) avoided.maxDistance(),
-                        Goals.number(goal, "walk_speed_modifier", 1),
-                        Goals.number(goal, "sprint_speed_modifier", 1.2)));
-                }
-                case "minecraft:behavior.avoid_block" ->
-                    goalSelector.addGoal(priority, new AvoidBlockGoal(this, componentBody(behaviour)));
-
-                // Each of these three walks to what a memory sensor wrote down rather than to
-                // anything the goal itself was given, which is why none of them carries a target.
-                case "minecraft:memory_behavior.follow_target" ->
-                    goalSelector.addGoal(priority, MemoryGoal.following(this));
-                case "minecraft:memory_behavior.flee_threat" ->
-                    goalSelector.addGoal(priority, MemoryGoal.fleeing(this));
-                case "minecraft:memory_behavior.move_to_position" ->
-                    goalSelector.addGoal(priority, MemoryGoal.movingToPosition(this));
-
-                case "minecraft:behavior.tempt", "minecraft:behavior.float_tempt" ->
-                    goalSelector.addGoal(priority, Platform.temptGoal(this, speed, tempting(goal)));
-                case "minecraft:behavior.open_door", "minecraft:annotation.open_door" ->
-                    goalSelector.addGoal(priority,
-                        new OpenDoorGoal(this, Goals.flag(goal, "close_door_after", true)));
-
-                case "minecraft:behavior.melee_attack", "minecraft:behavior.melee_box_attack",
-                     "minecraft:behavior.delayed_attack", "minecraft:behavior.stomp_attack" ->
-                    goalSelector.addGoal(priority,
-                        new net.minecraft.world.entity.ai.goal.MeleeAttackGoal(this, speed,
-                            Goals.flag(goal, "track_target", false)));
-                // A charge is a melee attack run at, which Java expresses as the speed the goal
-                // closes the distance with.
-                case "minecraft:behavior.charge_attack" ->
-                    goalSelector.addGoal(priority,
-                        new net.minecraft.world.entity.ai.goal.MeleeAttackGoal(this, 1.4, false));
-                case "minecraft:behavior.nearest_attackable_target",
-                     "minecraft:behavior.nearest_prioritized_attackable_target" -> {
-                    TargetSelection hunted = TargetSelection.from(goal, Player.class,
-                        Goals.number(goal, "within_radius", 0));
-                    targetSelector.addGoal(priority,
-                        new net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal<>(
-                            this, hunted.kind(),
-                            (int) Goals.number(goal, "scan_interval", 10),
-                            Goals.flag(goal, "must_see", false),
-                            Goals.flag(goal, "must_reach", false), null));
-                }
-                case "minecraft:behavior.hurt_by_target", "minecraft:behavior.target_when_pushed" -> {
-                    net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal hurt =
-                        new net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal(this);
-                    if (Goals.flag(goal, "alert_same_type", false)) hurt.setAlertOthers();
-                    targetSelector.addGoal(priority, hurt);
-                }
-
-                // Bedrock states the gap between shots in seconds and the reach in blocks; Java's
-                // goal counts the gap in ticks and asks the entity itself to release the projectile.
-                case "minecraft:behavior.ranged_attack" -> goalSelector.addGoal(priority,
-                    new net.minecraft.world.entity.ai.goal.RangedAttackGoal(this,
-                        number(definition, behaviour, "speed_multiplier", 1),
-                        (int) (number(definition, behaviour, "attack_interval_min", 1) * 20),
-                        (int) (number(definition, behaviour, "attack_interval_max", 1) * 20),
-                        (float) number(definition, behaviour, "attack_radius", 16)));
-                case "minecraft:behavior.ocelotattack" -> goalSelector.addGoal(priority,
-                    new net.minecraft.world.entity.ai.goal.OcelotAttackGoal(this));
-
-                case "minecraft:behavior.follow_parent" -> goalSelector.addGoal(priority,
-                    FollowKinGoal.parent(this, componentBody(behaviour)));
-                case "minecraft:behavior.follow_caravan" -> goalSelector.addGoal(priority,
-                    FollowKinGoal.caravan(this, componentBody(behaviour)));
-                case "minecraft:behavior.follow_target_leader" -> goalSelector.addGoal(priority,
-                    FollowKinGoal.leader(this, componentBody(behaviour)));
-                case "minecraft:behavior.follow_target_captain" -> goalSelector.addGoal(priority,
-                    FollowKinGoal.captain(this, componentBody(behaviour)));
-
-                case "minecraft:behavior.move_to_block" -> goalSelector.addGoal(priority,
-                    MoveToMatchingBlockGoal.named(this, componentBody(behaviour)));
-                case "minecraft:behavior.move_to_land" -> goalSelector.addGoal(priority,
-                    MoveToMatchingBlockGoal.land(this, componentBody(behaviour)));
-                case "minecraft:behavior.move_to_lava" -> goalSelector.addGoal(priority,
-                    MoveToMatchingBlockGoal.lava(this, componentBody(behaviour)));
-                case "minecraft:behavior.move_to_random_block" -> goalSelector.addGoal(priority,
-                    MoveToMatchingBlockGoal.anywhere(this, componentBody(behaviour)));
-
-                case "minecraft:behavior.equip_item" -> goalSelector.addGoal(priority,
-                    new EquipItemGoal(this, componentBody("minecraft:equip_item")));
-                case "minecraft:behavior.hold_ground" ->
-                    goalSelector.addGoal(priority, HoldGroundGoal.standing(this));
-                case "minecraft:behavior.look_at_target" ->
-                    goalSelector.addGoal(priority, HoldGroundGoal.watching(this));
-                // Java writes door handling as two goals under one base, and opening is the half
-                // Bedrock's own door interaction does.
-                case "minecraft:behavior.door_interact" ->
-                    goalSelector.addGoal(priority, new OpenDoorGoal(this, true));
-
-                case "minecraft:behavior.raid_garden" -> goalSelector.addGoal(priority,
-                    MoveToMatchingBlockGoal.raid(this, componentBody(behaviour)));
-                case "minecraft:behavior.harvest_farm_block" -> goalSelector.addGoal(priority,
-                    MoveToMatchingBlockGoal.harvest(this, componentBody(behaviour)));
-                case "minecraft:behavior.fertilize_farm_block" -> goalSelector.addGoal(priority,
-                    MoveToMatchingBlockGoal.fertilize(this, componentBody(behaviour)));
-                // Java's own goal for this is the one its zombie uses on the same block.
-                case "minecraft:behavior.stomp_turtle_egg" -> goalSelector.addGoal(priority,
-                    new net.minecraft.world.entity.ai.goal.RemoveBlockGoal(
-                        net.minecraft.world.level.block.Blocks.TURTLE_EGG, this,
-                        number(definition, behaviour, "speed_multiplier", 1),
-                        (int) number(definition, behaviour, "search_height", 2)));
-
-                case "minecraft:behavior.timer_flag_1", "minecraft:behavior.timer_flag_2",
-                     "minecraft:behavior.timer_flag_3" ->
-                    goalSelector.addGoal(priority, new TimerFlagGoal(this, componentBody(behaviour),
-                        behaviour.substring("minecraft:behavior.".length())));
-                case "minecraft:behavior.random_sitting" ->
-                    goalSelector.addGoal(priority, RestGoal.sitting(this, componentBody(behaviour)));
-                case "minecraft:behavior.lay_down" ->
-                    goalSelector.addGoal(priority, RestGoal.lyingDown(this, componentBody(behaviour)));
-                case "minecraft:behavior.knockback_roar" ->
-                    goalSelector.addGoal(priority, new KnockbackRoarGoal(this, componentBody(behaviour)));
-                case "minecraft:behavior.eat_carried_item" ->
-                    goalSelector.addGoal(priority, new EatCarriedItemGoal(this, componentBody(behaviour)));
-                case "minecraft:behavior.move_around_target" ->
-                    goalSelector.addGoal(priority, CircleTargetGoal.walking(this, componentBody(behaviour)));
-                case "minecraft:behavior.jump_around_target" ->
-                    goalSelector.addGoal(priority, CircleTargetGoal.jumping(this, componentBody(behaviour)));
-
-                // What the entity does because it belongs to somebody. Each of these reads back the
-                // owner that taming stored, so an untamed entity carrying one simply never starts it.
-                case "minecraft:behavior.owner_hurt_target" -> targetSelector.addGoal(priority,
-                    OwnerTargetGoal.whatTheOwnerHurt(this, componentBody(behaviour)));
-                case "minecraft:behavior.owner_hurt_by_target" -> targetSelector.addGoal(priority,
-                    OwnerTargetGoal.whoHurtTheOwner(this, componentBody(behaviour)));
-                case "minecraft:behavior.defend_trusted_target" -> targetSelector.addGoal(priority,
-                    OwnerTargetGoal.defendingTheOwner(this, componentBody(behaviour)));
-                case "minecraft:behavior.teleport_to_owner" -> goalSelector.addGoal(priority,
-                    new TeleportToOwnerGoal(this, componentBody(behaviour)));
-                case "minecraft:behavior.go_and_give_items_to_owner" -> goalSelector.addGoal(priority,
-                    new GiveItemsToOwnerGoal(this, componentBody(behaviour)));
-                case "minecraft:behavior.pet_sleep_with_owner" -> goalSelector.addGoal(priority,
-                    PetRestGoal.besideSleepingOwner(this, componentBody(behaviour)));
-                case "minecraft:behavior.stay_while_sitting" -> goalSelector.addGoal(priority,
-                    PetRestGoal.whileSitting(this));
-                case "minecraft:behavior.find_mount" -> goalSelector.addGoal(priority,
-                    new FindMountGoal(this, componentBody(behaviour)));
-
-                case "minecraft:behavior.roar" -> goalSelector.addGoal(priority,
-                    PoseHoldGoal.roaring(this, componentBody(behaviour)));
-                case "minecraft:behavior.croak" -> goalSelector.addGoal(priority,
-                    PoseHoldGoal.croaking(this, componentBody(behaviour)));
-                case "minecraft:behavior.sniff" -> goalSelector.addGoal(priority,
-                    PoseHoldGoal.sniffing(this, componentBody(behaviour)));
-                case "minecraft:behavior.emerge" -> goalSelector.addGoal(priority,
-                    PoseHoldGoal.emerging(this, componentBody(behaviour)));
-                case "minecraft:behavior.dig" -> goalSelector.addGoal(priority,
-                    PoseHoldGoal.digging(this, componentBody(behaviour)));
-                case "minecraft:behavior.random_search_and_dig" -> goalSelector.addGoal(priority,
-                    MoveToMatchingBlockGoal.searchingAndDigging(this, componentBody(behaviour)));
-
-                // What a Bedrock dolphin does that nothing else does.
-                case "minecraft:behavior.random_breach" -> goalSelector.addGoal(priority,
-                    DolphinGoal.breaching(this, componentBody(behaviour)));
-                case "minecraft:behavior.find_underwater_treasure" -> goalSelector.addGoal(priority,
-                    DolphinGoal.seekingTreasure(this, componentBody(behaviour)));
-                case "minecraft:behavior.swim_with_entity" -> goalSelector.addGoal(priority,
-                    DolphinGoal.escorting(this, componentBody(behaviour)));
-
-                case "minecraft:behavior.play_dead" -> goalSelector.addGoal(priority,
-                    new PlayDeadGoal(this, componentBody(behaviour)));
-                case "minecraft:behavior.scared" -> goalSelector.addGoal(priority,
-                    new ScaredGoal(this, componentBody(behaviour)));
-                case "minecraft:behavior.celebrate" -> goalSelector.addGoal(priority,
-                    new CelebrateGoal(this, componentBody(behaviour)));
-                case "minecraft:behavior.sneeze" -> goalSelector.addGoal(priority,
-                    new SneezeGoal(this, componentBody(behaviour)));
-                case "minecraft:behavior.roll" -> goalSelector.addGoal(priority,
-                    new RollGoal(this, componentBody(behaviour)));
-                case "minecraft:behavior.swim_idle" -> goalSelector.addGoal(priority,
-                    new SwimIdleGoal(this, componentBody(behaviour)));
-                case "minecraft:behavior.restrict_open_door" -> goalSelector.addGoal(priority,
-                    new RestrictOpenDoorGoal(this));
-                case "minecraft:behavior.rise_to_liquid_level" -> goalSelector.addGoal(priority,
-                    new RiseToLiquidLevelGoal(this, componentBody(behaviour)));
-                case "minecraft:behavior.move_to_poi" -> goalSelector.addGoal(priority,
-                    new MoveToPoiGoal(this, componentBody(behaviour)));
-                case "minecraft:behavior.jump_to_block" -> goalSelector.addGoal(priority,
-                    new JumpToBlockGoal(this, componentBody(behaviour)));
-                case "minecraft:behavior.lay_egg" -> goalSelector.addGoal(priority,
-                    new LayEggGoal(this, componentBody(behaviour)));
-                case "minecraft:behavior.eat_mob" -> goalSelector.addGoal(priority,
-                    new EatMobGoal(this, componentBody(behaviour)));
-                case "minecraft:behavior.fire_at_target" -> goalSelector.addGoal(priority,
-                    new FireAtTargetGoal(this, componentBody(behaviour)));
-                case "minecraft:behavior.charge_held_item" -> goalSelector.addGoal(priority,
-                    new ChargeHeldItemGoal(this, componentBody(behaviour)));
-                case "minecraft:behavior.circle_around_anchor" -> goalSelector.addGoal(priority,
-                    new CircleAroundAnchorGoal(this, componentBody(behaviour)));
-                case "minecraft:behavior.controlled_by_player" -> goalSelector.addGoal(priority,
-                    new ControlledByPlayerGoal(this, componentBody(behaviour)));
-
-                case "minecraft:behavior.take_block" -> goalSelector.addGoal(priority,
-                    CarryBlockGoal.taking(this, componentBody(behaviour)));
-                case "minecraft:behavior.place_block" -> goalSelector.addGoal(priority,
-                    CarryBlockGoal.placing(this, componentBody(behaviour)));
-                case "minecraft:behavior.enderman_take_block" -> goalSelector.addGoal(priority,
-                    CarryBlockGoal.endermanTaking(this, componentBody(behaviour)));
-                case "minecraft:behavior.enderman_leave_block" -> goalSelector.addGoal(priority,
-                    CarryBlockGoal.endermanLeaving(this, componentBody(behaviour)));
-
-                case "minecraft:behavior.ram_attack" -> goalSelector.addGoal(priority,
-                    ChargeAttackGoal.ramming(this, componentBody(behaviour)));
-                case "minecraft:behavior.swoop_attack" -> goalSelector.addGoal(priority,
-                    ChargeAttackGoal.swooping(this, componentBody(behaviour)));
-                case "minecraft:behavior.aquatic_charge_attack" -> goalSelector.addGoal(priority,
-                    ChargeAttackGoal.chargingUnderwater(this, componentBody(behaviour)));
-
-                case "minecraft:behavior.breed" -> goalSelector.addGoal(priority,
-                    new BreedGoal(this, componentBody(behaviour)));
-                case "minecraft:behavior.trade_with_player" -> goalSelector.addGoal(priority,
-                    TradeGoal.whileTrading(this, componentBody(behaviour)));
-                case "minecraft:behavior.trade_interest" -> goalSelector.addGoal(priority,
-                    TradeGoal.showingWares(this, componentBody(behaviour)));
-
-                // A villager's working life: the shift at a station, the handing round of what was
-                // gathered, and the pair of behaviours that make another villager.
-                case "minecraft:behavior.work" -> goalSelector.addGoal(priority,
-                    WorkGoal.working(this, componentBody(behaviour)));
-                case "minecraft:behavior.work_composter" -> goalSelector.addGoal(priority,
-                    WorkGoal.composting(this, componentBody(behaviour)));
-                case "minecraft:behavior.share_items" -> goalSelector.addGoal(priority,
-                    ShareItemsGoal.sharing(this, componentBody(behaviour)));
-                case "minecraft:behavior.transport_items" -> goalSelector.addGoal(priority,
-                    ShareItemsGoal.transporting(this, componentBody(behaviour)));
-                case "minecraft:behavior.drop_item_for" -> goalSelector.addGoal(priority,
-                    ShareItemsGoal.dropping(this, componentBody(behaviour)));
-                case "minecraft:behavior.offer_flower" -> goalSelector.addGoal(priority,
-                    ShareItemsGoal.offering(this, componentBody(behaviour)));
-                case "minecraft:behavior.inspect_bookshelf" -> goalSelector.addGoal(priority,
-                    MoveToMatchingBlockGoal.bookshelf(this, componentBody(behaviour)));
-                // Bedrock's villager courtship is its own pair of behaviours; what they come to is
-                // the same walk towards a willing partner that every other pack animal does.
-                case "minecraft:behavior.make_love", "minecraft:behavior.receive_love" ->
-                    goalSelector.addGoal(priority, new BreedGoal(this, componentBody(behaviour)));
-                // Napping is lying down, and snacking is eating what is already in hand.
-                case "minecraft:behavior.nap" -> goalSelector.addGoal(priority,
-                    RestGoal.lyingDown(this, componentBody(behaviour)));
-                case "minecraft:behavior.snacking" -> goalSelector.addGoal(priority,
-                    new EatCarriedItemGoal(this, componentBody(behaviour)));
-
-                case "minecraft:behavior.admire_item" -> goalSelector.addGoal(priority,
-                    BarterGoal.admiring(this, componentBody(behaviour)));
-                case "minecraft:behavior.barter" -> goalSelector.addGoal(priority,
-                    BarterGoal.bartering(this, componentBody(behaviour)));
-
-                // A wind-up held at range: a guardian's beam and a warden's boom.
-                case "minecraft:behavior.guardian_attack" -> goalSelector.addGoal(priority,
-                    BeamAttackGoal.beam(this, componentBody(behaviour)));
-                case "minecraft:behavior.sonic_boom" -> goalSelector.addGoal(priority,
-                    BeamAttackGoal.sonicBoom(this, componentBody(behaviour)));
-                case "minecraft:behavior.investigate_suspicious_location" ->
-                    goalSelector.addGoal(priority, new InvestigateGoal(this, componentBody(behaviour)));
-
-                case "minecraft:behavior.silverfish_merge_with_stone" ->
-                    goalSelector.addGoal(priority, SilverfishGoal.merging(this));
-                case "minecraft:behavior.silverfish_wake_up_friends" ->
-                    goalSelector.addGoal(priority, SilverfishGoal.wakingFriends(this));
-
-                case "minecraft:behavior.vex_random_move" ->
-                    goalSelector.addGoal(priority, new VexMoveGoal(this));
-                case "minecraft:behavior.vex_copy_owner_target" -> targetSelector.addGoal(priority,
-                    OwnerTargetGoal.whatTheOwnerIsAfter(this, componentBody(behaviour)));
-
-                case "minecraft:behavior.wither_random_attack_pos_goal" ->
-                    goalSelector.addGoal(priority,
-                        WitherGoal.loosingShots(this, componentBody(behaviour)));
-                case "minecraft:behavior.wither_target_highest_damage" ->
-                    targetSelector.addGoal(priority,
-                        WitherGoal.answeringTheWorstAttacker(this, componentBody(behaviour)));
-
-                case "minecraft:behavior.run_around_like_crazy" -> goalSelector.addGoal(priority,
-                    new BuckRiderGoal(this, componentBody(behaviour)));
-                case "minecraft:behavior.ocelot_sit_on_block" -> goalSelector.addGoal(priority,
-                    MoveToMatchingBlockGoal.sitOnBlock(this, componentBody(behaviour)));
-                case "minecraft:behavior.skeleton_horse_trap" -> goalSelector.addGoal(priority,
-                    new HorseTrapGoal(this, componentBody(behaviour)));
-                case "minecraft:behavior.defend_village_target" -> targetSelector.addGoal(priority,
-                    new DefendVillageGoal(this, componentBody(behaviour)));
-                case "minecraft:behavior.use_kinetic_weapon" -> goalSelector.addGoal(priority,
-                    new KineticWeaponGoal(this, componentBody(behaviour)));
-
-                case "minecraft:behavior.stay_near_noteblock" -> goalSelector.addGoal(priority,
-                    NoteblockGoal.stayingNear(this, componentBody(behaviour)));
-                case "minecraft:behavior.go_and_give_items_to_noteblock" ->
-                    goalSelector.addGoal(priority,
-                        NoteblockGoal.deliveringItems(this, componentBody(behaviour)));
-
-                // A dragon's flight and its three attacks, anchored on the place the entity is kept
-                // near rather than on the podium Java writes each of these phases around.
-                case "minecraft:behavior.dragonholdingpattern" ->
-                    goalSelector.addGoal(priority, DragonFlightGoal.circling(this));
-                case "minecraft:behavior.dragontakeoff" ->
-                    goalSelector.addGoal(priority, DragonFlightGoal.takingOff(this));
-                case "minecraft:behavior.dragonlanding" ->
-                    goalSelector.addGoal(priority, DragonFlightGoal.landing(this));
-                case "minecraft:behavior.dragonscanning" ->
-                    goalSelector.addGoal(priority, DragonFlightGoal.scanning(this));
-                case "minecraft:behavior.dragonchargeplayer" -> goalSelector.addGoal(priority,
-                    DragonAttackGoal.charging(this, componentBody(behaviour)));
-                case "minecraft:behavior.dragonstrafeplayer" -> goalSelector.addGoal(priority,
-                    DragonAttackGoal.strafing(this, componentBody(behaviour)));
-                case "minecraft:behavior.dragonflaming" -> goalSelector.addGoal(priority,
-                    DragonAttackGoal.flaming(this, componentBody(behaviour)));
-
-                case "minecraft:behavior.send_event" -> goalSelector.addGoal(priority,
-                    SpellGoal.sendingEvents(this, componentBody(behaviour)));
-                case "minecraft:behavior.summon_entity" -> goalSelector.addGoal(priority,
-                    SpellGoal.summoning(this, componentBody(behaviour)));
-
-                // A behaviour this switch does not name may still be one the entity carries out on
-                // its own clock rather than through a goal, so the register decides, not the switch.
-                default -> {
-                    if (!AddonEntities.implemented(behaviour)) AddonEntities.unsupported(behaviour);
-                }
+                com.google.gson.JsonElement declared = site.getValue().get(behaviour);
+                priority = addBehaviour(behaviour, declared.isJsonObject()
+                    ? declared.getAsJsonObject() : new com.google.gson.JsonObject(), ++order, site.getKey());
             }
         }
 
@@ -2613,6 +2191,459 @@ public class AddonEntity extends PathfinderMob
             targetSelector.addGoal(priority + 1, WitherGoal.answeringTheWorstAttacker(this,
                 componentBody("minecraft:wither_target_highest_damage")));
         }
+    }
+
+    /** What a pack's goals are added to, so a goal a group brings can be wrapped on the way in. */
+    private interface Selector {
+        void add(int priority, net.minecraft.world.entity.ai.goal.Goal goal);
+    }
+
+    /**
+     * Adds the goal one declaration of a behaviour asks for, read from that declaration's own body,
+     * and answers the priority it went in at. One that states none goes in at its place in the order.
+     *
+     * A goal declared at the top level always runs; one a group declares runs while the group is on.
+     * A behaviour written in two groups is two goals, each with the settings its own group gave it.
+     */
+    private int addBehaviour(String behaviour, com.google.gson.JsonObject goal, int order, String group) {
+        int priority = (int) Goals.number(goal, "priority", order);
+        goalPriorities.add(priority);
+        Selector goals = (at, added) -> goalSelector.addGoal(at,
+            group == null ? added : new GroupGoal(this, group, added));
+        Selector targets = (at, added) -> targetSelector.addGoal(at,
+            group == null ? added : new GroupGoal(this, group, added));
+        double speed = Goals.number(goal, "speed_multiplier", 1);
+
+        switch (behaviour) {
+            case "minecraft:behavior.float" -> goals.add(priority, new FloatGoal(this));
+            case "minecraft:behavior.panic" -> goals.add(priority, new PanicGoal(this, speed));
+            case "minecraft:behavior.swell" ->
+                goals.add(priority, new SwellGoal(this, goal));
+            case "minecraft:behavior.beg" ->
+                goals.add(priority, new BegGoal(this, goal));
+
+            // One squid moves five ways, and Bedrock names each of them separately.
+            case "minecraft:behavior.squid_idle" ->
+                goals.add(priority, SquidGoal.idling(this));
+            case "minecraft:behavior.squid_dive" ->
+                goals.add(priority, SquidGoal.diving(this));
+            case "minecraft:behavior.squid_flee" ->
+                goals.add(priority, SquidGoal.fleeing(this));
+            case "minecraft:behavior.squid_move_away_from_ground" ->
+                goals.add(priority, SquidGoal.leavingGround(this));
+            case "minecraft:behavior.squid_out_of_water" ->
+                goals.add(priority, SquidGoal.flopping(this));
+            // A slime turns, hops, floats and closes on a target, and Bedrock names each of the
+            // four separately.
+            case "minecraft:behavior.slime_random_direction" ->
+                goals.add(priority, SlimeGoal.turning(this, goal));
+            case "minecraft:behavior.slime_keep_on_jumping" ->
+                goals.add(priority, SlimeGoal.hopping(this, goal));
+            case "minecraft:behavior.slime_float" ->
+                goals.add(priority, SlimeGoal.floating(this, goal));
+            case "minecraft:behavior.slime_attack" ->
+                goals.add(priority, SlimeGoal.attacking(this, goal));
+
+            case "minecraft:behavior.random_stroll", "minecraft:behavior.move_outdoors",
+                 "minecraft:behavior.explore_outskirts" -> {
+                // `interval` is the one in N chance of choosing the goal, which Java counts the
+                // same way.
+                WaterAvoidingRandomStrollGoal stroll = new WaterAvoidingRandomStrollGoal(this, speed);
+                stroll.setInterval((int) Goals.number(goal, "interval", 120));
+                goals.add(priority, stroll);
+            }
+            case "minecraft:behavior.look_at_player", "minecraft:behavior.look_at_trading_player" ->
+                goals.add(priority, new LookAtPlayerGoal(this, Player.class,
+                    (float) Goals.number(goal, "look_distance", 8),
+                    (float) Goals.number(goal, "probability", 0.02)));
+            case "minecraft:behavior.random_look_around",
+                 "minecraft:behavior.random_look_around_and_sit" ->
+                goals.add(priority, new RandomLookAroundGoal(this));
+
+            // Bedrock names the kind of entity to watch; Java's goal takes a class, and the
+            // widest class that still means a creature is every living thing.
+            case "minecraft:behavior.look_at_entity" -> goals.add(priority,
+                new LookAtPlayerGoal(this, net.minecraft.world.entity.LivingEntity.class, 8f));
+
+            // Bedrock names the kind of wandering; Java has one stroll goal and a speed.
+            case "minecraft:behavior.move_indoors",
+                 "minecraft:behavior.move_towards_dwelling_restriction",
+                 "minecraft:behavior.move_towards_home_restriction",
+                 "minecraft:behavior.move_towards_restriction",
+                 "minecraft:behavior.go_home" ->
+                goals.add(priority, new MoveTowardsRestrictionGoal(this, speed));
+
+            case "minecraft:behavior.move_to_village" ->
+                goals.add(priority, new MoveBackToVillageGoal(this, 0.6, false));
+            // Java's goal asks separately whether the route may run at night and whether the mob
+            // can get through a door. Bedrock states neither, so the walk is allowed at any
+            // hour and doors are left to the navigator.
+            case "minecraft:behavior.move_through_village" ->
+                goals.add(priority,
+                    new MoveThroughVillageGoal(this, 0.6, false, 4, () -> false));
+            case "minecraft:behavior.mingle" ->
+                goals.add(priority, new StrollThroughVillageGoal(this, 60));
+            case "minecraft:behavior.move_towards_target" ->
+                goals.add(priority, new MoveTowardsTargetGoal(this, 0.9, 32f));
+
+            case "minecraft:behavior.random_fly", "minecraft:behavior.random_hover",
+                 "minecraft:behavior.hover", "minecraft:behavior.float_wander" ->
+                goals.add(priority, new WaterAvoidingRandomFlyingGoal(this, 1.0));
+            // `interval` is the one in N chance of choosing the goal, which Java counts the
+            // same way.
+            case "minecraft:behavior.random_swim", "minecraft:behavior.swim_wander" ->
+                goals.add(priority, new RandomSwimmingGoal(this, speed,
+                    (int) Goals.number(goal, "interval", 120)));
+            case "minecraft:behavior.move_to_water", "minecraft:behavior.move_to_liquid" ->
+                goals.add(priority, new TryFindWaterGoal(this));
+            case "minecraft:behavior.swim_up_for_breath" ->
+                goals.add(priority, new BreathAirGoal(this));
+
+            case "minecraft:behavior.eat_block" ->
+                goals.add(priority, new EatBlockGoal(this));
+            // Bedrock's find_cover and flee_sun both end with the mob standing out of the light.
+            case "minecraft:behavior.flee_sun", "minecraft:behavior.find_cover" ->
+                goals.add(priority, new FleeSunGoal(this, 1.0));
+            case "minecraft:behavior.restrict_sun" ->
+                goals.add(priority, new RestrictSunGoal(this));
+            // Java asks per difficulty whether a door may be broken; Bedrock states the ability
+            // once and leaves the difficulty out of it.
+            case "minecraft:behavior.break_door", "minecraft:annotation.break_door" ->
+                goals.add(priority, new BreakDoorGoal(this, difficulty -> true));
+            case "minecraft:behavior.follow_mob" ->
+                goals.add(priority, new FollowMobGoal(this, 1.0, 3f, 7f));
+            case "minecraft:behavior.leap_at_target",
+                 "minecraft:behavior.stalk_and_pounce_on_target" ->
+                goals.add(priority, new LeapAtTargetGoal(this, 0.4f));
+            case "minecraft:behavior.mount_pathing", "minecraft:behavior.follow_owner",
+                 "minecraft:behavior.play", "minecraft:behavior.stroll_towards_village" ->
+                goals.add(priority, new WaterAvoidingRandomStrollGoal(this, speed));
+
+            case "minecraft:behavior.avoid_mob_type" ->
+                goals.add(priority, new AvoidMobsGoal(this, goal));
+            // Hiding and playing are both a Bedrock villager moving somewhere for a reason Java
+            // writes into its own villager. What carries across is the moving.
+            case "minecraft:behavior.hide" -> {
+                TargetSelection avoided = TargetSelection.from(goal, Monster.class, 8);
+                goals.add(priority, new AvoidEntityGoal<>(this, avoided.kind(),
+                    (float) avoided.maxDistance(),
+                    Goals.number(goal, "walk_speed_modifier", 1),
+                    Goals.number(goal, "sprint_speed_modifier", 1.2)));
+            }
+            case "minecraft:behavior.avoid_block" ->
+                goals.add(priority, new AvoidBlockGoal(this, goal));
+
+            // Each of these three walks to what a memory sensor wrote down rather than to
+            // anything the goal itself was given, which is why none of them carries a target.
+            case "minecraft:memory_behavior.follow_target" ->
+                goals.add(priority, MemoryGoal.following(this));
+            case "minecraft:memory_behavior.flee_threat" ->
+                goals.add(priority, MemoryGoal.fleeing(this));
+            case "minecraft:memory_behavior.move_to_position" ->
+                goals.add(priority, MemoryGoal.movingToPosition(this));
+
+            case "minecraft:behavior.tempt", "minecraft:behavior.float_tempt" ->
+                goals.add(priority, Platform.temptGoal(this, speed, tempting(goal)));
+            case "minecraft:behavior.open_door", "minecraft:annotation.open_door" ->
+                goals.add(priority,
+                    new OpenDoorGoal(this, Goals.flag(goal, "close_door_after", true)));
+
+            case "minecraft:behavior.melee_attack", "minecraft:behavior.melee_box_attack",
+                 "minecraft:behavior.delayed_attack", "minecraft:behavior.stomp_attack" ->
+                goals.add(priority,
+                    new net.minecraft.world.entity.ai.goal.MeleeAttackGoal(this, speed,
+                        Goals.flag(goal, "track_target", false)));
+            // A charge is a melee attack run at, which Java expresses as the speed the goal
+            // closes the distance with.
+            case "minecraft:behavior.charge_attack" ->
+                goals.add(priority,
+                    new net.minecraft.world.entity.ai.goal.MeleeAttackGoal(this, 1.4, false));
+            case "minecraft:behavior.nearest_attackable_target",
+                 "minecraft:behavior.nearest_prioritized_attackable_target" -> {
+                TargetSelection hunted = TargetSelection.from(goal, Player.class,
+                    Goals.number(goal, "within_radius", 0));
+                targets.add(priority,
+                    new net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal<>(
+                        this, hunted.kind(),
+                        (int) Goals.number(goal, "scan_interval", 10),
+                        Goals.flag(goal, "must_see", false),
+                        Goals.flag(goal, "must_reach", false), null));
+            }
+            case "minecraft:behavior.hurt_by_target", "minecraft:behavior.target_when_pushed" -> {
+                net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal hurt =
+                    new net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal(this);
+                if (Goals.flag(goal, "alert_same_type", false)) hurt.setAlertOthers();
+                targets.add(priority, hurt);
+            }
+
+            // Bedrock states the gap between shots in seconds and the reach in blocks; Java's
+            // goal counts the gap in ticks and asks the entity itself to release the projectile.
+            case "minecraft:behavior.ranged_attack" -> goals.add(priority,
+                new net.minecraft.world.entity.ai.goal.RangedAttackGoal(this,
+                    number(definition, behaviour, "speed_multiplier", 1),
+                    (int) (number(definition, behaviour, "attack_interval_min", 1) * 20),
+                    (int) (number(definition, behaviour, "attack_interval_max", 1) * 20),
+                    (float) number(definition, behaviour, "attack_radius", 16)));
+            case "minecraft:behavior.ocelotattack" -> goals.add(priority,
+                new net.minecraft.world.entity.ai.goal.OcelotAttackGoal(this));
+
+            case "minecraft:behavior.follow_parent" -> goals.add(priority,
+                FollowKinGoal.parent(this, goal));
+            case "minecraft:behavior.follow_caravan" -> goals.add(priority,
+                FollowKinGoal.caravan(this, goal));
+            case "minecraft:behavior.follow_target_leader" -> goals.add(priority,
+                FollowKinGoal.leader(this, goal));
+            case "minecraft:behavior.follow_target_captain" -> goals.add(priority,
+                FollowKinGoal.captain(this, goal));
+
+            case "minecraft:behavior.move_to_block" -> goals.add(priority,
+                MoveToMatchingBlockGoal.named(this, goal));
+            case "minecraft:behavior.move_to_land" -> goals.add(priority,
+                MoveToMatchingBlockGoal.land(this, goal));
+            case "minecraft:behavior.move_to_lava" -> goals.add(priority,
+                MoveToMatchingBlockGoal.lava(this, goal));
+            case "minecraft:behavior.move_to_random_block" -> goals.add(priority,
+                MoveToMatchingBlockGoal.anywhere(this, goal));
+
+            case "minecraft:behavior.equip_item" -> goals.add(priority,
+                new EquipItemGoal(this, componentBody("minecraft:equip_item")));
+            case "minecraft:behavior.hold_ground" ->
+                goals.add(priority, HoldGroundGoal.standing(this));
+            case "minecraft:behavior.look_at_target" ->
+                goals.add(priority, HoldGroundGoal.watching(this));
+            // Java writes door handling as two goals under one base, and opening is the half
+            // Bedrock's own door interaction does.
+            case "minecraft:behavior.door_interact" ->
+                goals.add(priority, new OpenDoorGoal(this, true));
+
+            case "minecraft:behavior.raid_garden" -> goals.add(priority,
+                MoveToMatchingBlockGoal.raid(this, goal));
+            case "minecraft:behavior.harvest_farm_block" -> goals.add(priority,
+                MoveToMatchingBlockGoal.harvest(this, goal));
+            case "minecraft:behavior.fertilize_farm_block" -> goals.add(priority,
+                MoveToMatchingBlockGoal.fertilize(this, goal));
+            // Java's own goal for this is the one its zombie uses on the same block.
+            case "minecraft:behavior.stomp_turtle_egg" -> goals.add(priority,
+                new net.minecraft.world.entity.ai.goal.RemoveBlockGoal(
+                    net.minecraft.world.level.block.Blocks.TURTLE_EGG, this,
+                    number(definition, behaviour, "speed_multiplier", 1),
+                    (int) number(definition, behaviour, "search_height", 2)));
+
+            case "minecraft:behavior.timer_flag_1", "minecraft:behavior.timer_flag_2",
+                 "minecraft:behavior.timer_flag_3" ->
+                goals.add(priority, new TimerFlagGoal(this, goal,
+                    behaviour.substring("minecraft:behavior.".length())));
+            case "minecraft:behavior.random_sitting" ->
+                goals.add(priority, RestGoal.sitting(this, goal));
+            case "minecraft:behavior.lay_down" ->
+                goals.add(priority, RestGoal.lyingDown(this, goal));
+            case "minecraft:behavior.knockback_roar" ->
+                goals.add(priority, new KnockbackRoarGoal(this, goal));
+            case "minecraft:behavior.eat_carried_item" ->
+                goals.add(priority, new EatCarriedItemGoal(this, goal));
+            case "minecraft:behavior.move_around_target" ->
+                goals.add(priority, CircleTargetGoal.walking(this, goal));
+            case "minecraft:behavior.jump_around_target" ->
+                goals.add(priority, CircleTargetGoal.jumping(this, goal));
+
+            // What the entity does because it belongs to somebody. Each of these reads back the
+            // owner that taming stored, so an untamed entity carrying one simply never starts it.
+            case "minecraft:behavior.owner_hurt_target" -> targets.add(priority,
+                OwnerTargetGoal.whatTheOwnerHurt(this, goal));
+            case "minecraft:behavior.owner_hurt_by_target" -> targets.add(priority,
+                OwnerTargetGoal.whoHurtTheOwner(this, goal));
+            case "minecraft:behavior.defend_trusted_target" -> targets.add(priority,
+                OwnerTargetGoal.defendingTheOwner(this, goal));
+            case "minecraft:behavior.teleport_to_owner" -> goals.add(priority,
+                new TeleportToOwnerGoal(this, goal));
+            case "minecraft:behavior.go_and_give_items_to_owner" -> goals.add(priority,
+                new GiveItemsToOwnerGoal(this, goal));
+            case "minecraft:behavior.pet_sleep_with_owner" -> goals.add(priority,
+                PetRestGoal.besideSleepingOwner(this, goal));
+            case "minecraft:behavior.stay_while_sitting" -> goals.add(priority,
+                PetRestGoal.whileSitting(this));
+            case "minecraft:behavior.find_mount" -> goals.add(priority,
+                new FindMountGoal(this, goal));
+
+            case "minecraft:behavior.roar" -> goals.add(priority,
+                PoseHoldGoal.roaring(this, goal));
+            case "minecraft:behavior.croak" -> goals.add(priority,
+                PoseHoldGoal.croaking(this, goal));
+            case "minecraft:behavior.sniff" -> goals.add(priority,
+                PoseHoldGoal.sniffing(this, goal));
+            case "minecraft:behavior.emerge" -> goals.add(priority,
+                PoseHoldGoal.emerging(this, goal));
+            case "minecraft:behavior.dig" -> goals.add(priority,
+                PoseHoldGoal.digging(this, goal));
+            case "minecraft:behavior.random_search_and_dig" -> goals.add(priority,
+                MoveToMatchingBlockGoal.searchingAndDigging(this, goal));
+
+            // What a Bedrock dolphin does that nothing else does.
+            case "minecraft:behavior.random_breach" -> goals.add(priority,
+                DolphinGoal.breaching(this, goal));
+            case "minecraft:behavior.find_underwater_treasure" -> goals.add(priority,
+                DolphinGoal.seekingTreasure(this, goal));
+            case "minecraft:behavior.swim_with_entity" -> goals.add(priority,
+                DolphinGoal.escorting(this, goal));
+
+            case "minecraft:behavior.play_dead" -> goals.add(priority,
+                new PlayDeadGoal(this, goal));
+            case "minecraft:behavior.scared" -> goals.add(priority,
+                new ScaredGoal(this, goal));
+            case "minecraft:behavior.celebrate" -> goals.add(priority,
+                new CelebrateGoal(this, goal));
+            case "minecraft:behavior.sneeze" -> goals.add(priority,
+                new SneezeGoal(this, goal));
+            case "minecraft:behavior.roll" -> goals.add(priority,
+                new RollGoal(this, goal));
+            case "minecraft:behavior.swim_idle" -> goals.add(priority,
+                new SwimIdleGoal(this, goal));
+            case "minecraft:behavior.restrict_open_door" -> goals.add(priority,
+                new RestrictOpenDoorGoal(this));
+            case "minecraft:behavior.rise_to_liquid_level" -> goals.add(priority,
+                new RiseToLiquidLevelGoal(this, goal));
+            case "minecraft:behavior.move_to_poi" -> goals.add(priority,
+                new MoveToPoiGoal(this, goal));
+            case "minecraft:behavior.jump_to_block" -> goals.add(priority,
+                new JumpToBlockGoal(this, goal));
+            case "minecraft:behavior.lay_egg" -> goals.add(priority,
+                new LayEggGoal(this, goal));
+            case "minecraft:behavior.eat_mob" -> goals.add(priority,
+                new EatMobGoal(this, goal));
+            case "minecraft:behavior.fire_at_target" -> goals.add(priority,
+                new FireAtTargetGoal(this, goal));
+            case "minecraft:behavior.charge_held_item" -> goals.add(priority,
+                new ChargeHeldItemGoal(this, goal));
+            case "minecraft:behavior.circle_around_anchor" -> goals.add(priority,
+                new CircleAroundAnchorGoal(this, goal));
+            case "minecraft:behavior.controlled_by_player" -> goals.add(priority,
+                new ControlledByPlayerGoal(this, goal));
+
+            case "minecraft:behavior.take_block" -> goals.add(priority,
+                CarryBlockGoal.taking(this, goal));
+            case "minecraft:behavior.place_block" -> goals.add(priority,
+                CarryBlockGoal.placing(this, goal));
+            case "minecraft:behavior.enderman_take_block" -> goals.add(priority,
+                CarryBlockGoal.endermanTaking(this, goal));
+            case "minecraft:behavior.enderman_leave_block" -> goals.add(priority,
+                CarryBlockGoal.endermanLeaving(this, goal));
+
+            case "minecraft:behavior.ram_attack" -> goals.add(priority,
+                ChargeAttackGoal.ramming(this, goal));
+            case "minecraft:behavior.swoop_attack" -> goals.add(priority,
+                ChargeAttackGoal.swooping(this, goal));
+            case "minecraft:behavior.aquatic_charge_attack" -> goals.add(priority,
+                ChargeAttackGoal.chargingUnderwater(this, goal));
+
+            case "minecraft:behavior.breed" -> goals.add(priority,
+                new BreedGoal(this, goal));
+            case "minecraft:behavior.trade_with_player" -> goals.add(priority,
+                TradeGoal.whileTrading(this, goal));
+            case "minecraft:behavior.trade_interest" -> goals.add(priority,
+                TradeGoal.showingWares(this, goal));
+
+            // A villager's working life: the shift at a station, the handing round of what was
+            // gathered, and the pair of behaviours that make another villager.
+            case "minecraft:behavior.work" -> goals.add(priority,
+                WorkGoal.working(this, goal));
+            case "minecraft:behavior.work_composter" -> goals.add(priority,
+                WorkGoal.composting(this, goal));
+            case "minecraft:behavior.share_items" -> goals.add(priority,
+                ShareItemsGoal.sharing(this, goal));
+            case "minecraft:behavior.transport_items" -> goals.add(priority,
+                ShareItemsGoal.transporting(this, goal));
+            case "minecraft:behavior.drop_item_for" -> goals.add(priority,
+                ShareItemsGoal.dropping(this, goal));
+            case "minecraft:behavior.offer_flower" -> goals.add(priority,
+                ShareItemsGoal.offering(this, goal));
+            case "minecraft:behavior.inspect_bookshelf" -> goals.add(priority,
+                MoveToMatchingBlockGoal.bookshelf(this, goal));
+            // Bedrock's villager courtship is its own pair of behaviours; what they come to is
+            // the same walk towards a willing partner that every other pack animal does.
+            case "minecraft:behavior.make_love", "minecraft:behavior.receive_love" ->
+                goals.add(priority, new BreedGoal(this, goal));
+            // Napping is lying down, and snacking is eating what is already in hand.
+            case "minecraft:behavior.nap" -> goals.add(priority,
+                RestGoal.lyingDown(this, goal));
+            case "minecraft:behavior.snacking" -> goals.add(priority,
+                new EatCarriedItemGoal(this, goal));
+
+            case "minecraft:behavior.admire_item" -> goals.add(priority,
+                BarterGoal.admiring(this, goal));
+            case "minecraft:behavior.barter" -> goals.add(priority,
+                BarterGoal.bartering(this, goal));
+
+            // A wind-up held at range: a guardian's beam and a warden's boom.
+            case "minecraft:behavior.guardian_attack" -> goals.add(priority,
+                BeamAttackGoal.beam(this, goal));
+            case "minecraft:behavior.sonic_boom" -> goals.add(priority,
+                BeamAttackGoal.sonicBoom(this, goal));
+            case "minecraft:behavior.investigate_suspicious_location" ->
+                goals.add(priority, new InvestigateGoal(this, goal));
+
+            case "minecraft:behavior.silverfish_merge_with_stone" ->
+                goals.add(priority, SilverfishGoal.merging(this));
+            case "minecraft:behavior.silverfish_wake_up_friends" ->
+                goals.add(priority, SilverfishGoal.wakingFriends(this));
+
+            case "minecraft:behavior.vex_random_move" ->
+                goals.add(priority, new VexMoveGoal(this));
+            case "minecraft:behavior.vex_copy_owner_target" -> targets.add(priority,
+                OwnerTargetGoal.whatTheOwnerIsAfter(this, goal));
+
+            case "minecraft:behavior.wither_random_attack_pos_goal" ->
+                goals.add(priority,
+                    WitherGoal.loosingShots(this, goal));
+            case "minecraft:behavior.wither_target_highest_damage" ->
+                targets.add(priority,
+                    WitherGoal.answeringTheWorstAttacker(this, goal));
+
+            case "minecraft:behavior.run_around_like_crazy" -> goals.add(priority,
+                new BuckRiderGoal(this, goal));
+            case "minecraft:behavior.ocelot_sit_on_block" -> goals.add(priority,
+                MoveToMatchingBlockGoal.sitOnBlock(this, goal));
+            case "minecraft:behavior.skeleton_horse_trap" -> goals.add(priority,
+                new HorseTrapGoal(this, goal));
+            case "minecraft:behavior.defend_village_target" -> targets.add(priority,
+                new DefendVillageGoal(this, goal));
+            case "minecraft:behavior.use_kinetic_weapon" -> goals.add(priority,
+                new KineticWeaponGoal(this, goal));
+
+            case "minecraft:behavior.stay_near_noteblock" -> goals.add(priority,
+                NoteblockGoal.stayingNear(this, goal));
+            case "minecraft:behavior.go_and_give_items_to_noteblock" ->
+                goals.add(priority,
+                    NoteblockGoal.deliveringItems(this, goal));
+
+            // A dragon's flight and its three attacks, anchored on the place the entity is kept
+            // near rather than on the podium Java writes each of these phases around.
+            case "minecraft:behavior.dragonholdingpattern" ->
+                goals.add(priority, DragonFlightGoal.circling(this));
+            case "minecraft:behavior.dragontakeoff" ->
+                goals.add(priority, DragonFlightGoal.takingOff(this));
+            case "minecraft:behavior.dragonlanding" ->
+                goals.add(priority, DragonFlightGoal.landing(this));
+            case "minecraft:behavior.dragonscanning" ->
+                goals.add(priority, DragonFlightGoal.scanning(this));
+            case "minecraft:behavior.dragonchargeplayer" -> goals.add(priority,
+                DragonAttackGoal.charging(this, goal));
+            case "minecraft:behavior.dragonstrafeplayer" -> goals.add(priority,
+                DragonAttackGoal.strafing(this, goal));
+            case "minecraft:behavior.dragonflaming" -> goals.add(priority,
+                DragonAttackGoal.flaming(this, goal));
+
+            case "minecraft:behavior.send_event" -> goals.add(priority,
+                SpellGoal.sendingEvents(this, goal));
+            case "minecraft:behavior.summon_entity" -> goals.add(priority,
+                SpellGoal.summoning(this, goal));
+
+            // A behaviour this switch does not name may still be one the entity carries out on
+            // its own clock rather than through a goal, so the register decides, not the switch.
+            default -> {
+                if (!AddonEntities.implemented(behaviour)) AddonEntities.unsupported(behaviour);
+            }
+        }
+        return priority;
     }
 
     // A spawn rule describes natural spawning, so a spawner block and a spawn egg are left alone.
@@ -4228,7 +4259,7 @@ public class AddonEntity extends PathfinderMob
      */
     @Override
     protected void tickDeath() {
-        if (definition == null || !definition.behaviours().contains("minecraft:behavior.dragondeath")) {
+        if (definition == null || !declaresNow("minecraft:behavior.dragondeath")) {
             super.tickDeath();
             return;
         }

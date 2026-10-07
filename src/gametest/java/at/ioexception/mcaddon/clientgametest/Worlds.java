@@ -1,8 +1,12 @@
 package at.ioexception.mcaddon.clientgametest;
 
+import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.minecraft.server.MinecraftServer;
 
-/** Opening a test world, which the client game test API spelled differently before 26.2. */
+import java.util.function.Predicate;
+
+/** Opening a test world and waiting on its server, which the test API spelled differently before 26.2. */
 final class Worlds {
     private Worlds() {
     }
@@ -13,5 +17,15 @@ final class Worlds {
         //?} else {
         /*world.getClientLevel().waitForChunksRender();
         *///?}
+    }
+
+    /** Waits a tick at a time until the server answers yes, and fails once the ticks run out. */
+    static void waitForServer(ClientGameTestContext context, TestSingleplayerContext world,
+        Predicate<MinecraftServer> holds, int ticks, String failure) {
+        for (int tick = 0; tick < ticks; tick++) {
+            if (world.getServer().computeOnServer(holds::test)) return;
+            context.waitTick();
+        }
+        throw new AssertionError(failure);
     }
 }
