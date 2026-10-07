@@ -1210,7 +1210,8 @@ public final class PackConverter {
 
             String variantName = name + "_" + combination;
             writeCubeModel(assets, variantName, faces, geometryOf(block, geometries));
-            variants.add(String.join(",", key), modelReference(namespace, variantName, rotation));
+            variants.add(String.join(",", key), modelReference(namespace, variantName,
+                BlockComponents.rotation(block.componentsFor(chosen))));
         }
         return variants;
     }
@@ -1408,12 +1409,13 @@ public final class PackConverter {
 
             String named = BlockComponents.loot(block);
             LootTableDefinition table = named == null ? null : lootTable(tables, named);
-            if (table != null) {
-                JsonObject copy = table.java().deepCopy();
-                copy.addProperty("type", "minecraft:block");
+            JsonObject drops = table != null ? table.java().deepCopy()
+                : named == null ? dropsItself(id.namespace() + ":" + id.path()) : null;
+            if (drops != null) {
+                drops.addProperty("type", "minecraft:block");
                 write(root.resolve("data").resolve(id.namespace())
                     .resolve(dataDirectory("loot_table")).resolve("blocks")
-                    .resolve(id.path() + ".json"), copy);
+                    .resolve(id.path() + ".json"), drops);
             }
 
             for (String tag : BlockComponents.tags(block)) {
@@ -1434,6 +1436,36 @@ public final class PackConverter {
                 .resolve("tags").resolve(dataDirectory("block"))
                 .resolve(id.path() + ".json"), json);
         }
+    }
+
+    /**
+     * The table of a block naming no `minecraft:loot`, which Bedrock breaks into one of itself.
+     *
+     * Java drops nothing for a block whose table is missing, so the table Bedrock assumes is written
+     * out, with the condition Java's own blocks carry that an explosion may destroy the drop.
+     */
+    private static JsonObject dropsItself(String block) {
+        JsonObject entry = new JsonObject();
+        entry.addProperty("type", "minecraft:item");
+        entry.addProperty("name", block);
+        JsonArray entries = new JsonArray();
+        entries.add(entry);
+
+        JsonObject survives = new JsonObject();
+        survives.addProperty("condition", "minecraft:survives_explosion");
+        JsonArray conditions = new JsonArray();
+        conditions.add(survives);
+
+        JsonObject pool = new JsonObject();
+        pool.addProperty("rolls", 1);
+        pool.add("entries", entries);
+        pool.add("conditions", conditions);
+        JsonArray pools = new JsonArray();
+        pools.add(pool);
+
+        JsonObject table = new JsonObject();
+        table.add("pools", pools);
+        return table;
     }
 
     /**

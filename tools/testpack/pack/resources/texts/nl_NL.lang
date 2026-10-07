@@ -10,6 +10,7 @@ item.tp:disc.name=Testplaat
 item.tp:berry.name=Testbes
 item.tp:pebble.name=Testkiezel
 tile.tp:lamp.name=Testlamp
+tile.tp:totem.name=Testtotem
 entity.tp:sprite.name=Testgeest
 entity.tp:ember.name=Testsintel
 item.spawn_egg.entity.tp:sprite.name=Testgeest oproepen

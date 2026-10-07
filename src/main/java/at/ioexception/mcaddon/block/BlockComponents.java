@@ -55,12 +55,16 @@ import java.util.Map;
  * @param support        the shape other blocks rest on, or null for the one the collision box gives
  * @param connections    which of the blocks that reach sideways may reach this one
  * @param occlusion      the shape neighbouring faces are culled against, or null for Java's own
+ * @param permutations   what the permutations make of each state, or null where they change nothing
+ *                       a state is asked
+ * @param traits         the states set from how the block was placed, or null where it has none
  */
 public record BlockComponents(VoxelShape collision, VoxelShape selection, int lightDampening,
     Component craftingTitle, int catchChance, int destroyChance, Redstone redstone,
     List<Placement> placement, BlockEvents events, List<String> scripted,
     boolean dynamicProperties, ChestObstruction chestObstruction, VoxelShape support,
-    Connections connections, VoxelShape occlusion) {
+    Connections connections, VoxelShape occlusion, Permutations permutations,
+    PlacementTraits traits) {
 
     /** The explosion resistance Java gives bedrock, which no blast reaches. */
     private static final float BLAST_PROOF = 3600000f;
@@ -159,7 +163,23 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
             flag(components, "minecraft:block_entity", "dynamic_properties"),
             ChestObstruction.of(text(components, "minecraft:chest_obstruction", "obstruction_rule")),
             support(components), connections(components),
-            shapes.named(cullingShape(components)));
+            shapes.named(cullingShape(components)), Permutations.of(definition, properties),
+            PlacementTraits.of(definition, properties));
+    }
+
+    /** The area entities collide with in this state, or null for the whole block. */
+    public VoxelShape collisionAt(BlockState state) {
+        return permutations == null ? collision : permutations.at(state).collision();
+    }
+
+    /** The area the cursor selects in this state, or null for the whole block. */
+    public VoxelShape selectionAt(BlockState state) {
+        return permutations == null ? selection : permutations.at(state).selection();
+    }
+
+    /** The hardness of this state, which a permutation's `destructible_by_mining` may change. */
+    public float hardnessAt(BlockState state, float own) {
+        return permutations == null ? own : permutations.at(state).hardness();
     }
 
     /** The shape `minecraft:geometry` culls against, which it names beside the model it draws. */
@@ -344,10 +364,11 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
      * sound group in the resource pack's `blocks.json`, so it arrives with the rest of what that
      * file says about the block and is absent for a block the file does not mention.
      */
-    public static BlockBehaviour.Properties settings(BlockDefinition definition,
+    public BlockBehaviour.Properties settings(BlockDefinition definition,
         ClientBlockDefinition appearance) {
         JsonObject components = definition.components();
-        int emission = (int) number(components, "minecraft:light_emission", "light_emission", 0);
+        int emission = lightEmission(components);
+        Permutations live = permutations;
         boolean conductor = flag(components, "minecraft:redstone_conductivity", "redstone_conductor")
             || flag(components, "minecraft:redstone_consumer", "propagates_power");
         if (object(components, "minecraft:redstone_consumer").has("min_power")) {
@@ -356,7 +377,7 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
 
         BlockBehaviour.Properties properties = BlockBehaviour.Properties.of()
             .strength(hardness(components), resistance(components))
-            .lightLevel(state -> emission)
+            .lightLevel(state -> live == null ? emission : live.at(state).light())
             .friction(javaFriction(number(components, "minecraft:friction", "friction", 0.4f)))
             .pushReaction(pushReaction(text(components, "minecraft:movable", "movement_type")))
             .isRedstoneConductor((state, level, position) -> conductor);
@@ -483,7 +504,7 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
     }
 
     /** Null when the pack asked for the whole block, which is what Java does without being told. */
-    private static VoxelShape shape(JsonObject components, String name) {
+    static VoxelShape shape(JsonObject components, String name) {
         JsonElement component = components.get(name);
         if (component == null) return null;
         if (component.isJsonPrimitive()) return isFalse(component) ? Shapes.empty() : null;
@@ -554,8 +575,12 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
         return red * red + green * green + blue * blue;
     }
 
+    static int lightEmission(JsonObject components) {
+        return (int) number(components, "minecraft:light_emission", "light_emission", 0);
+    }
+
     /** `false` means the block cannot be mined at all, which Java writes as a negative hardness. */
-    private static float hardness(JsonObject components) {
+    static float hardness(JsonObject components) {
         JsonElement component = components.get("minecraft:destructible_by_mining");
         if (component != null && isFalse(component)) return -1f;
         return number(components, "minecraft:destructible_by_mining", "seconds_to_destroy", 1f);
@@ -637,7 +662,12 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
 
     /** The quarter turns about x and about y that a `minecraft:transformation` asks the model for. */
     public static int[] rotation(BlockDefinition definition) {
-        JsonObject transformation = object(definition.components(), "minecraft:transformation");
+        return rotation(definition.components());
+    }
+
+    /** The same quarter turns, out of components a permutation may have laid over the block's own. */
+    public static int[] rotation(JsonObject components) {
+        JsonObject transformation = object(components, "minecraft:transformation");
         double[] degrees = vector(transformation.get("rotation"), 0, 0, 0);
         return new int[] {quarterTurn(degrees[0]), quarterTurn(degrees[1])};
     }

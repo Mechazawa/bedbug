@@ -29,6 +29,16 @@ function openHandbook(player) {
     form.show().then(reason => player.addTag("tp:handbook_" + reason));
 }
 
+// `tp:totem` names this component, so using that block reaches the callback, and the tag it leaves
+// says the player who used it was handed over as well.
+system.beforeEvents.startup.subscribe(event => {
+    event.blockComponentRegistry.registerCustomComponent("tp:tapped", {
+        onPlayerInteract(interaction) {
+            interaction.player?.addTag("tp:tapped");
+        },
+    });
+});
+
 system.afterEvents.scriptEventReceive.subscribe(event => {
     if (event.id === "tp:handbook" && event.sourceEntity !== undefined) openHandbook(event.sourceEntity);
 });

@@ -63,6 +63,21 @@ final class Stage {
             && client.player.getMainHandItem().getCount() == count);
     }
 
+    static void emptyHand(ClientGameTestContext context, TestSingleplayerContext world) {
+        world.getServer().runCommand("item replace entity @a hotbar.0 with minecraft:air");
+        context.waitFor(client -> client.player != null && client.player.getMainHandItem().isEmpty());
+    }
+
+    /** Turns the player's view onto a point, worked out from where the client has their eyes. */
+    static void lookAt(ClientGameTestContext context, net.minecraft.world.phys.Vec3 point) {
+        net.minecraft.world.phys.Vec3 eye = context.computeOnClient(client -> client.player.getEyePosition());
+        net.minecraft.world.phys.Vec3 to = point.subtract(eye);
+        float yaw = (float) Math.toDegrees(Math.atan2(-to.x, to.z));
+        float pitch = (float) Math.toDegrees(-Math.atan2(to.y, to.horizontalDistance()));
+        context.getInput().lookAt(yaw, pitch);
+        context.waitTick();
+    }
+
     static ServerPlayer player(MinecraftServer server) {
         return server.getPlayerList().getPlayers().get(0);
     }

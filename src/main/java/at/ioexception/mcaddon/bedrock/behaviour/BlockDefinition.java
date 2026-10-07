@@ -1,10 +1,15 @@
 package at.ioexception.mcaddon.bedrock.behaviour;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
+import at.ioexception.mcaddon.bedrock.molang.MolangParser;
+import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.pack.BedrockPack;
+import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -26,7 +31,27 @@ import java.util.Map;
  */
 public record BlockDefinition(String identifier, Map<String, String> faceTextures, String geometry,
     boolean transparent, JsonObject components, Map<String, List<JsonElement>> states,
-    List<Permutation> permutations, JsonObject events) {
+    List<Permutation> permutations, JsonObject events, JsonObject traits) {
+
+    /**
+     * The states a trait adds, by the name `enabled_states` turns each on with, and the values each
+     * takes in the order Mojang lists them.
+     *
+     * `minecraft:corner_and_cardinal_direction` turns on the cardinal direction and a corner beside
+     * it. Working out the corner needs the neighbouring stairs this mod does not look at, so it adds
+     * the direction alone and the corner is reported.
+     */
+    public static final Map<String, Map<String, List<String>>> TRAIT_STATES = Map.of(
+        "minecraft:cardinal_direction",
+        Map.of("minecraft:cardinal_direction", List.of("north", "south", "east", "west")),
+        "minecraft:corner_and_cardinal_direction",
+        Map.of("minecraft:cardinal_direction", List.of("north", "south", "east", "west")),
+        "minecraft:facing_direction",
+        Map.of("minecraft:facing_direction", List.of("down", "up", "north", "south", "east", "west")),
+        "minecraft:block_face",
+        Map.of("minecraft:block_face", List.of("down", "up", "north", "south", "east", "west")),
+        "minecraft:vertical_half",
+        Map.of("minecraft:vertical_half", List.of("bottom", "top")));
 
     /** One `permutations` entry: the components that apply while its Molang condition holds. */
     public record Permutation(String condition, JsonObject components) {
@@ -93,8 +118,66 @@ public record BlockDefinition(String identifier, Map<String, String> faceTexture
                 object(permutation, "components")));
         }
 
+        JsonObject traits = object(description, "traits");
+        traitStates(traits).forEach(states::putIfAbsent);
+
         return new BlockDefinition(identifier, faces, geometry(components), transparent,
-            components, states, permutations, object(body, "events"));
+            components, states, permutations, object(body, "events"), traits);
+    }
+
+    /**
+     * The states the placement traits add, after the pack's own.
+     *
+     * A trait whose states depend on what stands around the block, and the two placement states
+     * this mod has no reading of, are reported rather than added.
+     */
+    private static Map<String, List<JsonElement>> traitStates(JsonObject traits) {
+        Map<String, List<JsonElement>> added = new LinkedHashMap<>();
+        for (String trait : traits.keySet()) {
+            if (!trait.equals("minecraft:placement_direction") && !trait.equals("minecraft:placement_position")) {
+                AddonEntities.unsupported("block trait " + trait);
+                continue;
+            }
+            for (JsonElement enabled : Json.list(object(traits, trait), "enabled_states")) {
+                String name = enabled.isJsonPrimitive() ? enabled.getAsString() : "";
+                Map<String, List<String>> states = TRAIT_STATES.get(name);
+                if (states == null) {
+                    AddonEntities.unsupported(trait + " " + name);
+                    continue;
+                }
+                if (name.equals("minecraft:corner_and_cardinal_direction")) {
+                    AddonEntities.unsupported(trait + " minecraft:corner");
+                }
+                states.forEach((state, values) -> added.put(state,
+                    values.stream().map(value -> (JsonElement) new JsonPrimitive(value)).toList()));
+            }
+        }
+        return added;
+    }
+
+    /**
+     * The components that apply while the block holds these states: its own, with every permutation
+     * whose condition holds laid over them in the order the pack wrote them, so the last one wins.
+     */
+    public JsonObject componentsFor(Map<String, JsonElement> chosen) {
+        JsonObject merged = components.deepCopy();
+        if (permutations.isEmpty()) return merged;
+
+        MolangEnvironment environment = new MolangEnvironment();
+        environment.setQueries((query, arguments) -> {
+            if (!query.equals("block_state") || arguments.isEmpty()) return MolangValue.ZERO;
+            JsonElement value = chosen.get(arguments.get(0).text());
+            if (value == null || !value.isJsonPrimitive()) return MolangValue.ZERO;
+            if (value.getAsJsonPrimitive().isBoolean()) return MolangValue.of(value.getAsBoolean());
+            if (value.getAsJsonPrimitive().isNumber()) return MolangValue.of(value.getAsDouble());
+            return MolangValue.of(value.getAsString());
+        });
+
+        for (Permutation permutation : permutations) {
+            if (!MolangParser.parse(permutation.condition()).evaluate(environment).truthy()) continue;
+            permutation.components().entrySet().forEach(entry -> merged.add(entry.getKey(), entry.getValue()));
+        }
+        return merged;
     }
 
     /** The named member, or an empty object when the pack left it out or wrote something else. */
