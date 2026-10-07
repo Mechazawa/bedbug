@@ -124,6 +124,18 @@ def visor(x: int, y: int) -> tuple[int, int, int, int]:
     return (120, 190, 220, 255) if 6 <= y <= 9 else (96, 104, 116, 255)
 
 
+def berry(x: int, y: int) -> tuple[int, int, int, int]:
+    if disc(x, y, 7.5, 1.5) and y < 6:
+        return (70, 140, 60, 255)
+    return (180, 30, 60, 255) if disc(x, y, 7.5, 5.0) and y >= 4 else TRANSPARENT
+
+
+def pebble(x: int, y: int) -> tuple[int, int, int, int]:
+    if ((x - 7.5) / 5.5) ** 2 + ((y - 8.5) / 4.0) ** 2 > 1.0:
+        return TRANSPARENT
+    return (150, 146, 140, 255) if (x + 2 * y) % 7 else (112, 108, 104, 255)
+
+
 def sprite_egg(x: int, y: int) -> tuple[int, int, int, int]:
     if ((x - 7.5) / 4.5) ** 2 + ((y - 8.0) / 6.0) ** 2 > 1.0:
         return TRANSPARENT
@@ -240,6 +252,8 @@ TEXTURES = (
     ("textures/items/pouch.png", 16, pouch),
     ("textures/items/visor.png", 16, visor),
     ("textures/items/record.png", 16, record_icon),
+    ("textures/items/berry.png", 16, berry),
+    ("textures/items/pebble.png", 16, pebble),
     ("textures/items/sprite_egg.png", 16, sprite_egg),
     ("textures/items/ember_egg.png", 16, ember_egg),
     ("textures/blocks/lamp_off.png", 16, lamp_off),

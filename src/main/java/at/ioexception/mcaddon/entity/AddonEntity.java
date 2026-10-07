@@ -2127,6 +2127,28 @@ public class AddonEntity extends PathfinderMob
         if (flight != null) flight.launch(shooter, aim, level().getDifficulty().getId());
     }
 
+    /**
+     * Fires this pack projectile out of what a living entity holds, along where it is looking.
+     *
+     * The speed is the `power` the projectile's own component states, scaled by `share`: how far a
+     * bow was drawn, or the launch power a throwable item gives. Answers false for an entity whose
+     * pack never made it a projectile, which the caller then sends off on its own.
+     */
+    public boolean fireFrom(net.minecraft.world.entity.LivingEntity shooter, double share) {
+        if (flight == null) return false;
+
+        net.minecraft.world.phys.Vec3 from = flight.muzzle(shooter);
+        Platform.placeAt(this, from.x, from.y, from.z, shooter.getYRot(), shooter.getXRot());
+        launchAsProjectile(shooter, shooter.getLookAngle());
+        setDeltaMovement(getDeltaMovement().scale(share));
+        return true;
+    }
+
+    /** Whoever fired this projectile, or null for one nobody fired and for an entity that is none. */
+    public net.minecraft.world.entity.LivingEntity firedBy() {
+        return flight == null ? null : flight.shooter();
+    }
+
     /** A projectile the pack declared itself, placed at its own anchor and sent along its own arc. */
     private void shootOwn(net.minecraft.server.level.ServerLevel level, AddonEntity shot,
         net.minecraft.world.entity.LivingEntity target) {

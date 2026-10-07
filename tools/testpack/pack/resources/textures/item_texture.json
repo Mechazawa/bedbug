@@ -25,6 +25,12 @@
     },
     "record": {
       "textures": "textures/items/record"
+    },
+    "berry": {
+      "textures": "textures/items/berry"
+    },
+    "pebble": {
+      "textures": "textures/items/pebble"
     }
   }
 }

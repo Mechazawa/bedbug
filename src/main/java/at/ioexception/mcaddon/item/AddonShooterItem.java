@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.item;
 
+import at.ioexception.mcaddon.entity.AddonEntity;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.registry.AddonItems;
 import net.minecraft.core.registries.Registries;
@@ -23,7 +24,8 @@ import java.util.List;
  *
  * Bedrock keeps the whole weapon in data. `minecraft:shooter` lists what may be loaded and says how
  * a draw becomes power, and what flies is the ammunition's own `minecraft:projectile`, so a pack can
- * fire an entity it declared itself. Java's own bow is a class with an arrow written into it, which
+ * fire an entity it declared itself, which flies at its own power scaled by the draw and by
+ * `launch_power_scale`. Java's own bow is a class with an arrow written into it, which
  * is why none of this can be expressed as components on a plain item.
  */
 public final class AddonShooterItem extends Item {
@@ -130,6 +132,18 @@ public final class AddonShooterItem extends Item {
         Entity shot = create(type, level);
         if (shot == null) return false;
 
+        if (shot instanceof AddonEntity own && own.fireFrom(player, power * powerScale)) {
+            level.addFreshEntity(own);
+        } else {
+            launch(shot, player, power);
+        }
+
+        if (!player.getAbilities().instabuild) ammo.shrink(1);
+        return true;
+    }
+
+    /** Sends off ammunition that is not a pack projectile, at the speed a vanilla arrow leaves at. */
+    private void launch(Entity shot, Player player, float power) {
         shot.setPos(player.getX(), player.getEyeY() - 0.1, player.getZ());
         if (shot instanceof Projectile aimed) {
             aimed.setOwner(player);
@@ -138,10 +152,7 @@ public final class AddonShooterItem extends Item {
         } else {
             shot.setDeltaMovement(player.getLookAngle().scale(power * ARROW_SPEED * powerScale));
         }
-        level.addFreshEntity(shot);
-
-        if (!player.getAbilities().instabuild) ammo.shrink(1);
-        return true;
+        player.level().addFreshEntity(shot);
     }
 
     /**

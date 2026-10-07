@@ -1,0 +1,24 @@
+{
+  "format_version": "1.21.20",
+  "minecraft:item": {
+    "description": {
+      "identifier": "tp:berry"
+    },
+    "components": {
+      "minecraft:icon": "berry",
+      "minecraft:max_stack_size": 16,
+      "minecraft:food": {
+        "nutrition": 4,
+        "saturation_modifier": 0.5
+      },
+      "minecraft:use_animation": "eat",
+      "minecraft:use_modifiers": {
+        "use_duration": 0.8,
+        "movement_modifier": 0.35
+      },
+      "minecraft:display_name": {
+        "value": "item.tp:berry.name"
+      }
+    }
+  }
+}

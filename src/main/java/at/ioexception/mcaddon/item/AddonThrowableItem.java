@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.item;
 
+import at.ioexception.mcaddon.entity.AddonEntity;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -19,9 +20,10 @@ import net.minecraft.world.level.Level;
  * launches something, and `minecraft:projectile` says what. The entity type is looked up at the
  * moment of the throw, because a pack's own types and its items register in the same pass.
  *
- * An entity Java knows as a projectile is aimed where the player is looking and remembers who threw
- * it. Anything else is given the same velocity and nothing more, which is as far as a pack that
- * throws an ordinary mob can be carried.
+ * A pack entity carrying its own `minecraft:projectile` flies on the arc that component describes,
+ * at its own power scaled by `launch_power_scale`, and remembers who threw it. An entity Java knows
+ * as a projectile is aimed the same way on Java's arc. Anything else is given the velocity and
+ * nothing more, which is as far as a pack that throws an ordinary mob can be carried.
  */
 public final class AddonThrowableItem extends Item {
     private final String projectile;
@@ -70,6 +72,11 @@ public final class AddonThrowableItem extends Item {
 
         Entity thrown = create(type, level);
         if (thrown == null) return;
+
+        if (thrown instanceof AddonEntity own && own.fireFrom(player, power)) {
+            level.addFreshEntity(own);
+            return;
+        }
 
         thrown.setPos(player.getX(), player.getEyeY() - 0.1, player.getZ());
         if (thrown instanceof Projectile shot) {
