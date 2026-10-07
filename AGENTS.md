@@ -293,6 +293,16 @@ These are the checks it runs, and what each one catches:
   The book table is the one a game test rolls: it holds a single entry carrying
   `enchant_book_for_trading` and no condition, so the loot function type this mod registers is
   exercised from the converted table through the codec to the enchanted book that comes back.
+
+  The behaviour pack's one script is a two-page handbook, opened by `/scriptevent "tp:handbook"`
+  run as a player. It is a single 2.x `CustomForm` holding both pages, each page's components shown
+  through an `ObservableBoolean` and the title an `ObservableString`, with buttons whose handlers
+  turn the page by setting those observables, one handler calling `form.close()` and a
+  `closeButton`. A tag on the player names how `show` resolved. The client game test
+  `FormClientGameTest`, run by `./gradlew :26.2:runClientGameTest` and part of `check`, opens it,
+  turns the page and asserts the same screen now draws the second page and not the first, then
+  closes it both ways and reads the tag back: a form whose button press closed the screen, or whose
+  observables reached the screen only once, fails there.
 - **`tools/testpack/build_modules.py`** builds a second add-on, whose script imports every
   `@minecraft/*` module the mod provides and calls one thing from each. Its sources are a manifest
   and one script under `tools/testpack/modules/`.
