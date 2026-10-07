@@ -357,12 +357,9 @@ public final class ServerHooks {
                 return 1;
             }))
             .then(Commands.literal("entities").executes(command -> {
-                List<String> report = AddonEntities.report();
-                if (report.isEmpty()) {
-                    command.getSource().sendSuccess(
-                        () -> Component.literal("Every entity component the packs used is implemented."), false);
-                    return 1;
-                }
+                List<String> report = new java.util.ArrayList<>(AddonEntities.report());
+                if (report.isEmpty()) report.add("Every entity component the packs used is implemented.");
+                report.addAll(AddonEntities.answers());
                 report.forEach(line -> command.getSource().sendSuccess(() -> Component.literal(line), false));
                 return 1;
             }))

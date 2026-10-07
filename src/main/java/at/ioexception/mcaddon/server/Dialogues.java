@@ -50,6 +50,9 @@ public final class Dialogues {
     /** Every scene the loaded packs declare, by the tag a command names one with. */
     private static final Map<String, DialogueScene> SCENES = new LinkedHashMap<>();
 
+    /** The namespace of the add-on each scene came from, by the scene's tag. */
+    private static final Map<String, String> WRITTEN_BY = new HashMap<>();
+
     /** Who is reading which scene, by the form the screen answers with. */
     private static final Map<Integer, Reading> READING = new HashMap<>();
 
@@ -73,9 +76,14 @@ public final class Dialogues {
     /** Every scene the behaviour packs ship, read once as the game starts. */
     public static void read(PackSet packs) {
         SCENES.clear();
+        WRITTEN_BY.clear();
         for (BedrockPack pack : packs.packs()) {
             if (pack.role() != PackRole.BEHAVIOUR) continue;
-            DialogueScene.readAll(pack).forEach(scene -> SCENES.put(scene.tag(), scene));
+            String namespace = at.ioexception.mcaddon.resource.AddonPacks.namespaceOf(pack);
+            DialogueScene.readAll(pack).forEach(scene -> {
+                SCENES.put(scene.tag(), scene);
+                if (namespace != null) WRITTEN_BY.put(scene.tag(), namespace);
+            });
         }
         if (!SCENES.isEmpty()) {
             McAddon.LOGGER.info("Read {} NPC dialogue scenes.", SCENES.size());
@@ -172,7 +180,7 @@ public final class Dialogues {
      * set by the time the text is built.
      */
     private static void show(ServerPlayer viewer, Entity npc, DialogueScene scene) {
-        run(scene.onOpen(), npc, viewer);
+        run(scene, scene.onOpen(), npc, viewer);
 
         int form = nextForm--;
         READING.put(form, new Reading(viewer, npc, scene));
@@ -236,10 +244,10 @@ public final class Dialogues {
             int chosen = (int) Json.number(body, "selection", -1);
             List<DialogueScene.Button> buttons = reading.scene().buttons();
             if (chosen >= 0 && chosen < buttons.size()) {
-                run(buttons.get(chosen).commands(), reading.npc(), reading.viewer());
+                run(reading.scene(), buttons.get(chosen).commands(), reading.npc(), reading.viewer());
             }
         }
-        run(reading.scene().onClose(), reading.npc(), reading.viewer());
+        run(reading.scene(), reading.scene().onClose(), reading.npc(), reading.viewer());
     }
 
     /** A player leaving takes every screen they were reading with them. */
@@ -253,18 +261,14 @@ public final class Dialogues {
      * A mob carries no authority of its own and a pack writing a command means the one the console
      * would run, which is the same reading an entity event's `queue_command` gets.
      */
-    private static void run(List<String> commands, Entity npc, Entity viewer) {
+    private static void run(DialogueScene scene, List<String> commands, Entity npc, Entity viewer) {
         if (!(npc.level() instanceof ServerLevel level)) return;
 
+        String namespace = WRITTEN_BY.get(scene.tag());
         for (String command : commands) {
-            String line = command.startsWith("/") ? command.substring(1) : command;
-            line = line.replace(INITIATOR, viewer.getName().getString());
-            try {
-                level.getServer().getCommands().getDispatcher().execute(line,
-                    Platform.commandSourceOf(npc, level).withSuppressedOutput());
-            } catch (com.mojang.brigadier.exceptions.CommandSyntaxException error) {
-                McAddon.LOGGER.debug("A dialogue scene ran a command that did not parse: {}", line);
-            }
+            PackCommand line = PackCommand.tryFrom(namespace,
+                command.replace(INITIATOR, viewer.getName().getString()));
+            if (line != null) line.run(Platform.commandSourceOf(npc, level), CommandReport.DATA);
         }
     }
 }

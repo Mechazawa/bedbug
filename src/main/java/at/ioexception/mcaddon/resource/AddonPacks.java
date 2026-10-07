@@ -2,6 +2,8 @@ package at.ioexception.mcaddon.resource;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.convert.ConvertedPack;
+import at.ioexception.mcaddon.convert.FunctionNames;
+import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.convert.PackConverter;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.McAddonPaths;
@@ -27,12 +29,27 @@ import java.util.function.Consumer;
  */
 public final class AddonPacks {
     private static List<ConvertedPack> converted = List.of();
+    private static FunctionNames functions = FunctionNames.NONE;
 
     private AddonPacks() {
     }
 
     public static List<ConvertedPack> all() {
         return converted;
+    }
+
+    /** The functions every add-on ships, which a function call written in any of them may name. */
+    public static FunctionNames functions() {
+        return functions;
+    }
+
+    /** The namespace the add-on this pack came out of was converted to, or null for a pack of none. */
+    public static String namespaceOf(BedrockPack pack) {
+        return converted.stream()
+            .filter(one -> one.pack().origin().equals(pack.origin()))
+            .map(ConvertedPack::namespace)
+            .findFirst()
+            .orElse(null);
     }
 
     /**
@@ -55,19 +72,27 @@ public final class AddonPacks {
             }
         }
 
-        List<ConvertedPack> results = new ArrayList<>();
+        List<PackConverter.Bundle> bundles = new ArrayList<>();
         for (BedrockPack pack : packs.packs()) {
             if (pack.role() == PackRole.RESOURCE) {
                 List<BedrockPack> behaviours = behavioursByOrigin.remove(pack.origin());
-                results.add(PackConverter.convert(new PackConverter.Bundle(pack,
-                    behaviours == null ? List.of() : behaviours), McAddonPaths.cache()));
+                bundles.add(new PackConverter.Bundle(pack, behaviours == null ? List.of() : behaviours));
             }
         }
-        for (List<BedrockPack> alone : behavioursByOrigin.values()) {
-            results.add(PackConverter.convert(
-                new PackConverter.Bundle(alone.get(0), alone), McAddonPaths.cache()));
-        }
-        converted = List.copyOf(results);
+        behavioursByOrigin.values().forEach(alone -> bundles.add(new PackConverter.Bundle(alone.get(0), alone)));
+
+        // Every add-on's namespace is settled before any is converted, because a function file may
+        // call a function another add-on ships and has to be written naming that add-on.
+        Map<PackConverter.Bundle, String> namespaces = new LinkedHashMap<>();
+        bundles.forEach(bundle -> namespaces.put(bundle, Names.namespaceOf(bundle.resources(), bundle.behaviours())));
+        Map<String, List<BedrockPack>> behavioursByNamespace = new LinkedHashMap<>();
+        namespaces.forEach((bundle, namespace) -> behavioursByNamespace
+            .computeIfAbsent(namespace, ignored -> new ArrayList<>()).addAll(bundle.behaviours()));
+        functions = FunctionNames.of(behavioursByNamespace);
+
+        converted = namespaces.entrySet().stream()
+            .map(entry -> PackConverter.convert(entry.getKey(), entry.getValue(), functions, McAddonPaths.cache()))
+            .toList();
     }
 
     /**

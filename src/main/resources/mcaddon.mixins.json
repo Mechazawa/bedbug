@@ -7,6 +7,7 @@
     "PackRepositoryMixin",
     "LivingEntityMixin",
     "JumpingAccessor",
+    "SelectorOptionsInvoker",
     "BiomeSeedAccessor",
     "ItemEntityMixin",
     "ProjectileMixin",
