@@ -256,7 +256,8 @@ def surfaces(samples):
     groups = keyword_groups(document)
     rules = {name.lower() for name in
              literal_set(FUNCTIONS, "RULES_JAVA_SHARES = Set.of")
-             | literal_set(FUNCTIONS, "RULES_NEWER_JAVA_HAS = Set.of")}
+             | literal_set(FUNCTIONS, "RULES_NEWER_JAVA_HAS = Set.of")
+             | literal_keys(FUNCTIONS, "RULES_JAVA_FOLDS =")}
 
     return [
         Surface("command names", published_names(document), names, "the command metadata"),
@@ -326,6 +327,8 @@ def main():
     print_names("Dropped and named as having no Java counterpart", named)
     print_names("Dropped and named as a form of a translated command Java has no way to say",
                 groups["dropped"] & literal_set(FUNCTIONS, "BEDROCK_ONLY_KEYWORDS = Set.of"))
+    named_rules = {name.lower() for name in literal_set(FUNCTIONS, "RULES_BEDROCK_ONLY = Set.of")}
+    print_names("Game rules named as having no Java counterpart", named_rules)
     print_names("Missing from the published commands but named in the source",
                 (named | mod["shared"] | mod["renamed"] | mod["registered"]) - found[0].published)
     print_names("Translated by a claim that Java's parser reads the line, with nothing to check it",
@@ -338,7 +341,7 @@ def main():
     for kind, names in selector_arguments().items():
         print(f"    {kind:<14}  {', '.join(sorted(names))}")
 
-    unnamed = (found[0].missing - named) | groups["missing"]
+    unnamed = (found[0].missing - named) | groups["missing"] | (found[2].missing - named_rules)
     print_names("Missing and not named, so dropped without anybody deciding to", unnamed)
 
     return 1 if arguments.strict and (unnamed or any(s.missing for s in found)) else 0

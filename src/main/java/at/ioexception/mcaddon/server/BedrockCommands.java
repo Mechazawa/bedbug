@@ -110,6 +110,15 @@ public final class BedrockCommands {
                         .executes(command ->
                             transfer(command, IntegerArgumentType.getInteger(command, "port")))))));
 
+        // Java's `/spawnpoint` gives a player a respawn point and has no form taking one away.
+        dispatcher.register(Commands.literal("clearspawnpoint")
+            .requires(source -> Platform.allowedAt(source, 1))
+            .executes(command ->
+                clearSpawnPoint(List.of(command.getSource().getPlayerOrException())))
+            .then(Commands.argument("player", EntityArgument.players())
+                .executes(command ->
+                    clearSpawnPoint(EntityArgument.getPlayers(command, "player")))));
+
         // Bedrock saves a region under a name and places it again; Java has the same two operations
         // behind a structure block and `/place template`, and no command that names them.
         dispatcher.register(Commands.literal("structure")
@@ -376,6 +385,11 @@ public final class BedrockCommands {
 
     private static int toggleDownfall(CommandSourceStack source) {
         return run(source, source.getLevel().isRaining() ? "weather clear" : "weather rain");
+    }
+
+    private static int clearSpawnPoint(Collection<ServerPlayer> players) {
+        players.forEach(player -> Platform.respawnAt(player, null, null));
+        return players.size();
     }
 
     /** The port a Java server listens on, which is what a line naming none means here. */

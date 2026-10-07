@@ -2070,6 +2070,33 @@ public final class Platform {
         *///?}
     }
 
+    /** A null level clears the spawn point. The setter took a record from 26 and five values before. */
+    public static void respawnAt(net.minecraft.server.level.ServerPlayer player, ServerLevel level,
+        net.minecraft.core.BlockPos at) {
+        //? if >=26 {
+        net.minecraft.server.level.ServerPlayer.RespawnConfig config = level == null ? null
+            : new net.minecraft.server.level.ServerPlayer.RespawnConfig(
+                net.minecraft.world.level.storage.LevelData.RespawnData.of(level.dimension(), at, 0f, 0f),
+                false);
+        player.setRespawnPosition(config, false);
+        //?} else {
+        /*player.setRespawnPosition(
+            level == null ? net.minecraft.world.level.Level.OVERWORLD : level.dimension(),
+            level == null ? null : at, 0f, false, false);
+        *///?}
+    }
+
+    /** Where the player respawns, or null while they respawn wherever the world says. */
+    public static net.minecraft.core.BlockPos respawnPosition(
+        net.minecraft.server.level.ServerPlayer player) {
+        //? if >=26 {
+        net.minecraft.server.level.ServerPlayer.RespawnConfig config = player.getRespawnConfig();
+        return config == null ? null : config.respawnData().pos();
+        //?} else {
+        /*return player.getRespawnPosition();
+        *///?}
+    }
+
     /**
      * What a loot table hands out, rolled without anything having to die for it.
      *

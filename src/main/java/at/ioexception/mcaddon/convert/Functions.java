@@ -60,16 +60,17 @@ public final class Functions {
      */
     private static final Set<String> REGISTERED_HERE = Set.of(
         "playanimation", "event", "scriptevent", "music", "toggledownfall", "structure", "mobevent",
-        "particle", "gametest", "dialogue", "transfer", "camera", "camerashake", "fog");
+        "particle", "gametest", "dialogue", "transfer", "camera", "camerashake", "fog",
+        "clearspawnpoint");
 
     /**
      * The registered commands whose Bedrock line the command built here reads as it stands.
      *
-     * The other six are rewritten, because a Bedrock form the command built here cannot read is a
+     * The other eight are rewritten, because a Bedrock form the command built here cannot read is a
      * line Java's parser rejects, and one of those costs the whole function.
      */
-    static final Set<String> REGISTERED_WHOLE_LINE =
-        Set.of("playanimation", "event", "toggledownfall", "transfer", "camerashake", "fog");
+    static final Set<String> REGISTERED_WHOLE_LINE = Set.of("playanimation", "event",
+        "toggledownfall", "transfer", "camerashake", "fog", "clearspawnpoint");
 
     /**
      * Commands Bedrock has and Java has no counterpart for.
@@ -90,13 +91,17 @@ public final class Functions {
      * `extractAirBubbles`. The class holding them moved twice as well: `Gui` up to 26.1.2, then
      * `Hud` in 26.2. Four alternative mixin bodies over private drawing methods, answering ten of
      * fourteen pieces on the newest version and seven on the oldest, costs more than it returns.
+     *
+     * `serveridentity` saves, deletes and reports the key a Bedrock dedicated server identifies
+     * itself to its services with, and a Java server holds no such key. `setmaxplayers` sets the
+     * limit for one session where Java keeps it as `max-players` in `server.properties`: a final
+     * `PlayerList.maxPlayers` before 26, and from 26 `DedicatedServer.setMaxPlayers`, which writes
+     * the file again, so a limit Bedrock drops at the end of the session would outlive it here.
      */
     private static final Set<String> BEDROCK_ONLY = Set.of(
-        "aimassist", "clearspawnpoint", "connect",
-        "controlscheme", "editor-allowlist", "hud", "immutableworld",
-        "inputpermission", "packstack", "permission", "ops", "project", "reloadconfig",
-        "reloadpacketlimitconfig", "script", "sendshowstoreoffer", "setmaxplayers",
-        "wsserver");
+        "aimassist", "connect", "controlscheme", "editor-allowlist", "hud", "inputpermission",
+        "packstack", "permission", "ops", "project", "reloadconfig", "reloadpacketlimitconfig",
+        "script", "sendshowstoreoffer", "serveridentity", "setmaxplayers", "wsserver");
 
     /**
      * Commands whose rewrite changes the front of a line and leaves the rest as the pack wrote it.
@@ -117,7 +122,6 @@ public final class Functions {
      */
     private static final Set<String> BEDROCK_ONLY_KEYWORDS = Set.of(
         "changesetting allow-cheats", "changesetting false", "changesetting true",
-        "gamerule functioncommandlimit",
         "gametest create", "gametest pos", "gametest runsetuntilfail", "gametest runthese",
         "gametest runthis",
         "loot slot.equippable",
@@ -193,8 +197,33 @@ public final class Functions {
         "commandBlocksEnabled", "playerWaypoints", "projectilesCanBreakBlocks", "pvp",
         "tntExplodes");
 
+    /**
+     * Bedrock rules whose limit Java keeps under another Bedrock rule's name.
+     *
+     * Bedrock caps the commands one function runs apart from the commands one chain of command
+     * blocks runs. Java's one rule caps both, so a function raising or lowering either limit moves
+     * the same Java rule.
+     */
+    private static final Map<String, String> RULES_JAVA_FOLDS =
+        Map.of("functionCommandLimit", "maxCommandChainLength");
+
+    /**
+     * Bedrock rules Java keeps no rule of any name for, each reported when a function sets it.
+     *
+     * Five switch a piece of Bedrock's screen. Java's heads-up display has no day count and no
+     * coordinates outside the debug screen, its world border draws whatever a rule says, its toast
+     * for an unlocked recipe and the tooltip lines naming what an item may be placed on and break
+     * answer to no rule either. `recipesUnlock` holds back the recipes a player is given as they
+     * collect ingredients, which Java grants through one advancement per recipe rather than through
+     * a rule, and `respawnBlocksExplode` stops a bed or a respawn anchor exploding in a dimension
+     * that cannot hold a spawn, which `BedBlock` and `RespawnAnchorBlock` do unconditionally.
+     */
+    private static final Set<String> RULES_BEDROCK_ONLY = Set.of(
+        "recipesUnlock", "respawnBlocksExplode", "showBorderEffect", "showCoordinates",
+        "showDaysPlayed", "showRecipeMessages", "showTags");
+
     private static final Map<String, String> GAME_RULES = lowerCased(RULES_JAVA_SHARES,
-        RULES_NEWER_JAVA_HAS);
+        RULES_NEWER_JAVA_HAS, RULES_JAVA_FOLDS);
 
     /** Every rule a Bedrock name reaches, which is the set a change can be reported under. */
     public static Collection<String> gameRuleNames() {
@@ -598,7 +627,8 @@ public final class Functions {
         String bedrock = GAME_RULES.get(parts[0].toLowerCase(Locale.ROOT));
         String java = bedrock == null ? null : Platform.gameRuleName(bedrock);
         if (java == null) {
-            unsupported.add("game rule " + parts[0]);
+            boolean named = RULES_BEDROCK_ONLY.stream().anyMatch(parts[0]::equalsIgnoreCase);
+            unsupported.add("game rule " + parts[0] + (named ? ", which Java keeps no rule for" : ""));
             return null;
         }
         if (parts.length < 2) return "gamerule " + java;
@@ -1213,10 +1243,12 @@ public final class Functions {
         };
     }
 
-    private static Map<String, String> lowerCased(Set<String> shared, Set<String> newer) {
+    private static Map<String, String> lowerCased(Set<String> shared, Set<String> newer,
+        Map<String, String> folds) {
         Map<String, String> byLowerCase = new LinkedHashMap<>();
         Stream.concat(shared.stream(), newer.stream())
             .forEach(name -> byLowerCase.put(name.toLowerCase(Locale.ROOT), name));
+        folds.forEach((bedrock, java) -> byLowerCase.put(bedrock.toLowerCase(Locale.ROOT), java));
         return Map.copyOf(byLowerCase);
     }
 

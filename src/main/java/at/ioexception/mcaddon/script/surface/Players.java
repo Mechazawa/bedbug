@@ -70,7 +70,7 @@ public final class Players extends Surface {
             unsupported("Player.setSpawnPoint(" + dimension + ")");
             return;
         }
-        respawnAt(player, level, new BlockPos(x, y, z));
+        Platform.respawnAt(player, level, new BlockPos(x, y, z));
     }
 
     // Item cooldowns
@@ -435,21 +435,6 @@ public final class Players extends Surface {
         /*BlockPos at = player.getRespawnPosition();
         if (at == null) return null;
         return spawnJson(Platform.idOf(player.getRespawnDimension()).toString(), at);
-        *///?}
-    }
-
-    /** A null level clears the spawn point. The setter took a record from 26 and five values before. */
-    private static void respawnAt(ServerPlayer player, ServerLevel level, BlockPos at) {
-        //? if >=26 {
-        net.minecraft.server.level.ServerPlayer.RespawnConfig config = level == null ? null
-            : new net.minecraft.server.level.ServerPlayer.RespawnConfig(
-                net.minecraft.world.level.storage.LevelData.RespawnData.of(level.dimension(), at, 0f, 0f),
-                false);
-        player.setRespawnPosition(config, false);
-        //?} else {
-        /*player.setRespawnPosition(
-            level == null ? net.minecraft.world.level.Level.OVERWORLD : level.dimension(),
-            level == null ? null : at, 0f, false, false);
         *///?}
     }
 
