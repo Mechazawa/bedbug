@@ -4793,9 +4793,13 @@ public class AddonEntity extends PathfinderMob
         if (!isClientSide() && satDown(player)) return InteractionResult.SUCCESS;
         if (!isClientSide() && interact(player)) return InteractionResult.SUCCESS;
 
-        if (trades() == null || isClientSide()) {
-            return super.mobInteract(player, hand);
-        }
+        if (trades() == null) return super.mobInteract(player, hand);
+        // A trader answers the click on the client as well, as Java's villager does, so the client
+        // does not go on to offer the other hand and ask a second time. A trader already trading is
+        // left alone, which is what keeps any second request from reopening the screen under the
+        // first and ending the trade it opened.
+        if (isClientSide()) return InteractionResult.SUCCESS;
+        if (getTradingPlayer() != null) return super.mobInteract(player, hand);
 
         setTradingPlayer(player);
         openTradingScreen(player, getDisplayName(), 1);
@@ -4876,9 +4880,15 @@ public class AddonEntity extends PathfinderMob
         return tradeExperience;
     }
 
+    /**
+     * Left alone, as Java's own traders leave it.
+     *
+     * Taking a trade's result calls this with the experience plus that trade's share, which is how a
+     * client's copy of a merchant keeps its bar up to date. The trader on the server has already
+     * counted the trade in `notifyTrade`, so taking it here as well would count every trade twice.
+     */
     @Override
     public void overrideXp(int experience) {
-        tradeExperience = experience;
     }
 
     @Override
