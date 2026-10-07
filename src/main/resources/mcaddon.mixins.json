@@ -23,6 +23,8 @@
     "TripWireBlockMixin",
     "TargetBlockMixin",
     "PowderSnowBlockMixin",
+    "TamableAnimalMixin",
+    "AbstractHorseMixin",
     "PistonBaseBlockMixin",
     "ExplosionMixin",
     "ServerPlayerGameModeMixin",

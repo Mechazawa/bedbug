@@ -639,6 +639,36 @@ public final class WorldEvents {
     }
 
     /**
+     * An entity about to be tamed, which a pack may call off: true when one did.
+     *
+     * Java tames a wolf, a cat or a parrot through `TamableAnimal.tame` and a horse through
+     * `AbstractHorse.tameWithName`, and a pack's own entity through its `minecraft:tameable` or
+     * `minecraft:tamemount`, so all three ask here first and say so afterwards.
+     */
+    public static boolean tamingRefused(net.minecraft.world.entity.Entity tamed,
+        net.minecraft.world.entity.player.Player by) {
+        ScriptHost scripts = ServerHooks.scripts();
+        return scripts != null && !tamed.level().isClientSide()
+            && scripts.raiseCancellable("entityTamed", taming(tamed, by));
+    }
+
+    public static void tamed(net.minecraft.world.entity.Entity tamed,
+        net.minecraft.world.entity.player.Player by) {
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts != null && !tamed.level().isClientSide()) {
+            scripts.raiseWorldEvent("entityTamed", taming(tamed, by));
+        }
+    }
+
+    private static Map<String, Object> taming(net.minecraft.world.entity.Entity tamed,
+        net.minecraft.world.entity.player.Player by) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("entity", ScriptHost.EntityHandle.of(tamed));
+        fields.put("tamingEntity", ScriptHost.EntityHandle.of(by));
+        return fields;
+    }
+
+    /**
      * Healing, which a pack may refuse before it lands.
      *
      * Java says how much and to whom, and nothing about why, so every heal carries Bedrock's plain
@@ -1026,8 +1056,14 @@ public final class WorldEvents {
          */
         private void buttonsChanged(ServerPlayer player, ScriptHost scripts) {
             boolean held = ((JumpingAccessor) player).mcaddon$jumping();
+            boolean wasSneaking = sneaking;
             sneaking = buttonChanged(player, scripts, "Sneak", sneaking, player.isShiftKeyDown());
             jumping = buttonChanged(player, scripts, "Jump", jumping, held);
+            if (sneaking != wasSneaking) {
+                Map<String, Object> fields = new LinkedHashMap<>();
+                fields.put("entity", ScriptHost.EntityHandle.of(player));
+                scripts.raiseWorldEvent(sneaking ? "entityStartSneaking" : "entityStopSneaking", fields);
+            }
         }
 
         private boolean buttonChanged(ServerPlayer player, ScriptHost scripts, String button,

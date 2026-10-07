@@ -99,6 +99,11 @@ export const StructureRotation = Object.freeze({
 
 export const StructureSaveMode = Object.freeze({ Memory: "Memory", World: "World" });
 
+export const CameraShakeType = Object.freeze({ Positional: "Positional", Rotational: "Rotational" });
+
+/** Java's own `/clone` modes are `normal`, `force` and `move`, in the order these number them. */
+export const CloneMode = Object.freeze({ Copy: 0, ForceCopy: 1, Move: 2 });
+
 function blockPosition(location) {
     return { x: Math.floor(location.x), y: Math.floor(location.y), z: Math.floor(location.z) };
 }
@@ -178,6 +183,28 @@ export class BlockVolumeBase {
         const max = this.getMax();
         return at.x >= min.x && at.x <= max.x && at.y >= min.y && at.y <= max.y
             && at.z >= min.z && at.z <= max.z;
+    }
+
+    /** The `count` positions nearest the location, nearest first. */
+    getClosest(count, location) {
+        return this.#byDistance(count, location, 1);
+    }
+
+    /** The `count` positions farthest from the location, farthest first. */
+    getFarthest(count, location) {
+        return this.#byDistance(count, location, -1);
+    }
+
+    /** Each position is measured from its own corner, which is the position the volume hands back. */
+    #byDistance(count, location, direction) {
+        if (!Number.isInteger(count) || count < 0) {
+            throw new RangeError("A count of positions has to be a whole number of at least zero.");
+        }
+        const away = at => (at.x - location.x) ** 2 + (at.y - location.y) ** 2
+            + (at.z - location.z) ** 2;
+        return Array.from(this.getBlockLocationIterator())
+            .sort((one, other) => direction * (away(one) - away(other)))
+            .slice(0, count);
     }
 }
 
@@ -1115,7 +1142,56 @@ export class BlockSignComponent extends BlockComponent {
     }
 }
 
+/** What a note block plays off this block, which every block answers for. */
+export class BlockInstrumentComponent extends BlockComponent {
+    static componentId = "minecraft:instrument_sound";
+
+    present() {
+        return true;
+    }
+
+    getInstrumentName(face) {
+        const faces = JSON.parse(bridge.blocks.instrument(...blockAt(this.block)));
+        if (face !== Direction.Up && face !== Direction.Down) {
+            throw new RangeError("Only the up and down faces of a block play an instrument.");
+        }
+        return face === Direction.Up ? faces.up : faces.down;
+    }
+
+    playInstrumentSound(face, soundOptions) {
+        if (face !== Direction.Up && face !== Direction.Down) {
+            throw new RangeError("Only the up and down faces of a block play an instrument.");
+        }
+        bridge.blocks.playInstrument(...blockAt(this.block), face, soundOptions?.volume ?? 1,
+            soundOptions?.pitch ?? 1);
+    }
+}
+
+/** The store a block keeps of its own, which `minecraft:block_entity` asks for. */
+export class BlockDynamicPropertiesComponent extends BlockComponent {
+    static componentId = "minecraft:dynamic_properties";
+
+    present() {
+        return bridge.blockKeepsProperties(...blockAt(this.block));
+    }
+
+    get(key) {
+        const value = bridge.blockDynamicProperty(...blockAt(this.block), key);
+        return value === null ? undefined : value;
+    }
+
+    set(key, value) {
+        bridge.setBlockDynamicProperty(...blockAt(this.block), key, value === undefined ? null : value);
+    }
+
+    totalByteCount() {
+        return bridge.blockDynamicPropertyBytes(...blockAt(this.block));
+    }
+}
+
 const BLOCK_COMPONENTS = Object.freeze({
+    "minecraft:dynamic_properties": BlockDynamicPropertiesComponent,
+    "minecraft:instrument_sound": BlockInstrumentComponent,
     "minecraft:inventory": BlockInventoryComponent,
     "minecraft:movable": BlockMovableComponent,
     "minecraft:sign": BlockSignComponent,
@@ -1814,6 +1890,28 @@ export class ItemComponent {
     /** What `getComponent` reads to decide whether this kind of item carries the component at all. */
     static declaredOn() {
         return {};
+    }
+}
+
+/**
+ * The store of the block an item places, carried on the item until it is placed.
+ *
+ * Java carries a block entity's data on an item as the data the block entity writes, and nothing
+ * here moves a script's store onto an item or back off it, so each member reports itself.
+ */
+export class ItemBlockDynamicPropertiesComponent extends ItemComponent {
+    static componentId = "minecraft:block_actor_dynamic_properties";
+
+    get() {
+        return unsupported("ItemBlockDynamicPropertiesComponent.get");
+    }
+
+    set() {
+        unsupported("ItemBlockDynamicPropertiesComponent.set");
+    }
+
+    totalByteCount() {
+        return unsupported("ItemBlockDynamicPropertiesComponent.totalByteCount", 0);
     }
 }
 
@@ -2763,7 +2861,8 @@ export class Entity {
     }
 
     playSound(soundId, options) {
-        bridge.playSoundAt(this.id, soundId, options?.volume ?? 1, options?.pitch ?? 1);
+        bridge.playSoundAt(this.id, soundIdOf(soundId), options?.volume ?? 1, options?.pitch ?? 1);
+        return new SoundInstance(soundIdOf(soundId));
     }
 
     playAnimation(animation) {
@@ -2934,6 +3033,10 @@ export class Player extends Entity {
         return new Camera(this.id);
     }
 
+    get fogSettings() {
+        return new FogSettings(this.id);
+    }
+
     get clientSystemInfo() {
         return new ClientSystemInfo(this.id);
     }
@@ -3005,7 +3108,8 @@ export class Player extends Entity {
 
     playSound(soundId, options) {
         if (options?.location !== undefined) unsupported("PlayerSoundOptions.location");
-        bridge.playSoundTo(this.id, soundId, options?.volume ?? 1, options?.pitch ?? 1);
+        bridge.playSoundTo(this.id, soundIdOf(soundId), options?.volume ?? 1, options?.pitch ?? 1);
+        return new SoundInstance(soundIdOf(soundId), this);
     }
 
     // Java has no track queue, so a queued track starts now, which is what `/music queue` does too.
@@ -3132,6 +3236,9 @@ export class ScreenDisplay {
  * comes back. Bedrock's presets, splines, fades and field of view are drawn by its client off a
  * packet Java has no counterpart for, so each of those reports itself rather than doing nothing.
  */
+/** The strongest shake Bedrock lets one event ask for. */
+const MAX_SHAKE = 4;
+
 export class Camera {
     #playerId;
 
@@ -3153,6 +3260,22 @@ export class Camera {
         bridge.players.attachCamera(this.#playerId, this.#playerId);
     }
 
+    /** `/camerashake add` for this one player, whose client draws the shake. */
+    addShake(options) {
+        const intensity = options?.intensity ?? 1;
+        const duration = options?.duration ?? 1;
+        if (!(intensity > 0 && intensity <= MAX_SHAKE) || !(duration > 0)) {
+            throw new RangeError("A camera shake takes an intensity above zero and at most "
+                + MAX_SHAKE + ", for a length of time above zero.");
+        }
+        bridge.players.shakeCamera(this.#playerId, intensity, duration,
+            options?.type === CameraShakeType.Rotational);
+    }
+
+    stopShaking() {
+        bridge.players.shakeCamera(this.#playerId, 0, 0, false);
+    }
+
     fade() {
         unsupported("Camera.fade");
     }
@@ -3171,6 +3294,55 @@ export class Camera {
 
     setFov() {
         unsupported("Camera.setFov");
+    }
+}
+
+/** What a fog stack throws for a fog no pack describes or a stack holding more than it may. */
+export class FogSettingsError extends Error {}
+
+/**
+ * The fog stack `/fog` keeps for one player, which the game draws the top of.
+ *
+ * A layer is named by the fog it draws and by a tag the pack chose; one pushed without a tag carries
+ * Bedrock's own `untagged`.
+ */
+export class FogSettings {
+    #playerId;
+
+    constructor(playerId) {
+        this.#playerId = playerId;
+    }
+
+    getStack() {
+        return list(bridge.players.fogs(this.#playerId));
+    }
+
+    getTags() {
+        return list(bridge.players.fogTags(this.#playerId));
+    }
+
+    pop(tag) {
+        return bridge.players.popFog(this.#playerId, tag ?? null) ?? undefined;
+    }
+
+    push(fogId, tag) {
+        const at = bridge.players.pushFog(this.#playerId, fogId, tag ?? null);
+        if (at < 0) {
+            throw new FogSettingsError("No add-on describes a fog called " + fogId
+                + ", or the stack already holds as many fogs as it may.");
+        }
+        return at;
+    }
+
+    remove(tag) {
+        return bridge.players.removeFog(this.#playerId, tag ?? null);
+    }
+
+    setStack(fogIds, tag) {
+        if (!bridge.players.replaceFogs(this.#playerId, JSON.stringify(fogIds ?? []), tag ?? null)) {
+            throw new FogSettingsError("A fog stack holds at most sixteen fogs, each one an add-on "
+                + "describes.");
+        }
     }
 }
 
@@ -3471,6 +3643,17 @@ export class Dimension {
         return new ListBlockVolume(written);
     }
 
+    cloneBlocks(beginLocation, endLocation, destination, cloneMode, filter) {
+        const from = blockPosition(beginLocation);
+        const to = blockPosition(endLocation);
+        const at = blockPosition(destination);
+        if (!bridge.worlds.cloneBlocks(this.id, from.x, from.y, from.z, to.x, to.y, to.z,
+            at.x, at.y, at.z, cloneMode ?? CloneMode.Copy, JSON.stringify(filter ?? {}))) {
+            throw new Error("The blocks could not be cloned: the region is not loaded, or a copy "
+                + "would land on the region it copies from.");
+        }
+    }
+
     getBlocks(volume, filter, allowUnloadedChunks) {
         const found = [];
         for (const [min, max] of boxesOf(volume)) {
@@ -3575,8 +3758,9 @@ export class Dimension {
     }
 
     playSound(soundId, location, options) {
-        bridge.playSoundAtLocation(this.id, soundId, location.x, location.y, location.z,
+        bridge.playSoundAtLocation(this.id, soundIdOf(soundId), location.x, location.y, location.z,
             options?.volume ?? 1, options?.pitch ?? 1);
+        return new SoundInstance(soundIdOf(soundId));
     }
 
     runCommand(command) {
@@ -3843,8 +4027,12 @@ function payloadsFor(group) {
         blockContainerClosed: BlockContainerClosedAfterEvent,
         entityContainerOpened: EntityContainerOpenedAfterEvent,
         entityContainerClosed: EntityContainerClosedAfterEvent,
+        entityStartSneaking: EntityStartSneakingAfterEvent,
+        entityStopSneaking: EntityStopSneakingAfterEvent,
+        entityTamed: EntityTamedAfterEvent,
     },
     worldBefore: {
+        entityTamed: EntityTamedBeforeEvent,
         entityHurt: EntityHurtBeforeEvent, entityRemove: EntityRemoveBeforeEvent,
         itemUse: ItemUseBeforeEvent, playerBreakBlock: PlayerBreakBlockBeforeEvent,
         playerInteractWithBlock: PlayerInteractWithBlockBeforeEvent,
@@ -3880,6 +4068,7 @@ function unraisedFor(group) {
         playerEmote: PlayerEmoteAfterEventSignal,
         playerInputModeChange: PlayerInputModeChangeAfterEventSignal,
         playerInputPermissionCategoryChange: PlayerInputPermissionCategoryChangeAfterEventSignal,
+        soundCompleted: SoundCompletedAfterEventSignal,
     },
     worldBefore: {},
     systemAfter: {},
@@ -3982,6 +4171,10 @@ export class PressurePlatePushAfterEventSignal extends EventSignal {}
 export class TargetBlockHitAfterEventSignal extends EventSignal {}
 export class TripWireTripAfterEventSignal extends EventSignal {}
 export class PlayerGameModeChangeBeforeEventSignal extends EventSignal {}
+export class EntityStartSneakingAfterEventSignal extends EventSignal {}
+export class EntityStopSneakingAfterEventSignal extends EventSignal {}
+export class EntityTamedAfterEventSignal extends EventSignal {}
+export class EntityTamedBeforeEventSignal extends EventSignal {}
 
 const RAISED = {
     worldAfter: {
@@ -4026,8 +4219,12 @@ const RAISED = {
         blockContainerClosed: BlockContainerClosedAfterEventSignal,
         entityContainerOpened: EntityContainerOpenedAfterEventSignal,
         entityContainerClosed: EntityContainerClosedAfterEventSignal,
+        entityStartSneaking: EntityStartSneakingAfterEventSignal,
+        entityStopSneaking: EntityStopSneakingAfterEventSignal,
+        entityTamed: EntityTamedAfterEventSignal,
     },
     worldBefore: {
+        entityTamed: EntityTamedBeforeEventSignal,
         entityHurt: EntityHurtBeforeEventSignal, entityRemove: EntityRemoveBeforeEventSignal,
         itemUse: ItemUseBeforeEventSignal, playerBreakBlock: PlayerBreakBlockBeforeEventSignal,
         playerInteractWithBlock: PlayerInteractWithBlockBeforeEventSignal,
@@ -4107,6 +4304,10 @@ export class World {
         return bridge.isHardcore();
     }
 
+    get soundDefinitionRegistry() {
+        return unsupported("World.soundDefinitionRegistry", new SoundDefinitionRegistry());
+    }
+
     get primitiveShapesManager() {
         return unsupported("World.primitiveShapesManager", new PrimitiveShapesManager());
     }
@@ -4152,7 +4353,7 @@ export class World {
     }
 
     playSound(soundId, location, options) {
-        this.getDimension("overworld").playSound(soundId, location, options);
+        return this.getDimension("overworld").playSound(soundId, location, options);
     }
 
     getTimeOfDay() {
@@ -5467,6 +5668,38 @@ export class EntityLavaMovementComponent {}
 export class EntityLoadAfterEvent {
     get entity() {
         return unsupported("EntityLoadAfterEvent.entity");
+    }
+}
+export class EntityStartSneakingAfterEvent {
+    get entity() {
+        return unsupported("EntityStartSneakingAfterEvent.entity");
+    }
+}
+export class EntityStopSneakingAfterEvent {
+    get entity() {
+        return unsupported("EntityStopSneakingAfterEvent.entity");
+    }
+}
+export class EntityTamedAfterEvent {
+    get entity() {
+        return unsupported("EntityTamedAfterEvent.entity");
+    }
+
+    get tamingEntity() {
+        return unsupported("EntityTamedAfterEvent.tamingEntity");
+    }
+}
+export class EntityTamedBeforeEvent {
+    get cancel() {
+        return unsupported("EntityTamedBeforeEvent.cancel");
+    }
+
+    get entity() {
+        return unsupported("EntityTamedBeforeEvent.entity");
+    }
+
+    get tamingEntity() {
+        return unsupported("EntityTamedBeforeEvent.tamingEntity");
     }
 }
 export class EntityPushThroughComponent extends EntityComponent {
@@ -6903,6 +7136,10 @@ export class PrimitiveShapesManager {
         return unsupported("PrimitiveShapesManager.maxShapes");
     }
 
+    getShapes() {
+        return unsupported("PrimitiveShapesManager.getShapes", []);
+    }
+
     addText() {
         return unsupported("PrimitiveShapesManager.addText");
     }
@@ -6915,9 +7152,90 @@ export class PrimitiveShapesManager {
         return unsupported("PrimitiveShapesManager.removeText");
     }
 }
+/**
+ * A sound a script played, which is what `playSound` hands back.
+ *
+ * Bedrock follows a sound's lifetime on the server only when a server sound definition gives it a
+ * duration, and nothing here reads one, so no instance carries duration information.
+ */
 export class SoundInstance {
+    #id;
+    #soundEventId;
+    #recipient;
+
+    constructor(soundEventId, recipient) {
+        this.#id = String(++soundsPlayed);
+        this.#soundEventId = soundEventId;
+        this.#recipient = recipient;
+    }
+
+    get id() {
+        return this.#id;
+    }
+
+    get soundEventId() {
+        return this.#soundEventId;
+    }
+
+    get recipient() {
+        return this.#recipient;
+    }
+
+    get durationInfo() {
+        return undefined;
+    }
+
     stop() {
         return unsupported("SoundInstance.stop");
+    }
+}
+
+let soundsPlayed = 0;
+
+/** The sound a pack names, which it may hand over as a definition it looked up or as its id. */
+function soundIdOf(sound) {
+    return typeof sound === "string" ? sound : sound?.soundEventId;
+}
+
+export class SoundCompletedAfterEvent {
+    get soundInstanceId() {
+        return unsupported("SoundCompletedAfterEvent.soundInstanceId");
+    }
+}
+export class SoundCompletedAfterEventSignal extends EventSignal {}
+export class SoundDefinition {
+    get durationInfo() {
+        return unsupported("SoundDefinition.durationInfo");
+    }
+
+    get musicInfo() {
+        return unsupported("SoundDefinition.musicInfo");
+    }
+
+    get soundEventId() {
+        return unsupported("SoundDefinition.soundEventId");
+    }
+
+    get tags() {
+        return unsupported("SoundDefinition.tags");
+    }
+}
+export class SoundDefinitionRegistry {
+    getDefinitions() {
+        return unsupported("SoundDefinitionRegistry.getDefinitions", []);
+    }
+}
+export class SoundDurationInfo {
+    get duration() {
+        return unsupported("SoundDurationInfo.duration");
+    }
+
+    get isActive() {
+        return unsupported("SoundDurationInfo.isActive");
+    }
+
+    getPlaybackPosition() {
+        return unsupported("SoundDurationInfo.getPlaybackPosition");
     }
 }
 export class WaypointTexture {}

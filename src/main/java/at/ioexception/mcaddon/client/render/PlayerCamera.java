@@ -68,6 +68,11 @@ public final class PlayerCamera {
         SHAKES.add(new Running(incoming, System.currentTimeMillis()));
     }
 
+    /** The shakes the server has started on this view and not yet seen run out or stopped. */
+    public static List<CameraShake> shakes() {
+        return SHAKES.stream().map(Running::shake).toList();
+    }
+
     /** Gives back the camera the player was playing with, and drops every running shake. */
     public static void clear() {
         view = CameraView.CLEARED;

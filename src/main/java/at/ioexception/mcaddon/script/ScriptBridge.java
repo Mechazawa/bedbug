@@ -216,14 +216,16 @@ public final class ScriptBridge {
     /** A game rule both editions have. Bedrock's own rules have nowhere to read from. */
     @HostAccess.Export
     public String gameRule(String name) {
-        String value = Platform.gameRule(server, name);
+        String value = Platform.gameRule(server,
+            at.ioexception.mcaddon.convert.Functions.gameRuleFor(name));
         if (value == null) unsupported("GameRules." + name);
         return value;
     }
 
     @HostAccess.Export
     public void setGameRule(String name, Value value) {
-        if (!Platform.setGameRule(server, name, String.valueOf(value))) {
+        if (!Platform.setGameRule(server, at.ioexception.mcaddon.convert.Functions.gameRuleFor(name),
+            String.valueOf(value))) {
             unsupported("GameRules." + name + " (write)");
         }
     }
@@ -572,6 +574,12 @@ public final class ScriptBridge {
         return level.getBlockState(new BlockPos(x, y, z)).getBlock()
             instanceof at.ioexception.mcaddon.block.AddonBlock addon && addon.holdsState()
             ? AddonState.blockKey(dimension, x, y, z) : null;
+    }
+
+    /** Whether the block keeps a store, which is what `minecraft:dynamic_properties` is handed out for. */
+    @HostAccess.Export
+    public boolean blockKeepsProperties(String dimension, int x, int y, int z) {
+        return blockStore(dimension, x, y, z) != null;
     }
 
     @HostAccess.Export

@@ -225,6 +225,15 @@ public final class Functions {
     private static final Map<String, String> GAME_RULES = lowerCased(RULES_JAVA_SHARES,
         RULES_NEWER_JAVA_HAS, RULES_JAVA_FOLDS);
 
+    /**
+     * The rule a Bedrock name reaches, under the name `Platform` looks one up by.
+     *
+     * A name reaching no rule comes back as it was, so the lookup it is handed to answers nothing.
+     */
+    public static String gameRuleFor(String bedrock) {
+        return GAME_RULES.getOrDefault(bedrock.toLowerCase(Locale.ROOT), bedrock);
+    }
+
     /** Every rule a Bedrock name reaches, which is the set a change can be reported under. */
     public static Collection<String> gameRuleNames() {
         return GAME_RULES.values();

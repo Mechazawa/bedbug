@@ -615,7 +615,7 @@ public final class BedrockCommands {
         String userId = StringArgumentType.getString(command, "userId");
         int pushed = 0;
         for (ServerPlayer player : EntityArgument.getPlayers(command, "targets")) {
-            if (PlayerFogs.push(player, fogId, userId)) pushed++;
+            if (PlayerFogs.push(player, fogId, userId) >= 0) pushed++;
         }
         return pushed;
     }
@@ -627,7 +627,8 @@ public final class BedrockCommands {
 
         int taken = 0;
         for (ServerPlayer player : EntityArgument.getPlayers(command, "targets")) {
-            boolean changed = all ? PlayerFogs.remove(player, userId) : PlayerFogs.pop(player, userId);
+            boolean changed = all ? PlayerFogs.remove(player, userId)
+                : PlayerFogs.pop(player, userId) != null;
             if (changed) taken++;
         }
         if (taken == 0) {

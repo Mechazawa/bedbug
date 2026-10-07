@@ -588,34 +588,44 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
      */
     private static NoteBlockInstrument instrument(JsonObject components) {
         String sound = text(components, "minecraft:instrument_sound", "up");
-        if (sound == null) return null;
-
-        return switch (sound) {
-            case "note.harp" -> NoteBlockInstrument.HARP;
-            case "note.bd" -> NoteBlockInstrument.BASEDRUM;
-            case "note.snare" -> NoteBlockInstrument.SNARE;
-            case "note.hat" -> NoteBlockInstrument.HAT;
-            case "note.bassattack" -> NoteBlockInstrument.BASS;
-            case "note.flute" -> NoteBlockInstrument.FLUTE;
-            case "note.bell" -> NoteBlockInstrument.BELL;
-            case "note.guitar" -> NoteBlockInstrument.GUITAR;
-            case "note.chime" -> NoteBlockInstrument.CHIME;
-            case "note.xylophone" -> NoteBlockInstrument.XYLOPHONE;
-            case "note.iron_xylophone" -> NoteBlockInstrument.IRON_XYLOPHONE;
-            case "note.cow_bell" -> NoteBlockInstrument.COW_BELL;
-            case "note.didgeridoo" -> NoteBlockInstrument.DIDGERIDOO;
-            case "note.bit" -> NoteBlockInstrument.BIT;
-            case "note.banjo" -> NoteBlockInstrument.BANJO;
-            case "note.pling" -> NoteBlockInstrument.PLING;
-            case "note.zombie" -> NoteBlockInstrument.ZOMBIE;
-            case "note.skeleton" -> NoteBlockInstrument.SKELETON;
-            case "note.creeper" -> NoteBlockInstrument.CREEPER;
-            case "note.enderdragon" -> NoteBlockInstrument.DRAGON;
-            case "note.witherskeleton" -> NoteBlockInstrument.WITHER_SKELETON;
-            case "note.piglin" -> NoteBlockInstrument.PIGLIN;
-            default -> null;
-        };
+        return sound == null ? null : INSTRUMENTS.get(sound);
     }
+
+    /** Bedrock's name for the sound a Java instrument makes, or `note.none` for one it has no name for. */
+    public static String instrumentName(NoteBlockInstrument instrument) {
+        return INSTRUMENTS.entrySet().stream()
+            .filter(entry -> entry.getValue() == instrument)
+            .map(Map.Entry::getKey)
+            .findFirst()
+            .orElse(NO_INSTRUMENT);
+    }
+
+    /** What Bedrock calls a face that plays nothing. */
+    public static final String NO_INSTRUMENT = "note.none";
+
+    private static final Map<String, NoteBlockInstrument> INSTRUMENTS = Map.ofEntries(
+        Map.entry("note.harp", NoteBlockInstrument.HARP),
+        Map.entry("note.bd", NoteBlockInstrument.BASEDRUM),
+        Map.entry("note.snare", NoteBlockInstrument.SNARE),
+        Map.entry("note.hat", NoteBlockInstrument.HAT),
+        Map.entry("note.bassattack", NoteBlockInstrument.BASS),
+        Map.entry("note.flute", NoteBlockInstrument.FLUTE),
+        Map.entry("note.bell", NoteBlockInstrument.BELL),
+        Map.entry("note.guitar", NoteBlockInstrument.GUITAR),
+        Map.entry("note.chime", NoteBlockInstrument.CHIME),
+        Map.entry("note.xylophone", NoteBlockInstrument.XYLOPHONE),
+        Map.entry("note.iron_xylophone", NoteBlockInstrument.IRON_XYLOPHONE),
+        Map.entry("note.cow_bell", NoteBlockInstrument.COW_BELL),
+        Map.entry("note.didgeridoo", NoteBlockInstrument.DIDGERIDOO),
+        Map.entry("note.bit", NoteBlockInstrument.BIT),
+        Map.entry("note.banjo", NoteBlockInstrument.BANJO),
+        Map.entry("note.pling", NoteBlockInstrument.PLING),
+        Map.entry("note.zombie", NoteBlockInstrument.ZOMBIE),
+        Map.entry("note.skeleton", NoteBlockInstrument.SKELETON),
+        Map.entry("note.creeper", NoteBlockInstrument.CREEPER),
+        Map.entry("note.enderdragon", NoteBlockInstrument.DRAGON),
+        Map.entry("note.witherskeleton", NoteBlockInstrument.WITHER_SKELETON),
+        Map.entry("note.piglin", NoteBlockInstrument.PIGLIN));
 
     /**
      * How far a block sits from the middle of its own space.

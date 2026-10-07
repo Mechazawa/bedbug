@@ -3987,9 +3987,14 @@ public class AddonEntity extends PathfinderMob
             if (!player.getAbilities().instabuild) held.shrink(1);
             if (random.nextDouble() > liveNumber(component, "probability", 0.33)) return true;
 
+            boolean trusting = component.endsWith("trusting");
+            if (!trusting && at.ioexception.mcaddon.server.WorldEvents.tamingRefused(this, player)) {
+                return true;
+            }
             ServerHooks.state().setProperty(getUUID(), "is_tamed", true);
             setOwner(player);
-            fire(namedEvent(component, component.endsWith("trusting") ? "trust_event" : "tame_event"));
+            fire(namedEvent(component, trusting ? "trust_event" : "tame_event"));
+            if (!trusting) at.ioexception.mcaddon.server.WorldEvents.tamed(this, player);
             return true;
         }
         return false;
