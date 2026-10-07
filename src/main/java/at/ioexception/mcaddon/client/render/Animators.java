@@ -3,6 +3,7 @@ package at.ioexception.mcaddon.client.render;
 import at.ioexception.mcaddon.bedrock.entity.EntityAnimator;
 import at.ioexception.mcaddon.bedrock.entity.EntityQueries;
 import at.ioexception.mcaddon.entity.AddonEntity;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.entity.Entity;
 
@@ -16,7 +17,27 @@ import java.util.Map;
  * removes from grows for the whole session.
  */
 public final class Animators {
-    private record Entry(EntityAnimator animator, EntityQueries queries, float[] lastTime) {
+    /** One animator, the queries it answers through and the moment it was last advanced to. */
+    record Entry(EntityAnimator animator, EntityQueries queries, float[] lastTime) {
+        static Entry of(Entity entity, AddonClientAssets.Binding binding, boolean attached, float ageInTicks) {
+            EntityAnimator animator = new EntityAnimator(binding.models().assets(), entity, binding.definition());
+            EntityQueries queries = new EntityQueries(entity, animator.player(),
+                new DrawnModel(animator, entity.getId(), attached),
+                () -> EntityProperties.of(entity.getId()), attached);
+            animator.environment().setQueries(queries);
+            animator.setEffects(AddonEffects.of(entity, animator, binding.models().converted().namespace()));
+            return new Entry(animator, queries, new float[] {ageInTicks});
+        }
+
+        /** Moves the animator on by however far the entity's clock has gone since the last call. */
+        void advance(float partialTick, float ageInTicks, String itemSlot) {
+            float now = ageInTicks + partialTick;
+            float delta = Math.max(0, now - lastTime[0]) / 20f;
+            lastTime[0] = now;
+            queries.setPartialTick(partialTick);
+            queries.setItemSlot(itemSlot);
+            animator.tick(delta, now / 20f);
+        }
     }
 
     private static final Map<String, Entry> ANIMATORS = new HashMap<>();
@@ -42,22 +63,9 @@ public final class Animators {
         if (binding == null) return null;
 
         boolean attached = itemSlot != null;
-        Entry entry = ANIMATORS.computeIfAbsent(entity.getId() + "/" + key, id -> {
-            EntityAnimator animator = new EntityAnimator(binding.models().assets(), entity, binding.definition());
-            EntityQueries queries = new EntityQueries(entity, animator.player(),
-                new DrawnModel(animator, entity.getId(), attached),
-                () -> EntityProperties.of(entity.getId()), attached);
-            animator.environment().setQueries(queries);
-            animator.setEffects(AddonEffects.of(entity, animator, binding.models().converted().namespace()));
-            return new Entry(animator, queries, new float[] {ageInTicks});
-        });
-
-        float now = ageInTicks + partialTick;
-        float delta = Math.max(0, now - entry.lastTime()[0]) / 20f;
-        entry.lastTime()[0] = now;
-        entry.queries().setPartialTick(partialTick);
-        entry.queries().setItemSlot(attached ? itemSlot : "");
-        entry.animator().tick(delta, now / 20f);
+        Entry entry = ANIMATORS.computeIfAbsent(entity.getId() + "/" + key,
+            id -> Entry.of(entity, binding, attached, ageInTicks));
+        entry.advance(partialTick, ageInTicks, attached ? itemSlot : "");
         return entry.animator();
     }
 
@@ -87,8 +95,9 @@ public final class Animators {
     /**
      * Starts a clip a script asked for, on whichever animator is already drawing the entity.
      *
-     * Nothing happens when the entity is not being drawn, which is the same as Bedrock: an animation
-     * is a client effect and a client that cannot see the entity has nothing to run it on.
+     * An add-on entity that is not being drawn runs nothing, which is the same as Bedrock: an
+     * animation is a client effect and a client that cannot see the entity has nothing to run it
+     * on. An entity Java draws with a model of its own is posed through that model's parts as well.
      */
     public static void play(int entityId, String animation, String stopExpression, float blendOut) {
         ANIMATORS.forEach((key, entry) -> {
@@ -96,6 +105,12 @@ public final class Animators {
                 entry.animator().playDirect(animation, stopExpression, blendOut);
             }
         });
+
+        ClientLevel level = Minecraft.getInstance().level;
+        Entity entity = level == null ? null : level.getEntity(entityId);
+        if (entity != null && !(entity instanceof AddonEntity)) {
+            JavaModelPoses.play(entity, animation, stopExpression, blendOut);
+        }
     }
 
     /**

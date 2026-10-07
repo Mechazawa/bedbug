@@ -9,7 +9,8 @@
       "at.ioexception.mcaddon.clientgametest.WorldClientGameTest",
       "at.ioexception.mcaddon.clientgametest.DrawnSizeClientGameTest",
       "at.ioexception.mcaddon.clientgametest.FormClientGameTest",
-      "at.ioexception.mcaddon.clientgametest.GroupGoalClientGameTest"
+      "at.ioexception.mcaddon.clientgametest.GroupGoalClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.JavaModelPoseClientGameTest"
     ]
   },
   "depends": {
