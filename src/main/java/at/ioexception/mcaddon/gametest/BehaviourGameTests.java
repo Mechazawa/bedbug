@@ -168,6 +168,35 @@ public final class BehaviourGameTests {
     }
 
     /**
+     * A blast loses most of what a table carrying `explosion_decay` hands out.
+     *
+     * The pack's rubble table names a full stack of cobblestone, and each item survives a blast of
+     * radius sixty-four one time in sixty-four. A table that lost the function on the way across
+     * hands out the whole stack inside a blast as well as outside one.
+     */
+    @GameTest()
+    public void aBlastDecaysWhatTheTableHandsOut(GameTestHelper helper) {
+        Player rolledFor = Platform.mockPlayer(helper);
+        Identifier table = Platform.id("tp", "entities/rubble");
+        int whole = Platform.rollLoot(helper.getLevel(), table, rolledFor).stream()
+            .mapToInt(ItemStack::getCount).sum();
+        if (whole == 0) {
+            helper.succeed();
+            return;
+        }
+
+        int blasted = Platform.rollLootInBlast(helper.getLevel(), table, rolledFor, RUBBLE).stream()
+            .mapToInt(ItemStack::getCount).sum();
+        helper.assertTrue(whole == RUBBLE, "The rubble table handed out " + whole + " outside a blast.");
+        helper.assertTrue(blasted < RUBBLE / 2,
+            "A blast of radius " + RUBBLE + " left " + blasted + " of the rubble table's stack.");
+        helper.succeed();
+    }
+
+    /** The stack the pack's rubble table names, and the blast radius it is rolled inside. */
+    private static final int RUBBLE = 64;
+
+    /**
      * The wool a table hands out is the colour of the entity it was rolled for.
      *
      * `set_data_from_color_index` is the one data value written nowhere in the pack: it is whatever

@@ -2081,24 +2081,43 @@ public final class Platform {
      */
     public static java.util.List<net.minecraft.world.item.ItemStack> rollLoot(ServerLevel level,
         Identifier table, Entity about) {
+        return java.util.List.copyOf(lootTable(level, table).getRandomItems(lootAbout(level, about)
+            .create(net.minecraft.world.level.storage.loot.parameters.LootContextParamSets.ENTITY)));
+    }
+
+    /**
+     * The same roll inside a blast of this radius, which is what a table's explosion decay reads.
+     *
+     * No set a table is rolled with by the game carries both an entity and a blast, so the roll
+     * is made against the set that allows every parameter.
+     */
+    public static java.util.List<net.minecraft.world.item.ItemStack> rollLootInBlast(
+        ServerLevel level, Identifier table, Entity about, float radius) {
+        return java.util.List.copyOf(lootTable(level, table).getRandomItems(lootAbout(level, about)
+            .withParameter(net.minecraft.world.level.storage.loot.parameters
+                .LootContextParams.EXPLOSION_RADIUS, radius)
+            .create(net.minecraft.world.level.storage.loot.parameters
+                .LootContextParamSets.ALL_PARAMS)));
+    }
+
+    private static net.minecraft.world.level.storage.loot.LootTable lootTable(ServerLevel level,
+        Identifier table) {
         //? if >=1.21 {
-        net.minecraft.world.level.storage.loot.LootTable found =
-            level.getServer().reloadableRegistries().getLootTable(lootTableKey(table));
+        return level.getServer().reloadableRegistries().getLootTable(lootTableKey(table));
         //?} else {
-        /*net.minecraft.world.level.storage.loot.LootTable found =
-            level.getServer().getLootData().getLootTable(table);
+        /*return level.getServer().getLootData().getLootTable(table);
         *///?}
-        net.minecraft.world.level.storage.loot.LootParams asked =
-            new net.minecraft.world.level.storage.loot.LootParams.Builder(level)
-                .withParameter(net.minecraft.world.level.storage.loot.parameters
-                    .LootContextParams.THIS_ENTITY, about)
-                .withParameter(net.minecraft.world.level.storage.loot.parameters
-                    .LootContextParams.ORIGIN, about.position())
-                .withParameter(net.minecraft.world.level.storage.loot.parameters
-                    .LootContextParams.DAMAGE_SOURCE, level.damageSources().generic())
-                .create(net.minecraft.world.level.storage.loot.parameters
-                    .LootContextParamSets.ENTITY);
-        return java.util.List.copyOf(found.getRandomItems(asked));
+    }
+
+    private static net.minecraft.world.level.storage.loot.LootParams.Builder lootAbout(
+        ServerLevel level, Entity about) {
+        return new net.minecraft.world.level.storage.loot.LootParams.Builder(level)
+            .withParameter(net.minecraft.world.level.storage.loot.parameters
+                .LootContextParams.THIS_ENTITY, about)
+            .withParameter(net.minecraft.world.level.storage.loot.parameters
+                .LootContextParams.ORIGIN, about.position())
+            .withParameter(net.minecraft.world.level.storage.loot.parameters
+                .LootContextParams.DAMAGE_SOURCE, level.damageSources().generic());
     }
 
     /** A boss bar the server draws. 26 gave it the id every other bar already carried. */

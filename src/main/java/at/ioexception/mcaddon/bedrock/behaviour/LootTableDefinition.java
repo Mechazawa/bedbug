@@ -184,6 +184,7 @@ public record LootTableDefinition(String path, JsonObject java) {
             }
             case "enchant_randomly" -> function.addProperty("function", "minecraft:enchant_randomly");
             case "furnace_smelt" -> function.addProperty("function", "minecraft:furnace_smelt");
+            case "explosion_decay" -> function.addProperty("function", "minecraft:explosion_decay");
             case "looting_enchant" ->
                 Platform.lootingCount(function, range(bedrock.get("count")), bedrock.get("limit"));
             case "enchant_with_levels" -> {

@@ -51,6 +51,20 @@ class RecipeDefinitionTest {
     }
 
     @Test
+    void readsATagAShapelessRecipeIsUnlockedByAsATag() throws IOException {
+        RecipeDefinition recipe = read("""
+            {"minecraft:recipe_shapeless": {
+              "description": {"identifier": "probe:cut"},
+              "tags": ["crafting_table"],
+              "ingredients": [{"item": "probe:raw"}],
+              "unlock": [{"tag": "minecraft:logs"}],
+              "result": {"item": "probe:cut", "count": 1}}}
+            """);
+
+        assertEquals(java.util.List.of("#minecraft:logs"), recipe.unlock());
+    }
+
+    @Test
     void leavesAnUnlockStatedAsAGameEventWithNothingToWaitFor() throws IOException {
         RecipeDefinition recipe = read("""
             {"minecraft:recipe_shapeless": {
