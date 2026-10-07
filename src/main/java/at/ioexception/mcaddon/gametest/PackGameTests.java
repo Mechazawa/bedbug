@@ -360,6 +360,59 @@ public final class PackGameTests {
     }
 
     /**
+     * A block's geometry reaches the Java model with its faces' material instances and the way its
+     * item is shown.
+     *
+     * The lamp's shade names a `glow` material instance on its top face, which the lamp's own
+     * `minecraft:material_instances` paints with a texture of its own, and its geometry states how
+     * the item is turned in the inventory and lifted on a shelf. A face reading `#all` or a model
+     * with no `display` is the converter having dropped both.
+     */
+    @GameTest()
+    public void aBlockModelKeepsItsMaterialInstancesAndItsItemDisplay(GameTestHelper helper) {
+        ConvertedPack pack = AddonPacks.all().stream()
+            .filter(one -> Files.isRegularFile(lampModel(one)))
+            .findFirst().orElse(null);
+        if (pack == null) {
+            helper.succeed();
+            return;
+        }
+
+        com.google.gson.JsonObject model;
+        try {
+            model = com.google.gson.JsonParser.parseString(Files.readString(lampModel(pack)))
+                .getAsJsonObject();
+        } catch (IOException unreadable) {
+            helper.fail("The converted lamp model could not be read: " + unreadable.getMessage());
+            return;
+        }
+
+        String shadeTop = model.getAsJsonArray("elements").get(1).getAsJsonObject()
+            .getAsJsonObject("faces").getAsJsonObject("up").get("texture").getAsString();
+        helper.assertTrue(shadeTop.equals("#glow"),
+            "The lamp's shade top names the glow instance and wears " + shadeTop + ".");
+        helper.assertTrue(model.getAsJsonObject("textures").has("glow"),
+            "The lamp's model declares no texture for its glow instance.");
+
+        com.google.gson.JsonObject display = model.getAsJsonObject("display");
+        helper.assertTrue(display != null && display.has("gui"),
+            "The lamp's geometry says how its item is shown and the model carries no display.");
+        helper.assertTrue(display.getAsJsonObject("gui").getAsJsonArray("rotation").get(1)
+            .getAsFloat() == GUI_TURN, "The lamp's item is turned otherwise than its geometry says.");
+        helper.assertTrue(!display.has("embedded"),
+            "A display context Java has no form of reached the model.");
+        helper.succeed();
+    }
+
+    /** The turn about the vertical axis the lamp's geometry gives its item in the inventory. */
+    private static final float GUI_TURN = 45f;
+
+    private static Path lampModel(ConvertedPack pack) {
+        return pack.root().resolve("assets").resolve("tp").resolve("models").resolve("block")
+            .resolve("lamp.json");
+    }
+
+    /**
      * A pack's block runs the event its own clock asks for.
      *
      * `minecraft:queued_ticking` names an interval and an event, and none of that chain exists

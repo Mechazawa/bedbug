@@ -159,7 +159,7 @@ public final class Worlds extends Surface {
 
         String how = " replace " + CLONE_MODES.get(mode);
         JsonObject filter = parse(filterJson);
-        if (filter.isEmpty()) {
+        if (filter.size() == 0) {
             return run(level, "clone " + fromX + " " + fromY + " " + fromZ + " " + toX + " " + toY
                 + " " + toZ + " " + atX + " " + atY + " " + atZ + how) > 0;
         }

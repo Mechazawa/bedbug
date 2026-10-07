@@ -16,6 +16,10 @@
         "*": {
           "texture": "lamp_off",
           "render_method": "opaque"
+        },
+        "glow": {
+          "texture": "lamp_on",
+          "render_method": "opaque"
         }
       },
       "minecraft:destructible_by_mining": {

@@ -1322,14 +1322,17 @@ public final class PackConverter {
         }
 
         JsonObject model = new JsonObject();
-        JsonArray elements = geometry == null ? null : BlockGeometry.elements(geometry, "#all");
+        if (geometry != null && !uniform) textures.addProperty("all", faces.values().iterator().next());
+        JsonArray elements = geometry == null ? null
+            : BlockGeometry.elements(geometry, textures.keySet());
         if (elements == null) {
             model.addProperty("parent", uniform ? "minecraft:block/cube_all" : "minecraft:block/cube");
         } else {
-            // A model with its own elements needs a particle texture; `all` is what the faces use.
-            if (!uniform) textures.addProperty("all", faces.values().iterator().next());
+            // A model with its own elements needs a particle texture, which `all` is.
             textures.addProperty("particle", "#all");
             model.add("elements", elements);
+            JsonObject display = BlockGeometry.display(geometry);
+            if (display != null) model.add("display", display);
         }
         model.add("textures", textures);
         write(assets.resolve("models/block").resolve(name + ".json"), model);

@@ -15,7 +15,12 @@ public record BedrockGeometry(
      * none, which leaves the entity culled against the box the server gave it.
      */
     AABB visibleBounds,
-    List<BedrockBone> bones
+    List<BedrockBone> bones,
+    /**
+     * How a block drawn from this geometry is held, worn and shown as an item, by the context
+     * Bedrock names. Null where the geometry says nothing about it.
+     */
+    com.google.gson.JsonObject itemDisplayTransforms
 ) {
     public Map<String, BedrockBone> byName() {
         return bones.stream().collect(java.util.stream.Collectors.toMap(BedrockBone::name, bone -> bone));
