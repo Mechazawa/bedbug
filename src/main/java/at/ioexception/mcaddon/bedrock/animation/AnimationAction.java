@@ -1,14 +1,11 @@
 package at.ioexception.mcaddon.bedrock.animation;
 
-import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import at.ioexception.mcaddon.server.EntityEvents;
+import at.ioexception.mcaddon.server.PackCommand;
 import at.ioexception.mcaddon.server.ServerHooks;
-import com.mojang.brigadier.exceptions.CommandSyntaxException;
-import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 
@@ -55,29 +52,11 @@ public sealed interface AnimationAction {
         }
     }
 
-    /**
-     * A command run as the entity, so `@s` is the entity and a relative position is its own.
-     *
-     * The authority behind it is the server's rather than the entity's. A mob carries none of its
-     * own, and a behaviour pack writing a command means the one the console would run.
-     */
+    /** A command run as the entity, the way {@link PackCommand} runs one. */
     record Command(String line) implements AnimationAction {
         @Override
         public void run(Entity entity, MolangEnvironment environment) {
-            if (entity == null || !(entity.level() instanceof ServerLevel level)) return;
-
-            MinecraftServer server = level.getServer();
-            CommandSourceStack source = server.createCommandSourceStack()
-                .withLevel(level)
-                .withEntity(entity)
-                .withPosition(entity.position())
-                .withRotation(entity.getRotationVector())
-                .withSuppressedOutput();
-            try {
-                server.getCommands().getDispatcher().execute(line, source);
-            } catch (CommandSyntaxException error) {
-                McAddon.LOGGER.debug("An animation ran a command that did not parse: {}", line);
-            }
+            new PackCommand(line).runAs(entity);
         }
     }
 }

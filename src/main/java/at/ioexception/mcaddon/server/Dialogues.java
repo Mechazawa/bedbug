@@ -21,7 +21,6 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
@@ -247,24 +246,9 @@ public final class Dialogues {
         READING.values().removeIf(reading -> reading.viewer().getUUID().equals(viewer));
     }
 
-    /**
-     * The scene's own commands, run with the NPC's authority and at the NPC's place.
-     *
-     * A mob carries no authority of its own and a pack writing a command means the one the console
-     * would run, which is the same reading an entity event's `queue_command` gets.
-     */
+    /** The scene's own commands, run as the NPC, with `@initiator` naming whoever is reading. */
     private static void run(List<String> commands, Entity npc, Entity viewer) {
-        if (!(npc.level() instanceof ServerLevel level)) return;
-
-        for (String command : commands) {
-            String line = command.startsWith("/") ? command.substring(1) : command;
-            line = line.replace(INITIATOR, viewer.getName().getString());
-            try {
-                level.getServer().getCommands().getDispatcher().execute(line,
-                    Platform.commandSourceOf(npc, level).withSuppressedOutput());
-            } catch (com.mojang.brigadier.exceptions.CommandSyntaxException error) {
-                McAddon.LOGGER.debug("A dialogue scene ran a command that did not parse: {}", line);
-            }
-        }
+        String reader = viewer.getName().getString();
+        commands.forEach(command -> PackCommand.of(command.replace(INITIATOR, reader)).runAs(npc));
     }
 }

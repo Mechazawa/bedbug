@@ -1,6 +1,5 @@
 package at.ioexception.mcaddon.server;
 
-import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.behaviour.EntityEvent;
 import at.ioexception.mcaddon.bedrock.behaviour.Filter;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
@@ -10,8 +9,6 @@ import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.state.AddonState;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.mojang.brigadier.exceptions.CommandSyntaxException;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -336,18 +333,7 @@ public final class EntityEvents {
      * pack's script works through here.
      */
     private static void runCommands(Entity entity, EntityEvent.RunCommands commands) {
-        if (!(entity.level() instanceof ServerLevel level)) return;
-        MinecraftServer server = level.getServer();
-
-        for (String command : commands.commands()) {
-            String trimmed = command.startsWith("/") ? command.substring(1) : command;
-            try {
-                server.getCommands().getDispatcher().execute(trimmed,
-                    Platform.commandSourceOf(entity, level).withSuppressedOutput());
-            } catch (CommandSyntaxException error) {
-                McAddon.LOGGER.debug("An entity event ran a command that did not parse: {}", trimmed);
-            }
-        }
+        commands.commands().forEach(command -> PackCommand.of(command).runAs(entity));
     }
 
     private static EntityEvent pick(EntityEvent.Randomise randomise) {

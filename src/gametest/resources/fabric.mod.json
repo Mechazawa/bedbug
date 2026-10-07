@@ -15,7 +15,8 @@
       "at.ioexception.mcaddon.clientgametest.BlockClientGameTest",
       "at.ioexception.mcaddon.clientgametest.CreativeTabClientGameTest",
       "at.ioexception.mcaddon.clientgametest.CraftingClientGameTest",
-      "at.ioexception.mcaddon.clientgametest.TradeClientGameTest"
+      "at.ioexception.mcaddon.clientgametest.TradeClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.DialogueClientGameTest"
     ]
   },
   "depends": {
