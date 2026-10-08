@@ -156,11 +156,15 @@ def mod_commands():
     }
 
 
+# A Java string literal, escaped quotes included, so a `"\""` cannot pair the quotes after it wrongly.
+STRING = re.compile(r'"((?:[^"\\\n]|\\.)*)"')
+
+
 def mod_keywords():
     """Every string literal the command handling writes, which is where a keyword would be."""
     sources = [FUNCTIONS, *REGISTRATIONS]
     return {name.lower() for path in sources
-            for name in re.findall(r'"([^"]*)"', text(path))}
+            for name in STRING.findall(text(path))}
 
 
 def unregistered(names):
