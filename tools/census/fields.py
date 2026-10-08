@@ -239,10 +239,6 @@ REASONS = {
         "*": "The anger spreads to the same definition within the range, which is what a pack means by "
              "it. Sounds, the finer broadcast rules and the filters have no Java counterpart.",
     },
-    "minecraft:breedable": {
-        "*": "Taming, sitting and pregnancy are states Java writes into its own animals, and an add-on "
-             "entity is none of them.",
-    },
     "minecraft:home": {
         "restriction_type": "Java holds a home as a position and a radius, with no kind.",
         "home_block_list": "Java's home is a position rather than a block to stand on.",

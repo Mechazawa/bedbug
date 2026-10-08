@@ -46,6 +46,11 @@
           "type": "bool",
           "default": false,
           "client_sync": true
+        },
+        "tp:pregnant": {
+          "type": "bool",
+          "default": false,
+          "client_sync": true
         }
       },
       "animations": {
@@ -328,6 +333,19 @@
           ]
         }
       },
+      "tp:ember_fertile": {
+        "minecraft:breedable": {
+          "breed_items": ["minecraft:wheat"],
+          "breed_cooldown": 2,
+          "causes_pregnancy": true,
+          "breeds_with": {
+            "tp:ember": {
+              "event": "tp:ember_conceived",
+              "target": "self"
+            }
+          }
+        }
+      },
       "tp:ember_alert": {
         "minecraft:timer": {
           "time": 1.0,
@@ -466,6 +484,16 @@
       "tp:ember_murmur": {
         "add": {
           "component_groups": ["tp:ember_murmuring"]
+        }
+      },
+      "tp:ember_make_fertile": {
+        "add": {
+          "component_groups": ["tp:ember_fertile"]
+        }
+      },
+      "tp:ember_conceived": {
+        "set_property": {
+          "tp:pregnant": true
         }
       },
       "tp:ember_winter": {

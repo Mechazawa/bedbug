@@ -1347,15 +1347,10 @@ public class AddonEntity extends PathfinderMob
     private boolean fed(Player player, InteractionHand hand) {
         com.google.gson.JsonObject breedable = liveComponent("minecraft:breedable");
         if (breedable == null || !breedsWith(breedable, player.getItemInHand(hand))) return false;
-        // A pack asking for a healthy parent means an entity at anything less is not tempted at all.
-        if (ServerEntityDefinition.flag(breedable, "require_full_health", false)
-            && getHealth() < getMaxHealth()) {
-            return false;
-        }
+        if (!willingToBreed(breedable, player)) return false;
 
         if (!player.getAbilities().instabuild) player.getItemInHand(hand).shrink(1);
-        // `breed_cooldown` is seconds, which is how long the mood the food put the entity in lasts.
-        inLoveUntil = tickCount + Goals.ticks(breedable, "breed_cooldown", 30);
+        inLoveUntil = tickCount + LOVE_TICKS;
         for (int i = 0; i < 7; i++) {
             level().addParticle(net.minecraft.core.particles.ParticleTypes.HEART,
                 getRandomX(1), getRandomY() + 0.5, getRandomZ(1), 0, 0, 0);
@@ -1409,6 +1404,108 @@ public class AddonEntity extends PathfinderMob
         return false;
     }
 
+    /**
+     * Whether food may put the entity in the mood at all, which every condition
+     * `minecraft:breedable` states has to allow.
+     *
+     * `require_tame` is yes unless a pack says otherwise, so an entity nobody owns refuses the food
+     * of a pack that never mentions it, and Mojang's own breedable entities each write it out.
+     */
+    private boolean willingToBreed(com.google.gson.JsonObject breedable, Player feeder) {
+        if (tickCount < breedReadyAt) return false;
+        if (Goals.flag(breedable, "require_tame", true) && ownerUuid() == null) return false;
+        if (Goals.flag(breedable, "require_full_health", false) && getHealth() < getMaxHealth()) {
+            return false;
+        }
+        if (!Goals.flag(breedable, "allow_sitting", false)
+            && getPose() == net.minecraft.world.entity.Pose.SITTING) {
+            return false;
+        }
+        return Goals.filter(breedable, "love_filters")
+                .matches(new Filter.Context(this, feeder, feeder, ServerHooks.state()))
+            && environmentAllowsBreeding(breedable);
+    }
+
+    /** `environment_requirements`: enough of the named blocks within the radius, for each entry. */
+    private boolean environmentAllowsBreeding(com.google.gson.JsonObject breedable) {
+        for (com.google.gson.JsonElement element
+            : at.ioexception.mcaddon.util.Json.list(breedable, "environment_requirements")) {
+            if (!element.isJsonObject()) continue;
+
+            com.google.gson.JsonObject requirement = element.getAsJsonObject();
+            java.util.Set<net.minecraft.world.level.block.Block> wanted = Goals.blocks(requirement, "blocks");
+            int radius = (int) Math.max(0, Math.min(BREEDING_SEARCH_LIMIT, Goals.number(requirement, "radius", 0)));
+            long found = net.minecraft.core.BlockPos.betweenClosedStream(
+                    blockPosition().offset(-radius, -radius, -radius), blockPosition().offset(radius, radius, radius))
+                .filter(position -> wanted.contains(level().getBlockState(position).getBlock()))
+                .count();
+            if (found < Goals.number(requirement, "count", 1)) return false;
+        }
+        return true;
+    }
+
+    /** The widest radius Bedrock lets `environment_requirements` search. */
+    private static final int BREEDING_SEARCH_LIMIT = 16;
+
+    /** How long food keeps an entity in the mood, which is the thirty seconds Java's animals get. */
+    private static final int LOVE_TICKS = 600;
+
+    /** When this entity may be put in the mood again after it last bred, in ticks of its own age. */
+    private int breedReadyAt;
+
+    /**
+     * Whether `breeds_with` names the kind the other entity is.
+     *
+     * Mojang writes it as a map from each mate to the event breeding with it raises, and the
+     * schema as a list of objects naming `mate_type`; either names who this entity pairs with.
+     */
+    public boolean breedsWith(AddonEntity other) {
+        return breedingEntry(other) != null;
+    }
+
+    /**
+     * Breeds with the mate, and answers whether a child is born where the two stand.
+     *
+     * The event `breeds_with` names for the mate is raised, which is how a pack makes its entity
+     * pregnant, and `causes_pregnancy` is that event carrying the child instead of one being born.
+     * The entity then rests for `breed_cooldown` seconds before food works on it again.
+     */
+    public boolean conceive(AddonEntity mate) {
+        com.google.gson.JsonObject breedable = liveComponent("minecraft:breedable");
+        com.google.gson.JsonElement entry = breedingEntry(mate);
+        restAfterBreeding();
+
+        String event = entry == null || !entry.isJsonObject() ? null
+            : entry.getAsJsonObject().has("breed_event")
+                ? Goals.event(entry.getAsJsonObject(), "breed_event")
+                : Goals.text(entry.getAsJsonObject(), "event");
+        fire(event);
+        return !Goals.flag(breedable, "causes_pregnancy", false);
+    }
+
+    /** Leaves the mood and waits out `breed_cooldown`, whose seconds Bedrock defaults to sixty. */
+    public void restAfterBreeding() {
+        inLoveUntil = 0;
+        breedReadyAt = tickCount + Goals.ticks(liveComponent("minecraft:breedable"), "breed_cooldown", 60);
+    }
+
+    /** The `breeds_with` entry naming the other entity's kind, or null where none does. */
+    private com.google.gson.JsonElement breedingEntry(AddonEntity other) {
+        com.google.gson.JsonObject breedable = liveComponent("minecraft:breedable");
+        com.google.gson.JsonElement listed = breedable == null ? null : breedable.get("breeds_with");
+        if (listed == null) return null;
+
+        String kind = BuiltInRegistries.ENTITY_TYPE.getKey(other.getType()).toString();
+        if (listed.isJsonObject() && !listed.getAsJsonObject().has("mate_type")) {
+            return listed.getAsJsonObject().get(kind);
+        }
+        return at.ioexception.mcaddon.util.Json.list(breedable, "breeds_with").stream()
+            .filter(com.google.gson.JsonElement::isJsonObject)
+            .filter(entry -> kind.equals(Goals.text(entry.getAsJsonObject(), "mate_type")))
+            .findFirst()
+            .orElse(null);
+    }
+
     /** Whether the food `minecraft:breedable` names has put this entity in the mood. */
     public boolean inTheMood() {
         return inLoveUntil > tickCount;
@@ -1420,10 +1517,6 @@ public class AddonEntity extends PathfinderMob
 
         boolean inLove = inTheMood();
         if (inLove != Boolean.TRUE.equals(value("is_in_love"))) setValue("is_in_love", inLove);
-    }
-
-    public void leaveTheMood() {
-        inLoveUntil = 0;
     }
 
     /**

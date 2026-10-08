@@ -9,6 +9,11 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.navigation.WaterBoundPathNavigation;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.PushReaction;
 
@@ -189,5 +194,72 @@ public final class ComponentGameTests {
         helper.assertTrue(ember.getPistonPushReaction() == PushReaction.IGNORE,
             EMBER + " gained a minecraft:pushable refusing pistons and a piston still moves it.");
         helper.succeed();
+    }
+
+    /**
+     * An entity nobody owns refuses breeding food unless its pack says taming is not needed.
+     *
+     * Bedrock's `require_tame` is yes by default, and the ember's fertile group never mentions it,
+     * so the food only works once the ember belongs to somebody.
+     */
+    @GameTest()
+    public void breedingFoodWaitsForAnOwnerByDefault(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_make_fertile", null, ServerHooks.state());
+        Player owner = holding(helper, ember, Items.WHEAT);
+        ember.mobInteract(owner, InteractionHand.MAIN_HAND);
+        helper.assertFalse(ember.inTheMood(), EMBER + " belongs to nobody and was put in the mood.");
+
+        ember.setOwner(owner);
+        ember.mobInteract(owner, InteractionHand.MAIN_HAND);
+        helper.assertTrue(ember.inTheMood(), EMBER + " belongs to its feeder and stayed out of the mood.");
+        helper.succeed();
+    }
+
+    /**
+     * Breeding raises the event `breeds_with` names for the mate, carries the child where the pack
+     * says the entity becomes pregnant, and rests the entity for `breed_cooldown` seconds.
+     */
+    @GameTest()
+    public void breedingRaisesTheMatesEventAndThenRests(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        AddonEntity mate = BehaviourGameTests.spawn(helper, EMBER);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_make_fertile", null, ServerHooks.state());
+        Player owner = holding(helper, ember, Items.WHEAT);
+        ember.setOwner(owner);
+        helper.assertTrue(ember.breedsWith(mate), EMBER + " names its own kind as a mate and refuses it.");
+
+        helper.assertFalse(ember.conceive(mate),
+            EMBER + " becomes pregnant by its pack's word and a child was born anyway.");
+        helper.assertTrue(Boolean.TRUE.equals(ember.value("tp:pregnant")),
+            EMBER + " bred and never raised the event breeds_with names for its mate.");
+
+        ember.mobInteract(owner, InteractionHand.MAIN_HAND);
+        helper.assertFalse(ember.inTheMood(), EMBER + " was put in the mood again the moment it bred.");
+        ember.tickCount += BREED_COOLDOWN + 1;
+        ember.mobInteract(owner, InteractionHand.MAIN_HAND);
+        helper.assertTrue(ember.inTheMood(), EMBER + " rested its two seconds and still refuses food.");
+        helper.succeed();
+    }
+
+    /** The two seconds the ember's fertile group rests after breeding, in Java's ticks. */
+    private static final int BREED_COOLDOWN = 2 * 20;
+
+    /** A player standing at the entity with a stack of the item in hand. */
+    private static Player holding(GameTestHelper helper, AddonEntity entity, Item item) {
+        Player player = Platform.mockPlayer(helper);
+        Platform.placeAt(player, entity.getX(), entity.getY(), entity.getZ(), 0f, 0f);
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(item, 16));
+        return player;
     }
 }
