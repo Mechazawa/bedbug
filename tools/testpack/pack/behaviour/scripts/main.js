@@ -6,12 +6,18 @@
 // on the screen while its pages turn, so the tag left on the player once `show` resolves says the
 // promise outlived every press and settled only when the form went away.
 //
+// A shop's catalogue: an ActionFormData of eight hundred buttons, whose description is longer than
+// the 32767 characters a plain network string carries. `/scriptevent "tp:catalogue"` run as a player
+// opens it, and a tag on the player names the button that answered it.
+//
 // A watch on the game's own villagers, written the way a pack that replaces them writes it: in
 // Bedrock's ids throughout, so a Java villager is `minecraft:villager_v2` and an experience orb is
 // `minecraft:xp_orb`. Every answer is a tag on the entity it is about.
+//
+// A look at the game's own blocks in the same spelling, which a server game test reads back.
 
-import { system, world } from "@minecraft/server";
-import { CustomForm, ObservableBoolean, ObservableString } from "@minecraft/server-ui";
+import { BlockPermutation, system, world } from "@minecraft/server";
+import { ActionFormData, CustomForm, ObservableBoolean, ObservableString } from "@minecraft/server-ui";
 
 const VILLAGER = "minecraft:villager_v2";
 
@@ -36,6 +42,18 @@ function openHandbook(player) {
     form.show().then(reason => player.addTag("tp:handbook_" + reason));
 }
 
+// `/scriptevent "tp:names" <x> <y> <z>` reads the block there by Bedrock's id and answers in blocks
+// above it: a lit pumpkin resolved under Bedrock's id one up, and a gold block two up when the block
+// read back as Bedrock's `golden_rail`.
+system.afterEvents.scriptEventReceive.subscribe(event => {
+    if (event.id !== "tp:names") return;
+    const [x, y, z] = event.message.split(" ").map(Number);
+    const dimension = world.getDimension("overworld");
+    const readAsGoldenRail = dimension.getBlock({ x, y, z })?.typeId === "minecraft:golden_rail";
+    dimension.getBlock({ x, y: y + 1, z })?.setPermutation(BlockPermutation.resolve("minecraft:lit_pumpkin"));
+    if (readAsGoldenRail) dimension.getBlock({ x, y: y + 2, z })?.setType("minecraft:gold_block");
+});
+
 // Commands written the way a pack writes them, none of which Java's parser reads as they stand: a
 // selector asking about an inventory, a selector naming Bedrock's villager, a function named by its
 // path alone and a command Java has nothing like. Each answer is a tag on the entity running them.
@@ -48,6 +66,14 @@ function runBedrockCommands(entity) {
     entity.runCommand("hud @s hide hotbar");
 }
 
+const WARES = 800;
+
+function openCatalogue(player) {
+    const catalogue = new ActionFormData().title("Catalogue");
+    for (let ware = 1; ware <= WARES; ware++) catalogue.button("Ware " + ware + " of the catalogue");
+    catalogue.show(player).then(response => player.addTag("tp:catalogue_" + response.selection));
+}
+
 system.afterEvents.scriptEventReceive.subscribe(event => {
     const player = event.sourceEntity;
     if (player === undefined) return;
@@ -57,6 +83,7 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
         player.runCommand("execute unless entity @s[hasitem={item=tp:dust}] run give @s tp:dust");
     }
     if (event.id === "tp:handbook") openHandbook(player);
+    if (event.id === "tp:catalogue") openCatalogue(player);
     if (event.id === "tp:villager") {
         const { x, y, z } = player.location;
         player.dimension.spawnEntity(VILLAGER, { x: x - 3, y, z }).addTag("tp:spawned_as_villager_v2");

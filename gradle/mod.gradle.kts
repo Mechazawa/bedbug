@@ -105,6 +105,24 @@ project.tasks.named<JavaCompile>("compileTestJava") {
 }
 
 /**
+ * Runs Bedrock item and block ids through the mod's own mapping, for `tools/census/ids.py`.
+ *
+ * The mapping asks the registry which spellings a version has, so it runs on the unit tests'
+ * classpath, which can bootstrap one without a game. `-PidsIn` and `-PidsOut` name the two files.
+ */
+project.tasks.register<JavaExec>("idCensus") {
+    group = "verification"
+    description = "Answer the id census's Bedrock ids with this mod's Java ones."
+    onlyIf { project.name == activeName }
+    dependsOn("testClasses")
+
+    val sourceSets = project.extensions.getByType(SourceSetContainer::class.java)
+    classpath = sourceSets.getByName("test").runtimeClasspath
+    mainClass.set("at.ioexception.mcaddon.convert.IdCensus")
+    args(project.findProperty("idsIn")?.toString() ?: "", project.findProperty("idsOut")?.toString() ?: "")
+}
+
+/**
  * The game tests, run for every version.
  *
  * `fabricApi.configureTests` hangs these off `check`, so a failing one fails the build. They start a
@@ -173,6 +191,16 @@ project.tasks.matching { it.name == "runClientGameTest" }.configureEach {
     onlyIf { project.name == activeName }
     val saves = project.layout.buildDirectory.dir("run/clientGameTest/saves")
     doFirst { project.delete(saves) }
+
+    // The multiplayer tests start a dedicated server inside the client's own process. C2ME ends the
+    // whole process once a dedicated server has shut down, unless its configuration says otherwise,
+    // which would end the run after the first of them.
+    val c2meConfig = project.layout.buildDirectory.file("run/clientGameTest/config/c2me.toml")
+    doFirst {
+        val file = c2meConfig.get().asFile
+        file.parentFile.mkdirs()
+        file.writeText("version = 3\n\n[fixes]\n\tdisableLoggingShutdownHook = false\n")
+    }
 }
 project.tasks.named("check") {
     dependsOn(project.tasks.matching { it.name == "runClientGameTest" })

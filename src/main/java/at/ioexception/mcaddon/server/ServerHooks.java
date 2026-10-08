@@ -120,11 +120,11 @@ public final class ServerHooks {
             (level, player, pos, broken, blockEntity) -> Sensors.blockBroken(level, player, pos, broken));
         Dialogues.register();
         // One channel and one screen serve both, so the id's sign is what says which is waiting.
-        Channels.receiveFormResponse((formId, answer) -> {
+        Channels.receiveFormResponse((player, formId, answer) -> {
             if (Dialogues.answers(formId)) {
-                Dialogues.respond(formId, answer);
+                Dialogues.respond(player, formId, answer);
             } else if (scripts != null) {
-                scripts.formResponse(formId, answer);
+                scripts.formResponse(player, formId, answer);
             }
         });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
@@ -132,12 +132,15 @@ public final class ServerHooks {
             startState(handler.player);
             playerJoined(handler.player);
         });
-        // A connection is dropped on the thread reading it, and a script belongs to the server
-        // thread, so the event is handed over rather than raised where the drop was noticed.
+        // A connection is dropped on the thread reading it, and a script and the fog stacks belong
+        // to the server thread, so the event is handed over rather than handled where the drop was
+        // noticed.
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             ServerPlayer left = handler.player;
-            PlayerFogs.forget(left);
-            server.execute(() -> playerLeft(left));
+            server.execute(() -> {
+                PlayerFogs.forget(left);
+                playerLeft(left);
+            });
         });
         // A respawn is the other way into the world, and the flag is how a pack tells the two apart.
         ServerPlayerEvents.AFTER_RESPAWN.register((from, to, alive) -> {

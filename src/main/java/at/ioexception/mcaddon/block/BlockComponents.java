@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.block;
 
 import at.ioexception.mcaddon.bedrock.ClientBlockDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.BlockDefinition;
+import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.server.BlockEvents;
 import at.ioexception.mcaddon.util.Json;
@@ -11,7 +12,6 @@ import com.google.gson.JsonObject;
 import net.fabricmc.fabric.api.registry.FlammableBlockRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.LevelReader;
@@ -136,7 +136,8 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
             return faces.stream().anyMatch(face -> {
                 BlockState against = level.getBlockState(position.relative(face.getOpposite()));
                 if (blocks.isEmpty()) return !against.isAir();
-                return blocks.contains(BuiltInRegistries.BLOCK.getKey(against.getBlock()).toString());
+                String id = AddonBlocks.identifierOf(against);
+                return blocks.stream().anyMatch(block -> AddonBlocks.identifierOf(block).equals(id));
             });
         }
     }

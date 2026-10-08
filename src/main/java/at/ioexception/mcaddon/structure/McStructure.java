@@ -1,32 +1,27 @@
 package at.ioexception.mcaddon.structure;
 
+import at.ioexception.mcaddon.registry.AddonBlocks;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
-import net.minecraft.world.level.block.state.properties.BooleanProperty;
-import net.minecraft.world.level.block.state.properties.Property;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.function.Consumer;
-import java.util.function.UnaryOperator;
 
 /**
  * A Bedrock `.mcstructure`, and the world it builds.
  *
  * Bedrock writes its NBT little endian and uncompressed, so Java's own reader cannot open one. The
- * palette carries Bedrock's block names and states, which the registry answers for everything both
- * editions spell the same, a pack's own blocks included. A name the registry has no block for, or a
- * state no property matches, is reported and the rest of the structure is still built.
+ * palette carries Bedrock's block names and states, which {@link AddonBlocks#stateOf} turns into
+ * the Java state they mean, a pack's own blocks included. A name no block answers, or a state no
+ * property matches, is reported and the rest of the structure is still built.
  *
  * A cell holds two blocks: the block itself and what liquid shares its space, which is the only use
  * Bedrock puts the second layer to. That layer becomes Java's waterlogged state.
@@ -34,61 +29,6 @@ import java.util.function.UnaryOperator;
 public final class McStructure {
     /** A palette entry a cell has none of, which Bedrock writes to mean "leave what is there". */
     private static final int KEEP = -1;
-
-    /**
-     * One Bedrock state, as the Java properties it may name and how its value is read.
-     *
-     * A name on its own is not enough for the states that count a direction rather than spelling it:
-     * `facing_direction` is a number and Java wants a word, so a rule carries both halves. The
-     * properties are tried in order, because one Bedrock state can land on either of two Java ones
-     * depending on the block, as an upside-down stair and an upside-down slab do.
-     */
-    private record StateRule(List<String> properties, UnaryOperator<String> value) {
-        static StateRule named(String... properties) {
-            return new StateRule(List.of(properties), UnaryOperator.identity());
-        }
-
-        static StateRule counted(String property, String... words) {
-            return new StateRule(List.of(property), given -> {
-                int index = given.matches("-?\\d+") ? Integer.parseInt(given) : -1;
-                return index >= 0 && index < words.length ? words[index] : given;
-            });
-        }
-    }
-
-    /** The order Bedrock counts a direction in, which is the order Java reads a 3D data value in. */
-    private static final String[] SIDES = {"down", "up", "north", "south", "west", "east"};
-
-    /** The order Bedrock counts the four horizontal directions in, for stairs and for repeaters. */
-    private static final String[] AROUND = {"south", "west", "north", "east"};
-
-    /**
-     * The Bedrock states this knows to be spelled or counted differently from the Java one.
-     *
-     * Bedrock suffixes a flag with `_bit`, which is stripped before a name is looked for, so only
-     * what differs by more than that is here. A state with no entry and no Java property of its own
-     * name is reported rather than guessed at.
-     */
-    private static final Map<String, StateRule> STATE_RULES = Map.ofEntries(
-        Map.entry("pillar_axis", StateRule.named("axis")),
-        Map.entry("toggle", StateRule.named("powered")),
-        Map.entry("button_pressed", StateRule.named("powered")),
-        Map.entry("growth", StateRule.named("age")),
-        Map.entry("liquid_depth", StateRule.named("level")),
-        Map.entry("minecraft:cardinal_direction", StateRule.named("facing")),
-        Map.entry("minecraft:vertical_half", StateRule.named("half", "type")),
-        Map.entry("minecraft:block_face", StateRule.named("facing", "face")),
-        Map.entry("ground_sign_direction", StateRule.named("rotation")),
-        Map.entry("hanging_sign_direction", StateRule.named("rotation")),
-        Map.entry("facing_direction", StateRule.counted("facing", SIDES)),
-        Map.entry("weirdo_direction", StateRule.counted("facing", AROUND)),
-        Map.entry("direction", StateRule.counted("facing", AROUND)),
-        // Java splits a torch into a standing block and a wall block, so only the four that name a
-        // wall carry across; `top` and `unknown` name the other block and are reported instead.
-        Map.entry("torch_facing_direction", StateRule.named("facing")),
-        // Stairs carry it as `half`, slabs as `type`, and Java spells both ends the same way.
-        Map.entry("upside_down", new StateRule(List.of("half", "type"),
-            given -> "1".equals(given) || "true".equals(given) ? "top" : "bottom")));
 
     private final int width;
     private final int height;
@@ -219,63 +159,13 @@ public final class McStructure {
         if (index < 0 || index >= palette.size()) return Blocks.AIR.defaultBlockState();
 
         Palette entry = palette.get(index);
-        Identifier id = Identifier.tryParse(entry.name());
-        Block block = id == null ? null : BuiltInRegistries.BLOCK.getOptional(id).orElse(null);
-        if (block == null) {
+        BlockState state = AddonBlocks.stateOf(entry.name(), entry.states(),
+            detail -> report.accept("Structure " + detail));
+        if (state == null) {
             report.accept("Structure block " + entry.name());
             return Blocks.AIR.defaultBlockState();
         }
-
-        BlockState state = block.defaultBlockState();
-        for (Map.Entry<String, Object> chosen : entry.states().entrySet()) {
-            state = applied(state, entry.name(), chosen.getKey(), chosen.getValue(), report);
-        }
         return state;
-    }
-
-    private static BlockState applied(BlockState state, String block, String name, Object value,
-        Consumer<String> report) {
-        String bare = name.toLowerCase(Locale.ROOT);
-        String stripped = bare.endsWith("_bit") ? bare.substring(0, bare.length() - 4) : bare;
-        StateRule rule = STATE_RULES.getOrDefault(bare, STATE_RULES.get(stripped));
-
-        Property<?> property = propertyNamed(state, rule, bare, stripped);
-        if (property == null) {
-            report.accept("Structure block state " + block + "[" + name + "]");
-            return state;
-        }
-
-        String written = text(value, property);
-        return set(state, property, rule == null ? written : rule.value().apply(written), block, report);
-    }
-
-    private static <T extends Comparable<T>> BlockState set(BlockState state, Property<T> property,
-        String value, String block, Consumer<String> report) {
-        T parsed = property.getValue(value).orElse(null);
-        if (parsed == null) {
-            report.accept("Structure block state " + block + "[" + property.getName() + "=" + value + "]");
-            return state;
-        }
-        return state.setValue(property, parsed);
-    }
-
-    /** Bedrock writes a flag as a byte and Java parses it from the words the property spells it with. */
-    private static String text(Object value, Property<?> property) {
-        if (property instanceof BooleanProperty && value instanceof Number flag) {
-            return flag.intValue() == 0 ? "false" : "true";
-        }
-        return String.valueOf(value);
-    }
-
-    /** The property a state names, under its own spelling first and then the ones its rule offers. */
-    private static Property<?> propertyNamed(BlockState state, StateRule rule, String bare, String stripped) {
-        List<String> candidates = new ArrayList<>(List.of(bare, stripped));
-        if (rule != null) candidates.addAll(rule.properties());
-
-        return candidates.stream().distinct()
-            .map(candidate -> state.getBlock().getStateDefinition().getProperty(candidate))
-            .filter(java.util.Objects::nonNull)
-            .findFirst().orElse(null);
     }
 
     /** One block the structure names, under Bedrock's spelling of it. */

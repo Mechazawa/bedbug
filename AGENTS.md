@@ -164,6 +164,34 @@ These are the checks it runs, and what each one catches:
     site, bed and bell, and a barrel is the fisherman's, so it answers with the nearest trial
     chamber or Terralith refinery as readily as a village. `/locate structure #minecraft:village` is
     the question about villages.
+
+  **Multiplayer is asserted against a dedicated server.** The three `Server*ClientGameTest`s call
+  `worldBuilder().createServer()` and `connect()`, so the client reaches the server over a real TCP
+  connection on which every message is encoded, which a single player world's in-memory connection
+  never does. `ServerRegistryClientGameTest` compares every add-on entity type, item, block, sound
+  event and biome by number on both sides and sends an item stack and a block state across;
+  `ServerEntityClientGameTest` follows a wisp's type, a `client_sync` property, a component group's
+  box and drawn size, a wisp settled before the client could see it, and `/playanimation` on a wisp
+  and a villager; `ServerPlayerClientGameTest` adds a second player, `Bystander`, and asserts a form,
+  `/camera`, `/camerashake` and `/fog` reach the player they name and nobody else, that a form's
+  answer counts only from its own player, and that the test pack's eight hundred button catalogue
+  arrives whole.
+
+  What the dedicated server runs on: Fabric starts it with `net.minecraft.server.Main` inside the
+  client's own process and in the same run directory, so it has the same mods, reads the same
+  `addons/` that `installClientTestPack` fills, and writes its world to `world/`, which Fabric
+  deletes before each one. Three things follow:
+
+  - **The built-in registries and every static field are one copy shared by both sides.** A
+    registry id cannot disagree here and a client reading server state by mistake would pass, so
+    assert on what crossed the connection (an entity, a stack, a payload) rather than on statics.
+  - **C2ME ends the whole process once a dedicated server shuts down**, which ended the run after
+    the first of these tests and still reported success. `runClientGameTest` writes
+    `config/c2me.toml` with `fixes.disableLoggingShutdownHook = false` first, which turns that off.
+  - **Fabric's client `DISCONNECT` is raised on the network thread** when a remote connection drops.
+    Anything a handler clears that the render thread also reads has to be handed to the client
+    thread, which is what the first of these tests to disconnect found as a
+    `ConcurrentModificationException`; the server's own `DISCONNECT` is handed over the same way.
 - **`tools/testpack/build.py`** builds a small add-on to check the mod against, so a clean checkout
   has something to verify itself with. Put it where the game reads packs from:
 
@@ -339,7 +367,12 @@ These are the checks it runs, and what each one catches:
   `FormClientGameTest`, run by `./gradlew :26.2:runClientGameTest` and part of `check`, opens it,
   turns the page and asserts the same screen now draws the second page and not the first, then
   closes it both ways and reads the tag back: a form whose button press closed the screen, or whose
-  observables reached the screen only once, fails there.
+  observables reached the screen only once, fails there. The same script answers
+  `/scriptevent "tp:catalogue"` with an `ActionFormData` of eight hundred buttons, whose description
+  is longer than the 32767 characters a plain network string carries.
+
+  `animation.tp.wisp.lift` raises the wisp's one bone by four pixels for two seconds, which is what
+  `/playanimation` on an add-on entity is measured by.
 
   The same script watches the game's own villagers the way a pack replacing them does, in Bedrock's
   ids throughout: it compares `typeId` against `minecraft:villager_v2` and `minecraft:xp_orb` as
@@ -362,6 +395,15 @@ These are the checks it runs, and what each one catches:
   parse. The dialogue's first button runs `xp 1L`, and `/scriptevent "tp:stock_up"` gives the player
   `tp:dust` unless `hasitem` finds one on them; `PackCommandClientGameTest` presses the button and
   asks for the dust twice, and reads back one level gained and one dust carried.
+
+  Four more things name the game's own items and blocks by Bedrock's ids, each of which Java's
+  parser refuses as written and refuses whole: `loot_tables/names.json` drops `golden_rail`,
+  `muttonRaw` and `wool` with a data value of fourteen, `recipes/lantern_from_rail.json` crafts a
+  `lit_pumpkin` out of a `golden_rail`, `functions/names.mcfunction` gives `record_13` and places a
+  `golden_rail` and a `wool` written with `["color"="red"]`, and `/scriptevent "tp:names" <x> <y> <z>`
+  has the script read a powered rail's `typeId` and place a `BlockPermutation` resolved from
+  `minecraft:lit_pumpkin`. `NamesGameTests` reads each back as the Java item or block, and every
+  one of the four fails when the mapping is taken out.
 - **`tools/testpack/build_modules.py`** builds a second add-on, whose script imports every
   `@minecraft/*` module the mod provides and calls one thing from each. Its sources are a manifest
   and one script under `tools/testpack/modules/`.
@@ -1111,6 +1153,37 @@ player who starts watching later sees whatever the pack plays next, as on an add
   the attribute instance rather than the supplier. What is left off is a name with no read at all,
   taken from the same set `components.py` prints as implemented with no reader of its own: those
   are the components Java does for every mob anyway, so where a pack declared one decides nothing.
+- **`tools/census/ids.py`** counts the nouns rather than the vocabulary: which of the item and block
+  ids Bedrock's own material writes resolve to a Java one. A pack names vanilla things by Bedrock's
+  ids, a few hundred of which are not Java's, and one that resolves to nothing costs a whole loot
+  table, recipe or function.
+
+  ```bash
+  bash tools/census/fetch.sh
+  python3 tools/census/ids.py            # the table, then every unanswered id and where it is written
+  python3 tools/census/ids.py --own      # and the ids declared Bedrock's own
+  python3 tools/census/ids.py --strict   # exits non-zero while an id is unanswered
+  ```
+
+  The published side is the vanilla data modules under `metadata/vanilladata_modules` in
+  `bedrock-samples`, every id its behaviour pack writes in a loot table, recipe, trade table, entity,
+  spawn rule, biome, block, item, feature or feature rule (by the keys that name an item or a block,
+  less anything the same material uses as an item tag), and the `@minecraft/vanilla-data` 1.20.0
+  tables `fetch.sh` puts in `scratchpad/mcapi`, which still carry the family ids (`wool`, `log`,
+  `stone_block_slab`) packs of that time write. The mod's side is the mapping itself rather than a
+  reading of its source: `./gradlew :<version>:idCensus` runs every id through `BedrockItemNames`
+  and `BedrockBlockNames` on the unit tests' classpath, because which Java spelling answers depends
+  on the registry of the version that runs it.
+
+  An id is answered, Bedrock's own, or unanswered. **Bedrock's own** is what
+  `BedrockBlockNames.bedrockOnly` and `BedrockItemNames.bedrockOnly` declare Java has nothing for:
+  the education edition's chemistry and hardened glass, the building permission blocks, Bedrock's
+  technical blocks, the experiments Java has not shipped, an item frame (an entity in Java), and
+  an item Java keeps none of. **The unanswered column has to stay at zero.**
+
+  Measured on 26.2 against bedrock-samples, over 1979 item ids and 1711 block ids written there:
+  1632 items and 1166 blocks resolved as written, and with the mapping 1869 items and 1408 blocks
+  resolve, the 110 and 303 left being Bedrock's own and none unanswered.
 
 ## Conventions
 
@@ -1190,6 +1263,7 @@ tools/census/data.py         The same, for loot tables, recipes and trade tables
 tools/census/packfiles.py    Coverage of the file kinds a pack may ship, against the ones read
 tools/census/manifest.py     Coverage of the fields a manifest may carry, against the ones read
 tools/census/declaration.py  Where a pack declares a component, against where the mod reads it
+tools/census/ids.py          Which item and block ids Bedrock writes resolve to a Java one
 tools/checkall.sh            Every check, in the order that fails fastest
 tools/census/script.py       How much of the published script API this mod offers
 tools/scene/scene.py         Scenes run inside the game, with nobody at the keyboard
@@ -1241,5 +1315,13 @@ the surface reports (`typeId`, `EntityTypes`, event payloads, families) and `Add
 is what it accepts (spawns, queries, filters), with `BedrockEntityNames` holding the vanilla ids
 the two editions spell differently in both directions. Compare two names through `identifierOf`,
 never the raw registry key, or `minecraft:villager` and `minecraft:villager_v2` read as two types.
-Item and block ids cross unchanged, so Bedrock-only spellings such as `minecraft:golden_rail` do
-not resolve in a script.
+
+**So does an item and a block, everywhere a pack names one.** `AddonItems.named` and
+`AddonBlocks.named` (or `AddonBlocks.stateOf`, where Bedrock's states pick the block) are what a
+name from a pack becomes, and `AddonItems.identifierOf` and `AddonBlocks.identifierOf` are what the
+game's own item or block state is reported and compared as. `BedrockItemNames` and
+`BedrockBlockNames` hold the spellings in both directions, with `DataValues` for the families a data
+value or a named state picks a member of. A Bedrock id may be a Java block in a state of its own, so
+the way back starts from a `BlockState`: a lit furnace reports itself as `minecraft:lit_furnace`. A
+command line is translated through `BedrockBlockNames.Resolved.command`, which writes only the
+properties the pack named, because a test for a block asks about those and no others.

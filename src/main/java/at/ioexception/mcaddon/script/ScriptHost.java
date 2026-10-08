@@ -6,6 +6,7 @@ import at.ioexception.mcaddon.pack.PackRole;
 import at.ioexception.mcaddon.resource.AddonPacks;
 import at.ioexception.mcaddon.state.AddonState;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.PolyglotException;
@@ -268,8 +269,12 @@ public final class ScriptHost {
         }, null);
     }
 
-    /** Hands a form's answer back to the promise the pack is waiting on. */
-    public void formResponse(int formId, String answer) {
+    /**
+     * Hands a form's answer back to the promise the pack is waiting on, when it comes from the
+     * player the form was shown to. The id is all an answer names, and any client can send any id.
+     */
+    public void formResponse(ServerPlayer player, int formId, String answer) {
+        if (!bridge.shownTo(formId, player)) return;
         enter("handling a form answer", () -> {
             Value forms = context.getBindings("js").getMember("__mcaddon_forms__");
             if (forms != null) forms.invokeMember("respond", formId, answer);

@@ -65,10 +65,9 @@ public final class AddonBrewing {
     }
 
     private static Item item(String named) {
-        Identifier id = identifier(named);
-        Optional<Item> found = id == null ? Optional.empty() : BuiltInRegistries.ITEM.getOptional(id);
-        if (found.isEmpty()) AddonEntities.unsupported("brewing ingredient " + named);
-        return found.orElse(null);
+        Item found = named == null ? null : AddonItems.named(named);
+        if (found == null) AddonEntities.unsupported("brewing ingredient " + named);
+        return found;
     }
 
     private static Identifier identifier(String named) {

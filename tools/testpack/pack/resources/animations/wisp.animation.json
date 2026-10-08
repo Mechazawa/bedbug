@@ -1,0 +1,13 @@
+{
+  "format_version": "1.8.0",
+  "animations": {
+    "animation.tp.wisp.lift": {
+      "animation_length": 2.0,
+      "bones": {
+        "core": {
+          "position": [0, 4, 0]
+        }
+      }
+    }
+  }
+}
