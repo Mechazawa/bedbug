@@ -91,6 +91,10 @@ BENIGN = (
     r"Failed to load properties from file: server\.properties",
     # Sodium turns off the mixins Iris replaces, which is how the two are meant to work together.
     r"\(Sodium\) Force-disabling mixin",
+    # The narrator's speech library is a system package many Linux machines do not carry, and the
+    # game only loses its narrator without it. The library path it prints names `sponge-mixin`.
+    r"Error while loading the narrator",
+    r"flite",
 )
 
 # What has to be in the log of a run that worked.
