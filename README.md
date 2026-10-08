@@ -78,6 +78,22 @@ server decides what happens; the client draws it.
   place it chose. One given the ender dragon's death takes the dragon's two hundred ticks over it
   rather than a mob's twenty. And one declaring hit boxes wider than the box it collides in is hit
   where it looks hit, by a swing and by an arrow alike, while still fitting through the same gap.
+  A projectile turning `isolated_physics` off, as Mojang's own arrows do, is moved the way any
+  entity is, so it stops against what it hits and a cobweb holds it back.
+- What the world does to a pack's entity. Powder snow freezes it unless `minecraft:freezing_immune`
+  says it never freezes, the cold hurts it five times over where `minecraft:freezing_vulnerable`
+  says so, powder snow bears its weight under `minecraft:can_stand_on_powder_snow`, and the blocks
+  `minecraft:block_movement_slowdown_immunity` lists let it through at full speed, Bedrock's `web`
+  being Java's cobweb. Each is asked of the entity rather than of its type, so a group bringing one
+  in changes the entity while the group is on. `minecraft:uses_legacy_ambient_sounds` picks its idle
+  sound by whether its head is under water, it is off the ground or it is young, from the moments
+  its `sounds.json` names. A group taking `minecraft:leashable` or `minecraft:leashable_to` away
+  lets go of the lead, which is what `unleash_on_removal` asks for and defaults to.
+- An entity in a bucket. `minecraft:bucketable` lets a player scoop the entity up with a water
+  bucket and let it out again in the same component groups it was scooped up in. The component
+  names no item, and Java holds a fish in an item per kind of fish, so each such entity is carried
+  in a bucket under its own id with `_bucket` after it, drawn as a bucket of water and named after
+  what is inside.
 - What a pack writes on the player rather than on an entity of its own. Bedrock reads
   `minecraft:player.hunger`, `player.saturation`, `player.exhaustion`, `player.level` and
   `player.experience` on nothing but the player, so a pack states them in its own
@@ -110,12 +126,18 @@ server decides what happens; the client draws it.
   it can name one, and that definition is the sound the jukebox plays. A record naming a sound the
   pack never defined has nothing to play and is reported rather than registered silent.
 - The custom components a pack registers from its own script, on its own blocks and items: placing,
-  breaking, clicking, standing on and ticking each reach the pack's own callback.
+  breaking, clicking, standing on and ticking each reach the pack's own callback. Both of Bedrock's
+  spellings are read: the list under `minecraft:custom_components` an older pack writes, and from
+  1.21.90 each component as a key of its own, whose body reaches the callback as its `params`.
 - Blocks, with the states and permutations a pack declares: each combination gets its own model, the
   permutation conditions are evaluated through the Molang evaluator, and a block drawn with its own
   geometry keeps it. A block naming one of the pack's own `shapes/` under `culling_shape` hides the
   faces that shape covers, which is what a Bedrock voxel shape is for and what a Java occlusion
-  shape does.
+  shape does. A face of a block's geometry naming a material instance wears the texture the block's
+  `minecraft:material_instances` gives that instance, and the geometry's `item_display_transforms`
+  turn, move and scale the block's item in either hand, on the head, on the ground, in a frame, in
+  the inventory and, from 26, on a shelf. A block's own `minecraft:sound` names the sound group it
+  makes its noises from, and outranks the one `blocks.json` names.
 - The events a block declares, fired the way Bedrock fires them: on its own clock, on a random tick,
   and on the block being placed, broken, clicked, stepped on, stepped off or landed on. Each one runs
   the commands the event queues and writes back the states it sets, with its Molang condition checked
@@ -148,16 +170,16 @@ server decides what happens; the client draws it.
   from, so a converted recipe reaches the recipe book the way a vanilla one does.
 - Loot tables, with the functions that set a count, a damage, a potion, a named enchantment, a
   random enchantment at a level, an armour trim, an illager captain's banner, a suspicious stew's
-  effects, an explorer map, an ominous bottle's amplifier and a drop that grows with looting, and
-  the gear a mob spawns in enchanted by the rule Java's own spawning enchants it with. A condition
-  Java has a predicate for becomes that predicate; one it has none for is asked by this mod as the
-  loot is rolled, which is how an entity's variant, a property a pack declared, the world and the
-  regional difficulty, a kill by a player's pet, a Bedrock biome tag and what a mob has just
-  swallowed all still decide a drop. That last one is `entity_killed`, which belongs to the table
-  `minecraft:behavior.eat_mob` names rather than to a death drop: the goal rolls it as the meal goes
-  down, so the mob doing the killing is the entity the loot is about. A function Java has none of is
-  answered the same way: a book drops carrying one of the enchantments the pack listed, at a level
-  out of that enchantment's own range.
+  effects, an explorer map, an ominous bottle's amplifier, a drop that grows with looting and one a
+  blast thins out, and the gear a mob spawns in enchanted by the rule Java's own spawning enchants
+  it with. A condition Java has a predicate for becomes that predicate; one it has none for is asked
+  by this mod as the loot is rolled, which is how an entity's variant, a property a pack declared,
+  the world and the regional difficulty, a kill by a player's pet, a Bedrock biome tag and what a
+  mob has just swallowed all still decide a drop. That last one is `entity_killed`, which belongs to
+  the table `minecraft:behavior.eat_mob` names rather than to a death drop: the goal rolls it as the
+  meal goes down, so the mob doing the killing is the entity the loot is about. A function Java has
+  none of is answered the same way: a book drops carrying one of the enchantments the pack listed,
+  at a level out of that enchantment's own range.
 - `.mcfunction` files translated into Java's command dialect with a `tick` function tag.
 - Natural spawning from a pack's `spawn_rules`, with each alternative the rule lists becoming a
   biome spawn entry of its own. The weight, the group size and the biome tags decide which biomes
@@ -239,14 +261,17 @@ server decides what happens; the client draws it.
   and nothing else on disk. Commands a script registers on startup become real commands,
   `@minecraft/server-ui` forms become real screens (a 2.x `CustomForm` stays open while its buttons
   run their handlers and redraws as its observables change), and the world, system, entity, dimension, block,
-  scoreboard, game rule and structure surfaces are answered by the game.
+  scoreboard, game rule and structure surfaces are answered by the game. A player's fog stack is the
+  one `/fog` keeps, a camera shake is the one `/camerashake` sends, and a dimension clones a region
+  through Java's own `/clone`, with a filter picking the blocks one at a time.
 - The world events a script subscribes to, raised out of the game rather than out of a pack's own
   data: what a player breaks, places, uses, picks up and swings at, where they go and what they
   hold, the weather turning and a game rule being set, an explosion and each block it takes, a
   piston going out and coming back, a pressure plate, a tripwire, a target block, a button and a
-  lever, and a container opening and closing on a block or on an entity. An explosion is offered
-  first as a before event, so a listener can call one off, and the blocks it names are the ones
-  still standing.
+  lever, a container opening and closing on a block or on an entity, a player crouching and standing,
+  and a wolf, a cat, a parrot, a horse or a pack's own entity being tamed. An explosion and a tame
+  are offered first as before events, so a listener can call one off, and the blocks an explosion
+  names are the ones still standing.
 - The tests a behaviour pack ships through `@minecraft/server-gametest`. `/gametest run <name>`,
   `/gametest runset <tag>` and `/gametest runall` build the structure a test named out of the pack's
   own `.mcstructure`, place it beside you, hand the pack's function a `Test` bound to that area and
@@ -286,27 +311,27 @@ compare what they read against the names this mod acts on:
 
 | Surface | Answered |
 | --- | --- |
-| Entity components | 99% |
+| Entity components | 100% |
 | Entity AI goals | 100% |
 | Entity filters | 100% |
 | Molang queries | 100% |
 | Molang maths | 100% |
 | Block components | 100% |
-| Item components | 88% |
-| Command names | 78% |
-| Command keywords | 63% |
-| Game rules | 78% |
+| Item components | 90% |
+| Command names | 82% |
+| Command keywords | 68% |
+| Game rules | 81% |
 | Particle components | 100% |
 | Particle component fields | 100% |
 | Particle curves and Molang variables | 100% |
-| Loot table functions | 83% |
+| Loot table functions | 100% |
 | Loot table conditions | 100% |
 | Recipe types | 100% |
 | Recipe fields | 100% |
 | Trade table fields | 100% |
-| Trade item functions | 80% |
+| Trade item functions | 100% |
 | Geometry, animation and controller fields | 97% |
-| Pack file kinds | 88% |
+| Pack file kinds | 92% |
 | Manifest fields | 58% |
 | `@minecraft/server` and friends | 100% |
 
@@ -321,14 +346,6 @@ get the current figures; the ones above are a snapshot.
 exhaustion per level through `ApplyExhaustion`, so the price is charged there; 1.20.1 and 1.21.1
 have neither the enchantment nor that effect, and on those two it is counted and named by `/mcaddon
 entities` as `minecraft:exhaustion_values lunge`. The other nine prices are charged on all four.
-
-**An entity in a bucket.** `minecraft:bucketable` would make a mob one a bucket picks up, which Java
-has an interface for: a mob implementing `Bucketable` answers `getBucketItemStack()` with the item
-the player is left holding. What the component does not say is which item that is. Its whole
-published schema is `{"title": "minecraft:bucketable", "type": "object"}` with no `properties` and
-the one-line description "Defines interactions with this entity", no entity in the vanilla behaviour
-pack declares it, and no documentation names a field, so there is nothing in a pack to build the
-bucket out of. It is counted and named.
 
 **Aim assist and the device memory tier a client reports** describe a Bedrock client rather than a
 world, and are counted and named the same way.
@@ -549,12 +566,14 @@ the second block to.
 **A sixth of Bedrock's commands.** The seventeen left divide two ways. `aimassist`, `controlscheme`
 and `inputpermission` describe a controller, a touchscreen and what a Bedrock client lets a player
 do, and `packstack` and `project` describe that client's pack list and the Bedrock Editor.
-`connect`, `wsserver`, `sendshowstoreoffer`, `setmaxplayers`, `ops`, `permission`,
-`editor-allowlist`, `reloadconfig` and `reloadpacketlimitconfig` speak to a websocket server, a
-marketplace or a Bedrock server's own configuration. `hud` is the one of the seventeen a Java client
-could be told to draw, and what it would cost is set out above. A function using any of them keeps
-its other lines and the dropped command is reported, and so is a line whose selector asks for
-something Java cannot select on, such as `hasitem`.
+`connect`, `wsserver`, `sendshowstoreoffer`, `ops`, `permission`, `editor-allowlist`,
+`reloadconfig`, `reloadpacketlimitconfig` and `serveridentity` speak to a websocket server, a
+marketplace or a Bedrock server's own configuration and identity. `setmaxplayers` sets the limit for
+one session where Java keeps it as `max-players` in `server.properties`, which 26 writes back to the
+file, so a limit Bedrock forgets at the end of the session would outlive it here. `hud` is the one
+of the seventeen a Java client could be told to draw, and what it would cost is set out above. A
+function using any of them keeps its other lines and the dropped command is reported, and so is a
+line whose selector asks for something Java cannot select on, such as `hasitem`.
 
 **One form of a command the rest of which translates.** A `ride` that summons what it mounts or
 empties a vehicle, a `music` that loops, a `structure` mirrored on both axes or placed a block at a
@@ -575,15 +594,20 @@ Java's `schedule function <function> <time> [append|replace]` with one keyword m
 words at the end, and `schedule clear` is spelled alike in both. `schedule on_area_loaded`, which
 waits for chunks, is the form Java keeps no queue for and the one that is reported.
 `playanimation`, `event`, `scriptevent`, `music`, `toggledownfall`, `structure`, `mobevent`,
-`particle`, `dialogue`, `gametest` and `transfer` are registered by this mod, and a line using one is
-written out in the form the command built here reads. `transfer` hands a player to another server,
+`particle`, `dialogue`, `gametest`, `transfer` and `clearspawnpoint` are registered by this mod, and
+a line using one is written out in the form the command built here reads. `clearspawnpoint` takes a
+player's respawn point away, which Java's `/spawnpoint` can only give. `transfer` hands a player to another server,
 which Java carries as `ClientboundTransferPacket` from 1.20.5 rather than as a command of its own; a
 line naming no port means the port a Java server listens on, because a Java client sent to Bedrock's
 own 19132 reaches nothing. 1.20.1 has no such packet and the command says so rather than reporting a
 move that never happened. Of Bedrock's thirty-seven game rules, the
 twenty-five every supported version of Java has are set under the name that version knows them by,
-which 26 changed, and four more reach a rule only the newer versions hold. The remaining eight name
-a Bedrock heads-up display or a limit Java keeps no rule for, and are reported.
+which 26 changed, and four more reach a rule only the newer versions hold. `functioncommandlimit`
+caps the commands one function runs, which Java caps with the rule it caps a chain of command blocks
+with, so it sets that rule. The remaining seven are reported: five switch a piece of Bedrock's screen
+Java draws whatever a rule says, `recipesunlock` holds back recipes Java grants through an
+advancement each, and `respawnblocksexplode` stops beds and anchors exploding where Java's own
+blocks do it unconditionally.
 
 **The player a test drives itself.** `Test.spawnSimulatedPlayer` and every member of the
 `SimulatedPlayer` it answers with describe a player the game walks, attacks and builds with. Java's
@@ -612,15 +636,34 @@ data on failures Bedrock raises where this mod answers instead: a book is writte
 asks, and an entity or an item that has gone reads as invalid rather than throwing. The errors are
 exported, so a pack catching one by name still compiles, and each of their members is counted.
 
-**Four world events nothing in Java raises.** `entityUpgrade` fires when Bedrock migrates an entity
+**How long a sound plays.** `playSound` hands back a `SoundInstance` carrying its id, the sound
+and who it was played for. Bedrock follows a sound's lifetime on the server only where a server sound
+definition, a beta file of its own, gives the sound a duration, and that is what `durationInfo`,
+`SoundDefinitionRegistry`, `SoundDurationInfo` and `world.afterEvents.soundCompleted` all read.
+Nothing here reads such a file, so each of those is counted and named, and so is
+`SoundInstance.stop`, which Java can only do for every copy of a sound a player hears at once.
+
+**A block's store carried on its item.** `ItemBlockDynamicPropertiesComponent` is the store of a
+block entity riding on the item that places the block. Java keeps a block entity's data on its item
+as the data that block entity writes, and nothing here moves a script's store onto an item and back
+off it, so each of its members is counted and named.
+
+**Three parts of how a block's item is shown.** A geometry's `item_display_transforms` may name an
+`embedded` context, which is how a block draws as the visual another block embeds, and Java has no
+such context. It may give a rotation or a scale a pivot of its own, where Java turns and scales a
+model about its middle, and it may ask for the item to be fitted to its frame in the inventory,
+which Java never does. Each of the three is counted and named; the rest of the transform is applied.
+
+**Five world events nothing here raises.** `entityUpgrade` fires when Bedrock migrates an entity
 to a newer version of the definition a pack wrote, which is a step in reading a pack rather than
 anything that happens in a world: this mod reads one definition and keeps it. `playerEmote` names a
 persona piece, and a persona is a Bedrock skin. `playerInputModeChange` says whether somebody is on a
 keyboard, a controller, a touchscreen or a motion controller, and `playerInputPermissionCategoryChange`
 follows Bedrock's `inputpermission` command, which takes movement and the camera away from a player.
-A Java client tells the server nothing about the device it is on, and Java has no such command. Each
-of the four hands a pack a signal of the class Bedrock names, so subscribing works, and `/mcaddon
-scripts` says the event is never raised.
+A Java client tells the server nothing about the device it is on, and Java has no such command.
+`soundCompleted` waits on the declared duration of a sound, which nothing here reads, as set out
+above. Each of the five hands a pack a signal of the class Bedrock names, so subscribing works, and
+`/mcaddon scripts` says the event is never raised.
 
 **Four spawn rule conditions with nothing to ask in Java.** `minecraft:permute_type` swaps the
 entity that spawns for another one after the biome list has already chosen a type.

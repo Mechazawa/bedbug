@@ -1038,6 +1038,12 @@ public final class BehaviourGameTests {
         }
 
         EntityEvents.trigger(wintry, "tp:ember_winter", null, ServerHooks.state());
+        // Before 26 an entity finds out what it stands in only by moving, which a mob without its
+        // goals never does, so both are given their goals back and no speed to stroll off with.
+        for (AddonEntity ember : List.of(plain, wintry)) {
+            ember.setNoAi(false);
+            ember.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(0);
+        }
         helper.runAfterDelay(FREEZING_TICKS, () -> {
             helper.assertTrue(plain.getTicksFrozen() > 0, "Powder snow froze no ember at all.");
             helper.assertTrue(wintry.getTicksFrozen() == 0, ENTITY + " carries "

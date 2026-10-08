@@ -226,8 +226,25 @@ These are the checks it runs, and what each one catches:
   more, a `minecraft:fire_immune`, because the ember declares that at the top level and an entity
   already immune shows nothing about a group.
 
+  Four more carry what the world does to an entity and what it sounds like. The wintry group holds
+  a `minecraft:freezing_immune`, a `minecraft:can_stand_on_powder_snow` and a
+  `minecraft:block_movement_slowdown_immunity` naming the cobweb the way Bedrock spells it,
+  `minecraft:web`; the thawing group holds a `minecraft:freezing_vulnerable`; the chatty group a
+  `minecraft:uses_legacy_ambient_sounds`, whose four idle moments the resource pack's `sounds.json`
+  names for the ember, each a sound definition of its own; and the scoopable group a
+  `minecraft:bucketable`. Each is read back through what Java does with it: a plain ember beside the
+  wintry one is what says the powder snow froze anything at all, a cobweb's slowdown is applied and
+  the move after it measured, the shape powder snow hands an entity standing on it is asked for, one
+  freezing blow lands on a plain ember and on a thawing one, the idle sound is asked for on the
+  ground, in the air, young and under water, and the scoopable ember is scooped into its bucket and
+  let out again in the groups it went in with. The laden group also carries a
+  `minecraft:leashable_to` beside its `minecraft:leashable`, both stating `unleash_on_removal`, so
+  unloading it lets go of both ends of a lead.
+
   Two more entities are there for what a mob walking about never reaches. One is a projectile with
-  hit boxes wider than the box it collides in; the other shoots it, rides rails, remembers what comes
+  hit boxes wider than the box it collides in, which turns `isolated_physics` off the way Mojang's
+  own arrows do, so it is moved the way any entity is and a row of cobwebs holds it back; the other
+  shoots it, rides rails, remembers what comes
   near it and dies the ender dragon's long death. A third file describes `minecraft:player`, which is
   a definition of an entity the game already has: nothing on it is applied and every component on it
   is named, which is the only way `minecraft:player.hunger` and the five beside it reach
@@ -268,7 +285,19 @@ These are the checks it runs, and what each one catches:
   alone, which is what says both tables were read while the pack was open. A fifth table is the meal
   one, whose two pools each ask `entity_killed` about a different kind of mob: that condition is
   about the moment `minecraft:behavior.eat_mob` rolls a table rather than about a death, so the game
-  test writes down what the entity swallowed and reads back which of the two pools fired.
+  test writes down what the entity swallowed and reads back which of the two pools fired. A sixth,
+  `rubble`, hands out a full stack under `explosion_decay`, which a game test rolls inside a blast
+  and outside one.
+
+  The lamp names its sound group in its own `minecraft:sound`, glass, and the pack ships no
+  `blocks.json`, so the block sounding like glass says the behaviour pack's component was read. The
+  top of its shade names a `glow` material instance, which the lamp's `minecraft:material_instances`
+  paints with a texture of its own, and its geometry states how its item is turned in the inventory,
+  lifted on a shelf and shown embedded, the last of which Java has no context for.
+  `aBlockModelKeepsItsMaterialInstancesAndItsItemDisplay` reads the converted model back. The item
+  `tp:tally` names a custom component the way a pack does from 1.21.90, as a key of its own with a
+  `step` in its body, which the script registers and answers by tagging whoever used the item with
+  that step.
 
   The worldgen side is a biome, five features and two rules. The biome carries the components a Java
   biome has a field for and four it has none of, so both halves of the reporting path run. The
@@ -325,6 +354,15 @@ These are the checks it runs, and what each one catches:
   turns the page and asserts the same screen now draws the second page and not the first, then
   closes it both ways and reads the tag back: a form whose button press closed the screen, or whose
   observables reached the screen only once, fails there.
+
+  Beside the handbook the script answers probes, each a script event `ScriptGameTests` runs as a
+  mock player and each answered by tagging that player with what the script read back: one pushes
+  and pops the pack's fog on the player's fog stack, one clones a row of blocks through a filter and
+  then moves it, one asks a volume for its nearest and farthest positions, and one asks a block what
+  a note block plays off it and stores a value in the block's own store. Two more shake the
+  player's camera and stop it, which only a client can show, so `CameraShakeClientGameTest` reads
+  the shake back off the client. The script also refuses to let anything tagged `tp:untameable` be
+  tamed, tags whatever a player tamed, and tags a player crouching and standing up again.
 - **`tools/testpack/build_modules.py`** builds a second add-on, whose script imports every
   `@minecraft/*` module the mod provides and calls one thing from each. Its sources are a manifest
   and one script under `tools/testpack/modules/`.
@@ -840,6 +878,10 @@ decide what it acts on and a reported field is still a dropped one.
   an arrow, an egg, a fireball, both potions, a leash knot, an item sprite, an experience bottle and
   a fireworks rocket. What it does to a pass is not established from the published material, so
   nothing is done with it rather than something guessed at.
+- **Part of `item_display_transforms`.** A block geometry's transforms become its Java model's
+  `display`, Bedrock's `shelf` becoming Java's `on_shelf` from 26. The `embedded` context, the two
+  pivots and `fit_to_frame` are reported in `BlockGeometry.display`, because Java has no context for
+  an embedded visual, turns and scales a model about its middle, and never fits an item to its frame.
 - **`parent_setup` and `binding`** are reported only for the wearer they cannot reach. An attachable
   writes the first into whoever is carrying it and hangs itself off the bone the second names, which
   both work for a pack's own entity and have nowhere to land on one Java draws with a model of its
