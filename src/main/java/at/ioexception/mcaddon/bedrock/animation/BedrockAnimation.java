@@ -73,8 +73,4 @@ public record BedrockAnimation(
     public float startDelaySeconds(MolangEnvironment environment) {
         return startDelay == null ? 0f : startDelay.asFloat(environment);
     }
-
-    public boolean finished(float elapsed) {
-        return loop != Loop.LOOP && elapsed >= length;
-    }
 }

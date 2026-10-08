@@ -7,10 +7,12 @@ import net.minecraft.world.entity.Entity;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Runs the animations playing on one entity and works out where its bones end up.
@@ -50,6 +52,19 @@ public final class AnimationPlayer {
         /** What the controller state asking for this clip declared, which the poses read back. */
         boolean shortestPath;
 
+        /**
+         * Started by an animate list or a controller state rather than by a command.
+         *
+         * Such a clip that does not loop plays once for as long as it is asked for: once over it
+         * stays in place, posing nothing, so it is not started again on the next frame and its
+         * state can see that it finished.
+         */
+        boolean kept;
+        boolean ended;
+
+        /** Whether the clip has reached its end at least once, which a looping one does as it wraps. */
+        boolean playedThrough;
+
         Running(BedrockAnimation animation) {
             this.animation = animation;
         }
@@ -74,6 +89,9 @@ public final class AnimationPlayer {
     private final MolangEnvironment environment = new MolangEnvironment();
     private final Map<String, Running> running = new HashMap<>();
     private final Map<String, BonePose> poses = new HashMap<>();
+
+    /** The clips the finished queries answer for, null for every clip in flight. */
+    private Set<String> finishedScope;
 
     private final Vector3f scratch = new Vector3f();
     private EffectSink effects = EffectSink.NONE;
@@ -138,19 +156,28 @@ public final class AnimationPlayer {
         running.put(name, clip);
     }
 
-    /** Whether any clip in flight has run past its length, which `q.any_animation_finished` asks. */
-    public boolean anyFinished() {
-        for (Running clip : running.values()) {
-            if (clip.animation.finished(clip.animTime)) return true;
-        }
-        return false;
+    /**
+     * Narrows the two finished queries to the clips of one controller state, or widens them again.
+     *
+     * Bedrock answers `q.any_animation_finished` and `q.all_animations_finished` for the state the
+     * controller is in, so a controller sets this while its transitions are asked and clears it after.
+     */
+    public void scopeFinishedTo(Collection<String> names) {
+        finishedScope = names == null ? null : Set.copyOf(names);
     }
 
+    /** Whether a clip in scope has played through at least once, which `q.any_animation_finished` asks. */
+    public boolean anyFinished() {
+        return inScope().anyMatch(clip -> clip != null && clip.playedThrough);
+    }
+
+    /** Whether every clip in scope has played through at least once; one not started yet has not. */
     public boolean allFinished() {
-        for (Running clip : running.values()) {
-            if (!clip.animation.finished(clip.animTime)) return false;
-        }
-        return true;
+        return inScope().allMatch(clip -> clip != null && clip.playedThrough);
+    }
+
+    private java.util.stream.Stream<Running> inScope() {
+        return finishedScope == null ? running.values().stream() : finishedScope.stream().map(running::get);
     }
 
     public void stop(String name) {
@@ -173,6 +200,7 @@ public final class AnimationPlayer {
         Running clip = running.get(name);
         if (clip == null) return;
 
+        clip.kept = true;
         clip.stateWeight = weight;
         clip.shortestPath = shortestPath;
     }
@@ -195,6 +223,8 @@ public final class AnimationPlayer {
         Iterator<Map.Entry<String, Running>> entries = running.entrySet().iterator();
         while (entries.hasNext()) {
             Running clip = entries.next().getValue();
+            if (clip.ended) continue;
+
             advance(clip, deltaSeconds);
             fireTimeline(clip);
             applyBones(clip);
@@ -203,7 +233,10 @@ public final class AnimationPlayer {
                 && clip.stopExpression.evaluate(environment).truthy();
             over |= clip.animation.loop() == BedrockAnimation.Loop.ONCE
                 && clip.animTime >= clip.animation.length();
-            if (over && !clip.fadeOut(deltaSeconds)) entries.remove();
+            if (!over || clip.fadeOut(deltaSeconds)) continue;
+
+            if (clip.kept && clip.stopExpression == null) clip.ended = true;
+            else entries.remove();
         }
     }
 
@@ -219,10 +252,12 @@ public final class AnimationPlayer {
         if (update != null) {
             environment.setAnimTime(clip.animTime);
             clip.animTime = update.asFloat(environment);
+            clip.playedThrough |= clip.animTime >= clip.animation.length();
         } else if (clip.waiting > 0f) {
             waitOut(clip, deltaSeconds);
         } else {
             clip.animTime += deltaSeconds;
+            clip.playedThrough |= clip.animTime >= clip.animation.length();
             loopOver(clip);
         }
 
