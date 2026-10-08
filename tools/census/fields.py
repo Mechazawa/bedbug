@@ -192,12 +192,6 @@ REASONS = {
         "*": "Java's panic goal runs from whatever hurt the mob, with no sound, no damage list and no "
              "preference for water.",
     },
-    "minecraft:behavior.look_at_player": {
-        "angle_of_view_horizontal": "Java's look goal has no field of view.",
-        "angle_of_view_vertical": "Java's look goal has no field of view.",
-        "look_time": "Java's look goal picks how long it looks.",
-    },
-    "minecraft:behavior.look_at_trading_player": {"look_time": "Java's look goal picks how long it looks."},
     "minecraft:behavior.tempt": {
         "*": "Java's tempt goal takes the items and the speed and decides the rest: it has no sound, no "
              "vertical reach and no fright.",

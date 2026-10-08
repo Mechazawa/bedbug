@@ -31,7 +31,6 @@ import net.minecraft.world.entity.ai.goal.MoveThroughVillageGoal;
 import net.minecraft.world.entity.ai.goal.MoveTowardsRestrictionGoal;
 import net.minecraft.world.entity.ai.goal.MoveTowardsTargetGoal;
 import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
-import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.PanicGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.RandomSwimmingGoal;
@@ -2382,6 +2381,14 @@ public class AddonEntity extends PathfinderMob
      * read without them runs in the order the components happened to be written in, at whatever
      * speed the mod chose, which is what makes a panicking mob amble and a strolling one sprint.
      */
+    /** The goals running at this moment, by name, so a test can ask how long one ran for. */
+    public java.util.List<String> runningGoals() {
+        return goalSelector.getAvailableGoals().stream()
+            .filter(net.minecraft.world.entity.ai.goal.WrappedGoal::isRunning)
+            .map(running -> running.getGoal().toString())
+            .toList();
+    }
+
     /** The priorities this entity's goals went in at, which its pack's `priority` fields state. */
     public java.util.Set<Integer> goalPriorities() {
         return goalPriorities;
@@ -2488,18 +2495,14 @@ public class AddonEntity extends PathfinderMob
                 stroll.setInterval((int) Goals.number(goal, "interval", 120));
                 goals.add(priority, stroll);
             }
-            case "minecraft:behavior.look_at_player", "minecraft:behavior.look_at_trading_player" ->
-                goals.add(priority, new LookAtPlayerGoal(this, Player.class,
-                    (float) Goals.number(goal, "look_distance", 8),
-                    (float) Goals.number(goal, "probability", 0.02)));
+            case "minecraft:behavior.look_at_player" -> goals.add(priority, LookGoal.atPlayers(this, goal));
+            case "minecraft:behavior.look_at_trading_player" ->
+                goals.add(priority, LookGoal.atTradingPlayer(this, goal));
             case "minecraft:behavior.random_look_around",
                  "minecraft:behavior.random_look_around_and_sit" ->
                 goals.add(priority, new RandomLookAroundGoal(this));
 
-            // Bedrock names the kind of entity to watch; Java's goal takes a class, and the
-            // widest class that still means a creature is every living thing.
-            case "minecraft:behavior.look_at_entity" -> goals.add(priority,
-                new LookAtPlayerGoal(this, net.minecraft.world.entity.LivingEntity.class, 8f));
+            case "minecraft:behavior.look_at_entity" -> goals.add(priority, LookGoal.atEntities(this, goal));
 
             // Bedrock names the kind of wandering; Java has one stroll goal and a speed.
             case "minecraft:behavior.move_indoors",

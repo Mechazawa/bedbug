@@ -362,6 +362,49 @@ public final class ComponentGameTests {
     private static final int SEARCH_TICKS = 10;
 
     /**
+     * An entity looks at a player for the `look_time` its pack states, in seconds.
+     *
+     * The watchful group asks for half a second; Java's own goal looks for two to four whatever it
+     * is told, so a goal that ignored the field sets out to look four times as long at the least.
+     */
+    @GameTest()
+    public void anEntityLooksForTheTimeItsPackStates(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        net.minecraft.server.level.ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        BlockPos near = helper.absolutePos(STAND).east(2);
+        Platform.placeAt(player, near.getX() + 0.5, near.getY(), near.getZ() + 0.5, 0f, 0f);
+        EntityEvents.trigger(ember, "tp:ember_watch", null, ServerHooks.state());
+        ember.setNoAi(false);
+
+        int waited = 0;
+        while (lookLeft(ember) < 0 && waited++ < LOOK_LIMIT) live(ember, 1);
+        helper.assertTrue(lookLeft(ember) >= 0, EMBER + " never looked at the player beside it.");
+        helper.assertTrue(lookLeft(ember) <= LOOK_TICKS,
+            EMBER + " looks for half a second and set out to look for " + lookLeft(ember) + " ticks.");
+        helper.succeed();
+    }
+
+    /** How many ticks the running look goal has left, or -1 while none runs. */
+    private static int lookLeft(AddonEntity entity) {
+        return entity.runningGoals().stream()
+            .filter(goal -> goal.startsWith("LookGoal with "))
+            .mapToInt(goal -> Integer.parseInt(goal.split(" ")[2]))
+            .findFirst()
+            .orElse(-1);
+    }
+
+    /** The half second the watchful group looks for, in Java's ticks. */
+    private static final int LOOK_TICKS = 10;
+
+    /** Well past the four seconds Java's own goal would look for. */
+    private static final int LOOK_LIMIT = 100;
+
+    /**
      * Runs the entity's own ticks the way the level does, which counts its age first: Java's goals
      * tell one blow from the next by the age it landed at.
      */

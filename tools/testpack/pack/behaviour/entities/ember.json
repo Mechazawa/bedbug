@@ -373,6 +373,17 @@
           }
         }
       },
+      "tp:ember_watchful": {
+        "minecraft:behavior.look_at_player": {
+          "priority": 0,
+          "probability": 1.0,
+          "look_distance": 8,
+          "look_time": {
+            "min": 0.5,
+            "max": 0.5
+          }
+        }
+      },
       "tp:ember_alert": {
         "minecraft:timer": {
           "time": 1.0,
@@ -536,6 +547,11 @@
       "tp:ember_avenge": {
         "add": {
           "component_groups": ["tp:ember_vengeful"]
+        }
+      },
+      "tp:ember_watch": {
+        "add": {
+          "component_groups": ["tp:ember_watchful"]
         }
       },
       "tp:ember_winter": {
