@@ -349,11 +349,13 @@ public final class Functions {
         List<String> found = new ArrayList<>();
         for (Path file : pack.list("functions", ".mcfunction")) {
             try {
-                lines(file).forEach(line -> {
-                    Set<String> unsupported = new LinkedHashSet<>();
-                    line(line, functions, unsupported);
-                    found.addAll(unsupported);
-                });
+                lines(file).stream()
+                    .flatMap(line -> {
+                        Set<String> unsupported = new LinkedHashSet<>();
+                        line(line, functions, unsupported);
+                        return unsupported.stream();
+                    })
+                    .forEach(found::add);
             } catch (IOException | RuntimeException unreadable) {
                 McAddon.LOGGER.warn("Could not read {}: {}", file.getFileName(), unreadable.toString());
             }
@@ -363,7 +365,7 @@ public final class Functions {
 
     /** A function file's lines, stripped, with the blank ones left out. */
     private static List<String> lines(Path file) throws IOException {
-        return Arrays.stream(Files.readString(file, StandardCharsets.UTF_8).split("\n"))
+        return Arrays.stream(new String(Files.readAllBytes(file), StandardCharsets.UTF_8).split("\n"))
             .map(String::strip)
             .filter(line -> !line.isEmpty())
             .toList();
