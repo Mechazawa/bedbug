@@ -165,6 +165,23 @@ These are the checks it runs, and what each one catches:
     chamber or Terralith refinery as readily as a village. `/locate structure #minecraft:village` is
     the question about villages.
 
+  Three more make a world and go somewhere in it. `PackBiomeClientGameTest` and
+  `PackFeatureClientGameTest` are described with the test pack below; `PackDimensionClientGameTest`
+  asks for the three pack dimensions as levels, flies the player into one and asks every entry the
+  test pack wrote into a dynamic registry whether it is stable. What they met:
+
+  - **A biome is three dimensional, so `findClosestBiome3d` finds one at a height rather than on
+    the ground.** Asked for a forest, it answered with a point two hundred blocks up over an ocean.
+    `PackFeatureClientGameTest` searches for ground whose surface is forest for as far as it counts,
+    working the surface out from the generator rather than the chunk.
+  - **Fabric registers a biome its modification API changed again, without its pack's name.** A
+    biome a feature rule or a spawn rule reached carries no `KnownPack` afterwards, though it stays
+    stable, and baking a world's dimensions registers every level stem again the same way. Ask a
+    placed feature or a dimension type which pack it came from, not a biome or a level stem.
+  - **The client game test task deletes its run directory**, so every run converts the pack afresh.
+    A defect that only shows on a cached conversion has to be asserted by `runGameTest`, whose
+    `.mcaddon/` survives between runs.
+
   **Multiplayer is asserted against a dedicated server.** The three `Server*ClientGameTest`s call
   `worldBuilder().createServer()` and `connect()`, so the client reaches the server over a real TCP
   connection on which every message is encoded, which a single player world's in-memory connection
@@ -313,16 +330,24 @@ These are the checks it runs, and what each one catches:
   about the moment `minecraft:behavior.eat_mob` rolls a table rather than about a death, so the game
   test writes down what the entity swallowed and reads back which of the two pools fired.
 
-  The worldgen side is a biome, five features and two rules. The biome carries the components a Java
-  biome has a field for and four it has none of, so both halves of the reporting path run. The
-  features cover the three kinds that convert and one of the six with nothing behind them, and one of
-  them wraps another in a scatter, which is what makes the placement chain more than one link. One
-  rule hangs an ore on every overworld biome and the other hangs flowers on the forests, so a fresh
-  chunk holds blocks that can be counted. **The ore places `tp:lamp`, which is the pack's own block**:
-  a run where the block registry and the worldgen registry disagree leaves nothing in the ground.
+  The worldgen side is three biomes, five features and two rules. The overworld biome, `tp:glade`,
+  carries the components a Java biome has a field for and four it has none of, so both halves of the
+  reporting path run; Java's overworld has no list a biome can be added to, so it is registered and
+  named rather than generated. The two nether biomes, `tp:cinder_wastes` and `tp:soot_fields`, are
+  added to the list the nether searches and are the ones a player can stand in. The features cover
+  the three kinds that convert and one of the six with nothing behind them, and one of them wraps
+  another in a scatter, which is what makes the placement chain more than one link. One rule hangs
+  an ore on every overworld biome and the other hangs flowers on the forests, so a fresh chunk holds
+  blocks that can be counted. **The ore places `tp:lamp`, which is the pack's own block**: a run
+  where the block registry and the worldgen registry disagree leaves nothing in the ground. The
+  flowers are mostly torchflowers, which no feature of the game's places anywhere, and the scatter
+  wrapping them states its height as `query.heightmap(variable.worldx, variable.worldz)`, the
+  surface query nearly every pack scattering something over the ground writes.
+  `PackFeatureClientGameTest` counts the lamps in the chunks round a normal world's spawn, every one
+  between the rule's heights, and the torchflowers in a forest, every one standing in a forest.
 
-  The resource pack paints both of those biomes, once in each of the two shapes Bedrock allows. One
-  has a `biomes/*.client_biome.json` naming a fog of its own; the other is an entry in
+  The resource pack paints the glade and the cinder wastes, once in each of the two shapes Bedrock
+  allows. One has a `biomes/*.client_biome.json` naming a fog of its own; the other is an entry in
   `biomes_client.json` naming a second fog and stating its water half outright, which is what a pack
   written before the split says. Between them the two fog files carry a distance in blocks, a
   distance as a fraction of the render distance, and each of the locations and blocks no Java biome
@@ -339,11 +364,32 @@ These are the checks it runs, and what each one catches:
   26 holds and the older versions report. Its precipitation is a white ash density, which is a
   number rather than a count, so `BiomeSoundTest` is what asserts it comes out as Java's own chance.
 
+  The soot fields are the generated biome painted the per-biome way: tints for grass and foliage in
+  the behaviour pack, and a water colour, a fog of their own with both halves in blocks, an ash
+  density, an ambient loop, mood and addition and a music definition with a volume in the resource
+  pack. They carry the tag `soot`, which no biome of the game's does, and `spawn_rules/sprite.json`
+  selects on it alone, puts the sprite in the monster population and allows it on crying obsidian.
+  `PackBiomeClientGameTest` finds both nether biomes in a normal world, reads every one of those back
+  from the client's copy of the biome and its environment attributes, and drives Java's natural
+  spawner at an arena cut into the soot fields; a filter answering a pack's own tag against Java's
+  biome ids, a sprite built as a creature, or a cinder wastes entry whose water half went missing
+  fails there. The same test reads the ambient light the pack's `minecraft:default_lighting` states
+  in the overworld, which is the lighting file reaching the world through the overworld's timelines.
+
+  `structures/tp/hut.mcstructure` is written by `build.py` with `mcstructure.py`, the little endian
+  NBT writer `build_gametests.py` uses too: a stone floor, the pack's lamp and four jack o'lanterns
+  written as `minecraft:lit_pumpkin` in the layer above with the rest of that layer left alone, and
+  air on top. `functions/hut.mcfunction` places it with `structure load tp:hut ~ ~ ~` and
+  `/scriptevent "tp:hut" <x> <y> <z>` has the script place it through `world.structureManager`, and
+  `StructureGameTests.aPacksStructureLoadsByItsName` reads both copies back on all four versions.
+
   Three dimension files and one dialogue file are there for the two directories with no count of
   their own. Two of the dimensions state their band of height in each of the spellings Bedrock
   writes it in and the third names a generator nothing converts, so the read half and the reported
-  half both run; `verify.py run` is what asks a server whether each became a level, because a game
-  test server cannot answer that. The dialogue file holds one scene with a name, text and two
+  half both run. A game test server cannot say whether a dimension became a level, so
+  `AddonGameTests.aPackDimensionIsWrittenOrNamed` asks only whether the conversion wrote it or named
+  it on the version that runs, and `PackDimensionClientGameTest` takes a player into `tp:grove` on 26
+  and reads its band back from the client. The dialogue file holds one scene with a name, text and two
   buttons and one written in rawtext rather than in plain strings, which is the pair
   `DialogueSceneTest` asserts on and the `dialogue` scene photographs.
 
