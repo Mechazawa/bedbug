@@ -114,6 +114,38 @@ public final class BedrockModelRenderer {
     }
 
     /**
+     * Where a locator sits in a posed model, in the space the model itself is drawn in.
+     *
+     * A locator is written under one bone and moves with it. A name that is a bone rather than a
+     * locator answers with the bone's own place. Null where the model has neither.
+     */
+    public static Vector3f locatorOf(BakedGeometry geometry, EntityAnimator animator, String locator) {
+        PoseStack poseStack = new PoseStack();
+        for (BakedBone root : geometry.roots()) {
+            Vector3f found = searchLocator(root, animator, locator, poseStack);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    private static Vector3f searchLocator(BakedBone bone, EntityAnimator animator, String locator,
+        PoseStack poseStack) {
+        poseStack.pushPose();
+        poseBone(bone, animator, poseStack);
+
+        Vector3f offset = bone.locators().get(locator);
+        if (offset == null && bone.name().equalsIgnoreCase(locator)) offset = new Vector3f();
+        Vector3f found = offset == null ? null : poseStack.last().pose()
+            .transformPosition(offset.x * PIXEL, offset.y * PIXEL, offset.z * PIXEL, new Vector3f());
+        for (BakedBone child : bone.children()) {
+            if (found != null) break;
+            found = searchLocator(child, animator, locator, poseStack);
+        }
+        poseStack.popPose();
+        return found;
+    }
+
+    /**
      * The space a model bound to that bone is drawn in.
      *
      * A bound bone's own pivot stops being a place in the wearer's model and becomes the point its

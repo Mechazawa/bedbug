@@ -94,6 +94,9 @@ public final class GeometryBaker {
             children.add(bakeBone(child, geometry, childrenOf, byName, pivot));
         }
 
+        Map<String, Vector3f> locators = new HashMap<>();
+        bone.locators().forEach((name, point) -> locators.put(name, toModelSpace(point).sub(pivot)));
+
         // A Java model part is positioned relative to its parent, so the absolute pivot becomes an offset.
         BakedBone baked = new BakedBone(
             bone.name(),
@@ -101,7 +104,8 @@ public final class GeometryBaker {
             toModelRotation(bone.rotation()),
             bone.binding(),
             List.copyOf(quads),
-            List.copyOf(children));
+            List.copyOf(children),
+            Map.copyOf(locators));
         byName.put(bone.name(), baked);
         return baked;
     }
