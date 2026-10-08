@@ -27,6 +27,10 @@
       "minecraft:navigation.walk": {},
       "minecraft:jump.static": {},
       "minecraft:is_illager_captain": {},
+      "minecraft:dweller": {
+        "dwelling_type": "village",
+        "dweller_role": "inhabitant"
+      },
       "minecraft:shooter": {
         "def": "tp:spark"
       },
