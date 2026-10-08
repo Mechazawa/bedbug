@@ -17,11 +17,12 @@
       },
       "animations": {
         "idle": "animation.tp.sprite.idle",
-        "chime": "animation.tp.sprite.chime"
+        "chime": "animation.tp.sprite.chime",
+        "ring": "controller.animation.tp.sprite.ring"
       },
       "scripts": {
         "pre_animation": ["v.bob = math.sin(q.life_time * 90) * 0.5;"],
-        "animate": ["idle", {"chime": "q.is_alive"}]
+        "animate": ["idle", {"chime": "q.is_alive"}, "ring"]
       },
       "sound_effects": {
         "ping": "tp:sprite.chime"

@@ -1,0 +1,17 @@
+{
+  "format_version": "1.10.0",
+  "animation_controllers": {
+    "controller.animation.tp.sprite.ring": {
+      "initial_state": "quiet",
+      "states": {
+        "quiet": {
+          "on_exit": ["v.quiet_until = q.life_time;"],
+          "transitions": [{"ringing": "v.chimed"}]
+        },
+        "ringing": {
+          "on_entry": ["v.rung = v.rung + 1;"]
+        }
+      }
+    }
+  }
+}
