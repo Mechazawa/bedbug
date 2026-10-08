@@ -34,8 +34,9 @@ import java.util.stream.Collectors;
  * An add-on's items and blocks are drawn from the pack's own pictures, and its glyphs reach the font.
  *
  * - `tp:wand` draws its icon, and `tp:shard`, which is dyeable, is tinted the pack's default colour.
- * - `tp:lamp` draws `lamp_off` until its `tp:lit` state is true, where a permutation swaps the
- *   texture for `lamp_on` and the light it gives for 15.
+ * - `tp:lamp` draws `lamp_off`, and `lamp_on` on the face its geometry names `glow`, until its
+ *   `tp:lit` state is true, where a permutation's material instances name `lamp_on` for every face
+ *   and the light it gives becomes 15.
  * - `tp:lamp`'s culling shape is a full slab twelve pixels tall with a smaller block on top, so the
  *   face of a block under it is hidden and the faces of blocks above and beside it are not.
  * - `font/glyph_E1.png` paints each glyph as wide as its column, so U+E103 is three pixels wider
@@ -73,8 +74,10 @@ public final class ItemAndBlockClientGameTest implements FabricClientGameTest {
     private static void lampModels(ClientGameTestContext context) {
         Set<String> unlit = context.computeOnClient(client -> spriteNames(quads(lamp(false))));
         Set<String> lit = context.computeOnClient(client -> spriteNames(quads(lamp(true))));
-        Assert.that(unlit.stream().allMatch(name -> name.contains("lamp_off")) && !unlit.isEmpty(),
-            "tp:lamp is drawn from lamp_off until it is lit, and its model was drawn from " + unlit + ".");
+        Assert.that(unlit.stream().anyMatch(name -> name.contains("lamp_off"))
+                && unlit.stream().allMatch(name -> name.contains("lamp_off") || name.contains("lamp_on")),
+            "tp:lamp is drawn from lamp_off, with lamp_on on its glow face, until it is lit, and its model was"
+                + " drawn from " + unlit + ".");
         Assert.that(lit.stream().allMatch(name -> name.contains("lamp_on")) && !lit.isEmpty(),
             "tp:lamp's lit permutation draws lamp_on, and its model was drawn from " + lit + ".");
 
