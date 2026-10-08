@@ -45,7 +45,8 @@ add-ons, or with another release of it, is told which in chat.
 - Models, animations, animation controllers and render controllers, drawn through a full Molang
   evaluator, with each pass drawn the way its `.material` asks: alpha tested or blended, culled or
   not, plain or glowing, tinted the colour its controller worked out for it and lit by the light its
-  controller asked for. A model reaching past the box the server gave the entity is culled against
+  controller asked for. A hurt or dying entity flashes red the way every Bedrock entity does, unless
+  its controller states an `is_hurt_color` of its own, which is drawn instead. A model reaching past the box the server gave the entity is culled against
   the extent its own geometry declares, so wings and a tail stay drawn while the hitbox is off the
   side of the screen. A controller state a pack gave a blend transition is crossed out of rather
   than left, so a walk releases into an idle instead of snapping. An entity whose pack asked for it
@@ -121,8 +122,11 @@ add-ons, or with another release of it, is told which in chat.
   clips liquids aims at water and lava, and one carrying a durability sensor shows the particle and
   plays the sound its threshold names as it wears down.
 - `/camera` and `/camerashake`, which set one player's own view: the four presets, a position and a
-  rotation of the pack's choosing, all thirty-one of Bedrock's easing curves, and a shake that moves
-  the camera or turns it.
+  rotation of the pack's choosing or a point or an entity to face, all thirty-one of Bedrock's easing
+  curves, and a shake that moves the camera or turns it. An ease to one of the three cameras that
+  follow the player is refused the way Bedrock refuses it, and `minecraft:fixed_boom`,
+  `minecraft:follow_orbit` and `minecraft:control_scheme_camera` are named as cameras Java has no
+  counterpart for.
 - `/fog`, which layers a pack's own `fogs/` settings over the one the game would draw, with a stack
   per player that `pop` and `remove` take apart the way Bedrock's do. Like the two camera commands it
   is decided on the server and sent to each player alone, so setting one player's view in a
