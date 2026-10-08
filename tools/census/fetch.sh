@@ -60,4 +60,20 @@ for module in server server-ui server-gametest common math vanilla-data; do
     rm -rf "$staging"
 done
 
+# The oldest vanilla data package, whose block and item tables still carry the family ids (`wool`,
+# `log`, `stone_block_slab`) Bedrock used before it gave every member an id of its own, which is
+# what packs from that time write. The id census reads it beside the newest.
+older="$definitions/vanilla-data-1.20.0.d.ts"
+if [ "$refresh" -eq 1 ] || [ ! -s "$older" ]; then
+    echo "fetching @minecraft/vanilla-data@1.20.0"
+    staging=$(mktemp -d)
+    if (cd "$staging" && npm pack "@minecraft/vanilla-data@1.20.0" --silent >/dev/null 2>&1); then
+        tar xzf "$(find "$staging" -name '*.tgz' | head -1)" -C "$staging" 2>/dev/null
+        cat "$staging"/package/lib/*.d.ts > "$older" 2>/dev/null
+    else
+        echo "could not fetch @minecraft/vanilla-data@1.20.0; the id census will leave it out" >&2
+    fi
+    rm -rf "$staging"
+fi
+
 echo "reference material is under $scratch"

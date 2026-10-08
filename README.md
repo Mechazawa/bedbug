@@ -259,9 +259,11 @@ add-ons, or with another release of it, is told which in chat.
   and nothing else on disk. Commands a script registers on startup become real commands,
   `@minecraft/server-ui` forms become real screens (a 2.x `CustomForm` stays open while its buttons
   run their handlers and redraws as its observables change), and the world, system, entity, dimension, block,
-  scoreboard, game rule and structure surfaces are answered by the game. The game's own mobs reach a
-  script under Bedrock's ids, so a Java villager's `typeId` is `minecraft:villager_v2` and every
-  query, spawn and event filter accepts that spelling as well as Java's.
+  scoreboard, game rule and structure surfaces are answered by the game. The game's own mobs, items
+  and blocks reach a script under Bedrock's ids, so a Java villager's `typeId` is
+  `minecraft:villager_v2`, a powered rail's is `minecraft:golden_rail` and a lit furnace's is
+  `minecraft:lit_furnace`, and every query, spawn, permutation, item stack and filter accepts that
+  spelling as well as Java's.
 - The options a listener subscribes with narrow what it hears, as Bedrock's do: the entities, entity
   types, entity filter, event ids and damage or heal causes an entity event names. `entitySpawn`
   and `entityLoad` arrive on the tick after the entity came into the world, so a script that spawns
@@ -307,8 +309,9 @@ particle schemas and documentation; `tools/census/data.py` reads the vanilla loo
 trade tables; `tools/census/model.py` reads every shape the vanilla resource pack's geometries and
 animations are written in; `tools/census/packfiles.py` reads the file kinds Mojang's own pack pair
 ships; `tools/census/manifest.py` reads the manifest schemas, which describe the one file every pack
-has; and `tools/census/script.py` reads the published `@minecraft/*` type definitions. All of them
-compare what they read against the names this mod acts on:
+has; `tools/census/ids.py` reads every item and block id the vanilla data and the vanilla behaviour
+pack write; and `tools/census/script.py` reads the published `@minecraft/*` type definitions. All
+of them compare what they read against the names this mod acts on:
 
 | Surface | Answered |
 | --- | --- |
@@ -334,6 +337,8 @@ compare what they read against the names this mod acts on:
 | Geometry, animation and controller fields | 97% |
 | Pack file kinds | 88% |
 | Manifest fields | 58% |
+| Vanilla item ids Bedrock writes (less the 110 Java has nothing for) | 100% |
+| Vanilla block ids Bedrock writes (less the 303 Java has nothing for) | 100% |
 | `@minecraft/server` and friends | 100% |
 
 Every name in the remaining share is counted and shown by `/mcaddon entities` and `/mcaddon
@@ -396,16 +401,28 @@ metadata, the aux-indexed texture arrays in `item_texture.json` and `terrain_tex
 Mojang's own recipes, which is what settles that a banner's numbering runs the other way round from
 a dye's. A stated value settles the entry's item as the table is converted, since Java refuses a
 table naming an id it has not got, and a range or a colour index carries the family into the roll,
-where a sheep's own `minecraft:color` picks the fleece. A recipe's `data` beside an item is still
-read and reported, because a recipe is a third reader the table has not reached.
+where a sheep's own `minecraft:color` picks the fleece. A recipe's `data` beside an item, a trade's
+`minecraft:wool:14` and a command's `give @p wool 1 14` are read the same way, and so is the named
+state an older block carries instead of a number: `minecraft:wool` with `["color"="red"]` is red
+wool and `minecraft:log` with `old_log_type` set to `spruce` is a spruce log.
 
 A value with no family, and a family member this version of the game has no item for, are two
 different things: the first leaves the id the pack wrote and is counted, and the second empties that
 one entry rather than costing the whole table, which is what keeps a banner pattern table working on
-the versions before Java made the item. Bedrock's older id spellings are a separate gap with no
-count of its own: a sweep of Mojang's 207 loot tables leaves 31 ids unresolved, `record_13`,
-`muttonRaw`, `speckled_melon`, `golden_rail` and the like, none of them a data value and all of them
-a rename.
+the versions before Java made the item.
+
+**Bedrock's own spelling of a vanilla id.** A few hundred of the game's own blocks and items are
+called something else in Bedrock: `golden_rail` is Java's `powered_rail`, `lit_pumpkin` its
+`jack_o_lantern`, `frame` its `item_frame`, and Bedrock's `snow` is the full block Java calls
+`snow_block` while its `snow_layer` is Java's `snow`. Some name one Java block in a state of its own
+(`lit_furnace`, `oak_double_slab`, `powered_repeater`, `light_block_7`), and packs still write the
+spellings Bedrock used before it renamed its items (`record_13`, `muttonRaw`, `horsearmorgold`).
+`BedrockItemNames` and `BedrockBlockNames` hold both directions, so every loot table, recipe, trade
+table, function, entity component, filter, Molang query, feature and script names the Java item or
+block and is answered under Bedrock's name, and `tools/census/ids.py` runs every id Mojang's own
+material writes through them. What Java has nothing for (the education edition's chemistry, the
+building permission blocks, Bedrock's experiments) is declared rather than guessed at, and costs the
+one entry, line or recipe that names it.
 
 `minecraft:stacked_by_data` is a
 different thing: it says whether two stacks of one id but different numbers may merge, and in Java

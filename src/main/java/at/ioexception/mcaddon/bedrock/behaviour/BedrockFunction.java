@@ -3,6 +3,7 @@ package at.ioexception.mcaddon.bedrock.behaviour;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -11,7 +12,6 @@ import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -133,9 +133,7 @@ public final class BedrockFunction implements LootItemFunction {
             ? colour(Platform.lootSubject(context)) : context.getRandom().nextInt(choices.size());
 
         JsonElement named = index >= 0 && index < choices.size() ? choices.get(index) : null;
-        Identifier id = named != null && named.isJsonPrimitive()
-            ? Identifier.tryParse(named.getAsString()) : null;
-        Item item = id == null ? null : BuiltInRegistries.ITEM.getOptional(id).orElse(null);
+        Item item = named != null && named.isJsonPrimitive() ? AddonItems.named(named.getAsString()) : null;
         if (item == null) {
             AddonEntities.unsupported("loot function " + name + " value " + index);
             return stack;

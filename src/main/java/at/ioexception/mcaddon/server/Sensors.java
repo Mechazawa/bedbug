@@ -4,7 +4,9 @@ import at.ioexception.mcaddon.bedrock.behaviour.Filter;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
 import at.ioexception.mcaddon.entity.AddonEntity;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.state.AddonState;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
@@ -174,8 +176,7 @@ public final class Sensors {
     /** `spawn_item` is the other half of the same component: an egg, a scute, a shed feather. */
     private static void drop(AddonEntity entity, ServerLevel level, String name, int count,
         String event, AddonState state) {
-        Identifier id = Identifier.tryParse(name.contains(":") ? name : "minecraft:" + name);
-        Item item = id == null ? null : BuiltInRegistries.ITEM.getOptional(id).orElse(null);
+        Item item = AddonItems.named(name);
         if (item == null) {
             AddonEntities.unsupported("spawn_entity item " + name);
             return;
@@ -509,7 +510,7 @@ public final class Sensors {
         AddonState state = ServerHooks.state();
         if (state == null) return;
 
-        String name = BuiltInRegistries.BLOCK.getKey(broken.getBlock()).toString();
+        String name = AddonBlocks.identifierOf(broken);
         AABB box = new AABB(pos).inflate(BLOCK_SENSOR_REACH);
         for (AddonEntity entity : level.getEntitiesOfClass(AddonEntity.class, box)) {
             JsonObject sensor = entity.liveComponent("minecraft:block_sensor");
@@ -536,15 +537,11 @@ public final class Sensors {
 
             boolean named = Json.list(rule, "block_list").stream()
                 .filter(JsonElement::isJsonPrimitive)
-                .anyMatch(listed -> block.equals(qualified(listed.getAsString())));
+                .anyMatch(listed -> block.equals(AddonBlocks.identifierOf(listed.getAsString())));
             if (!named) continue;
 
             raise(entity, Json.text(rule, "on_block_broken", null), breaker, state);
         }
-    }
-
-    private static String qualified(String name) {
-        return name.contains(":") ? name : "minecraft:" + name;
     }
 
     private static void raise(AddonEntity entity, String event, Entity other, AddonState state) {

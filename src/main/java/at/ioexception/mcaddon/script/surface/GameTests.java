@@ -3,7 +3,9 @@ package at.ioexception.mcaddon.script.surface;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.script.ScriptCoverage;
 import at.ioexception.mcaddon.structure.McStructure;
 import com.google.gson.JsonArray;
@@ -12,9 +14,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -223,8 +223,7 @@ public final class GameTests extends Surface {
         ServerLevel level = level(dimension);
         if (level == null) return "[]";
 
-        Identifier named = itemId == null ? null : Identifier.tryParse(namespaced(itemId));
-        Item wanted = named == null ? null : BuiltInRegistries.ITEM.getOptional(named).orElse(null);
+        Item wanted = itemId == null ? null : AddonItems.named(itemId);
         if (itemId != null && wanted == null) return "[]";
 
         JsonArray found = new JsonArray();
@@ -274,7 +273,7 @@ public final class GameTests extends Surface {
         if (state.getBlock() instanceof net.minecraft.world.level.block.ButtonBlock button) {
             Platform.pressButton(button, state, level, at, null);
         } else {
-            unsupported("Test.pressButton on " + BuiltInRegistries.BLOCK.getKey(state.getBlock()));
+            unsupported("Test.pressButton on " + AddonBlocks.identifierOf(state));
         }
     }
 
@@ -289,7 +288,7 @@ public final class GameTests extends Surface {
         if (state.getBlock() instanceof net.minecraft.world.level.block.LeverBlock lever) {
             Platform.pullLever(lever, state, level, at, null);
         } else {
-            unsupported("Test.pullLever on " + BuiltInRegistries.BLOCK.getKey(state.getBlock()));
+            unsupported("Test.pullLever on " + AddonBlocks.identifierOf(state));
         }
     }
 

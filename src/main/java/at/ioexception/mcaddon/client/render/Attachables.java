@@ -6,7 +6,7 @@ import at.ioexception.mcaddon.bedrock.model.BakedBone;
 import at.ioexception.mcaddon.bedrock.model.BakedGeometry;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.registry.AddonEntities;
-import net.minecraft.core.registries.BuiltInRegistries;
+import at.ioexception.mcaddon.registry.AddonItems;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
@@ -91,7 +91,7 @@ public final class Attachables {
             ItemStack held = entity.getItemBySlot(slot);
             if (held.isEmpty()) continue;
 
-            String item = BuiltInRegistries.ITEM.getKey(held.getItem()).toString();
+            String item = AddonItems.identifierOf(held.getItem());
             Chosen chosen = choose(entity, wearer, item, slotName(slot), partialTick);
             if (chosen == null) continue;
 

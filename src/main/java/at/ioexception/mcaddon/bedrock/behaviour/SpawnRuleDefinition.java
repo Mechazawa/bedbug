@@ -2,13 +2,12 @@ package at.ioexception.mcaddon.bedrock.behaviour;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.pack.BedrockPack;
+import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -52,14 +51,6 @@ public record SpawnRuleDefinition(String identifier, String category, List<Condi
         "minecraft:spawns_lava", "minecraft:disallow_spawns_in_bubble",
         "minecraft:spawns_on_block_filter", "minecraft:spawns_on_block_prevented_filter",
         "minecraft:spawns_above_block_filter", "minecraft:spawn_event", "minecraft:is_persistent");
-
-    /** Blocks the two editions spell differently, among the ones a spawn rule names. */
-    private static final Map<String, String> BLOCK_ALIASES = Map.of(
-        "snow_layer", "snow",
-        "hardened_clay", "terracotta",
-        "grass", "short_grass",
-        "monster_egg", "infested_stone",
-        "waterlily", "lily_pad");
 
     /** `minecraft:delay_filter` is a cooldown shared by every rule writing the same identifier. */
     private static final Map<String, Long> DELAYS = new ConcurrentHashMap<>();
@@ -320,19 +311,9 @@ public record SpawnRuleDefinition(String identifier, String category, List<Condi
 
     /** A block a rule names, under Java's own id or the one Bedrock spells it with. */
     private static Block block(String name) {
-        String path = name.contains(":") ? name.substring(name.indexOf(':') + 1) : name;
-        Block direct = registered(name.contains(":") ? name : "minecraft:" + name);
-        if (direct != null) return direct;
-
-        String alias = BLOCK_ALIASES.get(path);
-        Block aliased = alias == null ? null : registered("minecraft:" + alias);
-        if (aliased == null) AddonEntities.unsupported("spawn rule block " + name);
-        return aliased;
-    }
-
-    private static Block registered(String name) {
-        Identifier id = Identifier.tryParse(name);
-        return id == null ? null : BuiltInRegistries.BLOCK.getOptional(id).orElse(null);
+        Block named = AddonBlocks.named(name);
+        if (named == null) AddonEntities.unsupported("spawn rule block " + name);
+        return named;
     }
 
     private static int integer(JsonObject json, String key, int fallback) {

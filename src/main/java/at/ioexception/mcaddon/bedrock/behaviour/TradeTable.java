@@ -4,14 +4,14 @@ import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.core.RegistryAccess;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 import java.io.IOException;
@@ -108,14 +108,11 @@ public record TradeTable(List<Offer> offers, List<Integer> tierExperience) {
         ItemStack stack(int count) {
             if (id == null) return ItemStack.EMPTY;
 
-            String flattened = DataValues.item(id, data);
-            if (flattened == null && data != 0) {
-                AddonEntities.unsupported("trade item " + id + " " + data);
+            Item item = AddonItems.named(id + (data == 0 ? "" : ":" + data));
+            if (item == null || data != 0 && !DataValues.split(id)) {
+                AddonEntities.unsupported("trade item " + id + (data == 0 ? "" : " " + data));
             }
-
-            Identifier found = Identifier.tryParse(flattened == null ? id : flattened);
-            return found == null ? ItemStack.EMPTY : BuiltInRegistries.ITEM.getOptional(found)
-                .map(item -> new ItemStack(item, count)).orElse(ItemStack.EMPTY);
+            return item == null ? ItemStack.EMPTY : new ItemStack(item, count);
         }
     }
 
@@ -184,15 +181,12 @@ public record TradeTable(List<Offer> offers, List<Integer> tierExperience) {
      * the counter, so the whole of the change is which item the stack holds.
      */
     private static ItemStack picked(ItemStack stack, String item, int data) {
-        String flattened = DataValues.item(item, data);
-        if (flattened == null) {
+        Item found = DataValues.item(item, data) == null ? null : AddonItems.named(item + ":" + data);
+        if (found == null) {
             AddonEntities.unsupported("trade function random_aux_value " + item + " " + data);
             return stack;
         }
-
-        Identifier id = Identifier.tryParse(flattened);
-        return id == null ? stack : BuiltInRegistries.ITEM.getOptional(id)
-            .map(found -> new ItemStack(found, stack.getCount())).orElse(stack);
+        return new ItemStack(found, stack.getCount());
     }
 
     /**

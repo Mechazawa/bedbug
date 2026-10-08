@@ -1,5 +1,7 @@
 package at.ioexception.mcaddon.script.surface;
 
+import at.ioexception.mcaddon.registry.AddonBlocks;
+import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.script.ScriptCoverage;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -61,13 +63,12 @@ public final class Items extends Surface {
 
     @HostAccess.Export
     public String[] all() {
-        return BuiltInRegistries.ITEM.keySet().stream().map(Identifier::toString).toArray(String[]::new);
+        return BuiltInRegistries.ITEM.stream().map(AddonItems::identifierOf).distinct().toArray(String[]::new);
     }
 
     @HostAccess.Export
     public boolean blockExists(String blockId) {
-        Identifier parsed = blockId == null ? null : Identifier.tryParse(blockId);
-        return parsed != null && BuiltInRegistries.BLOCK.getOptional(parsed).isPresent();
+        return blockId != null && AddonBlocks.named(blockId) != null;
     }
 
     /** Everything a script's ItemStack needs about its type, as one JSON object. */
@@ -77,9 +78,9 @@ public final class Items extends Surface {
         Item item = item(itemId);
         if (item == null) return described.toString();
 
-        String id = idOf(item);
+        String id = BuiltInRegistries.ITEM.getKey(item).toString();
         ItemStack stack = new ItemStack(item);
-        described.addProperty("id", id);
+        described.addProperty("id", idOf(item));
         described.addProperty("localizationKey", item.getDescriptionId());
         described.addProperty("maxAmount", stack.getMaxStackSize());
         describeFood(described, stack, item);
@@ -295,12 +296,12 @@ public final class Items extends Surface {
     }
 
     private static Item item(String itemId) {
-        Identifier parsed = itemId == null ? null : Identifier.tryParse(itemId);
-        return parsed == null ? null : BuiltInRegistries.ITEM.getOptional(parsed).orElse(null);
+        return itemId == null ? null : AddonItems.named(itemId);
     }
 
+    /** The id a pack knows the item by, which is Bedrock's spelling for one of the game's own. */
     private static String idOf(Item item) {
-        return BuiltInRegistries.ITEM.getKey(item).toString();
+        return AddonItems.identifierOf(item);
     }
 
     private static String pathOf(String itemId) {

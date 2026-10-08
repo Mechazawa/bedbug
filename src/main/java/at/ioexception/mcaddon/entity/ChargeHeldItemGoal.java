@@ -1,10 +1,9 @@
 package at.ioexception.mcaddon.entity;
 
+import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.item.Item;
@@ -30,9 +29,8 @@ public final class ChargeHeldItemGoal extends Goal {
         for (JsonElement element : Json.list(component, "items")) {
             String name = element.isJsonPrimitive() ? element.getAsString()
                 : element.isJsonObject() ? Json.text(element.getAsJsonObject(), "item", null) : null;
-            Identifier id = name == null ? null
-                : Identifier.tryParse(name.contains(":") ? name : "minecraft:" + name);
-            if (id != null) BuiltInRegistries.ITEM.getOptional(id).ifPresent(ammunition::add);
+            Item item = name == null ? null : AddonItems.named(name);
+            if (item != null) ammunition.add(item);
         }
         setFlags(EnumSet.of(Goal.Flag.LOOK));
     }

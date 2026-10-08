@@ -44,8 +44,8 @@ public final class PackCommandClientGameTest implements FabricClientGameTest {
             context.clickScreenButton("Feed it");
             context.waitForScreen(null);
 
-            Worlds.waitForServer(context, world.getServer(), server -> player(server).experienceLevel == levels + 1,
-                WAIT_TICKS,
+            Worlds.waitForServer(context, world.getServer(),
+                server -> player(server).experienceLevel == levels + 1, WAIT_TICKS,
                 "The dialogue button's xp 1L never raised the player a level.");
         }
     }
