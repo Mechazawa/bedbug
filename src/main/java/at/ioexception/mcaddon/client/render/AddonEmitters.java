@@ -21,7 +21,6 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -100,17 +99,20 @@ public final class AddonEmitters {
         raise(effect, definition.emitter().events().creation());
     }
 
-    /** Advances every running effect by one tick, dropping the ones that are over. */
+    /**
+     * Advances every running effect by one tick, dropping the ones that are over.
+     *
+     * An effect's events may start other effects as it advances, so the effects of this tick are
+     * walked from a copy and anything started meanwhile first moves on the tick after.
+     */
     public static void tick() {
         if (RUNNING.isEmpty() || Minecraft.getInstance().level == null) return;
 
-        Iterator<Running> running = RUNNING.iterator();
-        while (running.hasNext()) {
-            Running effect = running.next();
-            if (!advance(effect)) {
-                raise(effect, effect.definition.emitter().events().expiration());
-                running.remove();
-            }
+        for (Running effect : List.copyOf(RUNNING)) {
+            if (advance(effect)) continue;
+
+            raise(effect, effect.definition.emitter().events().expiration());
+            RUNNING.remove(effect);
         }
     }
 

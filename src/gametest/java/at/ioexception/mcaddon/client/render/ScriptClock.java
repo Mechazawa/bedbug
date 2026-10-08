@@ -1,0 +1,36 @@
+package at.ioexception.mcaddon.client.render;
+
+import at.ioexception.mcaddon.bedrock.animation.BonePose;
+import at.ioexception.mcaddon.entity.AddonEntity;
+
+/**
+ * An entity's whole animation script run on a clock of the test's own, a tick at a time.
+ *
+ * It is built the way the renderer builds the animator it draws an entity with, from the same pack
+ * and against the same entity, and is then moved on by whole ticks rather than by however long a
+ * frame took, so a bone's pose can be asked for at an exact moment.
+ */
+public final class ScriptClock {
+    private final Animators.Entry entry;
+    private int ticks;
+
+    private ScriptClock(Animators.Entry entry) {
+        this.entry = entry;
+    }
+
+    public static ScriptClock of(AddonEntity entity) {
+        AddonClientAssets.Binding binding = AddonClientAssets.of(AddonEntityRenderer.identifierOf(entity));
+        return new ScriptClock(Animators.Entry.of(entity, binding, false, 0f));
+    }
+
+    public void tick() {
+        ticks++;
+        entry.advance(0f, ticks, "");
+    }
+
+    /** What the clips have done to a bone, or a pose at rest where nothing has touched it. */
+    public BonePose pose(String bone) {
+        BonePose pose = entry.animator().poseOf(bone);
+        return pose == null ? new BonePose() : pose;
+    }
+}

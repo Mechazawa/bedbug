@@ -328,7 +328,7 @@ public final class AddonModels {
      * the pass drawing plain white, which looks like a lit model with its markings gone rather than
      * like anything failing, so it is named against the pack as well.
      */
-    private Identifier textureId(String path) {
+    Identifier textureId(String path) {
         String mapped = converted.texturePaths().get(path);
         if (mapped == null) {
             if (REPORTED.add(path)) {

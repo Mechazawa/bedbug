@@ -25,7 +25,7 @@ public final class Animators {
                 new DrawnModel(animator, entity.getId(), attached),
                 () -> EntityProperties.of(entity.getId()), attached);
             animator.environment().setQueries(queries);
-            animator.setEffects(AddonEffects.of(entity, animator, binding.models().converted().namespace()));
+            animator.setEffects(AddonEffects.of(entity, animator, binding.models()));
             return new Entry(animator, queries, new float[] {ageInTicks});
         }
 

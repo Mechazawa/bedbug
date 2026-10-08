@@ -1,0 +1,46 @@
+{
+  "format_version": "1.10.0",
+  "render_controllers": {
+    "controller.render.tp.prism": {
+      "arrays": {
+        "textures": {
+          "Array.skins": ["Texture.plain", "Texture.dyed"]
+        }
+      },
+      "geometry": "q.is_baby ? Geometry.young : (q.property('tp:facet') == 'square' ? Geometry.square : Geometry.round)",
+      "textures": ["Array.skins[q.variant]"],
+      "materials": [
+        {
+          "*": "q.had_component_group('tp:prism_glassy') ? Material.glass : Material.default"
+        }
+      ],
+      "part_visibility": [
+        {
+          "mark": "q.mark_variant != 1"
+        }
+      ],
+      "uv_anim": {
+        "offset": [0.0, "q.variant * 0.5"],
+        "scale": [1.0, 0.5]
+      },
+      "color": {
+        "r": "q.variant == 1 ? 0.5 : 1.0",
+        "g": 1.0,
+        "b": 1.0,
+        "a": 1.0
+      },
+      "overlay_color": {
+        "r": 0.0,
+        "g": 0.0,
+        "b": 1.0,
+        "a": "q.mark_variant == 1 ? 0.5 : 0.0"
+      },
+      "on_fire_color": {
+        "r": 1.0,
+        "g": 0.0,
+        "b": 0.0,
+        "a": 1.0
+      }
+    }
+  }
+}

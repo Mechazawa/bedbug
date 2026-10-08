@@ -1,6 +1,6 @@
 package at.ioexception.mcaddon.clientgametest;
 
-import at.ioexception.mcaddon.client.render.DrawnBounds;
+import at.ioexception.mcaddon.client.render.Submitted;
 import at.ioexception.mcaddon.entity.AddonEntity;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -43,7 +43,7 @@ public final class DrawnSizeClientGameTest implements FabricClientGameTest {
         AddonEntity wisp = Entities.waitForClient(context, "tp:wisp");
         Assert.near(wisp.getBbHeight(), WISP_BOX_HEIGHT, 0.001, "the box height of an unscaled tp:wisp");
 
-        AABB plain = context.computeOnClient(client -> DrawnBounds.of(wisp));
+        AABB plain = context.computeOnClient(client -> Submitted.entity(wisp).box());
         Assert.that(plain != null, "tp:wisp has a client definition and nothing was drawn for it.");
         Assert.near(plain.minY, 0, TOLERANCE, "the lowest drawn point of tp:wisp above its feet");
         Assert.near(plain.getYsize(), CUBE_HEIGHT, TOLERANCE, "the drawn height of tp:wisp");
@@ -51,7 +51,7 @@ public final class DrawnSizeClientGameTest implements FabricClientGameTest {
         world.getServer().runCommand("event entity @e[type=tp:wisp] tp:settle");
         context.waitFor(client -> Math.abs(wisp.getBbHeight() - WISP_BOX_HEIGHT * CALMED_SCALE) < 0.001);
 
-        AABB calmed = context.computeOnClient(client -> DrawnBounds.of(wisp));
+        AABB calmed = context.computeOnClient(client -> Submitted.entity(wisp).box());
         Assert.near(calmed.minY, 0, TOLERANCE, "the lowest drawn point of a scaled tp:wisp above its feet");
         Assert.near(calmed.getYsize(), CUBE_HEIGHT * CALMED_SCALE, TOLERANCE,
             "the drawn height of tp:wisp once its group scaled it by " + CALMED_SCALE);
@@ -61,7 +61,7 @@ public final class DrawnSizeClientGameTest implements FabricClientGameTest {
         world.getServer().runCommand("summon tp:sprite ~ ~ ~-3 {NoAI:1b}");
         AddonEntity sprite = Entities.waitForClient(context, "tp:sprite");
 
-        AABB young = context.computeOnClient(client -> DrawnBounds.of(sprite));
+        AABB young = context.computeOnClient(client -> Submitted.entity(sprite).box());
         Assert.that(young != null, "tp:sprite has a client definition and nothing was drawn for it.");
         Assert.near(young.minY, 0, SPRITE_BOB + TOLERANCE, "the lowest drawn point of tp:sprite above its feet");
         Assert.near(young.maxY, YOUNG_SPRITE_HEIGHT, SPRITE_BOB + TOLERANCE,

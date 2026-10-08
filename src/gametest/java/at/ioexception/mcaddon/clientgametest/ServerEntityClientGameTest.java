@@ -1,8 +1,8 @@
 package at.ioexception.mcaddon.clientgametest;
 
-import at.ioexception.mcaddon.client.render.DrawnBounds;
 import at.ioexception.mcaddon.client.render.EntityProperties;
 import at.ioexception.mcaddon.client.render.PosedParts;
+import at.ioexception.mcaddon.client.render.Submitted;
 import at.ioexception.mcaddon.entity.AddonEntity;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -68,7 +68,7 @@ public final class ServerEntityClientGameTest implements FabricClientGameTest {
     }
 
     private static void animation(ClientGameTestContext context, TestServerContext server, AddonEntity wisp) {
-        AABB still = context.computeOnClient(client -> DrawnBounds.of(wisp));
+        AABB still = context.computeOnClient(client -> Submitted.entity(wisp).box());
         Assert.that(still != null, "tp:wisp has a client definition and nothing was drawn for it.");
         Assert.near(still.minY, 0, TOLERANCE, "the lowest drawn point of tp:wisp before any clip is played");
 
@@ -90,7 +90,7 @@ public final class ServerEntityClientGameTest implements FabricClientGameTest {
         Object settled = context.computeOnClient(client -> EntityProperties.of(wisp.getId()).get("tp:settled"));
         Assert.that(Boolean.TRUE.equals(settled),
             "Expected tp:settle on the server to set tp:settled to true on the client and found " + settled + ".");
-        AABB drawn = context.computeOnClient(client -> DrawnBounds.of(wisp));
+        AABB drawn = context.computeOnClient(client -> Submitted.entity(wisp).box());
         Assert.near(drawn.getYsize(), CUBE_HEIGHT * CALMED_SCALE, TOLERANCE,
             "the drawn height of the client's tp:wisp once the server's event scaled it by " + CALMED_SCALE);
     }
@@ -165,8 +165,8 @@ public final class ServerEntityClientGameTest implements FabricClientGameTest {
     private static void waitForDrawn(ClientGameTestContext context, AddonEntity entity,
         java.util.function.Predicate<AABB> holds, String failure) {
         Worlds.waitForClient(context, client -> {
-            AABB bounds = DrawnBounds.of(entity);
+            AABB bounds = Submitted.entity(entity).box();
             return bounds != null && holds.test(bounds);
-        }, PATIENCE, () -> failure + " The model was drawn over " + DrawnBounds.of(entity) + ".");
+        }, PATIENCE, () -> failure + " The model was drawn over " + Submitted.entity(entity).box() + ".");
     }
 }

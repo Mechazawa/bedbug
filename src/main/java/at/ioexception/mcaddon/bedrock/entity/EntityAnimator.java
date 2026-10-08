@@ -8,6 +8,7 @@ import at.ioexception.mcaddon.bedrock.animation.BonePose;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
+import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.bedrock.model.BedrockBone;
 import at.ioexception.mcaddon.bedrock.model.BedrockGeometry;
 import net.minecraft.world.entity.Entity;
@@ -140,8 +141,8 @@ public final class EntityAnimator {
             collect(controller, deltaSeconds, 1f, false, wanted);
         }
         for (ClientEntityDefinition.Gated entry : definition.animate()) {
-            if (entry.condition() != null && !entry.condition().evaluate(environment).truthy()) continue;
-            collect(entry.name(), deltaSeconds, 1f, false, wanted);
+            float blend = blendOf(entry.condition());
+            if (blend > 0f) collect(entry.name(), deltaSeconds, blend, false, wanted);
         }
 
         // A clip nobody asked for this frame has been switched off, so it stops rather than lingers.
@@ -191,6 +192,11 @@ public final class EntityAnimator {
         current.crossFadeSeconds = Math.max(0f, current.crossFadeSeconds - deltaSeconds);
         environment.setStateTime(current.timeInState);
 
+        // Whether the clips have finished is asked of the state's own clips rather than of every
+        // clip the entity runs, so a looping idle beside them cannot hold a state forever.
+        player.scopeFinishedTo(state.animations().stream()
+            .map(entry -> definition.resolveAnimation(entry.animation()))
+            .filter(name -> assets.animationController(name) == null).toList());
         for (AnimationController.Transition transition : state.transitions()) {
             if (!transition.condition().evaluate(environment).truthy()) continue;
             if (!controller.states().containsKey(transition.target())) continue;
@@ -206,21 +212,42 @@ public final class EntityAnimator {
             fireStateEffects(state);
             break;
         }
+        player.scopeFinishedTo(null);
 
+        // A crossing is shaped by the state being left, whose blend_transition decides how long it
+        // takes, so both sides of it take the short way round when that state asks for it.
         float leaving = current.weightOfLeaving();
         if (leaving <= 0f) current.leaving = null;
-        else playState(current.leaving, deltaSeconds, weight * leaving, wanted);
-        playState(state, deltaSeconds, weight * (1f - leaving), wanted);
+        boolean shortestPath = current.leaving == null
+            ? state.blendViaShortestPath() : current.leaving.blendViaShortestPath();
+        if (current.leaving != null) {
+            playState(current.leaving, deltaSeconds, weight * leaving, shortestPath, wanted);
+        }
+        playState(state, deltaSeconds, weight * (1f - leaving), shortestPath, wanted);
     }
 
-    /** The clips one controller state asks for, each at the weight the state itself carries. */
+    /** The clips one controller state asks for, each at its own blend value times the state's weight. */
     private void playState(AnimationController.State state, float deltaSeconds, float weight,
-        Set<String> wanted) {
-        MolangEnvironment environment = player.environment();
+        boolean shortestPath, Set<String> wanted) {
         for (AnimationController.Entry entry : state.animations()) {
-            if (entry.weight() != null && !entry.weight().evaluate(environment).truthy()) continue;
-            collect(entry.animation(), deltaSeconds, weight, state.blendViaShortestPath(), wanted);
+            float blend = blendOf(entry.weight());
+            if (blend > 0f) collect(entry.animation(), deltaSeconds, weight * blend, shortestPath, wanted);
         }
+    }
+
+    /**
+     * How strongly an entry of an animate list or of a controller state applies.
+     *
+     * The expression beside a name is a blend value rather than a condition: Mojang's own walk
+     * clips are written `{"walk": "query.modified_move_speed"}` so a slow mob only half walks. A
+     * value at or below zero leaves the clip off, and a string counts as the condition it reads as.
+     */
+    private float blendOf(MolangExpression expression) {
+        if (expression == null) return 1f;
+
+        MolangValue value = expression.evaluate(player.environment());
+        if (value.isText()) return value.truthy() ? 1f : 0f;
+        return Math.max(0f, value.asFloat());
     }
 
     /** A controller state's own effects, which fire once as the state is entered. */

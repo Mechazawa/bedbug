@@ -20,7 +20,9 @@ still works:
     three particle definitions in the 1.10.0 format, one of them carrying a curve and events
     a fog whose air and water blocks are written differently from each other
     a client biome naming a sound of the pack's, two of the engine's, a track and a density
-    a texture set whose emissive channel has pixels in it
+    a texture set whose emissive channel has pixels in it, for a block and for an entity
+    an entity whose render controller picks everything it draws by Molang, and the clips and
+    controllers that time, weigh and cross-fade its bones
     two subpacks of the resource pack, each repainting the sprite, so the chosen one is readable
     the pack settings a manifest declares, at the values the Molang queries read back
     an entity texture with a band written the way Bedrock marks a cut-out texel
@@ -218,6 +220,29 @@ def ember_skin(x: int, y: int) -> tuple[int, int, int, int]:
     return (255, warmth, 48, 255)
 
 
+def prism_skin(body: tuple[int, int, int, int]):
+    """The prism's skin: two copies of one layout, the lower one darker.
+
+    Its render controller halves the texture and slides it down by half a sheet per variant, so
+    each variant draws from a half of its own. The mark's patch is painted white beside the body.
+    """
+    def paint(x: int, y: int) -> tuple[int, int, int, int]:
+        if x >= 40:
+            return TRANSPARENT
+        if x >= 32:
+            return (250, 250, 250, 255)
+        return body if y < 32 else tuple(channel // 2 for channel in body[:3]) + (255,)
+
+    return paint
+
+
+def prism_mer(x: int, y: int) -> tuple[int, int, int, int]:
+    """Metalness, emissive and roughness: only the mark's patch of the sheet glows."""
+    if 32 <= x < 40 and y < 8:
+        return (0, 235, 190, 255)
+    return (0, 0, 220, 255)
+
+
 def particle_atlas(x: int, y: int) -> tuple[int, int, int, int]:
     """A 128x128 sheet of 8x8 cells, the layout the billboard components address by texel.
 
@@ -267,6 +292,9 @@ TEXTURES = (
     ("subpacks/plain/textures/entity/sprite.png", 64, sprite_skin(PLAIN_SPRITE_BODY)),
     ("subpacks/bright/textures/entity/sprite.png", 64, sprite_skin(BRIGHT_SPRITE_BODY)),
     ("textures/entity/ember.png", 64, ember_skin),
+    ("textures/entity/prism.png", 64, prism_skin((70, 120, 200, 255))),
+    ("textures/entity/prism_dyed.png", 64, prism_skin((200, 70, 120, 255))),
+    ("textures/entity/prism_mer.png", 64, prism_mer),
     ("textures/particle/particles.png", 128, particle_atlas),
 )
 

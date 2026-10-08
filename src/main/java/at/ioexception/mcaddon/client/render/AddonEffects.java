@@ -1,19 +1,22 @@
 package at.ioexception.mcaddon.client.render;
 
 import at.ioexception.mcaddon.bedrock.animation.AnimationPlayer;
-import at.ioexception.mcaddon.bedrock.animation.BonePose;
 import at.ioexception.mcaddon.bedrock.entity.EntityAnimator;
 import at.ioexception.mcaddon.convert.Names;
+import at.ioexception.mcaddon.entity.AddonEntity;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.registry.AddonParticles;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.core.particles.ParticleOptions;
-import net.minecraft.util.Mth;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import org.joml.Vector3f;
+
+import java.util.List;
 
 /**
  * The sounds and particles an entity's animations ask for, played where the entity is.
@@ -26,7 +29,8 @@ public final class AddonEffects {
     }
 
     /** Binds an animator to the entity it is drawn on, so its effects land in the world. */
-    public static AnimationPlayer.EffectSink of(Entity entity, EntityAnimator animator, String namespace) {
+    public static AnimationPlayer.EffectSink of(Entity entity, EntityAnimator animator, AddonModels models) {
+        String namespace = models.converted().namespace();
         return new AnimationPlayer.EffectSink() {
             @Override
             public void sound(String soundId) {
@@ -35,7 +39,7 @@ public final class AddonEffects {
 
             @Override
             public void particle(String particleId, String locator) {
-                spawn(entity, animator, particleId, locator);
+                spawn(entity, animator, models, particleId, locator);
             }
         };
     }
@@ -59,18 +63,17 @@ public final class AddonEffects {
     }
 
     /**
-     * Shows a particle effect at the bone it is anchored to, or at the entity when it names none.
+     * Shows a particle effect at the locator it is anchored to, or at the entity when it names none.
      *
      * A pack's own particle definitions have no Java counterpart, so what can be shown is the vanilla
      * effect a Bedrock id names. Anything else is counted and reported by `/mcaddon entities` rather
      * than silently doing nothing.
-     *
-     * A locator names a bone, and the animator drawing the entity is the one holding that bone.
      */
-    private static void spawn(Entity entity, EntityAnimator animator, String particleId, String locator) {
+    private static void spawn(Entity entity, EntityAnimator animator, AddonModels models, String particleId,
+        String locator) {
         if (particleId == null || entity.level() == null) return;
 
-        Vector3f at = anchor(entity, animator, locator);
+        Vector3f at = anchor(entity, animator, models, locator);
         if (AddonParticles.definitionOf(particleId) != null) {
             AddonEmitters.start(particleId, entity,
                 new net.minecraft.world.phys.Vec3(at.x() - entity.getX(), at.y() - entity.getY(),
@@ -86,21 +89,25 @@ public final class AddonEffects {
         entity.level().addParticle(options, at.x(), at.y(), at.z(), 0, 0, 0);
     }
 
-    /** Where the effect is born: the bone's current position when one is named, else the entity. */
-    private static Vector3f anchor(Entity entity, EntityAnimator animator, String locator) {
-        Vector3f position = new Vector3f((float) entity.getX(), (float) entity.getY(), (float) entity.getZ());
-        if (locator == null) return position;
+    /**
+     * Where the effect is born: the locator where the drawn model puts it, else the entity's feet.
+     *
+     * The model is the one the entity's first pass draws, since a render controller may pick another
+     * geometry than the one the queries read. The locator is carried through its bone's pose and
+     * then through the space the renderer draws the model in, which turns it with the body and
+     * scales it with the entity, so the point lands where the drawn model shows it.
+     */
+    private static Vector3f anchor(Entity entity, EntityAnimator animator, AddonModels models, String locator) {
+        Vector3f feet = new Vector3f((float) entity.getX(), (float) entity.getY(), (float) entity.getZ());
+        List<AddonModels.Pass> passes = locator == null ? List.of() : models.resolve(animator);
+        Vector3f placed = passes.isEmpty() ? null
+            : BedrockModelRenderer.locatorOf(passes.get(0).geometry(), animator, locator);
+        if (placed == null) return feet;
 
-        BonePose pose = animator.poseOf(locator);
-        if (pose == null) return position;
-
-        // A bone is placed in model space, sixteen units to the block, before the entity is turned.
-        float yaw = (float) Math.toRadians(entity.getYRot());
-        float x = -pose.position.x() / 16f;
-        float z = pose.position.z() / 16f;
-        return position.add(
-            x * Mth.cos(yaw) - z * Mth.sin(yaw),
-            pose.position.y() / 16f,
-            x * Mth.sin(yaw) + z * Mth.cos(yaw));
+        PoseStack modelSpace = new PoseStack();
+        AddonEntityRenderer.applyModelSpace(modelSpace,
+            entity instanceof LivingEntity living ? living.yBodyRot : entity.getYRot(),
+            entity instanceof AddonEntity addon ? AddonEntityRenderer.drawnScale(addon, animator) : animator.scale());
+        return feet.add(modelSpace.last().pose().transformPosition(placed));
     }
 }

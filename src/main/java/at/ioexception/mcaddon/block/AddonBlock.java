@@ -88,14 +88,17 @@ public class AddonBlock extends Block {
     public static Map<String, Property<?>> propertiesOf(BlockDefinition definition) {
         Map<String, Property<?>> properties = new LinkedHashMap<>();
         definition.states().forEach((name, values) -> {
-            String java = Names.sanitise(name).replace(':', '_').replace('.', '_').replace('/', '_');
             if (isBoolean(values)) {
-                properties.put(name, BooleanProperty.create(java));
+                properties.put(name, BooleanProperty.create(javaName(name)));
             } else {
-                properties.put(name, IntegerProperty.create(java, 0, values.size() - 1));
+                properties.put(name, IntegerProperty.create(javaName(name), 0, values.size() - 1));
             }
         });
         return properties;
+    }
+
+    private static String javaName(String state) {
+        return Names.sanitise(state).replace(':', '_').replace('.', '_').replace('/', '_');
     }
 
     public static boolean isBoolean(List<JsonElement> values) {

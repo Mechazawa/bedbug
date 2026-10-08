@@ -1,0 +1,77 @@
+{
+  "format_version": "1.8.0",
+  "animations": {
+    "animation.tp.prism.rise": {
+      "loop": true,
+      "bones": {
+        "dial": {"rotation": [0, 350, 0]}
+      }
+    },
+    "animation.tp.prism.fall": {
+      "loop": true,
+      "bones": {
+        "dial": {"rotation": [0, 10, 0]}
+      }
+    },
+    "animation.tp.prism.tilt": {
+      "loop": true,
+      "bones": {
+        "needle": {"rotation": [60, 0, 0]}
+      }
+    },
+    "animation.tp.prism.lean": {
+      "loop": true,
+      "bones": {
+        "gauge": {"rotation": [0, 0, 40]}
+      }
+    },
+    "animation.tp.prism.pulse": {
+      "loop": true,
+      "animation_length": 4.0,
+      "bones": {
+        "dial": {
+          "scale": {
+            "0.0": [1, 1, 1],
+            "2.0": [2, 2, 2]
+          }
+        }
+      }
+    },
+    "animation.tp.prism.spin": {
+      "loop": true,
+      "animation_length": 4.0,
+      "anim_time_update": "q.anim_time + q.delta_time * 2",
+      "bones": {
+        "gauge": {
+          "rotation": {
+            "0.0": [0, 0, 0],
+            "1.0": [90, 0, 0]
+          }
+        }
+      }
+    },
+    "animation.tp.prism.blink": {
+      "animation_length": 0.5,
+      "bones": {
+        "needle": {
+          "scale": {
+            "0.0": [1, 1, 1],
+            "0.5": [3, 3, 3]
+          }
+        }
+      }
+    },
+    "animation.tp.prism.settle": {
+      "loop": "hold_on_last_frame",
+      "animation_length": 1.0,
+      "bones": {
+        "dial": {
+          "position": {
+            "0.0": [0, 0, 0],
+            "1.0": [0, 4, 0]
+          }
+        }
+      }
+    }
+  }
+}

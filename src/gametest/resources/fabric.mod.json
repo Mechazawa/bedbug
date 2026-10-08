@@ -27,9 +27,20 @@
       "at.ioexception.mcaddon.clientgametest.ServerRegistryClientGameTest",
       "at.ioexception.mcaddon.clientgametest.ServerEntityClientGameTest",
       "at.ioexception.mcaddon.clientgametest.ServerPlayerClientGameTest",
-      "at.ioexception.mcaddon.clientgametest.CameraShakeClientGameTest"
+      "at.ioexception.mcaddon.clientgametest.CameraShakeClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.RenderControllerClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.AnimationClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.AttachableClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.CullingClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.ParticleClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.FogClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.CameraClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.ItemAndBlockClientGameTest"
     ]
   },
+  "mixins": [
+    "mcaddon-gametest.mixins.json"
+  ],
   "depends": {
     "mcaddon": "*",
     "fabric-client-gametest-api-v1": "*"
