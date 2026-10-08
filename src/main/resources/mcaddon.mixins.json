@@ -13,6 +13,7 @@
     "ProjectileMixin",
     "ButtonBlockMixin",
     "LeverBlockMixin",
+    "ParticleCommandMixin",
     "PrimaryLevelDataMixin",
     "ChestBlockMixin",
     "BlockConnectionMixin",

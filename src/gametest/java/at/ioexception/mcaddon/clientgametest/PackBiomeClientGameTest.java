@@ -5,6 +5,7 @@ import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestServerContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationUiState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -277,11 +278,12 @@ public final class PackBiomeClientGameTest implements FabricClientGameTest {
             .collect(Collectors.toCollection(TreeSet::new));
     }
 
+    /** The biome the client holds there, waited for, because the chunk reaches the client after the player. */
     private static Biome clientBiome(ClientGameTestContext context, BlockPos centre, ResourceKey<Biome> expected) {
-        Holder<Biome> found = context.computeOnClient(client -> client.level.getBiome(centre));
-        Assert.that(found.is(expected), "Expected the client to hold " + expected.identifier() + " at "
-            + centre.toShortString() + " and found " + found.unwrapKey().orElse(null) + ".");
-        return found.value();
+        Worlds.waitForClient(context, client -> client.level.getBiome(centre).is(expected), PATIENCE,
+            () -> "Expected the client to hold " + expected.identifier() + " at " + centre.toShortString()
+                + " and found " + Minecraft.getInstance().level.getBiome(centre).unwrapKey().orElse(null) + ".");
+        return context.computeOnClient(client -> client.level.getBiome(centre).value());
     }
 
     private static <T> T attribute(ClientGameTestContext context, EnvironmentAttribute<T> attribute, BlockPos at) {

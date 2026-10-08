@@ -181,14 +181,14 @@ project.tasks.named("runGameTest") {
 }
 
 /**
- * The client game tests, run for the checked-out version only.
+ * The client game tests, run for every version that ships the API they are written against.
  *
  * Each one opens a window and drives a real client through a world, which is what reaches a screen,
- * a model and a key press. Only the 26.x targets ship the API they are written against.
+ * a model and a key press. Only the 26.x targets have the API, and both of them run the tests, because
+ * a spelling that differs between the two is exactly what a test on one version alone would miss.
  */
 project.tasks.matching { it.name == "runClientGameTest" }.configureEach {
     dependsOn(installClientTestPack)
-    onlyIf { project.name == activeName }
     val saves = project.layout.buildDirectory.dir("run/clientGameTest/saves")
     doFirst { project.delete(saves) }
 

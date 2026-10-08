@@ -47,8 +47,21 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
         try (TestSingleplayerContext world = context.worldBuilder().create()) {
             Worlds.waitForChunks(world);
             burst(context, world);
+            unquoted(context, world);
             trail(context, world);
         }
+    }
+
+    /**
+     * The same effect typed the way an operator types it, unquoted, which Java's own `/particle`
+     * reads as a particle type: what comes of it is the whole emitter rather than one particle.
+     */
+    private static void unquoted(ClientGameTestContext context, TestSingleplayerContext world) {
+        context.runOnClient(client -> Born.clear());
+        world.getServer().runCommand("execute as @p at @s run particle tp:burst ~ ~1 ~3");
+        Worlds.waitForClient(context, client -> Born.of("tp:burst").size() >= BURST_COUNT, PATIENCE,
+            () -> "particle tp:burst typed unquoted starts the pack's emitter of " + BURST_COUNT
+                + " particles, and " + Born.of("tp:burst").size() + " were made.");
     }
 
     private static void burst(ClientGameTestContext context, TestSingleplayerContext world) {
