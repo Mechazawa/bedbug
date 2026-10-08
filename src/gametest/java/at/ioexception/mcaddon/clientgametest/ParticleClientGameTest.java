@@ -11,13 +11,18 @@ import java.util.List;
 /**
  * A pack's particle effect started by `/particle` makes particles the way its file describes.
  *
+ * The effect is quoted, which is how a pack's own command reaches the server once it is translated:
+ * unquoted, the colon ends the mod's own argument and Java's `/particle` answers instead, with one
+ * particle and no emitter.
+ *
  * `tp:burst` emits all 24 of its particles at once from a point a fifth of a block above where it
  * was started, each leaving at three blocks a second, living 0.9 seconds, a tenth of a block across,
  * facing the camera and tinted `#FFB4E2FF`, which Bedrock writes alpha first.
  *
  * `tp:ember_trail` lives 1.2 seconds, turns only about the vertical to face the camera, and is
  * coloured from a gradient read at its age over its lifetime: a warm white at birth and `#FFE06010`
- * at 0.4, blended in between.
+ * at 0.4, blended in between. Its emitter starts `tp:burst` as it is created and again from its own
+ * timeline two seconds in, which is an effect starting another while the running ones are advanced.
  */
 public final class ParticleClientGameTest implements FabricClientGameTest {
     private static final double SPEED_TOLERANCE = 1e-4;
@@ -49,7 +54,7 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
 
     private static void burst(ClientGameTestContext context, TestSingleplayerContext world) {
         context.runOnClient(client -> Born.clear());
-        world.getServer().runCommand("execute as @p at @s run particle tp:burst ~ ~1 ~3");
+        world.getServer().runCommand("execute as @p at @s run particle \"tp:burst\" ~ ~1 ~3");
         Worlds.waitForClient(context, client -> Born.of("tp:burst").size() >= BURST_COUNT, PATIENCE,
             () -> "tp:burst emits " + BURST_COUNT + " particles at once, and " + Born.of("tp:burst").size()
                 + " were made.");
@@ -81,7 +86,7 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
 
     private static void trail(ClientGameTestContext context, TestSingleplayerContext world) {
         context.runOnClient(client -> Born.clear());
-        world.getServer().runCommand("execute as @p at @s run particle tp:ember_trail ~ ~1 ~3");
+        world.getServer().runCommand("execute as @p at @s run particle \"tp:ember_trail\" ~ ~1 ~3");
         Worlds.waitForClient(context, client -> Born.of("tp:ember_trail").size() >= 3, PATIENCE,
             () -> "tp:ember_trail emits twenty particles a second and none were made.");
 
@@ -107,6 +112,10 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
         }
         assertColour(quad.colour(), expected, "tp:ember_trail's colour at " + progress + " of its life,"
             + " between its gradient's first two stops");
+
+        Worlds.waitForClient(context, client -> Born.of("tp:burst").size() >= 2 * BURST_COUNT, PATIENCE,
+            () -> "tp:ember_trail starts tp:burst as it is created and again two seconds in, from its own"
+                + " timeline, and " + Born.of("tp:burst").size() + " burst particles were made.");
     }
 
     private static Camera camera(net.minecraft.client.Minecraft client) {

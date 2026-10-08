@@ -30,12 +30,12 @@
       },
       "scripts": {
         "pre_animation": ["v.lean = 0.25;"],
-        "animate": ["turn", "wave", {"lean": "v.lean"}, "pulse", "spin", "settle"]
+        "animate": ["turn", "wave", {"lean": "v.lean"}, "pulse", "spin", "settle"],
+        "hide_held_items": "q.mark_variant == 1"
       },
       "render_controllers": ["controller.render.tp.prism"],
       "enable_attachables": true,
-      "hide_armor": true,
-      "hide_held_items": "q.mark_variant == 1"
+      "hide_armor": true
     }
   }
 }

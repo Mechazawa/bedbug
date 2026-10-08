@@ -58,17 +58,23 @@ public final class FogClientGameTest implements FabricClientGameTest {
     }
 
     private static void biome(ClientGameTestContext context, TestSingleplayerContext world) {
+        // The overworld's day darkens the fog colour every biome states, and at noon it leaves it alone.
+        world.getServer().runCommand("time set noon");
+        context.waitTicks(2);
         BlockPos standing = context.computeOnClient(client -> client.player.blockPosition());
         int before = context.computeOnClient(client ->
             client.level.environmentAttributes().getValue(EnvironmentAttributes.FOG_COLOR, standing));
         Assert.that((before & 0xFFFFFF) != GLADE, "the world's own biome already has tp:glade's fog colour.");
 
-        world.getServer().runCommand("execute as @p at @s run fillbiome ~-16 ~-8 ~-16 ~16 ~8 ~16 tp:glade");
+        // The flat world's floor is four blocks above the bottom of the world, so the fill starts at the feet.
+        world.getServer().runCommand("execute as @p at @s run fillbiome ~-16 ~ ~-16 ~16 ~8 ~16 tp:glade");
         Worlds.waitForClient(context, client -> (client.level.environmentAttributes()
                 .getValue(EnvironmentAttributes.FOG_COLOR, standing) & 0xFFFFFF) == GLADE, PATIENCE,
-            () -> "the player stands in tp:glade, whose client biome names tp:fog_glade, and the fog colour there is "
+            () -> "the player stands in " + Minecraft.getInstance().level.getBiome(standing).getRegisteredName()
+                + ", whose client biome names tp:fog_glade, and the fog colour there is "
                 + Integer.toHexString(Minecraft.getInstance().level.environmentAttributes()
-                .getValue(EnvironmentAttributes.FOG_COLOR, standing)) + ".");
+                .getValue(EnvironmentAttributes.FOG_COLOR, standing)) + " where it was "
+                + Integer.toHexString(before) + ".");
         float waterEnd = context.computeOnClient(client ->
             client.level.environmentAttributes().getValue(EnvironmentAttributes.WATER_FOG_END_DISTANCE, standing));
         Assert.near(waterEnd, GLADE_WATER_END, DISTANCE_TOLERANCE,
