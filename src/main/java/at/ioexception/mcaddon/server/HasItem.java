@@ -1,7 +1,6 @@
 package at.ioexception.mcaddon.server;
 
 import at.ioexception.mcaddon.bedrock.behaviour.DataValues;
-import at.ioexception.mcaddon.mixin.SelectorOptionsInvoker;
 import at.ioexception.mcaddon.registry.AddonItems;
 import com.mojang.brigadier.StringReader;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -27,8 +26,8 @@ import java.util.stream.IntStream;
  *
  * `@s[hasitem={item=apple,location=slot.weapon.mainhand,quantity=2..}]` keeps an entity carrying
  * what the braces describe, and `hasitem=[{...},{...}]` one carrying all of them. Java's selector
- * has no way to ask about an inventory, so the argument is registered as an option of Java's own
- * selector parser under Bedrock's name, and a line using it reads the same in both editions.
+ * has no way to ask about an inventory, so {@link CarriedItems} asks each entity here and hands
+ * Java's selector a tag on the ones that answer yes.
  *
  * `quantity` counts every matching item across the slots asked about, and `slot` narrows those
  * slots by their index within the `location`. With no location, everything the entity carries is
@@ -44,14 +43,6 @@ public record HasItem(Item item, Range quantity, String location, Range slot) {
     /** Bedrock's armour slots in the order a `slot.armor` index counts them. */
     private static final List<EquipmentSlot> ARMOUR = List.of(
         EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET);
-
-    /** Puts `hasitem` beside Java's own options; asked once, as the mod starts. */
-    public static void register() {
-        SelectorOptionsInvoker.mcaddon$register("hasitem", parser -> {
-            List<HasItem> wanted = readAll(parser.getReader());
-            parser.addPredicate(entity -> wanted.stream().allMatch(one -> one.carriedBy(entity)));
-        }, parser -> true, Component.literal("The items an entity carries, as Bedrock asks for them"));
-    }
 
     /** One object in braces, or a list of them in brackets. */
     static List<HasItem> readAll(StringReader reader) throws CommandSyntaxException {

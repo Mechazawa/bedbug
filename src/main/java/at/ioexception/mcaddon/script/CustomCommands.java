@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.script;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.server.BedrockTree;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -18,7 +19,6 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,9 +26,9 @@ import java.util.List;
 /**
  * The commands a pack's script registers on startup.
  *
- * Bedrock lets a script declare commands and expects them to work from then on. Java builds its
- * command tree while the server is still starting, before any pack script has run, so these are
- * added to the live dispatcher afterwards and the tree is resent to everyone who is already on.
+ * Bedrock lets a script declare commands and expects them to work from then on. They go into the
+ * tree a Bedrock line is read against, so `/bedrock tp:command` and a pack's own lines reach them
+ * and Java's own tree carries none of them.
  */
 public final class CustomCommands {
     private CustomCommands() {
@@ -48,11 +48,7 @@ public final class CustomCommands {
             if (register(server, host, commands.get(index).getAsJsonObject(), index)) registered++;
         }
 
-        if (registered == 0) return;
-        McAddon.LOGGER.info("Registered {} commands a pack's script declared.", registered);
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            server.getCommands().sendCommands(player);
-        }
+        if (registered > 0) McAddon.LOGGER.info("Registered {} commands a pack's script declared.", registered);
     }
 
     private static boolean register(MinecraftServer server, ScriptHost host, JsonObject command, int index) {
@@ -87,7 +83,7 @@ public final class CustomCommands {
         }
         if (deepest != null) literal = literal.then(deepest);
 
-        server.getCommands().getDispatcher().register(literal);
+        BedrockTree.of(server).register(literal);
         return true;
     }
 

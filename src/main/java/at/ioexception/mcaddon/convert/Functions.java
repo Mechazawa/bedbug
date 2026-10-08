@@ -31,17 +31,18 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
- * Bedrock `.mcfunction` files, rewritten into the dialect Java's parser reads.
+ * Bedrock command lines, rewritten into the dialect the {@link at.ioexception.mcaddon.server.BedrockTree}
+ * reads, and Bedrock `.mcfunction` files written as Java functions running them.
  *
  * The two command languages share most of their spelling, and the rest is what this translates: a
  * command Java names differently, an argument order Java reverses, a keyword Java replaced, and the
  * selector arguments, where Bedrock says `r` for what Java calls `distance` and `c` for `limit`.
  *
- * Java refuses to load a whole function over one line it cannot parse, so a line this cannot
- * translate is left out and its name is reported through
- * {@link at.ioexception.mcaddon.registry.AddonEntities#unsupported}. Nothing falls through: a
- * command name that is neither shared with Java, registered by this mod nor rewritten here is
- * dropped and named as well.
+ * A function file becomes one whose every line is `bedrock <the line as the pack wrote it>`, so
+ * Java's parser reads `/bedrock` and a string and the file always loads. The line is translated as it
+ * runs, and one this cannot translate fails alone and is reported where the line that ran it reports.
+ * Nothing falls through: a command name that is neither shared with Java, registered by this mod nor
+ * rewritten here is reported as well.
  */
 public final class Functions {
     /**
@@ -56,7 +57,7 @@ public final class Functions {
         "tell", "tp", "w", "weather");
 
     /**
-     * Commands Bedrock has that this mod registers itself, so a function may use them.
+     * Commands Bedrock has that this mod registers in the tree a Bedrock line is read against.
      *
      * Everything they need is already here: the entity events, the script bridge, the pack's own
      * animations and particles, and the mob event rules.
@@ -70,7 +71,7 @@ public final class Functions {
      * The registered commands whose Bedrock line the command built here reads as it stands.
      *
      * The other eight are rewritten, because a Bedrock form the command built here cannot read is a
-     * line Java's parser rejects, and one of those costs the whole function.
+     * line the tree rejects.
      */
     static final Set<String> REGISTERED_WHOLE_LINE = Set.of("playanimation", "event",
         "toggledownfall", "transfer", "camerashake", "fog", "clearspawnpoint");
@@ -121,8 +122,8 @@ public final class Functions {
      * Forms of a command this mod does translate that Java has no way to say.
      *
      * Each is written `<command> <keyword>`, which is how the published command metadata names one.
-     * A line carrying one is left out and the form is reported, because handing it to Java would
-     * give its parser something it rejects and cost the whole function.
+     * A line carrying one does not run and the form is reported, rather than reaching a parser that
+     * would reject it with a message about the wrong word.
      */
     private static final Set<String> BEDROCK_ONLY_KEYWORDS = Set.of(
         "changesetting allow-cheats", "changesetting false", "changesetting true",
@@ -169,7 +170,7 @@ public final class Functions {
      * Selector arguments Java has no form of.
      *
      * Each narrows a selection by something Java's parser cannot express, so a line carrying one
-     * would match more entities than the pack asked for. The line is left out instead.
+     * would match more entities than the pack asked for. The line does not run instead.
      */
     private static final Set<String> BEDROCK_ONLY_SELECTOR_ARGUMENTS = Set.of(
         "haspermission", "has_property");
@@ -313,14 +314,21 @@ public final class Functions {
     }
 
     /** A pack's functions, calling only one another. */
-    public static List<String> convert(BedrockPack pack, Path root, String namespace,
-        Set<String> unsupported) throws IOException {
-        return convert(pack, root, namespace, FunctionNames.of(Map.of(namespace, List.of(pack))), unsupported);
+    public static List<String> convert(BedrockPack pack, Path root, String namespace) throws IOException {
+        return convert(pack, root, namespace, FunctionNames.of(Map.of(namespace, List.of(pack))));
     }
 
-    /** The names of the functions that ran, so the caller can build the tick tag from them. */
+    /**
+     * Writes each of the pack's functions as Java's, and answers their names, so the caller can
+     * build the tick tag from them.
+     *
+     * A comment stays a comment and a blank line goes. Every other line is handed to `/bedrock` as
+     * the pack wrote it, except for a function it calls by a name another add-on ships too, which is
+     * written as the id this add-on's own call reaches: nothing at run time says which add-on wrote
+     * the line.
+     */
     public static List<String> convert(BedrockPack pack, Path root, String namespace,
-        FunctionNames functions, Set<String> unsupported) throws IOException {
+        FunctionNames functions) throws IOException {
         List<String> converted = new ArrayList<>();
         String directory = Platform.singularDataDirectories()
             ? "function" : "functions";
@@ -329,11 +337,13 @@ public final class Functions {
         for (Path file : pack.list("functions", ".mcfunction")) {
             String inside = FunctionNames.pathOf(pack, file);
 
-            List<String> lines = new ArrayList<>();
-            for (String line : new String(Files.readAllBytes(file), StandardCharsets.UTF_8).split("\n")) {
-                String rewritten = line(line.strip(), calls, unsupported);
-                if (rewritten != null) lines.add(rewritten);
-            }
+            String text = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
+            List<String> lines = Arrays.stream(text.split("\n"))
+                .map(String::strip)
+                .filter(line -> !line.isEmpty())
+                .map(line -> line.startsWith("#") ? line
+                    : "bedrock " + calls.pinned(line.startsWith("/") ? line.substring(1) : line))
+                .toList();
 
             Path target = root.resolve("data").resolve(namespace).resolve(directory)
                 .resolve(inside + ".mcfunction");
@@ -347,10 +357,10 @@ public final class Functions {
     }
 
     /**
-     * One line of a pack's in Java's dialect, written by the add-on `functions` is issued by.
+     * One Bedrock line in the dialect the tree reads, written by the add-on `functions` is issued by.
      *
-     * Null for a line Java would reject: a blank, or one whose command or selector cannot follow.
-     * What could not be said is added to `unsupported`, including for a line that still translates.
+     * Null for a line that cannot run: a blank, or one whose command or selector cannot follow. What
+     * could not be said is added to `unsupported`, including for a line that still translates.
      */
     public static String line(String source, FunctionNames functions, Set<String> unsupported) {
         if (source.isEmpty() || source.startsWith("#")) return source.isEmpty() ? null : source;
@@ -375,6 +385,9 @@ public final class Functions {
             unsupported.add("command " + name);
             return null;
         }
+        // A pack's script names the commands it declares with its namespace, and the tree holds them
+        // as they were declared.
+        if (name.contains(":")) return command.strip();
         if (name.equals("function")) return function(rest, functions, unsupported);
         String renamed = RENAMED.getOrDefault(name, SHARED_WITH_JAVA.contains(name)
             || REGISTERED_WHOLE_LINE.contains(name) ? name : null);
@@ -387,7 +400,7 @@ public final class Functions {
      * `function <name>`, naming the add-on that ships the function as well as its path.
      *
      * Java reads a name with no namespace as one under `minecraft`, where no add-on's function is,
-     * so a call left as Bedrock wrote it runs nothing and says nothing.
+     * so a call left as Bedrock wrote it would run nothing and say nothing.
      */
     private static String function(String rest, FunctionNames functions, Set<String> unsupported) {
         String[] parts = SPACE.split(rest, 2);
@@ -1505,7 +1518,7 @@ public final class Functions {
                     arguments.add("gamemode=" + mode);
                 }
                 case "family" -> arguments.add("tag=" + value);
-                // Read by the option `server.HasItem` adds to Java's own selector parser.
+                // Answered by `server.CarriedItems` before the line is read, as a tag.
                 case "hasitem" -> arguments.add("hasitem=" + value);
                 default -> {
                     if (SHARED_SELECTOR_ARGUMENTS.contains(key)) {

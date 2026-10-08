@@ -180,6 +180,83 @@ public final class Platform {
         *///?}
     }
 
+    /** A line read against a tree other than the one the command reading it sits in. */
+    public interface ReadLine {
+        com.mojang.brigadier.ParseResults<CommandSourceStack> parsed();
+
+        String line();
+
+        /** Asked once the line, and everything it started, has run. */
+        void finish();
+    }
+
+    @FunctionalInterface
+    public interface LineReader {
+        /** Null for a line with nothing in it to run. */
+        ReadLine read(com.mojang.brigadier.context.CommandContext<CommandSourceStack> command,
+            CommandSourceStack source) throws com.mojang.brigadier.exceptions.CommandSyntaxException;
+    }
+
+    /**
+     * A command that reads a line of its own and runs it as part of itself.
+     *
+     * From 1.20.3 the line is queued on the execution the command is part of, which keeps the
+     * command limit, the depth a function call may reach and `execute store` working across it, and
+     * a function the line calls runs inside the same execution rather than one of its own. Before
+     * that a command runs to its end on the spot, and a function a running function calls is queued
+     * by the function manager itself.
+     */
+    public static com.mojang.brigadier.Command<CommandSourceStack> runningLine(LineReader reader) {
+        //? if >=1.21 {
+        return new RunningLine(reader);
+        //?} else {
+        /*return command -> {
+            ReadLine read = reader.read(command, command.getSource());
+            if (read == null) return 0;
+            try {
+                return runToEnd(read.parsed(), read.line());
+            } finally {
+                read.finish();
+            }
+        };
+        *///?}
+    }
+
+    //? if >=1.21 {
+    private static final class RunningLine
+        extends net.minecraft.commands.execution.CustomCommandExecutor.WithErrorHandling<CommandSourceStack>
+        implements net.minecraft.commands.execution.CustomCommandExecutor.CommandAdapter<CommandSourceStack> {
+        private final LineReader reader;
+
+        private RunningLine(LineReader reader) {
+            this.reader = reader;
+        }
+
+        @Override
+        protected void runGuarded(CommandSourceStack sender,
+            com.mojang.brigadier.context.ContextChain<CommandSourceStack> step,
+            net.minecraft.commands.execution.ChainModifiers modifiers,
+            net.minecraft.commands.execution.ExecutionControl<CommandSourceStack> output)
+            throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+            ReadLine read = reader.read(step.getTopContext().copyFor(sender), sender);
+            if (read == null) return;
+
+            com.mojang.brigadier.context.ContextChain<CommandSourceStack> chain;
+            try {
+                chain = com.mojang.brigadier.context.ContextChain.tryFlatten(read.parsed().getContext().build(read.line()))
+                    .orElseThrow(() -> com.mojang.brigadier.exceptions.CommandSyntaxException.BUILT_IN_EXCEPTIONS
+                        .dispatcherUnknownCommand().createWithContext(read.parsed().getReader()));
+            } catch (com.mojang.brigadier.exceptions.CommandSyntaxException unfinished) {
+                read.finish();
+                throw unfinished;
+            }
+            output.queueNext(new net.minecraft.commands.execution.tasks.BuildContexts.Continuation<>(read.line(),
+                chain, modifiers, sender, List.of(sender)));
+            output.queueNext((context, frame) -> read.finish());
+        }
+    }
+    //?}
+
     public static GameType gameMode(ServerPlayer player) {
         //? if >=26 {
         return player.gameMode();

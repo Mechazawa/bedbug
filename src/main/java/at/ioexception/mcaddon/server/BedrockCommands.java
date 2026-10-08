@@ -44,7 +44,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 
 /**
- * The Bedrock commands a pack expects to exist and Java does not ship.
+ * The Bedrock commands a pack expects to exist and Java does not ship, in the tree `/bedrock` reads
+ * a line against rather than in Java's own.
  *
  * Most are things this mod already does from script, so a `.mcfunction` or a command block gets the
  * same behaviour the pack's script half gets. What Bedrock's own form takes and this does not is
@@ -61,8 +62,20 @@ public final class BedrockCommands {
     private BedrockCommands() {
     }
 
+    /** Into the tree a Bedrock line is read against, which is not Java's own. */
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         Dialogues.registerCommand(dispatcher);
+
+        // A script event id carries the namespace of the pack that declared it, and Brigadier reads
+        // a colon only inside quotes, which is how the translated form of the command writes it.
+        dispatcher.register(Commands.literal("scriptevent")
+            .then(Commands.argument("id", StringArgumentType.string())
+                .then(Commands.argument("message", StringArgumentType.greedyString())
+                    .executes(command -> ServerHooks.scriptEvent(command.getSource(),
+                        StringArgumentType.getString(command, "id"),
+                        StringArgumentType.getString(command, "message"))))
+                .executes(command -> ServerHooks.scriptEvent(command.getSource(),
+                    StringArgumentType.getString(command, "id"), ""))));
 
         dispatcher.register(Commands.literal("playanimation")
             .requires(source -> Platform.allowedAt(source, 1))
@@ -146,8 +159,8 @@ public final class BedrockCommands {
             .then(mobEvent("minecraft:wandering_trader_event"))
             .then(mobEvent("events_enabled")));
 
-        // Java's own `/particle` knows nothing of a pack's effects, which are emitters rather than
-        // single particles, so the mod answers for those and hands the rest to the game.
+        // A pack's effects are emitters rather than single particles, which Java's own `/particle`
+        // knows nothing of, so this answers for those and hands any other particle to Java's.
         dispatcher.register(Commands.literal("particle")
             .requires(source -> Platform.allowedAt(source, 1))
             .then(Commands.argument("effect", StringArgumentType.string())
