@@ -337,7 +337,9 @@ public final class Platform {
      * Makes an item edible.
      *
      * The saturation field was renamed in 1.21, and from 1.21.2 how long eating takes moved out of
-     * the food properties and into a separate consumable component.
+     * the food properties and into a separate consumable component. Before that a food is eaten in
+     * one of two times, 1.6 seconds or the 0.8 of a fast one, so a pack asking for 0.8 or less gets
+     * the fast one.
      */
     public static Item.Properties food(Item.Properties properties, int nutrition, float saturation,
         boolean alwaysEdible, float seconds) {
@@ -351,14 +353,20 @@ public final class Platform {
         /*net.minecraft.world.food.FoodProperties.Builder food = new net.minecraft.world.food.FoodProperties
             .Builder().nutrition(nutrition).saturationModifier(saturation);
         if (alwaysEdible) food = food.alwaysEdible();
+        if (seconds <= FAST_FOOD_SECONDS) food = food.fast();
         return properties.food(food.build());
         *///?} else {
         /*net.minecraft.world.food.FoodProperties.Builder food = new net.minecraft.world.food.FoodProperties
             .Builder().nutrition(nutrition).saturationMod(saturation);
         if (alwaysEdible) food = food.alwaysEat();
+        if (seconds <= FAST_FOOD_SECONDS) food = food.fast();
         return properties.food(food.build());
         *///?}
     }
+
+    //? if <1.21.2 {
+    /*private static final float FAST_FOOD_SECONDS = 0.8f;
+    *///?}
 
     /**
      * An item a pack said can be worn, in the slot it named.
