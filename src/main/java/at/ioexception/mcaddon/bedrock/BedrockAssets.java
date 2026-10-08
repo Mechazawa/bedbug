@@ -105,9 +105,10 @@ public final class BedrockAssets {
         return animationControllers.get(name);
     }
 
-    /** Null when a pack names a material the game already has, which carries its own behaviour. */
+    /** The pack's own material of that name, or the game's own one when the pack wrote none. */
     public MaterialDefinition material(String name) {
-        return materials.get(name);
+        MaterialDefinition own = materials.get(name);
+        return own != null ? own : MaterialDefinition.ofGame(name);
     }
 
     public RenderController renderController(String name) {

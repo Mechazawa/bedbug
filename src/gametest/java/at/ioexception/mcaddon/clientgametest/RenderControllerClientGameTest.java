@@ -40,8 +40,11 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
     private static final int WHITE = 0xFFFFFFFF;
     /** The variant's colour: red at half, the other two channels untouched. */
     private static final int DYED = 0xFF80FFFF;
-    /** The same with the mark variant's blue overlay laid over it at half strength. */
-    private static final int DYED_AND_MARKED = 0xFF4080FF;
+    /**
+     * The same with the mark variant's blue overlay laid over it at half strength, which eight bits of
+     * alpha carry as 128 parts in 255.
+     */
+    private static final int DYED_AND_MARKED = 0xFF407FFF;
     private static final int ON_FIRE = 0xFFFF0000;
 
     @Override

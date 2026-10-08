@@ -63,6 +63,16 @@ public record MaterialDefinition(String name, String parent, Set<String> defines
         return states.contains("EnableStencilTest") || states.contains("StencilWrite");
     }
 
+    /**
+     * One of the game's own materials, which a pack names without writing a file for it.
+     *
+     * Its behaviour is carried by its name the same way a parent's is, so `entity_alphablend`
+     * blends and `entity_emissive_alpha` glows.
+     */
+    public static MaterialDefinition ofGame(String name) {
+        return new MaterialDefinition(name, name, Set.of(), Set.of(), Set.of(), Set.of());
+    }
+
     public static Map<String, MaterialDefinition> readAll(BedrockPack pack) {
         Map<String, MaterialDefinition> materials = new LinkedHashMap<>();
         for (Path file : pack.list("materials", ".material")) {
