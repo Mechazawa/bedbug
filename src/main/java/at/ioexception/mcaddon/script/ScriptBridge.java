@@ -1236,9 +1236,15 @@ public final class ScriptBridge {
         if (entity(playerId) instanceof ServerPlayer player) Channels.sendForm(player, 0, "");
     }
 
-    /** The form a player still has open, so a disconnect can resolve the promise waiting on it. */
-    Map<Integer, String> openForms() {
-        return openForms;
+    /** Whether a form is waiting on this player, who is the only one its answer may come from. */
+    boolean shownTo(int formId, ServerPlayer player) {
+        return player.getStringUUID().equals(openForms.get(formId));
+    }
+
+    /** Called once a form's promise has settled, after which nobody's answer to it is wanted. */
+    @HostAccess.Export
+    public void formSettled(int formId) {
+        openForms.remove(formId);
     }
 
     // Helpers, not exported

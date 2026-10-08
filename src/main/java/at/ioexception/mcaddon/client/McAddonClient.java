@@ -12,9 +12,7 @@ import at.ioexception.mcaddon.client.render.EntityProperties;
 import at.ioexception.mcaddon.client.render.PlayerCamera;
 import at.ioexception.mcaddon.client.render.PlayerFog;
 import at.ioexception.mcaddon.client.screen.AddonFormScreen;
-import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.network.Channels;
-import at.ioexception.mcaddon.network.PackList;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import net.fabricmc.api.ClientModInitializer;
@@ -23,8 +21,6 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.world.entity.EntityType;
-
-import java.util.List;
 
 public final class McAddonClient implements ClientModInitializer {
     @Override
@@ -49,7 +45,7 @@ public final class McAddonClient implements ClientModInitializer {
         Channels.receiveCameraView(encoded -> PlayerCamera.accept(CameraView.decode(encoded)));
         Channels.receiveCameraShake(encoded -> PlayerCamera.shake(CameraShake.decode(encoded)));
         Channels.receiveFog(encoded -> PlayerFog.accept(FogDefinition.decode(encoded)));
-        Channels.receivePacks(McAddonClient::reportMissingPacks);
+        Channels.receivePacks(ServerAddons::receive);
         Channels.receiveAnimation(Animators::play);
         Channels.receiveParticle((effect, x, y, z) ->
             at.ioexception.mcaddon.client.render.AddonEmitters.start(effect, null,
@@ -72,14 +68,17 @@ public final class McAddonClient implements ClientModInitializer {
             JavaModelPoses.forget(entity.getId());
             EntityProperties.forget(entity.getId());
         });
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+        // A connection to a server that drops is noticed on the network thread, which is where this
+        // event is raised, while the render thread is still drawing from the same state.
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> client.execute(() -> {
             Animators.clear();
             JavaModelPoses.clear();
             EntityProperties.clear();
             PlayerCamera.clear();
             PlayerFog.clear();
+            ServerAddons.clear();
             at.ioexception.mcaddon.client.render.AddonEmitters.clear();
-        });
+        }));
     }
 
     /** Properties can arrive before the entity they belong to, so both arrivals apply them. */
@@ -87,24 +86,6 @@ public final class McAddonClient implements ClientModInitializer {
         if (entity instanceof at.ioexception.mcaddon.entity.AddonEntity addon) {
             addon.mirrorGroups(EntityProperties.of(entity.getId()));
         }
-    }
-
-    /**
-     * Says which of the server's add-ons this client has not got.
-     *
-     * A pack is a file the player installs, so a server cannot hand one out. Without this the models
-     * are simply missing and nothing says why.
-     */
-    private static void reportMissingPacks(String encoded) {
-        List<PackList.Entry> missing = PackList.decode(encoded).missingFrom(PackList.of(McAddon.packs()));
-        if (missing.isEmpty()) return;
-
-        for (PackList.Entry entry : missing) {
-            McAddon.LOGGER.warn("The server has an add-on this client has not got: {} {}",
-                entry.name(), entry.version());
-        }
-        McAddon.LOGGER.warn("Entities and items from those add-ons will not appear until they are "
-            + "installed here as well.");
     }
 
     /**

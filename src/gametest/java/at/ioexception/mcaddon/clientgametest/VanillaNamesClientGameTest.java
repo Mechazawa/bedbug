@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.clientgametest;
 
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
+import net.fabricmc.fabric.api.client.gametest.v1.context.TestServerContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.MinecraftServer;
@@ -25,22 +26,23 @@ public final class VanillaNamesClientGameTest implements FabricClientGameTest {
     public void runTest(ClientGameTestContext context) {
         try (TestSingleplayerContext world = context.worldBuilder().create()) {
             Worlds.waitForChunks(world);
+            TestServerContext game = world.getServer();
             world.getServer().runCommand("execute as @p at @s run summon minecraft:villager ~4 ~ ~ {NoAI:1b}");
 
-            Worlds.waitForServer(context, world, server -> !tagged(server, "tp:spawn_seen").isEmpty(), WAIT_TICKS,
+            Worlds.waitForServer(context, game, server -> !tagged(server, "tp:spawn_seen").isEmpty(), WAIT_TICKS,
                 "A Java villager spawned and the script never read its typeId as minecraft:villager_v2.");
-            Worlds.waitForServer(context, world, server -> !tagged(server, "tp:found_by_query").isEmpty(), WAIT_TICKS,
+            Worlds.waitForServer(context, game, server -> !tagged(server, "tp:found_by_query").isEmpty(), WAIT_TICKS,
                 "getEntities({ type: \"minecraft:villager_v2\" }) never found a Java villager.");
-            Worlds.waitForServer(context, world, server -> !tagged(server, "tp:villager_companion").isEmpty(),
+            Worlds.waitForServer(context, game, server -> !tagged(server, "tp:villager_companion").isEmpty(),
                 WAIT_TICKS, "The script found a villager and the sprite it spawned beside it never appeared.");
-            Worlds.waitForServer(context, world,
+            Worlds.waitForServer(context, game,
                 server -> !tagged(server, "tp:companion_marked_on_spawn").isEmpty(), WAIT_TICKS,
                 "entitySpawn reached the script before the code that spawned the sprite had marked it.");
 
             world.getServer().runCommand("damage @e[type=minecraft:villager,limit=1] 1");
-            Worlds.waitForServer(context, world, server -> !tagged(server, "tp:hurt_as_villager").isEmpty(),
+            Worlds.waitForServer(context, game, server -> !tagged(server, "tp:hurt_as_villager").isEmpty(),
                 WAIT_TICKS, "An entityHurt listener for minecraft:villager_v2 never heard a Java villager hurt.");
-            Worlds.waitForServer(context, world, server -> !tagged(server, "tp:before_hurt_as_villager").isEmpty(),
+            Worlds.waitForServer(context, game, server -> !tagged(server, "tp:before_hurt_as_villager").isEmpty(),
                 WAIT_TICKS, "A before entityHurt listener filtered to minecraft:villager_v2 never heard it.");
             Assert.that(untagged(world, "tp:hurt_as_zombie"),
                 "An entityHurt listener subscribed for minecraft:zombie heard a villager being hurt.");
@@ -48,12 +50,12 @@ public final class VanillaNamesClientGameTest implements FabricClientGameTest {
                 "A before entityHurt listener filtered to minecraft:zombie heard a villager being hurt.");
 
             world.getServer().runCommand("execute as @p at @s run summon minecraft:experience_orb ~16 ~ ~");
-            Worlds.waitForServer(context, world, server -> tagged(server, "tp:xp_orb_seen").stream()
+            Worlds.waitForServer(context, game, server -> tagged(server, "tp:xp_orb_seen").stream()
                     .anyMatch(orb -> javaId(orb).equals("minecraft:experience_orb")), WAIT_TICKS,
                 "An experience orb spawned and the script never read its typeId as minecraft:xp_orb.");
 
             world.getServer().runCommand("execute as @a run scriptevent \"tp:villager\"");
-            Worlds.waitForServer(context, world, server -> !tagged(server, "tp:spawned_as_villager_v2").isEmpty(),
+            Worlds.waitForServer(context, game, server -> !tagged(server, "tp:spawned_as_villager_v2").isEmpty(),
                 WAIT_TICKS, "spawnEntity(\"minecraft:villager_v2\") spawned nothing.");
             String spawned = world.getServer()
                 .computeOnServer(server -> javaId(tagged(server, "tp:spawned_as_villager_v2").get(0)));
@@ -63,7 +65,7 @@ public final class VanillaNamesClientGameTest implements FabricClientGameTest {
             // Three sprites spawned by the script come back from a query each tick, and each has to be
             // the object spawnEntity answered with, the second and third as much as the first.
             world.getServer().runCommand("execute as @a run scriptevent \"tp:sprites\"");
-            Worlds.waitForServer(context, world,
+            Worlds.waitForServer(context, game,
                 server -> tagged(server, "tp:same_object_as_spawned").size() >= 3, WAIT_TICKS,
                 "A sprite the script spawned came back from getEntities as a different object.");
         }

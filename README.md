@@ -20,7 +20,8 @@ Put the jar in `mods/`, then put your packs in `addons/`:
 `.mcaddon/` next to `addons/`; deleting that directory only costs one slower start.
 
 On a server, install the mod on the server and on every client, and give both the same packs. The
-server decides what happens; the client draws it.
+server decides what happens; the client draws it. A player joining without one of the server's
+add-ons, or with another release of it, is told which in chat.
 
 ## What works
 

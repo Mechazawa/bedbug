@@ -37,7 +37,7 @@ public final class VillageClientGameTest implements FabricClientGameTest {
             Assert.that(village != null, "No village generated within " + SEARCH_CHUNKS + " chunks of the origin.");
 
             world.getServer().runCommand("tp @a " + village.getX() + " 200 " + village.getZ());
-            Worlds.waitForServer(context, world, server -> villagersAround(server, village) > 0, 1200,
+            Worlds.waitForServer(context, world.getServer(), server -> villagersAround(server, village) > 0, 1200,
                 "The village at " + village.toShortString() + " generated with no villager loaded around it.");
         }
     }
