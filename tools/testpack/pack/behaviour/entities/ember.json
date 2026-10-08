@@ -292,6 +292,14 @@
       "tp:ember_scoopable": {
         "minecraft:bucketable": {}
       },
+      "tp:ember_gilled": {
+        "minecraft:breathable": {
+          "total_supply": 2,
+          "suffocate_time": 0,
+          "breathes_air": false,
+          "breathes_water": true
+        }
+      },
       "tp:ember_alert": {
         "minecraft:timer": {
           "time": 1.0,
@@ -405,6 +413,11 @@
       "tp:ember_sensed": {
         "set_property": {
           "tp:sensed": true
+        }
+      },
+      "tp:ember_grow_gills": {
+        "add": {
+          "component_groups": ["tp:ember_gilled"]
         }
       },
       "tp:ember_winter": {

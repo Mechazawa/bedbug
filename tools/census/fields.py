@@ -52,7 +52,13 @@ GATE = 8
 REASONS = {
     # Components whose whole body describes something Java holds nowhere.
     "minecraft:breathable": {
-        "*": "Java drowns a mob on a timer of its own with no way to restate it per entity.",
+        "suffocate_time": "Documented as seconds between suffocation damage with a default of -20, which no "
+                          "count of seconds can be, and written as 0 or -1 by every vanilla entity. Java's "
+                          "own two damage a second once the air is gone is what applies.",
+        "generates_bubbles": "The bubbles a Bedrock client draws around a mob breathing under water, "
+                             "which Java draws for no mob.",
+        "totalSupply": "An older spelling the schemas no longer describe; the default stands in for it.",
+        "suffocateTime": "An older spelling the schemas no longer describe; the default stands in for it.",
     },
     "minecraft:conditional_bandwidth_optimization": {
         "*": "How often Bedrock's own server resends an entity, which Java decides for itself.",

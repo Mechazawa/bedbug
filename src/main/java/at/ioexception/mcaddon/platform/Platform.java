@@ -1210,6 +1210,24 @@ public final class Platform {
         return true;
     }
 
+    /**
+     * Whether a player's lead would go on the entity, which is the question Java asks before tying.
+     *
+     * 26 asks it of the holder as well, which is where taking a mob off a post is decided; 1.21 asks
+     * the entity alone and 1.20.1 asks a mob with the player in hand.
+     */
+    public static boolean acceptsLead(Entity entity, net.minecraft.world.entity.player.Player player) {
+        //? if >=26 {
+        return entity instanceof net.minecraft.world.entity.Leashable led
+            && led.canHaveALeashAttachedTo(player);
+        //?} else if >=1.21 {
+        /*return entity instanceof net.minecraft.world.entity.Leashable led
+            && led.canHaveALeashAttachedToIt();
+        *///?} else {
+        /*return entity instanceof net.minecraft.world.entity.Mob led && led.canBeLeashed(player);
+        *///?}
+    }
+
     /** Drops the lead where the entity stands, the way shearing one off does. */
     public static boolean unleash(Entity entity) {
         //? if >=26 {

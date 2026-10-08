@@ -395,6 +395,7 @@ public class AddonEntity extends PathfinderMob
 
         refreshComponents();
         publishMarkers();
+        setAirSupply(getMaxAirSupply());
 
         String table = liveText("minecraft:loot", "table");
         if (table != null) lootTable = AddonEntities.lootTable(getType(), table);
@@ -613,6 +614,7 @@ public class AddonEntity extends PathfinderMob
         Platform.setStepHeight(this,
             (float) liveNumber("minecraft:variable_max_auto_step", "base_value", 0.6));
 
+        refreshBreath();
         refreshHome();
         refreshContainer();
         releaseLeadsAGroupTook();
@@ -649,6 +651,63 @@ public class AddonEntity extends PathfinderMob
 
     /** Past the distance at which Java snaps a lead on any supported version. */
     private static final double LEASH_REACH = 16;
+
+    /**
+     * What the entity breathes, which a component group may change like any other component. Air
+     * already spent stays spent, up to the new supply.
+     */
+    private void refreshBreath() {
+        breath = Breath.tryFrom(liveComponent("minecraft:breathable"));
+        if (getAirSupply() > getMaxAirSupply()) setAirSupply(getMaxAirSupply());
+    }
+
+    private Breath breath;
+
+    @Override
+    public int getMaxAirSupply() {
+        return breath == null ? super.getMaxAirSupply() : breath.supply();
+    }
+
+    /**
+     * The air a tick under water leaves, which is the only medium Java counts down in by itself.
+     *
+     * An entity that breathes water fills up there instead, and one carrying no
+     * `minecraft:breathable` never loses any.
+     */
+    @Override
+    protected int decreaseAirSupply(int current) {
+        if (definition == null) return super.decreaseAirSupply(current);
+        if (breath == null) return current;
+
+        return breath.breathesAround(this) ? breath.inhale(current) : super.decreaseAirSupply(current);
+    }
+
+    /** Java refills a mob's air whenever it is out of water, which a fish on land does not get. */
+    @Override
+    protected int increaseAirSupply(int current) {
+        if (breath == null) return super.increaseAirSupply(current);
+
+        return breath.breathesAround(this) ? breath.inhale(current) : current;
+    }
+
+    /**
+     * Counts the breath down wherever the entity cannot breathe and Java does not count it.
+     *
+     * Java drowns a mob only under water, so a fish on land, a mob that breathes nothing but water
+     * and one choking in lava lose their air here, at the rate and with the damage Java drowns with.
+     */
+    private void holdBreath() {
+        if (breath == null || Breath.underwater(this) || breath.breathesAround(this)) return;
+
+        setAirSupply(super.decreaseAirSupply(getAirSupply()));
+        if (getAirSupply() > DROWNED_AT) return;
+
+        setAirSupply(0);
+        Platform.hurt(this, (net.minecraft.server.level.ServerLevel) level(), damageSources().drown(), 2f);
+    }
+
+    /** How far below empty Java lets a mob's air fall before drowning hurts it. */
+    private static final int DROWNED_AT = -20;
 
     /**
      * Where the entity is held, which `minecraft:home` and `minecraft:dweller` both state as a radius.
@@ -1795,14 +1854,40 @@ public class AddonEntity extends PathfinderMob
 
     private boolean wasLeashed;
 
-    // A mob could always be leashed before 1.21.2, where the question moved onto the entity.
+    /** A lead goes on an entity carrying `minecraft:leashable` and on nothing else, as in Bedrock. */
+    // 1.21 and 1.21.1 ask this of `Mob` without the annotation; 1.20.1 asks it with the player.
     //? if >=1.21.2 {
     @Override
     //?}
     public boolean canBeLeashed() {
-        return definition == null || !declaresNow("minecraft:leashable")
-            || liveNumber("minecraft:leashable", "can_be_stolen", 1) != 0;
+        return definition == null || declaresNow("minecraft:leashable");
     }
+
+    //? if <1.21 {
+    /*@Override
+    public boolean canBeLeashed(Player player) {
+        return !isLeashed() && canBeLeashed();
+    }
+    *///?}
+
+    /**
+     * Whether a player may take the lead off whatever else holds this entity.
+     *
+     * `can_be_stolen` is Bedrock's answer, and it defaults to yes. From 26 Java lets a player with a
+     * lead take a mob off a post or another mob, so a pack saying no refuses that player; before 26
+     * Java lets nobody take a mob that is already tied, which is the answer a pack saying no wants.
+     */
+    //? if >=26 {
+    @Override
+    public boolean canHaveALeashAttachedTo(net.minecraft.world.entity.Entity holder) {
+        boolean stealing = holder instanceof Player && isLeashed() && getLeashHolder() != holder;
+        if (stealing && definition != null
+            && !Goals.flag(liveComponent("minecraft:leashable"), "can_be_stolen", true)) {
+            return false;
+        }
+        return super.canHaveALeashAttachedTo(holder);
+    }
+    //?}
 
     /**
      * Breaks the blocks a pack listed as the entity walks into them.
@@ -3209,6 +3294,7 @@ public class AddonEntity extends PathfinderMob
      * every tenth tick, so these are the few that pay for being asked every one.
      */
     private void everyTick() {
+        holdBreath();
         noticeBeingHurt();
         noticeCatchingFire();
         noticeLeavingTheGround();

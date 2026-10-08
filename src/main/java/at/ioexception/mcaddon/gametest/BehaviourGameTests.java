@@ -968,24 +968,55 @@ public final class BehaviourGameTests {
     }
 
     /**
-     * A group saying the entity may not be stolen refuses a lead.
+     * A lead goes on an entity while it carries `minecraft:leashable` and not before.
      *
-     * `minecraft:leashable` is written into a group as often as at the top, because being tied is a
-     * state a pack puts the entity into, and `can_be_stolen` is the half of it that says whether
-     * somebody else may take the other end.
+     * Bedrock leashes nothing that does not declare the component, and the ember's laden group is
+     * where it gets one, so the plain ember refuses the player's lead and the laden one takes it.
      */
     @GameTest()
-    public void aGroupRefusingTheEntityToBeStolenRefusesTheLead(GameTestHelper helper) {
+    public void aLeadGoesOnlyOnAnEntityCarryingLeashable(GameTestHelper helper) {
         AddonEntity ember = spawn(helper, ENTITY);
         if (ember == null) {
             helper.succeed();
             return;
         }
 
-        helper.assertTrue(ember.canBeLeashed(), ENTITY + " refuses a lead before any group says so.");
+        Player player = besideOf(helper, ember);
+        helper.assertFalse(Platform.acceptsLead(ember, player),
+            ENTITY + " carries no minecraft:leashable and accepts a lead.");
         EntityEvents.trigger(ember, "tp:ember_load", null, ServerHooks.state());
-        helper.assertFalse(ember.canBeLeashed(),
-            ENTITY + " gained a minecraft:leashable refusing to be stolen and accepts a lead.");
+        helper.assertTrue(Platform.acceptsLead(ember, player),
+            ENTITY + " gained minecraft:leashable from a group and refuses a lead.");
+        helper.succeed();
+    }
+
+    /**
+     * `can_be_stolen` decides whether a player may take a tied entity off what holds it.
+     *
+     * The ember's laden group says no and the wisp says yes, and each is tied to a post before the
+     * player tries. Before 26 Java lets nobody take a tied mob, so the half asking for a yes is
+     * asked of the versions that can give one.
+     */
+    @GameTest()
+    public void anEntityThatMayNotBeStolenKeepsItsLead(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        AddonEntity post = spawn(helper, ENTITY);
+        AddonEntity wisp = spawn(helper, "tp:wisp");
+        if (ember == null || wisp == null) {
+            helper.succeed();
+            return;
+        }
+
+        Player player = besideOf(helper, ember);
+        EntityEvents.trigger(ember, "tp:ember_load", null, ServerHooks.state());
+        Platform.leashTo(ember, post);
+        Platform.leashTo(wisp, post);
+        helper.assertFalse(Platform.acceptsLead(ember, player),
+            ENTITY + " says it may not be stolen and a player took it off the post.");
+        //? if >=26 {
+        helper.assertTrue(Platform.acceptsLead(wisp, player),
+            "tp:wisp says it may be stolen and a player could not take it off the post.");
+        //?}
         helper.succeed();
     }
 
@@ -1797,7 +1828,14 @@ public final class BehaviourGameTests {
     private static final int PICKED_UP_BY = 25;
 
     /** One of the pack's own entities, in the world and ready to assert about. */
-    private static AddonEntity spawn(GameTestHelper helper, String identifier) {
+    /** A player standing where the entity is, inside the reach Java gives a lead. */
+    private static Player besideOf(GameTestHelper helper, Entity entity) {
+        Player player = Platform.mockPlayer(helper);
+        Platform.placeAt(player, entity.getX(), entity.getY(), entity.getZ(), 0f, 0f);
+        return player;
+    }
+
+    static AddonEntity spawn(GameTestHelper helper, String identifier) {
         return spawn(helper, identifier, STAND);
     }
 
