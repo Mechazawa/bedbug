@@ -549,24 +549,41 @@ These are the checks it runs, and what each one catches:
   refuses it as it stands. On `/bedrock scriptevent tp:commands` the script runs, as whatever sent it, a
   selector asking with `hasitem` about the main hand and about everything carried, a selector naming
   `villager_v2`, `function tp/relay` by its path alone (which calls `tp/relayed` the same way inside
-  the file) and `hud`, which nothing translates. The ember's `tp:ember_command` event tags it through
-  a Bedrock radius and asks for `hud` as well, and its controller's command tags it through a Bedrock
-  radius. `CommandGameTests` reads each of those back as a tag, and finds `hud` among what
-  `/mcaddon scripts` and `/mcaddon entities` say cannot be translated rather than among what did not
-  parse. The dialogue's first button runs `xp 1L`, and `/bedrock scriptevent tp:stock_up` gives the
+  the file) and `aimassist`, which nothing translates. The ember's `tp:ember_command` event tags it
+  through a Bedrock radius and asks for `aimassist` as well, and its controller's command tags it
+  through a Bedrock radius. `CommandGameTests` reads each of those back as a tag, and finds
+  `aimassist` among what `/mcaddon scripts` and `/mcaddon entities` say cannot be translated rather
+  than among what did not parse. No function file of the pack carries `aimassist`, because a function
+  line is reported as the pack loads, which would answer the event's assertion before the event ran. The dialogue's first button runs `xp 1L`, and `/bedrock scriptevent tp:stock_up` gives the
   player `tp:dust` unless `hasitem` finds one on them; `PackCommandClientGameTest` presses the button
   and asks for the dust twice, and reads back one level gained and one dust carried.
 
-  `functions/tp/gap.mcfunction` tags whoever runs it on either side of an `inputpermission` line,
-  which nothing translates, so `CommandGameTests` can say the file loaded, both tags landed and the
-  middle line was reported. The same class types `/bedrock` itself: an `execute` chain selecting
-  embers by `hasitem` and running a Bedrock `event` behind its `run`, a function named by its
+  `functions/tp/gap.mcfunction` tags whoever runs it on either side of a `controlscheme` line,
+  which nothing translates, so `CommandGameTests` can say the file loaded and both tags landed.
+  `functions/tp/unrun.mcfunction` is run by nothing, and its `hud @s hide paperdoll` line, a piece no
+  Java client draws, has to be among what `/mcaddon entities` names all the same: that is the
+  report `Functions.untranslatable` makes of every function line as the pack loads. The same class
+  types `/bedrock` itself: an `execute` chain selecting embers by `hasitem` and running a Bedrock
+  `event` behind its `run`, embers selected by `has_property` on a value, on its opposite and on a
+  property never declared, players selected by `haspermission` once `/bedrock inputpermission` has
+  taken one's camera and mount away (the minecart refuses that one and takes the other, and the
+  script hears the change through `playerInputPermissionCategoryChange`), a function named by its
   Bedrock path from Java's own `execute`, and the line a player who is no operator may not run. The
   client game tests ship two functions of a Java data pack of their own under
   `src/gametest/resources/data/mcaddon_gametest/`, whose `bedrock camera` and `bedrock
   playanimation` lines `CameraClientGameTest` and `JavaModelPoseClientGameTest` measure, and
   `ParticleClientGameTest` has the player type `/bedrock particle` and has Java's own `/particle`
   make the one particle Java makes of any type.
+
+  `HudClientGameTest` hides and resets pieces of the heads-up display on a dedicated server, one
+  piece at a time, all of them, and through the script's `tp:hud_hide` and `tp:hud_reset` probes.
+  A piece is watched through the sprite Java draws it with, which a mixin of the test source set,
+  `GuiGraphicsExtractorMixin`, counts into `Drawn`: a hidden piece's sprite stops being drawn while
+  another piece's goes on. The bystander's display is hidden first and has to leave the client's
+  alone, and nothing the client is told may reach the bystander. `InputPermissionClientGameTest`
+  holds the forward key and moves the mouse the way a player would, and reads back that the player
+  neither walked nor turned while `/bedrock inputpermission` had taken the input away, and did both
+  once it was given back.
 
   Four more things name the game's own items and blocks by Bedrock's ids, each of which Java's
   parser refuses as written and refuses whole: `loot_tables/names.json` drops `golden_rail`,
@@ -1199,8 +1216,8 @@ player who starts watching later sees whatever the pack plays next, as on an add
   `RULES_BEDROCK_ONLY` would be a gap nobody decided on, and that is what `--strict` fails on.
   `RULES_JAVA_FOLDS` names a Bedrock rule whose limit Java keeps under another Bedrock rule's name.
 
-  **What the keyword number counts.** Every published keyword goes into one of three groups, the
-  same three the selector arguments use, and the first two are what the percentage is of:
+  **What the keyword number counts.** Every published keyword goes into one of three groups, and
+  the first two are what the percentage is of:
 
   - **passed through**: the whole line reaches Java, because the command is shared or renamed, or
     the rewrite names the front of the line and leaves the rest alone. `TAIL_REACHES_JAVA` declares
@@ -1222,7 +1239,8 @@ player who starts watching later sees whatever the pack plays next, as on an add
   counts here and is dropped and reported on the version that has no such thing.
 
   The command metadata names no selector arguments at all, so those are listed from the source
-  instead, in the same three groups.
+  instead, as rewritten or passed through. `hasitem`, `haspermission` and `has_property` count as
+  rewritten: each is answered by a tag `server.SelectorTags` puts on the entities that answer it.
 - **`tools/census/particles.py`** measures the effects a pack describes itself.
 
   ```bash
@@ -1434,12 +1452,33 @@ which holds Java's own commands beside them and an `execute` whose `run` looks t
 
 `server.PackCommand` is the interpreter behind it. `Functions.line` translates the line as the
 add-on that wrote it, so a bare function name reaches that add-on's function through
-`FunctionNames`, the caller's first; `server.CarriedItems` answers each `hasitem` with a tag that
-names the run and comes off when it ends; and the line is read against the Bedrock tree. A converted
-function file holds `bedrock <the line>` for every line, with a bare call another add-on also ships
-written as the id its own add-on reaches, and from 1.20.3 `/bedrock` queues the line onto the
-execution that is running it, so the command limit, a function's depth and `execute store` hold
-across it. A script, an entity event, a timeline, a dialogue scene and a block hand their lines to
+`FunctionNames`, the caller's first; `server.SelectorTags` answers each `hasitem`, `haspermission`
+and `has_property` with a tag that names the run and comes off when it ends; and the line is read
+against the Bedrock tree. A converted function file holds `bedrock <the line>` for every line, with
+a bare call another add-on also ships written as the id its own add-on reaches, and from 1.20.3
+`/bedrock` queues the line onto the execution that is running it, so the command limit, a
+function's depth and `execute store` hold across it.
+
+**A function line is translated twice, once to report it.** `Functions.untranslatable` translates
+every line of every add-on's functions as the mod starts, writes nothing and hands what each line
+cannot do to `AddonEntities.unsupported`, which is the register `/mcaddon entities` prints. It runs
+in `McAddon.onInitialize` after the entities, items and blocks are registered rather than inside the
+conversion, for two reasons: a conversion that is cached never runs again, and a line naming a pack's
+own item would read as naming one Java has not got before that item is in the registry. A line that
+runs is reported again each time it runs, so the count beside a name is the lines plus the runs.
+
+**What a player sees and may do is the client's own.** `/hud` and `/inputpermission` keep their
+state per player on the server, in `server.PlayerHuds` and `server.PlayerInputs`, and send it to that
+player's client alone as a bitmask of `bedrock.hud.HudElement` or `bedrock.input.InputPermission`,
+whose constants carry the numbers a script names them by. The client acts on it: `HudMixin` leaves a
+hidden piece undrawn, `KeyboardInputMixin` lets go of a key whose input was taken away and
+`MouseHandlerMixin` keeps the player facing the same way. Mounting and dismounting are decided by the
+server, so `MountPermissionMixin` and `DismountPermissionMixin` refuse those there. `HudMixin` carries
+three bodies: `Gui` up to 26.1.2 and `Hud` from 26.2 hold the same `extract*` methods from 26, and
+before 26 the armour, the hunger and the air bubbles are drawn inline in `renderPlayerHealth` (the
+air bubbles alone on 1.21.1), so the drawing calls inside Mojang's own profiler section of that name
+are what is skipped there. A script's `ScreenDisplay` and `Player.inputPermissions` reach the same two
+classes, so a command and a script never disagree about one player. A script, an entity event, a timeline, a dialogue scene and a block hand their lines to
 `PackCommand` directly, which runs each to its end in an execution context of its own with the
 authority of a function, because the server's context runs a line queued during another command
 only once that command is done. A new path that runs a pack's commands takes the issuing add-on's
@@ -1493,6 +1532,8 @@ src/main/java/at/ioexception/mcaddon/
   registry/                  Sounds, entities, items, blocks, spawns, worldgen and the creative tab
   bedrock/camera/            What `/camera` and `/camerashake` set, and the easing curves they name
   bedrock/fog/               A pack's `fogs/` settings, as far as Java's one fog can carry them
+  bedrock/hud/               The pieces of the heads-up display `/hud` names
+  bedrock/input/             The kinds of player input `/inputpermission` names
   bedrock/molang/            Molang parser, evaluator, maths. Trig is in degrees.
   bedrock/model/             Geometry parsing, baking, render controllers
   bedrock/animation/         Animations, channels, player, controllers

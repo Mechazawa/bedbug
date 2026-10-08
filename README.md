@@ -131,6 +131,19 @@ add-ons, or with another release of it, is told which in chat.
   per player that `pop` and `remove` take apart the way Bedrock's do. Like the two camera commands it
   is decided on the server and sent to each player alone, so setting one player's view in a
   multiplayer world leaves everybody else's as it was.
+- `/bedrock hud`, which hides pieces of one player's heads-up display and draws them again: the
+  hotbar, the crosshair, the health, the hunger, the armour, the air bubbles, the bar above the
+  hotbar, the status effects, the held item's name and a ridden mob's health, on every supported
+  version. `all` and a line naming no piece hide every one of them, and a script's
+  `ScreenDisplay.setHudVisibility`, `hideAllExcept` and `resetHudElementsVisibility` change the same
+  set that `getHiddenHudElements` reads back. Like the camera it reaches the targets' clients alone.
+- `/bedrock inputpermission`, which takes one kind of input away from a player and gives it back. The
+  camera, walking in each of the four directions, jumping and sneaking are let go of on that
+  player's own client before the player moves by them, and getting onto a vehicle or off it is
+  refused by the server; `movement` takes all of those but the camera at once. `query` reads a
+  category back, `haspermission` selects by it, a script's `Player.inputPermissions` changes the
+  same set, and `playerInputPermissionCategoryChange` is raised on every change. A player's set lasts
+  as long as they are connected.
 - Records. A record a pack ships goes into a jukebox and plays, for the length the pack stated, with
   the comparator reading it asked for. Bedrock lets a pack give a record music of its own by writing
   one of the engine's own record sound names in its `sound_definitions.json`, which is the only way
@@ -203,13 +216,14 @@ add-ons, or with another release of it, is told which in chat.
   as Java builds it: `/bedrock` and `/mcaddon` are the only commands this mod adds there, `/particle`
   and `/transfer` take Java's arguments alone, and a Java data pack's `@e[...]` knows only Java's
   selector options. The Bedrock commands Java has not got, `camera`, `camerashake`,
-  `clearspawnpoint`, `dialogue`, `event`, `fog`, `gametest`, `mobevent`, `music`, `playanimation`,
-  `scriptevent`, `structure`, `toggledownfall`, Bedrock's `particle` and `transfer` and the commands
-  a pack's script declares, are reached through it and nowhere else. It asks for the level Java runs
+  `clearspawnpoint`, `dialogue`, `event`, `fog`, `gametest`, `hud`, `inputpermission`, `mobevent`,
+  `music`, `playanimation`, `scriptevent`, `structure`, `toggledownfall`, Bedrock's `particle` and
+  `transfer` and the commands a pack's script declares, are reached through it and nowhere else. It asks for the level Java runs
   a function at, and every command the line names asks for its own on top of that.
 - `.mcfunction` files, written as Java functions whose every line is `bedrock <the line>`, with a
   `tick` function tag. Java's parser reads `/bedrock` and a string, so a file always loads, and a
-  line that cannot be translated fails alone and is reported when it runs. A function called by its
+  line that cannot be translated fails alone. Such a line is reported as the pack loads, whether
+  anything ever runs it or not, and again each time it runs. A function called by its
   Bedrock name, which is a path with no namespace, reaches the add-on that ships it: the calling
   add-on's own first, then whichever installed add-on has it.
 - The commands a pack runs while the game is going, translated the same way and as the add-on that
@@ -217,10 +231,13 @@ add-ons, or with another release of it, is told which in chat.
   or controller timeline, a dialogue scene's buttons and a block event's `run_command`. Each runs to
   its end, functions it calls included, with the authority Java gives a function, and what could
   not be translated, what Java would not parse and what the game declined are each reported.
-- Bedrock's selector arguments inside a Bedrock line, `hasitem` among them:
-  `@s[hasitem={item=apple,location=slot.weapon.mainhand,quantity=2..}]` is answered by tagging every
-  entity carrying what it asks for while the line runs, so it selects anywhere in an `execute` chain
-  and Java's own selector never learns the word.
+- Bedrock's selector arguments inside a Bedrock line, the three Java has no form of among them:
+  `@s[hasitem={item=apple,location=slot.weapon.mainhand,quantity=2..}]` asks what an entity carries,
+  `@a[haspermission={camera=disabled}]` which input a player has been left, and
+  `@e[has_property={tp:mood="calm",tp:level=2..4,property=!tp:owner}]` what a pack's entity
+  properties hold, a value, a range or a presence, any of them turned round by `!`. Each is answered
+  by tagging every entity that answers it while the line runs, so it selects anywhere in an `execute`
+  chain and Java's own selector never learns the word.
 - Natural spawning from a pack's `spawn_rules`, with each alternative the rule lists becoming a
   biome spawn entry of its own. The weight, the group size and the biome tags decide which biomes
   it is offered in, a pack's own biome answering on the tags its pack gave it; the brightness,
@@ -373,8 +390,8 @@ of them compare what they read against the names this mod acts on:
 | Molang maths | 100% |
 | Block components | 100% |
 | Item components | 90% |
-| Command names | 82% |
-| Command keywords | 68% |
+| Command names | 84% |
+| Command keywords | 75% |
 | Game rules | 81% |
 | Particle components | 100% |
 | Particle component fields | 100% |
@@ -618,13 +635,11 @@ the whole vocabulary, so the four that aim a quad along the particle's direction
 instead of being turned into one of Java's. 1.20.1 has no such interface and turns every quad to the
 camera, so those four are counted and named there.
 
-**Hiding pieces of the heads-up display.** Bedrock's `/hud` names fourteen pieces and Java draws each
-of the ones it has from its own method, so hiding one means cancelling that method. Three pieces have
-no Java method on any version: nothing draws a paperdoll or touch controls, and the experience bar
-became a contextual bar chosen per frame in 26. Three more have none on 1.20.1, where the armour, the
-hunger and the air bubbles are drawn inline with the health. The class holding the rest moved twice
-across the four versions, so answering ten pieces on the newest and seven on the oldest would take
-four alternative renderer patches. `/hud` is dropped with its name reported, like the rest below.
+**Three pieces of the heads-up display.** `/hud` names the paper doll, the touch controls and the
+hints Bedrock calls tooltips, which say what a key would do to whatever is under the crosshair. No
+Java client draws any of the three; the one such hint Java shows, how to get off a mount, is written
+to the action bar a pack writes to as well. A line naming one of them is dropped and reported, and a
+script naming one is reported while the rest of what it asked for is done.
 
 **The fog a pack describes for water, lava and powder snow, and its volumetric block.** A Bedrock fog
 file says what the world looks like through each medium the camera can be in, and adds a second
@@ -632,17 +647,15 @@ description with its own scattering coefficients. `/fog` carries the `air` block
 pack pushes a fog for; Java draws its own fog for the other media and has no volumetric fog to give
 the second block to.
 
-**A sixth of Bedrock's commands.** The seventeen left divide two ways. `aimassist`, `controlscheme`
-and `inputpermission` describe a controller, a touchscreen and what a Bedrock client lets a player
-do, and `packstack` and `project` describe that client's pack list and the Bedrock Editor.
+**A sixth of Bedrock's commands.** The fifteen left divide two ways. `aimassist` and `controlscheme`
+describe a controller and a touchscreen, and `packstack` and `project` describe a Bedrock client's
+pack list and the Bedrock Editor.
 `connect`, `wsserver`, `sendshowstoreoffer`, `ops`, `permission`, `editor-allowlist`,
 `reloadconfig`, `reloadpacketlimitconfig` and `serveridentity` speak to a websocket server, a
 marketplace or a Bedrock server's own configuration and identity. `setmaxplayers` sets the limit for
 one session where Java keeps it as `max-players` in `server.properties`, which 26 writes back to the
-file, so a limit Bedrock forgets at the end of the session would outlive it here. `hud` is the one
-of the seventeen a Java client could be told to draw, and what it would cost is set out above. A
-function using any of them keeps its other lines and the dropped command is reported, and so is a
-line whose selector asks for something Java cannot select on, such as `haspermission`.
+file, so a limit Bedrock forgets at the end of the session would outlive it here. A function using
+any of them keeps its other lines and the dropped command is reported.
 
 **One form of a command the rest of which translates.** A `ride` that summons what it mounts or
 empties a vehicle, a `music` that loops, a `structure` mirrored on both axes or placed a block at a
@@ -725,16 +738,14 @@ such context. It may give a rotation or a scale a pivot of its own, where Java t
 model about its middle, and it may ask for the item to be fitted to its frame in the inventory,
 which Java never does. Each of the three is counted and named; the rest of the transform is applied.
 
-**Five world events nothing here raises.** `entityUpgrade` fires when Bedrock migrates an entity
+**Four world events nothing here raises.** `entityUpgrade` fires when Bedrock migrates an entity
 to a newer version of the definition a pack wrote, which is a step in reading a pack rather than
 anything that happens in a world: this mod reads one definition and keeps it. `playerEmote` names a
 persona piece, and a persona is a Bedrock skin. `playerInputModeChange` says whether somebody is on a
-keyboard, a controller, a touchscreen or a motion controller, and `playerInputPermissionCategoryChange`
-follows Bedrock's `inputpermission` command, which takes movement and the camera away from a player.
-A Java client tells the server nothing about the device it is on, and Java has no such command.
-`soundCompleted` waits on the declared duration of a sound, which nothing here reads, as set out
-above. Each of the five hands a pack a signal of the class Bedrock names, so subscribing works, and
-`/mcaddon scripts` says the event is never raised.
+keyboard, a controller, a touchscreen or a motion controller, and a Java client tells the server
+nothing about the device it is on. `soundCompleted` waits on the declared duration of a sound, which
+nothing here reads, as set out above. Each of the four hands a pack a signal of the class Bedrock
+names, so subscribing works, and `/mcaddon scripts` says the event is never raised.
 
 **Four spawn rule conditions with nothing to ask in Java.** `minecraft:permute_type` swaps the
 entity that spawns for another one after the biome list has already chosen a type.
