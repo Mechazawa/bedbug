@@ -46,7 +46,7 @@ public final class ServerRegistryClientGameTest implements FabricClientGameTest 
 
     @Override
     public void runTest(ClientGameTestContext context) {
-        try (TestDedicatedServerContext server = context.worldBuilder().createServer();
+        try (TestDedicatedServerContext server = Worlds.server(context);
             var connection = server.connect()) {
             Worlds.waitForChunks(connection);
             String player = server.computeOnServer(minecraft -> client(minecraft).getName().getString());

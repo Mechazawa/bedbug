@@ -41,7 +41,7 @@ public final class ServerEntityClientGameTest implements FabricClientGameTest {
 
     @Override
     public void runTest(ClientGameTestContext context) {
-        try (TestDedicatedServerContext server = context.worldBuilder().createServer();
+        try (TestDedicatedServerContext server = Worlds.server(context);
             var connection = server.connect()) {
             Worlds.waitForChunks(connection);
 

@@ -58,4 +58,20 @@ final class Worlds {
         }
         throw new AssertionError(context.computeOnClient(client -> failure.get()));
     }
+
+    /**
+     * A dedicated server on a port nothing else holds, because two checkouts running their client
+     * game tests at once would otherwise both ask for the default one and the second could not bind.
+     */
+    static net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerContext server(
+        ClientGameTestContext context) {
+        java.util.Properties properties = new java.util.Properties();
+        try (java.net.ServerSocket probe = new java.net.ServerSocket(0, 0,
+            java.net.InetAddress.getByName("127.0.0.1"))) {
+            properties.setProperty("server-port", String.valueOf(probe.getLocalPort()));
+        } catch (java.io.IOException unavailable) {
+            throw new AssertionError("No free port for a dedicated server: " + unavailable.getMessage());
+        }
+        return context.worldBuilder().createServer(properties);
+    }
 }
