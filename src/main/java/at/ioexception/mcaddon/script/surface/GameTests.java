@@ -3,6 +3,7 @@ package at.ioexception.mcaddon.script.surface;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.script.ScriptCoverage;
 import at.ioexception.mcaddon.structure.McStructure;
 import com.google.gson.JsonArray;
@@ -182,9 +183,7 @@ public final class GameTests extends Surface {
     @HostAccess.Export
     public String spawnWithoutAi(String dimension, String typeId, double x, double y, double z) {
         ServerLevel level = level(dimension);
-        Identifier parsed = typeId == null ? null : Identifier.tryParse(typeId);
-        EntityType<?> type = parsed == null ? null
-            : BuiltInRegistries.ENTITY_TYPE.getOptional(parsed).orElse(null);
+        EntityType<?> type = typeId == null ? null : AddonEntities.typeOf(typeId);
         if (level == null || type == null) return null;
 
         Entity spawned = Platform.createMob(type, level);
@@ -205,20 +204,11 @@ public final class GameTests extends Surface {
         ServerLevel level = level(dimension);
         if (level == null) return new String[0];
 
-        EntityType<?> wanted = entityType(typeId);
-        if (typeId != null && wanted == null) return new String[0];
-
+        String wanted = typeId == null ? null : AddonEntities.identifierOf(namespaced(typeId));
         return level.getEntitiesOfClass(Entity.class, new AABB(fromX, fromY, fromZ, toX, toY, toZ)).stream()
-            .filter(entity -> wanted == null || entity.getType() == wanted)
+            .filter(entity -> wanted == null || AddonEntities.identifierOf(entity.getType()).equals(wanted))
             .map(Entity::getStringUUID)
             .toArray(String[]::new);
-    }
-
-    /** The type a pack named, or null for a name this game has none for, which matches nothing. */
-    private static EntityType<?> entityType(String typeId) {
-        if (typeId == null) return null;
-        Identifier parsed = Identifier.tryParse(namespaced(typeId));
-        return parsed == null ? null : BuiltInRegistries.ENTITY_TYPE.getOptional(parsed).orElse(null);
     }
 
     /**

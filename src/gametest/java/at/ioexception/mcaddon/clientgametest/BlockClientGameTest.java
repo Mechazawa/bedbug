@@ -59,7 +59,7 @@ public final class BlockClientGameTest implements FabricClientGameTest {
         Stage.lookAt(context, Vec3.atCenterOf(Stage.CENTRE.south()).add(0, 0.5, 0));
         context.getInput().pressKey(options -> options.keyUse);
 
-        Worlds.waitForServer(context, world, server -> Stage.blockAt(server, BLOCK).equals("tp:totem"), 40,
+        Worlds.waitForServer(context, world.getServer(), server -> Stage.blockAt(server, BLOCK).equals("tp:totem"), 40,
             "tp:totem was placed from the hotbar and the server holds no tp:totem in front of the player.");
         String facing = world.getServer().computeOnServer(server -> stateValue(server, "minecraft:cardinal_direction"));
         Assert.that("east".equals(facing), "Expected tp:totem placed facing south to store east, south turned a"
@@ -83,10 +83,10 @@ public final class BlockClientGameTest implements FabricClientGameTest {
         for (int taps = 1; taps <= 3; taps++) {
             context.getInput().pressKey(options -> options.keyUse);
             int wanted = taps;
-            Worlds.waitForServer(context, world,
-                server -> String.valueOf(wanted).equals(stateValue(server, "tp:taps")), 40, () ->
+            Worlds.waitForServer(context, world.getServer(),
+                server -> String.valueOf(wanted).equals(stateValue(server, "tp:taps")), 40, server ->
                 "tp:totem was used " + wanted + " times and its tp:taps state never reached " + wanted + "; it holds "
-                    + world.getServer().computeOnServer(server -> stateValue(server, "tp:taps")) + ".");
+                    + stateValue(server, "tp:taps") + ".");
         }
         boolean tagged = world.getServer().computeOnServer(server ->
             Stage.player(server).entityTags().contains("tp:tapped"));
@@ -105,7 +105,7 @@ public final class BlockClientGameTest implements FabricClientGameTest {
 
     private static void lamp(ClientGameTestContext context, TestSingleplayerContext world) {
         world.getServer().runCommand(setblock(BLOCK, "tp:lamp"));
-        Worlds.waitForServer(context, world,
+        Worlds.waitForServer(context, world.getServer(),
             server -> "true".equals(stateValue(server, "tp:lit")), 40,
             "tp:lamp queues its own lighting five ticks after it is placed and it never lit.");
         int emitted = world.getServer().computeOnServer(server ->
@@ -117,7 +117,7 @@ public final class BlockClientGameTest implements FabricClientGameTest {
         breakFor(context, world, "tp:lamp", 1, 0.5f);
 
         world.getServer().runCommand(setblock(BLOCK, "tp:lamp[tp_lit=true,tp_level=2]"));
-        Worlds.waitForServer(context, world, server -> Stage.blockAt(server, BLOCK).equals("tp:lamp"), 40,
+        Worlds.waitForServer(context, world.getServer(), server -> Stage.blockAt(server, BLOCK).equals("tp:lamp"), 40,
             "The brightened tp:lamp was never set.");
         breakFor(context, world, "tp:lamp", 1, 1.5f);
     }
@@ -149,11 +149,12 @@ public final class BlockClientGameTest implements FabricClientGameTest {
 
         Assert.that(ticks >= expected - 1 && ticks <= expected + BREAK_SLACK, "Expected " + block + " at a hardness"
             + " of " + hardness + " to take " + expected + " ticks to mine by hand and it took " + ticks + ".");
-        Worlds.waitForServer(context, world, server -> Stage.blockAt(server, BLOCK).equals("minecraft:air"), 40,
+        Worlds.waitForServer(context, world.getServer(),
+            server -> Stage.blockAt(server, BLOCK).equals("minecraft:air"), 40,
             "The client broke " + block + " and the server still holds it.");
-        Worlds.waitForServer(context, world, server -> dropped(server, drop) >= count, 60, () ->
-            "Expected breaking " + block + " to drop " + count + " " + drop + " and "
-                + world.getServer().computeOnServer(server -> dropped(server, drop)) + " came of it.");
+        Worlds.waitForServer(context, world.getServer(), server -> dropped(server, drop) >= count, 60, server ->
+            "Expected breaking " + block + " to drop " + count + " " + drop + " and " + dropped(server, drop)
+                + " came of it.");
         int found = world.getServer().computeOnServer(server -> dropped(server, drop));
         Assert.that(found == count, "Expected breaking " + block + " to drop " + count + " " + drop + " and "
             + found + " came of it.");

@@ -130,7 +130,7 @@ public final class CraftingClientGameTest implements FabricClientGameTest {
         Stage.build(context, world, "survival");
         world.getServer().runCommand("setblock " + STATION.getX() + " " + STATION.getY() + " " + STATION.getZ()
             + " " + station);
-        Worlds.waitForServer(context, world, server -> Stage.blockAt(server, STATION).equals(station), 20,
+        Worlds.waitForServer(context, world.getServer(), server -> Stage.blockAt(server, STATION).equals(station), 20,
             station + " was never set in front of the player.");
         context.getInput().lookAt(STATION);
         context.waitFor(client -> client.hitResult instanceof BlockHitResult hit
@@ -142,7 +142,7 @@ public final class CraftingClientGameTest implements FabricClientGameTest {
     private static void give(ClientGameTestContext context, TestSingleplayerContext world, List<String> stacks) {
         stacks.forEach(stack -> world.getServer().runCommand("give @a " + stack));
         int wanted = stacks.size();
-        Worlds.waitForServer(context, world, server -> carried(server).size() == wanted, 40,
+        Worlds.waitForServer(context, world.getServer(), server -> carried(server).size() == wanted, 40,
             "The player was given " + stacks + " and does not carry them all.");
         context.waitTicks(2);
     }
@@ -161,7 +161,7 @@ public final class CraftingClientGameTest implements FabricClientGameTest {
     private static void take(ClientGameTestContext context, TestSingleplayerContext world, int slot, String result) {
         context.waitFor(client -> id(client.player.containerMenu.getSlot(slot).getItem()).equals(result), 600);
         click(context, slot, 0, ContainerInput.QUICK_MOVE);
-        Worlds.waitForServer(context, world, server -> carried(server).containsKey(result), 40,
+        Worlds.waitForServer(context, world.getServer(), server -> carried(server).containsKey(result), 40,
             result + " was shift-clicked out of the result slot and never reached the player's inventory.");
     }
 

@@ -36,6 +36,16 @@ public final class Channels {
     private static final Identifier SHAKE = McAddon.id("camera_shake");
     private static final Identifier FOG = McAddon.id("fog");
 
+    /**
+     * The longest form description, form answer or pack list in characters.
+     *
+     * A plain network string stops at 32767, and a shop's form of a few hundred buttons describes
+     * itself in more than that. A connection to a dedicated server encodes every message and drops
+     * the player on one that is too long; the in-memory connection a single player world uses never
+     * encodes, so it never shows. This many characters still fit in one custom payload.
+     */
+    private static final int LONG_TEXT = 262144;
+
     private Channels() {
     }
 
@@ -61,7 +71,7 @@ public final class Channels {
         private static final CustomPacketPayload.Type<Packs> TYPE = new CustomPacketPayload.Type<>(PACKS);
 
         private static final StreamCodec<FriendlyByteBuf, Packs> CODEC = StreamCodec.composite(
-            ByteBufCodecs.STRING_UTF8, Packs::packs,
+            ByteBufCodecs.stringUtf8(LONG_TEXT), Packs::packs,
             Packs::new);
 
         @Override
@@ -78,7 +88,7 @@ public final class Channels {
 
         private static final StreamCodec<FriendlyByteBuf, Form> CODEC = StreamCodec.composite(
             ByteBufCodecs.VAR_INT, Form::formId,
-            ByteBufCodecs.STRING_UTF8, Form::description,
+            ByteBufCodecs.stringUtf8(LONG_TEXT), Form::description,
             Form::new);
 
         @Override
@@ -93,7 +103,7 @@ public final class Channels {
 
         private static final StreamCodec<FriendlyByteBuf, FormResponse> CODEC = StreamCodec.composite(
             ByteBufCodecs.VAR_INT, FormResponse::formId,
-            ByteBufCodecs.STRING_UTF8, FormResponse::answer,
+            ByteBufCodecs.stringUtf8(LONG_TEXT), FormResponse::answer,
             FormResponse::new);
 
         @Override
@@ -361,23 +371,28 @@ public final class Channels {
         //?} else {
         /*FriendlyByteBuf buffer = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         buffer.writeVarInt(formId);
-        buffer.writeUtf(description, 262144);
+        buffer.writeUtf(description, LONG_TEXT);
         ServerPlayNetworking.send(player, FORM, buffer);
         *///?}
     }
 
-    /** The server side of the answer: which form, and what the player chose. */
-    public static void receiveFormResponse(java.util.function.BiConsumer<Integer, String> handler) {
+    /** The server side of the answer: who answered, which form, and what they chose. */
+    @FunctionalInterface
+    public interface FormAnswerHandler {
+        void answer(ServerPlayer player, int formId, String answer);
+    }
+
+    public static void receiveFormResponse(FormAnswerHandler handler) {
         //? if >=1.21 {
         ServerPlayNetworking.registerGlobalReceiver(FormResponse.TYPE,
             (payload, context) -> context.server().execute(
-                () -> handler.accept(payload.formId(), payload.answer())));
+                () -> handler.answer(context.player(), payload.formId(), payload.answer())));
         //?} else {
         /*ServerPlayNetworking.registerGlobalReceiver(FORM_RESPONSE,
             (server, player, network, buffer, sender) -> {
                 int formId = buffer.readVarInt();
-                String answer = buffer.readUtf(262144);
-                server.execute(() -> handler.accept(formId, answer));
+                String answer = buffer.readUtf(LONG_TEXT);
+                server.execute(() -> handler.answer(player, formId, answer));
             });
         *///?}
     }
@@ -393,7 +408,7 @@ public final class Channels {
             FORM,
             (client, network, buffer, sender) -> {
                 int formId = buffer.readVarInt();
-                String description = buffer.readUtf(262144);
+                String description = buffer.readUtf(LONG_TEXT);
                 client.execute(() -> handler.accept(formId, description));
             });
         *///?}
@@ -406,7 +421,7 @@ public final class Channels {
         //?} else {
         /*FriendlyByteBuf buffer = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         buffer.writeVarInt(formId);
-        buffer.writeUtf(answer, 262144);
+        buffer.writeUtf(answer, LONG_TEXT);
         net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(FORM_RESPONSE, buffer);
         *///?}
     }
@@ -416,7 +431,7 @@ public final class Channels {
         ServerPlayNetworking.send(player, new Packs(packs));
         //?} else {
         /*FriendlyByteBuf buffer = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
-        buffer.writeUtf(packs, 262144);
+        buffer.writeUtf(packs, LONG_TEXT);
         ServerPlayNetworking.send(player, PACKS, buffer);
         *///?}
     }
@@ -430,7 +445,7 @@ public final class Channels {
         /*net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
             PACKS,
             (client, network, buffer, sender) -> {
-                String packs = buffer.readUtf(262144);
+                String packs = buffer.readUtf(LONG_TEXT);
                 client.execute(() -> handler.accept(packs));
             });
         *///?}

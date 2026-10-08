@@ -17,7 +17,13 @@
       "at.ioexception.mcaddon.clientgametest.CraftingClientGameTest",
       "at.ioexception.mcaddon.clientgametest.TradeClientGameTest",
       "at.ioexception.mcaddon.clientgametest.DialogueClientGameTest",
-      "at.ioexception.mcaddon.clientgametest.RecordClientGameTest"
+      "at.ioexception.mcaddon.clientgametest.RecordClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.VanillaNamesClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.VillageClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.PackCommandClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.ServerRegistryClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.ServerEntityClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.ServerPlayerClientGameTest"
     ]
   },
   "depends": {

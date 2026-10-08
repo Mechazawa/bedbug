@@ -3,9 +3,12 @@ package at.ioexception.mcaddon.bedrock.animation;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
+import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.server.CommandReport;
 import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.PackCommand;
 import at.ioexception.mcaddon.server.ServerHooks;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 
@@ -52,11 +55,27 @@ public sealed interface AnimationAction {
         }
     }
 
-    /** A command run as the entity, the way {@link PackCommand} runs one. */
+    /**
+     * A command run as the entity, so `@s` is the entity and a relative position is its own.
+     *
+     * The authority behind it is the server's rather than the entity's. A mob carries none of its
+     * own, and a behaviour pack writing a command means the one the console would run. The line is
+     * in Bedrock's dialect, written by the add-on that declared the entity.
+     */
     record Command(String line) implements AnimationAction {
         @Override
         public void run(Entity entity, MolangEnvironment environment) {
-            new PackCommand(line).runAs(entity);
+            if (entity == null || !(entity.level() instanceof ServerLevel level)) return;
+
+            PackCommand command = PackCommand.tryFrom(AddonEntities.namespaceOf(entity.getType()), line);
+            if (command == null) return;
+
+            CommandSourceStack source = level.getServer().createCommandSourceStack()
+                .withLevel(level)
+                .withEntity(entity)
+                .withPosition(entity.position())
+                .withRotation(entity.getRotationVector());
+            command.run(source, CommandReport.DATA);
         }
     }
 }

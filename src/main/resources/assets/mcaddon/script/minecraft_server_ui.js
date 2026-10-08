@@ -138,6 +138,7 @@ function settle(formId, response) {
     const waiting = pending.get(formId);
     if (waiting === undefined) return;
     pending.delete(formId);
+    bridge.formSettled(formId);
     waiting.resolve(response);
 }
 

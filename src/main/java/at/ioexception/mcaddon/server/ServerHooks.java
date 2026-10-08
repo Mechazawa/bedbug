@@ -120,11 +120,11 @@ public final class ServerHooks {
             (level, player, pos, broken, blockEntity) -> Sensors.blockBroken(level, player, pos, broken));
         Dialogues.register();
         // One channel and one screen serve both, so the id's sign is what says which is waiting.
-        Channels.receiveFormResponse((formId, answer) -> {
+        Channels.receiveFormResponse((player, formId, answer) -> {
             if (Dialogues.answers(formId)) {
-                Dialogues.respond(formId, answer);
+                Dialogues.respond(player, formId, answer);
             } else if (scripts != null) {
-                scripts.formResponse(formId, answer);
+                scripts.formResponse(player, formId, answer);
             }
         });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
@@ -132,12 +132,15 @@ public final class ServerHooks {
             startState(handler.player);
             playerJoined(handler.player);
         });
-        // A connection is dropped on the thread reading it, and a script belongs to the server
-        // thread, so the event is handed over rather than raised where the drop was noticed.
+        // A connection is dropped on the thread reading it, and a script and the fog stacks belong
+        // to the server thread, so the event is handed over rather than handled where the drop was
+        // noticed.
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             ServerPlayer left = handler.player;
-            PlayerFogs.forget(left);
-            server.execute(() -> playerLeft(left));
+            server.execute(() -> {
+                PlayerFogs.forget(left);
+                playerLeft(left);
+            });
         });
         // A respawn is the other way into the world, and the flag is how a pack tells the two apart.
         ServerPlayerEvents.AFTER_RESPAWN.register((from, to, alive) -> {
@@ -303,13 +306,18 @@ public final class ServerHooks {
         if (state != null && server.getTickCount() % 1200 == 0) state.save();
     }
 
+    /**
+     * Held until the next tick rather than raised in place, the way Bedrock delivers it. A pack's
+     * `spawnEntity` returns before its listeners hear about the entity, so a pack that spawns one and
+     * then marks it as its own has done both by the time a listener asks whether it is marked.
+     */
     private static void raiseEntityEvent(String event, Entity entity) {
         if (scripts == null) return;
 
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("entity", ScriptHost.EntityHandle.of(entity));
         fields.put("cause", event.equals("entitySpawn") ? "Spawned" : "Loaded");
-        scripts.raiseWorldEvent(event, fields);
+        scripts.queueWorldEvent(event, fields);
     }
 
     /** The after event names an entity that no longer exists, so it carries its id and its type. */
@@ -322,8 +330,7 @@ public final class ServerHooks {
 
         Map<String, Object> removed = new LinkedHashMap<>();
         removed.put("removedEntityId", entity.getStringUUID());
-        removed.put("typeId",
-            net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString());
+        removed.put("typeId", AddonEntities.identifierOf(entity.getType()));
         scripts.raiseWorldEvent("entityRemove", removed);
     }
 
@@ -353,12 +360,9 @@ public final class ServerHooks {
                 return 1;
             }))
             .then(Commands.literal("entities").executes(command -> {
-                List<String> report = AddonEntities.report();
-                if (report.isEmpty()) {
-                    command.getSource().sendSuccess(
-                        () -> Component.literal("Every entity component the packs used is implemented."), false);
-                    return 1;
-                }
+                List<String> report = new java.util.ArrayList<>(AddonEntities.report());
+                if (report.isEmpty()) report.add("Every entity component the packs used is implemented.");
+                report.addAll(AddonEntities.answers());
                 report.forEach(line -> command.getSource().sendSuccess(() -> Component.literal(line), false));
                 return 1;
             }))

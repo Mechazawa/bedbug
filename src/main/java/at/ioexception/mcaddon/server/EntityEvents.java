@@ -327,13 +327,19 @@ public final class EntityEvents {
     }
 
     /**
-     * Bedrock's commands are Java's in the cases a pack's events use, apart from the leading slash.
+     * The event's commands, run as the entity and written by the add-on that declared it.
      *
      * `/scriptevent` is registered by this mod, so the whole round trip from an entity event to a
      * pack's script works through here.
      */
     private static void runCommands(Entity entity, EntityEvent.RunCommands commands) {
-        commands.commands().forEach(command -> PackCommand.of(command).runAs(entity));
+        if (!(entity.level() instanceof ServerLevel level)) return;
+
+        String namespace = AddonEntities.namespaceOf(entity.getType());
+        for (String command : commands.commands()) {
+            PackCommand line = PackCommand.tryFrom(namespace, command);
+            if (line != null) line.run(Platform.commandSourceOf(entity, level), CommandReport.DATA);
+        }
     }
 
     private static EntityEvent pick(EntityEvent.Randomise randomise) {

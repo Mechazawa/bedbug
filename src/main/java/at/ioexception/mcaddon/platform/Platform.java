@@ -131,6 +131,55 @@ public final class Platform {
         *///?}
     }
 
+    /**
+     * The source with at least the authority Java runs a function with.
+     *
+     * A command a pack's entity, block, dialogue or script runs is one the pack wrote, the way a
+     * function is, and a mob carries no authority of its own.
+     */
+    public static CommandSourceStack withFunctionPermission(CommandSourceStack source) {
+        //? if >=26 {
+        return source.withMaximumPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.GAMEMASTER);
+        //?} else {
+        /*return source.withMaximumPermission(2);
+        *///?}
+    }
+
+    /** Java's default for both the commands one run may queue and the forks one command may make. */
+    private static final int COMMAND_LIMIT = 65536;
+
+    /**
+     * Runs a parsed line to its end before returning, functions it calls included, and answers what
+     * it returned.
+     *
+     * From 1.20.3 a command runs inside an execution context, and the dispatcher alone refuses a
+     * `function`. The server's own context runs a line queued while another command is running only
+     * once that command is done, so the line gets a context of its own. A failure there reaches the
+     * source as a message rather than being thrown, so the source has to be one that hears it.
+     */
+    public static int runToEnd(com.mojang.brigadier.ParseResults<CommandSourceStack> parsed, String line)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        //? if >=1.21 {
+        com.mojang.brigadier.context.ContextChain<CommandSourceStack> chain =
+            com.mojang.brigadier.context.ContextChain.tryFlatten(parsed.getContext().build(line))
+                .orElseThrow(() -> com.mojang.brigadier.exceptions.CommandSyntaxException.BUILT_IN_EXCEPTIONS
+                    .dispatcherUnknownCommand().createWithContext(parsed.getReader()));
+        int[] returned = {0};
+        CommandSourceStack counted = parsed.getContext().getSource()
+            .withCallback((success, result) -> returned[0] += success ? result : 0);
+        try (net.minecraft.commands.execution.ExecutionContext<CommandSourceStack> context =
+            new net.minecraft.commands.execution.ExecutionContext<>(COMMAND_LIMIT, COMMAND_LIMIT,
+                net.minecraft.util.profiling.InactiveProfiler.INSTANCE)) {
+            net.minecraft.commands.execution.ExecutionContext.queueInitialCommandExecution(context, line, chain,
+                counted, net.minecraft.commands.CommandResultCallback.EMPTY);
+            context.runCommandQueue();
+        }
+        return returned[0];
+        //?} else {
+        /*return parsed.getContext().getSource().getServer().getCommands().getDispatcher().execute(parsed);
+        *///?}
+    }
+
     public static GameType gameMode(ServerPlayer player) {
         //? if >=26 {
         return player.gameMode();

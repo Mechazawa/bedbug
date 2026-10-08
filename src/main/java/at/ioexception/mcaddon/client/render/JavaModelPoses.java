@@ -4,7 +4,6 @@ import at.ioexception.mcaddon.bedrock.animation.BonePose;
 import at.ioexception.mcaddon.bedrock.entity.ClientEntityDefinition;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import net.minecraft.client.model.geom.ModelPart;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.Entity;
 
 import java.util.HashMap;
@@ -139,7 +138,7 @@ public final class JavaModelPoses {
     }
 
     private static String typeOf(Entity entity) {
-        return BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString();
+        return at.ioexception.mcaddon.registry.AddonEntities.identifierOf(entity.getType());
     }
 
     private static void report(String what) {

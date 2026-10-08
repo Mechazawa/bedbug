@@ -83,7 +83,7 @@ public final class ItemUseClientGameTest implements FabricClientGameTest {
         context.getInput().lookAt(0, -90);
         context.getInput().pressKey(options -> options.keyUse);
 
-        Worlds.waitForServer(context, world,
+        Worlds.waitForServer(context, world.getServer(),
             server -> !Stage.player(server).getItemBySlot(EquipmentSlot.HEAD).isEmpty(), 40,
             "tp:visor was used from the hotbar and nothing went onto the player's head.");
         String worn = world.getServer().computeOnServer(server ->
@@ -101,7 +101,7 @@ public final class ItemUseClientGameTest implements FabricClientGameTest {
         context.getInput().lookAt(180, 0);
         context.getInput().pressKey(options -> options.keyUse);
 
-        Worlds.waitForServer(context, world, server -> !sparks(server).isEmpty(), 40,
+        Worlds.waitForServer(context, world.getServer(), server -> !sparks(server).isEmpty(), 40,
             "tp:pebble was thrown and no tp:spark came into the world.");
         AddonEntity spark = world.getServer().computeOnServer(server -> sparks(server).get(0));
         boolean thrownByPlayer = world.getServer().computeOnServer(server -> spark.firedBy() == Stage.player(server));
@@ -136,7 +136,7 @@ public final class ItemUseClientGameTest implements FabricClientGameTest {
         context.getInput().lookAt(target);
         context.getInput().pressKey(options -> options.keyUse);
 
-        Worlds.waitForServer(context, world, server -> !embers(server).isEmpty(), 40,
+        Worlds.waitForServer(context, world.getServer(), server -> !embers(server).isEmpty(), 40,
             "tp:ember_spawn_egg was used on the floor and no tp:ember came into the world.");
         BlockPos stands = world.getServer().computeOnServer(server -> embers(server).get(0).blockPosition());
         Assert.that(stands.equals(target.above()), "Expected the tp:ember a spawn egg released to stand on the block"

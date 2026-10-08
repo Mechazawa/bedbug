@@ -58,9 +58,9 @@ public final class DialogueClientGameTest implements FabricClientGameTest {
 
             context.clickScreenButton("Feed it");
             context.waitForScreen(null);
-            Worlds.waitForServer(context, world, server -> score(server) == 111, 40, () ->
+            Worlds.waitForServer(context, world.getServer(), server -> score(server) == 111, 40, server ->
                 "Expected \"Feed it\" to add 100 and the scene's closing to add 10, leaving the reader on 111, and the"
-                    + " score is " + world.getServer().computeOnServer(DialogueClientGameTest::score) + ".");
+                    + " score is " + score(server) + ".");
         }
     }
 

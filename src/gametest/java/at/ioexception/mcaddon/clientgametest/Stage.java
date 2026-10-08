@@ -27,7 +27,7 @@ final class Stage {
     static void build(ClientGameTestContext context, TestSingleplayerContext world, String gameMode) {
         TestServerContext server = world.getServer();
         server.runCommand("tp @a 0.5 " + (FLOOR + 1) + " 0.5 0 0");
-        Worlds.waitForServer(context, world,
+        Worlds.waitForServer(context, world.getServer(),
             minecraft -> player(minecraft).level().isLoaded(CENTRE.offset(HALF_WIDTH, 0, HALF_WIDTH))
                 && player(minecraft).level().isLoaded(CENTRE.offset(-HALF_WIDTH, 0, -HALF_WIDTH)),
             200, "The chunks under the stage never loaded.");

@@ -37,9 +37,9 @@ public final class RecordClientGameTest implements FabricClientGameTest {
                 && hit.getType() == HitResult.Type.BLOCK && hit.getBlockPos().equals(JUKEBOX));
             context.getInput().pressKey(options -> options.keyUse);
 
-            Worlds.waitForServer(context, world, server -> jukebox(server).getSongPlayer().isPlaying(), 40, () ->
-                "tp:disc was used on a jukebox and the jukebox is not playing; it holds "
-                    + world.getServer().computeOnServer(server -> jukebox(server).getTheItem().toString()) + ".");
+            Worlds.waitForServer(context, world.getServer(), server -> jukebox(server).getSongPlayer().isPlaying(), 40,
+                server -> "tp:disc was used on a jukebox and the jukebox is not playing; it holds "
+                    + jukebox(server).getTheItem() + ".");
             int started = world.getServer().computeOnServer(MinecraftServer::getTickCount);
             context.waitFor(client -> client.level.getBlockState(JUKEBOX).getValue(JukeboxBlock.HAS_RECORD));
 
@@ -58,7 +58,7 @@ public final class RecordClientGameTest implements FabricClientGameTest {
             Assert.that(held.equals("minecraft:air"), "Expected the disc to leave the player's hand for the jukebox"
                 + " and the hand holds " + held + ".");
 
-            Worlds.waitForServer(context, world, server -> !jukebox(server).getSongPlayer().isPlaying(),
+            Worlds.waitForServer(context, world.getServer(), server -> !jukebox(server).getSongPlayer().isPlaying(),
                 LENGTH_TICKS * 3, "tp:disc states four seconds and was still playing after twelve.");
             int played = world.getServer().computeOnServer(MinecraftServer::getTickCount) - started;
             Assert.that(played >= LENGTH_TICKS, "Expected tp:disc to play for at least its four seconds, "

@@ -81,7 +81,8 @@ public final class TradeClientGameTest implements FabricClientGameTest {
             context.getInput().pressKey(options -> options.keyInventory);
             context.waitForScreen(null);
 
-            Worlds.waitForServer(context, world, server -> carried(server).containsKey("minecraft:lime_wool"), 40,
+            Worlds.waitForServer(context, world.getServer(),
+                server -> carried(server).containsKey("minecraft:lime_wool"), 40,
                 "The lime wool was taken out of tp:ember's result slot and never reached the player.");
             Map<String, Integer> carried = world.getServer().computeOnServer(TradeClientGameTest::carried);
             Assert.that(carried.equals(Map.of("minecraft:emerald", EMERALDS - 2, "minecraft:lime_wool", 1)),

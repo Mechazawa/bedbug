@@ -66,8 +66,9 @@ public final class PackConverter {
      * version, because the output is a function of the code that wrote it as well. A pack edited in
      * place gives a different answer and is converted again.
      */
-    private static String stampOf(Bundle bundle) {
+    private static String stampOf(Bundle bundle, FunctionNames functions) {
         StringBuilder stamp = new StringBuilder(at.ioexception.mcaddon.McAddon.VERSION);
+        stamp.append(' ').append(functions.stamp());
         stamp.append(' ').append(bundle.resources().contentStamp());
         for (BedrockPack behaviour : bundle.behaviours()) {
             stamp.append(' ').append(behaviour.contentStamp());
@@ -84,7 +85,8 @@ public final class PackConverter {
         }
     }
 
-    public static ConvertedPack convert(Bundle bundle, Path cache) {
+    /** Converts one add-on under the namespace chosen for it, calling functions out of `functions`. */
+    public static ConvertedPack convert(Bundle bundle, String namespace, FunctionNames functions, Path cache) {
         BedrockPack pack = bundle.resources();
         List<ItemDefinition> items = new ArrayList<>();
         List<RecipeDefinition> recipes = new ArrayList<>();
@@ -109,7 +111,6 @@ public final class PackConverter {
             dimensions.addAll(
                 at.ioexception.mcaddon.bedrock.behaviour.DimensionDefinition.readAll(behaviour));
         }
-        String namespace = Names.namespaceOf(pack, bundle.behaviours());
         Path root = cache.resolve("converted").resolve("%s-%s-%d".formatted(
             pack.manifest().uuid(), pack.manifest().version(), Platform.resourcePackFormat()));
 
@@ -129,7 +130,7 @@ public final class PackConverter {
         });
 
         try {
-            String stamp = stampOf(bundle);
+            String stamp = stampOf(bundle, functions);
             boolean fresh = !stamp.equals(readMarker(root));
             if (fresh) {
                 deleteRecursively(root);
@@ -155,7 +156,7 @@ public final class PackConverter {
                     ClientBlockDefinition.readAll(pack));
                 writeAtlas(root, sprites);
                 writeParticles(pack, root, textures.paths());
-                writeFunctions(bundle, root, namespace);
+                writeFunctions(bundle, root, namespace, functions);
                 writeFont(pack, root, namespace);
                 Worldgen.write(root, namespace, biomes,
                     at.ioexception.mcaddon.bedrock.ClientBiomeDefinition.readAll(pack,
@@ -1158,10 +1159,11 @@ public final class PackConverter {
         write(root.resolve("assets/minecraft/font/default.json"), font);
     }
 
-    private static void writeFunctions(Bundle bundle, Path root, String namespace) throws IOException {
+    private static void writeFunctions(Bundle bundle, Path root, String namespace, FunctionNames functions)
+        throws IOException {
         Set<String> unsupported = new java.util.LinkedHashSet<>();
         for (BedrockPack behaviour : bundle.behaviours()) {
-            Functions.convert(behaviour, root, namespace, unsupported);
+            Functions.convert(behaviour, root, namespace, functions, unsupported);
         }
         unsupported.forEach(at.ioexception.mcaddon.registry.AddonEntities::unsupported);
     }
