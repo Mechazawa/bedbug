@@ -1,7 +1,6 @@
 package at.ioexception.mcaddon.bedrock.model;
 
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
-import at.ioexception.mcaddon.registry.AddonEntities;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -18,14 +17,6 @@ import java.util.Map;
 
 /** Reads one geometry out of a pack's `models/entity` JSON. */
 public final class GeometryParser {
-
-    /**
-     * A way of building a bone that this renderer has no form of.
-     *
-     * `texture_meshes` builds geometry out of a texture's opaque pixels. A bone written that way is
-     * drawn as the boxes it also declares.
-     */
-    private static final List<String> UNREAD_BONE = List.of("texture_meshes");
 
     private GeometryParser() {
     }
@@ -66,8 +57,6 @@ public final class GeometryParser {
     }
 
     private static BedrockBone readBone(JsonObject json) {
-        AddonEntities.unsupportedFields("geometry", json, UNREAD_BONE);
-
         // A cube's own mirror and inflate replace the bone's rather than adding to them.
         boolean mirror = json.has("mirror") && json.get("mirror").getAsBoolean();
         float inflate = json.has("inflate") ? json.get("inflate").getAsFloat() : 0f;
@@ -76,6 +65,13 @@ public final class GeometryParser {
         if (json.has("cubes")) {
             for (JsonElement cube : json.getAsJsonArray("cubes")) {
                 cubes.add(readCube(cube.getAsJsonObject(), mirror, inflate));
+            }
+        }
+
+        List<BedrockTextureMesh> textureMeshes = new ArrayList<>();
+        if (json.has("texture_meshes")) {
+            for (JsonElement mesh : json.getAsJsonArray("texture_meshes")) {
+                textureMeshes.add(readTextureMesh(mesh.getAsJsonObject()));
             }
         }
 
@@ -100,7 +96,18 @@ public final class GeometryParser {
             json.has("neverRender") && json.get("neverRender").getAsBoolean(),
             json.has("binding") ? MolangParser.parse(json.get("binding").getAsString()) : null,
             List.copyOf(cubes),
+            List.copyOf(textureMeshes),
             Map.copyOf(locators));
+    }
+
+    private static BedrockTextureMesh readTextureMesh(JsonObject json) {
+        return new BedrockTextureMesh(
+            json.get("texture").getAsString(),
+            optionalVector(json, "position"),
+            optionalVector(json, "local_pivot"),
+            optionalVector(json, "rotation"),
+            json.has("scale") ? vector(json.getAsJsonArray("scale")) : new Vector3f(1f),
+            !json.has("use_pixel_depth") || json.get("use_pixel_depth").getAsBoolean());
     }
 
     private static BedrockCube readCube(JsonObject json, boolean boneMirror, float boneInflate) {

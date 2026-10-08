@@ -1,0 +1,24 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "tp:vane",
+      "materials": {
+        "default": "entity_alphatest"
+      },
+      "textures": {
+        "default": "textures/entity/vane"
+      },
+      "geometry": {
+        "default": "geometry.tp.vane"
+      },
+      "animations": {
+        "turn": "animation.tp.vane.turn"
+      },
+      "scripts": {
+        "animate": ["turn"]
+      },
+      "render_controllers": ["controller.render.tp.sprite"]
+    }
+  }
+}

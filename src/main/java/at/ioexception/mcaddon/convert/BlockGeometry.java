@@ -39,6 +39,7 @@ final class BlockGeometry {
     static JsonArray elements(BedrockGeometry geometry, Set<String> textures) {
         JsonArray elements = new JsonArray();
         for (BedrockBone bone : geometry.bones()) {
+            if (!bone.textureMeshes().isEmpty()) AddonEntities.unsupported("block geometry texture_meshes");
             for (BedrockCube cube : bone.cubes()) {
                 elements.add(element(cube, geometry, textures));
             }

@@ -31,6 +31,7 @@
       "at.ioexception.mcaddon.clientgametest.RenderControllerClientGameTest",
       "at.ioexception.mcaddon.clientgametest.AnimationClientGameTest",
       "at.ioexception.mcaddon.clientgametest.AttachableClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.TextureMeshClientGameTest",
       "at.ioexception.mcaddon.clientgametest.CullingClientGameTest",
       "at.ioexception.mcaddon.clientgametest.ParticleClientGameTest",
       "at.ioexception.mcaddon.clientgametest.FogClientGameTest",

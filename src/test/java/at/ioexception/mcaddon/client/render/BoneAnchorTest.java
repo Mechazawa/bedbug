@@ -70,7 +70,8 @@ class BoneAnchorTest {
 
     private static Matrix4f anchorOf(String bone) {
         BakedGeometry baked = GeometryBaker.bake(
-            GeometryParser.readGeometry("geometry.thing", Json.parse(HUMANOID).getAsJsonObject()));
+            GeometryParser.readGeometry("geometry.thing", Json.parse(HUMANOID).getAsJsonObject()),
+            texture -> null);
         return BedrockModelRenderer.anchorOf(baked, null, bone);
     }
 }

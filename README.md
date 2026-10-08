@@ -264,6 +264,13 @@ add-ons, or with another release of it, is told which in chat.
   and the item is drawn there at the size `held_item_scale` works out, at full brightness where
   `held_item_ignores_lighting` asks for it, and not at all while `hide_held_items` holds. A model
   carrying neither bone has nowhere to put an item and draws none, which is what Bedrock does too.
+- A bone built out of a texture. `texture_meshes` turns every texel a texture draws into a voxel one
+  pixel deep, which is how Mojang's own bow and crossbow attachables are modelled, and the shape
+  Java's `ItemModelGenerator` gives a flat item: both broad faces of each texel and a side wherever
+  the texel beside it is clear, each face drawn in its own texel's colour. The mesh names its texture
+  the way the entity's `textures` map does, is read from the converted image whatever the pack wrote
+  it as, and is placed by its `local_pivot`, `position`, `rotation` and `scale`, with
+  `use_pixel_depth` deciding how deep the layer is.
 - The sounds and particles an animation, an animation controller state or an entity's own definition
   fires, played at the bone the pack anchored them to.
 - Particle effects a pack describes itself: the emitter runs on its own clock at the rate and
@@ -535,14 +542,6 @@ hurts them for the right amount by a source that names no cause. Every other res
 can give runs: a command, a block state, dying, a sound, a particle, an effect added or taken away,
 a teleport, a swing, a loot table, a spent or swapped held item, and a block replaced here or one
 step away.
-
-**A bone built out of a texture.** `texture_meshes` extrudes geometry from a texture's opaque pixels,
-placing the sheet by a `local_pivot`, a `position` and a `rotation`. That is the same construction
-Java's own `ItemModelGenerator` performs for a flat item model, so nothing about Java stands in the
-way; what is missing is the reader, because the geometry pipeline here bakes boxes out of JSON and
-never opens an image. Eleven of Mojang's declarations use it, every one of them an item attachable,
-the bow and the crossbow among them. A bone written that way is drawn as the boxes it also declares,
-which for those eleven is nothing.
 
 **A bone bound to an entity Java draws with a model of its own.** A `binding` names a bone of
 whoever carries the model, which works for a pack's own entity and has nowhere to land on a player
