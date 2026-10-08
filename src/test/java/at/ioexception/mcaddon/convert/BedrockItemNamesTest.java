@@ -97,14 +97,25 @@ class BedrockItemNamesTest {
         assertEquals(bedrock, BedrockItemNames.bedrock(java));
     }
 
-    /** What a pack reads off an item has to name that same item when the pack hands it back. */
+    /**
+     * What a pack reads off an item has to name that same item when the pack hands it back.
+     *
+     * Every item the game has is asked, because a Bedrock name that Java spells for something else
+     * (`snow`, `nether_brick`, `stone_stairs`) breaks the round trip in one direction only. Banners
+     * and beds are the exception Bedrock makes itself: every colour is one id told apart by a data
+     * value, which the stack does not carry.
+     */
     @Test
     void readsBackWhatItReports() {
-        for (String java : java.util.List.of("minecraft:powered_rail", "minecraft:nether_brick",
-            "minecraft:nether_bricks", "minecraft:snow", "minecraft:snow_block", "minecraft:stone_stairs",
-            "minecraft:cobblestone_stairs", "minecraft:glow_item_frame", "minecraft:light_gray_glazed_terracotta")) {
-            assertEquals(java, BedrockItemNames.java(BedrockItemNames.bedrock(java)), java);
+        java.util.List<String> lost = new java.util.ArrayList<>();
+        for (net.minecraft.world.item.Item item : net.minecraft.core.registries.BuiltInRegistries.ITEM) {
+            String java = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item).toString();
+            if (java.endsWith("_banner") || java.endsWith("_bed")) continue;
+
+            String bedrock = BedrockItemNames.bedrock(java);
+            if (!java.equals(BedrockItemNames.java(bedrock))) lost.add(java + " -> " + bedrock);
         }
+        assertTrue(lost.isEmpty(), lost.toString());
         assertTrue(BedrockItemNames.bedrockOnly("minecraft:white_cushion"));
     }
 }
