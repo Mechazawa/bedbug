@@ -746,8 +746,9 @@ are. The server has no way to say that: `ServerPlayer.setCamera` calls `teleport
 entity's own position before it sends `ClientboundSetCameraPacket`, which is why
 `Camera.attachToEntity` works here and a preset does not. A client can say it, because
 `net.minecraft.client.Camera` keeps its `position`, `xRot`, `yRot` and `detached` as fields a mixin
-on `setup` may overwrite, which is what a free camera mod does; that is a payload of this mod's own,
-a client that acts on it, and the easing `/camera` states, and none of the three is built. Of the
+on `setup` may overwrite, and that is how the four built-in presets are drawn: a payload of this
+mod's own and a client that acts on it. What is not built is reading a pack's own presets out of
+`cameras`, so a name only such a file declares is refused as no preset at all. Of the
 fourteen things a preset states beside its identifier and what it inherits from, `pos_x`, `pos_y`,
 `pos_z`, `rot_x` and `rot_y` are the only ones naming anything Java holds at all. `player_effects`,
 `listener`, `extend_player_rendering`, `rotation_speed`, `snap_to_target`, `continue_targeting`,
