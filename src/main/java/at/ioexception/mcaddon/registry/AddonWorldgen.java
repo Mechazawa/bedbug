@@ -4,6 +4,7 @@ import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.behaviour.BiomeDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.FeatureDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.FeatureRuleDefinition;
+import at.ioexception.mcaddon.bedrock.behaviour.PackBiomes;
 import at.ioexception.mcaddon.convert.ConvertedPack;
 import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.pack.BedrockPack;
@@ -56,6 +57,10 @@ public final class AddonWorldgen {
         int biomes = 0;
         int rules = 0;
 
+        // Every pack's biomes are named before any rule is read, because a rule may select on a tag
+        // only a biome of another pack carries.
+        if (Platform.convertsWorldgen()) packs.forEach(AddonWorldgen::declareBiomes);
+
         for (ConvertedPack converted : packs) {
             for (BedrockPack pack : converted.behaviours()) {
                 List<BiomeDefinition> declared = BiomeDefinition.readAll(pack);
@@ -80,6 +85,15 @@ public final class AddonWorldgen {
 
         if (biomes > 0 || rules > 0) {
             McAddon.LOGGER.info("Added {} biomes and {} feature rules from add-ons.", biomes, rules);
+        }
+    }
+
+    private static void declareBiomes(ConvertedPack converted) {
+        for (BedrockPack pack : converted.behaviours()) {
+            for (BiomeDefinition biome : BiomeDefinition.readAll(pack)) {
+                Names.Identifier id = Names.split(biome.identifier(), converted.namespace());
+                PackBiomes.declare(id.namespace() + ":" + id.path(), biome.tags());
+            }
         }
     }
 
@@ -151,14 +165,17 @@ public final class AddonWorldgen {
         return GenerationStep.Decoration.VEGETAL_DECORATION;
     }
 
-    /** The biomes one rule reaches: the world its filter names, then the tags inside that world. */
+    /**
+     * The biomes one rule reaches: one of Java's when it lies in the world the filter names and its
+     * id matches, and a pack's own when the tags its pack gave it do.
+     */
     private static Predicate<BiomeSelectionContext> selector(FeatureRuleDefinition rule) {
         Predicate<BiomeSelectionContext> world = switch (rule.world()) {
             case "nether" -> BiomeSelectors.foundInTheNether();
             case "end" -> BiomeSelectors.foundInTheEnd();
             default -> BiomeSelectors.foundInOverworld();
         };
-        return context -> world.test(context)
-            && rule.biomes().matches(Platform.idOf(context.getBiomeKey()).getPath());
+        return context -> rule.biomes().allows(Platform.idOf(context.getBiomeKey()).toString(),
+            () -> world.test(context));
     }
 }

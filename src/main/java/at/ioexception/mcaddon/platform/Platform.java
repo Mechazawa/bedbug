@@ -1137,11 +1137,11 @@ public final class Platform {
         return context.getLevel().getCurrentDifficultyAt(lootOrigin(context)).getSpecialMultiplier();
     }
 
-    /** The biome the drop is happening in, by the path of its id, which is what a tag is read of. */
+    /** The id of the biome the drop is happening in, which is what a tag is read of. */
     public static String lootBiome(
         net.minecraft.world.level.storage.loot.LootContext context) {
         return context.getLevel().getBiome(lootOrigin(context)).unwrapKey()
-            .map(key -> idOf(key).getPath()).orElse("");
+            .map(key -> idOf(key).toString()).orElse("");
     }
 
     /**

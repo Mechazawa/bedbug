@@ -3,6 +3,8 @@ package at.ioexception.mcaddon.bedrock.behaviour;
 import at.ioexception.mcaddon.util.Json;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -13,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * The two editions name biomes differently, so every answer here is a decision this mod makes: a
  * bare array means all of its tests, a tag with a Java counterpart is matched against the id of the
  * biome carrying the same idea, and a tag with none is allowed rather than refused, so a pack whose
- * rule mentions one keeps the rest of the filter.
+ * rule mentions one keeps the rest of the filter. A pack's own biome is answered on its own tags.
  */
 class BiomeMatchTest {
     @Test
@@ -72,6 +74,20 @@ class BiomeMatchTest {
         assertEquals("overworld", world("""
             {"all_of": [{"test": "has_biome_tag", "operator": "!=", "value": "nether"},
                         {"test": "has_biome_tag", "operator": "!=", "value": "the_end"}]}"""));
+    }
+
+    @Test
+    void aPacksOwnBiomeIsAnsweredOnTheTagsItsPackGaveIt() {
+        PackBiomes.declare("tp:ash_flats", List.of("nether", "ashen"));
+
+        BiomeMatch ashen = parse("{\"test\": \"has_biome_tag\", \"value\": \"ashen\"}");
+        assertTrue(ashen.allows("tp:ash_flats", () -> false));
+        assertFalse(ashen.allows("minecraft:nether_wastes", () -> true));
+        assertFalse(ashen.allows("minecraft:plains", () -> true));
+
+        BiomeMatch overworld = parse("{\"test\": \"has_biome_tag\", \"value\": \"overworld\"}");
+        assertFalse(overworld.allows("tp:ash_flats", () -> true));
+        assertTrue(overworld.allows("minecraft:plains", () -> true));
     }
 
     private static BiomeMatch parse(String filter) {

@@ -68,8 +68,9 @@ public final class AddonSpawns {
     /**
      * The biomes one alternative allows.
      *
-     * The world comes first because Java holds the three of them apart with selectors of its own,
-     * and the tags are then matched against the id of each biome in that world.
+     * Java holds its three worlds apart with selectors of its own, so one of its biomes has to be in
+     * the world the filter points at before its id is matched. A pack's own biome says which world
+     * it belongs to among its tags.
      */
     private static Predicate<BiomeSelectionContext> selector(SpawnRuleDefinition.Condition condition) {
         Predicate<BiomeSelectionContext> world = switch (condition.world()) {
@@ -77,8 +78,8 @@ public final class AddonSpawns {
             case "end" -> BiomeSelectors.foundInTheEnd();
             default -> BiomeSelectors.foundInOverworld();
         };
-        return context -> world.test(context)
-            && condition.biomes().matches(Platform.idOf(context.getBiomeKey()).getPath());
+        return context -> condition.biomes().allows(Platform.idOf(context.getBiomeKey()).toString(),
+            () -> world.test(context));
     }
 
     /** Bedrock's population control names line up with Java's spawn categories. */

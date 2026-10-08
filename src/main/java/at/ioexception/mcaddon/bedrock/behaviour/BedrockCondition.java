@@ -194,11 +194,10 @@ public final class BedrockCondition implements LootItemCondition {
 
     private boolean biomeHasTag(LootContext context) {
         String tag = Json.text(bedrock, "tag", "");
-        if (!BiomeMatch.WORLDS.contains(tag) && !BiomeMatch.NOT_BIOMES.containsKey(tag)
-            && !BiomeMatch.JAVA_BIOMES.containsKey(tag)) {
+        if (!BiomeMatch.known(tag)) {
             AddonEntities.unsupported("loot condition biome_has_tag " + tag);
             return false;
         }
-        return new BiomeMatch.Tag(tag, false).matches(Platform.lootBiome(context));
+        return new BiomeMatch.Tag(tag, false).allows(Platform.lootBiome(context), () -> true);
     }
 }
