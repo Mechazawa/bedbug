@@ -80,7 +80,6 @@ REASONS = {
         "push_towards_closest_space": "The one vanilla entity declaring it is the player, which this mod "
                                       "applies nothing to.",
     },
-    "minecraft:pushable_by_entity": {"*": "Java pushes every mob apart and offers no per-entity switch."},
     "minecraft:push_through": {"*": "A crowd spacing per entity, which Java holds nowhere."},
     "minecraft:nameable": {"*": "Java lets a name tag name any mob, which is what the component asks for."},
     "minecraft:can_climb": {"*": "Carries no fields; declaring it is the whole statement."},

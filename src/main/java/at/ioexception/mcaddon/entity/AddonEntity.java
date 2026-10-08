@@ -1189,7 +1189,7 @@ public class AddonEntity extends PathfinderMob
      * Takes what the dropped stack holds into wherever the entity keeps things, and answers whether
      * any of it fitted.
      */
-    boolean pickUp(net.minecraft.world.entity.item.ItemEntity dropped) {
+    public boolean pickUp(net.minecraft.world.entity.item.ItemEntity dropped) {
         // `singular_pickup` is the pack asking for one of the stack rather than all of it.
         ItemStack taken = dropped.getItem().copy();
         if (ServerEntityDefinition.flag(liveComponent("minecraft:shareables"), "singular_pickup", false)) {
@@ -1230,7 +1230,7 @@ public class AddonEntity extends PathfinderMob
      * `all_items` is the pack saying the list is a preference rather than a gate, so an entity
      * declaring it takes whatever it finds.
      */
-    boolean shareable(net.minecraft.world.item.ItemStack stack) {
+    public boolean shareable(net.minecraft.world.item.ItemStack stack) {
         com.google.gson.JsonObject body = liveComponent("minecraft:shareables");
         if (body == null || !body.has("items")) return true;
         if (ServerEntityDefinition.flag(body, "all_items", false)) return true;
@@ -5286,6 +5286,87 @@ public class AddonEntity extends PathfinderMob
         }
         return !declaresNow("minecraft:pushable")
             || liveNumber("minecraft:pushable", "is_pushable", 1) != 0;
+    }
+
+    /**
+     * Pushes this entity and the one bumping into it apart, as the `minecraft:pushable_by_entity`
+     * preset for the other entity says.
+     *
+     * Java pushes every pair apart at five hundredths of a block a tick, which is the strength
+     * Bedrock's `default` mode starts from too; a preset scales that strength and each side's share
+     * of it, keeps the pair apart only between its two distances, or turns the push off. `ball` is
+     * a kick along the other entity's own movement, at a speed taken from that movement.
+     */
+    @Override
+    public void push(net.minecraft.world.entity.Entity other) {
+        com.google.gson.JsonObject preset = definition == null ? null : pushPreset(other);
+        if (preset == null) {
+            super.push(other);
+            return;
+        }
+        String mode = at.ioexception.mcaddon.util.Json.text(preset, "push_mode", "default");
+        if (mode.equals("none") || isPassengerOfSameVehicle(other) || other.noPhysics || noPhysics) return;
+
+        double dx = other.getX() - getX();
+        double dz = other.getZ() - getZ();
+        double apart = Math.sqrt(dx * dx + dz * dz);
+        if (apart < Goals.number(preset, "min_distance", 0.01)
+            || apart > Goals.number(preset, "max_distance", Double.MAX_VALUE)) {
+            return;
+        }
+        if (mode.equals("ball")) {
+            kickedBy(other, preset);
+            return;
+        }
+
+        double strength = Goals.number(preset, "strength_multiplier", 0.05) / Math.max(1, apart);
+        double xa = dx / Math.max(apart, 0.01) * strength;
+        double za = dz / Math.max(apart, 0.01) * strength;
+        double self = Goals.number(preset, "push_scale_self", 1);
+        double back = Goals.number(preset, "push_scale_other", 1);
+        if (!isVehicle() && isPushable()) push(-xa * self, 0, -za * self);
+        if (!other.isVehicle() && other.isPushable()) other.push(xa * back, 0, za * back);
+    }
+
+    /** `ball`: sent along the way the other entity was going, faster the faster it went. */
+    private void kickedBy(net.minecraft.world.entity.Entity other, com.google.gson.JsonObject preset) {
+        net.minecraft.world.phys.Vec3 going = other.getDeltaMovement().multiply(1, 0, 1);
+        if (going.lengthSqr() < 1.0e-6) going = position().subtract(other.position()).multiply(1, 0, 1);
+        if (going.lengthSqr() < 1.0e-6) return;
+
+        double speed = Math.max(Goals.number(preset, "min_kick_speed", 0),
+            Math.min(Goals.number(preset, "max_kick_speed", 0.5),
+                other.getDeltaMovement().horizontalDistance() * Goals.number(preset, "kick_speed_scale", 2)))
+            * Goals.number(preset, "push_scale_self", 1);
+        net.minecraft.world.phys.Vec3 kick = going.normalize().scale(speed);
+        double lift = onGround() ? speed * Goals.number(preset, "vertical_kick_multiplier", 0.3) : 0;
+        push(kick.x, lift, kick.z);
+        if (Goals.flag(preset, "play_sound", false) && tickCount >= nextPushSoundAt
+            && speed >= Goals.number(preset, "play_sound_impulse_threshold", 0.2)) {
+            makeNoise("pushed_by_player");
+            nextPushSoundAt = tickCount + Goals.ticks(preset, "play_sound_cooldown_in_seconds", 0.2);
+        }
+    }
+
+    private int nextPushSoundAt;
+
+    /**
+     * The first `minecraft:pushable_by_entity` preset whose `filters` hold with the other entity as
+     * `other`, or null where the component states none and Java's own push applies.
+     */
+    private com.google.gson.JsonObject pushPreset(net.minecraft.world.entity.Entity other) {
+        com.google.gson.JsonObject component = liveComponent("minecraft:pushable_by_entity");
+        java.util.List<com.google.gson.JsonElement> presets =
+            at.ioexception.mcaddon.util.Json.list(component, "presets");
+        if (presets.isEmpty()) return null;
+
+        Filter.Context context = new Filter.Context(this, other, other, ServerHooks.state());
+        return presets.stream()
+            .filter(com.google.gson.JsonElement::isJsonObject)
+            .map(com.google.gson.JsonElement::getAsJsonObject)
+            .filter(preset -> Goals.filter(preset, "filters").matches(context))
+            .findFirst()
+            .orElseGet(com.google.gson.JsonObject::new);
     }
 
     /** `is_pushable_by_piston` is the half of `minecraft:pushable` a moving piston asks about. */

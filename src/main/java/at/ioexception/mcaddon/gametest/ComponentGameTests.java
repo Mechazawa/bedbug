@@ -633,6 +633,46 @@ public final class ComponentGameTests {
     private static final double WISP_SNAP = 20;
 
     /**
+     * A bump pushes the entity as the `minecraft:pushable_by_entity` preset for the other one says.
+     *
+     * The anchored group lets a wisp push it not at all, and another ember ten times as hard as
+     * Java pushes anything, without that ember being pushed back.
+     */
+    @GameTest()
+    public void aBumpPushesAsThePresetForTheOtherEntitySays(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER, MIDDLE);
+        AddonEntity wisp = BehaviourGameTests.spawn(helper, WISP, MIDDLE);
+        AddonEntity kin = BehaviourGameTests.spawn(helper, EMBER, MIDDLE);
+        if (ember == null || wisp == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_anchor", null, ServerHooks.state());
+        Platform.placeAt(wisp, ember.getX() + BUMP, ember.getY(), ember.getZ(), 0f, 0f);
+        Platform.placeAt(kin, ember.getX() - BUMP, ember.getY(), ember.getZ(), 0f, 0f);
+        ember.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+        kin.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+
+        ember.push(wisp);
+        helper.assertTrue(ember.getDeltaMovement().lengthSqr() == 0,
+            EMBER + " may not be pushed by a wisp and was sent off at " + ember.getDeltaMovement() + ".");
+
+        ember.push(kin);
+        helper.assertTrue(ember.getDeltaMovement().x > JAVA_PUSH,
+            EMBER + " is pushed ten times as hard by its own kind and moved off at " + ember.getDeltaMovement() + ".");
+        helper.assertTrue(kin.getDeltaMovement().lengthSqr() == 0,
+            "the ember that bumped " + EMBER + " was pushed back, which the preset scales to nothing.");
+        helper.succeed();
+    }
+
+    /** How far apart the bumping entities stand, inside each other's boxes. */
+    private static final double BUMP = 0.3;
+
+    /** The most Java's own push moves anything in one bump. */
+    private static final double JAVA_PUSH = 0.05;
+
+    /**
      * Runs the entity's own ticks the way the level does, which counts its age first: Java's goals
      * tell one blow from the next by the age it landed at.
      */

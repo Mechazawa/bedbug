@@ -432,6 +432,20 @@
           "private": true
         }
       },
+      "tp:ember_anchored": {
+        "minecraft:pushable_by_entity": {
+          "presets": [
+            {
+              "filters": { "test": "is_family", "subject": "other", "value": "tp_wisp" },
+              "push_mode": "none"
+            },
+            {
+              "strength_multiplier": 0.5,
+              "push_scale_other": 0
+            }
+          ]
+        }
+      },
       "tp:ember_alert": {
         "minecraft:timer": {
           "time": 1.0,
@@ -625,6 +639,11 @@
       "tp:ember_hoard": {
         "add": {
           "component_groups": ["tp:ember_hoarding"]
+        }
+      },
+      "tp:ember_anchor": {
+        "add": {
+          "component_groups": ["tp:ember_anchored"]
         }
       },
       "tp:ember_winter": {
