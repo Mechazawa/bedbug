@@ -594,6 +594,45 @@ public final class ComponentGameTests {
     }
 
     /**
+     * The lead an entity is on stretches and breaks at the distances the preset for its holder says.
+     *
+     * The laden group's first preset applies to a wisp holding the lead and the second to anything
+     * else, so the same ember breaks free at five blocks from a post and at twenty from a wisp.
+     * Before 26 Java fixes the lead's lengths, so there is nothing to ask there.
+     */
+    @GameTest()
+    public void aLeadStretchesAsThePresetForItsHolderSays(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        AddonEntity post = BehaviourGameTests.spawn(helper, EMBER, STAND.east(1));
+        AddonEntity wisp = BehaviourGameTests.spawn(helper, WISP, STAND.east(2));
+        if (ember == null || wisp == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_load", null, ServerHooks.state());
+        //? if >=26 {
+        Platform.leashTo(ember, post);
+        helper.assertTrue(ember.leashSnapDistance() == POST_SNAP && ember.leashElasticDistance() == POST_PULL,
+            EMBER + " is tied to a post and breaks at " + ember.leashSnapDistance() + ", pulling past "
+                + ember.leashElasticDistance() + ".");
+        helper.assertTrue(ember.supportQuadLeash(), EMBER + " is tied by four springs and hangs from one.");
+
+        Platform.leashTo(ember, wisp);
+        helper.assertTrue(ember.leashSnapDistance() == WISP_SNAP,
+            EMBER + " is held by a wisp and breaks at " + ember.leashSnapDistance() + ".");
+        //?}
+        helper.succeed();
+    }
+
+    /** The second preset's `max_distance` and `hard_distance`, in blocks. */
+    private static final double POST_SNAP = 5;
+    private static final double POST_PULL = 3;
+
+    /** The first preset's `max_distance`, which applies while a wisp holds the lead. */
+    private static final double WISP_SNAP = 20;
+
+    /**
      * Runs the entity's own ticks the way the level does, which counts its age first: Java's goals
      * tell one blow from the next by the age it landed at.
      */

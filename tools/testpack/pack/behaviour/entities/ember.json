@@ -220,7 +220,18 @@
         },
         "minecraft:leashable": {
           "can_be_stolen": false,
-          "unleash_on_removal": true
+          "unleash_on_removal": true,
+          "presets": [
+            {
+              "filter": { "test": "is_family", "subject": "other", "value": "tp_wisp" },
+              "max_distance": 20
+            },
+            {
+              "max_distance": 5,
+              "hard_distance": 3,
+              "spring_type": "quad_dampened"
+            }
+          ]
         },
         "minecraft:leashable_to": {
           "unleash_on_removal": true

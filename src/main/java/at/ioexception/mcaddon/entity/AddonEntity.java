@@ -2032,6 +2032,56 @@ public class AddonEntity extends PathfinderMob
     *///?}
 
     /**
+     * The preset of `minecraft:leashable` that applies to the entity holding the lead, which is the
+     * first whose `filter` holds with the holder as `other`; an empty one where none does.
+     *
+     * Its distances are blocks: the lead pulls past `hard_distance`, which Bedrock defaults to seven,
+     * and breaks past `max_distance`, which it defaults to the twelve Java breaks at as well.
+     */
+    private com.google.gson.JsonObject leashPreset() {
+        net.minecraft.world.entity.Entity holder = Platform.leashHolder(this);
+        for (com.google.gson.JsonElement entry
+            : at.ioexception.mcaddon.util.Json.list(liveComponent("minecraft:leashable"), "presets")) {
+            if (!entry.isJsonObject()) continue;
+
+            com.google.gson.JsonObject preset = entry.getAsJsonObject();
+            if (holder == null && preset.has("filter")) continue;
+            if (holder == null || Goals.filter(preset, "filter")
+                .matches(new Filter.Context(this, holder, holder, ServerHooks.state()))) {
+                return preset;
+            }
+        }
+        return new com.google.gson.JsonObject();
+    }
+
+    // Before 26 Java fixes how far a lead stretches and gives an entity no say in it.
+    //? if >=26 {
+    @Override
+    public double leashSnapDistance() {
+        return definition == null ? super.leashSnapDistance() : Goals.number(leashPreset(), "max_distance", 12);
+    }
+
+    @Override
+    public double leashElasticDistance() {
+        return definition == null ? super.leashElasticDistance() : Goals.number(leashPreset(), "hard_distance", 7);
+    }
+
+    /** `quad_dampened` is four springs, one at each side, which is Java's quad lead. */
+    @Override
+    public boolean supportQuadLeash() {
+        return definition != null && "quad_dampened".equals(Goals.text(leashPreset(), "spring_type"));
+    }
+
+    /** `soft_distance` is how far off the holder the entity starts walking back towards it. */
+    @Override
+    public void closeRangeLeashBehaviour(net.minecraft.world.entity.Entity holder) {
+        if (definition == null || distanceTo(holder) > Goals.number(leashPreset(), "soft_distance", 4)) {
+            super.closeRangeLeashBehaviour(holder);
+        }
+    }
+    //?}
+
+    /**
      * Whether a player may take the lead off whatever else holds this entity.
      *
      * `can_be_stolen` is Bedrock's answer, and it defaults to yes. From 26 Java lets a player with a

@@ -230,7 +230,6 @@ REASONS = {
         "restriction_type": "Java holds a home as a position and a radius, with no kind.",
         "home_block_list": "Java's home is a position rather than a block to stand on.",
     },
-    "minecraft:leashable": {"presets": "Java pulls a leashed mob at a distance it fixes itself."},
     "minecraft:rideable": {
         "*": "The rider sits at the seat the pack gave and gets off where Java puts it: there is no "
              "dismount rule, no prompt text and no pulling riders in.",
