@@ -1846,6 +1846,62 @@ public class AddonEntity extends PathfinderMob
         ServerHooks.state().setProperty(getUUID(), "owner", player.getStringUUID());
     }
 
+    /** Belongs to whoever the entity it was before belonged to. */
+    public void keepOwnerOf(AddonEntity before) {
+        java.util.UUID id = before.ownerUuid();
+        if (id == null || ServerHooks.state() == null) return;
+
+        owner = id;
+        ownerRead = true;
+        ServerHooks.state().setProperty(getUUID(), "owner", id.toString());
+    }
+
+    /** Takes over the trading experience of the entity it was before, and the tiers that opens. */
+    public void keepTradeLevelOf(AddonEntity before) {
+        tradeExperience = before.tradeExperience;
+    }
+
+    /** Leaves what the entity carries in its inventory on the ground where it stands. */
+    public void dropInventory() {
+        if (carried == null) return;
+
+        net.minecraft.world.Containers.dropContents(level(), blockPosition(), carried);
+        carried.clearContent();
+    }
+
+    /** Makes one of the noises the entity's `sounds.json` names, by Bedrock's name for the moment. */
+    public void makeNoise(String moment) {
+        net.minecraft.sounds.SoundEvent made = moment == null ? null : noise(moment);
+        if (made != null) playSound(made, getSoundVolume(), getVoicePitch());
+    }
+
+    /**
+     * Starts the wait a delayed `minecraft:transformation` states, and answers whether there is one.
+     *
+     * `begin_transform_sound` is made as it starts. The wait ends with the transformation unless the
+     * group carrying the component has gone by then, which is how a cure is called off.
+     */
+    public boolean startTransforming(com.google.gson.JsonObject body) {
+        makeNoise(at.ioexception.mcaddon.util.Json.text(body, "begin_transform_sound", null));
+        transforming = Transformation.tryFrom(body, this);
+        return transforming != null;
+    }
+
+    private Transformation transforming;
+
+    private void keepTransforming() {
+        if (transforming == null) return;
+        if (liveComponent("minecraft:transformation") == null) {
+            transforming = null;
+            return;
+        }
+        if (!transforming.tick(this)) return;
+
+        com.google.gson.JsonObject body = transforming.body();
+        transforming = null;
+        EntityEvents.transform(this, body, ServerHooks.state());
+    }
+
     /** The owner's id, or null while nobody owns this entity. */
     /**
      * Whether the other entity is on this one's side: its owner, or another entity the same
@@ -3457,6 +3513,7 @@ public class AddonEntity extends PathfinderMob
      */
     private void everyTick() {
         holdBreath();
+        keepTransforming();
         noticeBeingHurt();
         noticeCatchingFire();
         noticeLeavingTheGround();

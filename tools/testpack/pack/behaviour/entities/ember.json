@@ -407,6 +407,14 @@
           "y_dist": 1
         }
       },
+      "tp:ember_turning": {
+        "minecraft:transformation": {
+          "into": "tp:wisp",
+          "delay": {
+            "value": 1
+          }
+        }
+      },
       "tp:ember_alert": {
         "minecraft:timer": {
           "time": 1.0,
@@ -590,6 +598,11 @@
       "tp:ember_potter": {
         "add": {
           "component_groups": ["tp:ember_pottering"]
+        }
+      },
+      "tp:ember_turn": {
+        "add": {
+          "component_groups": ["tp:ember_turning"]
         }
       },
       "tp:ember_winter": {

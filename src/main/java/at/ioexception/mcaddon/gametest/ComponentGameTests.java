@@ -533,6 +533,34 @@ public final class ComponentGameTests {
     private static final int STROLL_TICKS = 40;
 
     /**
+     * A transformation waits out the `delay` its pack states before the entity becomes another.
+     *
+     * The turning group waits one second, so the ember is still itself just after the group
+     * arrives and a wisp a second later.
+     */
+    @GameTest()
+    public void aTransformationWaitsOutItsDelay(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        if (ember == null || at.ioexception.mcaddon.registry.AddonEntities.typeOf(WISP) == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_turn", null, ServerHooks.state());
+        helper.assertTrue(ember.isAlive(), EMBER + " waits a second to transform and transformed at once.");
+
+        live(ember, TRANSFORM_TICKS);
+        helper.assertTrue(ember.isRemoved(), EMBER + " waited out its second and is still itself.");
+        helper.assertTrue(!helper.getLevel().getEntitiesOfClass(AddonEntity.class, ember.getBoundingBox().inflate(1),
+                other -> other.getType() == at.ioexception.mcaddon.registry.AddonEntities.typeOf(WISP)).isEmpty(),
+            EMBER + " transformed into nothing it can be found as.");
+        helper.succeed();
+    }
+
+    /** Past the one second the turning group waits, in Java's ticks. */
+    private static final int TRANSFORM_TICKS = 21;
+
+    /**
      * Runs the entity's own ticks the way the level does, which counts its age first: Java's goals
      * tell one blow from the next by the age it landed at.
      */

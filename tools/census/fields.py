@@ -234,10 +234,6 @@ REASONS = {
         "*": "Teleporting towards a target is a goal rather than a component here, and the entity has "
              "no target to chase.",
     },
-    "minecraft:transformation": {
-        "*": "The change happens at once, so there is no delay to wait out and no sound to play on the "
-             "way in or out of it.",
-    },
 }
 
 # The shapes a field name reaches the JSON through. Each captures the field it asks for.
