@@ -11,6 +11,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -21,6 +22,7 @@ import net.minecraft.world.phys.AABB;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -68,14 +70,55 @@ public record SpawnRuleDefinition(String identifier, String category, List<Condi
         return rules;
     }
 
-    private static SpawnRuleDefinition read(JsonObject root) {
+    /**
+     * The population each entity a pack writes a spawn rule for counts against, by identifier.
+     *
+     * Java fixes the category on the entity type, which is built before the rules are read in full,
+     * and counts an entity against the cap of its type's category whichever spawn list placed it.
+     */
+    public static Map<String, MobCategory> populations(BedrockPack pack) {
+        Map<String, MobCategory> found = new LinkedHashMap<>();
+        for (Path file : pack.list("spawn_rules", ".json")) {
+            try {
+                JsonObject description = description(Json.parseObject(file));
+                String identifier = description == null ? null : Json.text(description, "identifier", null);
+                if (identifier != null) {
+                    found.put(identifier, population(Json.text(description, "population_control", "animal")));
+                }
+            } catch (IOException | RuntimeException error) {
+                McAddon.LOGGER.warn("Could not read {}: {}", file.getFileName(), error.toString());
+            }
+        }
+        return found;
+    }
+
+    /** The population the entity counts against, which Java calls its spawn category. */
+    public MobCategory population() {
+        return population(category);
+    }
+
+    /** Bedrock's population control names line up with Java's spawn categories. */
+    private static MobCategory population(String control) {
+        return switch (control) {
+            case "monster" -> MobCategory.MONSTER;
+            case "water_animal" -> MobCategory.WATER_CREATURE;
+            case "ambient" -> MobCategory.AMBIENT;
+            default -> MobCategory.CREATURE;
+        };
+    }
+
+    private static JsonObject description(JsonObject root) {
         JsonObject body = root.has("minecraft:spawn_rules") && root.get("minecraft:spawn_rules").isJsonObject()
             ? root.getAsJsonObject("minecraft:spawn_rules") : null;
-        if (body == null) return null;
+        return body == null ? null : body.getAsJsonObject("description");
+    }
 
-        JsonObject description = body.getAsJsonObject("description");
+    private static SpawnRuleDefinition read(JsonObject root) {
+        JsonObject description = description(root);
         String identifier = description == null ? null : Json.text(description, "identifier", null);
         if (identifier == null) return null;
+
+        JsonObject body = root.getAsJsonObject("minecraft:spawn_rules");
 
         // A rule listing no conditions is how a pack says its entity has no natural spawn at all,
         // which is what Bedrock's own blaze, cat and pillager files say.

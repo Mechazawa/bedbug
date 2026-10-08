@@ -11,7 +11,6 @@ import net.fabricmc.fabric.api.biome.v1.BiomeSelectionContext;
 import net.fabricmc.fabric.api.biome.v1.BiomeSelectors;
 import net.fabricmc.fabric.api.biome.v1.ModificationPhase;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.MobCategory;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -58,7 +57,7 @@ public final class AddonSpawns {
             BiomeModifications
                 .create(McAddon.id("spawn_" + Math.abs(rule.identifier().hashCode()) + "_" + index++))
                 .add(ModificationPhase.ADDITIONS, selector(condition), context ->
-                    Platform.addSpawn(context, category(rule.category()), type, condition.weight(),
+                    Platform.addSpawn(context, rule.population(), type, condition.weight(),
                         condition.minimumHerd(), condition.maximumHerd()));
         }
         CONDITIONS.put(type, rule.conditions());
@@ -80,16 +79,5 @@ public final class AddonSpawns {
         };
         return context -> condition.biomes().allows(Platform.idOf(context.getBiomeKey()).toString(),
             () -> world.test(context));
-    }
-
-    /** Bedrock's population control names line up with Java's spawn categories. */
-    private static MobCategory category(String control) {
-        return switch (control) {
-            case "monster" -> MobCategory.MONSTER;
-            case "water_animal" -> MobCategory.WATER_CREATURE;
-            case "ambient" -> MobCategory.AMBIENT;
-            case "pillager", "cat", "villager" -> MobCategory.CREATURE;
-            default -> MobCategory.CREATURE;
-        };
     }
 }

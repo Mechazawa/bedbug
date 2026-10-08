@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.registry;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.behaviour.SpawnRuleDefinition;
 import at.ioexception.mcaddon.bedrock.EntitySounds;
 import at.ioexception.mcaddon.bedrock.behaviour.PlayerDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
@@ -193,13 +194,19 @@ public final class AddonEntities {
             if (pack.role() == PackRole.RESOURCE) sounds.putAll(EntitySounds.readAll(pack));
         }
 
+        Map<String, MobCategory> populations = new LinkedHashMap<>();
+        for (BedrockPack pack : packs.packs()) {
+            if (pack.role() == PackRole.BEHAVIOUR) populations.putAll(SpawnRuleDefinition.populations(pack));
+        }
+
         for (BedrockPack pack : packs.packs()) {
             if (pack.role() != PackRole.BEHAVIOUR) continue;
 
             at.ioexception.mcaddon.bedrock.BedrockAssets clips =
                 at.ioexception.mcaddon.bedrock.BedrockAssets.readBehaviour(pack);
             for (ServerEntityDefinition definition : ServerEntityDefinition.readAll(pack)) {
-                register(pack, definition, sounds, clips);
+                register(pack, definition, sounds, clips,
+                    populations.getOrDefault(definition.identifier(), MobCategory.CREATURE));
                 DECLARED.addAll(definition.components().keySet());
                 definition.componentGroups().values()
                     .forEach(group -> DECLARED.addAll(group.keySet()));
@@ -210,8 +217,13 @@ public final class AddonEntities {
         }
     }
 
+    /**
+     * Registers one entity type, in the population its pack's spawn rule names, which decides the
+     * cap the entity counts against however it came into the world.
+     */
     private static void register(BedrockPack pack, ServerEntityDefinition definition,
-        Map<String, EntitySounds> sounds, at.ioexception.mcaddon.bedrock.BedrockAssets clips) {
+        Map<String, EntitySounds> sounds, at.ioexception.mcaddon.bedrock.BedrockAssets clips,
+        MobCategory population) {
         Identifier id = identifier(definition.identifier());
         if (id == null) {
             McAddon.LOGGER.warn("{} declares {}, which is not a usable identifier.",
@@ -224,7 +236,7 @@ public final class AddonEntities {
         }
 
         EntityType<AddonEntity> type = Platform.buildEntityType(
-            EntityType.Builder.of(AddonEntity::new, MobCategory.CREATURE)
+            EntityType.Builder.of(AddonEntity::new, population)
                 .sized(definition.width() * definition.scale(), definition.height() * definition.scale()),
             id);
 
