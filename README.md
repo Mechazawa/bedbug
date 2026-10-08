@@ -20,7 +20,8 @@ Put the jar in `mods/`, then put your packs in `addons/`:
 `.mcaddon/` next to `addons/`; deleting that directory only costs one slower start.
 
 On a server, install the mod on the server and on every client, and give both the same packs. The
-server decides what happens; the client draws it.
+server decides what happens; the client draws it. A player joining without one of the server's
+add-ons, or with another release of it, is told which in chat.
 
 ## What works
 
@@ -180,7 +181,16 @@ server decides what happens; the client draws it.
   meal goes down, so the mob doing the killing is the entity the loot is about. A function Java has
   none of is answered the same way: a book drops carrying one of the enchantments the pack listed,
   at a level out of that enchantment's own range.
-- `.mcfunction` files translated into Java's command dialect with a `tick` function tag.
+- `.mcfunction` files translated into Java's command dialect with a `tick` function tag. A function
+  called by its Bedrock name, which is a path with no namespace, is written naming the add-on that
+  ships it: the calling add-on's own first, then whichever installed add-on has it.
+- The commands a pack runs while the game is going, translated the same way and as the add-on that
+  wrote them: a script's `runCommand`, an entity event's `queue_command`, a command on an animation
+  or controller timeline, a dialogue scene's buttons and a block event's `run_command`. Each runs to
+  its end, functions it calls included, with the authority Java gives a function, and what could
+  not be translated, what Java would not parse and what the game declined are each reported.
+- Bedrock's `hasitem` selector argument, registered as an option of Java's own selector, so
+  `@s[hasitem={item=apple,location=slot.weapon.mainhand,quantity=2..}]` selects in both editions.
 - Natural spawning from a pack's `spawn_rules`, with each alternative the rule lists becoming a
   biome spawn entry of its own. The weight, the group size and the biome tags decide which biomes
   it is offered in; the brightness, height, difficulty, world age, distance, density, delay, the
@@ -263,7 +273,13 @@ server decides what happens; the client draws it.
   run their handlers and redraws as its observables change), and the world, system, entity, dimension, block,
   scoreboard, game rule and structure surfaces are answered by the game. A player's fog stack is the
   one `/fog` keeps, a camera shake is the one `/camerashake` sends, and a dimension clones a region
-  through Java's own `/clone`, with a filter picking the blocks one at a time.
+  through Java's own `/clone`, with a filter picking the blocks one at a time. The game's own mobs reach a
+  script under Bedrock's ids, so a Java villager's `typeId` is `minecraft:villager_v2` and every
+  query, spawn and event filter accepts that spelling as well as Java's.
+- The options a listener subscribes with narrow what it hears, as Bedrock's do: the entities, entity
+  types, entity filter, event ids and damage or heal causes an entity event names. `entitySpawn`
+  and `entityLoad` arrive on the tick after the entity came into the world, so a script that spawns
+  one and then marks it has done both before a listener asks.
 - The world events a script subscribes to, raised out of the game rather than out of a pack's own
   data: what a player breaks, places, uses, picks up and swings at, where they go and what they
   hold, the weather turning and a game rule being set, an explosion and each block it takes, a
@@ -573,7 +589,7 @@ one session where Java keeps it as `max-players` in `server.properties`, which 2
 file, so a limit Bedrock forgets at the end of the session would outlive it here. `hud` is the one
 of the seventeen a Java client could be told to draw, and what it would cost is set out above. A
 function using any of them keeps its other lines and the dropped command is reported, and so is a
-line whose selector asks for something Java cannot select on, such as `hasitem`.
+line whose selector asks for something Java cannot select on, such as `haspermission`.
 
 **One form of a command the rest of which translates.** A `ride` that summons what it mounts or
 empties a vehicle, a `music` that loops, a `structure` mirrored on both axes or placed a block at a

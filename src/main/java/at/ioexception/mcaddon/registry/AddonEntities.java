@@ -39,6 +39,7 @@ public final class AddonEntities {
     private static final Map<EntityType<?>, ServerEntityDefinition> DEFINITIONS = new LinkedHashMap<>();
     private static final Map<String, EntityType<?>> BY_IDENTIFIER = new LinkedHashMap<>();
     private static final Map<String, AtomicInteger> UNSUPPORTED = new TreeMap<>();
+    private static final Map<String, String> DECLINED = new TreeMap<>();
     /** Per type, every trade table any of its declarations names, kept under the path it was read from. */
     private static final Map<EntityType<?>, Map<String, TradeTable>> TRADES = new LinkedHashMap<>();
     private static final Map<EntityType<?>, String> NAMESPACES = new LinkedHashMap<>();
@@ -64,6 +65,11 @@ public final class AddonEntities {
         return namespace == null ? null
             : Platform.id(namespace, at.ioexception.mcaddon.bedrock.behaviour.LootTableDefinition
                 .javaPath(table));
+    }
+
+    /** The namespace of the add-on that declared the type, or null for a type no add-on did. */
+    public static String namespaceOf(EntityType<?> type) {
+        return NAMESPACES.get(type);
     }
 
     public static ServerEntityDefinition definitionOf(EntityType<?> type) {
@@ -115,6 +121,26 @@ public final class AddonEntities {
         return id == null ? null : BuiltInRegistries.ENTITY_TYPE.getOptional(id).orElse(null);
     }
 
+    /**
+     * The identifier a pack knows this type by, which is what `typeOf` reads back: the add-on's own
+     * for a type a pack declared, and Bedrock's spelling for one the game has.
+     */
+    public static String identifierOf(EntityType<?> type) {
+        ServerEntityDefinition own = DEFINITIONS.get(type);
+        return own != null ? own.identifier()
+            : at.ioexception.mcaddon.convert.BedrockEntityNames.bedrock(
+                BuiltInRegistries.ENTITY_TYPE.getKey(type).toString());
+    }
+
+    /**
+     * The identifier a type a pack names is reported under, whichever edition's spelling it wrote,
+     * so that two names for one type compare equal. A name no type answers to comes back as written.
+     */
+    public static String identifierOf(String identifier) {
+        EntityType<?> named = typeOf(identifier);
+        return named == null ? identifier : identifierOf(named);
+    }
+
     public static Map<EntityType<?>, ServerEntityDefinition> all() {
         return DEFINITIONS;
     }
@@ -141,6 +167,23 @@ public final class AddonEntities {
         List<String> lines = new ArrayList<>();
         UNSUPPORTED.forEach((component, uses) -> lines.add("    " + component + " x" + uses.get()));
         if (!lines.isEmpty()) lines.add(0, "What the packs asked of their entities and this mod does not implement:");
+        return lines;
+    }
+
+    /**
+     * A command a pack's data ran that the game read and then declined, by its first word.
+     *
+     * This is the game answering, such as a selector that matched nothing, so it is listed apart
+     * from the gaps rather than among them.
+     */
+    public static void declined(String command, String reason) {
+        DECLINED.putIfAbsent(command.split(" ")[0], reason);
+    }
+
+    public static List<String> answers() {
+        List<String> lines = new ArrayList<>();
+        DECLINED.forEach((command, reason) -> lines.add("    " + command + ": " + reason));
+        if (!lines.isEmpty()) lines.add(0, "Commands the packs' entities and blocks ran that the game declined:");
         return lines;
     }
 
@@ -203,7 +246,8 @@ public final class AddonEntities {
         DEFINITIONS.put(type, definition);
         if (!definition.script().isEmpty()) CLIPS.put(type, clips);
         BY_IDENTIFIER.put(definition.identifier(), type);
-        namespaceOf(pack).ifPresent(namespace -> NAMESPACES.put(type, namespace));
+        String namespace = at.ioexception.mcaddon.resource.AddonPacks.namespaceOf(pack);
+        if (namespace != null) NAMESPACES.put(type, namespace);
         EntitySounds noises = EntitySounds.of(sounds, definition.identifier());
         if (noises != null) SOUNDS.put(type, noises);
         Map<String, TradeTable> trades = readTrades(pack, definition);
@@ -564,13 +608,6 @@ public final class AddonEntities {
      * A behaviour pack and the resource pack beside it are one add-on and converted as one, so the
      * namespace is looked up by the file both halves were unpacked from.
      */
-    private static java.util.Optional<String> namespaceOf(BedrockPack pack) {
-        return at.ioexception.mcaddon.resource.AddonPacks.all().stream()
-            .filter(converted -> converted.pack().origin().equals(pack.origin()))
-            .map(at.ioexception.mcaddon.convert.ConvertedPack::namespace)
-            .findFirst();
-    }
-
     /** Bedrock identifiers carry characters a resource location rejects, so both halves are cleaned. */
     private static Identifier identifier(String bedrock) {
         Names.Identifier split = Names.split(bedrock, "minecraft");

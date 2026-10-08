@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.script;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.server.CommandReport;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -15,8 +16,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * every unimplemented script member, every sound a pack names that does not exist and every command
  * that would not parse is counted here and reported rather than thrown.
  */
-public final class ScriptCoverage {
+public final class ScriptCoverage implements CommandReport {
     private final Map<String, AtomicInteger> unsupported = new LinkedHashMap<>();
+    private final Map<String, AtomicInteger> untranslatable = new LinkedHashMap<>();
     private final Map<String, AtomicInteger> missingSounds = new LinkedHashMap<>();
     private final Map<String, String> failedCommands = new LinkedHashMap<>();
     private final Map<String, String> refusedCommands = new LinkedHashMap<>();
@@ -29,12 +31,18 @@ public final class ScriptCoverage {
         count(missingSounds, sound);
     }
 
-    void failedCommand(String command, String reason) {
+    @Override
+    public void untranslatable(String what) {
+        count(untranslatable, what);
+    }
+
+    @Override
+    public void unreadable(String command, String reason) {
         failedCommands.putIfAbsent(command.split(" ")[0], reason);
     }
 
-    /** A command the game read and then declined, which says nothing about what this mod supports. */
-    void refusedCommand(String command, String reason) {
+    @Override
+    public void declined(String command, String reason) {
         refusedCommands.putIfAbsent(command.split(" ")[0], reason);
     }
 
@@ -47,6 +55,10 @@ public final class ScriptCoverage {
         if (!missingSounds.isEmpty()) {
             lines.add("Sounds the packs played that are not registered:");
             missingSounds.forEach((sound, plays) -> lines.add("    " + sound + " x" + plays.get()));
+        }
+        if (!untranslatable.isEmpty()) {
+            lines.add("What the packs' commands asked for that this mod cannot translate:");
+            untranslatable.forEach((what, runs) -> lines.add("    " + what + " x" + runs.get()));
         }
         if (!failedCommands.isEmpty()) {
             lines.add("Commands the packs ran that did not parse:");

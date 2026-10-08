@@ -1,6 +1,5 @@
 package at.ioexception.mcaddon.server;
 
-import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.behaviour.EntityEvent;
 import at.ioexception.mcaddon.bedrock.behaviour.Filter;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
@@ -10,8 +9,6 @@ import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.state.AddonState;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.mojang.brigadier.exceptions.CommandSyntaxException;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -330,23 +327,18 @@ public final class EntityEvents {
     }
 
     /**
-     * Bedrock's commands are Java's in the cases a pack's events use, apart from the leading slash.
+     * The event's commands, run as the entity and written by the add-on that declared it.
      *
      * `/scriptevent` is registered by this mod, so the whole round trip from an entity event to a
      * pack's script works through here.
      */
     private static void runCommands(Entity entity, EntityEvent.RunCommands commands) {
         if (!(entity.level() instanceof ServerLevel level)) return;
-        MinecraftServer server = level.getServer();
 
+        String namespace = AddonEntities.namespaceOf(entity.getType());
         for (String command : commands.commands()) {
-            String trimmed = command.startsWith("/") ? command.substring(1) : command;
-            try {
-                server.getCommands().getDispatcher().execute(trimmed,
-                    Platform.commandSourceOf(entity, level).withSuppressedOutput());
-            } catch (CommandSyntaxException error) {
-                McAddon.LOGGER.debug("An entity event ran a command that did not parse: {}", trimmed);
-            }
+            PackCommand line = PackCommand.tryFrom(namespace, command);
+            if (line != null) line.run(Platform.commandSourceOf(entity, level), CommandReport.DATA);
         }
     }
 

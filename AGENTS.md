@@ -142,13 +142,56 @@ These are the checks it runs, and what each one catches:
   Only the 26.x targets ship that API, so the tests are a source set of their own (`gametest`, with
   its own `fabric.mod.json` listing them) that the two older targets never compile, and `check`
   runs them for the checked-out version only. The two 26.x test APIs differ in a few spellings,
-  which `Worlds` holds. A test world is in creative on peaceful unless a test says otherwise, and
-  Java's avoid and target goals ignore a creative player and every player on peaceful.
+  which `Worlds` holds. A world built with the builder's consistent settings is on peaceful, so a
+  test about a mob reacting to the player sets the game mode and the difficulty itself: Java's
+  avoid and target goals ignore a creative player and every player on peaceful.
 
   `-Paddons=<directory>` installs every `.mcaddon` in that directory beside the synthetic one, for
   either game test task, so the same tests can be run against a real pack that may never be
   committed here. Both tasks delete their world before running, because each run of the server
   tests places them somewhere new and a kept world only grows.
+
+  `VillageClientGameTest` makes a normal world with structures, teleports to the nearest village and
+  waits for villagers to be standing in it, which is what a player calls a village. Two traps met
+  while writing it:
+
+  - **A survival player teleported into the air dies of the fall, and a dead player holds no
+    chunk.** The overworld then has nothing loaded, `areEntitiesLoaded` answers false everywhere and
+    no entity is found, which reads exactly like entity loading being broken. A world made with
+    `setUseConsistentSettings(false)` starts in survival, so put the player in creative or somewhere
+    they can stand.
+  - **`/locate poi #minecraft:village` finds job sites, not villages.** The tag holds every job
+    site, bed and bell, and a barrel is the fisherman's, so it answers with the nearest trial
+    chamber or Terralith refinery as readily as a village. `/locate structure #minecraft:village` is
+    the question about villages.
+
+  **Multiplayer is asserted against a dedicated server.** The three `Server*ClientGameTest`s call
+  `worldBuilder().createServer()` and `connect()`, so the client reaches the server over a real TCP
+  connection on which every message is encoded, which a single player world's in-memory connection
+  never does. `ServerRegistryClientGameTest` compares every add-on entity type, item, block, sound
+  event and biome by number on both sides and sends an item stack and a block state across;
+  `ServerEntityClientGameTest` follows a wisp's type, a `client_sync` property, a component group's
+  box and drawn size, a wisp settled before the client could see it, and `/playanimation` on a wisp
+  and a villager; `ServerPlayerClientGameTest` adds a second player, `Bystander`, and asserts a form,
+  `/camera`, `/camerashake` and `/fog` reach the player they name and nobody else, that a form's
+  answer counts only from its own player, and that the test pack's eight hundred button catalogue
+  arrives whole.
+
+  What the dedicated server runs on: Fabric starts it with `net.minecraft.server.Main` inside the
+  client's own process and in the same run directory, so it has the same mods, reads the same
+  `addons/` that `installClientTestPack` fills, and writes its world to `world/`, which Fabric
+  deletes before each one. Three things follow:
+
+  - **The built-in registries and every static field are one copy shared by both sides.** A
+    registry id cannot disagree here and a client reading server state by mistake would pass, so
+    assert on what crossed the connection (an entity, a stack, a payload) rather than on statics.
+  - **C2ME ends the whole process once a dedicated server shuts down**, which ended the run after
+    the first of these tests and still reported success. `runClientGameTest` writes
+    `config/c2me.toml` with `fixes.disableLoggingShutdownHook = false` first, which turns that off.
+  - **Fabric's client `DISCONNECT` is raised on the network thread** when a remote connection drops.
+    Anything a handler clears that the render thread also reads has to be handed to the client
+    thread, which is what the first of these tests to disconnect found as a
+    `ConcurrentModificationException`; the server's own `DISCONNECT` is handed over the same way.
 - **`tools/testpack/build.py`** builds a small add-on to check the mod against, so a clean checkout
   has something to verify itself with. Put it where the game reads packs from:
 
@@ -353,7 +396,34 @@ These are the checks it runs, and what each one catches:
   `FormClientGameTest`, run by `./gradlew :26.2:runClientGameTest` and part of `check`, opens it,
   turns the page and asserts the same screen now draws the second page and not the first, then
   closes it both ways and reads the tag back: a form whose button press closed the screen, or whose
-  observables reached the screen only once, fails there.
+  observables reached the screen only once, fails there. The same script answers
+  `/scriptevent "tp:catalogue"` with an `ActionFormData` of eight hundred buttons, whose description
+  is longer than the 32767 characters a plain network string carries.
+
+  `animation.tp.wisp.lift` raises the wisp's one bone by four pixels for two seconds, which is what
+  `/playanimation` on an add-on entity is measured by.
+
+  The same script watches the game's own villagers the way a pack replacing them does, in Bedrock's
+  ids throughout: it compares `typeId` against `minecraft:villager_v2` and `minecraft:xp_orb` as
+  each entity spawns, queries the overworld for `minecraft:villager_v2` every tick and spawns a
+  sprite it then marks beside each one found, hears `entityHurt` through listeners narrowed to a
+  villager and to a zombie, and answers `/scriptevent "tp:villager"` with
+  `spawnEntity("minecraft:villager_v2")`. Every answer is a tag, which `VanillaNamesClientGameTest`
+  reads back after summoning a Java villager and an experience orb: a surface reporting or accepting
+  only Java's ids, a listener whose options are ignored, or an `entitySpawn` raised before
+  `spawnEntity` has returned each fails there.
+
+  Every command line in the pack that runs while the game is going is written so Java's parser
+  refuses it as it stands. On `/scriptevent "tp:commands"` the script runs, as whatever sent it, a
+  selector asking with `hasitem` about the main hand and about everything carried, a selector naming
+  `villager_v2`, `function tp/relay` by its path alone (which calls `tp/relayed` the same way inside
+  the file) and `hud`, which nothing translates. The ember's `tp:ember_command` event tags it through
+  a Bedrock radius and asks for `hud` as well, and its controller's command tags it through a Bedrock
+  radius. `CommandGameTests` reads each of those back as a tag, and finds `hud` among what
+  `/mcaddon scripts` and `/mcaddon entities` say cannot be translated rather than among what did not
+  parse. The dialogue's first button runs `xp 1L`, and `/scriptevent "tp:stock_up"` gives the player
+  `tp:dust` unless `hasitem` finds one on them; `PackCommandClientGameTest` presses the button and
+  asks for the dust twice, and reads back one level gained and one dust carried.
 
   Beside the handbook the script answers probes, each a script event `ScriptGameTests` runs as a
   mock player and each answered by tagging that player with what the script read back: one pushes
@@ -1152,6 +1222,15 @@ check when reading a component for the first time:
   disagrees with it. The doc modules under `metadata/doc_modules/` carry Mojang's own default and
   type per field, which is what to read it against.
 
+**A command a pack runs goes through `server.PackCommand`.** A script, an entity event, a timeline,
+a dialogue scene and a block all hand over Bedrock's dialect, which `Functions.line` translates
+exactly as it does a function file's line, as the add-on that wrote it so a bare function name
+reaches that add-on's function. `FunctionNames` is what a bare name is looked up in: every add-on's
+functions, the caller's first. The line then runs in an execution context of its own, because from
+1.20.3 the dispatcher alone refuses a `function` and the server's context runs a line queued during
+another command only once that command is done. A new path that runs a pack's commands takes the
+issuing add-on's namespace and a `CommandReport`, never the dispatcher directly.
+
 **A gap and an answer are counted apart.** A command the game read and then declined, a selector that
 matched nothing, a structure holding a chest this cannot fill: those are listed after the verdict
 line rather than among the gaps, because counting them would make a pack asking an ordinary question
@@ -1231,3 +1310,11 @@ src/main/resources/assets/mcaddon/script/
 of it runs, so a specifier a pack imports that is not in that map, or a named export missing from
 one that is, ends that pack's whole script rather than the line that asked for it. Add the name
 even when the mod cannot act on what the module offers.
+
+**An entity type crosses the bridge under its Bedrock id.** `AddonEntities.identifierOf` is what
+the surface reports (`typeId`, `EntityTypes`, event payloads, families) and `AddonEntities.typeOf`
+is what it accepts (spawns, queries, filters), with `BedrockEntityNames` holding the vanilla ids
+the two editions spell differently in both directions. Compare two names through `identifierOf`,
+never the raw registry key, or `minecraft:villager` and `minecraft:villager_v2` read as two types.
+Item and block ids cross unchanged, so Bedrock-only spellings such as `minecraft:golden_rail` do
+not resolve in a script.

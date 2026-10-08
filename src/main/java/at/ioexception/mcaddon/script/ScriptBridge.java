@@ -1,8 +1,10 @@
 package at.ioexception.mcaddon.script;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.script.surface.Blocks;
 import at.ioexception.mcaddon.script.surface.Containers;
 import at.ioexception.mcaddon.script.surface.EntityMembers;
@@ -13,12 +15,12 @@ import at.ioexception.mcaddon.script.surface.Registries;
 import at.ioexception.mcaddon.script.surface.TickingAreas;
 import at.ioexception.mcaddon.script.surface.Worlds;
 import at.ioexception.mcaddon.server.DamageSources;
+import at.ioexception.mcaddon.server.PackCommand;
 import at.ioexception.mcaddon.state.AddonState;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
-import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -78,6 +80,14 @@ public final class ScriptBridge {
     private final MinecraftServer server;
     private final AddonState state;
     private final ScriptCoverage coverage;
+
+    /**
+     * The namespace of the add-on whose script runs here, or null when several add-ons ship one.
+     *
+     * Every pack's script shares one bridge and calls it through one module, so a command a script
+     * runs carries nothing saying which of several packs wrote it.
+     */
+    private final String namespace;
     private long tickDeadline;
     private final Map<Integer, String> openForms = new java.util.LinkedHashMap<>();
 
@@ -108,10 +118,11 @@ public final class ScriptBridge {
     @HostAccess.Export
     public final TickingAreas tickingAreas;
 
-    ScriptBridge(MinecraftServer server, AddonState state, ScriptCoverage coverage) {
+    ScriptBridge(MinecraftServer server, AddonState state, ScriptCoverage coverage, String namespace) {
         this.server = server;
         this.state = state;
         this.coverage = coverage;
+        this.namespace = namespace;
         this.blocks = new Blocks(server, coverage);
         this.containers = new Containers(server, coverage);
         this.players = new Players(server, coverage);
@@ -300,7 +311,7 @@ public final class ScriptBridge {
     @HostAccess.Export
     public String entityTypeId(String id) {
         Entity entity = entity(id);
-        return entity == null ? null : EntityType.getKey(entity.getType()).toString();
+        return entity == null ? null : AddonEntities.identifierOf(entity.getType());
     }
 
     @HostAccess.Export
@@ -519,7 +530,8 @@ public final class ScriptBridge {
 
     @HostAccess.Export
     public String[] entityFamilies(String id) {
-        return EntityFamilies.of(entityTypeId(id));
+        Entity entity = entity(id);
+        return entity == null ? new String[0] : EntityFamilies.of(entity);
     }
 
     @HostAccess.Export
@@ -917,11 +929,8 @@ public final class ScriptBridge {
     @HostAccess.Export
     public String spawnEntity(String dimension, String typeId, double x, double y, double z) {
         ServerLevel level = level(dimension);
-        Identifier parsed = Identifier.tryParse(typeId);
-        if (level == null || parsed == null) return null;
-
-        EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getOptional(parsed).orElse(null);
-        if (type == null) return null;
+        EntityType<?> type = typeId == null ? null : AddonEntities.typeOf(typeId);
+        if (level == null || type == null) return null;
 
         Entity spawned = Platform.createMob(type, level);
         if (spawned == null) return null;
@@ -988,13 +997,19 @@ public final class ScriptBridge {
         Entity entity = entity(id);
         if (entity == null) return 0;
         if (!(entity.level() instanceof ServerLevel level)) return 0;
-        return run(Platform.commandSourceOf(entity, level), command);
+        return runPacks(Platform.commandSourceOf(entity, level), command);
     }
 
     @HostAccess.Export
     public int runCommandIn(String dimension, String command) {
         ServerLevel level = level(dimension);
-        return level == null ? 0 : run(server.createCommandSourceStack().withLevel(level), command);
+        return level == null ? 0 : runPacks(server.createCommandSourceStack().withLevel(level), command);
+    }
+
+    /** A line the pack's script wrote, which is in Bedrock's dialect. */
+    private int runPacks(CommandSourceStack source, String command) {
+        PackCommand line = PackCommand.tryFrom(namespace, command);
+        return line == null ? 0 : line.run(source, coverage);
     }
 
     // Scoreboard. Reads go through the game's own objects; writes go through the command, whose
@@ -1229,9 +1244,15 @@ public final class ScriptBridge {
         if (entity(playerId) instanceof ServerPlayer player) Channels.sendForm(player, 0, "");
     }
 
-    /** The form a player still has open, so a disconnect can resolve the promise waiting on it. */
-    Map<Integer, String> openForms() {
-        return openForms;
+    /** Whether a form is waiting on this player, who is the only one its answer may come from. */
+    boolean shownTo(int formId, ServerPlayer player) {
+        return player.getStringUUID().equals(openForms.get(formId));
+    }
+
+    /** Called once a form's promise has settled, after which nobody's answer to it is wanted. */
+    @HostAccess.Export
+    public void formSettled(int formId) {
+        openForms.remove(formId);
     }
 
     // Helpers, not exported
@@ -1287,37 +1308,9 @@ public final class ScriptBridge {
         return null;
     }
 
-    /**
-     * Brigadier's dispatcher rather than `performPrefixedCommand`, whose return type changed twice
-     * across the supported versions while the dispatcher's has not.
-     */
+    /** A line this bridge built in Java's dialect. */
     private int run(CommandSourceStack source, String command) {
-        String trimmed = command.startsWith("/") ? command.substring(1) : command;
-        CommandSourceStack quiet = source.withSuppressedOutput();
-
-        // Brigadier raises the same kind of failure for a command it cannot read and one that read
-        // fine and then declined. Only the first says this mod is missing something, so the two are
-        // counted apart: a selector matching nothing is the game answering, not a gap.
-        com.mojang.brigadier.ParseResults<CommandSourceStack> parsed =
-            server.getCommands().getDispatcher().parse(trimmed, quiet);
-        if (!parsed.getExceptions().isEmpty() || parsed.getReader().canRead()) {
-            coverage.failedCommand(trimmed, unreadable(parsed));
-            return 0;
-        }
-
-        try {
-            return server.getCommands().getDispatcher().execute(parsed);
-        } catch (CommandSyntaxException declined) {
-            coverage.refusedCommand(trimmed, declined.getMessage());
-            return 0;
-        }
-    }
-
-    /** What Brigadier objected to, or where it stopped reading when it said nothing. */
-    private static String unreadable(com.mojang.brigadier.ParseResults<CommandSourceStack> parsed) {
-        return parsed.getExceptions().values().stream().findFirst()
-            .map(CommandSyntaxException::getMessage)
-            .orElseGet(() -> "unread from position " + parsed.getReader().getCursor());
+        return PackCommand.java(command).run(source, coverage);
     }
 
     private ItemStack stack(String itemId, int amount) {
@@ -1404,24 +1397,34 @@ public final class ScriptBridge {
             location.get("x").getAsDouble(), location.get("y").getAsDouble(), location.get("z").getAsDouble()};
     }
 
-    /** Bedrock type families come from the behaviour pack; nothing declares them for vanilla types. */
+    /**
+     * Bedrock type families come from the behaviour pack, so an add-on's own type answers with what
+     * its definition declares. Nothing declares them for the game's types, which are keyed here by
+     * the id Bedrock gives them.
+     */
     private static final class EntityFamilies {
-        private static final Map<String, String[]> VANILLA = Map.of(
-            "minecraft:player", new String[] {"player", "mob"},
-            "minecraft:villager", new String[] {"villager", "mob"},
-            "minecraft:zombie", new String[] {"zombie", "undead", "monster", "mob"},
-            "minecraft:skeleton", new String[] {"skeleton", "undead", "monster", "mob"},
-            "minecraft:creeper", new String[] {"creeper", "monster", "mob"},
-            "minecraft:sheep", new String[] {"sheep", "animal", "mob"},
-            "minecraft:cow", new String[] {"cow", "animal", "mob"},
-            "minecraft:wandering_trader", new String[] {"wandering_trader", "mob"},
-            "minecraft:iron_golem", new String[] {"irongolem", "mob"});
+        private static final Map<String, String[]> VANILLA = Map.ofEntries(
+            Map.entry("minecraft:player", new String[] {"player", "mob"}),
+            Map.entry("minecraft:villager_v2", new String[] {"villager", "mob"}),
+            Map.entry("minecraft:zombie_villager_v2",
+                new String[] {"zombie_villager", "zombie", "undead", "monster", "mob"}),
+            Map.entry("minecraft:zombie", new String[] {"zombie", "undead", "monster", "mob"}),
+            Map.entry("minecraft:skeleton", new String[] {"skeleton", "undead", "monster", "mob"}),
+            Map.entry("minecraft:creeper", new String[] {"creeper", "monster", "mob"}),
+            Map.entry("minecraft:sheep", new String[] {"sheep", "animal", "mob"}),
+            Map.entry("minecraft:cow", new String[] {"cow", "animal", "mob"}),
+            Map.entry("minecraft:wandering_trader", new String[] {"wandering_trader", "mob"}),
+            Map.entry("minecraft:iron_golem", new String[] {"irongolem", "mob"}),
+            Map.entry("minecraft:boat", new String[] {"boat", "inanimate"}),
+            Map.entry("minecraft:chest_boat", new String[] {"boat", "inanimate"}));
 
         private EntityFamilies() {
         }
 
-        static String[] of(String typeId) {
-            return VANILLA.getOrDefault(typeId, new String[] {"mob"});
+        static String[] of(Entity entity) {
+            ServerEntityDefinition own = AddonEntities.definitionOf(entity.getType());
+            if (own != null) return own.families().toArray(String[]::new);
+            return VANILLA.getOrDefault(AddonEntities.identifierOf(entity.getType()), new String[] {"mob"});
         }
     }
 
@@ -1466,22 +1469,27 @@ public final class ScriptBridge {
         /** What the entity is: its registered type, and the Bedrock families that type belongs to. */
         private void kinds(JsonObject options) {
             String type = text(options, "type");
-            if (type != null) tests.add(entity -> typeId(entity).equals(qualify(type)));
+            if (type != null) {
+                String wanted = identifier(type);
+                tests.add(entity -> typeId(entity).equals(wanted));
+            }
 
             Set<String> excludeTypes = strings(options, "excludeTypes");
             if (!excludeTypes.isEmpty()) {
-                tests.add(entity -> excludeTypes.stream().noneMatch(one -> typeId(entity).equals(qualify(one))));
+                Set<String> unwanted = new java.util.HashSet<>();
+                excludeTypes.forEach(one -> unwanted.add(identifier(one)));
+                tests.add(entity -> !unwanted.contains(typeId(entity)));
             }
 
             Set<String> families = strings(options, "families");
             if (!families.isEmpty()) {
-                tests.add(entity -> Set.of(EntityFamilies.of(typeId(entity))).containsAll(families));
+                tests.add(entity -> Set.of(EntityFamilies.of(entity)).containsAll(families));
             }
 
             Set<String> excludeFamilies = strings(options, "excludeFamilies");
             if (!excludeFamilies.isEmpty()) {
                 tests.add(entity -> java.util.Collections.disjoint(
-                    Set.of(EntityFamilies.of(typeId(entity))), excludeFamilies));
+                    Set.of(EntityFamilies.of(entity)), excludeFamilies));
             }
         }
 
@@ -1645,7 +1653,11 @@ public final class ScriptBridge {
         }
 
         private static String typeId(Entity entity) {
-            return EntityType.getKey(entity.getType()).toString();
+            return AddonEntities.identifierOf(entity.getType());
+        }
+
+        private static String identifier(String type) {
+            return AddonEntities.identifierOf(qualify(type));
         }
 
         private static String nameOf(Entity entity) {

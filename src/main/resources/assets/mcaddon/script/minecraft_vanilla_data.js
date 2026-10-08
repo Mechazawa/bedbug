@@ -7,8 +7,10 @@
 //
 // A key is the id with its namespace dropped and each underscore turned into a capital, which is
 // how the Bedrock package spells it, and the value is the id this game answers to. Where Bedrock
-// and Java name the same thing differently, the Java name is the one here, because the id is what
-// a pack hands back to the rest of the surface.
+// and Java name the same block or item differently, the Java name is the one here, because the id
+// is what a pack hands back to the rest of the surface. Entities carry both, `Villager` and
+// `VillagerV2` alike, because the surface accepts either spelling of an entity type and reports
+// the Bedrock one.
 
 const bridge = globalThis.__mcaddon_bridge__;
 

@@ -1,5 +1,7 @@
 package at.ioexception.mcaddon.script.surface;
 
+import at.ioexception.mcaddon.convert.BedrockEntityNames;
+import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.script.ScriptCoverage;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -15,7 +17,11 @@ import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.level.biome.Biome;
 import org.graalvm.polyglot.HostAccess;
 
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * The static lookup tables a pack calls `get` and `getAll` on.
@@ -31,27 +37,28 @@ public final class Registries extends Surface {
         super(server, coverage);
     }
 
+    /** One entry per Bedrock id, so the woods Java gives a boat each are the one `minecraft:boat`. */
     @HostAccess.Export
     public String entityTypes() {
-        JsonArray types = new JsonArray();
-        BuiltInRegistries.ENTITY_TYPE.keySet().forEach(id -> types.add(entityTypeOf(id)));
-        return types.toString();
+        Map<String, JsonObject> types = new LinkedHashMap<>();
+        BuiltInRegistries.ENTITY_TYPE.forEach(type -> types.putIfAbsent(AddonEntities.identifierOf(type),
+            entityTypeOf(type)));
+        JsonArray all = new JsonArray();
+        types.values().forEach(all::add);
+        return all.toString();
     }
 
     @HostAccess.Export
     public String entityType(String id) {
-        Identifier parsed = qualified(id);
-        return parsed == null || !BuiltInRegistries.ENTITY_TYPE.containsKey(parsed)
-            ? null : entityTypeOf(parsed).toString();
+        EntityType<?> type = id == null ? null : AddonEntities.typeOf(id);
+        return type == null ? null : entityTypeOf(type).toString();
     }
 
-    private static JsonObject entityTypeOf(Identifier id) {
-        JsonObject type = new JsonObject();
-        type.addProperty("id", id.toString());
-        type.addProperty("localizationKey", BuiltInRegistries.ENTITY_TYPE.getOptional(id)
-            .map(EntityType::getDescriptionId)
-            .orElse(""));
-        return type;
+    private static JsonObject entityTypeOf(EntityType<?> type) {
+        JsonObject fields = new JsonObject();
+        fields.addProperty("id", AddonEntities.identifierOf(type));
+        fields.addProperty("localizationKey", type.getDescriptionId());
+        return fields;
     }
 
     @HostAccess.Export
@@ -133,7 +140,7 @@ public final class Registries extends Surface {
         JsonObject tables = new JsonObject();
         tables.add("blocks", vanillaIds(BuiltInRegistries.BLOCK));
         tables.add("items", vanillaIds(BuiltInRegistries.ITEM));
-        tables.add("entities", vanillaIds(BuiltInRegistries.ENTITY_TYPE));
+        tables.add("entities", vanillaEntityIds());
         tables.add("effects", vanillaIds(BuiltInRegistries.MOB_EFFECT));
         tables.add("potionEffects", vanillaIds(BuiltInRegistries.POTION));
         tables.add("enchantments",
@@ -157,6 +164,23 @@ public final class Registries extends Surface {
             .filter(id -> id.getNamespace().equals("minecraft"))
             .forEach(id -> ids.add(id.toString()));
         return ids;
+    }
+
+    /**
+     * Each vanilla entity under both editions' ids, the way Bedrock's own table keeps `Villager`
+     * beside `VillagerV2`. The surface accepts either and reports the Bedrock one.
+     */
+    private static JsonArray vanillaEntityIds() {
+        Set<String> ids = new LinkedHashSet<>();
+        BuiltInRegistries.ENTITY_TYPE.keySet().stream()
+            .filter(id -> id.getNamespace().equals("minecraft"))
+            .forEach(id -> {
+                ids.add(id.toString());
+                ids.add(BedrockEntityNames.bedrock(id.toString()));
+            });
+        JsonArray all = new JsonArray();
+        ids.forEach(all::add);
+        return all;
     }
 
     @HostAccess.Export
