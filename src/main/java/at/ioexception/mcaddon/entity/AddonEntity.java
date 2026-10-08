@@ -2230,8 +2230,71 @@ public class AddonEntity extends PathfinderMob
     *///?}
         if (hit) knockBack(target);
         blockedBy(target);
+        if (hit && target instanceof net.minecraft.world.entity.LivingEntity struck
+            && Goals.flag(liveComponent("minecraft:angry"), "broadcast_anger_on_attack", false)) {
+            broadcastAnger(struck);
+        }
         return hit;
     }
+
+    /**
+     * Hands the entity's quarry to the others `minecraft:angry` names, which is how Bedrock spreads
+     * anger: each of them takes the quarry as its own target, and its own `on_target_acquired` is
+     * what makes it angry in turn, the way a wolf pack turns on whoever hurt one of them.
+     *
+     * The others are the same definition within `broadcast_range` blocks, or the families
+     * `broadcast_targets` lists, and `broadcast_filters` is asked about each with this entity as
+     * `self` and the one told as `other`. One already after something keeps what it is after.
+     */
+    private void broadcastAnger(net.minecraft.world.entity.LivingEntity quarry) {
+        com.google.gson.JsonObject angry = liveComponent("minecraft:angry");
+        if (angry == null || quarry == null || !quarry.isAlive()) return;
+
+        double range = Goals.number(angry, "broadcast_range", Goals.number(angry, "broadcastRange", 20));
+        java.util.Set<String> families = new java.util.HashSet<>();
+        at.ioexception.mcaddon.util.Json.list(angry, "broadcast_targets").stream()
+            .filter(com.google.gson.JsonElement::isJsonPrimitive)
+            .forEach(family -> families.add(family.getAsString()));
+        Filter allowed = Goals.filter(angry, "broadcast_filters");
+
+        level().getEntitiesOfClass(net.minecraft.world.entity.Mob.class, getBoundingBox().inflate(range),
+                other -> other != this && other != quarry && other.getTarget() == null
+                    && (families.isEmpty() ? other.getType() == getType()
+                        : !java.util.Collections.disjoint(
+                            at.ioexception.mcaddon.bedrock.behaviour.Families.of(other), families))
+                    && allowed.matches(new Filter.Context(this, other, other, ServerHooks.state())))
+            .forEach(other -> other.setTarget(quarry));
+    }
+
+    /** Whether `minecraft:angry` is live and says its anger spreads, in either spelling of the flag. */
+    private boolean spreadsAnger() {
+        com.google.gson.JsonObject angry = liveComponent("minecraft:angry");
+        return Goals.flag(angry, "broadcast_anger", Goals.flag(angry, "broadcastAnger", false));
+    }
+
+    /**
+     * While angry and broadcasting, the quarry is handed on, and `angry_sound` is made again after
+     * each wait `sound_interval` spans.
+     */
+    private void beAngry() {
+        com.google.gson.JsonObject angry = liveComponent("minecraft:angry");
+        if (angry == null) return;
+        if (spreadsAnger()) broadcastAnger(getTarget());
+
+        String sound = Goals.text(angry, "angry_sound");
+        if (sound == null || tickCount < nextAngrySoundAt) return;
+
+        net.minecraft.sounds.SoundEvent made = noise(sound);
+        if (made != null) playSound(made, getSoundVolume(), getVoicePitch());
+        com.google.gson.JsonObject interval = angry.has("sound_interval") && angry.get("sound_interval").isJsonObject()
+            ? angry.getAsJsonObject("sound_interval") : null;
+        double low = Goals.number(interval, "range_min", 0);
+        double high = Math.max(low, Goals.number(interval, "range_max", 0));
+        nextAngrySoundAt = tickCount + (int) ((low + random.nextDouble() * (high - low))
+            * at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.TICKS_PER_SECOND);
+    }
+
+    private int nextAngrySoundAt;
 
     /**
      * What `minecraft:ravager_blocked` does to an entity whose blow a shield turned away.
@@ -3030,6 +3093,7 @@ public class AddonEntity extends PathfinderMob
             showBossBar();
             addRider();
             countKin();
+            beAngry();
             noticeKinAnger();
             reflectProjectiles();
             drawFromHopper();
@@ -4420,6 +4484,9 @@ public class AddonEntity extends PathfinderMob
         lastHurtTick = tickCount;
         recordDisturbance(getLastHurtByMob(), lost);
         annoy(getLastHurtByMob());
+        if (Goals.flag(liveComponent("minecraft:angry"), "broadcast_anger_on_being_attacked", false)) {
+            broadcastAnger(getLastHurtByMob());
+        }
         raise("minecraft:on_hurt", getLastHurtByMob());
         if (getLastHurtByMob() instanceof Player) raise("minecraft:on_hurt_by_player", getLastHurtByMob());
     }
@@ -4550,6 +4617,12 @@ public class AddonEntity extends PathfinderMob
 
         String event = liveText("minecraft:on_death", "event");
         if (event != null) EntityEvents.trigger(this, event, source.getEntity(), ServerHooks.state());
+        // `broadcast_anger_when_dying` is yes unless the pack says otherwise, for a mob that spreads
+        // its anger at all.
+        if (spreadsAnger() && Goals.flag(liveComponent("minecraft:angry"), "broadcast_anger_when_dying", true)
+            && source.getEntity() instanceof net.minecraft.world.entity.LivingEntity killer) {
+            broadcastAnger(killer);
+        }
 
         // What a mob was hauling belongs on the ground once it is dead, the same as a chest's does.
         if (carried != null) net.minecraft.world.Containers.dropContents(level, blockPosition(), carried);
@@ -4954,6 +5027,13 @@ public class AddonEntity extends PathfinderMob
      */
     @Override
     public boolean canAttack(net.minecraft.world.entity.LivingEntity target) {
+        // `filters` on `minecraft:angry` names who the entity leaves alone while angry, which is
+        // how a piglin in a rage still spares the other piglins.
+        com.google.gson.JsonObject angry = definition == null ? null : liveComponent("minecraft:angry");
+        if (angry != null && angry.has("filters") && !Goals.filter(angry, "filters")
+            .matches(new Filter.Context(this, target, target, ServerHooks.state()))) {
+            return false;
+        }
         if (definition != null && declares("minecraft:ignore_cannot_be_attacked")
             && Filter.parse(componentBody("minecraft:ignore_cannot_be_attacked").get("filters"))
                 .matches(new Filter.Context(this, target, target, ServerHooks.state()))) {

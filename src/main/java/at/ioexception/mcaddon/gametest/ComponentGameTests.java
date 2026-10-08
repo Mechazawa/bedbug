@@ -450,6 +450,36 @@ public final class ComponentGameTests {
     private static final int WALK_TICKS = 100;
 
     /**
+     * An angry entity that broadcasts hands its quarry to the others of its kind around it.
+     *
+     * The ember's furious group broadcasts within six blocks, so the second ember beside it turns
+     * on the same wisp, and the sprite, which is another definition, is left alone.
+     */
+    @GameTest()
+    public void anAngryEntityBroadcastsItsQuarryToItsOwnKind(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        AddonEntity kin = BehaviourGameTests.spawn(helper, EMBER, STAND.east(2));
+        AddonEntity stranger = BehaviourGameTests.spawn(helper, "tp:sprite", STAND.south(2));
+        AddonEntity wisp = BehaviourGameTests.spawn(helper, WISP, STAND.east(4));
+        if (ember == null || kin == null || stranger == null || wisp == null) {
+            helper.succeed();
+            return;
+        }
+
+        ember.setTarget(wisp);
+        EntityEvents.trigger(ember, "tp:ember_rage", null, ServerHooks.state());
+        live(ember, SENSOR_INTERVAL);
+        helper.assertTrue(kin.getTarget() == wisp,
+            EMBER + " is angry at the wisp and never told the ember beside it.");
+        helper.assertTrue(stranger.getTarget() == null,
+            EMBER + " told an entity of another definition to turn on the wisp.");
+        helper.succeed();
+    }
+
+    /** One full round of the entity's own interval checks. */
+    private static final int SENSOR_INTERVAL = 10;
+
+    /**
      * Runs the entity's own ticks the way the level does, which counts its age first: Java's goals
      * tell one blow from the next by the age it landed at.
      */

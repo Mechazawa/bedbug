@@ -224,10 +224,6 @@ REASONS = {
     "minecraft:behavior.trade_with_player": {"filters": "Java's merchant screen opens for whoever clicks."},
 
     # The rest, one component at a time.
-    "minecraft:angry": {
-        "*": "The anger spreads to the same definition within the range, which is what a pack means by "
-             "it. Sounds, the finer broadcast rules and the filters have no Java counterpart.",
-    },
     "minecraft:home": {
         "restriction_type": "Java holds a home as a position and a radius, with no kind.",
         "home_block_list": "Java's home is a position rather than a block to stand on.",

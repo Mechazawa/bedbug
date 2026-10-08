@@ -369,10 +369,6 @@ public final class AddonEntities {
     private static final Map<String, Set<String>> UNREAD_FIELDS = Map.of(
         "minecraft:experience_reward", Set.of("on_bred"),
         "minecraft:block_movement_slowdown_immunity", Set.of("tags"),
-        "minecraft:angry", Set.of("broadcastAnger", "broadcast_anger", "broadcast_range",
-            "broadcast_filters", "broadcast_targets", "broadcast_anger_when_dying",
-            "broadcast_anger_on_attack", "broadcast_anger_on_being_attacked", "angry_sound",
-            "sound_interval"),
         "minecraft:attack", Set.of("effect_name", "effect_duration"),
         "minecraft:spawn_entity", Set.of("spawn_method", "should_leash"),
         "minecraft:drying_out_timer", Set.of("water_bottle_refill_time"),
