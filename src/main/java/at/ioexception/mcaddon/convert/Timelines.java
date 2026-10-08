@@ -49,8 +49,13 @@ public final class Timelines {
     private Timelines() {
     }
 
-    /** Writes the timelines the pack's settings collections become, and the tag naming them. */
-    public static void write(Path root, String namespace,
+    /**
+     * Writes the timelines the pack's settings collections become, and the tag naming them.
+     *
+     * A version with no timelines names the settings every time, a cached conversion included; the
+     * files themselves are written only when the conversion is fresh.
+     */
+    public static void write(Path root, boolean fresh, String namespace,
         Map<String, LightingDefinition> lightings,
         Map<String, AtmosphereDefinition> atmospheres) throws IOException {
         if (lightings.isEmpty() && atmospheres.isEmpty()) return;
@@ -61,6 +66,7 @@ public final class Timelines {
                 AddonEntities.unsupported("resource pack atmospherics (needs 26 or newer)"));
             return;
         }
+        if (!fresh) return;
 
         List<String> written = new ArrayList<>();
         for (LightingDefinition lighting : lightings.values()) {

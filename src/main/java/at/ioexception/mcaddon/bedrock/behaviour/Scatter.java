@@ -6,6 +6,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * How often and where inside a chunk Bedrock spreads one feature.
@@ -19,6 +20,10 @@ import java.util.List;
  * a rule that counts itself out of the world is not what a pack gets instead.
  */
 public record Scatter(JsonObject body) {
+
+    /** `query.heightmap(variable.worldx, variable.worldz)`, in either spelling of the query. */
+    private static final Pattern SURFACE = Pattern.compile(
+        "(?i)(query|q)\\.heightmap\\(\\s*(variable|v)\\.worldx\\s*,\\s*(variable|v)\\.worldz\\s*\\)");
 
     /** A rule that states nothing, which places its feature once per chunk at the surface. */
     public static final Scatter ONCE = new Scatter(new JsonObject());
@@ -64,9 +69,23 @@ public record Scatter(JsonObject body) {
         return 1;
     }
 
+    /**
+     * Whether the height is Bedrock's surface query, which is the expression nearly every pack
+     * scattering something over the ground writes, and which Java states as a heightmap.
+     */
+    public boolean surface() {
+        JsonElement declared = body.get("y");
+        return declared != null && declared.isJsonPrimitive() && declared.getAsJsonPrimitive().isString()
+            && SURFACE.matcher(declared.getAsString().trim()).matches();
+    }
+
     /** The two heights the feature is scattered between, or null where it states none. */
     public int[] heights() {
         JsonElement declared = body.get("y");
+        if (declared != null && declared.isJsonPrimitive() && declared.getAsJsonPrimitive().isString()
+            && !surface()) {
+            AddonEntities.unsupported("scatter height as an expression");
+        }
         if (declared == null || !declared.isJsonObject()) return null;
 
         JsonObject axis = declared.getAsJsonObject();

@@ -47,8 +47,13 @@ public final class Worldgen {
     private Worldgen() {
     }
 
-    /** Writes everything the pack's worldgen becomes. */
-    public static void write(Path root, String namespace, List<BiomeDefinition> biomes,
+    /**
+     * Builds everything the pack's worldgen becomes, and writes it when the conversion is fresh.
+     *
+     * A cached conversion has the files already. What it still needs is what building them names
+     * against the pack, so the entries are built either way.
+     */
+    public static void write(Path root, boolean fresh, String namespace, List<BiomeDefinition> biomes,
         Map<String, ClientBiomeDefinition> colours, List<FeatureDefinition> features,
         List<FeatureRuleDefinition> rules, List<DimensionDefinition> dimensions) throws IOException {
         // No biome is converted on 1.20.1, so the colours and the fog a resource pack paints one
@@ -69,15 +74,15 @@ public final class Worldgen {
             }
 
             Names.Identifier id = Names.split(dimension.identifier(), namespace);
-            write(path(root, id, "dimension_type"),
+            write(fresh, path(root, id, "dimension_type"),
                 Platform.dimensionType(dimension.minimumY(), dimension.height()));
-            write(path(root, id, "dimension"),
+            write(fresh, path(root, id, "dimension"),
                 voidDimension(id.namespace() + ":" + id.path(), dimension.biome()));
         }
 
         for (BiomeDefinition biome : biomes) {
             Names.Identifier id = Names.split(biome.identifier(), namespace);
-            write(path(root, id, "worldgen/biome"),
+            write(fresh, path(root, id, "worldgen/biome"),
                 biome(biome, colours.getOrDefault(biome.identifier(), ClientBiomeDefinition.NONE)));
         }
 
@@ -90,8 +95,8 @@ public final class Worldgen {
             if (configured == null) continue;
 
             Names.Identifier id = Names.split(feature.identifier(), namespace);
-            write(path(root, id, "worldgen/configured_feature"), configured);
-            write(path(root, id, "worldgen/placed_feature"),
+            write(fresh, path(root, id, "worldgen/configured_feature"), configured);
+            write(fresh, path(root, id, "worldgen/placed_feature"),
                 placed(id.namespace() + ":" + id.path(), new JsonArray()));
             built.add(feature.identifier());
         }
@@ -100,7 +105,7 @@ public final class Worldgen {
             JsonObject placement = rulePlacement(rule, byIdentifier, built, namespace);
             if (placement == null) continue;
 
-            write(path(root, Names.split(rule.identifier(), namespace), "worldgen/placed_feature"),
+            write(fresh, path(root, Names.split(rule.identifier(), namespace), "worldgen/placed_feature"),
                 placement);
         }
     }
@@ -483,11 +488,11 @@ public final class Worldgen {
             range.addProperty("type", "minecraft:height_range");
             range.add("height", uniform(heights[0], heights[1], scatter.trapezoid()));
             placement.add(range);
-        } else if (step != null) {
+        } else if (step != null || scatter.surface()) {
             JsonObject heightmap = new JsonObject();
             heightmap.addProperty("type", "minecraft:heightmap");
-            heightmap.addProperty("heightmap",
-                step.equals("VEGETAL_DECORATION") ? "MOTION_BLOCKING" : "WORLD_SURFACE_WG");
+            heightmap.addProperty("heightmap", step == null || step.equals("VEGETAL_DECORATION")
+                ? "MOTION_BLOCKING" : "WORLD_SURFACE_WG");
             placement.add(heightmap);
         }
         return placement;
@@ -555,7 +560,9 @@ public final class Worldgen {
             .resolve(id.path() + ".json");
     }
 
-    private static void write(Path file, JsonObject content) throws IOException {
+    private static void write(boolean fresh, Path file, JsonObject content) throws IOException {
+        if (!fresh) return;
+
         Files.createDirectories(file.getParent());
         Files.writeString(file, content.toString(), StandardCharsets.UTF_8);
     }

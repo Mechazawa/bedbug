@@ -272,7 +272,7 @@ class LightingTimelineTest {
      */
     @Test
     void onlyTheWholeWorldSettingsBecomeTimelines(@TempDir Path root) throws IOException {
-        Timelines.write(root, "tp",
+        Timelines.write(root, true, "tp",
             Map.of("minecraft:default_lighting", lighting(LIGHTING),
                 "tp:glade_lighting", lighting(FLAT_LIGHTING)),
             Map.of("minecraft:default_atmospherics",
