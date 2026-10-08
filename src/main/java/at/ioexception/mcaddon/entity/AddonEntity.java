@@ -1844,6 +1844,18 @@ public class AddonEntity extends PathfinderMob
     }
 
     /** The owner's id, or null while nobody owns this entity. */
+    /**
+     * Whether the other entity is on this one's side: its owner, or another entity the same
+     * player owns, which a pack's targeting leaves alone unless it says otherwise.
+     */
+    public boolean sides(net.minecraft.world.entity.Entity other) {
+        java.util.UUID mine = ownerUuid();
+        if (mine == null) return false;
+
+        return mine.equals(other.getUUID())
+            || (other instanceof AddonEntity fellow && mine.equals(fellow.ownerUuid()));
+    }
+
     public java.util.UUID ownerUuid() {
         if (ownerRead || isClientSide() || ServerHooks.state() == null) return owner;
 
@@ -1879,12 +1891,6 @@ public class AddonEntity extends PathfinderMob
     }
     *///?}
 
-    /**
-     * Whether a lead can hold this entity.
-     *
-     * A pack saying so is describing what Java already allows for a mob, so the component only has
-     * to be honoured when it says the opposite.
-     */
     /**
      * Whether a portal will take this entity anywhere.
      *
@@ -2545,9 +2551,14 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.leap_at_target",
                  "minecraft:behavior.stalk_and_pounce_on_target" ->
                 goals.add(priority, new LeapAtTargetGoal(this, 0.4f));
-            case "minecraft:behavior.mount_pathing", "minecraft:behavior.follow_owner",
-                 "minecraft:behavior.play", "minecraft:behavior.stroll_towards_village" ->
+            case "minecraft:behavior.play", "minecraft:behavior.stroll_towards_village" ->
                 goals.add(priority, new WaterAvoidingRandomStrollGoal(this, speed));
+            case "minecraft:behavior.follow_owner" ->
+                goals.add(priority, new FollowOwnerGoal(this, goal));
+            // Java steers a mount from its rider: a mob riding another plans with the mount's
+            // navigator and switches the mount's own movement goals off, so the chase a rider's
+            // attack goal runs is the mount's, at the reach that goal keeps.
+            case "minecraft:behavior.mount_pathing" -> { }
 
             case "minecraft:behavior.avoid_mob_type" ->
                 goals.add(priority, new AvoidMobsGoal(this, goal));
@@ -2589,22 +2600,12 @@ public class AddonEntity extends PathfinderMob
                 goals.add(priority,
                     new net.minecraft.world.entity.ai.goal.MeleeAttackGoal(this, 1.4, false));
             case "minecraft:behavior.nearest_attackable_target",
-                 "minecraft:behavior.nearest_prioritized_attackable_target" -> {
-                TargetSelection hunted = TargetSelection.from(goal, Player.class,
-                    Goals.number(goal, "within_radius", 0));
-                targets.add(priority,
-                    new net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal<>(
-                        this, hunted.kind(),
-                        (int) Goals.number(goal, "scan_interval", 10),
-                        Goals.flag(goal, "must_see", false),
-                        Goals.flag(goal, "must_reach", false), null));
-            }
-            case "minecraft:behavior.hurt_by_target", "minecraft:behavior.target_when_pushed" -> {
-                net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal hurt =
-                    new net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal(this);
-                if (Goals.flag(goal, "alert_same_type", false)) hurt.setAlertOthers();
-                targets.add(priority, hurt);
-            }
+                 "minecraft:behavior.nearest_prioritized_attackable_target" ->
+                targets.add(priority, new HuntGoal(this, goal, TargetSelection.from(goal, Player.class,
+                    Goals.number(goal, "within_radius", 0))));
+            case "minecraft:behavior.hurt_by_target", "minecraft:behavior.target_when_pushed" ->
+                targets.add(priority, new RetaliateGoal(this, goal,
+                    TargetSelection.from(goal, net.minecraft.world.entity.LivingEntity.class, 0)));
 
             // Bedrock states the gap between shots in seconds and the reach in blocks; Java's
             // goal counts the gap in ticks and asks the entity itself to release the projectile.

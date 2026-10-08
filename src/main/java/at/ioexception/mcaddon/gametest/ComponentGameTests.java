@@ -262,4 +262,113 @@ public final class ComponentGameTests {
         player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(item, 16));
         return player;
     }
+
+    /**
+     * An entity following its owner steps to the owner's side once the owner is far ahead.
+     *
+     * Java writes the same walk into its tamable animals alone, so the ember's loyal group is what
+     * gives it one, and the owner standing fifteen blocks off is past the twelve Java's pets
+     * teleport at.
+     */
+    @GameTest()
+    public void anEntityFollowingItsOwnerCatchesUpWithThem(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        net.minecraft.server.level.ServerPlayer owner = helper.makeMockServerPlayerInLevel();
+        BlockPos far = helper.absolutePos(STAND).east(FAR_AHEAD);
+        Platform.placeAt(owner, far.getX() + 0.5, far.getY(), far.getZ() + 0.5, 0f, 0f);
+        ember.setOwner(owner);
+        EntityEvents.trigger(ember, "tp:ember_befriend", null, ServerHooks.state());
+        ember.setNoAi(false);
+
+        live(ember, CATCH_UP_TICKS);
+        helper.assertTrue(ember.distanceTo(owner) < FAR_AHEAD / 2,
+            EMBER + " follows its owner and is still " + ember.distanceTo(owner) + " blocks behind.");
+        helper.succeed();
+    }
+
+    /** How far ahead the owner stands, past the distance a pet teleports at. */
+    private static final int FAR_AHEAD = 15;
+
+    /** Long enough for the follow goal to start and take its first step. */
+    private static final int CATCH_UP_TICKS = 20;
+
+    /**
+     * A hunter picks what its `entity_types` filters name, even with a player standing nearer.
+     *
+     * The ember's hunting group names the wisp's own family, which no Java class stands for, so a
+     * goal choosing by class alone falls back to hunting players.
+     */
+    @GameTest()
+    public void aHunterPicksTheFamilyItsFiltersName(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        AddonEntity wisp = BehaviourGameTests.spawn(helper, WISP, STAND.east(4));
+        if (ember == null || wisp == null) {
+            helper.succeed();
+            return;
+        }
+
+        net.minecraft.server.level.ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        BlockPos near = helper.absolutePos(STAND).east(1);
+        Platform.placeAt(player, near.getX() + 0.5, near.getY(), near.getZ() + 0.5, 0f, 0f);
+        player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
+
+        EntityEvents.trigger(ember, "tp:ember_hunt", null, ServerHooks.state());
+        ember.setNoAi(false);
+        live(ember, SEARCH_TICKS);
+        helper.assertTrue(ember.getTarget() == wisp,
+            EMBER + " hunts the wisp's family and set its sights on " + ember.getTarget() + ".");
+        helper.succeed();
+    }
+
+    /**
+     * An entity turns on an attacker its `hurt_by_target` entries name, and not on one they leave out.
+     *
+     * The ember's vengeful group names the wisp's family, so a player's blow goes unanswered.
+     */
+    @GameTest()
+    public void anEntityAnswersOnlyTheAttackersItsEntriesName(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        AddonEntity wisp = BehaviourGameTests.spawn(helper, WISP, STAND.east(2));
+        if (ember == null || wisp == null) {
+            helper.succeed();
+            return;
+        }
+
+        net.minecraft.server.level.ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
+        EntityEvents.trigger(ember, "tp:ember_avenge", null, ServerHooks.state());
+        ember.setNoAi(false);
+
+        Platform.hurt(ember, helper.getLevel(), ember.damageSources().playerAttack(player), 0.5f);
+        live(ember, SEARCH_TICKS);
+        helper.assertTrue(ember.getTarget() == null,
+            EMBER + " answers only the wisp's family and turned on the player who hit it.");
+
+        // Out of the moment after a blow in which Java ignores the next one.
+        ember.invulnerableTime = 0;
+        Platform.hurt(ember, helper.getLevel(), ember.damageSources().mobAttack(wisp), 0.5f);
+        live(ember, SEARCH_TICKS);
+        helper.assertTrue(ember.getTarget() == wisp,
+            EMBER + " was hit by the wisp its entries name and set its sights on " + ember.getTarget() + ".");
+        helper.succeed();
+    }
+
+    /** Long enough for a target goal searching every tick to have run several times. */
+    private static final int SEARCH_TICKS = 10;
+
+    /**
+     * Runs the entity's own ticks the way the level does, which counts its age first: Java's goals
+     * tell one blow from the next by the age it landed at.
+     */
+    private static void live(AddonEntity entity, int ticks) {
+        for (int tick = 0; tick < ticks; tick++) {
+            entity.tickCount++;
+            entity.tick();
+        }
+    }
 }

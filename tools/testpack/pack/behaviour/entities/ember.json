@@ -346,6 +346,33 @@
           }
         }
       },
+      "tp:ember_loyal": {
+        "minecraft:behavior.follow_owner": {
+          "priority": 1,
+          "start_distance": 3,
+          "stop_distance": 1
+        }
+      },
+      "tp:ember_hunting": {
+        "minecraft:behavior.nearest_attackable_target": {
+          "priority": 1,
+          "scan_interval": 1,
+          "entity_types": [
+            {
+              "filters": { "test": "is_family", "subject": "other", "value": "tp_wisp" },
+              "max_dist": 6
+            }
+          ]
+        }
+      },
+      "tp:ember_vengeful": {
+        "minecraft:behavior.hurt_by_target": {
+          "priority": 1,
+          "entity_types": {
+            "filters": { "test": "is_family", "subject": "other", "value": "tp_wisp" }
+          }
+        }
+      },
       "tp:ember_alert": {
         "minecraft:timer": {
           "time": 1.0,
@@ -494,6 +521,21 @@
       "tp:ember_conceived": {
         "set_property": {
           "tp:pregnant": true
+        }
+      },
+      "tp:ember_befriend": {
+        "add": {
+          "component_groups": ["tp:ember_loyal"]
+        }
+      },
+      "tp:ember_hunt": {
+        "add": {
+          "component_groups": ["tp:ember_hunting"]
+        }
+      },
+      "tp:ember_avenge": {
+        "add": {
+          "component_groups": ["tp:ember_vengeful"]
         }
       },
       "tp:ember_winter": {

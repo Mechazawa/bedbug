@@ -1,7 +1,9 @@
 package at.ioexception.mcaddon.bedrock.behaviour;
 
+import at.ioexception.mcaddon.server.ServerHooks;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.animal.Animal;
@@ -16,10 +18,14 @@ import java.util.List;
  *
  * Bedrock names the target by family and states how far the goal reaches inside the same list, so a
  * goal read without it hunts or flees whatever the mod guessed, at whatever distance it guessed.
- * Java picks its targets by class, and a family maps onto one closely enough to keep a pack's
- * meaning: a goal about players stays about players and one about monsters stays about monsters.
+ * Java picks its targets by class, so the kind is the widest class the named families map onto,
+ * and each entry's own filters then decide about a candidate of that class.
  */
-public record TargetSelection(Class<? extends LivingEntity> kind, double maxDistance) {
+public record TargetSelection(Class<? extends LivingEntity> kind, double maxDistance, List<Entry> entries) {
+    /** One entry of the list: the filters naming who it is about, and how far it reaches. */
+    public record Entry(Filter filters, double maxDistance) {
+    }
+
     private static final List<Class<? extends LivingEntity>> ORDER =
         List.of(Player.class, Monster.class, Animal.class, Mob.class, LivingEntity.class);
 
@@ -31,21 +37,41 @@ public record TargetSelection(Class<? extends LivingEntity> kind, double maxDist
      */
     public static TargetSelection from(JsonObject goal, Class<? extends LivingEntity> fallbackKind,
         double fallbackDistance) {
-        if (goal == null) return new TargetSelection(fallbackKind, fallbackDistance);
+        if (goal == null) return new TargetSelection(fallbackKind, fallbackDistance, List.of());
 
         List<Class<? extends LivingEntity>> kinds = new ArrayList<>();
+        List<Entry> entries = new ArrayList<>();
         double distance = 0;
         for (JsonElement element : at.ioexception.mcaddon.util.Json.list(goal, "entity_types")) {
             if (!element.isJsonObject()) continue;
             JsonObject entry = element.getAsJsonObject();
 
-            distance = Math.max(distance, ServerEntityDefinition.number(entry, "max_dist", 0));
+            double reach = ServerEntityDefinition.number(entry, "max_dist", 0);
+            distance = Math.max(distance, reach);
             families(entry.get("filters"), kinds);
+            entries.add(new Entry(Filter.parse(entry.get("filters")), reach));
         }
 
         return new TargetSelection(
             kinds.isEmpty() ? fallbackKind : kinds.stream().max(TargetSelection::width).orElseThrow(),
-            distance > 0 ? distance : fallbackDistance);
+            distance > 0 ? distance : fallbackDistance, entries);
+    }
+
+    /**
+     * Whether the candidate is one the list is about, inside the reach of the entry naming it.
+     *
+     * The entry's own filters decide, asked about the candidate as `other`, which is how a pack
+     * names a family Java has no class for: a goal about villagers is about villagers rather than
+     * about whatever class the families closest to it map to. A list with no entries is about
+     * anything of the kind the goal was given.
+     */
+    public boolean accepts(Entity self, LivingEntity candidate) {
+        if (entries.isEmpty()) return kind.isInstance(candidate);
+
+        double distance = self.distanceTo(candidate);
+        Filter.Context context = new Filter.Context(self, candidate, candidate, ServerHooks.state());
+        return entries.stream().anyMatch(entry ->
+            (entry.maxDistance() <= 0 || distance <= entry.maxDistance()) && entry.filters().matches(context));
     }
 
     private static int width(Class<? extends LivingEntity> left, Class<? extends LivingEntity> right) {

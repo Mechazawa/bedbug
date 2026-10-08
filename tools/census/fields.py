@@ -171,7 +171,11 @@ REASONS = {
     "minecraft:behavior.stroll_towards_village": {"*": "Java's stroll goal has no village to aim at."},
     "minecraft:behavior.move_indoors": {"*": "Java's goal has no cooldown of its own."},
     "minecraft:behavior.move_outdoors": {"*": "Java's goal has no cooldown of its own."},
-    "minecraft:behavior.mount_pathing": {"*": "Java's stroll goal has no target to path to."},
+    "minecraft:behavior.mount_pathing": {
+        "*": "A mob riding another steers it in Java: the rider plans with the mount's navigator and the "
+             "mount's own movement goals are switched off while it is ridden, so the chase and the "
+             "distance kept belong to the rider's attack goal.",
+    },
     "minecraft:behavior.share_items": {"*": "Java's stroll goal has no arrival radius of its own."},
     "minecraft:behavior.play": {"*": "Java writes playing into its own villager, with no friends to name."},
     "minecraft:behavior.hide": {
@@ -205,14 +209,6 @@ REASONS = {
         "*": "Java's melee goal swings on its own cooldown inside its own reach, and raises no event of "
              "its own when it lands or kills.",
     },
-    "minecraft:behavior.nearest_attackable_target": {
-        "*": "Java's target goal rescans on the interval it is given and keeps a target until it is "
-             "invalid, with no probability, no memory of sight and no search height.",
-    },
-    "minecraft:behavior.hurt_by_target": {
-        "entity_types": "Java's goal turns on whatever hurt the mob rather than on a list.",
-        "hurt_owner": "A tamed mob's owner, which an add-on entity has none of.",
-    },
     "minecraft:behavior.avoid_mob_type": {
         "*": "Java's avoid goal flees whatever it is given at the speed it is given, with no sound, no "
              "probability and no event when it gets away.",
@@ -220,7 +216,10 @@ REASONS = {
     "minecraft:behavior.avoid_block": {
         "*": "Java has no goal that flees a block, so what carries across is the fleeing.",
     },
-    "minecraft:behavior.follow_owner": {"*": "A tamed mob's owner, which an add-on entity has none of."},
+    "minecraft:behavior.follow_owner": {
+        "ignore_vibration": "Whether a vibration interrupts the following. Only the allay says it does, and "
+                            "its note block goals sit above this one in priority, which is what interrupts it.",
+    },
     "minecraft:behavior.pickup_items": {
         "*": "Picking up happens on this entity's own clock rather than through a path, so there is no "
              "arrival radius, no search height and no cooldown to honour.",

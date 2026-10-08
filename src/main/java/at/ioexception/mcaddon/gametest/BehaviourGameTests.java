@@ -1869,7 +1869,7 @@ public final class BehaviourGameTests {
         return spawn(helper, identifier, STAND);
     }
 
-    private static AddonEntity spawn(GameTestHelper helper, String identifier, BlockPos where) {
+    static AddonEntity spawn(GameTestHelper helper, String identifier, BlockPos where) {
         EntityType<?> type = AddonEntities.typeOf(identifier);
         if (type == null) return null;
 
