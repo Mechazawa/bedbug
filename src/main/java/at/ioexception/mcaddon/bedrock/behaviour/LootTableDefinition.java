@@ -1,6 +1,8 @@
 package at.ioexception.mcaddon.bedrock.behaviour;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.convert.BedrockEntityNames;
+import at.ioexception.mcaddon.convert.BedrockItemNames;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
@@ -9,8 +11,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -326,24 +326,21 @@ public record LootTableDefinition(String path, JsonObject java) {
     private static String dropped(String name, JsonObject bedrock) {
         JsonObject stated = dataFunction(bedrock);
         Span span = stated == null ? null : Span.tryFrom(statedData(stated));
-
-        String flattened = DataValues.item(name, span == null ? 0 : span.lowest());
-        return flattened == null ? name : shipped(flattened);
+        return shipped(name, span == null ? 0 : span.lowest());
     }
 
     /**
-     * The item, or null when this version ships none by that id, which is reported as it is read.
+     * The Java item a Bedrock id and a data value name, or null when this version ships none, which
+     * is reported as it is read.
      *
-     * The families span versions that do not hold the same items: Java made an item of the field
-     * masoned and the bordure indented banner pattern later than the rest, and the pale oak sapling
-     * later still, while the families around them answer everywhere.
+     * Bedrock spells a few hundred vanilla items its own way, and Java's own names move between the
+     * supported versions too: Java made an item of the field masoned and the bordure indented
+     * banner pattern later than the rest, and the pale oak sapling later still.
      */
-    private static String shipped(String item) {
-        Identifier id = Identifier.tryParse(item);
-        if (id != null && BuiltInRegistries.ITEM.getOptional(id).isPresent()) return item;
-
-        AddonEntities.unsupported("loot item " + item);
-        return null;
+    private static String shipped(String item, int data) {
+        String java = BedrockItemNames.java(item, data);
+        if (java == null) AddonEntities.unsupported("loot item " + item + (data == 0 ? "" : " " + data));
+        return java;
     }
 
     /**
@@ -397,8 +394,7 @@ public record LootTableDefinition(String path, JsonObject java) {
         JsonArray choices = new JsonArray();
         boolean answered = false;
         for (int data = span.lowest(); data <= span.highest(); data++) {
-            String named = DataValues.item(item, data);
-            String flattened = named == null ? null : shipped(named);
+            String flattened = DataValues.item(item, data) == null ? null : shipped(item, data);
             answered |= flattened != null;
             choices.add(flattened);
         }
@@ -542,8 +538,9 @@ public record LootTableDefinition(String path, JsonObject java) {
 
     private static JsonObject entityType(String type) {
         JsonObject predicate = new JsonObject();
+        String java = type == null ? null : BedrockEntityNames.java(type);
         predicate.addProperty(Platform.entityPredicateKey("entity_type"),
-            type == null ? "minecraft:pig" : type);
+            type == null ? "minecraft:pig" : java == null ? type : java);
         return predicate;
     }
 

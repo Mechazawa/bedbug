@@ -7,6 +7,7 @@ import at.ioexception.mcaddon.block.AddonBlock;
 import at.ioexception.mcaddon.block.AddonWaterloggedBlock;
 import at.ioexception.mcaddon.block.BlockComponents;
 import at.ioexception.mcaddon.block.PackShapes;
+import at.ioexception.mcaddon.convert.BedrockBlockNames;
 import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.PackRole;
@@ -21,6 +22,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.FlowerPotBlock;
 import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.material.PushReaction;
 
@@ -28,6 +30,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * A block per block a behaviour pack declares, with an item so it can be placed.
@@ -39,11 +42,62 @@ import java.util.Map;
 public final class AddonBlocks {
     private static final Map<String, Block> BY_IDENTIFIER = new LinkedHashMap<>();
 
+    /**
+     * The answers of the two `identifierOf`, which a filter or a sensor asks every tick and which
+     * never change once a name has a block. A name no block answers yet is asked again, because a
+     * pack's own blocks are registered after the first packs are read.
+     */
+    private static final Map<BlockState, String> REPORTED = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final Map<String, String> NAMED = new java.util.concurrent.ConcurrentHashMap<>();
+
     private AddonBlocks() {
     }
 
     public static Map<String, Block> all() {
         return BY_IDENTIFIER;
+    }
+
+    /** The block a Bedrock name refers to, a pack's own or the game's, under either edition's spelling. */
+    public static Block named(String bedrock) {
+        Block own = BY_IDENTIFIER.get(bedrock);
+        if (own != null) return own;
+
+        String java = BedrockBlockNames.java(bedrock);
+        Identifier id = java == null ? null : Identifier.tryParse(java);
+        return id == null ? null : BuiltInRegistries.BLOCK.getOptional(id).orElse(null);
+    }
+
+    /**
+     * The block state a Bedrock name and its states stand for, a pack's own block or the game's, or
+     * null where no block answers. A state no property answers is reported through `report`.
+     */
+    public static BlockState stateOf(String bedrock, Map<String, ?> states, Consumer<String> report) {
+        BedrockBlockNames.Resolved resolved = BedrockBlockNames.state(bedrock, states, report);
+        return resolved == null ? null : resolved.state();
+    }
+
+    /**
+     * The identifier a pack knows this block by, which `named` reads back: Bedrock's spelling for
+     * the state the game holds it in, and the registered one for a pack's own.
+     */
+    public static String identifierOf(BlockState state) {
+        return REPORTED.computeIfAbsent(state, BedrockBlockNames::bedrock);
+    }
+
+    /**
+     * The identifier a block a pack names is reported under, whichever edition's spelling it wrote,
+     * so that two names for one block compare equal. A name no block answers comes back as written.
+     */
+    public static String identifierOf(String bedrock) {
+        String known = NAMED.get(bedrock);
+        if (known != null) return known;
+
+        BlockState state = stateOf(bedrock, Map.of(), ignored -> { });
+        if (state == null) return bedrock;
+
+        String identifier = identifierOf(state);
+        NAMED.put(bedrock, identifier);
+        return identifier;
     }
 
     /** A block and the named shapes of the pack it came from, which two packs may spell alike. */

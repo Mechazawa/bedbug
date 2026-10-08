@@ -337,11 +337,21 @@ function typeIdOf(value) {
     return value?.type?.id ?? value?.id;
 }
 
-// A block name without a namespace is a vanilla one, which is how the registry reads it too. Going
-// through the bridge for that would cost a host call per comparison, so the default is applied here.
+// The id a block name reports itself under, which is Bedrock's spelling whichever edition's a pack
+// wrote, so `minecraft:powered_rail` and `golden_rail` both compare equal to `minecraft:golden_rail`.
+// A comparison is made often and the answer never changes, so each name is asked about once.
+const canonicalBlockIds = new Map();
+
 function blockNameOf(value) {
     const id = typeIdOf(value);
-    return typeof id === "string" && !id.includes(":") ? "minecraft:" + id : id;
+    if (typeof id !== "string") return id;
+
+    let canonical = canonicalBlockIds.get(id);
+    if (canonical === undefined) {
+        canonical = bridge.blocks.canonicalId(id) ?? (id.includes(":") ? id : "minecraft:" + id);
+        canonicalBlockIds.set(id, canonical);
+    }
+    return canonical;
 }
 
 export class BlockPermutation {
@@ -485,6 +495,16 @@ function itemInfo(typeId) {
     return info;
 }
 
+/**
+ * The id an item name reports itself under, which is Bedrock's spelling whichever edition's a pack
+ * wrote: `minecraft:item_frame` is `minecraft:frame` and `minecraft:muttonRaw` is `minecraft:mutton`.
+ * A name no item answers keeps its spelling, with the namespace a bare one implies.
+ */
+function itemIdOf(name) {
+    const id = namespaced(name);
+    return itemInfo(id).id ?? id;
+}
+
 export class ItemTypes {
     static get(itemId) {
         return itemInfo(namespaced(itemId)).type;
@@ -557,7 +577,7 @@ const bookItems = Object.freeze(["minecraft:writable_book", "minecraft:written_b
  */
 export class ItemStack {
     constructor(itemType, amount) {
-        this.typeId = namespaced(itemType);
+        this.typeId = itemIdOf(itemType);
         this.amount = amount ?? 1;
         this.nameTag = undefined;
     }
@@ -623,7 +643,7 @@ export class ItemStack {
 
     /** States belong to blocks, so a stack of a block item answers with the ones it would place. */
     matches(itemName, states) {
-        if (namespaced(itemName) !== this.typeId) return false;
+        if (itemIdOf(itemName) !== this.typeId) return false;
 
         const wanted = Object.entries(states ?? {});
         if (wanted.length === 0) return true;
@@ -631,7 +651,7 @@ export class ItemStack {
         const resolved = bridge.blocks.resolve(this.typeId, "{}");
         if (resolved === null) return false;
 
-        const placed = JSON.parse(resolved);
+        const placed = JSON.parse(resolved).states;
         return wanted.every(([state, value]) => placed[state] === value);
     }
 

@@ -1,9 +1,9 @@
 package at.ioexception.mcaddon.entity;
 
+import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.LinkedHashMap;
@@ -115,7 +115,7 @@ public final class Age {
     public boolean fed(ItemStack offered) {
         if (offered.isEmpty() || !baby()) return false;
 
-        String id = BuiltInRegistries.ITEM.getKey(offered.getItem()).toString();
+        String id = AddonItems.identifierOf(offered.getItem());
         // A pack names three lists beside each other, and only one of them brings the day forward:
         // `pause_growth_items` stops the count where it is and `reset_growth_items` puts it back to
         // the start, which is how a pack keeps an entity young while something is being fed to it.
@@ -142,8 +142,9 @@ public final class Age {
         return items.keySet().stream().anyMatch(name -> names(name, id));
     }
 
+    /** Whether a pack's item name, in either edition's spelling, is the item reported as `id`. */
     private static boolean names(String written, String id) {
-        return written.equals(id) || ("minecraft:" + written).equals(id);
+        return AddonItems.identifierOf(written).equals(id);
     }
 
     private static double number(JsonObject body, String key, double fallback) {

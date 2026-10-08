@@ -1,12 +1,11 @@
 package at.ioexception.mcaddon.server;
 
-import at.ioexception.mcaddon.convert.Names;
+import at.ioexception.mcaddon.bedrock.behaviour.DataValues;
 import at.ioexception.mcaddon.mixin.SelectorOptionsInvoker;
-import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonItems;
 import com.mojang.brigadier.StringReader;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.exceptions.DynamicCommandExceptionType;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
@@ -95,15 +94,16 @@ public record HasItem(Item item, Range quantity, String location, Range slot) {
                 throw UNREADABLE.createWithContext(reader, "the field " + key);
             }
         }
+        // A data value picks a member of a family Java split, and picks nothing Java keeps apart
+        // anywhere else: `-1` is any value at all, and zero is what an id with none beside it means.
+        String named = fields.get("item");
         String data = fields.getOrDefault("data", "-1");
-        if (!data.equals("-1") && !data.equals("0")) {
+        boolean picks = named != null && DataValues.split(named) && data.matches("\\d+");
+        if (!data.equals("-1") && !data.equals("0") && !picks) {
             throw UNREADABLE.createWithContext(reader, "a data value, which Java items have none of");
         }
 
-        String named = fields.get("item");
-        Names.Identifier id = named == null ? null : Names.split(named, "minecraft");
-        Item item = id == null ? null
-            : BuiltInRegistries.ITEM.getOptional(Platform.id(id.namespace(), id.path())).orElse(null);
+        Item item = named == null ? null : AddonItems.named(picks ? named + ":" + data : named);
         if (item == null) throw UNREADABLE.createWithContext(reader, "the item " + named);
 
         String location = fields.get("location");

@@ -3,6 +3,8 @@ package at.ioexception.mcaddon.server;
 import at.ioexception.mcaddon.convert.Functions;
 import at.ioexception.mcaddon.mixin.JumpingAccessor;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonBlocks;
+import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.script.ScriptHost;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
@@ -12,7 +14,6 @@ import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -912,7 +913,7 @@ public final class WorldEvents {
         if (stack.isEmpty()) return null;
 
         Map<String, Object> fields = new LinkedHashMap<>();
-        fields.put("typeId", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+        fields.put("typeId", AddonItems.identifierOf(stack.getItem()));
         fields.put("amount", stack.getCount());
         fields.put("damage", stack.getDamageValue());
         fields.put("maxDurability", stack.getMaxDamage());
@@ -926,7 +927,7 @@ public final class WorldEvents {
         }
 
         Map<String, Object> fields = new LinkedHashMap<>();
-        fields.put("typeId", BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString());
+        fields.put("typeId", AddonBlocks.identifierOf(state));
         fields.put("states", states);
         return fields;
     }

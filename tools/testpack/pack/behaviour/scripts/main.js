@@ -13,8 +13,10 @@
 // A watch on the game's own villagers, written the way a pack that replaces them writes it: in
 // Bedrock's ids throughout, so a Java villager is `minecraft:villager_v2` and an experience orb is
 // `minecraft:xp_orb`. Every answer is a tag on the entity it is about.
+//
+// A look at the game's own blocks in the same spelling, which a server game test reads back.
 
-import { system, world } from "@minecraft/server";
+import { BlockPermutation, system, world } from "@minecraft/server";
 import { ActionFormData, CustomForm, ObservableBoolean, ObservableString } from "@minecraft/server-ui";
 
 const VILLAGER = "minecraft:villager_v2";
@@ -39,6 +41,18 @@ function openHandbook(player) {
 
     form.show().then(reason => player.addTag("tp:handbook_" + reason));
 }
+
+// `/scriptevent "tp:names" <x> <y> <z>` reads the block there by Bedrock's id and answers in blocks
+// above it: a lit pumpkin resolved under Bedrock's id one up, and a gold block two up when the block
+// read back as Bedrock's `golden_rail`.
+system.afterEvents.scriptEventReceive.subscribe(event => {
+    if (event.id !== "tp:names") return;
+    const [x, y, z] = event.message.split(" ").map(Number);
+    const dimension = world.getDimension("overworld");
+    const readAsGoldenRail = dimension.getBlock({ x, y, z })?.typeId === "minecraft:golden_rail";
+    dimension.getBlock({ x, y: y + 1, z })?.setPermutation(BlockPermutation.resolve("minecraft:lit_pumpkin"));
+    if (readAsGoldenRail) dimension.getBlock({ x, y: y + 2, z })?.setType("minecraft:gold_block");
+});
 
 // Commands written the way a pack writes them, none of which Java's parser reads as they stand: a
 // selector asking about an inventory, a selector naming Bedrock's villager, a function named by its

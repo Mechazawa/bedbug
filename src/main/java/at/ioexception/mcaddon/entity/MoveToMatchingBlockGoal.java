@@ -1,12 +1,11 @@
 package at.ioexception.mcaddon.entity;
 
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.Pose;
@@ -193,8 +192,8 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
         for (JsonElement element : Json.list(component, key)) {
             if (!element.isJsonPrimitive()) continue;
 
-            Identifier id = Identifier.tryParse(element.getAsString());
-            if (id != null) BuiltInRegistries.BLOCK.getOptional(id).ifPresent(blocks::add);
+            Block block = AddonBlocks.named(element.getAsString());
+            if (block != null) blocks.add(block);
         }
         return state -> blocks.contains(state.getBlock());
     }
