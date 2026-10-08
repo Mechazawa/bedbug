@@ -133,11 +133,37 @@ These are the checks it runs, and what each one catches:
   `src/gametest/java/at/ioexception/mcaddon/clientgametest/`, which drive a real client through a
   real world with Fabric's `fabric-client-gametest-api-v1`: they create worlds, run server
   commands, wait on the client's copy of an entity, click a screen's buttons by label and measure
-  what the renderer would draw (`client/render/DrawnBounds` in the same source set builds the render
-  state the renderer builds and keeps the vertex positions instead of drawing them). This is where
-  anything only a player reaches is asserted: a form that stays open across a button press, a model
-  standing on its feet at its pack's scale, a goal that runs only while its group is on. A picture is
-  not a test; assert on the state that produced it.
+  what the renderer would draw. This is where anything only a player reaches is asserted: a form
+  that stays open across a button press, a model standing on its feet at its pack's scale, a goal
+  that runs only while its group is on. A picture is not a test; assert on the state that produced
+  it.
+
+  **The drawing side is read back through what it hands the frame.** Four helpers in the same
+  source set do that, and a test about drawing goes through one of them rather than through a
+  screenshot:
+
+  - `client/render/Submitted` extracts an entity's render state the way the level renderer does,
+    submits it to a collector that answers every call and keeps two kinds: each piece of custom
+    geometry with the render type it asked for and every vertex it wrote (position from the feet,
+    colour, texture point, light), and each item with the pose it was hung at, its light and its
+    tints. The same collector takes an item's own render state, which is how an icon is asserted.
+  - `client/render/ScriptClock` builds the animator the renderer builds for an entity and moves it
+    on a tick at a time, so a bone's pose can be asked for at an exact moment instead of at whatever
+    moment a frame happened to land on.
+  - `clientgametest/Born` and `clientgametest/Heard` write down every pack particle the client adds
+    and every sound it is asked to play, through the test mod's own mixins in
+    `mcaddon-gametest.mixins.json`. A particle is kept with its velocity and lifetime as it was
+    before its first tick, and can be drawn into a recording quad state to read its size, its turn
+    and its colour. A sound is recorded as the request rather than the playback, because a test
+    client may have no audio device and the engine drops a sound before any listener hears it then.
+
+  `RenderControllerClientGameTest`, `AnimationClientGameTest`, `AttachableClientGameTest`,
+  `CullingClientGameTest`, `ParticleClientGameTest`, `FogClientGameTest`, `CameraClientGameTest` and
+  `ItemAndBlockClientGameTest` are the drawing side's tests; each class's docblock names the pack
+  content it reads and what it asserts. Two things about the machine the tests run on: a window
+  hidden by the compositor can stall the render thread inside `glfwSwapBuffers` until the server's
+  watchdog ends the run, which reads as a hang in whatever test was running, and a dedicated server
+  test fails at once when another game on the same machine holds port 25565.
 
   Only the 26.x targets ship that API, so the tests are a source set of their own (`gametest`, with
   its own `fabric.mod.json` listing them) that the two older targets never compile, and `check`
@@ -294,6 +320,22 @@ These are the checks it runs, and what each one catches:
   and one of its two controllers picks its body by `query.is_baby` while the other draws a cap
   written to sit on top of the young body, so a query answering the wrong way leaves the cap in the
   air with a gap under it.
+
+  `tp:prism` exists to be drawn. Its one render controller picks everything about its one pass by
+  Molang over the entity: the geometry from `q.is_baby` and an enum property, the texture from an
+  array indexed by `q.variant`, the material from `q.had_component_group` between
+  `entity_alphatest` and `entity_alphablend`, the mark bone's visibility from `q.mark_variant`, a
+  texture slide and a colour from the variant, an overlay from the mark variant and an
+  `on_fire_color`, and one event per group or property switches one of those. Its three geometries
+  differ in how far the core reaches from the middle, so which one was drawn reads off the vertices
+  whichever way it faces. Its skin carries a texture set whose emissive channel glows over the mark,
+  so a second, lit pass is drawn for the plain skin and none for the dyed one. Its script runs
+  cubeless bones through each timing rule a clip has: a length past its last keyframe, its own
+  `anim_time_update`, `hold_on_last_frame`, a blend value in the animate list and another in a
+  controller state, a one second crossing out of a state declaring `blend_via_shortest_path` from
+  350 degrees to 10, and a state that plays a clip once and moves on once its clips have all
+  finished. It enables attachables, hides armour and hides what it holds while its mark variant is
+  one, so the visor is drawn in its hand and never on its head.
 
   The recipes cover the seven kinds and the fields that decide what each becomes: a furnace recipe
   naming four cookers and an unlock item, a shapeless one tagged for the stonecutter and unlocked by
@@ -956,7 +998,17 @@ Seven fields are read outside the renderer itself, which is where to look for th
 clips staying at a falling weight while the state it moved to comes up. `blend_via_shortest_path`
 rides on that crossing: a bone's rotation is the weighted sum of every clip reaching it, so 350 and
 10 degrees at equal weight otherwise leave the bone at 180, and a state declaring the flag has each
-later angle turned to within half a circle of the first one before it is weighed.
+later angle turned to within half a circle of the first one before it is weighed. The state being
+left decides it for both sides of a crossing, the way its `blend_transition` decides how long the
+crossing takes, so the answer does not depend on which clip is summed first.
+
+The expression beside a name in an animate list or a controller state is a blend value, not a
+condition: Mojang writes `{"walk": "query.modified_move_speed"}` so a slow mob only half walks. A
+value at or below zero leaves the clip off. A clip that does not loop, asked for by either list,
+plays once and stays finished while it is asked for, and `q.any_animation_finished` and
+`q.all_animations_finished` answer for the clips of the controller's current state, a looping clip
+counting once it has come round the first time. An effect a clip fires at a locator is born where
+the drawn model carries that locator, through its bone's pose.
 
 **A clip played on a mob Java draws moves Java's model of it.** `/playanimation` on a vanilla
 villager names the bones of Bedrock's own villager geometry, so `JavaModelPoses` runs the clip on an

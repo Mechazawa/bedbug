@@ -41,7 +41,7 @@ public final class FogClientGameTest implements FabricClientGameTest {
         world.getServer().runCommand("fog @a push tp:dusk dusk");
         waitForColour(context, DUSK, "tp:dusk was pushed and the frame's fog never took its colour.");
         float distance = context.computeOnClient(client -> PlayerFog.renderDistanceBlocks());
-        FogData dusk = context.computeOnClient(FogClientGameTest::fog);
+        FogData dusk = context.computeOnClient(Worlds::fog);
         Assert.near(dusk.environmentalStart, 0.2f * distance, DISTANCE_TOLERANCE,
             "where tp:dusk's fog starts, a fifth of the render distance");
         Assert.near(dusk.environmentalEnd, 0.9f * distance, DISTANCE_TOLERANCE,
@@ -53,8 +53,8 @@ public final class FogClientGameTest implements FabricClientGameTest {
         waitForColour(context, DUSK, "tp:fog_glade was popped and the frame's fog never went back to tp:dusk.");
 
         world.getServer().runCommand("fog @a pop dusk");
-        Worlds.waitForClient(context, client -> PlayerFog.active() == null && !matches(fog(client), DUSK), PATIENCE,
-            () -> "the last fog on the stack was popped and the frame kept tp:dusk's colour.");
+        Worlds.waitForClient(context, client -> PlayerFog.active() == null && !matches(Worlds.fog(client), DUSK),
+            PATIENCE, () -> "the last fog on the stack was popped and the frame kept tp:dusk's colour.");
     }
 
     private static void biome(ClientGameTestContext context, TestSingleplayerContext world) {
@@ -82,8 +82,8 @@ public final class FogClientGameTest implements FabricClientGameTest {
     }
 
     private static void waitForColour(ClientGameTestContext context, int colour, String failure) {
-        Worlds.waitForClient(context, client -> matches(fog(client), colour), PATIENCE,
-            () -> failure + " It is " + fog(Minecraft.getInstance()).color + ".");
+        Worlds.waitForClient(context, client -> matches(Worlds.fog(client), colour), PATIENCE,
+            () -> failure + " It is " + Worlds.fog(Minecraft.getInstance()).color + ".");
     }
 
     private static boolean matches(FogData fog, int colour) {
@@ -91,10 +91,5 @@ public final class FogClientGameTest implements FabricClientGameTest {
             && Math.abs(fog.color.x() - (colour >> 16 & 0xFF) / 255f) < COLOUR_TOLERANCE
             && Math.abs(fog.color.y() - (colour >> 8 & 0xFF) / 255f) < COLOUR_TOLERANCE
             && Math.abs(fog.color.z() - (colour & 0xFF) / 255f) < COLOUR_TOLERANCE;
-    }
-
-    /** The fog the last frame was drawn with. */
-    private static FogData fog(Minecraft client) {
-        return client.gameRenderer.gameRenderState().levelRenderState.cameraRenderState.fogData;
     }
 }

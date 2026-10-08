@@ -4,14 +4,16 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestServerConnection;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestServerContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.fog.FogData;
 import net.minecraft.server.MinecraftServer;
 
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
-/** Opening a test world and waiting on its server, which the test API spelled differently before 26.2. */
+/** Opening a test world, waiting on its server and reading the client's frame, which 26.2 spells differently. */
 final class Worlds {
     private Worlds() {
     }
@@ -21,6 +23,24 @@ final class Worlds {
         waitForChunks(world.getConnection());
         //?} else {
         /*world.getClientLevel().waitForChunksRender();
+        *///?}
+    }
+
+    /** The camera the client draws its frames from. */
+    static Camera camera(Minecraft client) {
+        //? if >=26.2 {
+        return client.gameRenderer.mainCamera();
+        //?} else {
+        /*return client.gameRenderer.getMainCamera();
+        *///?}
+    }
+
+    /** The fog the client's last frame was drawn with. */
+    static FogData fog(Minecraft client) {
+        //? if >=26.2 {
+        return client.gameRenderer.gameRenderState().levelRenderState.cameraRenderState.fogData;
+        //?} else {
+        /*return client.gameRenderer.getGameRenderState().levelRenderState.cameraRenderState.fogData;
         *///?}
     }
 

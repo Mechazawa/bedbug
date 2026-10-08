@@ -30,9 +30,9 @@ public final class CameraClientGameTest implements FabricClientGameTest {
             world.getServer().runCommand("camera @a set minecraft:free pos 0.5 100 0.5 rot 30 45");
             Worlds.waitForClient(context, client -> at(client, PLACED), PATIENCE,
                 () -> "the camera was set free at " + PLACED + " and is at " + position(Minecraft.getInstance()) + ".");
-            Assert.near(context.computeOnClient(client -> client.gameRenderer.mainCamera().xRot()), 30, TOLERANCE,
+            Assert.near(context.computeOnClient(client -> Worlds.camera(client).xRot()), 30, TOLERANCE,
                 "the camera's pitch under /camera ... rot 30 45");
-            Assert.near(context.computeOnClient(client -> client.gameRenderer.mainCamera().yRot()), 45, TOLERANCE,
+            Assert.near(context.computeOnClient(client -> Worlds.camera(client).yRot()), 45, TOLERANCE,
                 "the camera's yaw under /camera ... rot 30 45");
 
             world.getServer().runCommand("camera @a set minecraft:free ease 2 linear pos 0.5 110 0.5 rot 30 45");
@@ -42,7 +42,8 @@ public final class CameraClientGameTest implements FabricClientGameTest {
             }, PATIENCE, () -> "the camera eases over two seconds from " + PLACED + " to " + EASED
                 + " and was never seen between the two.");
             Worlds.waitForClient(context, client -> at(client, EASED), PATIENCE,
-                () -> "the camera's ease never reached " + EASED + "; it is at " + position(Minecraft.getInstance()) + ".");
+                () -> "the camera's ease never reached " + EASED + "; it is at "
+                    + position(Minecraft.getInstance()) + ".");
 
             world.getServer().runCommand("camerashake add @a 1 10 positional");
             Worlds.waitForClient(context, client -> position(client).distanceTo(EASED) > 0.01, PATIENCE,
@@ -63,6 +64,6 @@ public final class CameraClientGameTest implements FabricClientGameTest {
     }
 
     private static Vec3 position(Minecraft client) {
-        return client.gameRenderer.mainCamera().position();
+        return Worlds.camera(client).position();
     }
 }

@@ -3,7 +3,6 @@ package at.ioexception.mcaddon.clientgametest;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
-import net.minecraft.client.Camera;
 import org.joml.Quaternionf;
 
 import java.util.List;
@@ -76,8 +75,8 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
 
         Born.Particle first = burst.get(0);
         Born.Quad quad = context.computeOnClient(client ->
-            Born.drawn(first.particle(), client.gameRenderer.mainCamera()));
-        Quaternionf facing = context.computeOnClient(client -> new Quaternionf(camera(client).rotation()));
+            Born.drawn(first.particle(), Worlds.camera(client)));
+        Quaternionf facing = context.computeOnClient(client -> new Quaternionf(Worlds.camera(client).rotation()));
         Assert.near(quad.size(), BURST_SIZE, 1e-4, "the size a tp:burst particle is drawn at");
         Assert.that(quad.rotation().equals(facing, 1e-4f), "tp:burst faces the camera with lookat_xyz, and was"
             + " turned " + quad.rotation() + " against the camera's " + facing + ".");
@@ -99,7 +98,7 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
         Assert.that(progress > 0 && progress < TRAIL_LATER_AT, "the trail particle was asked about at "
             + progress + " of its life, outside its gradient's first span.");
         Born.Quad quad = context.computeOnClient(client ->
-            Born.drawn(first.particle(), client.gameRenderer.mainCamera()));
+            Born.drawn(first.particle(), Worlds.camera(client)));
         Assert.near(quad.rotation().x, 0, 1e-4, "the pitch of a tp:ember_trail particle, which rotate_y keeps upright");
         Assert.near(quad.rotation().z, 0, 1e-4, "the roll of a tp:ember_trail particle, which rotate_y keeps upright");
 
@@ -116,10 +115,6 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
         Worlds.waitForClient(context, client -> Born.of("tp:burst").size() >= 2 * BURST_COUNT, PATIENCE,
             () -> "tp:ember_trail starts tp:burst as it is created and again two seconds in, from its own"
                 + " timeline, and " + Born.of("tp:burst").size() + " burst particles were made.");
-    }
-
-    private static Camera camera(net.minecraft.client.Minecraft client) {
-        return client.gameRenderer.mainCamera();
     }
 
     /** Each of the four channels within one step of the colour asked for. */
