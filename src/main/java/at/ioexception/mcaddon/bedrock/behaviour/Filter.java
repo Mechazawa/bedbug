@@ -396,9 +396,7 @@ public sealed interface Filter {
         }
 
         private static boolean family(Entity entity, String family) {
-            if (entity instanceof Player) return family.equals("player") || family.equals("mob");
-            return AddonEntities.definitionOf(entity.getType()) != null
-                && AddonEntities.definitionOf(entity.getType()).families().contains(family);
+            return Families.of(entity).contains(family);
         }
 
         /** Whether the block the entity is standing in holds water as well as itself. */

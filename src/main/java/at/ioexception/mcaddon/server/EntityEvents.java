@@ -164,7 +164,11 @@ public final class EntityEvents {
                 EntityPropertySync.broadcast(entity, state);
             }
             case "minecraft:instant_despawn" -> entity.discard();
-            case "minecraft:transformation" -> transform(entity, values, state);
+            case "minecraft:transformation" -> {
+                if (!(entity instanceof AddonEntity addon) || !addon.startTransforming(values)) {
+                    transform(entity, values, state);
+                }
+            }
             case "minecraft:health" -> {
                 // `max` is the ceiling and `value` what the entity is at, so a group raising the
                 // ceiling alone heals the entity to it rather than leaving it where it was.
@@ -270,7 +274,13 @@ public final class EntityEvents {
      * The new entity takes the old one's place and name; nothing else carries across, which is what
      * Bedrock does unless the pack asks for its equipment to be kept.
      */
-    private static void transform(Entity entity, JsonObject values, AddonState state) {
+    /**
+     * Replaces the entity with the one `minecraft:transformation` names, at once.
+     *
+     * The new entity is given the groups the component's `add` lists, as the event that makes it
+     * would have given them, and `transformation_sound` is the old one's last sound.
+     */
+    public static void transform(Entity entity, JsonObject values, AddonState state) {
         String into = at.ioexception.mcaddon.util.Json.text(values, "into", null);
         if (into == null || !(entity.level() instanceof ServerLevel level)) return;
 
@@ -289,6 +299,20 @@ public final class EntityEvents {
         carryOver(entity, replacement, values);
         level.addFreshEntity(replacement);
 
+        JsonObject added = values.has("add") && values.get("add").isJsonObject() ? values.getAsJsonObject("add") : null;
+        java.util.List<String> groups = at.ioexception.mcaddon.util.Json.list(added, "component_groups").stream()
+            .filter(JsonElement::isJsonPrimitive)
+            .map(JsonElement::getAsString)
+            .toList();
+        ServerEntityDefinition becomes = AddonEntities.definitionOf(type);
+        if (!groups.isEmpty() && becomes != null) {
+            changeGroups(replacement, becomes,
+                new EntityEvent.ChangeGroups(Filter.parse(null), groups, java.util.List.of()), null, state);
+        }
+        if (entity instanceof AddonEntity addon) {
+            addon.makeNoise(at.ioexception.mcaddon.util.Json.text(values, "transformation_sound", null));
+        }
+
         state.forget(entity.getUUID());
         entity.discard();
     }
@@ -301,6 +325,16 @@ public final class EntityEvents {
      */
     private static void carryOver(Entity before, Entity after, JsonObject values) {
         if (!(before instanceof LivingEntity old) || !(after instanceof LivingEntity fresh)) return;
+
+        if (before instanceof AddonEntity was && after instanceof AddonEntity becomes) {
+            // `keep_level` is a trader's progress, `keep_owner` whose it is, and `drop_inventory`
+            // what it was carrying left on the ground rather than lost with it.
+            if (ServerEntityDefinition.flag(values, "keep_level", false)) becomes.keepTradeLevelOf(was);
+            if (ServerEntityDefinition.flag(values, "keep_owner", false)) becomes.keepOwnerOf(was);
+        }
+        if (before instanceof AddonEntity was && ServerEntityDefinition.flag(values, "drop_inventory", false)) {
+            was.dropInventory();
+        }
 
         boolean kept = ServerEntityDefinition.flag(values, "preserve_equipment", false);
         boolean dropped = ServerEntityDefinition.flag(values, "drop_equipment", false);

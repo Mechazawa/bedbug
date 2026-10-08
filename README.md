@@ -93,6 +93,23 @@ add-ons, or with another release of it, is told which in chat.
   sound by whether its head is under water, it is off the ground or it is young, from the moments
   its `sounds.json` names. A group taking `minecraft:leashable` or `minecraft:leashable_to` away
   lets go of the lead, which is what `unleash_on_removal` asks for and defaults to.
+- The numbers inside an entity's components, in Bedrock's units and with Bedrock's defaults where a
+  pack leaves one out. An entity holds its breath for `total_supply` seconds in whatever it cannot
+  breathe, and one declaring nothing to breathe never drowns. Its navigation prices water, lava and
+  blocks that hurt as its allowances say, and a generic navigation that swims and never walks plans
+  like a fish. It turns no faster than `max_turn`, thirty degrees a tick unless the pack says
+  otherwise, strolls and swims as far as `xz_dist` and `y_dist`, looks at a player for its
+  `look_time`, is tempted as far across as `within_radius`, walks to an item to pick it up at the
+  behaviour's own priority and jumps at its `jump_power`. It hunts and answers what the filters of
+  its `entity_types` name, the game's own entities answering with the families Mojang's behaviour
+  pack gives them, and an angry one hands its quarry to its own kind. It follows its owner, breeds
+  only once tamed unless `require_tame` says otherwise and rests for `breed_cooldown` afterwards, and
+  raises the event `breeds_with` names for its mate. A transformation waits out its delay, a lit
+  fuse goes off when it has burned, a home holds the entity only when its `restriction_type` says
+  to, and a bump or a piston pushes it as its presets say. A lead goes only on an entity carrying
+  `minecraft:leashable`, stretches and breaks where the preset for its holder says from 26, and
+  `can_be_stolen` says whether a player may take it off whatever holds it. A name tag names only what
+  `minecraft:nameable` lets one rename, and the name raises the event its `name_actions` lists.
 - An entity in a bucket. `minecraft:bucketable` lets a player scoop the entity up with a water
   bucket and let it out again in the same component groups it was scooped up in. The component
   names no item, and Java holds a fish in an item per kind of fish, so each such entity is carried
@@ -504,6 +521,15 @@ selected index, and no reference to the stack carrying them, so a cap of a pack'
 handed to the arithmetic; it needs the whole insertion path replaced, which is a mixin on both of
 `BundleItem`'s `override*` methods and on `getWeight`. 1.20.1 has no `BundleContents` at all. A bag
 from a pack is a Java bundle of the ordinary size, and both components are counted.
+
+**The fields of an entity's components with no Java place.** `tools/census/fields.py` keeps a
+written reason beside each one. The main ones: a player cannot open an entity's inventory, because
+Java builds that screen for its own horses, minecarts and hoppers by class; `suffocate_time` is
+documented as seconds with a default of -20, which no count of seconds can be, so Java's own
+drowning rhythm applies; `has_gravity` is left alone, because Mojang's fish declare it off and still
+fall when they leap out of water; a dweller holds to where it stood without joining a Java village;
+a tempt sound's gap is documented in ticks and written by Mojang in two units at once; and how fast
+an entity resends itself over the network is Java's own business.
 
 **A camera and a touch button.** `minecraft:camera` times the black bars, the shutter and the
 photograph sliding away, which is a full-screen animation the Bedrock client plays while a player

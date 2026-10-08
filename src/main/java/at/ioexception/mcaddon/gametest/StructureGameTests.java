@@ -83,6 +83,7 @@ public final class StructureGameTests {
 
         BlockPos at = helper.absolutePos(ABOVE_FLOOR);
         Platform.placeAt(spawned, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        keep(spawned);
         level.addFreshEntity(spawned);
 
         helper.runAfterDelay(10, () -> {
@@ -142,6 +143,7 @@ public final class StructureGameTests {
         Entity spawned = Platform.createMob(type, level);
         BlockPos at = helper.absolutePos(new BlockPos(4, FLOOR + 1, 4));
         Platform.placeAt(spawned, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        keep(spawned);
         level.addFreshEntity(spawned);
 
         helper.runAfterDelay(100, () -> {
@@ -220,5 +222,16 @@ public final class StructureGameTests {
         MinecraftServer server = helper.getLevel().getServer();
         server.getCommands().performPrefixedCommand(server.createCommandSourceStack().withSuppressedOutput(),
             command);
+    }
+
+    /**
+     * Keeps a mob from despawning for the length of a test that waits on it.
+     *
+     * Java takes away a mob that is not persistent the moment the nearest player is more than a
+     * hundred and twenty eight blocks off, and another test's mock player standing at the origin
+     * is that far from every test structure.
+     */
+    private static void keep(Entity spawned) {
+        if (spawned instanceof net.minecraft.world.entity.Mob mob) mob.setPersistenceRequired();
     }
 }

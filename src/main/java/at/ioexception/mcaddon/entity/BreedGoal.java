@@ -41,7 +41,8 @@ public final class BreedGoal extends Goal {
 
         mate = mob.level().getEntitiesOfClass(AddonEntity.class,
                 mob.getBoundingBox().inflate(SEARCH_RANGE)).stream()
-            .filter(other -> other != mob && other.getType() == mob.getType() && other.inTheMood())
+            .filter(other -> other != mob && other.inTheMood()
+                && (other.getType() == mob.getType() || mob.breedsWith(other)))
             .min(Comparator.comparingDouble(mob::distanceToSqr))
             .orElse(null);
         return mate != null;
@@ -66,12 +67,18 @@ public final class BreedGoal extends Goal {
         bear();
     }
 
-    /** Puts the child where the pair stand, and leaves both of them out of the mood again. */
+    /**
+     * Puts the child where the pair stand, unless breeding made the entity pregnant instead, and
+     * leaves both of them resting.
+     */
     private void bear() {
         if (!(mob.level() instanceof ServerLevel level)) return;
 
-        mob.leaveTheMood();
-        mate.leaveTheMood();
+        mate.restAfterBreeding();
+        if (!mob.conceive(mate)) {
+            mate = null;
+            return;
+        }
 
         EntityType<?> born = mob.offspringType();
         Entity child = born == null ? null : Platform.createMob(born, level);

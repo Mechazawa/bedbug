@@ -1,0 +1,954 @@
+package at.ioexception.mcaddon.gametest;
+
+import at.ioexception.mcaddon.entity.AddonEntity;
+import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.server.EntityEvents;
+import at.ioexception.mcaddon.server.ServerHooks;
+import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.minecraft.core.BlockPos;
+import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
+import net.minecraft.world.entity.ai.navigation.WaterBoundPathNavigation;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.material.PushReaction;
+
+/**
+ * The fields inside an entity component that Java has a place for, read back through that place.
+ *
+ * Each of these was once taken for something Java decides alone, so a regression puts the entity
+ * back on Java's own number with nothing in a count to show it.
+ */
+public final class ComponentGameTests {
+    private static final String EMBER = "tp:ember";
+    private static final String WISP = "tp:wisp";
+
+    /** Where an entity is stood, clear of the structure's edges. */
+    private static final BlockPos STAND = new BlockPos(1, 2, 1);
+
+    /** The seven seconds of air `tp:wisp` declares, in Java's ticks. */
+    private static final int WISP_SUPPLY = 7 * 20;
+
+    /** The two seconds of air the ember's gilled group declares, in Java's ticks. */
+    private static final int GILLED_SUPPLY = 2 * 20;
+
+    /** Enough ticks for a count of air to have moved, well short of drowning. */
+    private static final int BREATHS = 10;
+
+    /**
+     * `total_supply` is seconds of air, and the entity arrives holding all of it.
+     *
+     * Java gives every mob three hundred ticks, which is fifteen seconds, so a supply read as Java's
+     * own default or as a number of ticks shows up as a count other than one hundred and forty.
+     */
+    @GameTest()
+    public void aBreathableSupplyIsCountedInSeconds(GameTestHelper helper) {
+        AddonEntity wisp = BehaviourGameTests.spawn(helper, WISP);
+        if (wisp == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.assertTrue(wisp.getMaxAirSupply() == WISP_SUPPLY,
+            WISP + " declares seven seconds of air and holds " + wisp.getMaxAirSupply() + " ticks.");
+        helper.assertTrue(wisp.getAirSupply() == WISP_SUPPLY,
+            WISP + " arrived holding " + wisp.getAirSupply() + " of its " + WISP_SUPPLY + " ticks of air.");
+        helper.succeed();
+    }
+
+    /**
+     * An entity with no `minecraft:breathable` never runs out of air under water.
+     *
+     * Bedrock leaves an entity that declares nothing to breathe unable to drown, which is how its
+     * iron golem stands on a river bed. Java drowns every mob it is not told otherwise about.
+     */
+    @GameTest()
+    public void anEntityWithNothingToBreatheNeverDrowns(GameTestHelper helper) {
+        helper.setBlock(STAND, Blocks.WATER);
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        int full = ember.getAirSupply();
+        for (int tick = 0; tick < BREATHS; tick++) {
+            ember.tick();
+        }
+        helper.assertTrue(ember.getAirSupply() == full,
+            EMBER + " declares no minecraft:breathable and lost air under water, "
+                + full + " down to " + ember.getAirSupply() + ".");
+        helper.succeed();
+    }
+
+    /**
+     * An entity that breathes water alone holds its breath on land and fills up again in water.
+     *
+     * Java counts a mob's air down under water and nowhere else, so a fish out of water is the case
+     * this mod has to count itself, and a group is where a pack switches such breathing on.
+     */
+    @GameTest()
+    public void aGroupThatBreathesOnlyWaterHoldsItsBreathOnLand(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_grow_gills", null, ServerHooks.state());
+        helper.assertTrue(ember.getMaxAirSupply() == GILLED_SUPPLY,
+            EMBER + " gained two seconds of air from a group and holds " + ember.getMaxAirSupply() + ".");
+
+        int before = ember.getAirSupply();
+        for (int tick = 0; tick < BREATHS; tick++) {
+            ember.tick();
+        }
+        helper.assertTrue(ember.getAirSupply() == before - BREATHS,
+            EMBER + " breathes only water and its air went from " + before + " to "
+                + ember.getAirSupply() + " in " + BREATHS + " ticks on land.");
+
+        helper.setBlock(STAND, Blocks.WATER);
+        ember.tick();
+        helper.assertTrue(ember.getAirSupply() == GILLED_SUPPLY,
+            EMBER + " breathes water and did not fill its air in one breath of it.");
+        helper.succeed();
+    }
+
+    /**
+     * The prices a navigation component states are the ones the pathfinder plans with.
+     *
+     * Bedrock avoids nothing a pack does not ask it to, so the plain ember walks through a block
+     * that hurts, and Java refuses lava to every mob. The wading group asks for water and damaging
+     * blocks to be avoided and lets the entity cross lava, which reverses all three.
+     */
+    @GameTest()
+    public void aNavigationComponentPricesTheGroundItNames(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.assertTrue(Platform.damagingMalus(ember) == 0,
+            EMBER + " never asked to avoid damaging blocks and its pathfinder prices them at "
+                + Platform.damagingMalus(ember) + ".");
+        helper.assertTrue(Platform.lavaMalus(ember) < 0, EMBER + " never asked to cross lava and may.");
+        helper.assertTrue(Platform.waterMalus(ember) == 0, EMBER + " never asked to avoid water and does.");
+
+        EntityEvents.trigger(ember, "tp:ember_wade", null, ServerHooks.state());
+        helper.assertTrue(Platform.damagingMalus(ember) != 0,
+            EMBER + " asked to avoid damaging blocks and its pathfinder still walks through them.");
+        helper.assertTrue(Platform.lavaMalus(ember) == 0, EMBER + " asked to cross lava and may not.");
+        helper.assertTrue(Platform.waterMalus(ember) > 0, EMBER + " asked to avoid water and wades in.");
+        helper.succeed();
+    }
+
+    /**
+     * `minecraft:navigation.generic` swimming and never walking is a fish, and gets a fish's navigator.
+     *
+     * Bedrock describes a fish, a turtle and an axolotl with the same component, so the allowances
+     * inside it pick between Java's swimming, amphibious and ground navigators. A ground navigator
+     * plans a fish's way along the sea floor.
+     */
+    @GameTest()
+    public void aGenericNavigationThatOnlySwimsGetsASwimmingNavigator(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_fin", null, ServerHooks.state());
+        helper.assertTrue(ember.getNavigation() instanceof WaterBoundPathNavigation,
+            EMBER + " gained a navigation that swims and never walks and plans with "
+                + ember.getNavigation().getClass().getSimpleName() + ".");
+
+        EntityEvents.trigger(ember, "tp:ember_unfin", null, ServerHooks.state());
+        helper.assertTrue(ember.getNavigation() instanceof GroundPathNavigation,
+            EMBER + " lost the group that made it swim and still plans with "
+                + ember.getNavigation().getClass().getSimpleName() + ".");
+        helper.succeed();
+    }
+
+    /**
+     * A piston leaves alone an entity whose `minecraft:pushable` says pistons may not move it.
+     *
+     * Java asks the entity what a piston does to it, and the ember's ghostly group answers no to
+     * pistons as well as to other entities.
+     */
+    @GameTest()
+    public void aPistonLeavesAloneAnEntityThatMayNotBePushedByOne(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.assertTrue(ember.getPistonPushReaction() != PushReaction.IGNORE,
+            EMBER + " never refused a piston and a piston leaves it where it is.");
+        EntityEvents.trigger(ember, "tp:ember_fade", null, ServerHooks.state());
+        helper.assertTrue(ember.getPistonPushReaction() == PushReaction.IGNORE,
+            EMBER + " gained a minecraft:pushable refusing pistons and a piston still moves it.");
+        helper.succeed();
+    }
+
+    /**
+     * An entity nobody owns refuses breeding food unless its pack says taming is not needed.
+     *
+     * Bedrock's `require_tame` is yes by default, and the ember's fertile group never mentions it,
+     * so the food only works once the ember belongs to somebody.
+     */
+    @GameTest()
+    public void breedingFoodWaitsForAnOwnerByDefault(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_make_fertile", null, ServerHooks.state());
+        Player owner = holding(helper, ember, Items.WHEAT);
+        ember.mobInteract(owner, InteractionHand.MAIN_HAND);
+        helper.assertFalse(ember.inTheMood(), EMBER + " belongs to nobody and was put in the mood.");
+
+        ember.setOwner(owner);
+        ember.mobInteract(owner, InteractionHand.MAIN_HAND);
+        helper.assertTrue(ember.inTheMood(), EMBER + " belongs to its feeder and stayed out of the mood.");
+        helper.succeed();
+    }
+
+    /**
+     * Breeding raises the event `breeds_with` names for the mate, carries the child where the pack
+     * says the entity becomes pregnant, and rests the entity for `breed_cooldown` seconds.
+     */
+    @GameTest()
+    public void breedingRaisesTheMatesEventAndThenRests(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        AddonEntity mate = BehaviourGameTests.spawn(helper, EMBER);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_make_fertile", null, ServerHooks.state());
+        Player owner = holding(helper, ember, Items.WHEAT);
+        ember.setOwner(owner);
+        helper.assertTrue(ember.breedsWith(mate), EMBER + " names its own kind as a mate and refuses it.");
+
+        helper.assertFalse(ember.conceive(mate),
+            EMBER + " becomes pregnant by its pack's word and a child was born anyway.");
+        helper.assertTrue(Boolean.TRUE.equals(ember.value("tp:pregnant")),
+            EMBER + " bred and never raised the event breeds_with names for its mate.");
+
+        ember.mobInteract(owner, InteractionHand.MAIN_HAND);
+        helper.assertFalse(ember.inTheMood(), EMBER + " was put in the mood again the moment it bred.");
+        ember.tickCount += BREED_COOLDOWN + 1;
+        ember.mobInteract(owner, InteractionHand.MAIN_HAND);
+        helper.assertTrue(ember.inTheMood(), EMBER + " rested its two seconds and still refuses food.");
+        helper.succeed();
+    }
+
+    /** The two seconds the ember's fertile group rests after breeding, in Java's ticks. */
+    private static final int BREED_COOLDOWN = 2 * 20;
+
+    /** A player standing at the entity with a stack of the item in hand. */
+    private static Player holding(GameTestHelper helper, AddonEntity entity, Item item) {
+        Player player = Platform.mockPlayer(helper);
+        Platform.placeAt(player, entity.getX(), entity.getY(), entity.getZ(), 0f, 0f);
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(item, 16));
+        return player;
+    }
+
+    /**
+     * An entity following its owner steps to the owner's side once the owner is far ahead.
+     *
+     * Java writes the same walk into its tamable animals alone, so the ember's loyal group is what
+     * gives it one, and the owner standing fifteen blocks off is past the twelve Java's pets
+     * teleport at.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = AI_TEST_TICKS)
+    public void anEntityFollowingItsOwnerCatchesUpWithThem(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        net.minecraft.server.level.ServerPlayer owner = helper.makeMockServerPlayerInLevel();
+        BlockPos far = helper.absolutePos(STAND).east(FAR_AHEAD);
+        Platform.placeAt(owner, far.getX() + 0.5, far.getY(), far.getZ() + 0.5, 0f, 0f);
+        ember.setOwner(owner);
+        EntityEvents.trigger(ember, "tp:ember_befriend", null, ServerHooks.state());
+        ember.setNoAi(false);
+
+        helper.runAfterDelay(CATCH_UP_TICKS, () -> {
+            helper.assertTrue(ember.distanceTo(owner) < FAR_AHEAD / 2,
+                EMBER + " follows its owner and is still " + ember.distanceTo(owner) + " blocks behind.");
+            helper.succeed();
+        });
+    }
+
+    /** How far ahead the owner stands, past the distance a pet teleports at. */
+    private static final int FAR_AHEAD = 15;
+
+    /** Long enough for the follow goal to start and take its first step. */
+    private static final int CATCH_UP_TICKS = 20;
+
+    /**
+     * A hunter picks what its `entity_types` filters name, even with a player standing nearer.
+     *
+     * The ember's hunting group names the wisp's own family, which no Java class stands for, so a
+     * goal choosing by class alone falls back to hunting players.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = AI_TEST_TICKS)
+    public void aHunterPicksTheFamilyItsFiltersName(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        AddonEntity wisp = BehaviourGameTests.spawn(helper, WISP, STAND.east(4));
+        if (ember == null || wisp == null) {
+            helper.succeed();
+            return;
+        }
+
+        net.minecraft.server.level.ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        BlockPos near = helper.absolutePos(STAND).east(1);
+        Platform.placeAt(player, near.getX() + 0.5, near.getY(), near.getZ() + 0.5, 0f, 0f);
+        player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
+
+        EntityEvents.trigger(ember, "tp:ember_hunt", null, ServerHooks.state());
+        ember.setNoAi(false);
+        helper.succeedWhen(() -> helper.assertTrue(ember.getTarget() == wisp,
+            EMBER + " hunts the wisp's family and set its sights on " + ember.getTarget() + "."));
+    }
+
+    /**
+     * An entity turns on an attacker its `hurt_by_target` entries name, and not on one they leave out.
+     *
+     * The ember's vengeful group names the wisp's family, so a player's blow goes unanswered.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = AI_TEST_TICKS)
+    public void anEntityAnswersOnlyTheAttackersItsEntriesName(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        AddonEntity wisp = BehaviourGameTests.spawn(helper, WISP, STAND.east(2));
+        if (ember == null || wisp == null) {
+            helper.succeed();
+            return;
+        }
+
+        net.minecraft.server.level.ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
+        EntityEvents.trigger(ember, "tp:ember_avenge", null, ServerHooks.state());
+        ember.setNoAi(false);
+
+        Platform.hurt(ember, helper.getLevel(), ember.damageSources().playerAttack(player), 0.5f);
+        helper.startSequence()
+            .thenExecuteAfter(SEARCH_TICKS, () -> {
+                helper.assertTrue(ember.getTarget() == null,
+                    EMBER + " answers only the wisp's family and turned on the player who hit it.");
+
+                // Out of the moment after a blow in which Java ignores the next one.
+                ember.invulnerableTime = 0;
+                Platform.hurt(ember, helper.getLevel(), ember.damageSources().mobAttack(wisp), 0.5f);
+            })
+            .thenWaitUntil(() -> helper.assertTrue(ember.getTarget() == wisp,
+                EMBER + " was hit by the wisp its entries name and set its sights on " + ember.getTarget() + "."))
+            .thenSucceed();
+    }
+
+    /** Long enough for a target goal searching every other tick to have run several times. */
+    private static final int SEARCH_TICKS = 10;
+
+    /**
+     * How long a test waiting on the entity's own goals may run. The goals are left to the level's
+     * own ticks: on the older versions a mob chooses a new goal on every other tick of the server,
+     * which a test stepping the entity by hand never advances.
+     */
+    private static final int AI_TEST_TICKS = 100;
+
+    /**
+     * An entity looks at a player for the `look_time` its pack states, in seconds.
+     *
+     * The watchful group asks for half a second; Java's own goal looks for two to four whatever it
+     * is told, so a goal that ignored the field sets out to look four times as long at the least.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = AI_TEST_TICKS)
+    public void anEntityLooksForTheTimeItsPackStates(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        net.minecraft.server.level.ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        BlockPos near = helper.absolutePos(STAND).east(2);
+        Platform.placeAt(player, near.getX() + 0.5, near.getY(), near.getZ() + 0.5, 0f, 0f);
+        EntityEvents.trigger(ember, "tp:ember_watch", null, ServerHooks.state());
+        ember.setNoAi(false);
+
+        int[] first = {-1};
+        helper.onEachTick(() -> {
+            if (first[0] < 0) first[0] = lookLeft(ember);
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(first[0] >= 0, EMBER + " never looked at the player beside it.");
+            helper.assertTrue(first[0] <= LOOK_TICKS,
+                EMBER + " looks for half a second and set out to look for " + first[0] + " ticks.");
+        });
+    }
+
+    /** How many ticks the running look goal has left, or -1 while none runs. */
+    private static int lookLeft(AddonEntity entity) {
+        return entity.runningGoals().stream()
+            .filter(goal -> goal.startsWith("LookGoal with "))
+            .mapToInt(goal -> Integer.parseInt(goal.split(" ")[2]))
+            .findFirst()
+            .orElse(-1);
+    }
+
+    /** The half second the watchful group looks for, in Java's ticks. */
+    private static final int LOOK_TICKS = 10;
+
+    /**
+     * An entity walks to an item lying within its reach and picks it up there.
+     *
+     * Picking up is a behaviour with a priority and a speed, so the ember goes to the item rather
+     * than taking it from where it stands. The gathering group puts the behaviour above the
+     * ember's wandering, which would otherwise be free to take the ember elsewhere first.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = AI_TEST_TICKS + SETTLE_TICKS)
+    public void anEntityWalksToTheItemItPicksUp(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        // On the floor beside the ember rather than where it was put down, which it falls from.
+        EntityEvents.trigger(ember, "tp:ember_gather", null, ServerHooks.state());
+        ember.setNoAi(false);
+        double[] start = {Double.NaN};
+        double[] furthest = {0};
+        helper.onEachTick(() -> {
+            if (!Double.isNaN(start[0])) furthest[0] = Math.max(furthest[0], ember.getX() - start[0]);
+        });
+        helper.startSequence()
+            .thenExecuteAfter(SETTLE_TICKS, () -> {
+                start[0] = ember.getX();
+                net.minecraft.world.entity.item.ItemEntity dropped = new net.minecraft.world.entity.item.ItemEntity(
+                    helper.getLevel(), start[0] + ITEM_AWAY, ember.getY(), ember.getZ(),
+                    new ItemStack(Items.GOLD_INGOT));
+                dropped.setNoPickUpDelay();
+                helper.getLevel().addFreshEntity(dropped);
+            })
+            .thenWaitUntil(() -> {
+                helper.assertTrue(ember.getMainHandItem().is(Items.GOLD_INGOT),
+                    EMBER + " never picked up the gold lying " + ITEM_AWAY + " blocks off.");
+                helper.assertTrue(furthest[0] > ITEM_AWAY - GOAL_RADIUS - 0.5,
+                    EMBER + " picked up an item without going to it, having moved " + furthest[0] + ".");
+            })
+            .thenSucceed();
+    }
+
+    /** How far off the item lies, inside the four blocks the gathering group reaches. */
+    private static final int ITEM_AWAY = 3;
+
+    /** How close the gathering group has to come to an item to take it, Mojang's own two blocks. */
+    private static final int GOAL_RADIUS = 2;
+
+    /** Long enough for the ember to land on the floor it was put above. */
+    private static final int SETTLE_TICKS = 20;
+
+    /**
+     * An angry entity that broadcasts hands its quarry to the others of its kind around it.
+     *
+     * The ember's furious group broadcasts within six blocks, so the second ember beside it turns
+     * on the same wisp, and the sprite, which is another definition, is left alone.
+     */
+    @GameTest()
+    public void anAngryEntityBroadcastsItsQuarryToItsOwnKind(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        AddonEntity kin = BehaviourGameTests.spawn(helper, EMBER, STAND.east(2));
+        AddonEntity stranger = BehaviourGameTests.spawn(helper, "tp:sprite", STAND.south(2));
+        AddonEntity wisp = BehaviourGameTests.spawn(helper, WISP, STAND.east(4));
+        if (ember == null || kin == null || stranger == null || wisp == null) {
+            helper.succeed();
+            return;
+        }
+
+        ember.setTarget(wisp);
+        EntityEvents.trigger(ember, "tp:ember_rage", null, ServerHooks.state());
+        live(ember, SENSOR_INTERVAL);
+        helper.assertTrue(kin.getTarget() == wisp,
+            EMBER + " is angry at the wisp and never told the ember beside it.");
+        helper.assertTrue(stranger.getTarget() == null,
+            EMBER + " told an entity of another definition to turn on the wisp.");
+        helper.succeed();
+    }
+
+    /** One full round of the entity's own interval checks. */
+    private static final int SENSOR_INTERVAL = 10;
+
+    /**
+     * A stroll sets out for somewhere within the `xz_dist` its pack states.
+     *
+     * The pottering group asks for one block across; Java's own stroll goal looks ten blocks out
+     * whatever it is told.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = AI_TEST_TICKS)
+    public void aStrollStaysWithinTheDistanceItsPackStates(GameTestHelper helper) {
+        // The structure's own floor is barrier, which a ground navigator will not stop on.
+        for (int x = 0; x < STRUCTURE_SIDE; x++) {
+            for (int z = 0; z < STRUCTURE_SIDE; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+            }
+        }
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER, MIDDLE);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_potter", null, ServerHooks.state());
+        ember.setNoAi(false);
+        double[] furthest = {0};
+        helper.onEachTick(() -> {
+            BlockPos heading = ember.getNavigation().getTargetPos();
+            if (heading == null || ember.getNavigation().isDone()) return;
+
+            furthest[0] = Math.max(furthest[0], Math.max(Math.abs(heading.getX() + 0.5 - ember.getX()),
+                Math.abs(heading.getZ() + 0.5 - ember.getZ())));
+        });
+        helper.runAfterDelay(STROLL_TICKS, () -> {
+            helper.assertTrue(furthest[0] > 0, EMBER + " never set out on a stroll.");
+            helper.assertTrue(furthest[0] <= STROLL_ACROSS + 1,
+                EMBER + " strolls one block across and set out for somewhere " + furthest[0] + " away.");
+            helper.succeed();
+        });
+    }
+
+    /** The width of the empty structure every test here stands in. */
+    private static final int STRUCTURE_SIDE = 8;
+
+    /** The middle of that structure, standing on its floor. */
+    private static final BlockPos MIDDLE = new BlockPos(4, 1, 4);
+
+    /** The pottering group's `xz_dist`, in blocks. */
+    private static final int STROLL_ACROSS = 1;
+
+    /** Long enough for a stroll chosen at one in one to have been set out on. */
+    private static final int STROLL_TICKS = 40;
+
+    /**
+     * A transformation waits out the `delay` its pack states before the entity becomes another.
+     *
+     * The turning group waits one second, so the ember is still itself just after the group
+     * arrives and a wisp a second later.
+     */
+    @GameTest()
+    public void aTransformationWaitsOutItsDelay(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        if (ember == null || at.ioexception.mcaddon.registry.AddonEntities.typeOf(WISP) == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_turn", null, ServerHooks.state());
+        helper.assertTrue(ember.isAlive(), EMBER + " waits a second to transform and transformed at once.");
+
+        live(ember, TRANSFORM_TICKS);
+        helper.assertTrue(ember.isRemoved(), EMBER + " waited out its second and is still itself.");
+        helper.assertTrue(!helper.getLevel().getEntitiesOfClass(AddonEntity.class, ember.getBoundingBox().inflate(1),
+                other -> other.getType() == at.ioexception.mcaddon.registry.AddonEntities.typeOf(WISP)).isEmpty(),
+            EMBER + " transformed into nothing it can be found as.");
+        helper.succeed();
+    }
+
+    /** Past the one second the turning group waits, in Java's ticks. */
+    private static final int TRANSFORM_TICKS = 21;
+
+    /**
+     * A `private` inventory goes with the entity when it dies rather than onto the ground.
+     *
+     * The hoarding group's three slots are private; the laden group's nine are not, and spill.
+     */
+    @GameTest()
+    public void aPrivateInventoryIsNotDroppedOnDeath(GameTestHelper helper) {
+        AddonEntity hoarder = BehaviourGameTests.spawn(helper, EMBER);
+        AddonEntity hauler = BehaviourGameTests.spawn(helper, EMBER, MIDDLE);
+        if (hoarder == null || hauler == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(hoarder, "tp:ember_hoard", null, ServerHooks.state());
+        EntityEvents.trigger(hauler, "tp:ember_load", null, ServerHooks.state());
+        hoarder.inventory().setItem(0, new ItemStack(Items.DIAMOND));
+        hauler.inventory().setItem(0, new ItemStack(Items.EMERALD));
+        Platform.kill(hoarder, helper.getLevel());
+        Platform.kill(hauler, helper.getLevel());
+
+        helper.assertTrue(dropped(helper, hauler, Items.EMERALD),
+            EMBER + " died hauling an emerald in an inventory nobody called private and left nothing.");
+        helper.assertFalse(dropped(helper, hoarder, Items.DIAMOND),
+            EMBER + " died with a diamond in its private inventory and spilled it.");
+        helper.succeed();
+    }
+
+    private static boolean dropped(GameTestHelper helper, AddonEntity where, Item item) {
+        return !helper.getLevel().getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
+            where.getBoundingBox().inflate(2), lying -> lying.getItem().is(item)).isEmpty();
+    }
+
+    /**
+     * The lead an entity is on stretches and breaks at the distances the preset for its holder says.
+     *
+     * The laden group's first preset applies to a wisp holding the lead and the second to anything
+     * else, so the same ember breaks free at five blocks from a post and at twenty from a wisp.
+     * Before 26 Java fixes the lead's lengths, so there is nothing to ask there.
+     */
+    @GameTest()
+    public void aLeadStretchesAsThePresetForItsHolderSays(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        AddonEntity post = BehaviourGameTests.spawn(helper, EMBER, STAND.east(1));
+        AddonEntity wisp = BehaviourGameTests.spawn(helper, WISP, STAND.east(2));
+        if (ember == null || wisp == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_load", null, ServerHooks.state());
+        //? if >=26 {
+        Platform.leashTo(ember, post);
+        helper.assertTrue(ember.leashSnapDistance() == POST_SNAP && ember.leashElasticDistance() == POST_PULL,
+            EMBER + " is tied to a post and breaks at " + ember.leashSnapDistance() + ", pulling past "
+                + ember.leashElasticDistance() + ".");
+        helper.assertTrue(ember.supportQuadLeash(), EMBER + " is tied by four springs and hangs from one.");
+
+        Platform.leashTo(ember, wisp);
+        helper.assertTrue(ember.leashSnapDistance() == WISP_SNAP,
+            EMBER + " is held by a wisp and breaks at " + ember.leashSnapDistance() + ".");
+        //?}
+        helper.succeed();
+    }
+
+    /** The second preset's `max_distance` and `hard_distance`, in blocks. */
+    private static final double POST_SNAP = 5;
+    private static final double POST_PULL = 3;
+
+    /** The first preset's `max_distance`, which applies while a wisp holds the lead. */
+    private static final double WISP_SNAP = 20;
+
+    /**
+     * A bump pushes the entity as the `minecraft:pushable_by_entity` preset for the other one says.
+     *
+     * The anchored group lets a wisp push it not at all, and another ember ten times as hard as
+     * Java pushes anything, without that ember being pushed back.
+     */
+    @GameTest()
+    public void aBumpPushesAsThePresetForTheOtherEntitySays(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER, MIDDLE);
+        AddonEntity wisp = BehaviourGameTests.spawn(helper, WISP, MIDDLE);
+        AddonEntity kin = BehaviourGameTests.spawn(helper, EMBER, MIDDLE);
+        if (ember == null || wisp == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_anchor", null, ServerHooks.state());
+        Platform.placeAt(wisp, ember.getX() + BUMP, ember.getY(), ember.getZ(), 0f, 0f);
+        Platform.placeAt(kin, ember.getX() - BUMP, ember.getY(), ember.getZ(), 0f, 0f);
+        ember.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+        kin.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+
+        ember.push(wisp);
+        helper.assertTrue(ember.getDeltaMovement().lengthSqr() == 0,
+            EMBER + " may not be pushed by a wisp and was sent off at " + ember.getDeltaMovement() + ".");
+
+        ember.push(kin);
+        helper.assertTrue(ember.getDeltaMovement().x > JAVA_PUSH,
+            EMBER + " is pushed ten times as hard by its own kind and moved off at " + ember.getDeltaMovement() + ".");
+        helper.assertTrue(kin.getDeltaMovement().lengthSqr() == 0,
+            "the ember that bumped " + EMBER + " was pushed back, which the preset scales to nothing.");
+        helper.succeed();
+    }
+
+    /** How far apart the bumping entities stand, inside each other's boxes. */
+    private static final double BUMP = 0.3;
+
+    /** The most Java's own push moves anything in one bump. */
+    private static final double JAVA_PUSH = 0.05;
+
+    /**
+     * Food tempts within the `within_radius` a pack states, measured across unless it says height counts.
+     *
+     * The peckish group reaches three blocks, so wheat five blocks off is out of reach where Java's
+     * own ten would have it, and wheat two blocks across and six up is within reach, which Java's
+     * goal measuring in every direction would refuse.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = AI_TEST_TICKS)
+    public void temptationReachesAsFarAcrossAsThePackSays(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER, MIDDLE);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        net.minecraft.server.level.ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.WHEAT));
+        EntityEvents.trigger(ember, "tp:ember_hunger", null, ServerHooks.state());
+        ember.setNoAi(false);
+
+        Platform.placeAt(player, ember.getX() + FAR_ACROSS, ember.getY(), ember.getZ(), 0f, 0f);
+        boolean[] early = {false};
+        boolean[] moved = {false};
+        helper.onEachTick(() -> early[0] |= !moved[0] && tempted(ember));
+        helper.startSequence()
+            .thenExecuteAfter(TEMPT_TICKS, () -> {
+                helper.assertFalse(early[0], EMBER + " is tempted three blocks off and followed wheat five away.");
+                moved[0] = true;
+                Platform.placeAt(player, ember.getX() + NEAR_ACROSS, ember.getY() + HIGH_UP, ember.getZ(), 0f, 0f);
+            })
+            .thenWaitUntil(() -> helper.assertTrue(tempted(ember),
+                EMBER + " is tempted across rather than up and ignored wheat two across and six up."))
+            .thenSucceed();
+    }
+
+    private static boolean tempted(AddonEntity entity) {
+        return entity.runningGoals().stream().anyMatch(goal -> goal.startsWith("TemptedGoal"));
+    }
+
+    private static final int FAR_ACROSS = 5;
+    private static final int NEAR_ACROSS = 2;
+    private static final int HIGH_UP = 6;
+
+    /** Long enough for a goal selector to have looked for a goal to start several times. */
+    private static final int TEMPT_TICKS = 20;
+
+    /**
+     * A group bringing a lit fuse goes off once `fuse_length` has burned, with nothing to kill it.
+     *
+     * The lit group's fuse is half a second, so the ember is still there just after the group
+     * arrives and gone, with the ember beside it hurt, half a second later.
+     */
+    @GameTest()
+    public void aLitFuseGoesOffWhenItHasBurned(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        AddonEntity bystander = BehaviourGameTests.spawn(helper, EMBER, STAND.east(1));
+        if (ember == null || bystander == null) {
+            helper.succeed();
+            return;
+        }
+
+        float whole = bystander.getHealth();
+        EntityEvents.trigger(ember, "tp:ember_light", null, ServerHooks.state());
+        helper.assertTrue(ember.isAlive(), EMBER + " burns a half second fuse and went off at once.");
+
+        live(ember, FUSE_TICKS);
+        helper.assertTrue(ember.isRemoved(), EMBER + " burned its fuse down and never went off.");
+        helper.assertTrue(bystander.getHealth() < whole || !bystander.isAlive(),
+            EMBER + " went off and the ember beside it was not hurt.");
+        helper.succeed();
+    }
+
+    /** Past the half second the lit group's fuse burns, in Java's ticks. */
+    private static final int FUSE_TICKS = 11;
+
+    /**
+     * A home holds the entity to it only when its `restriction_type` says to.
+     *
+     * Bedrock's default is no restriction, which is what an empty `minecraft:home` is for; the
+     * nesting group asks for its wandering to stay within five blocks.
+     */
+    @GameTest()
+    public void aHomeHoldsTheEntityOnlyWhenItsRestrictionSaysSo(GameTestHelper helper) {
+        AddonEntity remembering = BehaviourGameTests.spawn(helper, EMBER);
+        AddonEntity nesting = BehaviourGameTests.spawn(helper, EMBER, MIDDLE);
+        if (remembering == null || nesting == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(remembering, "tp:ember_remember", null, ServerHooks.state());
+        EntityEvents.trigger(nesting, "tp:ember_nest", null, ServerHooks.state());
+        helper.assertFalse(Platform.hasHome(remembering),
+            EMBER + " has a home that restricts nothing and is held to it.");
+        helper.assertTrue(Platform.hasHome(nesting),
+            EMBER + " has a home that restricts its wandering and wanders freely.");
+        helper.succeed();
+    }
+
+    /**
+     * A buoyant entity floats on the liquids its `liquid_blocks` names and in no other.
+     *
+     * The lava group gives the ember four times the usual lift in lava, so in water it has none of
+     * it: an ember lifted there would be pushed up through the water it stands in.
+     */
+    @GameTest()
+    public void aBuoyantEntityFloatsOnlyOnTheLiquidsItNames(GameTestHelper helper) {
+        helper.setBlock(STAND, Blocks.WATER);
+        helper.setBlock(STAND.above(), Blocks.WATER);
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_float_on_lava", null, ServerHooks.state());
+        double start = ember.getY();
+        live(ember, FLOAT_TICKS);
+        helper.assertTrue(ember.getY() <= start,
+            EMBER + " floats on lava alone and rose " + (ember.getY() - start) + " through water.");
+        helper.succeed();
+    }
+
+    /** Long enough for a lift four times the usual to carry the ember up through the water. */
+    private static final int FLOAT_TICKS = 20;
+
+    /**
+     * An entity turns no further in a tick than its movement component's `max_turn`.
+     *
+     * The ember's `minecraft:movement.basic` states no turn rate, which is Bedrock's thirty degrees a
+     * tick; Java's own move control swings a mob ninety degrees in one.
+     */
+    @GameTest()
+    public void anEntityTurnsNoFasterThanItsMaxTurn(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER, MIDDLE);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        ember.setNoAi(false);
+        live(ember, SETTLE_TICKS);
+        ember.setYRot(0f);
+        ember.getMoveControl().setWantedPosition(ember.getX() - TURN_TOWARD, ember.getY(), ember.getZ(), 1.0);
+        live(ember, 1);
+        float turned = Math.abs(net.minecraft.util.Mth.wrapDegrees(ember.getYRot()));
+        helper.assertTrue(turned > 0 && turned <= MAX_TURN + 0.5f,
+            EMBER + " turns thirty degrees a tick and turned " + turned + ".");
+        helper.succeed();
+    }
+
+    /** Bedrock's default turn rate, in degrees a tick. */
+    private static final float MAX_TURN = 30f;
+
+    /** How far to the side the ember is sent, a quarter turn from where it faces. */
+    private static final double TURN_TOWARD = 5;
+
+    /**
+     * A jump starts at the `jump_power` its pack states, in blocks a tick.
+     *
+     * The springy group states eight tenths, almost twice the 0.42 Java jumps every mob at.
+     */
+    @GameTest()
+    public void aJumpStartsAtTheJumpPowerItsPackStates(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER, MIDDLE);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_spring", null, ServerHooks.state());
+        ember.setNoAi(false);
+        live(ember, SETTLE_TICKS);
+        ember.getJumpControl().jump();
+        live(ember, 1);
+        helper.assertTrue(ember.getDeltaMovement().y > JAVA_JUMP,
+            EMBER + " jumps at eight tenths and left the ground at " + ember.getDeltaMovement().y + ".");
+        helper.succeed();
+    }
+
+    /** Java's own jump speed, which the springy group's jump leaves well behind even after a tick. */
+    private static final double JAVA_JUMP = 0.42;
+
+    /**
+     * A hopping entity rests for its `jump_delay` after each landing before it leaves the ground again.
+     *
+     * The hopping group rests a second, so in two seconds the ember leaves the ground twice at most;
+     * hopping again the moment it lands, it would be off the ground every few ticks.
+     */
+    @GameTest()
+    public void aHopperRestsForItsJumpDelay(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER, MIDDLE);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_hop", null, ServerHooks.state());
+        ember.setNoAi(false);
+        live(ember, SETTLE_TICKS);
+
+        int takeoffs = 0;
+        boolean grounded = ember.onGround();
+        for (int tick = 0; tick < HOP_TICKS; tick++) {
+            ember.getMoveControl().setWantedPosition(ember.getX() + HOP_TOWARD, ember.getY(), ember.getZ(), 1.0);
+            live(ember, 1);
+            if (grounded && !ember.onGround()) takeoffs++;
+            grounded = ember.onGround();
+        }
+        helper.assertTrue(takeoffs > 0 && takeoffs <= MOST_HOPS,
+            EMBER + " rests a second between hops and left the ground " + takeoffs + " times in two.");
+        helper.succeed();
+    }
+
+    /** Two seconds of hopping, in Java's ticks. */
+    private static final int HOP_TICKS = 40;
+
+    /** The most takeoffs two seconds allows with a one second rest after each landing. */
+    private static final int MOST_HOPS = 2;
+
+    /** Far enough off that the ember never arrives. */
+    private static final double HOP_TOWARD = 20;
+
+    /**
+     * A name tag names only an entity `minecraft:nameable` allows, and the name raises its event.
+     *
+     * The plain ember carries no such component and refuses the tag. The nameable group raises one
+     * event for the name it lists and its default trigger for any other, and shows the name always.
+     */
+    @GameTest()
+    public void aNameTagNamesOnlyANameableEntityAndRaisesItsEvent(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        net.minecraft.server.level.ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
+        ItemStack tag = new ItemStack(Items.NAME_TAG);
+        Platform.setCustomName(tag, "Cinder");
+        player.setItemInHand(InteractionHand.MAIN_HAND, tag);
+        Platform.interactOn(player, ember, InteractionHand.MAIN_HAND);
+        helper.assertTrue(ember.getCustomName() == null, EMBER + " is not nameable and took a name tag's name.");
+
+        EntityEvents.trigger(ember, "tp:ember_make_nameable", null, ServerHooks.state());
+        player.setItemInHand(InteractionHand.MAIN_HAND, tag.copy());
+        Platform.interactOn(player, ember, InteractionHand.MAIN_HAND);
+        helper.assertTrue(ember.getCustomName() != null && "Cinder".equals(ember.getCustomName().getString()),
+            EMBER + " is nameable and refused the name tag.");
+        helper.assertTrue("cinder".equals(ember.value("tp:named")),
+            EMBER + " was named Cinder and raised " + ember.value("tp:named") + " rather than its event for Cinder.");
+        helper.assertTrue(ember.isCustomNameVisible(), EMBER + " shows its name always and hides it.");
+
+        ember.setCustomName(net.minecraft.network.chat.Component.literal("Ash"));
+        helper.assertTrue("plain".equals(ember.value("tp:named")),
+            EMBER + " was given a name no action lists and never raised its default trigger.");
+        helper.succeed();
+    }
+
+    /**
+     * Runs the entity's own ticks the way the level does, which counts its age first: Java's goals
+     * tell one blow from the next by the age it landed at.
+     */
+    private static void live(AddonEntity entity, int ticks) {
+        for (int tick = 0; tick < ticks; tick++) {
+            entity.tickCount++;
+            entity.tick();
+        }
+    }
+}

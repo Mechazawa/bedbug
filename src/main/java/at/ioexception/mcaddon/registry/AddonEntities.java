@@ -369,10 +369,6 @@ public final class AddonEntities {
     private static final Map<String, Set<String>> UNREAD_FIELDS = Map.of(
         "minecraft:experience_reward", Set.of("on_bred"),
         "minecraft:block_movement_slowdown_immunity", Set.of("tags"),
-        "minecraft:angry", Set.of("broadcastAnger", "broadcast_anger", "broadcast_range",
-            "broadcast_filters", "broadcast_targets", "broadcast_anger_when_dying",
-            "broadcast_anger_on_attack", "broadcast_anger_on_being_attacked", "angry_sound",
-            "sound_interval"),
         "minecraft:attack", Set.of("effect_name", "effect_duration"),
         "minecraft:spawn_entity", Set.of("spawn_method", "should_leash"),
         "minecraft:drying_out_timer", Set.of("water_bottle_refill_time"),
@@ -401,8 +397,8 @@ public final class AddonEntities {
      * Everything an entity can declare that this mod does something about.
      *
      * A component naming something the game already does for every mob is in here too: a pack saying
-     * an entity is pushable or has physics is describing what a Java mob does anyway, so honouring it
-     * is doing nothing, and reporting it would be noise rather than a gap.
+     * pistons push an entity or that it has physics is describing what a Java mob does anyway, so
+     * honouring it is doing nothing, and reporting it would be noise rather than a gap.
      *
      * That is the only reason a name belongs here without a reader of its own. A component this mod
      * neither acts on nor gets for free stays out, so `/mcaddon entities` counts it.

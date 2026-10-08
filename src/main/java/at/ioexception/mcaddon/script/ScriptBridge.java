@@ -1,7 +1,6 @@
 package at.ioexception.mcaddon.script;
 
 import at.ioexception.mcaddon.McAddon;
-import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.structure.McStructure;
@@ -534,7 +533,8 @@ public final class ScriptBridge {
     @HostAccess.Export
     public String[] entityFamilies(String id) {
         Entity entity = entity(id);
-        return entity == null ? new String[0] : EntityFamilies.of(entity);
+        return entity == null ? new String[0]
+            : at.ioexception.mcaddon.bedrock.behaviour.Families.of(entity).toArray(String[]::new);
     }
 
     @HostAccess.Export
@@ -1401,37 +1401,6 @@ public final class ScriptBridge {
     }
 
     /**
-     * Bedrock type families come from the behaviour pack, so an add-on's own type answers with what
-     * its definition declares. Nothing declares them for the game's types, which are keyed here by
-     * the id Bedrock gives them.
-     */
-    private static final class EntityFamilies {
-        private static final Map<String, String[]> VANILLA = Map.ofEntries(
-            Map.entry("minecraft:player", new String[] {"player", "mob"}),
-            Map.entry("minecraft:villager_v2", new String[] {"villager", "mob"}),
-            Map.entry("minecraft:zombie_villager_v2",
-                new String[] {"zombie_villager", "zombie", "undead", "monster", "mob"}),
-            Map.entry("minecraft:zombie", new String[] {"zombie", "undead", "monster", "mob"}),
-            Map.entry("minecraft:skeleton", new String[] {"skeleton", "undead", "monster", "mob"}),
-            Map.entry("minecraft:creeper", new String[] {"creeper", "monster", "mob"}),
-            Map.entry("minecraft:sheep", new String[] {"sheep", "animal", "mob"}),
-            Map.entry("minecraft:cow", new String[] {"cow", "animal", "mob"}),
-            Map.entry("minecraft:wandering_trader", new String[] {"wandering_trader", "mob"}),
-            Map.entry("minecraft:iron_golem", new String[] {"irongolem", "mob"}),
-            Map.entry("minecraft:boat", new String[] {"boat", "inanimate"}),
-            Map.entry("minecraft:chest_boat", new String[] {"boat", "inanimate"}));
-
-        private EntityFamilies() {
-        }
-
-        static String[] of(Entity entity) {
-            ServerEntityDefinition own = AddonEntities.definitionOf(entity.getType());
-            if (own != null) return own.families().toArray(String[]::new);
-            return VANILLA.getOrDefault(AddonEntities.identifierOf(entity.getType()), new String[] {"mob"});
-        }
-    }
-
-    /**
      * `EntityQueryOptions`, as one test per option the query carries.
      *
      * Every option the pack set becomes a test when the query is parsed, so an entity is measured
@@ -1486,13 +1455,14 @@ public final class ScriptBridge {
 
             Set<String> families = strings(options, "families");
             if (!families.isEmpty()) {
-                tests.add(entity -> Set.of(EntityFamilies.of(entity)).containsAll(families));
+                tests.add(entity -> at.ioexception.mcaddon.bedrock.behaviour.Families.of(entity)
+                    .containsAll(families));
             }
 
             Set<String> excludeFamilies = strings(options, "excludeFamilies");
             if (!excludeFamilies.isEmpty()) {
                 tests.add(entity -> java.util.Collections.disjoint(
-                    Set.of(EntityFamilies.of(entity)), excludeFamilies));
+                    at.ioexception.mcaddon.bedrock.behaviour.Families.of(entity), excludeFamilies));
             }
         }
 

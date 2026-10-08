@@ -31,17 +31,14 @@ import net.minecraft.world.entity.ai.goal.MoveThroughVillageGoal;
 import net.minecraft.world.entity.ai.goal.MoveTowardsRestrictionGoal;
 import net.minecraft.world.entity.ai.goal.MoveTowardsTargetGoal;
 import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
-import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.PanicGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
-import net.minecraft.world.entity.ai.goal.RandomSwimmingGoal;
 import net.minecraft.world.entity.ai.goal.RestrictSunGoal;
 import net.minecraft.world.entity.ai.goal.StrollThroughVillageGoal;
 import net.minecraft.world.entity.ai.goal.TryFindWaterGoal;
 import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomFlyingGoal;
 import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
 import net.minecraft.world.entity.ai.navigation.FlyingPathNavigation;
-import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.ai.navigation.WallClimberNavigation;
 import net.minecraft.world.entity.ai.navigation.WaterBoundPathNavigation;
@@ -395,6 +392,7 @@ public class AddonEntity extends PathfinderMob
 
         refreshComponents();
         publishMarkers();
+        setAirSupply(getMaxAirSupply());
 
         String table = liveText("minecraft:loot", "table");
         if (table != null) lootTable = AddonEntities.lootTable(getType(), table);
@@ -605,14 +603,16 @@ public class AddonEntity extends PathfinderMob
         if (liveComponent("minecraft:persistent") != null) setPersistenceRequired();
 
         // `minecraft:preferred_path` is the entity keeping to the ground it was given, so water
-        // costs it what water costs a villager. Nought is what a pathfinding mob starts at.
-        Platform.setWaterMalus(this, declaresNow("minecraft:preferred_path") ? 8f : 0f);
+        // costs it what Java charges a villager for it, whatever its navigation allowed.
+        if (declaresNow("minecraft:preferred_path")) Platform.priceWater(this, true);
 
         // `minecraft:variable_max_auto_step` arrives with the group that lets an entity climb what
         // it otherwise could not. Six tenths of a block is what a Java mob steps otherwise.
         Platform.setStepHeight(this,
             (float) liveNumber("minecraft:variable_max_auto_step", "base_value", 0.6));
 
+        refreshBreath();
+        refreshFuse();
         refreshHome();
         refreshContainer();
         releaseLeadsAGroupTook();
@@ -651,6 +651,94 @@ public class AddonEntity extends PathfinderMob
     private static final double LEASH_REACH = 16;
 
     /**
+     * What the entity breathes, which a component group may change like any other component. Air
+     * already spent stays spent, up to the new supply.
+     */
+    private void refreshBreath() {
+        breath = Breath.tryFrom(liveComponent("minecraft:breathable"));
+        if (getAirSupply() > getMaxAirSupply()) setAirSupply(getMaxAirSupply());
+    }
+
+    private Breath breath;
+
+    /**
+     * Lights the fuse of a `minecraft:explode` that arrives with `fuse_lit`, and puts it out again
+     * when the component goes.
+     *
+     * This is how a Bedrock creeper goes off: its sensor adds the group carrying the explosion, and
+     * the fuse that group lights burns for `fuse_length` seconds, a range a random point of which is
+     * taken. A negative length goes off at once. A fuse already burning keeps the time it has left.
+     */
+    private void refreshFuse() {
+        com.google.gson.JsonObject explode = liveComponent("minecraft:explode");
+        if (explode == null || !Goals.flag(explode, "fuse_lit", false)) {
+            fuseEndsAt = -1;
+            return;
+        }
+        if (fuseEndsAt >= 0) return;
+
+        double low = Goals.low(explode, "fuse_length", 0);
+        double high = Math.max(low, Goals.high(explode, "fuse_length", low));
+        double seconds = low + random.nextDouble() * (high - low);
+        fuseEndsAt = tickCount + Math.max(0, (int) (seconds * Goals.TICKS_PER_SECOND));
+    }
+
+    private int fuseEndsAt = -1;
+
+    private void burnFuse() {
+        if (fuseEndsAt >= 0 && tickCount >= fuseEndsAt) {
+            fuseEndsAt = -1;
+            detonate();
+        }
+    }
+
+    @Override
+    public int getMaxAirSupply() {
+        return breath == null ? super.getMaxAirSupply() : breath.supply();
+    }
+
+    /**
+     * The air a tick under water leaves, which is the only medium Java counts down in by itself.
+     *
+     * An entity that breathes water fills up there instead, and one carrying no
+     * `minecraft:breathable` never loses any.
+     */
+    @Override
+    protected int decreaseAirSupply(int current) {
+        if (definition == null) return super.decreaseAirSupply(current);
+        if (breath == null) return current;
+
+        return breath.breathesAround(this) ? breath.inhale(current) : super.decreaseAirSupply(current);
+    }
+
+    /** Java refills a mob's air whenever it is out of water, which a fish on land does not get. */
+    @Override
+    protected int increaseAirSupply(int current) {
+        if (breath == null) return super.increaseAirSupply(current);
+
+        return breath.breathesAround(this) ? breath.inhale(current) : current;
+    }
+
+    /**
+     * Counts the breath down wherever the entity cannot breathe and Java does not count it.
+     *
+     * Java drowns a mob only under water, so a fish on land, a mob that breathes nothing but water
+     * and one choking in lava lose their air here, at the rate and with the damage Java drowns with.
+     */
+    private void holdBreath() {
+        if (breath == null || Breath.underwater(this) || breath.breathesAround(this)) return;
+
+        setAirSupply(super.decreaseAirSupply(getAirSupply()));
+        if (getAirSupply() > DROWNED_AT) return;
+
+        setAirSupply(0);
+        Platform.hurt(this, (net.minecraft.server.level.ServerLevel) level(), damageSources().drown(), 2f);
+    }
+
+    /** How far below empty Java lets a mob's air fall before drowning hurts it. */
+    private static final int DROWNED_AT = -20;
+
+    /**
      * Where the entity is held, which `minecraft:home` and `minecraft:dweller` both state as a radius.
      *
      * Both say the entity belongs somewhere rather than wandering, and Bedrock brings either in with
@@ -662,6 +750,14 @@ public class AddonEntity extends PathfinderMob
     private void refreshHome() {
         String component = declaresNow("minecraft:home") ? "minecraft:home"
             : declaresNow("minecraft:dweller") ? "minecraft:dweller" : null;
+        // `restriction_type` is `none` unless the pack says otherwise, which keeps a home without
+        // holding the entity to it: Mojang writes an empty `minecraft:home` on entities whose events
+        // only need somewhere to remember.
+        if (component != null && component.equals("minecraft:home")
+            && "none".equals(at.ioexception.mcaddon.util.Json.text(
+                liveComponent("minecraft:home"), "restriction_type", "none"))) {
+            component = null;
+        }
         if (component == null) {
             Platform.clearHome(this);
             return;
@@ -847,7 +943,8 @@ public class AddonEntity extends PathfinderMob
             || carriesNow("minecraft:block_climber")) {
             return new WallClimberNavigation(this, level);
         }
-        return super.createNavigation(level);
+        PathNavigation swimming = pathing().navigatorFor(this, level);
+        return swimming != null ? swimming : super.createNavigation(level);
     }
 
     /**
@@ -861,44 +958,42 @@ public class AddonEntity extends PathfinderMob
         PathNavigation asked = createNavigation(level());
         if (asked.getClass() != navigation.getClass()) navigation = asked;
 
-        // Bedrock names the kind of pathfinding in the component and states the allowances inside
-        // it, and an entity that may not float sinks where one that may swims, so the flags decide
-        // as much as the name does.
-        if (navigation instanceof GroundPathNavigation ground) {
-            com.google.gson.JsonObject walking = navigationBody();
-            ground.setCanOpenDoors(carriesNow("minecraft:annotation.open_door")
-                || Goals.flag(walking, "can_open_doors", false)
-                || Goals.flag(walking, "can_pass_doors", false));
-            ground.setCanFloat(carriesNow("minecraft:navigation.swim")
-                || carriesNow("minecraft:navigation.generic")
-                || Goals.flag(walking, "can_float", false)
-                || Goals.flag(walking, "can_swim", false)
-                || Goals.flag(walking, "can_path_over_water", false)
-                || Goals.flag(walking, "is_amphibious", false));
-            ground.setAvoidSun(Goals.flag(walking, "avoid_sun", false));
-
-            if (Goals.flag(walking, "avoid_water", false)) {
-                // The enum naming a kind of ground was renamed in 1.21.
-                //? if >=1.21 {
-                setPathfindingMalus(net.minecraft.world.level.pathfinder.PathType.WATER, 8f);
-                //?} else {
-                /*setPathfindingMalus(net.minecraft.world.level.pathfinder.BlockPathTypes.WATER, 8f);
-                *///?}
-            }
-        }
+        pathing().applyTo(this, navigation, carriesNow("minecraft:annotation.open_door"));
         applyMoveControl();
     }
 
-    /** The navigation component the entity carries now, which is the last one a pack that wrote two means. */
-    private com.google.gson.JsonObject navigationBody() {
+    /**
+     * The allowances of the navigation component the entity carries now.
+     *
+     * One a live group brought outranks one the entity declares, the way a group outranks the top
+     * level for any component, and of two written in the same place the later in this list wins.
+     */
+    private Pathing pathing() {
         com.google.gson.JsonObject walking = null;
+        boolean grouped = false;
         for (String component : java.util.List.of(
             "minecraft:navigation.float", "minecraft:navigation.climb", "minecraft:navigation.fly",
             "minecraft:navigation.hover", "minecraft:navigation.swim", "minecraft:navigation.generic",
             "minecraft:navigation.walk")) {
-            if (carriesNow(component)) walking = liveComponent(component);
+            if (!carriesNow(component)) continue;
+
+            boolean fromGroup = definition != null && !declares(component);
+            if (grouped && !fromGroup) continue;
+            walking = bodyNow(component);
+            grouped = fromGroup;
         }
-        return walking;
+        return Pathing.of(walking);
+    }
+
+    /**
+     * The body of a component the entity carries now, answered before the definition as well, for
+     * the same reason {@link #carriesNow} is.
+     */
+    private com.google.gson.JsonObject bodyNow(String component) {
+        if (definition != null) return liveComponent(component);
+
+        ServerEntityDefinition declared = AddonEntities.definitionOf(getType());
+        return declared == null ? null : declared.components().get(component);
     }
 
     /** Which way of getting about the entity's `minecraft:movement.*` names at this moment. */
@@ -1115,48 +1210,58 @@ public class AddonEntity extends PathfinderMob
      * hand and a body, so what is picked up is held rather than stored, which is what a pack using
      * this for a villager carrying bread is describing anyway.
      */
-    private void pickUpNearby() {
-        if (!declares("minecraft:behavior.pickup_items") || level().isClientSide()) return;
-        if (carried == null && !getMainHandItem().isEmpty()) return;
+    /** The slots `minecraft:inventory` or `minecraft:strength` gives the entity, or null while it has none. */
+    public net.minecraft.world.Container inventory() {
+        return carried;
+    }
 
-        com.google.gson.JsonObject goal = componentBody("minecraft:behavior.pickup_items");
-        double range = number(goal, "max_dist", 3);
-        boolean anything = ServerEntityDefinition.flag(goal, "can_pickup_any_item", false);
+    /** Whether the entity has slots of its own to put what it picks up in. */
+    boolean carriesInventory() {
+        return carried != null;
+    }
 
-        for (net.minecraft.world.entity.item.ItemEntity dropped
-            : level().getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
-                getBoundingBox().inflate(range))) {
-            if (!dropped.isAlive() || dropped.hasPickUpDelay()) continue;
-            if (named(goal, "excluded_items", dropped.getItem())) continue;
-            if (!anything && !shareable(dropped.getItem())) continue;
+    /** Whether the slot Java would wear this item in is empty, a hand for most things. */
+    boolean slotFreeFor(ItemStack stack) {
+        return getItemBySlot(getEquipmentSlotForItem(stack)).isEmpty();
+    }
 
-            // `singular_pickup` is the pack asking for one of the stack rather than all of it.
-            ItemStack taken = dropped.getItem().copy();
-            if (ServerEntityDefinition.flag(liveComponent("minecraft:shareables"),
-                "singular_pickup", false)) {
-                taken.setCount(1);
-            }
-            if (!stow(taken)) return;
-
-            dropped.getItem().shrink(taken.getCount());
-            if (dropped.getItem().isEmpty()) dropped.discard();
-            return;
+    /**
+     * Takes what the dropped stack holds into wherever the entity keeps things, and answers whether
+     * any of it fitted.
+     */
+    public boolean pickUp(net.minecraft.world.entity.item.ItemEntity dropped) {
+        // `singular_pickup` is the pack asking for one of the stack rather than all of it.
+        ItemStack taken = dropped.getItem().copy();
+        if (ServerEntityDefinition.flag(liveComponent("minecraft:shareables"), "singular_pickup", false)) {
+            taken.setCount(1);
         }
+        if (!stow(taken)) return false;
+
+        dropped.getItem().shrink(taken.getCount());
+        if (dropped.getItem().isEmpty()) dropped.discard();
+        return true;
+    }
+
+    /** Raises one of the entity's own events, for a goal that names one. */
+    void raiseEvent(String event) {
+        fire(event);
     }
 
     /**
      * Puts one item where the pack said this entity keeps what it collects.
      *
      * `minecraft:inventory` gives the entity slots of its own, which is what a pack describes for
-     * something that hauls goods. Without it there is one hand, which is enough for the villager
-     * carrying bread that most packs use this for. False when there is nowhere left to put it.
+     * something that hauls goods. Without it the item goes to the slot Java would wear it in, a
+     * hand for most things and the head for a helmet. False when there is nowhere left to put it.
      */
     private boolean stow(ItemStack stack) {
-        if (carried == null) {
-            setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, stack);
-            return true;
-        }
-        return carried.addItem(stack).isEmpty();
+        if (carried != null) return carried.addItem(stack).isEmpty();
+
+        net.minecraft.world.entity.EquipmentSlot slot = getEquipmentSlotForItem(stack);
+        if (!getItemBySlot(slot).isEmpty()) return false;
+
+        setItemSlot(slot, stack);
+        return true;
     }
 
     /**
@@ -1165,7 +1270,7 @@ public class AddonEntity extends PathfinderMob
      * `all_items` is the pack saying the list is a preference rather than a gate, so an entity
      * declaring it takes whatever it finds.
      */
-    private boolean shareable(net.minecraft.world.item.ItemStack stack) {
+    public boolean shareable(net.minecraft.world.item.ItemStack stack) {
         com.google.gson.JsonObject body = liveComponent("minecraft:shareables");
         if (body == null || !body.has("items")) return true;
         if (ServerEntityDefinition.flag(body, "all_items", false)) return true;
@@ -1173,7 +1278,7 @@ public class AddonEntity extends PathfinderMob
     }
 
     /** Whether an item list a component carries names this stack, in either spelling of an entry. */
-    private static boolean named(com.google.gson.JsonObject body, String field,
+    static boolean named(com.google.gson.JsonObject body, String field,
         net.minecraft.world.item.ItemStack stack) {
         java.util.List<com.google.gson.JsonElement> listed =
             at.ioexception.mcaddon.util.Json.list(body, field);
@@ -1290,15 +1395,10 @@ public class AddonEntity extends PathfinderMob
     private boolean fed(Player player, InteractionHand hand) {
         com.google.gson.JsonObject breedable = liveComponent("minecraft:breedable");
         if (breedable == null || !breedsWith(breedable, player.getItemInHand(hand))) return false;
-        // A pack asking for a healthy parent means an entity at anything less is not tempted at all.
-        if (ServerEntityDefinition.flag(breedable, "require_full_health", false)
-            && getHealth() < getMaxHealth()) {
-            return false;
-        }
+        if (!willingToBreed(breedable, player)) return false;
 
         if (!player.getAbilities().instabuild) player.getItemInHand(hand).shrink(1);
-        // `breed_cooldown` is seconds, which is how long the mood the food put the entity in lasts.
-        inLoveUntil = tickCount + Goals.ticks(breedable, "breed_cooldown", 30);
+        inLoveUntil = tickCount + LOVE_TICKS;
         for (int i = 0; i < 7; i++) {
             level().addParticle(net.minecraft.core.particles.ParticleTypes.HEART,
                 getRandomX(1), getRandomY() + 0.5, getRandomZ(1), 0, 0, 0);
@@ -1352,6 +1452,108 @@ public class AddonEntity extends PathfinderMob
         return false;
     }
 
+    /**
+     * Whether food may put the entity in the mood at all, which every condition
+     * `minecraft:breedable` states has to allow.
+     *
+     * `require_tame` is yes unless a pack says otherwise, so an entity nobody owns refuses the food
+     * of a pack that never mentions it, and Mojang's own breedable entities each write it out.
+     */
+    private boolean willingToBreed(com.google.gson.JsonObject breedable, Player feeder) {
+        if (tickCount < breedReadyAt) return false;
+        if (Goals.flag(breedable, "require_tame", true) && ownerUuid() == null) return false;
+        if (Goals.flag(breedable, "require_full_health", false) && getHealth() < getMaxHealth()) {
+            return false;
+        }
+        if (!Goals.flag(breedable, "allow_sitting", false)
+            && getPose() == net.minecraft.world.entity.Pose.SITTING) {
+            return false;
+        }
+        return Goals.filter(breedable, "love_filters")
+                .matches(new Filter.Context(this, feeder, feeder, ServerHooks.state()))
+            && environmentAllowsBreeding(breedable);
+    }
+
+    /** `environment_requirements`: enough of the named blocks within the radius, for each entry. */
+    private boolean environmentAllowsBreeding(com.google.gson.JsonObject breedable) {
+        for (com.google.gson.JsonElement element
+            : at.ioexception.mcaddon.util.Json.list(breedable, "environment_requirements")) {
+            if (!element.isJsonObject()) continue;
+
+            com.google.gson.JsonObject requirement = element.getAsJsonObject();
+            java.util.Set<net.minecraft.world.level.block.Block> wanted = Goals.blocks(requirement, "blocks");
+            int radius = (int) Math.max(0, Math.min(BREEDING_SEARCH_LIMIT, Goals.number(requirement, "radius", 0)));
+            long found = net.minecraft.core.BlockPos.betweenClosedStream(
+                    blockPosition().offset(-radius, -radius, -radius), blockPosition().offset(radius, radius, radius))
+                .filter(position -> wanted.contains(level().getBlockState(position).getBlock()))
+                .count();
+            if (found < Goals.number(requirement, "count", 1)) return false;
+        }
+        return true;
+    }
+
+    /** The widest radius Bedrock lets `environment_requirements` search. */
+    private static final int BREEDING_SEARCH_LIMIT = 16;
+
+    /** How long food keeps an entity in the mood, which is the thirty seconds Java's animals get. */
+    private static final int LOVE_TICKS = 600;
+
+    /** When this entity may be put in the mood again after it last bred, in ticks of its own age. */
+    private int breedReadyAt;
+
+    /**
+     * Whether `breeds_with` names the kind the other entity is.
+     *
+     * Mojang writes it as a map from each mate to the event breeding with it raises, and the
+     * schema as a list of objects naming `mate_type`; either names who this entity pairs with.
+     */
+    public boolean breedsWith(AddonEntity other) {
+        return breedingEntry(other) != null;
+    }
+
+    /**
+     * Breeds with the mate, and answers whether a child is born where the two stand.
+     *
+     * The event `breeds_with` names for the mate is raised, which is how a pack makes its entity
+     * pregnant, and `causes_pregnancy` is that event carrying the child instead of one being born.
+     * The entity then rests for `breed_cooldown` seconds before food works on it again.
+     */
+    public boolean conceive(AddonEntity mate) {
+        com.google.gson.JsonObject breedable = liveComponent("minecraft:breedable");
+        com.google.gson.JsonElement entry = breedingEntry(mate);
+        restAfterBreeding();
+
+        String event = entry == null || !entry.isJsonObject() ? null
+            : entry.getAsJsonObject().has("breed_event")
+                ? Goals.event(entry.getAsJsonObject(), "breed_event")
+                : Goals.text(entry.getAsJsonObject(), "event");
+        fire(event);
+        return !Goals.flag(breedable, "causes_pregnancy", false);
+    }
+
+    /** Leaves the mood and waits out `breed_cooldown`, whose seconds Bedrock defaults to sixty. */
+    public void restAfterBreeding() {
+        inLoveUntil = 0;
+        breedReadyAt = tickCount + Goals.ticks(liveComponent("minecraft:breedable"), "breed_cooldown", 60);
+    }
+
+    /** The `breeds_with` entry naming the other entity's kind, or null where none does. */
+    private com.google.gson.JsonElement breedingEntry(AddonEntity other) {
+        com.google.gson.JsonObject breedable = liveComponent("minecraft:breedable");
+        com.google.gson.JsonElement listed = breedable == null ? null : breedable.get("breeds_with");
+        if (listed == null) return null;
+
+        String kind = BuiltInRegistries.ENTITY_TYPE.getKey(other.getType()).toString();
+        if (listed.isJsonObject() && !listed.getAsJsonObject().has("mate_type")) {
+            return listed.getAsJsonObject().get(kind);
+        }
+        return at.ioexception.mcaddon.util.Json.list(breedable, "breeds_with").stream()
+            .filter(com.google.gson.JsonElement::isJsonObject)
+            .filter(entry -> kind.equals(Goals.text(entry.getAsJsonObject(), "mate_type")))
+            .findFirst()
+            .orElse(null);
+    }
+
     /** Whether the food `minecraft:breedable` names has put this entity in the mood. */
     public boolean inTheMood() {
         return inLoveUntil > tickCount;
@@ -1363,10 +1565,6 @@ public class AddonEntity extends PathfinderMob
 
         boolean inLove = inTheMood();
         if (inLove != Boolean.TRUE.equals(value("is_in_love"))) setValue("is_in_love", inLove);
-    }
-
-    public void leaveTheMood() {
-        inLoveUntil = 0;
     }
 
     /**
@@ -1693,7 +1891,75 @@ public class AddonEntity extends PathfinderMob
         ServerHooks.state().setProperty(getUUID(), "owner", player.getStringUUID());
     }
 
+    /** Belongs to whoever the entity it was before belonged to. */
+    public void keepOwnerOf(AddonEntity before) {
+        java.util.UUID id = before.ownerUuid();
+        if (id == null || ServerHooks.state() == null) return;
+
+        owner = id;
+        ownerRead = true;
+        ServerHooks.state().setProperty(getUUID(), "owner", id.toString());
+    }
+
+    /** Takes over the trading experience of the entity it was before, and the tiers that opens. */
+    public void keepTradeLevelOf(AddonEntity before) {
+        tradeExperience = before.tradeExperience;
+    }
+
+    /** Leaves what the entity carries in its inventory on the ground where it stands. */
+    public void dropInventory() {
+        if (carried == null) return;
+
+        net.minecraft.world.Containers.dropContents(level(), blockPosition(), carried);
+        carried.clearContent();
+    }
+
+    /** Makes one of the noises the entity's `sounds.json` names, by Bedrock's name for the moment. */
+    public void makeNoise(String moment) {
+        net.minecraft.sounds.SoundEvent made = moment == null ? null : noise(moment);
+        if (made != null) playSound(made, getSoundVolume(), getVoicePitch());
+    }
+
+    /**
+     * Starts the wait a delayed `minecraft:transformation` states, and answers whether there is one.
+     *
+     * `begin_transform_sound` is made as it starts. The wait ends with the transformation unless the
+     * group carrying the component has gone by then, which is how a cure is called off.
+     */
+    public boolean startTransforming(com.google.gson.JsonObject body) {
+        makeNoise(at.ioexception.mcaddon.util.Json.text(body, "begin_transform_sound", null));
+        transforming = Transformation.tryFrom(body, this);
+        return transforming != null;
+    }
+
+    private Transformation transforming;
+
+    private void keepTransforming() {
+        if (transforming == null) return;
+        if (liveComponent("minecraft:transformation") == null) {
+            transforming = null;
+            return;
+        }
+        if (!transforming.tick(this)) return;
+
+        com.google.gson.JsonObject body = transforming.body();
+        transforming = null;
+        EntityEvents.transform(this, body, ServerHooks.state());
+    }
+
     /** The owner's id, or null while nobody owns this entity. */
+    /**
+     * Whether the other entity is on this one's side: its owner, or another entity the same
+     * player owns, which a pack's targeting leaves alone unless it says otherwise.
+     */
+    public boolean sides(net.minecraft.world.entity.Entity other) {
+        java.util.UUID mine = ownerUuid();
+        if (mine == null) return false;
+
+        return mine.equals(other.getUUID())
+            || (other instanceof AddonEntity fellow && mine.equals(fellow.ownerUuid()));
+    }
+
     public java.util.UUID ownerUuid() {
         if (ownerRead || isClientSide() || ServerHooks.state() == null) return owner;
 
@@ -1729,12 +1995,6 @@ public class AddonEntity extends PathfinderMob
     }
     *///?}
 
-    /**
-     * Whether a lead can hold this entity.
-     *
-     * A pack saying so is describing what Java already allows for a mob, so the component only has
-     * to be honoured when it says the opposite.
-     */
     /**
      * Whether a portal will take this entity anywhere.
      *
@@ -1795,14 +2055,90 @@ public class AddonEntity extends PathfinderMob
 
     private boolean wasLeashed;
 
-    // A mob could always be leashed before 1.21.2, where the question moved onto the entity.
+    /** A lead goes on an entity carrying `minecraft:leashable` and on nothing else, as in Bedrock. */
+    // 1.21 and 1.21.1 ask this of `Mob` without the annotation; 1.20.1 asks it with the player.
     //? if >=1.21.2 {
     @Override
     //?}
     public boolean canBeLeashed() {
-        return definition == null || !declaresNow("minecraft:leashable")
-            || liveNumber("minecraft:leashable", "can_be_stolen", 1) != 0;
+        return definition == null || declaresNow("minecraft:leashable");
     }
+
+    //? if <1.21 {
+    /*@Override
+    public boolean canBeLeashed(Player player) {
+        return !isLeashed() && canBeLeashed();
+    }
+    *///?}
+
+    /**
+     * The preset of `minecraft:leashable` that applies to the entity holding the lead, which is the
+     * first whose `filter` holds with the holder as `other`; an empty one where none does.
+     *
+     * Its distances are blocks: the lead pulls past `hard_distance`, which Bedrock defaults to seven,
+     * and breaks past `max_distance`, which it defaults to the twelve Java breaks at as well.
+     */
+    private com.google.gson.JsonObject leashPreset() {
+        net.minecraft.world.entity.Entity holder = Platform.leashHolder(this);
+        for (com.google.gson.JsonElement entry
+            : at.ioexception.mcaddon.util.Json.list(liveComponent("minecraft:leashable"), "presets")) {
+            if (!entry.isJsonObject()) continue;
+
+            com.google.gson.JsonObject preset = entry.getAsJsonObject();
+            if (holder == null && preset.has("filter")) continue;
+            if (holder == null || Goals.filter(preset, "filter")
+                .matches(new Filter.Context(this, holder, holder, ServerHooks.state()))) {
+                return preset;
+            }
+        }
+        return new com.google.gson.JsonObject();
+    }
+
+    // Before 26 Java fixes how far a lead stretches and gives an entity no say in it.
+    //? if >=26 {
+    @Override
+    public double leashSnapDistance() {
+        return definition == null ? super.leashSnapDistance() : Goals.number(leashPreset(), "max_distance", 12);
+    }
+
+    @Override
+    public double leashElasticDistance() {
+        return definition == null ? super.leashElasticDistance() : Goals.number(leashPreset(), "hard_distance", 7);
+    }
+
+    /** `quad_dampened` is four springs, one at each side, which is Java's quad lead. */
+    @Override
+    public boolean supportQuadLeash() {
+        return definition != null && "quad_dampened".equals(Goals.text(leashPreset(), "spring_type"));
+    }
+
+    /** `soft_distance` is how far off the holder the entity starts walking back towards it. */
+    @Override
+    public void closeRangeLeashBehaviour(net.minecraft.world.entity.Entity holder) {
+        if (definition == null || distanceTo(holder) > Goals.number(leashPreset(), "soft_distance", 4)) {
+            super.closeRangeLeashBehaviour(holder);
+        }
+    }
+    //?}
+
+    /**
+     * Whether a player may take the lead off whatever else holds this entity.
+     *
+     * `can_be_stolen` is Bedrock's answer, and it defaults to yes. From 26 Java lets a player with a
+     * lead take a mob off a post or another mob, so a pack saying no refuses that player; before 26
+     * Java lets nobody take a mob that is already tied, which is the answer a pack saying no wants.
+     */
+    //? if >=26 {
+    @Override
+    public boolean canHaveALeashAttachedTo(net.minecraft.world.entity.Entity holder) {
+        boolean stealing = holder instanceof Player && isLeashed() && getLeashHolder() != holder;
+        if (stealing && definition != null
+            && !Goals.flag(liveComponent("minecraft:leashable"), "can_be_stolen", true)) {
+            return false;
+        }
+        return super.canHaveALeashAttachedTo(holder);
+    }
+    //?}
 
     /**
      * Breaks the blocks a pack listed as the entity walks into them.
@@ -1980,12 +2316,33 @@ public class AddonEntity extends PathfinderMob
 
     /** Rises through the liquid it is in, which is the whole of what a buoyant entity does. */
     private void rideLiquid() {
-        if (!declaresNow("minecraft:buoyant") && !declaresNow("minecraft:floats_in_liquid")) return;
-        if (!isInWater() && !isInLava()) return;
+        com.google.gson.JsonObject buoyant = liveComponent("minecraft:buoyant");
+        boolean floating = declaresNow("minecraft:floats_in_liquid") ? isInWater() || isInLava()
+            : buoyant != null
+                && ((isInWater() && floatsOn(buoyant, "water")) || (isInLava() && floatsOn(buoyant, "lava")));
+        if (!floating) return;
 
-        double lift = liveNumber("minecraft:buoyant", "liquid_blocks_scale", 1) * 0.03;
+        double lift = Goals.number(buoyant, "base_buoyancy", 1) * BUOYANT_LIFT;
         setDeltaMovement(getDeltaMovement().add(0, lift, 0));
         fallDistance = 0;
+    }
+
+    /** The lift a `base_buoyancy` of one gives each tick, in blocks a tick each tick. */
+    private static final double BUOYANT_LIFT = 0.03;
+
+    /**
+     * Whether `liquid_blocks` names the liquid, still or flowing. A component naming none floats in
+     * water, which is where Java floats every mob that floats.
+     */
+    private static boolean floatsOn(com.google.gson.JsonObject buoyant, String liquid) {
+        java.util.List<com.google.gson.JsonElement> named =
+            at.ioexception.mcaddon.util.Json.list(buoyant, "liquid_blocks");
+        if (named.isEmpty()) return liquid.equals("water");
+
+        return named.stream()
+            .filter(com.google.gson.JsonElement::isJsonPrimitive)
+            .map(block -> block.getAsString().replace("minecraft:", "").replace("flowing_", ""))
+            .anyMatch(liquid::equals);
     }
 
     /** Ticks of the entity's own age at which something last hurt it, for the components that wait. */
@@ -2044,8 +2401,71 @@ public class AddonEntity extends PathfinderMob
     *///?}
         if (hit) knockBack(target);
         blockedBy(target);
+        if (hit && target instanceof net.minecraft.world.entity.LivingEntity struck
+            && Goals.flag(liveComponent("minecraft:angry"), "broadcast_anger_on_attack", false)) {
+            broadcastAnger(struck);
+        }
         return hit;
     }
+
+    /**
+     * Hands the entity's quarry to the others `minecraft:angry` names, which is how Bedrock spreads
+     * anger: each of them takes the quarry as its own target, and its own `on_target_acquired` is
+     * what makes it angry in turn, the way a wolf pack turns on whoever hurt one of them.
+     *
+     * The others are the same definition within `broadcast_range` blocks, or the families
+     * `broadcast_targets` lists, and `broadcast_filters` is asked about each with this entity as
+     * `self` and the one told as `other`. One already after something keeps what it is after.
+     */
+    private void broadcastAnger(net.minecraft.world.entity.LivingEntity quarry) {
+        com.google.gson.JsonObject angry = liveComponent("minecraft:angry");
+        if (angry == null || quarry == null || !quarry.isAlive()) return;
+
+        double range = Goals.number(angry, "broadcast_range", Goals.number(angry, "broadcastRange", 20));
+        java.util.Set<String> families = new java.util.HashSet<>();
+        at.ioexception.mcaddon.util.Json.list(angry, "broadcast_targets").stream()
+            .filter(com.google.gson.JsonElement::isJsonPrimitive)
+            .forEach(family -> families.add(family.getAsString()));
+        Filter allowed = Goals.filter(angry, "broadcast_filters");
+
+        level().getEntitiesOfClass(net.minecraft.world.entity.Mob.class, getBoundingBox().inflate(range),
+                other -> other != this && other != quarry && other.getTarget() == null
+                    && (families.isEmpty() ? other.getType() == getType()
+                        : !java.util.Collections.disjoint(
+                            at.ioexception.mcaddon.bedrock.behaviour.Families.of(other), families))
+                    && allowed.matches(new Filter.Context(this, other, other, ServerHooks.state())))
+            .forEach(other -> other.setTarget(quarry));
+    }
+
+    /** Whether `minecraft:angry` is live and says its anger spreads, in either spelling of the flag. */
+    private boolean spreadsAnger() {
+        com.google.gson.JsonObject angry = liveComponent("minecraft:angry");
+        return Goals.flag(angry, "broadcast_anger", Goals.flag(angry, "broadcastAnger", false));
+    }
+
+    /**
+     * While angry and broadcasting, the quarry is handed on, and `angry_sound` is made again after
+     * each wait `sound_interval` spans.
+     */
+    private void beAngry() {
+        com.google.gson.JsonObject angry = liveComponent("minecraft:angry");
+        if (angry == null) return;
+        if (spreadsAnger()) broadcastAnger(getTarget());
+
+        String sound = Goals.text(angry, "angry_sound");
+        if (sound == null || tickCount < nextAngrySoundAt) return;
+
+        net.minecraft.sounds.SoundEvent made = noise(sound);
+        if (made != null) playSound(made, getSoundVolume(), getVoicePitch());
+        com.google.gson.JsonObject interval = angry.has("sound_interval") && angry.get("sound_interval").isJsonObject()
+            ? angry.getAsJsonObject("sound_interval") : null;
+        double low = Goals.number(interval, "range_min", 0);
+        double high = Math.max(low, Goals.number(interval, "range_max", 0));
+        nextAngrySoundAt = tickCount + (int) ((low + random.nextDouble() * (high - low))
+            * at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.TICKS_PER_SECOND);
+    }
+
+    private int nextAngrySoundAt;
 
     /**
      * What `minecraft:ravager_blocked` does to an entity whose blow a shield turned away.
@@ -2200,6 +2620,14 @@ public class AddonEntity extends PathfinderMob
      * read without them runs in the order the components happened to be written in, at whatever
      * speed the mod chose, which is what makes a panicking mob amble and a strolling one sprint.
      */
+    /** The goals running at this moment, by name, so a test can ask how long one ran for. */
+    public java.util.List<String> runningGoals() {
+        return goalSelector.getAvailableGoals().stream()
+            .filter(net.minecraft.world.entity.ai.goal.WrappedGoal::isRunning)
+            .map(running -> running.getGoal().toString())
+            .toList();
+    }
+
     /** The priorities this entity's goals went in at, which its pack's `priority` fields state. */
     public java.util.Set<Integer> goalPriorities() {
         return goalPriorities;
@@ -2298,26 +2726,22 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.slime_attack" ->
                 goals.add(priority, SlimeGoal.attacking(this, goal));
 
-            case "minecraft:behavior.random_stroll", "minecraft:behavior.move_outdoors",
-                 "minecraft:behavior.explore_outskirts" -> {
+            case "minecraft:behavior.random_stroll" -> goals.add(priority, StrollGoal.walking(this, goal));
+            case "minecraft:behavior.move_outdoors", "minecraft:behavior.explore_outskirts" -> {
                 // `interval` is the one in N chance of choosing the goal, which Java counts the
                 // same way.
                 WaterAvoidingRandomStrollGoal stroll = new WaterAvoidingRandomStrollGoal(this, speed);
                 stroll.setInterval((int) Goals.number(goal, "interval", 120));
                 goals.add(priority, stroll);
             }
-            case "minecraft:behavior.look_at_player", "minecraft:behavior.look_at_trading_player" ->
-                goals.add(priority, new LookAtPlayerGoal(this, Player.class,
-                    (float) Goals.number(goal, "look_distance", 8),
-                    (float) Goals.number(goal, "probability", 0.02)));
+            case "minecraft:behavior.look_at_player" -> goals.add(priority, LookGoal.atPlayers(this, goal));
+            case "minecraft:behavior.look_at_trading_player" ->
+                goals.add(priority, LookGoal.atTradingPlayer(this, goal));
             case "minecraft:behavior.random_look_around",
                  "minecraft:behavior.random_look_around_and_sit" ->
                 goals.add(priority, new RandomLookAroundGoal(this));
 
-            // Bedrock names the kind of entity to watch; Java's goal takes a class, and the
-            // widest class that still means a creature is every living thing.
-            case "minecraft:behavior.look_at_entity" -> goals.add(priority,
-                new LookAtPlayerGoal(this, net.minecraft.world.entity.LivingEntity.class, 8f));
+            case "minecraft:behavior.look_at_entity" -> goals.add(priority, LookGoal.atEntities(this, goal));
 
             // Bedrock names the kind of wandering; Java has one stroll goal and a speed.
             case "minecraft:behavior.move_indoors",
@@ -2343,11 +2767,8 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.random_fly", "minecraft:behavior.random_hover",
                  "minecraft:behavior.hover", "minecraft:behavior.float_wander" ->
                 goals.add(priority, new WaterAvoidingRandomFlyingGoal(this, 1.0));
-            // `interval` is the one in N chance of choosing the goal, which Java counts the
-            // same way.
             case "minecraft:behavior.random_swim", "minecraft:behavior.swim_wander" ->
-                goals.add(priority, new RandomSwimmingGoal(this, speed,
-                    (int) Goals.number(goal, "interval", 120)));
+                goals.add(priority, StrollGoal.swimming(this, goal));
             case "minecraft:behavior.move_to_water", "minecraft:behavior.move_to_liquid" ->
                 goals.add(priority, new TryFindWaterGoal(this));
             case "minecraft:behavior.swim_up_for_breath" ->
@@ -2369,9 +2790,17 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.leap_at_target",
                  "minecraft:behavior.stalk_and_pounce_on_target" ->
                 goals.add(priority, new LeapAtTargetGoal(this, 0.4f));
-            case "minecraft:behavior.mount_pathing", "minecraft:behavior.follow_owner",
-                 "minecraft:behavior.play", "minecraft:behavior.stroll_towards_village" ->
+            case "minecraft:behavior.play", "minecraft:behavior.stroll_towards_village" ->
                 goals.add(priority, new WaterAvoidingRandomStrollGoal(this, speed));
+            case "minecraft:behavior.follow_owner" ->
+                goals.add(priority, new FollowOwnerGoal(this, goal));
+            // Java steers a mount from its rider: a mob riding another plans with the mount's
+            // navigator and switches the mount's own movement goals off, so the chase a rider's
+            // attack goal runs is the mount's, at the reach that goal keeps.
+            case "minecraft:behavior.mount_pathing" -> { }
+
+            case "minecraft:behavior.pickup_items" ->
+                goals.add(priority, new PickupItemsGoal(this, goal));
 
             case "minecraft:behavior.avoid_mob_type" ->
                 goals.add(priority, new AvoidMobsGoal(this, goal));
@@ -2396,7 +2825,8 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:memory_behavior.move_to_position" ->
                 goals.add(priority, MemoryGoal.movingToPosition(this));
 
-            case "minecraft:behavior.tempt", "minecraft:behavior.float_tempt" ->
+            case "minecraft:behavior.tempt" -> goals.add(priority, new TemptedGoal(this, goal, tempting(goal)));
+            case "minecraft:behavior.float_tempt" ->
                 goals.add(priority, Platform.temptGoal(this, speed, tempting(goal)));
             case "minecraft:behavior.open_door", "minecraft:annotation.open_door" ->
                 goals.add(priority,
@@ -2413,22 +2843,12 @@ public class AddonEntity extends PathfinderMob
                 goals.add(priority,
                     new net.minecraft.world.entity.ai.goal.MeleeAttackGoal(this, 1.4, false));
             case "minecraft:behavior.nearest_attackable_target",
-                 "minecraft:behavior.nearest_prioritized_attackable_target" -> {
-                TargetSelection hunted = TargetSelection.from(goal, Player.class,
-                    Goals.number(goal, "within_radius", 0));
-                targets.add(priority,
-                    new net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal<>(
-                        this, hunted.kind(),
-                        (int) Goals.number(goal, "scan_interval", 10),
-                        Goals.flag(goal, "must_see", false),
-                        Goals.flag(goal, "must_reach", false), null));
-            }
-            case "minecraft:behavior.hurt_by_target", "minecraft:behavior.target_when_pushed" -> {
-                net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal hurt =
-                    new net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal(this);
-                if (Goals.flag(goal, "alert_same_type", false)) hurt.setAlertOthers();
-                targets.add(priority, hurt);
-            }
+                 "minecraft:behavior.nearest_prioritized_attackable_target" ->
+                targets.add(priority, new HuntGoal(this, goal, TargetSelection.from(goal, Player.class,
+                    Goals.number(goal, "within_radius", 0))));
+            case "minecraft:behavior.hurt_by_target", "minecraft:behavior.target_when_pushed" ->
+                targets.add(priority, new RetaliateGoal(this, goal,
+                    TargetSelection.from(goal, net.minecraft.world.entity.LivingEntity.class, 0)));
 
             // Bedrock states the gap between shots in seconds and the reach in blocks; Java's
             // goal counts the gap in ticks and asks the entity itself to release the projectile.
@@ -2799,6 +3219,43 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
+     * Turns the entity no further in a tick than its `minecraft:movement.*` component's `max_turn`.
+     *
+     * Bedrock defaults the turn to thirty degrees a tick for every way of moving it describes, where
+     * Java's move controls swing a mob round by up to ninety, so a pack's entity that never states a
+     * turn rate still turns at a third of Java's pace. A rider steering the entity turns it as fast
+     * as they look round, which Bedrock leaves to the rider too.
+     */
+    @Override
+    public void aiStep() {
+        float facing = getYRot();
+        super.aiStep();
+        if (definition == null || isClientSide() || getControllingPassenger() instanceof Player) return;
+
+        float limit = maxTurn();
+        float turned = net.minecraft.util.Mth.wrapDegrees(getYRot() - facing);
+        if (limit >= 0 && Math.abs(turned) > limit) setYRot(facing + Math.signum(turned) * limit);
+    }
+
+    /** Bedrock's turn rate for a movement component that states none, in degrees a tick. */
+    private static final double DEFAULT_MAX_TURN = 30;
+
+    /**
+     * The `max_turn` of the `minecraft:movement.*` component the entity carries now, or below nought
+     * where it carries none and Java's own move control decides.
+     */
+    private float maxTurn() {
+        for (String component : java.util.List.of("minecraft:movement.basic", "minecraft:movement.generic",
+            "minecraft:movement.amphibious", "minecraft:movement.sway", "minecraft:movement.jump",
+            "minecraft:movement.skip", "minecraft:movement.dolphin", "minecraft:movement.fly",
+            "minecraft:movement.glide", "minecraft:movement.hover")) {
+            com.google.gson.JsonObject live = liveComponent(component);
+            if (live != null) return (float) Goals.number(live, "max_turn", DEFAULT_MAX_TURN);
+        }
+        return -1;
+    }
+
+    /**
      * Bedrock's sensors have no Java equivalent, so they are evaluated here rather than as goals.
      *
      * Staggered by entity id: a pack's two big entities carry dozens of subsensors each, and every
@@ -2821,7 +3278,6 @@ public class AddonEntity extends PathfinderMob
             rememberSomethingNearby();
             resupply();
             teleportAbout();
-            pickUpNearby();
             rest();
             drink();
             leashChanged(isLeashed());
@@ -2843,6 +3299,7 @@ public class AddonEntity extends PathfinderMob
             showBossBar();
             addRider();
             countKin();
+            beAngry();
             noticeKinAnger();
             reflectProjectiles();
             drawFromHopper();
@@ -3209,6 +3666,9 @@ public class AddonEntity extends PathfinderMob
      * every tenth tick, so these are the few that pay for being asked every one.
      */
     private void everyTick() {
+        holdBreath();
+        burnFuse();
+        keepTransforming();
         noticeBeingHurt();
         noticeCatchingFire();
         noticeLeavingTheGround();
@@ -3627,12 +4087,18 @@ public class AddonEntity extends PathfinderMob
      */
     @Override
     protected float getJumpPower() {
-        if (definition == null || !declaresNow("minecraft:can_power_jump")) {
-            return super.getJumpPower();
-        }
+        if (definition == null) return super.getJumpPower();
+        if (declaresNow("minecraft:can_power_jump")) return (float) getAttributeValue(Attributes.JUMP_STRENGTH);
 
-        return (float) getAttributeValue(Attributes.JUMP_STRENGTH);
+        // `jump_power` is the jump's starting speed in blocks a tick, the 0.42 Java jumps every mob
+        // at unless the pack says otherwise.
+        com.google.gson.JsonObject jump = liveComponent("minecraft:jump.static");
+        if (jump == null || !jump.has("jump_power")) return super.getJumpPower();
+        return (float) Goals.number(jump, "jump_power", JAVA_JUMP) * getBlockJumpFactor() + getJumpBoostPower();
     }
+
+    /** The speed in blocks a tick Java starts every ordinary mob's jump at. */
+    private static final double JAVA_JUMP = 0.42;
 
     /**
      * The lunge `minecraft:dash_action` gives a mount, on the tick its rider asks for one.
@@ -4232,6 +4698,9 @@ public class AddonEntity extends PathfinderMob
         lastHurtTick = tickCount;
         recordDisturbance(getLastHurtByMob(), lost);
         annoy(getLastHurtByMob());
+        if (Goals.flag(liveComponent("minecraft:angry"), "broadcast_anger_on_being_attacked", false)) {
+            broadcastAnger(getLastHurtByMob());
+        }
         raise("minecraft:on_hurt", getLastHurtByMob());
         if (getLastHurtByMob() instanceof Player) raise("minecraft:on_hurt_by_player", getLastHurtByMob());
     }
@@ -4362,9 +4831,18 @@ public class AddonEntity extends PathfinderMob
 
         String event = liveText("minecraft:on_death", "event");
         if (event != null) EntityEvents.trigger(this, event, source.getEntity(), ServerHooks.state());
+        // `broadcast_anger_when_dying` is yes unless the pack says otherwise, for a mob that spreads
+        // its anger at all.
+        if (spreadsAnger() && Goals.flag(liveComponent("minecraft:angry"), "broadcast_anger_when_dying", true)
+            && source.getEntity() instanceof net.minecraft.world.entity.LivingEntity killer) {
+            broadcastAnger(killer);
+        }
 
-        // What a mob was hauling belongs on the ground once it is dead, the same as a chest's does.
-        if (carried != null) net.minecraft.world.Containers.dropContents(level, blockPosition(), carried);
+        // What a mob was hauling belongs on the ground once it is dead, the same as a chest's does,
+        // unless `private` says the inventory goes with it.
+        if (carried != null && !Goals.flag(liveComponent("minecraft:inventory"), "private", false)) {
+            net.minecraft.world.Containers.dropContents(level, blockPosition(), carried);
+        }
         spawnOnDeath(level);
         explode(level);
     }
@@ -4582,9 +5060,15 @@ public class AddonEntity extends PathfinderMob
     /** Bedrock states the gap between idle sounds in seconds; Java counts it in ticks. */
     @Override
     public int getAmbientSoundInterval() {
-        return definition == null || !declaresNow("minecraft:ambient_sound_interval")
-            ? super.getAmbientSoundInterval()
-            : (int) (liveNumber("minecraft:ambient_sound_interval", "value", 8) * 20);
+        com.google.gson.JsonObject interval = definition == null
+            ? null : liveComponent("minecraft:ambient_sound_interval");
+        if (interval == null) return super.getAmbientSoundInterval();
+
+        // `value` is the shortest gap in seconds and `range` the most Bedrock adds to it at random,
+        // and Java asks for the gap again each time the entity has spoken.
+        double seconds = Goals.number(interval, "value", 8)
+            + random.nextDouble() * Goals.number(interval, "range", 16);
+        return (int) (seconds * at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.TICKS_PER_SECOND);
     }
 
     @Override
@@ -4606,10 +5090,58 @@ public class AddonEntity extends PathfinderMob
     /** Public so a test can ask which idle sound the entity would make where it stands. */
     @Override
     public net.minecraft.sounds.SoundEvent getAmbientSound() {
+        String chosen = chosenAmbientMoment();
+        if (chosen != null) return noise(chosen);
+
         net.minecraft.sounds.SoundEvent named = noise(ambientMoment());
         if (named == null) named = noise("ambient");
         return named == null ? super.getAmbientSound() : named;
     }
+
+    /**
+     * The idle moment `minecraft:ambient_sound_interval` names, or null where it names none.
+     *
+     * Its `event_names` are tried in order and the first whose condition holds is the sound, with
+     * `event_name` behind them. A moment the pack's `sounds.json` has no sound for is silence, which
+     * is how Mojang's own entities write a group that keeps an entity quiet.
+     */
+    private String chosenAmbientMoment() {
+        if (definition == null || declaresNow("minecraft:uses_legacy_ambient_sounds")) return null;
+
+        com.google.gson.JsonObject interval = liveComponent("minecraft:ambient_sound_interval");
+        if (interval == null) return null;
+        for (com.google.gson.JsonElement entry : at.ioexception.mcaddon.util.Json.list(interval, "event_names")) {
+            if (!entry.isJsonObject()) continue;
+
+            com.google.gson.JsonObject named = entry.getAsJsonObject();
+            String moment = Goals.text(named, "event_name");
+            String condition = Goals.text(named, "condition");
+            if (moment != null && (condition == null || holds(condition))) return moment;
+        }
+        return at.ioexception.mcaddon.util.Json.text(interval, "event_name", "ambient");
+    }
+
+    /**
+     * Whether a Molang condition a component states holds for the entity now.
+     *
+     * It is answered with the queries the entity's own scripts get, which is what lets a pack write
+     * the `query.is_baby` it writes in an animation controller into a component as well.
+     */
+    public boolean holds(String condition) {
+        if (questions == null) {
+            questions = new at.ioexception.mcaddon.bedrock.animation.AnimationPlayer(null, this);
+            questions.environment().setQueries(new at.ioexception.mcaddon.bedrock.entity.EntityQueries(
+                this, questions, at.ioexception.mcaddon.bedrock.entity.EntityQueries.Drawn.NONE,
+                () -> ServerHooks.state() == null
+                    ? java.util.Map.of() : ServerHooks.state().properties(getUUID()), false));
+        }
+        questions.environment().setLifeTime(
+            tickCount / (float) at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.TICKS_PER_SECOND);
+        return at.ioexception.mcaddon.bedrock.molang.MolangParser.parse(condition)
+            .evaluate(questions.environment()).truthy();
+    }
+
+    private at.ioexception.mcaddon.bedrock.animation.AnimationPlayer questions;
 
     /**
      * Which of its idle sounds the entity makes, which `minecraft:uses_legacy_ambient_sounds` picks
@@ -4712,6 +5244,13 @@ public class AddonEntity extends PathfinderMob
      */
     @Override
     public boolean canAttack(net.minecraft.world.entity.LivingEntity target) {
+        // `filters` on `minecraft:angry` names who the entity leaves alone while angry, which is
+        // how a piglin in a rage still spares the other piglins.
+        com.google.gson.JsonObject angry = definition == null ? null : liveComponent("minecraft:angry");
+        if (angry != null && angry.has("filters") && !Goals.filter(angry, "filters")
+            .matches(new Filter.Context(this, target, target, ServerHooks.state()))) {
+            return false;
+        }
         if (definition != null && declares("minecraft:ignore_cannot_be_attacked")
             && Filter.parse(componentBody("minecraft:ignore_cannot_be_attacked").get("filters"))
                 .matches(new Filter.Context(this, target, target, ServerHooks.state()))) {
@@ -4853,6 +5392,135 @@ public class AddonEntity extends PathfinderMob
         }
         return !declaresNow("minecraft:pushable")
             || liveNumber("minecraft:pushable", "is_pushable", 1) != 0;
+    }
+
+    /**
+     * Pushes this entity and the one bumping into it apart, as the `minecraft:pushable_by_entity`
+     * preset for the other entity says.
+     *
+     * Java pushes every pair apart at five hundredths of a block a tick, which is the strength
+     * Bedrock's `default` mode starts from too; a preset scales that strength and each side's share
+     * of it, keeps the pair apart only between its two distances, or turns the push off. `ball` is
+     * a kick along the other entity's own movement, at a speed taken from that movement.
+     */
+    @Override
+    public void push(net.minecraft.world.entity.Entity other) {
+        com.google.gson.JsonObject preset = definition == null ? null : pushPreset(other);
+        if (preset == null) {
+            super.push(other);
+            return;
+        }
+        String mode = at.ioexception.mcaddon.util.Json.text(preset, "push_mode", "default");
+        if (mode.equals("none") || isPassengerOfSameVehicle(other) || other.noPhysics || noPhysics) return;
+
+        double dx = other.getX() - getX();
+        double dz = other.getZ() - getZ();
+        double apart = Math.sqrt(dx * dx + dz * dz);
+        if (apart < Goals.number(preset, "min_distance", 0.01)
+            || apart > Goals.number(preset, "max_distance", Double.MAX_VALUE)) {
+            return;
+        }
+        if (mode.equals("ball")) {
+            kickedBy(other, preset);
+            return;
+        }
+
+        double strength = Goals.number(preset, "strength_multiplier", 0.05) / Math.max(1, apart);
+        double xa = dx / Math.max(apart, 0.01) * strength;
+        double za = dz / Math.max(apart, 0.01) * strength;
+        double self = Goals.number(preset, "push_scale_self", 1);
+        double back = Goals.number(preset, "push_scale_other", 1);
+        if (!isVehicle() && isPushable()) push(-xa * self, 0, -za * self);
+        if (!other.isVehicle() && other.isPushable()) other.push(xa * back, 0, za * back);
+    }
+
+    /** `ball`: sent along the way the other entity was going, faster the faster it went. */
+    private void kickedBy(net.minecraft.world.entity.Entity other, com.google.gson.JsonObject preset) {
+        net.minecraft.world.phys.Vec3 going = other.getDeltaMovement().multiply(1, 0, 1);
+        if (going.lengthSqr() < 1.0e-6) going = position().subtract(other.position()).multiply(1, 0, 1);
+        if (going.lengthSqr() < 1.0e-6) return;
+
+        double speed = Math.max(Goals.number(preset, "min_kick_speed", 0),
+            Math.min(Goals.number(preset, "max_kick_speed", 0.5),
+                other.getDeltaMovement().horizontalDistance() * Goals.number(preset, "kick_speed_scale", 2)))
+            * Goals.number(preset, "push_scale_self", 1);
+        net.minecraft.world.phys.Vec3 kick = going.normalize().scale(speed);
+        double lift = onGround() ? speed * Goals.number(preset, "vertical_kick_multiplier", 0.3) : 0;
+        push(kick.x, lift, kick.z);
+        if (Goals.flag(preset, "play_sound", false) && tickCount >= nextPushSoundAt
+            && speed >= Goals.number(preset, "play_sound_impulse_threshold", 0.2)) {
+            makeNoise("pushed_by_player");
+            nextPushSoundAt = tickCount + Goals.ticks(preset, "play_sound_cooldown_in_seconds", 0.2);
+        }
+    }
+
+    private int nextPushSoundAt;
+
+    /**
+     * The first `minecraft:pushable_by_entity` preset whose `filters` hold with the other entity as
+     * `other`, or null where the component states none and Java's own push applies.
+     */
+    private com.google.gson.JsonObject pushPreset(net.minecraft.world.entity.Entity other) {
+        com.google.gson.JsonObject component = liveComponent("minecraft:pushable_by_entity");
+        java.util.List<com.google.gson.JsonElement> presets =
+            at.ioexception.mcaddon.util.Json.list(component, "presets");
+        if (presets.isEmpty()) return null;
+
+        Filter.Context context = new Filter.Context(this, other, other, ServerHooks.state());
+        return presets.stream()
+            .filter(com.google.gson.JsonElement::isJsonObject)
+            .map(com.google.gson.JsonElement::getAsJsonObject)
+            .filter(preset -> Goals.filter(preset, "filters").matches(context))
+            .findFirst()
+            .orElseGet(com.google.gson.JsonObject::new);
+    }
+
+    /**
+     * Whether a name tag may name the entity, which needs `minecraft:nameable` and its
+     * `allow_name_tag_renaming`, yes unless the pack says otherwise.
+     */
+    public boolean takesNameTags() {
+        if (definition == null) return true;
+
+        com.google.gson.JsonObject nameable = liveComponent("minecraft:nameable");
+        return nameable != null && Goals.flag(nameable, "allow_name_tag_renaming", true);
+    }
+
+    /**
+     * Raises the event `minecraft:nameable` names for the name the entity was just given.
+     *
+     * The first of `name_actions` whose `name_filter` is the name raises its `on_named`, and any
+     * other name raises `default_trigger`, which is how Mojang's vindicator turns into Johnny and back.
+     * `always_show` keeps the name over the entity's head whether or not anyone looks at it.
+     */
+    @Override
+    public void setCustomName(net.minecraft.network.chat.Component name) {
+        super.setCustomName(name);
+        com.google.gson.JsonObject nameable = definition == null || isClientSide()
+            ? null : liveComponent("minecraft:nameable");
+        if (nameable == null || name == null) return;
+
+        if (Goals.flag(nameable, "always_show", false)) setCustomNameVisible(true);
+        String given = name.getString();
+        String event = at.ioexception.mcaddon.util.Json.list(nameable, "name_actions").stream()
+            .filter(com.google.gson.JsonElement::isJsonObject)
+            .map(com.google.gson.JsonElement::getAsJsonObject)
+            .filter(action -> at.ioexception.mcaddon.util.Json.list(action, "name_filter").stream()
+                .anyMatch(filter -> filter.isJsonPrimitive() && filter.getAsString().equals(given)))
+            .map(action -> Goals.event(action, "on_named"))
+            .findFirst()
+            .orElseGet(() -> Goals.event(nameable, "default_trigger"));
+        fire(event);
+    }
+
+    /** `is_pushable_by_piston` is the half of `minecraft:pushable` a moving piston asks about. */
+    @Override
+    public net.minecraft.world.level.material.PushReaction getPistonPushReaction() {
+        if (definition != null && declaresNow("minecraft:pushable")
+            && liveNumber("minecraft:pushable", "is_pushable_by_piston", 1) == 0) {
+            return net.minecraft.world.level.material.PushReaction.IGNORE;
+        }
+        return super.getPistonPushReaction();
     }
 
     /** True when one of the pack's interactions applied, which is what consumes the click. */

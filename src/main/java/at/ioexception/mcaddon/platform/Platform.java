@@ -1288,6 +1288,24 @@ public final class Platform {
         return true;
     }
 
+    /**
+     * Whether a player's lead would go on the entity, which is the question Java asks before tying.
+     *
+     * 26 asks it of the holder as well, which is where taking a mob off a post is decided; 1.21 asks
+     * the entity alone and 1.20.1 asks a mob with the player in hand.
+     */
+    public static boolean acceptsLead(Entity entity, net.minecraft.world.entity.player.Player player) {
+        //? if >=26 {
+        return entity instanceof net.minecraft.world.entity.Leashable led
+            && led.canHaveALeashAttachedTo(player);
+        //?} else if >=1.21 {
+        /*return entity instanceof net.minecraft.world.entity.Leashable led
+            && led.canHaveALeashAttachedToIt();
+        *///?} else {
+        /*return entity instanceof net.minecraft.world.entity.Mob led && led.canBeLeashed(player);
+        *///?}
+    }
+
     /** Drops the lead where the entity stands, the way shearing one off does. */
     public static boolean unleash(Entity entity) {
         //? if >=26 {
@@ -1858,12 +1876,80 @@ public final class Platform {
         *///?}
     }
 
-    /** Prices water for the mob's pathfinder, which is what keeps a mob to the path it was given. */
-    public static void setWaterMalus(net.minecraft.world.entity.Mob mob, float malus) {
+    /** Prices water at what Java charges every mob for it, or at nothing. */
+    public static void priceWater(net.minecraft.world.entity.Mob mob, boolean avoided) {
         //? if >=1.21 {
-        mob.setPathfindingMalus(net.minecraft.world.level.pathfinder.PathType.WATER, malus);
+        price(mob, avoided, net.minecraft.world.level.pathfinder.PathType.WATER);
         //?} else {
-        /*mob.setPathfindingMalus(net.minecraft.world.level.pathfinder.BlockPathTypes.WATER, malus);
+        /*price(mob, avoided, net.minecraft.world.level.pathfinder.BlockPathTypes.WATER);
+        *///?}
+    }
+
+    /**
+     * Prices a block that hurts and the ground beside one at what Java charges for them, or at
+     * nothing. 26 renamed the four kinds of ground this covers.
+     */
+    public static void priceDamagingBlocks(net.minecraft.world.entity.Mob mob, boolean avoided) {
+        //? if >=26 {
+        price(mob, avoided, net.minecraft.world.level.pathfinder.PathType.FIRE,
+            net.minecraft.world.level.pathfinder.PathType.FIRE_IN_NEIGHBOR,
+            net.minecraft.world.level.pathfinder.PathType.DAMAGING,
+            net.minecraft.world.level.pathfinder.PathType.DAMAGING_IN_NEIGHBOR);
+        //?} else if >=1.21 {
+        /*price(mob, avoided, net.minecraft.world.level.pathfinder.PathType.DAMAGE_FIRE,
+            net.minecraft.world.level.pathfinder.PathType.DANGER_FIRE,
+            net.minecraft.world.level.pathfinder.PathType.DAMAGE_OTHER,
+            net.minecraft.world.level.pathfinder.PathType.DANGER_OTHER);
+        *///?} else {
+        /*price(mob, avoided, net.minecraft.world.level.pathfinder.BlockPathTypes.DAMAGE_FIRE,
+            net.minecraft.world.level.pathfinder.BlockPathTypes.DANGER_FIRE,
+            net.minecraft.world.level.pathfinder.BlockPathTypes.DAMAGE_OTHER,
+            net.minecraft.world.level.pathfinder.BlockPathTypes.DANGER_OTHER);
+        *///?}
+    }
+
+    /** Prices lava at what Java charges for it, which is refusing it, or at nothing. */
+    public static void priceLava(net.minecraft.world.entity.Mob mob, boolean avoided) {
+        //? if >=1.21 {
+        price(mob, avoided, net.minecraft.world.level.pathfinder.PathType.LAVA);
+        //?} else {
+        /*price(mob, avoided, net.minecraft.world.level.pathfinder.BlockPathTypes.LAVA);
+        *///?}
+    }
+
+    //? if >=1.21 {
+    private static void price(net.minecraft.world.entity.Mob mob, boolean avoided,
+        net.minecraft.world.level.pathfinder.PathType... kinds) {
+        for (net.minecraft.world.level.pathfinder.PathType kind : kinds) {
+            mob.setPathfindingMalus(kind, avoided ? kind.getMalus() : 0f);
+        }
+    }
+    //?} else {
+    /*private static void price(net.minecraft.world.entity.Mob mob, boolean avoided,
+        net.minecraft.world.level.pathfinder.BlockPathTypes... kinds) {
+        for (net.minecraft.world.level.pathfinder.BlockPathTypes kind : kinds) {
+            mob.setPathfindingMalus(kind, avoided ? kind.getMalus() : 0f);
+        }
+    }
+    *///?}
+
+    /** What a block that hurts costs the mob's pathfinder, a cactus or a berry bush among them. */
+    public static float damagingMalus(net.minecraft.world.entity.Mob mob) {
+        //? if >=26 {
+        return mob.getPathfindingMalus(net.minecraft.world.level.pathfinder.PathType.DAMAGING);
+        //?} else if >=1.21 {
+        /*return mob.getPathfindingMalus(net.minecraft.world.level.pathfinder.PathType.DAMAGE_OTHER);
+        *///?} else {
+        /*return mob.getPathfindingMalus(net.minecraft.world.level.pathfinder.BlockPathTypes.DAMAGE_OTHER);
+        *///?}
+    }
+
+    /** What lava costs the mob's pathfinder, which is below nothing while it may not go there. */
+    public static float lavaMalus(net.minecraft.world.entity.Mob mob) {
+        //? if >=1.21 {
+        return mob.getPathfindingMalus(net.minecraft.world.level.pathfinder.PathType.LAVA);
+        //?} else {
+        /*return mob.getPathfindingMalus(net.minecraft.world.level.pathfinder.BlockPathTypes.LAVA);
         *///?}
     }
 
@@ -2229,6 +2315,27 @@ public final class Platform {
     //?}
 
     /** The stand-in player a game test acts through. 1.21 made it say which mode it is playing in. */
+    /** A player using what is in their hand on the entity, as a click does. 26 asks where it landed. */
+    public static net.minecraft.world.InteractionResult interactOn(net.minecraft.world.entity.player.Player player,
+        Entity entity,
+        net.minecraft.world.InteractionHand hand) {
+        //? if >=26 {
+        return player.interactOn(entity, hand, entity.position());
+        //?} else {
+        /*return player.interactOn(entity, hand);
+        *///?}
+    }
+
+    /** Names a stack the way an anvil does, which is what a name tag reads its name from. */
+    public static void setCustomName(net.minecraft.world.item.ItemStack stack, String name) {
+        //? if >=1.21 {
+        stack.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME,
+            net.minecraft.network.chat.Component.literal(name));
+        //?} else {
+        /*stack.setHoverName(net.minecraft.network.chat.Component.literal(name));
+        *///?}
+    }
+
     public static net.minecraft.world.entity.player.Player mockPlayer(
         net.minecraft.gametest.framework.GameTestHelper helper) {
         //? if >=1.21 {

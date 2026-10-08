@@ -46,6 +46,17 @@
           "type": "bool",
           "default": false,
           "client_sync": true
+        },
+        "tp:pregnant": {
+          "type": "bool",
+          "default": false,
+          "client_sync": true
+        },
+        "tp:named": {
+          "type": "enum",
+          "values": ["none", "cinder", "plain"],
+          "default": "none",
+          "client_sync": true
         }
       },
       "animations": {
@@ -202,7 +213,8 @@
           ]
         },
         "minecraft:ambient_sound_interval": {
-          "value": 3.0
+          "value": 3.0,
+          "range": 2.0
         },
         "minecraft:item_hopper": {},
         "minecraft:can_power_jump": {},
@@ -214,7 +226,18 @@
         },
         "minecraft:leashable": {
           "can_be_stolen": false,
-          "unleash_on_removal": true
+          "unleash_on_removal": true,
+          "presets": [
+            {
+              "filter": { "test": "is_family", "subject": "other", "value": "tp_wisp" },
+              "max_distance": 20
+            },
+            {
+              "max_distance": 5,
+              "hard_distance": 3,
+              "spring_type": "quad_dampened"
+            }
+          ]
         },
         "minecraft:leashable_to": {
           "unleash_on_removal": true
@@ -258,7 +281,8 @@
           "value": false
         },
         "minecraft:pushable": {
-          "is_pushable": false
+          "is_pushable": false,
+          "is_pushable_by_piston": false
         }
       },
       "tp:ember_shod": {
@@ -291,6 +315,201 @@
       },
       "tp:ember_scoopable": {
         "minecraft:bucketable": {}
+      },
+      "tp:ember_gilled": {
+        "minecraft:breathable": {
+          "total_supply": 2,
+          "suffocate_time": 0,
+          "breathes_air": false,
+          "breathes_water": true
+        }
+      },
+      "tp:ember_wading": {
+        "minecraft:navigation.walk": {
+          "avoid_water": true,
+          "avoid_damage_blocks": true,
+          "can_path_over_lava": true
+        }
+      },
+      "tp:ember_finned": {
+        "minecraft:navigation.generic": {
+          "can_swim": true,
+          "can_walk": false
+        }
+      },
+      "tp:ember_murmuring": {
+        "minecraft:ambient_sound_interval": {
+          "value": 3.0,
+          "range": 0.0,
+          "event_name": "ambient.in.air",
+          "event_names": [
+            {
+              "condition": "query.is_baby",
+              "event_name": "ambient.baby"
+            }
+          ]
+        }
+      },
+      "tp:ember_fertile": {
+        "minecraft:breedable": {
+          "breed_items": ["minecraft:wheat"],
+          "breed_cooldown": 2,
+          "causes_pregnancy": true,
+          "breeds_with": {
+            "tp:ember": {
+              "event": "tp:ember_conceived",
+              "target": "self"
+            }
+          }
+        }
+      },
+      "tp:ember_loyal": {
+        "minecraft:behavior.follow_owner": {
+          "priority": 1,
+          "start_distance": 3,
+          "stop_distance": 1
+        }
+      },
+      "tp:ember_hunting": {
+        "minecraft:behavior.nearest_attackable_target": {
+          "priority": 1,
+          "scan_interval": 1,
+          "entity_types": [
+            {
+              "filters": { "test": "is_family", "subject": "other", "value": "tp_wisp" },
+              "max_dist": 6
+            }
+          ]
+        }
+      },
+      "tp:ember_vengeful": {
+        "minecraft:behavior.hurt_by_target": {
+          "priority": 1,
+          "entity_types": {
+            "filters": { "test": "is_family", "subject": "other", "value": "tp_wisp" }
+          }
+        }
+      },
+      "tp:ember_watchful": {
+        "minecraft:behavior.look_at_player": {
+          "priority": 0,
+          "probability": 1.0,
+          "look_distance": 8,
+          "look_time": {
+            "min": 0.5,
+            "max": 0.5
+          }
+        }
+      },
+      "tp:ember_gathering": {
+        "minecraft:behavior.pickup_items": {
+          "priority": 0,
+          "max_dist": 4,
+          "goal_radius": 2,
+          "speed_multiplier": 1.0
+        }
+      },
+      "tp:ember_furious": {
+        "minecraft:angry": {
+          "duration": 30,
+          "broadcast_anger": true,
+          "broadcast_range": 6
+        }
+      },
+      "tp:ember_pottering": {
+        "minecraft:behavior.random_stroll": {
+          "priority": 0,
+          "interval": 1,
+          "xz_dist": 1,
+          "y_dist": 1
+        }
+      },
+      "tp:ember_turning": {
+        "minecraft:transformation": {
+          "into": "tp:wisp",
+          "delay": {
+            "value": 1
+          }
+        }
+      },
+      "tp:ember_hoarding": {
+        "minecraft:inventory": {
+          "inventory_size": 3,
+          "private": true
+        }
+      },
+      "tp:ember_anchored": {
+        "minecraft:pushable_by_entity": {
+          "presets": [
+            {
+              "filters": { "test": "is_family", "subject": "other", "value": "tp_wisp" },
+              "push_mode": "none"
+            },
+            {
+              "strength_multiplier": 0.5,
+              "push_scale_other": 0
+            }
+          ]
+        }
+      },
+      "tp:ember_peckish": {
+        "minecraft:behavior.tempt": {
+          "priority": 0,
+          "items": ["minecraft:wheat"],
+          "within_radius": 3,
+          "stop_distance": 1
+        }
+      },
+      "tp:ember_lit": {
+        "minecraft:explode": {
+          "fuse_length": 0.5,
+          "fuse_lit": true,
+          "power": 1,
+          "breaks_blocks": false
+        }
+      },
+      "tp:ember_remembering": {
+        "minecraft:home": {}
+      },
+      "tp:ember_nesting": {
+        "minecraft:home": {
+          "restriction_type": "random_movement",
+          "restriction_radius": 5
+        }
+      },
+      "tp:ember_lava_buoyant": {
+        "minecraft:buoyant": {
+          "liquid_blocks": ["minecraft:lava", "minecraft:flowing_lava"],
+          "base_buoyancy": 4
+        }
+      },
+      "tp:ember_springy": {
+        "minecraft:jump.static": {
+          "jump_power": 0.8
+        }
+      },
+      "tp:ember_hopping": {
+        "minecraft:movement.jump": {
+          "jump_delay": [1.0, 1.0]
+        }
+      },
+      "tp:ember_nameable": {
+        "minecraft:nameable": {
+          "always_show": true,
+          "default_trigger": {
+            "event": "tp:ember_named_plainly",
+            "target": "self"
+          },
+          "name_actions": [
+            {
+              "name_filter": "Cinder",
+              "on_named": {
+                "event": "tp:ember_named_cinder",
+                "target": "self"
+              }
+            }
+          ]
+        }
       },
       "tp:ember_alert": {
         "minecraft:timer": {
@@ -405,6 +624,141 @@
       "tp:ember_sensed": {
         "set_property": {
           "tp:sensed": true
+        }
+      },
+      "tp:ember_grow_gills": {
+        "add": {
+          "component_groups": ["tp:ember_gilled"]
+        }
+      },
+      "tp:ember_wade": {
+        "add": {
+          "component_groups": ["tp:ember_wading"]
+        }
+      },
+      "tp:ember_fin": {
+        "add": {
+          "component_groups": ["tp:ember_finned"]
+        }
+      },
+      "tp:ember_unfin": {
+        "remove": {
+          "component_groups": ["tp:ember_finned"]
+        }
+      },
+      "tp:ember_murmur": {
+        "add": {
+          "component_groups": ["tp:ember_murmuring"]
+        }
+      },
+      "tp:ember_make_fertile": {
+        "add": {
+          "component_groups": ["tp:ember_fertile"]
+        }
+      },
+      "tp:ember_conceived": {
+        "set_property": {
+          "tp:pregnant": true
+        }
+      },
+      "tp:ember_befriend": {
+        "add": {
+          "component_groups": ["tp:ember_loyal"]
+        }
+      },
+      "tp:ember_hunt": {
+        "add": {
+          "component_groups": ["tp:ember_hunting"]
+        }
+      },
+      "tp:ember_avenge": {
+        "add": {
+          "component_groups": ["tp:ember_vengeful"]
+        }
+      },
+      "tp:ember_watch": {
+        "add": {
+          "component_groups": ["tp:ember_watchful"]
+        }
+      },
+      "tp:ember_gather": {
+        "add": {
+          "component_groups": ["tp:ember_gathering"]
+        }
+      },
+      "tp:ember_rage": {
+        "add": {
+          "component_groups": ["tp:ember_furious"]
+        }
+      },
+      "tp:ember_potter": {
+        "add": {
+          "component_groups": ["tp:ember_pottering"]
+        }
+      },
+      "tp:ember_turn": {
+        "add": {
+          "component_groups": ["tp:ember_turning"]
+        }
+      },
+      "tp:ember_hoard": {
+        "add": {
+          "component_groups": ["tp:ember_hoarding"]
+        }
+      },
+      "tp:ember_anchor": {
+        "add": {
+          "component_groups": ["tp:ember_anchored"]
+        }
+      },
+      "tp:ember_hunger": {
+        "add": {
+          "component_groups": ["tp:ember_peckish"]
+        }
+      },
+      "tp:ember_light": {
+        "add": {
+          "component_groups": ["tp:ember_lit"]
+        }
+      },
+      "tp:ember_remember": {
+        "add": {
+          "component_groups": ["tp:ember_remembering"]
+        }
+      },
+      "tp:ember_nest": {
+        "add": {
+          "component_groups": ["tp:ember_nesting"]
+        }
+      },
+      "tp:ember_float_on_lava": {
+        "add": {
+          "component_groups": ["tp:ember_lava_buoyant"]
+        }
+      },
+      "tp:ember_spring": {
+        "add": {
+          "component_groups": ["tp:ember_springy"]
+        }
+      },
+      "tp:ember_hop": {
+        "add": {
+          "component_groups": ["tp:ember_hopping"]
+        }
+      },
+      "tp:ember_make_nameable": {
+        "add": {
+          "component_groups": ["tp:ember_nameable"]
+        }
+      },
+      "tp:ember_named_cinder": {
+        "set_property": {
+          "tp:named": "cinder"
+        }
+      },
+      "tp:ember_named_plainly": {
+        "set_property": {
+          "tp:named": "plain"
         }
       },
       "tp:ember_winter": {

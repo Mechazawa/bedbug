@@ -47,33 +47,65 @@ INDEX = "Entity component definitions.json"
 # list rather than a regression. `--min-declarations 1` gates on the whole tail.
 GATE = 8
 
+# Reasons several navigation components share.
+DOOR_ANNOTATION = ("Not in the published schema. Mojang writes it beside `minecraft:annotation.open_door`, "
+                   "and that component is what decides whether the pathfinder plans through a closed door.")
+AMPHIBIOUS = ("Walking the bottom under water: a Java mob that may not float sinks and walks it, and water is "
+              "priced at nothing unless `avoid_water` says otherwise, so nothing is left to set.")
+FROM_AIR = "Java's flying navigator starts a path from wherever the entity is, the air included."
+
+TEMPT_SOUND = ("Mojang's documentation counts the gap between tempt sounds in ticks, and its cat writes "
+               "[0, 100] where its strider writes 2 to 5, which no one unit fits; the sound is left unmade "
+               "rather than made at one of the two rates.")
+
+BOBBING = ("The shape of the rise and fall on the surface. The lift above gives a floating entity Java's own "
+           "bob, and nothing in Java lets an entity choose another.")
+
 # A field a reader may skip, and why. Keyed by component, then by field; the key "*" covers every
 # field of that component that no reader names.
 REASONS = {
     # Components whose whole body describes something Java holds nowhere.
     "minecraft:breathable": {
-        "*": "Java drowns a mob on a timer of its own with no way to restate it per entity.",
+        "suffocate_time": "Documented as seconds between suffocation damage with a default of -20, which no "
+                          "count of seconds can be, and written as 0 or -1 by every vanilla entity. Java's "
+                          "own two damage a second once the air is gone is what applies.",
+        "generates_bubbles": "The bubbles a Bedrock client draws around a mob breathing under water, "
+                             "which Java draws for no mob.",
+        "totalSupply": "An older spelling the schemas no longer describe; the default stands in for it.",
+        "suffocateTime": "An older spelling the schemas no longer describe; the default stands in for it.",
     },
     "minecraft:conditional_bandwidth_optimization": {
         "*": "How often Bedrock's own server resends an entity, which Java decides for itself.",
     },
     "minecraft:physics": {
-        "*": "Java applies gravity and collision to every mob, so asking for them asks for what is there.",
+        "has_gravity": "Java can switch gravity off per entity, but Mojang's fish declare it off and still "
+                       "fall back when they leap out of water, so the engine does not apply it as written; "
+                       "a mob that flies is held up by its move control either way.",
+        "has_collision": "Java can switch collision off per entity, as its own vex does every tick, but every "
+                         "vanilla mob declaring it also declares the gravity left alone above, and one without "
+                         "the other falls through the floor.",
+        "push_towards_closest_space": "The one vanilla entity declaring it is the player, which this mod "
+                                      "applies nothing to.",
     },
-    "minecraft:pushable": {"*": "Java pushes every mob apart and offers no per-entity switch."},
-    "minecraft:pushable_by_entity": {"*": "Java pushes every mob apart and offers no per-entity switch."},
     "minecraft:push_through": {"*": "A crowd spacing per entity, which Java holds nowhere."},
-    "minecraft:nameable": {"*": "Java lets a name tag name any mob, which is what the component asks for."},
     "minecraft:can_climb": {"*": "Carries no fields; declaring it is the whole statement."},
     "minecraft:inventory": {
-        "*": "Bedrock gives a mob a container of its own; a Java mob has hands and armour and no chest.",
+        "container_type": "The screen a player opens onto the entity's slots, which Java builds for its own "
+                          "horses, chest minecarts and hoppers by class. The entity holds the slots here and "
+                          "has no screen onto them, so a player cannot open them.",
+        "can_be_siphoned_from": "A Java hopper draws from an entity that is a container, which only Java's "
+                                "own minecarts and boats are.",
+        "additional_slots_per_strength": "Only Mojang's llama writes it, beside an `inventory_size`, and the "
+                                         "documentation leaves open how the two add up; its "
+                                         "`minecraft:strength` sizes a container alone at three slots a point.",
     },
     "minecraft:equipment": {
         "*": "Names a loot table Java rolls for a mob's gear at spawn, which the loot reader covers.",
     },
     "minecraft:dweller": {
-        "*": "Village membership: the points of interest, the professions and the migration are written "
-             "into Java's own villager brain and cannot be given to another mob.",
+        "*": "Village membership. Java's point of interest manager would let any mob claim a bed or a job "
+             "site, but the village those claims make up, its gossip, its golems and its raids, is kept by "
+             "Java's villager brain, which a pack's entity has none of; the restriction radius is read.",
     },
     "minecraft:offspring": {
         "*": "Inheritance between two parents. Java's own animals breed by class, so a child has no "
@@ -103,55 +135,54 @@ REASONS = {
     "minecraft:follow_range": {"max": "Java fixes the attribute's own ceiling."},
     "minecraft:knockback_resistance": {"max": "Java fixes the attribute's own ceiling."},
     "minecraft:movement": {"max": "Java fixes the attribute's own ceiling."},
-    "minecraft:jump.static": {"jump_power": "Java jumps a mob at a fixed height with no attribute to set."},
 
-    # Navigation. Java asks its navigator a smaller set of questions than Bedrock states.
+    # Navigation. Java asks its node evaluator about doors and floating and the mob what each kind of
+    # ground costs; what is left here is what it has no question for.
     "minecraft:navigation.walk": {
-        "*": "Java's navigator already refuses a damaging block, a portal and lava for every mob, and "
-             "asks nothing about breaking doors or sinking.",
+        "using_door_annotation": DOOR_ANNOTATION,
+        "is_amphibious": AMPHIBIOUS,
+        "avoid_portals": "Java's pathfinder classes a portal block as open ground, so there is no kind of "
+                         "ground to price it by.",
+        "blocks_to_avoid": "Java prices a step by the kind of ground it is rather than by the block, so a "
+                           "list of blocks would take a node evaluator of this mod's own.",
     },
     "minecraft:navigation.generic": {
-        "*": "Java's navigator asks nothing about breaching, jumping or sinking.",
+        "using_door_annotation": DOOR_ANNOTATION,
+        "is_amphibious": AMPHIBIOUS,
+        "can_jump": "Java's ground navigator plans every step up a block as a jump and has no switch for "
+                    "a mob that may not; the one vanilla entity saying no is a dolphin, which swims.",
     },
-    "minecraft:navigation.float": {"*": "Java's navigator already refuses a damaging block for every mob."},
-    "minecraft:navigation.hover": {
-        "*": "Java's flying navigator asks nothing about sinking or damaging blocks.",
-    },
-    "minecraft:navigation.fly": {"*": "Java's flying navigator starts a path from the air already."},
+    "minecraft:navigation.float": {"using_door_annotation": DOOR_ANNOTATION},
+    "minecraft:navigation.hover": {"can_path_from_air": FROM_AIR},
+    "minecraft:navigation.fly": {"can_path_from_air": FROM_AIR},
 
-    # Movement styles. Java moves a mob through one controller with no turn rate or sway of its own.
-    "minecraft:movement.basic": {"*": "Java's move control turns a mob at a rate it fixes itself."},
-    "minecraft:movement.amphibious": {"*": "Java's move control turns a mob at a rate it fixes itself."},
-    "minecraft:movement.sway": {"*": "Java has no swimming sway to give an arbitrary mob."},
-    "minecraft:movement.jump": {"*": "Java's jump control has no delay of its own."},
+    # Movement styles.
+    "minecraft:movement.sway": {
+        "*": "The side to side sway of a swimming fish, which is how its body is drawn moving rather than "
+             "where it goes; Java's swimming move control steers it straight.",
+    },
 
-    "minecraft:ambient_sound_interval": {
-        "event_name": "Java gives a mob the idle sound its own type ships, with no name to swap in.",
-        "event_names": "Java gives a mob the idle sound its own type ships, with no name to swap in.",
-        "range": "Java spreads the gap between idle sounds itself, off the interval it is given.",
-    },
-    "minecraft:explode": {
-        "fuse_lit": "The fuse is lit by the goal that swells the entity, so its starting state is "
-                    "whatever that goal has done rather than a field read at spawn.",
-    },
     "minecraft:buoyant": {
-        "liquid_blocks": "Java floats a mob in water and in nothing else, so a list of liquids has "
-                         "only the one entry it can be given.",
-        "apply_gravity": "Java applies gravity to every mob and offers no per-entity switch.",
-        "base_buoyancy": "Read as the lift the entity is given, under the scale beside it.",
+        "apply_gravity": "The lift is added on top of the gravity Java applies in a liquid, so an entity "
+                         "saying no to gravity still has it; every vanilla mob declaring this says yes.",
+        "movement_type": BOBBING,
+        "big_wave_probability": BOBBING,
+        "big_wave_speed": BOBBING,
+        "can_auto_step_from_liquid": "Java lets a mob pushing against the bank climb out of water already.",
+        "drag_down_on_buoyancy_removed": "A boat's sinking when it stops floating; the two vanilla entities "
+                                         "writing it are Mojang's boats.",
     },
 
     # Goals. Java's goal of the same name takes fewer parameters than Bedrock states.
-    "minecraft:behavior.random_stroll": {"*": "Java's stroll goal picks its own distance."},
-    "minecraft:behavior.random_swim": {
-        "xz_dist": "Java's swim goal picks how far it goes.",
-        "y_dist": "Java's swim goal picks how far it goes.",
-    },
     "minecraft:behavior.explore_outskirts": {"*": "Java's stroll goal picks its own distance and wait."},
     "minecraft:behavior.stroll_towards_village": {"*": "Java's stroll goal has no village to aim at."},
     "minecraft:behavior.move_indoors": {"*": "Java's goal has no cooldown of its own."},
     "minecraft:behavior.move_outdoors": {"*": "Java's goal has no cooldown of its own."},
-    "minecraft:behavior.mount_pathing": {"*": "Java's stroll goal has no target to path to."},
+    "minecraft:behavior.mount_pathing": {
+        "*": "A mob riding another steers it in Java: the rider plans with the mount's navigator and the "
+             "mount's own movement goals are switched off while it is ridden, so the chase and the "
+             "distance kept belong to the rider's attack goal.",
+    },
     "minecraft:behavior.share_items": {"*": "Java's stroll goal has no arrival radius of its own."},
     "minecraft:behavior.play": {"*": "Java writes playing into its own villager, with no friends to name."},
     "minecraft:behavior.hide": {
@@ -168,15 +199,9 @@ REASONS = {
         "*": "Java's panic goal runs from whatever hurt the mob, with no sound, no damage list and no "
              "preference for water.",
     },
-    "minecraft:behavior.look_at_player": {
-        "angle_of_view_horizontal": "Java's look goal has no field of view.",
-        "angle_of_view_vertical": "Java's look goal has no field of view.",
-        "look_time": "Java's look goal picks how long it looks.",
-    },
-    "minecraft:behavior.look_at_trading_player": {"look_time": "Java's look goal picks how long it looks."},
     "minecraft:behavior.tempt": {
-        "*": "Java's tempt goal takes the items and the speed and decides the rest: it has no sound, no "
-             "vertical reach and no fright.",
+        "tempt_sound": TEMPT_SOUND,
+        "sound_interval": TEMPT_SOUND,
     },
     "minecraft:behavior.melee_attack": {
         "reach_multiplier": "Java reaches as far as the mob's own size allows.",
@@ -185,14 +210,6 @@ REASONS = {
         "*": "Java's melee goal swings on its own cooldown inside its own reach, and raises no event of "
              "its own when it lands or kills.",
     },
-    "minecraft:behavior.nearest_attackable_target": {
-        "*": "Java's target goal rescans on the interval it is given and keeps a target until it is "
-             "invalid, with no probability, no memory of sight and no search height.",
-    },
-    "minecraft:behavior.hurt_by_target": {
-        "entity_types": "Java's goal turns on whatever hurt the mob rather than on a list.",
-        "hurt_owner": "A tamed mob's owner, which an add-on entity has none of.",
-    },
     "minecraft:behavior.avoid_mob_type": {
         "*": "Java's avoid goal flees whatever it is given at the speed it is given, with no sound, no "
              "probability and no event when it gets away.",
@@ -200,10 +217,9 @@ REASONS = {
     "minecraft:behavior.avoid_block": {
         "*": "Java has no goal that flees a block, so what carries across is the fleeing.",
     },
-    "minecraft:behavior.follow_owner": {"*": "A tamed mob's owner, which an add-on entity has none of."},
-    "minecraft:behavior.pickup_items": {
-        "*": "Picking up happens on this entity's own clock rather than through a path, so there is no "
-             "arrival radius, no search height and no cooldown to honour.",
+    "minecraft:behavior.follow_owner": {
+        "ignore_vibration": "Whether a vibration interrupts the following. Only the allay says it does, and "
+                            "its note block goals sit above this one in priority, which is what interrupts it.",
     },
     "minecraft:behavior.drink_milk": {"filters": "Drinking clears what is harmful whenever there is any."},
     "minecraft:behavior.drink_potion": {
@@ -215,19 +231,11 @@ REASONS = {
     "minecraft:behavior.trade_with_player": {"filters": "Java's merchant screen opens for whoever clicks."},
 
     # The rest, one component at a time.
-    "minecraft:angry": {
-        "*": "The anger spreads to the same definition within the range, which is what a pack means by "
-             "it. Sounds, the finer broadcast rules and the filters have no Java counterpart.",
-    },
-    "minecraft:breedable": {
-        "*": "Taming, sitting and pregnancy are states Java writes into its own animals, and an add-on "
-             "entity is none of them.",
-    },
     "minecraft:home": {
-        "restriction_type": "Java holds a home as a position and a radius, with no kind.",
-        "home_block_list": "Java's home is a position rather than a block to stand on.",
+        "home_block_list": "Bedrock checks the list against the block an event set the home at; the home here "
+                           "is where the entity stood as the component arrived, which is no such block, so "
+                           "the list has nothing to be checked against.",
     },
-    "minecraft:leashable": {"presets": "Java pulls a leashed mob at a distance it fixes itself."},
     "minecraft:rideable": {
         "*": "The rider sits at the seat the pack gave and gets off where Java puts it: there is no "
              "dismount rule, no prompt text and no pulling riders in.",
@@ -237,10 +245,6 @@ REASONS = {
     "minecraft:teleport": {
         "*": "Teleporting towards a target is a goal rather than a component here, and the entity has "
              "no target to chase.",
-    },
-    "minecraft:transformation": {
-        "*": "The change happens at once, so there is no delay to wait out and no sound to play on the "
-             "way in or out of it.",
     },
 }
 

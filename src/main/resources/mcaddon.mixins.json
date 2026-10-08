@@ -24,6 +24,7 @@
     "TargetBlockMixin",
     "PowderSnowBlockMixin",
     "TamableAnimalMixin",
+    "NameTagItemMixin",
     "AbstractHorseMixin",
     "PistonBaseBlockMixin",
     "ExplosionMixin",

@@ -1000,8 +1000,11 @@ public final class AddonItems {
      * bag's capacity and one item's weight inside one, where Java measures against the constant
      * `Fraction.ONE` in `BundleContents.Mutable.getMaxAmountToAdd` and weighs an item in
      * `BundleContents.getWeight` by its stack size, neither of which reads anything an item carries.
-     * `minecraft:swing_sounds` names Bedrock level sound events, which the engine resolves through a
-     * catalogue of its own that no table here maps onto Java's sound events.
+     * Those constants are the sixty-four and the four in sixty-four every one of Mojang's seventeen
+     * bundles states, so a pack copying them gets what it wrote and only other numbers go unmet.
+     * `minecraft:swing_sounds` names Bedrock level sound events, which a resource pack defines in the
+     * `individual_event_sounds` section of its `sounds.json`, a section this mod reports rather than
+     * reads, and which no table here maps onto Java's sound events.
      *
      * `tools/census/components.py` counts these as missing and does not fail on them, and names
      * any that become implemented or stop being published.
