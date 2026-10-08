@@ -264,29 +264,50 @@ public class AddonParticle extends SingleQuadParticle {
      * The colour the texture is multiplied by, read where the pack says to read it.
      *
      * A gradient is a list of colours at positions, and the pack's own expression decides where
-     * along it to look, which is usually the particle's age over its lifetime.
+     * along it to look, which is usually the particle's age over its lifetime. Between two stops the
+     * colour is blended from both, which is what Bedrock documents and what a fade written as two
+     * stops relies on.
      */
     private void paint(ParticleTint tint) {
-        ParticleTint.Solid solid = tint instanceof ParticleTint.Gradient gradient
-            ? at(gradient) : tint instanceof ParticleTint.Solid only ? only : null;
-        if (solid == null) return;
+        float[] colour = tint instanceof ParticleTint.Gradient gradient ? at(gradient)
+            : tint instanceof ParticleTint.Solid solid ? channels(solid) : null;
+        if (colour == null) return;
 
-        setColor(solid.red().asFloat(environment), solid.green().asFloat(environment),
-            solid.blue().asFloat(environment));
-        setAlpha(solid.alpha().asFloat(environment));
+        setColor(colour[0], colour[1], colour[2]);
+        setAlpha(colour[3]);
     }
 
-    /** The stop a gradient's interpolant lands on, which is the nearer of the two it sits between. */
-    private ParticleTint.Solid at(ParticleTint.Gradient gradient) {
-        if (gradient.stops().isEmpty()) return null;
+    /** The colour a gradient's interpolant lands on, blended between the stops either side of it. */
+    private float[] at(ParticleTint.Gradient gradient) {
+        List<ParticleTint.Gradient.Stop> stops = gradient.stops();
+        if (stops.isEmpty()) return null;
 
         float where = gradient.interpolant().asFloat(environment);
-        ParticleTint.Gradient.Stop chosen = gradient.stops().get(0);
-        for (ParticleTint.Gradient.Stop stop : gradient.stops()) {
-            if (stop.position() > where) break;
-            chosen = stop;
+        ParticleTint.Gradient.Stop below = stops.get(0);
+        ParticleTint.Gradient.Stop above = stops.get(stops.size() - 1);
+        for (ParticleTint.Gradient.Stop stop : stops) {
+            if (stop.position() > where) {
+                above = stop;
+                break;
+            }
+            below = stop;
         }
-        return chosen.colour();
+
+        float[] from = channels(below.colour());
+        float span = above.position() - below.position();
+        if (span <= 0f) return from;
+
+        float[] to = channels(above.colour());
+        float share = Math.clamp((where - below.position()) / span, 0f, 1f);
+        for (int channel = 0; channel < from.length; channel++) {
+            from[channel] += (to[channel] - from[channel]) * share;
+        }
+        return from;
+    }
+
+    private float[] channels(ParticleTint.Solid solid) {
+        return new float[] {solid.red().asFloat(environment), solid.green().asFloat(environment),
+            solid.blue().asFloat(environment), solid.alpha().asFloat(environment)};
     }
 
     private Vector3f evaluate(Vector3Expression expression) {
