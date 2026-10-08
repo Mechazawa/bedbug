@@ -2237,6 +2237,27 @@ public final class Platform {
     //?}
 
     /** The stand-in player a game test acts through. 1.21 made it say which mode it is playing in. */
+    /** A player using what is in their hand on the entity, as a click does. 26 asks where it landed. */
+    public static net.minecraft.world.InteractionResult interactOn(net.minecraft.world.entity.player.Player player,
+        Entity entity,
+        net.minecraft.world.InteractionHand hand) {
+        //? if >=26 {
+        return player.interactOn(entity, hand, entity.position());
+        //?} else {
+        /*return player.interactOn(entity, hand);
+        *///?}
+    }
+
+    /** Names a stack the way an anvil does, which is what a name tag reads its name from. */
+    public static void setCustomName(net.minecraft.world.item.ItemStack stack, String name) {
+        //? if >=1.21 {
+        stack.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME,
+            net.minecraft.network.chat.Component.literal(name));
+        //?} else {
+        /*stack.setHoverName(net.minecraft.network.chat.Component.literal(name));
+        *///?}
+    }
+
     public static net.minecraft.world.entity.player.Player mockPlayer(
         net.minecraft.gametest.framework.GameTestHelper helper) {
         //? if >=1.21 {

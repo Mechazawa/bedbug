@@ -88,7 +88,6 @@ REASONS = {
                                       "applies nothing to.",
     },
     "minecraft:push_through": {"*": "A crowd spacing per entity, which Java holds nowhere."},
-    "minecraft:nameable": {"*": "Java lets a name tag name any mob, which is what the component asks for."},
     "minecraft:can_climb": {"*": "Carries no fields; declaring it is the whole statement."},
     "minecraft:inventory": {
         "container_type": "The screen a player opens onto the entity's slots, which Java builds for its own "

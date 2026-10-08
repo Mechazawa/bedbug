@@ -892,6 +892,43 @@ public final class ComponentGameTests {
     private static final double HOP_TOWARD = 20;
 
     /**
+     * A name tag names only an entity `minecraft:nameable` allows, and the name raises its event.
+     *
+     * The plain ember carries no such component and refuses the tag. The nameable group raises one
+     * event for the name it lists and its default trigger for any other, and shows the name always.
+     */
+    @GameTest()
+    public void aNameTagNamesOnlyANameableEntityAndRaisesItsEvent(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        net.minecraft.server.level.ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
+        ItemStack tag = new ItemStack(Items.NAME_TAG);
+        Platform.setCustomName(tag, "Cinder");
+        player.setItemInHand(InteractionHand.MAIN_HAND, tag);
+        Platform.interactOn(player, ember, InteractionHand.MAIN_HAND);
+        helper.assertTrue(ember.getCustomName() == null, EMBER + " is not nameable and took a name tag's name.");
+
+        EntityEvents.trigger(ember, "tp:ember_make_nameable", null, ServerHooks.state());
+        player.setItemInHand(InteractionHand.MAIN_HAND, tag.copy());
+        Platform.interactOn(player, ember, InteractionHand.MAIN_HAND);
+        helper.assertTrue(ember.getCustomName() != null && "Cinder".equals(ember.getCustomName().getString()),
+            EMBER + " is nameable and refused the name tag.");
+        helper.assertTrue("cinder".equals(ember.value("tp:named")),
+            EMBER + " was named Cinder and raised " + ember.value("tp:named") + " rather than its event for Cinder.");
+        helper.assertTrue(ember.isCustomNameVisible(), EMBER + " shows its name always and hides it.");
+
+        ember.setCustomName(net.minecraft.network.chat.Component.literal("Ash"));
+        helper.assertTrue("plain".equals(ember.value("tp:named")),
+            EMBER + " was given a name no action lists and never raised its default trigger.");
+        helper.succeed();
+    }
+
+    /**
      * Runs the entity's own ticks the way the level does, which counts its age first: Java's goals
      * tell one blow from the next by the age it landed at.
      */

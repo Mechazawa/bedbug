@@ -5475,6 +5475,44 @@ public class AddonEntity extends PathfinderMob
             .orElseGet(com.google.gson.JsonObject::new);
     }
 
+    /**
+     * Whether a name tag may name the entity, which needs `minecraft:nameable` and its
+     * `allow_name_tag_renaming`, yes unless the pack says otherwise.
+     */
+    public boolean takesNameTags() {
+        if (definition == null) return true;
+
+        com.google.gson.JsonObject nameable = liveComponent("minecraft:nameable");
+        return nameable != null && Goals.flag(nameable, "allow_name_tag_renaming", true);
+    }
+
+    /**
+     * Raises the event `minecraft:nameable` names for the name the entity was just given.
+     *
+     * The first of `name_actions` whose `name_filter` is the name raises its `on_named`, and any
+     * other name raises `default_trigger`, which is how Mojang's vindicator turns into Johnny and back.
+     * `always_show` keeps the name over the entity's head whether or not anyone looks at it.
+     */
+    @Override
+    public void setCustomName(net.minecraft.network.chat.Component name) {
+        super.setCustomName(name);
+        com.google.gson.JsonObject nameable = definition == null || isClientSide()
+            ? null : liveComponent("minecraft:nameable");
+        if (nameable == null || name == null) return;
+
+        if (Goals.flag(nameable, "always_show", false)) setCustomNameVisible(true);
+        String given = name.getString();
+        String event = at.ioexception.mcaddon.util.Json.list(nameable, "name_actions").stream()
+            .filter(com.google.gson.JsonElement::isJsonObject)
+            .map(com.google.gson.JsonElement::getAsJsonObject)
+            .filter(action -> at.ioexception.mcaddon.util.Json.list(action, "name_filter").stream()
+                .anyMatch(filter -> filter.isJsonPrimitive() && filter.getAsString().equals(given)))
+            .map(action -> Goals.event(action, "on_named"))
+            .findFirst()
+            .orElseGet(() -> Goals.event(nameable, "default_trigger"));
+        fire(event);
+    }
+
     /** `is_pushable_by_piston` is the half of `minecraft:pushable` a moving piston asks about. */
     @Override
     public net.minecraft.world.level.material.PushReaction getPistonPushReaction() {

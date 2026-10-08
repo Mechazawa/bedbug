@@ -51,6 +51,12 @@
           "type": "bool",
           "default": false,
           "client_sync": true
+        },
+        "tp:named": {
+          "type": "enum",
+          "values": ["none", "cinder", "plain"],
+          "default": "none",
+          "client_sync": true
         }
       },
       "animations": {
@@ -487,6 +493,24 @@
           "jump_delay": [1.0, 1.0]
         }
       },
+      "tp:ember_nameable": {
+        "minecraft:nameable": {
+          "always_show": true,
+          "default_trigger": {
+            "event": "tp:ember_named_plainly",
+            "target": "self"
+          },
+          "name_actions": [
+            {
+              "name_filter": "Cinder",
+              "on_named": {
+                "event": "tp:ember_named_cinder",
+                "target": "self"
+              }
+            }
+          ]
+        }
+      },
       "tp:ember_alert": {
         "minecraft:timer": {
           "time": 1.0,
@@ -720,6 +744,21 @@
       "tp:ember_hop": {
         "add": {
           "component_groups": ["tp:ember_hopping"]
+        }
+      },
+      "tp:ember_make_nameable": {
+        "add": {
+          "component_groups": ["tp:ember_nameable"]
+        }
+      },
+      "tp:ember_named_cinder": {
+        "set_property": {
+          "tp:named": "cinder"
+        }
+      },
+      "tp:ember_named_plainly": {
+        "set_property": {
+          "tp:named": "plain"
         }
       },
       "tp:ember_winter": {
