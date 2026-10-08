@@ -1278,14 +1278,15 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
-     * Whether the pack's `shareables` list allows this item, which allows everything when absent.
+     * Whether the pack's `shareables` list allows this item.
      *
-     * `all_items` is the pack saying the list is a preference rather than a gate, so an entity
-     * declaring it takes whatever it finds.
+     * An entity with no list wants nothing: `can_pickup_any_item` on the pickup behaviour is how a
+     * pack says otherwise. `all_items` is the pack saying the list is a preference rather than a
+     * gate, so an entity declaring it takes whatever it finds.
      */
     public boolean shareable(net.minecraft.world.item.ItemStack stack) {
         com.google.gson.JsonObject body = liveComponent("minecraft:shareables");
-        if (body == null || !body.has("items")) return true;
+        if (body == null) return false;
         if (ServerEntityDefinition.flag(body, "all_items", false)) return true;
         return named(body, "items", stack);
     }
