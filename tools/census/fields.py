@@ -71,9 +71,15 @@ REASONS = {
         "*": "How often Bedrock's own server resends an entity, which Java decides for itself.",
     },
     "minecraft:physics": {
-        "*": "Java applies gravity and collision to every mob, so asking for them asks for what is there.",
+        "has_gravity": "Java can switch gravity off per entity, but Mojang's fish declare it off and still "
+                       "fall back when they leap out of water, so the engine does not apply it as written; "
+                       "a mob that flies is held up by its move control either way.",
+        "has_collision": "Java can switch collision off per entity, as its own vex does every tick, but every "
+                         "vanilla mob declaring it also declares the gravity left alone above, and one without "
+                         "the other falls through the floor.",
+        "push_towards_closest_space": "The one vanilla entity declaring it is the player, which this mod "
+                                      "applies nothing to.",
     },
-    "minecraft:pushable": {"*": "Java pushes every mob apart and offers no per-entity switch."},
     "minecraft:pushable_by_entity": {"*": "Java pushes every mob apart and offers no per-entity switch."},
     "minecraft:push_through": {"*": "A crowd spacing per entity, which Java holds nowhere."},
     "minecraft:nameable": {"*": "Java lets a name tag name any mob, which is what the component asks for."},
@@ -144,11 +150,6 @@ REASONS = {
     "minecraft:movement.sway": {"*": "Java has no swimming sway to give an arbitrary mob."},
     "minecraft:movement.jump": {"*": "Java's jump control has no delay of its own."},
 
-    "minecraft:ambient_sound_interval": {
-        "event_name": "Java gives a mob the idle sound its own type ships, with no name to swap in.",
-        "event_names": "Java gives a mob the idle sound its own type ships, with no name to swap in.",
-        "range": "Java spreads the gap between idle sounds itself, off the interval it is given.",
-    },
     "minecraft:explode": {
         "fuse_lit": "The fuse is lit by the goal that swells the entity, so its starting state is "
                     "whatever that goal has done rather than a field read at spawn.",

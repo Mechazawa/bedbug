@@ -202,7 +202,8 @@
           ]
         },
         "minecraft:ambient_sound_interval": {
-          "value": 3.0
+          "value": 3.0,
+          "range": 2.0
         },
         "minecraft:item_hopper": {},
         "minecraft:can_power_jump": {},
@@ -258,7 +259,8 @@
           "value": false
         },
         "minecraft:pushable": {
-          "is_pushable": false
+          "is_pushable": false,
+          "is_pushable_by_piston": false
         }
       },
       "tp:ember_shod": {
@@ -311,6 +313,19 @@
         "minecraft:navigation.generic": {
           "can_swim": true,
           "can_walk": false
+        }
+      },
+      "tp:ember_murmuring": {
+        "minecraft:ambient_sound_interval": {
+          "value": 3.0,
+          "range": 0.0,
+          "event_name": "ambient.in.air",
+          "event_names": [
+            {
+              "condition": "query.is_baby",
+              "event_name": "ambient.baby"
+            }
+          ]
         }
       },
       "tp:ember_alert": {
@@ -446,6 +461,11 @@
       "tp:ember_unfin": {
         "remove": {
           "component_groups": ["tp:ember_finned"]
+        }
+      },
+      "tp:ember_murmur": {
+        "add": {
+          "component_groups": ["tp:ember_murmuring"]
         }
       },
       "tp:ember_winter": {

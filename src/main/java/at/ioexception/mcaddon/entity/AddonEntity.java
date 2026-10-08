@@ -4666,9 +4666,15 @@ public class AddonEntity extends PathfinderMob
     /** Bedrock states the gap between idle sounds in seconds; Java counts it in ticks. */
     @Override
     public int getAmbientSoundInterval() {
-        return definition == null || !declaresNow("minecraft:ambient_sound_interval")
-            ? super.getAmbientSoundInterval()
-            : (int) (liveNumber("minecraft:ambient_sound_interval", "value", 8) * 20);
+        com.google.gson.JsonObject interval = definition == null
+            ? null : liveComponent("minecraft:ambient_sound_interval");
+        if (interval == null) return super.getAmbientSoundInterval();
+
+        // `value` is the shortest gap in seconds and `range` the most Bedrock adds to it at random,
+        // and Java asks for the gap again each time the entity has spoken.
+        double seconds = Goals.number(interval, "value", 8)
+            + random.nextDouble() * Goals.number(interval, "range", 16);
+        return (int) (seconds * at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.TICKS_PER_SECOND);
     }
 
     @Override
@@ -4690,10 +4696,58 @@ public class AddonEntity extends PathfinderMob
     /** Public so a test can ask which idle sound the entity would make where it stands. */
     @Override
     public net.minecraft.sounds.SoundEvent getAmbientSound() {
+        String chosen = chosenAmbientMoment();
+        if (chosen != null) return noise(chosen);
+
         net.minecraft.sounds.SoundEvent named = noise(ambientMoment());
         if (named == null) named = noise("ambient");
         return named == null ? super.getAmbientSound() : named;
     }
+
+    /**
+     * The idle moment `minecraft:ambient_sound_interval` names, or null where it names none.
+     *
+     * Its `event_names` are tried in order and the first whose condition holds is the sound, with
+     * `event_name` behind them. A moment the pack's `sounds.json` has no sound for is silence, which
+     * is how Mojang's own entities write a group that keeps an entity quiet.
+     */
+    private String chosenAmbientMoment() {
+        if (definition == null || declaresNow("minecraft:uses_legacy_ambient_sounds")) return null;
+
+        com.google.gson.JsonObject interval = liveComponent("minecraft:ambient_sound_interval");
+        if (interval == null) return null;
+        for (com.google.gson.JsonElement entry : at.ioexception.mcaddon.util.Json.list(interval, "event_names")) {
+            if (!entry.isJsonObject()) continue;
+
+            com.google.gson.JsonObject named = entry.getAsJsonObject();
+            String moment = Goals.text(named, "event_name");
+            String condition = Goals.text(named, "condition");
+            if (moment != null && (condition == null || holds(condition))) return moment;
+        }
+        return at.ioexception.mcaddon.util.Json.text(interval, "event_name", "ambient");
+    }
+
+    /**
+     * Whether a Molang condition a component states holds for the entity now.
+     *
+     * It is answered with the queries the entity's own scripts get, which is what lets a pack write
+     * the `query.is_baby` it writes in an animation controller into a component as well.
+     */
+    public boolean holds(String condition) {
+        if (questions == null) {
+            questions = new at.ioexception.mcaddon.bedrock.animation.AnimationPlayer(null, this);
+            questions.environment().setQueries(new at.ioexception.mcaddon.bedrock.entity.EntityQueries(
+                this, questions, at.ioexception.mcaddon.bedrock.entity.EntityQueries.Drawn.NONE,
+                () -> ServerHooks.state() == null
+                    ? java.util.Map.of() : ServerHooks.state().properties(getUUID()), false));
+        }
+        questions.environment().setLifeTime(
+            tickCount / (float) at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.TICKS_PER_SECOND);
+        return at.ioexception.mcaddon.bedrock.molang.MolangParser.parse(condition)
+            .evaluate(questions.environment()).truthy();
+    }
+
+    private at.ioexception.mcaddon.bedrock.animation.AnimationPlayer questions;
 
     /**
      * Which of its idle sounds the entity makes, which `minecraft:uses_legacy_ambient_sounds` picks
@@ -4937,6 +4991,16 @@ public class AddonEntity extends PathfinderMob
         }
         return !declaresNow("minecraft:pushable")
             || liveNumber("minecraft:pushable", "is_pushable", 1) != 0;
+    }
+
+    /** `is_pushable_by_piston` is the half of `minecraft:pushable` a moving piston asks about. */
+    @Override
+    public net.minecraft.world.level.material.PushReaction getPistonPushReaction() {
+        if (definition != null && declaresNow("minecraft:pushable")
+            && liveNumber("minecraft:pushable", "is_pushable_by_piston", 1) == 0) {
+            return net.minecraft.world.level.material.PushReaction.IGNORE;
+        }
+        return super.getPistonPushReaction();
     }
 
     /** True when one of the pack's interactions applied, which is what consumes the click. */

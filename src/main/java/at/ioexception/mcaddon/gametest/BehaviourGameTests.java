@@ -961,9 +961,10 @@ public final class BehaviourGameTests {
 
         int silent = ember.getAmbientSoundInterval();
         EntityEvents.trigger(ember, "tp:ember_load", null, ServerHooks.state());
-        helper.assertTrue(ember.getAmbientSoundInterval() == GROUPED_SOUND_GAP,
-            ENTITY + " gained minecraft:ambient_sound_interval from a group and kept the gap "
-                + silent + ".");
+        int gap = ember.getAmbientSoundInterval();
+        helper.assertTrue(gap >= GROUPED_SOUND_GAP && gap <= GROUPED_SOUND_GAP + GROUPED_SOUND_RANGE,
+            ENTITY + " gained minecraft:ambient_sound_interval from a group and waits " + gap
+                + " ticks rather than the gap it states, where it waited " + silent + ".");
         helper.succeed();
     }
 
@@ -1204,6 +1205,31 @@ public final class BehaviourGameTests {
                 ENTITY + " makes " + idle(ember) + " under water.");
             helper.succeed();
         });
+    }
+
+    /**
+     * `minecraft:ambient_sound_interval` names the idle moment, and its first condition that holds
+     * names it instead.
+     *
+     * The murmuring group asks for the ember's aloft moment, and for its young one while
+     * `query.is_baby` holds, so the moment moves with the condition rather than with where the
+     * ember stands.
+     */
+    @GameTest()
+    public void anIdleSoundIntervalNamesTheMomentItPlays(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_murmur", null, ServerHooks.state());
+        helper.assertTrue(idle(ember).equals("tp:ember.idle_aloft"),
+            ENTITY + " was given the aloft moment by name and makes " + idle(ember) + ".");
+        EntityEvents.trigger(ember, "tp:ember_grow_young", null, ServerHooks.state());
+        helper.assertTrue(idle(ember).equals("tp:ember.idle_young"),
+            ENTITY + " is young, which the first condition asks about, and makes " + idle(ember) + ".");
+        helper.succeed();
     }
 
     /**
@@ -1815,6 +1841,9 @@ public final class BehaviourGameTests {
 
     /** The gap in ticks the pack's laden group states, which it writes in seconds. */
     private static final int GROUPED_SOUND_GAP = 60;
+
+    /** The most the laden group adds to that gap at random, also written in seconds. */
+    private static final int GROUPED_SOUND_RANGE = 40;
 
     /** The dye the pack's laden group names. */
     private static final int GROUPED_DYE = 11;

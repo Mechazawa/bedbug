@@ -10,6 +10,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.navigation.WaterBoundPathNavigation;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.material.PushReaction;
 
 /**
  * The fields inside an entity component that Java has a place for, read back through that place.
@@ -165,6 +166,28 @@ public final class ComponentGameTests {
         helper.assertTrue(ember.getNavigation() instanceof GroundPathNavigation,
             EMBER + " lost the group that made it swim and still plans with "
                 + ember.getNavigation().getClass().getSimpleName() + ".");
+        helper.succeed();
+    }
+
+    /**
+     * A piston leaves alone an entity whose `minecraft:pushable` says pistons may not move it.
+     *
+     * Java asks the entity what a piston does to it, and the ember's ghostly group answers no to
+     * pistons as well as to other entities.
+     */
+    @GameTest()
+    public void aPistonLeavesAloneAnEntityThatMayNotBePushedByOne(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.assertTrue(ember.getPistonPushReaction() != PushReaction.IGNORE,
+            EMBER + " never refused a piston and a piston leaves it where it is.");
+        EntityEvents.trigger(ember, "tp:ember_fade", null, ServerHooks.state());
+        helper.assertTrue(ember.getPistonPushReaction() == PushReaction.IGNORE,
+            EMBER + " gained a minecraft:pushable refusing pistons and a piston still moves it.");
         helper.succeed();
     }
 }
