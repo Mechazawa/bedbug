@@ -18,7 +18,10 @@ public interface CommandReport {
     /** A line the game read and then declined. */
     void declined(String command, String reason);
 
-    /** The commands a pack's data runs: its entity events, animations, dialogue scenes and blocks. */
+    /**
+     * The lines `/bedrock` is given, and the ones a pack's entity events, animations, dialogue scenes
+     * and blocks run.
+     */
     CommandReport DATA = new CommandReport() {
         @Override
         public void untranslatable(String what) {

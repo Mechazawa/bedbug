@@ -170,7 +170,7 @@ public final class Functions {
      * Selector arguments Java has no form of.
      *
      * Each narrows a selection by something Java's parser cannot express, so a line carrying one
-     * would match more entities than the pack asked for. The line does not run instead.
+     * would match more entities than the pack asked for, so the line does not run.
      */
     private static final Set<String> BEDROCK_ONLY_SELECTOR_ARGUMENTS = Set.of(
         "haspermission", "has_property");

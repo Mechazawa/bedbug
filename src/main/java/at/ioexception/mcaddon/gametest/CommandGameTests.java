@@ -216,6 +216,23 @@ public final class CommandGameTests {
         helper.succeed();
     }
 
+    /**
+     * A function calling itself through `/bedrock` is ended by the limit on the commands one run may
+     * queue, the way one calling itself directly is, rather than by the stack running out.
+     */
+    @GameTest()
+    public void aFunctionCallingItselfStopsAtTheCommandLimit(GameTestHelper helper) {
+        if (AddonEntities.typeOf(ENTITY) == null) {
+            helper.succeed();
+            return;
+        }
+
+        Entity stand = place(helper, vanilla("armor_stand"), STAND);
+        run(helper, "execute as " + stand.getStringUUID() + " run function tp:tp/loop");
+        helper.assertTrue(Platform.tagsOf(stand).contains("tp_looped"), "tp:tp/loop never ran its first line.");
+        helper.succeed();
+    }
+
     /** `/bedrock` asks for the level Java runs a function at, which a player who is no operator lacks. */
     @GameTest()
     public void bedrockIsForOperators(GameTestHelper helper) {
