@@ -300,6 +300,19 @@
           "breathes_water": true
         }
       },
+      "tp:ember_wading": {
+        "minecraft:navigation.walk": {
+          "avoid_water": true,
+          "avoid_damage_blocks": true,
+          "can_path_over_lava": true
+        }
+      },
+      "tp:ember_finned": {
+        "minecraft:navigation.generic": {
+          "can_swim": true,
+          "can_walk": false
+        }
+      },
       "tp:ember_alert": {
         "minecraft:timer": {
           "time": 1.0,
@@ -418,6 +431,21 @@
       "tp:ember_grow_gills": {
         "add": {
           "component_groups": ["tp:ember_gilled"]
+        }
+      },
+      "tp:ember_wade": {
+        "add": {
+          "component_groups": ["tp:ember_wading"]
+        }
+      },
+      "tp:ember_fin": {
+        "add": {
+          "component_groups": ["tp:ember_finned"]
+        }
+      },
+      "tp:ember_unfin": {
+        "remove": {
+          "component_groups": ["tp:ember_finned"]
         }
       },
       "tp:ember_winter": {

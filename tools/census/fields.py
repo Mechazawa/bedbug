@@ -47,6 +47,13 @@ INDEX = "Entity component definitions.json"
 # list rather than a regression. `--min-declarations 1` gates on the whole tail.
 GATE = 8
 
+# Reasons several navigation components share.
+DOOR_ANNOTATION = ("Not in the published schema. Mojang writes it beside `minecraft:annotation.open_door`, "
+                   "and that component is what decides whether the pathfinder plans through a closed door.")
+AMPHIBIOUS = ("Walking the bottom under water: a Java mob that may not float sinks and walks it, and water is "
+              "priced at nothing unless `avoid_water` says otherwise, so nothing is left to set.")
+FROM_AIR = "Java's flying navigator starts a path from wherever the entity is, the air included."
+
 # A field a reader may skip, and why. Keyed by component, then by field; the key "*" covers every
 # field of that component that no reader names.
 REASONS = {
@@ -111,19 +118,25 @@ REASONS = {
     "minecraft:movement": {"max": "Java fixes the attribute's own ceiling."},
     "minecraft:jump.static": {"jump_power": "Java jumps a mob at a fixed height with no attribute to set."},
 
-    # Navigation. Java asks its navigator a smaller set of questions than Bedrock states.
+    # Navigation. Java asks its node evaluator about doors and floating and the mob what each kind of
+    # ground costs; what is left here is what it has no question for.
     "minecraft:navigation.walk": {
-        "*": "Java's navigator already refuses a damaging block, a portal and lava for every mob, and "
-             "asks nothing about breaking doors or sinking.",
+        "using_door_annotation": DOOR_ANNOTATION,
+        "is_amphibious": AMPHIBIOUS,
+        "avoid_portals": "Java's pathfinder classes a portal block as open ground, so there is no kind of "
+                         "ground to price it by.",
+        "blocks_to_avoid": "Java prices a step by the kind of ground it is rather than by the block, so a "
+                           "list of blocks would take a node evaluator of this mod's own.",
     },
     "minecraft:navigation.generic": {
-        "*": "Java's navigator asks nothing about breaching, jumping or sinking.",
+        "using_door_annotation": DOOR_ANNOTATION,
+        "is_amphibious": AMPHIBIOUS,
+        "can_jump": "Java's ground navigator plans every step up a block as a jump and has no switch for "
+                    "a mob that may not; the one vanilla entity saying no is a dolphin, which swims.",
     },
-    "minecraft:navigation.float": {"*": "Java's navigator already refuses a damaging block for every mob."},
-    "minecraft:navigation.hover": {
-        "*": "Java's flying navigator asks nothing about sinking or damaging blocks.",
-    },
-    "minecraft:navigation.fly": {"*": "Java's flying navigator starts a path from the air already."},
+    "minecraft:navigation.float": {"using_door_annotation": DOOR_ANNOTATION},
+    "minecraft:navigation.hover": {"can_path_from_air": FROM_AIR},
+    "minecraft:navigation.fly": {"can_path_from_air": FROM_AIR},
 
     # Movement styles. Java moves a mob through one controller with no turn rate or sway of its own.
     "minecraft:movement.basic": {"*": "Java's move control turns a mob at a rate it fixes itself."},

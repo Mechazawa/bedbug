@@ -1662,8 +1662,9 @@ public final class BehaviourGameTests {
     /**
      * A group carrying `minecraft:preferred_path` prices water for the entity's pathfinder.
      *
-     * A pathfinding mob starts out costing water nothing, which is what lets it wade across rather
-     * than walk around. The component is the entity keeping to the ground it was given.
+     * An entity whose navigation never asked to avoid water costs it nothing, which is what lets it
+     * wade across rather than walk around. The component is the entity keeping to the ground it was
+     * given.
      */
     @GameTest()
     public void aGroupCarryingThePreferredPathPricesWater(GameTestHelper helper) {

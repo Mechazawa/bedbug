@@ -1,11 +1,14 @@
 package at.ioexception.mcaddon.gametest;
 
 import at.ioexception.mcaddon.entity.AddonEntity;
+import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
+import net.minecraft.world.entity.ai.navigation.WaterBoundPathNavigation;
 import net.minecraft.world.level.block.Blocks;
 
 /**
@@ -106,6 +109,62 @@ public final class ComponentGameTests {
         ember.tick();
         helper.assertTrue(ember.getAirSupply() == GILLED_SUPPLY,
             EMBER + " breathes water and did not fill its air in one breath of it.");
+        helper.succeed();
+    }
+
+    /**
+     * The prices a navigation component states are the ones the pathfinder plans with.
+     *
+     * Bedrock avoids nothing a pack does not ask it to, so the plain ember walks through a block
+     * that hurts, and Java refuses lava to every mob. The wading group asks for water and damaging
+     * blocks to be avoided and lets the entity cross lava, which reverses all three.
+     */
+    @GameTest()
+    public void aNavigationComponentPricesTheGroundItNames(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.assertTrue(Platform.damagingMalus(ember) == 0,
+            EMBER + " never asked to avoid damaging blocks and its pathfinder prices them at "
+                + Platform.damagingMalus(ember) + ".");
+        helper.assertTrue(Platform.lavaMalus(ember) < 0, EMBER + " never asked to cross lava and may.");
+        helper.assertTrue(Platform.waterMalus(ember) == 0, EMBER + " never asked to avoid water and does.");
+
+        EntityEvents.trigger(ember, "tp:ember_wade", null, ServerHooks.state());
+        helper.assertTrue(Platform.damagingMalus(ember) != 0,
+            EMBER + " asked to avoid damaging blocks and its pathfinder still walks through them.");
+        helper.assertTrue(Platform.lavaMalus(ember) == 0, EMBER + " asked to cross lava and may not.");
+        helper.assertTrue(Platform.waterMalus(ember) > 0, EMBER + " asked to avoid water and wades in.");
+        helper.succeed();
+    }
+
+    /**
+     * `minecraft:navigation.generic` swimming and never walking is a fish, and gets a fish's navigator.
+     *
+     * Bedrock describes a fish, a turtle and an axolotl with the same component, so the allowances
+     * inside it pick between Java's swimming, amphibious and ground navigators. A ground navigator
+     * plans a fish's way along the sea floor.
+     */
+    @GameTest()
+    public void aGenericNavigationThatOnlySwimsGetsASwimmingNavigator(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_fin", null, ServerHooks.state());
+        helper.assertTrue(ember.getNavigation() instanceof WaterBoundPathNavigation,
+            EMBER + " gained a navigation that swims and never walks and plans with "
+                + ember.getNavigation().getClass().getSimpleName() + ".");
+
+        EntityEvents.trigger(ember, "tp:ember_unfin", null, ServerHooks.state());
+        helper.assertTrue(ember.getNavigation() instanceof GroundPathNavigation,
+            EMBER + " lost the group that made it swim and still plans with "
+                + ember.getNavigation().getClass().getSimpleName() + ".");
         helper.succeed();
     }
 }

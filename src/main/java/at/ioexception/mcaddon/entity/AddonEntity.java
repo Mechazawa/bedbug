@@ -41,7 +41,6 @@ import net.minecraft.world.entity.ai.goal.TryFindWaterGoal;
 import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomFlyingGoal;
 import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
 import net.minecraft.world.entity.ai.navigation.FlyingPathNavigation;
-import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.ai.navigation.WallClimberNavigation;
 import net.minecraft.world.entity.ai.navigation.WaterBoundPathNavigation;
@@ -606,8 +605,8 @@ public class AddonEntity extends PathfinderMob
         if (liveComponent("minecraft:persistent") != null) setPersistenceRequired();
 
         // `minecraft:preferred_path` is the entity keeping to the ground it was given, so water
-        // costs it what water costs a villager. Nought is what a pathfinding mob starts at.
-        Platform.setWaterMalus(this, declaresNow("minecraft:preferred_path") ? 8f : 0f);
+        // costs it what Java charges a villager for it, whatever its navigation allowed.
+        if (declaresNow("minecraft:preferred_path")) Platform.priceWater(this, true);
 
         // `minecraft:variable_max_auto_step` arrives with the group that lets an entity climb what
         // it otherwise could not. Six tenths of a block is what a Java mob steps otherwise.
@@ -906,7 +905,8 @@ public class AddonEntity extends PathfinderMob
             || carriesNow("minecraft:block_climber")) {
             return new WallClimberNavigation(this, level);
         }
-        return super.createNavigation(level);
+        PathNavigation swimming = pathing().navigatorFor(this, level);
+        return swimming != null ? swimming : super.createNavigation(level);
     }
 
     /**
@@ -920,44 +920,42 @@ public class AddonEntity extends PathfinderMob
         PathNavigation asked = createNavigation(level());
         if (asked.getClass() != navigation.getClass()) navigation = asked;
 
-        // Bedrock names the kind of pathfinding in the component and states the allowances inside
-        // it, and an entity that may not float sinks where one that may swims, so the flags decide
-        // as much as the name does.
-        if (navigation instanceof GroundPathNavigation ground) {
-            com.google.gson.JsonObject walking = navigationBody();
-            ground.setCanOpenDoors(carriesNow("minecraft:annotation.open_door")
-                || Goals.flag(walking, "can_open_doors", false)
-                || Goals.flag(walking, "can_pass_doors", false));
-            ground.setCanFloat(carriesNow("minecraft:navigation.swim")
-                || carriesNow("minecraft:navigation.generic")
-                || Goals.flag(walking, "can_float", false)
-                || Goals.flag(walking, "can_swim", false)
-                || Goals.flag(walking, "can_path_over_water", false)
-                || Goals.flag(walking, "is_amphibious", false));
-            ground.setAvoidSun(Goals.flag(walking, "avoid_sun", false));
-
-            if (Goals.flag(walking, "avoid_water", false)) {
-                // The enum naming a kind of ground was renamed in 1.21.
-                //? if >=1.21 {
-                setPathfindingMalus(net.minecraft.world.level.pathfinder.PathType.WATER, 8f);
-                //?} else {
-                /*setPathfindingMalus(net.minecraft.world.level.pathfinder.BlockPathTypes.WATER, 8f);
-                *///?}
-            }
-        }
+        pathing().applyTo(this, navigation, carriesNow("minecraft:annotation.open_door"));
         applyMoveControl();
     }
 
-    /** The navigation component the entity carries now, which is the last one a pack that wrote two means. */
-    private com.google.gson.JsonObject navigationBody() {
+    /**
+     * The allowances of the navigation component the entity carries now.
+     *
+     * One a live group brought outranks one the entity declares, the way a group outranks the top
+     * level for any component, and of two written in the same place the later in this list wins.
+     */
+    private Pathing pathing() {
         com.google.gson.JsonObject walking = null;
+        boolean grouped = false;
         for (String component : java.util.List.of(
             "minecraft:navigation.float", "minecraft:navigation.climb", "minecraft:navigation.fly",
             "minecraft:navigation.hover", "minecraft:navigation.swim", "minecraft:navigation.generic",
             "minecraft:navigation.walk")) {
-            if (carriesNow(component)) walking = liveComponent(component);
+            if (!carriesNow(component)) continue;
+
+            boolean fromGroup = definition != null && !declares(component);
+            if (grouped && !fromGroup) continue;
+            walking = bodyNow(component);
+            grouped = fromGroup;
         }
-        return walking;
+        return Pathing.of(walking);
+    }
+
+    /**
+     * The body of a component the entity carries now, answered before the definition as well, for
+     * the same reason {@link #carriesNow} is.
+     */
+    private com.google.gson.JsonObject bodyNow(String component) {
+        if (definition != null) return liveComponent(component);
+
+        ServerEntityDefinition declared = AddonEntities.definitionOf(getType());
+        return declared == null ? null : declared.components().get(component);
     }
 
     /** Which way of getting about the entity's `minecraft:movement.*` names at this moment. */
