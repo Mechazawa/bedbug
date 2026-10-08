@@ -5,12 +5,18 @@ import at.ioexception.mcaddon.bedrock.model.BedrockCube;
 import at.ioexception.mcaddon.bedrock.model.BedrockGeometry;
 import at.ioexception.mcaddon.bedrock.model.CubeUv;
 import at.ioexception.mcaddon.bedrock.model.FaceUv;
+import at.ioexception.mcaddon.registry.AddonEntities;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.core.Direction;
+import net.minecraft.world.item.ItemDisplayContext;
 import org.joml.Vector3f;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A Bedrock block geometry, rewritten as a Java block model.
@@ -23,18 +29,72 @@ final class BlockGeometry {
     private BlockGeometry() {
     }
 
-    /** Null when the geometry has nothing to draw, which is how a pack writes an invisible block. */
-    static JsonArray elements(BedrockGeometry geometry, String textureVariable) {
+    /**
+     * Null when the geometry has nothing to draw, which is how a pack writes an invisible block.
+     *
+     * Each face wears the texture variable of the material instance it names, then the one named
+     * after its own direction, then `all`, which is the order Bedrock looks a face's material up
+     * in. `textures` is the set of variables the model declares.
+     */
+    static JsonArray elements(BedrockGeometry geometry, Set<String> textures) {
         JsonArray elements = new JsonArray();
         for (BedrockBone bone : geometry.bones()) {
             for (BedrockCube cube : bone.cubes()) {
-                elements.add(element(cube, geometry, textureVariable));
+                elements.add(element(cube, geometry, textures));
             }
         }
         return elements.isEmpty() ? null : elements;
     }
 
-    private static JsonObject element(BedrockCube cube, BedrockGeometry geometry, String texture) {
+    /**
+     * What the geometry says about how its block is held, worn and shown as an item, as the
+     * `display` block of a Java model, or null where it says nothing.
+     *
+     * The two editions name the same contexts and measure each the same way, a rotation in degrees
+     * and a translation in sixteenths, applied in the same order. Bedrock's `shelf` is Java's
+     * `on_shelf`, which only 26 has. What Java holds no place for is reported: the context an
+     * embedded visual is drawn in, a pivot to turn or scale about other than the model's middle,
+     * and a frame for the item to be fitted to.
+     */
+    static JsonObject display(BedrockGeometry geometry) {
+        JsonObject transforms = geometry.itemDisplayTransforms();
+        if (transforms == null) return null;
+
+        JsonObject display = new JsonObject();
+        for (Map.Entry<String, JsonElement> context : transforms.entrySet()) {
+            String java = javaContext(context.getKey());
+            if (java == null || !context.getValue().isJsonObject()) {
+                AddonEntities.unsupported("geometry item_display_transforms " + context.getKey());
+                continue;
+            }
+
+            JsonObject bedrock = context.getValue().getAsJsonObject();
+            AddonEntities.unsupportedFields("geometry item_display_transforms", bedrock,
+                UNREAD_DISPLAY);
+            JsonObject transform = new JsonObject();
+            for (String part : List.of("rotation", "translation", "scale")) {
+                if (bedrock.has(part)) transform.add(part, bedrock.get(part));
+            }
+            display.add(java, transform);
+        }
+        return display.size() == 0 ? null : display;
+    }
+
+    /** The parts of a display transform a Java model has no field for. */
+    private static final List<String> UNREAD_DISPLAY =
+        List.of("rotation_pivot", "scale_pivot", "fit_to_frame");
+
+    /** Java's name for the context Bedrock names, or null where this version has none. */
+    private static String javaContext(String bedrock) {
+        String named = bedrock.equals("shelf") ? "on_shelf" : bedrock;
+        return Arrays.stream(ItemDisplayContext.values())
+            .map(ItemDisplayContext::getSerializedName)
+            .filter(named::equals)
+            .findFirst()
+            .orElse(null);
+    }
+
+    private static JsonObject element(BedrockCube cube, BedrockGeometry geometry, Set<String> textures) {
         Vector3f origin = cube.origin();
         Vector3f size = cube.size();
         float inflate = cube.inflate();
@@ -66,7 +126,7 @@ final class BlockGeometry {
 
         JsonObject faces = new JsonObject();
         for (Direction direction : Direction.values()) {
-            JsonObject face = face(cube, geometry, direction, texture);
+            JsonObject face = face(cube, geometry, direction, textures);
             if (face != null) faces.add(direction.getSerializedName(), face);
         }
         element.add("faces", faces);
@@ -74,7 +134,7 @@ final class BlockGeometry {
     }
 
     private static JsonObject face(BedrockCube cube, BedrockGeometry geometry, Direction direction,
-        String texture) {
+        Set<String> textures) {
         float width = geometry.textureWidth() <= 0 ? 16 : geometry.textureWidth();
         float height = geometry.textureHeight() <= 0 ? 16 : geometry.textureHeight();
 
@@ -83,6 +143,12 @@ final class BlockGeometry {
             case CubeUv.PerFace perFace -> perFaceRectangle(perFace.faces(), direction);
         };
         if (rectangle == null) return null;
+
+        String instance = cube.uv() instanceof CubeUv.PerFace perFace
+            && perFace.faces().get(direction) != null
+            ? perFace.faces().get(direction).materialInstance() : null;
+        String texture = "#" + (instance != null && textures.contains(instance) ? instance
+            : textures.contains(direction.getSerializedName()) ? direction.getSerializedName() : "all");
 
         JsonObject face = new JsonObject();
         JsonArray uv = new JsonArray();

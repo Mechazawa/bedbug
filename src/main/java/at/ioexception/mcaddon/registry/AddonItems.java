@@ -212,7 +212,11 @@ public final class AddonItems {
         if (id == null || BuiltInRegistries.ITEM.containsKey(id)) return;
 
         for (String component : definition.components().keySet()) {
-            if (!IMPLEMENTED.contains(component)) AddonEntities.unsupported(component);
+            if (!IMPLEMENTED.contains(component)
+                && !at.ioexception.mcaddon.bedrock.behaviour.CustomComponents.isCustom(component)) {
+                AddonEntities.unsupported(component
+                    + (BEDROCK_ONLY.contains(component) ? ", which Java has nothing for" : ""));
+            }
         }
 
         Item item = build(definition, properties(definition, id), id);
@@ -343,7 +347,8 @@ public final class AddonItems {
         if (thrown != null) return thrown;
 
         // An item whose behaviour is a pack's own script, and which nothing above already claimed.
-        List<String> scripted = definition.scriptedComponents();
+        at.ioexception.mcaddon.bedrock.behaviour.CustomComponents scripted =
+            definition.scriptedComponents();
         if (!scripted.isEmpty()) return AddonScriptedItem.build(properties, id, scripted);
 
         JsonObject wearable = definition.components().get("minecraft:wearable");
@@ -939,6 +944,11 @@ public final class AddonItems {
      * counting a gap that is still a gap, so nothing is listed on the grounds that Java cannot
      * express it.
      *
+     * `minecraft:stacked_by_data` is the one name here with no reader, and that is because there is
+     * nothing for it to read. It decides whether copies of an item holding different data values
+     * stack, and an add-on item in Java holds no data value, so every copy of it is alike and Java
+     * stacks them as Bedrock does.
+     *
      * `minecraft:record` reaches a jukebox two ways. From 1.21 the song is an entry in a registry a
      * data pack writes into, which the converter writes as a file and the item names; before that
      * the item is a `RecordItem` carrying the sound itself and joins the tag a jukebox accepts.
@@ -959,7 +969,8 @@ public final class AddonItems {
         "minecraft:shooter", "minecraft:storage_item", "minecraft:bundle_interaction",
         "minecraft:swing_duration", "minecraft:custom_components",
         "minecraft:piercing_weapon", "minecraft:kinetic_weapon", "minecraft:damage_absorption",
-        "minecraft:allow_off_hand", "minecraft:liquid_clipped", "minecraft:durability_sensor");
+        "minecraft:allow_off_hand", "minecraft:liquid_clipped", "minecraft:durability_sensor",
+        "minecraft:stacked_by_data");
 
     /**
      * Item components read on purpose that the schemas Mojang publishes today do not carry.
@@ -967,14 +978,37 @@ public final class AddonItems {
      * `minecraft:armor` states the protection `minecraft:wearable` states instead, and
      * `minecraft:weapon` the swing `minecraft:damage` states instead. A pack written against an
      * older format version ships the older spelling, so both are read and both are listed in
-     * `IMPLEMENTED` beside the current ones.
+     * `IMPLEMENTED` beside the current ones. `minecraft:custom_components` is the list of a pack's
+     * own components an item named before each became a component of its own, and
+     * `CustomComponents` reads both spellings.
      *
      * `tools/census/components.py` reads this declaration to tell a name kept for such a pack from
      * one that has gone stale, so the list it ends with means a name nothing published has and
      * nobody meant. A name here has to be one `IMPLEMENTED` carries and one no published schema
      * does, and the census says so when it is neither.
      */
-    public static final Set<String> LEGACY = Set.of("minecraft:armor", "minecraft:weapon");
+    public static final Set<String> LEGACY = Set.of("minecraft:armor", "minecraft:weapon",
+        "minecraft:custom_components");
+
+    /**
+     * Item components Java has nothing to answer with, each reported when an item declares it.
+     *
+     * `minecraft:camera` times the black bars, the shutter and the photograph sliding away while an
+     * Education Edition player takes a picture, and Java has neither the picture nor the screen.
+     * `minecraft:interact_button` writes the word on the button a touchscreen shows, and Java has no
+     * touch controls. `minecraft:storage_weight_limit` and `minecraft:storage_weight_modifier` set a
+     * bag's capacity and one item's weight inside one, where Java measures against the constant
+     * `Fraction.ONE` in `BundleContents.Mutable.getMaxAmountToAdd` and weighs an item in
+     * `BundleContents.getWeight` by its stack size, neither of which reads anything an item carries.
+     * `minecraft:swing_sounds` names Bedrock level sound events, which the engine resolves through a
+     * catalogue of its own that no table here maps onto Java's sound events.
+     *
+     * `tools/census/components.py` counts these as missing and does not fail on them, and names
+     * any that become implemented or stop being published.
+     */
+    public static final Set<String> BEDROCK_ONLY = Set.of("minecraft:camera",
+        "minecraft:interact_button", "minecraft:storage_weight_limit",
+        "minecraft:storage_weight_modifier", "minecraft:swing_sounds");
 
     private static Identifier identifier(String bedrock) {
         Names.Identifier split = Names.split(bedrock, "minecraft");

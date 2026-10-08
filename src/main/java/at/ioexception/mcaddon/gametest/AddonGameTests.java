@@ -14,6 +14,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 
@@ -106,6 +107,29 @@ public final class AddonGameTests {
             "/playanimation reached no target.");
         helper.assertTrue(run(helper, "event entity " + selector + " mcaddon:no_such_event") == 0,
             "/event fired an event nothing declares.");
+        helper.succeed();
+    }
+
+    /**
+     * `/clearspawnpoint` takes away the respawn point a player was given.
+     *
+     * Java's own commands only ever give one, so the player is given a point first and then has it
+     * taken away by the command this mod registers, named the way a function line names them.
+     */
+    @GameTest()
+    public void aClearedSpawnPointIsGone(GameTestHelper helper) {
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        try {
+            Platform.respawnAt(player, helper.getLevel(), helper.absolutePos(STAND));
+            helper.assertTrue(Platform.respawnPosition(player) != null,
+                "The player was given no spawn point to clear.");
+            helper.assertTrue(run(helper, "clearspawnpoint " + player.getScoreboardName()) == 1,
+                "/clearspawnpoint reached no player.");
+            helper.assertTrue(Platform.respawnPosition(player) == null,
+                "/clearspawnpoint left the player's spawn point where it was.");
+        } finally {
+            helper.getLevel().getServer().getPlayerList().remove(player);
+        }
         helper.succeed();
     }
 

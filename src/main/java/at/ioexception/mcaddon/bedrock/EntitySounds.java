@@ -27,8 +27,14 @@ import java.util.Set;
  * @param pitch   the range a pitch is drawn from, or null where the entry names none
  */
 public record EntitySounds(Map<String, String> events, double volume, double[] pitch) {
-    /** The moments Java asks a mob about, which is the whole of what can be answered here. */
-    private static final Set<String> ANSWERED = Set.of("ambient", "hurt", "death", "step");
+    /**
+     * The moments Java asks a mob about, which is the whole of what can be answered here.
+     *
+     * The three idle moments beside the plain one are what `minecraft:uses_legacy_ambient_sounds`
+     * picks between, so Java's one question about an idle sound reaches each of them.
+     */
+    private static final Set<String> ANSWERED = Set.of("ambient", "ambient.in.air",
+        "ambient.in.water", "ambient.baby", "hurt", "death", "step");
 
     public String event(String moment) {
         return events.get(moment);

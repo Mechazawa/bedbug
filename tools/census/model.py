@@ -11,6 +11,10 @@ The mod's side is read out of the Java source, one reader method per surface, ta
 out of each `has`, `get` and helper call in that method's body. Missing fields are listed with the
 number of published declarations that use them, so the cost of a gap is visible rather than implied.
 
+A dropped field a reader names in one of its `UNREAD` constants is reported through
+`AddonEntities.unsupportedFields` as a pack declares it, which is a decision rather than a field
+passed over without a word: such a field is listed apart, and `--strict` fails only on the rest.
+
     bash tools/census/fetch.sh
     python3 tools/census/model.py
 """
@@ -39,12 +43,13 @@ EGG = JAVA / "convert/SpawnEggAppearance.java"
 class Surface:
     """One kind of declaration, the fields the published files use, and the fields a reader reads."""
 
-    def __init__(self, title, published, implemented, declarations, source):
+    def __init__(self, title, published, implemented, declarations, source, reported=()):
         self.title = title
         self.published = published
         self.implemented = set(implemented)
         self.declarations = declarations
         self.source = source
+        self.reported = set(reported)
 
     @property
     def covered(self):
@@ -54,6 +59,11 @@ class Surface:
     def missing(self):
         return {name: count for name, count in self.published.items()
                 if name not in self.implemented}
+
+    @property
+    def silent(self):
+        """Dropped fields no reader reports, which is what `--strict` fails on."""
+        return {name: count for name, count in self.missing.items() if name not in self.reported}
 
     @property
     def unpublished(self):
@@ -307,8 +317,19 @@ def surfaces(samples):
     found = []
     for title, (methods, source) in readers.items():
         found.append(Surface(title, tally.fields[title], fields(*methods),
-                             tally.counts[title], source))
+                             tally.counts[title], source,
+                             reported(*{method[0] for method in methods})))
     return found
+
+
+def reported(*paths):
+    """The field names the readers in these files report through an `UNREAD` constant."""
+    names = set()
+    for path in paths:
+        body = path.read_text(encoding="utf-8")
+        for match in re.finditer(r"UNREAD\w*\s*=\s*List\.of\(([^)]*)\)", body):
+            names.update(re.findall(r'"([^"]+)"', match.group(1)))
+    return names
 
 
 # --- output ---------------------------------------------------------------------------------------
@@ -336,7 +357,7 @@ def print_missing(surface):
     print()
     print(f"Dropped, {surface.title} ({len(surface.missing)}), with the declarations using each:")
     for name, count in sorted(surface.missing.items(), key=lambda item: (-item[1], item[0])):
-        print(f"    {count:>5}  {name}")
+        print(f"    {count:>5}  {name}{'' if name in surface.silent else '  (reported)'}")
 
 
 def print_unpublished(surface):
@@ -354,7 +375,7 @@ def main():
     parser.add_argument("--samples", type=Path, default=DEFAULT_SAMPLES,
                         help="a bedrock-samples checkout (default: %(default)s)")
     parser.add_argument("--strict", action="store_true",
-                        help="exit non-zero when a published field has no reader")
+                        help="exit non-zero when a published field is dropped without a report")
     arguments = parser.parse_args()
 
     if not (arguments.samples / "resource_pack").is_dir():
@@ -369,7 +390,7 @@ def main():
     for surface in found:
         print_unpublished(surface)
 
-    return 1 if arguments.strict and any(surface.missing for surface in found) else 0
+    return 1 if arguments.strict and any(surface.silent for surface in found) else 0
 
 
 if __name__ == "__main__":

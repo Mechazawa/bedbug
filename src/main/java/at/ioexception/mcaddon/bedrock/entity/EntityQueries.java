@@ -19,6 +19,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.effect.MobEffects;
@@ -226,6 +227,7 @@ public final class EntityQueries implements MolangEnvironment.Queries {
             case "is_alive" -> MolangValue.of(entity.isAlive());
             case "is_on_ground" -> MolangValue.of(entity.onGround());
             case "is_in_water" -> MolangValue.of(entity.isInWater());
+            case "head_is_in_water" -> MolangValue.of(entity.isEyeInFluid(FluidTags.WATER));
             case "is_in_water_or_rain", "is_in_contact_with_water" -> MolangValue.of(entity.isInWaterOrRain());
             case "is_in_lava" -> MolangValue.of(entity.isInLava());
             case "is_on_fire", "is_onfire" -> MolangValue.of(entity.isOnFire());
@@ -447,8 +449,12 @@ public final class EntityQueries implements MolangEnvironment.Queries {
             case "block_has_any_tag" -> blockTag(arguments, false, false);
             case "block_has_all_tags" -> blockTag(arguments, false, true);
 
-            case "entity_biome_has_any_tags" -> MolangValue.of(biomeTags(arguments, false));
-            case "entity_biome_has_all_tags" -> MolangValue.of(biomeTags(arguments, true));
+            // The two without `entity_` ask about the position a feature is being placed at, which
+            // for an entity being asked is where it stands.
+            case "entity_biome_has_any_tags", "has_any_biome_tags" ->
+                MolangValue.of(biomeTags(arguments, false));
+            case "entity_biome_has_all_tags", "has_all_biome_tags" ->
+                MolangValue.of(biomeTags(arguments, true));
             case "entity_biome_has_any_identifier" -> MolangValue.of(biomeNamed(arguments));
             case "above_top_solid", "heightmap" -> MolangValue.of(surfaceHeight(arguments));
             case "surface_particle_color" -> surfaceColour(member);

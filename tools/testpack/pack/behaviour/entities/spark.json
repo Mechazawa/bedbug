@@ -51,6 +51,7 @@
         "owner_launch_immunity_ticks": 5,
         "on_fire_time": 3,
         "homing": false,
+        "isolated_physics": false,
         "ignored_entities": ["tp:spark"],
         "splash_range": 2,
         "on_hit": {

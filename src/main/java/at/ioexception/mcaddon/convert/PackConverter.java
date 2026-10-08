@@ -170,6 +170,7 @@ public final class PackConverter {
                 Set<String> sprites = new LinkedHashSet<>();
                 writeItemModels(root, icons, items, sprites);
                 writeSpawnEggs(root, icons, eggs, sprites);
+                writeBuckets(root, bundle.behaviours());
                 writeRecipes(root, recipes);
                 writeLootTables(root, loot, namespace);
                 writeBlockData(root, blocks, loot);
@@ -739,6 +740,30 @@ public final class PackConverter {
             writeFlatItem(root, Names.split(egg.identifier(), "minecraft"), "_spawn_egg",
                 icon == null ? vanilla : flat(icon, "minecraft:item/generated"),
                 icon == null ? tints(egg) : null);
+        }
+    }
+
+    /**
+     * The bucket each entity `minecraft:bucketable` makes scoopable is carried in, drawn as a bucket
+     * of water.
+     *
+     * Bedrock draws the entity inside the bucket from its own model, and a Java item model has no
+     * way to name an entity, so the bucket shows what it holds by its name instead.
+     */
+    private static void writeBuckets(Path root, List<BedrockPack> behaviours) throws IOException {
+        for (BedrockPack behaviour : behaviours) {
+            for (at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition entity
+                : at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition.readAll(behaviour)) {
+                boolean scoopable = entity.components().containsKey("minecraft:bucketable")
+                    || entity.componentGroups().values().stream()
+                        .anyMatch(group -> group.has("minecraft:bucketable"));
+                if (!scoopable) continue;
+
+                JsonObject bucket = new JsonObject();
+                bucket.addProperty("parent", "minecraft:item/water_bucket");
+                writeFlatItem(root, Names.split(entity.identifier(), "minecraft"), "_bucket", bucket,
+                    null);
+            }
         }
     }
 
@@ -1348,14 +1373,17 @@ public final class PackConverter {
         }
 
         JsonObject model = new JsonObject();
-        JsonArray elements = geometry == null ? null : BlockGeometry.elements(geometry, "#all");
+        if (geometry != null && !uniform) textures.addProperty("all", faces.values().iterator().next());
+        JsonArray elements = geometry == null ? null
+            : BlockGeometry.elements(geometry, textures.keySet());
         if (elements == null) {
             model.addProperty("parent", uniform ? "minecraft:block/cube_all" : "minecraft:block/cube");
         } else {
-            // A model with its own elements needs a particle texture; `all` is what the faces use.
-            if (!uniform) textures.addProperty("all", faces.values().iterator().next());
+            // A model with its own elements needs a particle texture, which `all` is.
             textures.addProperty("particle", "#all");
             model.add("elements", elements);
+            JsonObject display = BlockGeometry.display(geometry);
+            if (display != null) model.add("display", display);
         }
         model.add("textures", textures);
         write(assets.resolve("models/block").resolve(name + ".json"), model);

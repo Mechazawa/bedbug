@@ -68,7 +68,12 @@ import net.minecraft.world.level.Level;
  */
 public class AddonEntity extends PathfinderMob
     implements Merchant, net.minecraft.world.entity.monster.RangedAttackMob,
-        net.minecraft.world.entity.OwnableEntity {
+        net.minecraft.world.entity.OwnableEntity,
+        //? if >=26.2 {
+        net.minecraft.world.entity.Bucketable {
+        //?} else {
+        /*net.minecraft.world.entity.animal.Bucketable {
+        *///?}
     private final ServerEntityDefinition definition;
     private final java.util.Set<String> activeGroups = new java.util.LinkedHashSet<>();
     private final java.util.Map<String, Integer> sensorReady = new java.util.HashMap<>();
@@ -610,9 +615,40 @@ public class AddonEntity extends PathfinderMob
 
         refreshHome();
         refreshContainer();
+        releaseLeadsAGroupTook();
         publishAnger();
         publishLiveFlags();
     }
+
+    /**
+     * Lets go of the leads a group took with it, which `unleash_on_removal` asks for by default.
+     *
+     * `minecraft:leashable` going takes the lead off this entity, and `minecraft:leashable_to` going
+     * frees whatever was tied to it. Each is compared with what the entity carried before the groups
+     * changed, so an entity read back from storage lets go of nothing.
+     */
+    private void releaseLeadsAGroupTook() {
+        com.google.gson.JsonObject leashable = liveComponent("minecraft:leashable");
+        if (leashable == null && releases(heldLeashable) && isLeashed()) Platform.unleash(this);
+        heldLeashable = leashable;
+
+        com.google.gson.JsonObject leashableTo = liveComponent("minecraft:leashable_to");
+        if (leashableTo == null && releases(heldLeashableTo)) {
+            level().getEntities(this, getBoundingBox().inflate(LEASH_REACH),
+                other -> Platform.leashHolder(other) == this).forEach(Platform::unleash);
+        }
+        heldLeashableTo = leashableTo;
+    }
+
+    private static boolean releases(com.google.gson.JsonObject held) {
+        return held != null && ServerEntityDefinition.flag(held, "unleash_on_removal", true);
+    }
+
+    private com.google.gson.JsonObject heldLeashable;
+    private com.google.gson.JsonObject heldLeashableTo;
+
+    /** Past the distance at which Java snaps a lead on any supported version. */
+    private static final double LEASH_REACH = 16;
 
     /**
      * Where the entity is held, which `minecraft:home` and `minecraft:dweller` both state as a radius.
@@ -3950,9 +3986,14 @@ public class AddonEntity extends PathfinderMob
             if (!player.getAbilities().instabuild) held.shrink(1);
             if (random.nextDouble() > liveNumber(component, "probability", 0.33)) return true;
 
+            boolean trusting = component.endsWith("trusting");
+            if (!trusting && at.ioexception.mcaddon.server.WorldEvents.tamingRefused(this, player)) {
+                return true;
+            }
             ServerHooks.state().setProperty(getUUID(), "is_tamed", true);
             setOwner(player);
-            fire(namedEvent(component, component.endsWith("trusting") ? "trust_event" : "tame_event"));
+            fire(namedEvent(component, trusting ? "trust_event" : "tame_event"));
+            if (!trusting) at.ioexception.mcaddon.server.WorldEvents.tamed(this, player);
             return true;
         }
         return false;
@@ -4540,10 +4581,30 @@ public class AddonEntity extends PathfinderMob
         return noises == null ? null : sound(noises.event(moment), null);
     }
 
+    /** Public so a test can ask which idle sound the entity would make where it stands. */
     @Override
-    protected net.minecraft.sounds.SoundEvent getAmbientSound() {
-        net.minecraft.sounds.SoundEvent named = noise("ambient");
+    public net.minecraft.sounds.SoundEvent getAmbientSound() {
+        net.minecraft.sounds.SoundEvent named = noise(ambientMoment());
+        if (named == null) named = noise("ambient");
         return named == null ? super.getAmbientSound() : named;
+    }
+
+    /**
+     * Which of its idle sounds the entity makes, which `minecraft:uses_legacy_ambient_sounds` picks
+     * by where the entity is and how old.
+     *
+     * Mojang names four moments: in the air, with the head under water, young, and otherwise. A
+     * swimmer is never on the ground, so the water is asked about before the air; the other order
+     * would never play the water moment Mojang's own swimmers name in `sounds.json`. A moment the
+     * pack names no sound for falls back to the plain one.
+     */
+    private String ambientMoment() {
+        if (definition == null || !declaresNow("minecraft:uses_legacy_ambient_sounds")) {
+            return "ambient";
+        }
+        if (isEyeInFluid(net.minecraft.tags.FluidTags.WATER)) return "ambient.in.water";
+        if (!onGround()) return "ambient.in.air";
+        return isBaby() ? "ambient.baby" : "ambient";
     }
 
     @Override
@@ -4678,6 +4739,83 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
+     * Whether powder snow freezes the entity, which `minecraft:freezing_immune` says it never does.
+     *
+     * Java asks the entity each tick it stands in powder snow, and answers from a tag for its own
+     * mobs, so a group bringing the component in thaws the entity for as long as it is on.
+     */
+    @Override
+    public boolean canFreeze() {
+        return !(definition != null && declaresNow("minecraft:freezing_immune")) && super.canFreeze();
+    }
+
+    /**
+     * The cold hurting five times over, which `minecraft:freezing_vulnerable` asks for.
+     *
+     * Java multiplies a freezing blow by five for the mobs its `freeze_hurts_extra_types` tag names,
+     * the blaze, the magma cube and the strider, which are the three Mojang writes the component on.
+     */
+    //? if >=1.21.2 {
+    @Override
+    public boolean hurtServer(net.minecraft.server.level.ServerLevel level,
+        net.minecraft.world.damagesource.DamageSource source, float amount) {
+        return super.hurtServer(level, source, coldScaled(source, amount));
+    }
+    //?} else {
+    /*@Override
+    public boolean hurt(net.minecraft.world.damagesource.DamageSource source, float amount) {
+        return super.hurt(source, coldScaled(source, amount));
+    }
+    *///?}
+
+    private float coldScaled(net.minecraft.world.damagesource.DamageSource source, float amount) {
+        boolean vulnerable = definition != null && declaresNow("minecraft:freezing_vulnerable")
+            && source.is(net.minecraft.tags.DamageTypeTags.IS_FREEZING);
+        return vulnerable ? amount * FREEZE_VULNERABILITY : amount;
+    }
+
+    /** What Java multiplies a freezing blow by for the mobs the cold hurts more. */
+    private static final float FREEZE_VULNERABILITY = 5f;
+
+    /** Whether powder snow bears the entity's weight, which `minecraft:can_stand_on_powder_snow` says. */
+    public boolean standsOnPowderSnow() {
+        return definition != null && declaresNow("minecraft:can_stand_on_powder_snow");
+    }
+
+    /**
+     * Inside a block that holds back whatever is in it, unless the entity is immune to that block.
+     *
+     * Java slows an entity inside a cobweb, a sweet berry bush or powder snow through this one call,
+     * and lets a spider through a cobweb by refusing it, which is what
+     * `minecraft:block_movement_slowdown_immunity` asks for the blocks it lists.
+     */
+    @Override
+    public void makeStuckInBlock(net.minecraft.world.level.block.state.BlockState state,
+        net.minecraft.world.phys.Vec3 multiplier) {
+        if (definition == null || !slowedNeverBy(state)) super.makeStuckInBlock(state, multiplier);
+    }
+
+    private boolean slowedNeverBy(net.minecraft.world.level.block.state.BlockState state) {
+        com.google.gson.JsonObject immunity =
+            liveComponent("minecraft:block_movement_slowdown_immunity");
+        if (immunity == null) return false;
+
+        String id = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
+        return at.ioexception.mcaddon.util.Json.list(immunity, "blocks").stream()
+            .map(AddonEntity::slowingBlockName)
+            .anyMatch(id::equals);
+    }
+
+    /** A block descriptor's name in Java's spelling, which turns Bedrock's `web` into the cobweb. */
+    private static String slowingBlockName(com.google.gson.JsonElement descriptor) {
+        String named = descriptor.isJsonPrimitive() ? descriptor.getAsString()
+            : descriptor.isJsonObject()
+                ? at.ioexception.mcaddon.util.Json.text(descriptor.getAsJsonObject(), "name", null)
+                : null;
+        return named == null ? null : at.ioexception.mcaddon.convert.BedrockBlockNames.java(named);
+    }
+
+    /**
      * Whether other entities walk into this one or through it.
      *
      * Bedrock splits the question in two: `is_collidable` decides whether anything collides at all,
@@ -4754,6 +4892,10 @@ public class AddonEntity extends PathfinderMob
             && ServerEntityDefinition.flag(rideable, "crouching_skip_interact", true)) {
             return super.mobInteract(player, hand);
         }
+        if (definition != null && declaresNow("minecraft:bucketable")) {
+            java.util.Optional<InteractionResult> scooped = Platform.scoop(player, hand, this);
+            if (scooped.isPresent()) return scooped.get();
+        }
         if (!isClientSide() && bredBySpawnEgg(player, hand)) return InteractionResult.SUCCESS;
         if (!isClientSide() && fed(player, hand)) return InteractionResult.SUCCESS;
         if (!isClientSide() && bribed(player, hand)) return InteractionResult.SUCCESS;
@@ -4772,6 +4914,69 @@ public class AddonEntity extends PathfinderMob
         setTradingPlayer(player);
         openTradingScreen(player, getDisplayName(), 1);
         return InteractionResult.SUCCESS;
+    }
+
+    // `minecraft:bucketable`: Java's own bucket carries the entity away and lets it go again.
+
+    private boolean fromBucket;
+
+    @Override
+    public boolean fromBucket() {
+        return fromBucket;
+    }
+
+    /** An entity let out of a bucket stays, the way Java's fish do. */
+    @Override
+    public void setFromBucket(boolean fromBucket) {
+        this.fromBucket = fromBucket;
+        if (fromBucket) setPersistenceRequired();
+    }
+
+    /**
+     * What the bucket keeps of the entity: what Java keeps of any mob it carries, and which of the
+     * pack's component groups were on, since those are what the pack changed about this one.
+     */
+    @Override
+    public void saveToBucketTag(ItemStack bucket) {
+        Platform.saveBucketDefaults(this, bucket);
+        Platform.putBucketText(bucket, BUCKET_GROUPS, String.join(",", activeGroups));
+    }
+
+    @Override
+    public void loadFromBucketTag(net.minecraft.nbt.CompoundTag kept) {
+        Platform.loadBucketDefaults(this, kept);
+        String groups = Platform.bucketText(kept, BUCKET_GROUPS);
+        if (groups == null) return;
+        takeGroups(groups.isEmpty() ? java.util.Set.of() : java.util.Set.of(groups.split(",")));
+    }
+
+    @Override
+    public ItemStack getBucketItemStack() {
+        net.minecraft.world.item.Item bucket = AddonEntities.bucketOf(getType());
+        return bucket == null ? ItemStack.EMPTY : new ItemStack(bucket);
+    }
+
+    @Override
+    public SoundEvent getPickupSound() {
+        return SoundEvents.BUCKET_FILL_FISH;
+    }
+
+    /** Where in the bucket the groups that were on are written. */
+    private static final String BUCKET_GROUPS = "mcaddon:groups";
+
+    /** Puts the entity in exactly these of its component groups, with what each one brings. */
+    private void takeGroups(java.util.Set<String> groups) {
+        if (definition == null) return;
+
+        activeGroups.clear();
+        for (String group : definition.componentGroups().keySet()) {
+            boolean on = groups.contains(group);
+            setValue(GROUP + group, on);
+            if (on) activeGroups.add(group);
+        }
+        refreshAge();
+        refreshComponents();
+        publishMarkers();
     }
 
     @Override

@@ -2151,6 +2151,89 @@ public final class Platform {
         *///?}
     }
 
+    /** A null level clears the spawn point. The setter took a record from 26 and five values before. */
+    public static void respawnAt(net.minecraft.server.level.ServerPlayer player, ServerLevel level,
+        net.minecraft.core.BlockPos at) {
+        //? if >=26 {
+        net.minecraft.server.level.ServerPlayer.RespawnConfig config = level == null ? null
+            : new net.minecraft.server.level.ServerPlayer.RespawnConfig(
+                net.minecraft.world.level.storage.LevelData.RespawnData.of(level.dimension(), at, 0f, 0f),
+                false);
+        player.setRespawnPosition(config, false);
+        //?} else {
+        /*player.setRespawnPosition(
+            level == null ? net.minecraft.world.level.Level.OVERWORLD : level.dimension(),
+            level == null ? null : at, 0f, false, false);
+        *///?}
+    }
+
+    /**
+     * Scoops a pack's entity into the bucket the player holds, which Java's own fish do the same way.
+     * Empty when the player holds no water bucket. The interface moved into `entity` in 26.2.
+     */
+    public static java.util.Optional<net.minecraft.world.InteractionResult> scoop(
+        net.minecraft.world.entity.player.Player player, net.minecraft.world.InteractionHand hand,
+        at.ioexception.mcaddon.entity.AddonEntity entity) {
+        //? if >=26.2 {
+        return net.minecraft.world.entity.Bucketable.bucketMobPickup(player, hand, entity);
+        //?} else {
+        /*return net.minecraft.world.entity.animal.Bucketable.bucketMobPickup(player, hand, entity);
+        *///?}
+    }
+
+    /** What Java keeps of every mob it carries in a bucket: its name, its health and its flags. */
+    public static void saveBucketDefaults(net.minecraft.world.entity.Mob mob,
+        net.minecraft.world.item.ItemStack bucket) {
+        //? if >=26.2 {
+        net.minecraft.world.entity.Bucketable.saveDefaultDataToBucketTag(mob, bucket);
+        //?} else {
+        /*net.minecraft.world.entity.animal.Bucketable.saveDefaultDataToBucketTag(mob, bucket);
+        *///?}
+    }
+
+    public static void loadBucketDefaults(net.minecraft.world.entity.Mob mob,
+        net.minecraft.nbt.CompoundTag kept) {
+        //? if >=26.2 {
+        net.minecraft.world.entity.Bucketable.loadDefaultDataFromBucketTag(mob, kept);
+        //?} else {
+        /*net.minecraft.world.entity.animal.Bucketable.loadDefaultDataFromBucketTag(mob, kept);
+        *///?}
+    }
+
+    /**
+     * Writes one text into what a bucket keeps of the mob inside it, which is handed back to the mob
+     * as it is let go. From 1.20.5 that is a component of its own; before, the stack's own tag.
+     */
+    public static void putBucketText(net.minecraft.world.item.ItemStack bucket, String key, String text) {
+        //? if >=1.21 {
+        net.minecraft.world.item.component.CustomData.update(
+            net.minecraft.core.component.DataComponents.BUCKET_ENTITY_DATA, bucket,
+            tag -> tag.putString(key, text));
+        //?} else {
+        /*bucket.getOrCreateTag().putString(key, text);
+        *///?}
+    }
+
+    /** Null where nothing was written under that key. 26 made a missing key an empty answer. */
+    public static String bucketText(net.minecraft.nbt.CompoundTag kept, String key) {
+        //? if >=26 {
+        return kept.getString(key).orElse(null);
+        //?} else {
+        /*return kept.contains(key) ? kept.getString(key) : null;
+        *///?}
+    }
+
+    /** Where the player respawns, or null while they respawn wherever the world says. */
+    public static net.minecraft.core.BlockPos respawnPosition(
+        net.minecraft.server.level.ServerPlayer player) {
+        //? if >=26 {
+        net.minecraft.server.level.ServerPlayer.RespawnConfig config = player.getRespawnConfig();
+        return config == null ? null : config.respawnData().pos();
+        //?} else {
+        /*return player.getRespawnPosition();
+        *///?}
+    }
+
     /**
      * What a loot table hands out, rolled without anything having to die for it.
      *
@@ -2162,24 +2245,54 @@ public final class Platform {
      */
     public static java.util.List<net.minecraft.world.item.ItemStack> rollLoot(ServerLevel level,
         Identifier table, Entity about) {
-        //? if >=1.21 {
-        net.minecraft.world.level.storage.loot.LootTable found =
-            level.getServer().reloadableRegistries().getLootTable(lootTableKey(table));
-        //?} else {
-        /*net.minecraft.world.level.storage.loot.LootTable found =
-            level.getServer().getLootData().getLootTable(table);
-        *///?}
+        return java.util.List.copyOf(lootTable(level, table).getRandomItems(lootAbout(level, about)
+            .create(net.minecraft.world.level.storage.loot.parameters.LootContextParamSets.ENTITY)));
+    }
+
+    /**
+     * The same table rolled the way a block a blast broke is, which is what explosion decay reads.
+     *
+     * A block's roll is the one that carries the blast's radius, so the table is asked as though
+     * an air block at the entity's feet had been blown apart.
+     */
+    public static java.util.List<net.minecraft.world.item.ItemStack> rollLootInBlast(
+        ServerLevel level, Identifier table, Entity about, float radius) {
         net.minecraft.world.level.storage.loot.LootParams asked =
             new net.minecraft.world.level.storage.loot.LootParams.Builder(level)
                 .withParameter(net.minecraft.world.level.storage.loot.parameters
-                    .LootContextParams.THIS_ENTITY, about)
+                    .LootContextParams.BLOCK_STATE,
+                    net.minecraft.world.level.block.Blocks.AIR.defaultBlockState())
                 .withParameter(net.minecraft.world.level.storage.loot.parameters
                     .LootContextParams.ORIGIN, about.position())
                 .withParameter(net.minecraft.world.level.storage.loot.parameters
-                    .LootContextParams.DAMAGE_SOURCE, level.damageSources().generic())
+                    .LootContextParams.TOOL, net.minecraft.world.item.ItemStack.EMPTY)
+                .withParameter(net.minecraft.world.level.storage.loot.parameters
+                    .LootContextParams.THIS_ENTITY, about)
+                .withParameter(net.minecraft.world.level.storage.loot.parameters
+                    .LootContextParams.EXPLOSION_RADIUS, radius)
                 .create(net.minecraft.world.level.storage.loot.parameters
-                    .LootContextParamSets.ENTITY);
-        return java.util.List.copyOf(found.getRandomItems(asked));
+                    .LootContextParamSets.BLOCK);
+        return java.util.List.copyOf(lootTable(level, table).getRandomItems(asked));
+    }
+
+    private static net.minecraft.world.level.storage.loot.LootTable lootTable(ServerLevel level,
+        Identifier table) {
+        //? if >=1.21 {
+        return level.getServer().reloadableRegistries().getLootTable(lootTableKey(table));
+        //?} else {
+        /*return level.getServer().getLootData().getLootTable(table);
+        *///?}
+    }
+
+    private static net.minecraft.world.level.storage.loot.LootParams.Builder lootAbout(
+        ServerLevel level, Entity about) {
+        return new net.minecraft.world.level.storage.loot.LootParams.Builder(level)
+            .withParameter(net.minecraft.world.level.storage.loot.parameters
+                .LootContextParams.THIS_ENTITY, about)
+            .withParameter(net.minecraft.world.level.storage.loot.parameters
+                .LootContextParams.ORIGIN, about.position())
+            .withParameter(net.minecraft.world.level.storage.loot.parameters
+                .LootContextParams.DAMAGE_SOURCE, level.damageSources().generic());
     }
 
     /** A boss bar the server draws. 26 gave it the id every other bar already carried. */

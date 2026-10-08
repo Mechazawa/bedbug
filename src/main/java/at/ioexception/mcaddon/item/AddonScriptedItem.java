@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.item;
 
+import at.ioexception.mcaddon.bedrock.behaviour.CustomComponents;
 import at.ioexception.mcaddon.script.ScriptHost;
 import at.ioexception.mcaddon.server.ServerHooks;
 import com.google.gson.JsonObject;
@@ -13,25 +14,25 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 
-import java.util.List;
 
 /**
  * An item a pack's own script decides the behaviour of.
  *
- * `minecraft:custom_components` lists names the pack registered from its script as the world starts
- * up, and each name carries the callbacks Bedrock runs at the moments an item has. The item itself
+ * The item names components the pack registered from its script as the world starts up, and each
+ * one carries the callbacks Bedrock runs at the moments an item has. The item itself
  * does nothing: everything about what happens is in the pack.
  */
 public final class AddonScriptedItem extends Item {
-    private final List<String> scripted;
+    private final CustomComponents scripted;
 
-    private AddonScriptedItem(Properties properties, List<String> scripted) {
+    private AddonScriptedItem(Properties properties, CustomComponents scripted) {
         super(properties);
         this.scripted = scripted;
     }
 
     /** An item has carried its own registry id since 1.21.2, so it must be set before registering. */
-    public static AddonScriptedItem build(Properties properties, Identifier id, List<String> scripted) {
+    public static AddonScriptedItem build(Properties properties, Identifier id,
+        CustomComponents scripted) {
         //? if >=1.21.2 {
         return new AddonScriptedItem(properties.setId(ResourceKey.create(Registries.ITEM, id)), scripted);
         //?} else {
@@ -84,11 +85,7 @@ public final class AddonScriptedItem extends Item {
         ScriptHost scripts = ServerHooks.scripts();
         if (scripts == null) return false;
 
-        String arguments = fields.toString();
-        boolean cancelled = false;
-        for (String name : scripted) {
-            cancelled |= scripts.runItemComponent(name, callback, arguments);
-        }
-        return cancelled;
+        return scripted.run(fields,
+            (name, arguments) -> scripts.runItemComponent(name, callback, arguments));
     }
 }

@@ -290,7 +290,22 @@ class FunctionsTest {
     @Test
     void dropsAGameRuleJavaDoesNotHave() throws IOException {
         assertEquals(List.of(), translate("gamerule showcoordinates true"));
-        assertTrue(problems.contains("game rule showcoordinates"), problems.toString());
+        assertTrue(problems.contains("game rule showcoordinates, which Java keeps no rule for"),
+            problems.toString());
+    }
+
+    /** Bedrock caps a function's commands with a rule of its own; Java caps them with its chain rule. */
+    @Test
+    void setsTheLimitOnAFunctionsCommandsThroughJavasChainRule() throws IOException {
+        assertEquals(only("gamerule maxcommandchainlength 20000"),
+            only("gamerule functioncommandlimit 20000"));
+    }
+
+    /** `clearspawnpoint` is registered here, and takes the line as Bedrock writes it. */
+    @Test
+    void passesAClearedSpawnPointThroughToTheCommandRegisteredForIt() throws IOException {
+        assertEquals("clearspawnpoint @a[tag=lost]", only("clearspawnpoint @a[tag=lost]"));
+        assertEquals("clearspawnpoint", only("clearspawnpoint"));
     }
 
     /** A score list carries commas of its own, which the argument split has to leave alone. */

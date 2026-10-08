@@ -41,16 +41,16 @@ bash tools/census/fetch.sh >/dev/null 2>&1
 
 step "script modules link" python3 tools/modules/check.py
 step "build, four versions" ./gradlew build --console=plain -q
-step "script surface census" python3 tools/census/script.py
-step "component census" python3 tools/census/components.py
+step "script surface census" python3 tools/census/script.py --strict
+step "component census" python3 tools/census/components.py --strict
 step "component field census" python3 tools/census/fields.py --strict
-step "model census" python3 tools/census/model.py
-step "command census" python3 tools/census/commands.py
-step "particle census" python3 tools/census/particles.py
-step "data census" python3 tools/census/data.py
-step "declaration census" python3 tools/census/declaration.py
-step "pack file census" python3 tools/census/packfiles.py
-step "manifest census" python3 tools/census/manifest.py
+step "model census" python3 tools/census/model.py --strict
+step "command census" python3 tools/census/commands.py --strict
+step "particle census" python3 tools/census/particles.py --strict
+step "data census" python3 tools/census/data.py --strict
+step "declaration census" python3 tools/census/declaration.py --strict
+step "pack file census" python3 tools/census/packfiles.py --strict
+step "manifest census" python3 tools/census/manifest.py --strict
 step "item and block id census" python3 tools/census/ids.py --strict
 
 if [ "$quick" -eq 0 ]; then

@@ -347,6 +347,48 @@ public final class Blocks extends Surface {
         return component.toString();
     }
 
+    /**
+     * What a note block plays off this block from either side, under Bedrock's names.
+     *
+     * `up` is the face a note block standing on the block touches and `down` the one under a note
+     * block. Java plays a block under a note block from the instrument the block carries, and plays
+     * one above it only when that instrument is a mob head's, in which case the head's own face
+     * below plays the harp. A face that plays nothing reads as `note.none`.
+     */
+    @HostAccess.Export
+    public String instrument(String dimension, int x, int y, int z) {
+        net.minecraft.world.level.block.state.properties.NoteBlockInstrument carried =
+            stateAt(dimension, x, y, z).instrument();
+        String own = at.ioexception.mcaddon.block.BlockComponents.instrumentName(carried);
+        boolean head = carried.worksAboveNoteBlock();
+
+        JsonObject faces = new JsonObject();
+        faces.addProperty("up", head ? at.ioexception.mcaddon.block.BlockComponents.instrumentName(
+            net.minecraft.world.level.block.state.properties.NoteBlockInstrument.HARP) : own);
+        faces.addProperty("down", head ? own : at.ioexception.mcaddon.block.BlockComponents.NO_INSTRUMENT);
+        return faces.toString();
+    }
+
+    /** Plays the sound one face's instrument makes, at the block, which `note.none` makes none of. */
+    @HostAccess.Export
+    public void playInstrument(String dimension, int x, int y, int z, String face, double volume,
+        double pitch) {
+        ServerLevel level = level(dimension);
+        if (level == null) return;
+
+        BlockPos position = new BlockPos(x, y, z);
+        net.minecraft.world.level.block.state.properties.NoteBlockInstrument carried =
+            level.getBlockState(position).instrument();
+        boolean up = "Up".equals(face);
+        net.minecraft.world.level.block.state.properties.NoteBlockInstrument played =
+            carried.worksAboveNoteBlock() != up ? carried
+                : up ? net.minecraft.world.level.block.state.properties.NoteBlockInstrument.HARP : null;
+        if (played == null) return;
+
+        level.playSound(null, position, played.getSoundEvent().value(),
+            net.minecraft.sounds.SoundSource.RECORDS, (float) volume, (float) pitch);
+    }
+
     /** What the block feeds the redstone around it, and null for a block that powers nothing. */
     @HostAccess.Export
     public String redstoneProducer(String dimension, int x, int y, int z) {

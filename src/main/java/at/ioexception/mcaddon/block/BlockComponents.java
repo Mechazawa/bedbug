@@ -58,7 +58,8 @@ import java.util.Map;
  */
 public record BlockComponents(VoxelShape collision, VoxelShape selection, int lightDampening,
     Component craftingTitle, int catchChance, int destroyChance, Redstone redstone,
-    List<Placement> placement, BlockEvents events, List<String> scripted,
+    List<Placement> placement, BlockEvents events,
+    at.ioexception.mcaddon.bedrock.behaviour.CustomComponents scripted,
     boolean dynamicProperties, ChestObstruction chestObstruction, VoxelShape support,
     Connections connections, VoxelShape occlusion) {
 
@@ -156,7 +157,8 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
             burns ? (int) number(components, "minecraft:flammable", "catch_chance_modifier", 5) : -1,
             (int) number(components, "minecraft:flammable", "destroy_chance_modifier", 20),
             redstone(components), placement(components),
-            BlockEvents.of(definition, properties), scripted(components),
+            BlockEvents.of(definition, properties),
+            at.ioexception.mcaddon.bedrock.behaviour.CustomComponents.of(components),
             flag(components, "minecraft:block_entity", "dynamic_properties"),
             ChestObstruction.of(text(components, "minecraft:chest_obstruction", "obstruction_rule")),
             support(components), connections(components),
@@ -207,23 +209,6 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
 
         AddonEntities.unsupported("minecraft:support " + shape);
         return null;
-    }
-
-    /**
-     * The components a pack's own script registered that this block asks for.
-     *
-     * `minecraft:custom_components` is a list of names rather than a component with a body: what
-     * each name does lives in the pack's script, which registers it as the world starts up.
-     */
-    private static List<String> scripted(JsonObject components) {
-        JsonElement declared = components.get("minecraft:custom_components");
-        if (declared == null || !declared.isJsonArray()) return List.of();
-
-        List<String> named = new ArrayList<>();
-        declared.getAsJsonArray().forEach(one -> {
-            if (one.isJsonPrimitive()) named.add(one.getAsString());
-        });
-        return List.copyOf(named);
     }
 
     /** Zero unless the block produces a signal and the asking neighbour touches a connected face. */
@@ -383,7 +368,7 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
         BlockBehaviour.OffsetType offset = offsetType(components);
         if (offset != BlockBehaviour.OffsetType.NONE) properties = properties.offsetType(offset);
 
-        SoundType sound = appearance == null ? null : BlockSounds.of(appearance.soundGroup());
+        SoundType sound = BlockSounds.of(soundGroup(components, appearance));
         if (sound != null) properties = properties.sound(sound);
 
         NoteBlockInstrument instrument = instrument(components);
@@ -391,6 +376,18 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
 
         MapColor colour = mapColour(components);
         return colour == null ? properties : properties.mapColor(colour);
+    }
+
+    /**
+     * The sound group the block makes its noises from.
+     *
+     * `minecraft:sound` names it in the behaviour pack, which is where a block states it from 1.26.20
+     * on and what outranks the group the resource pack's `blocks.json` names for the same block.
+     */
+    private static String soundGroup(JsonObject components, ClientBlockDefinition appearance) {
+        String stated = text(components, "minecraft:sound", "sound");
+        if (stated != null && !stated.isEmpty()) return stated;
+        return appearance == null ? null : appearance.soundGroup();
     }
 
     /**
@@ -577,34 +574,44 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
      */
     private static NoteBlockInstrument instrument(JsonObject components) {
         String sound = text(components, "minecraft:instrument_sound", "up");
-        if (sound == null) return null;
-
-        return switch (sound) {
-            case "note.harp" -> NoteBlockInstrument.HARP;
-            case "note.bd" -> NoteBlockInstrument.BASEDRUM;
-            case "note.snare" -> NoteBlockInstrument.SNARE;
-            case "note.hat" -> NoteBlockInstrument.HAT;
-            case "note.bassattack" -> NoteBlockInstrument.BASS;
-            case "note.flute" -> NoteBlockInstrument.FLUTE;
-            case "note.bell" -> NoteBlockInstrument.BELL;
-            case "note.guitar" -> NoteBlockInstrument.GUITAR;
-            case "note.chime" -> NoteBlockInstrument.CHIME;
-            case "note.xylophone" -> NoteBlockInstrument.XYLOPHONE;
-            case "note.iron_xylophone" -> NoteBlockInstrument.IRON_XYLOPHONE;
-            case "note.cow_bell" -> NoteBlockInstrument.COW_BELL;
-            case "note.didgeridoo" -> NoteBlockInstrument.DIDGERIDOO;
-            case "note.bit" -> NoteBlockInstrument.BIT;
-            case "note.banjo" -> NoteBlockInstrument.BANJO;
-            case "note.pling" -> NoteBlockInstrument.PLING;
-            case "note.zombie" -> NoteBlockInstrument.ZOMBIE;
-            case "note.skeleton" -> NoteBlockInstrument.SKELETON;
-            case "note.creeper" -> NoteBlockInstrument.CREEPER;
-            case "note.enderdragon" -> NoteBlockInstrument.DRAGON;
-            case "note.witherskeleton" -> NoteBlockInstrument.WITHER_SKELETON;
-            case "note.piglin" -> NoteBlockInstrument.PIGLIN;
-            default -> null;
-        };
+        return sound == null ? null : INSTRUMENTS.get(sound);
     }
+
+    /** Bedrock's name for the sound a Java instrument makes, or `note.none` for one it has no name for. */
+    public static String instrumentName(NoteBlockInstrument instrument) {
+        return INSTRUMENTS.entrySet().stream()
+            .filter(entry -> entry.getValue() == instrument)
+            .map(Map.Entry::getKey)
+            .findFirst()
+            .orElse(NO_INSTRUMENT);
+    }
+
+    /** What Bedrock calls a face that plays nothing. */
+    public static final String NO_INSTRUMENT = "note.none";
+
+    private static final Map<String, NoteBlockInstrument> INSTRUMENTS = Map.ofEntries(
+        Map.entry("note.harp", NoteBlockInstrument.HARP),
+        Map.entry("note.bd", NoteBlockInstrument.BASEDRUM),
+        Map.entry("note.snare", NoteBlockInstrument.SNARE),
+        Map.entry("note.hat", NoteBlockInstrument.HAT),
+        Map.entry("note.bassattack", NoteBlockInstrument.BASS),
+        Map.entry("note.flute", NoteBlockInstrument.FLUTE),
+        Map.entry("note.bell", NoteBlockInstrument.BELL),
+        Map.entry("note.guitar", NoteBlockInstrument.GUITAR),
+        Map.entry("note.chime", NoteBlockInstrument.CHIME),
+        Map.entry("note.xylophone", NoteBlockInstrument.XYLOPHONE),
+        Map.entry("note.iron_xylophone", NoteBlockInstrument.IRON_XYLOPHONE),
+        Map.entry("note.cow_bell", NoteBlockInstrument.COW_BELL),
+        Map.entry("note.didgeridoo", NoteBlockInstrument.DIDGERIDOO),
+        Map.entry("note.bit", NoteBlockInstrument.BIT),
+        Map.entry("note.banjo", NoteBlockInstrument.BANJO),
+        Map.entry("note.pling", NoteBlockInstrument.PLING),
+        Map.entry("note.zombie", NoteBlockInstrument.ZOMBIE),
+        Map.entry("note.skeleton", NoteBlockInstrument.SKELETON),
+        Map.entry("note.creeper", NoteBlockInstrument.CREEPER),
+        Map.entry("note.enderdragon", NoteBlockInstrument.DRAGON),
+        Map.entry("note.witherskeleton", NoteBlockInstrument.WITHER_SKELETON),
+        Map.entry("note.piglin", NoteBlockInstrument.PIGLIN));
 
     /**
      * How far a block sits from the middle of its own space.

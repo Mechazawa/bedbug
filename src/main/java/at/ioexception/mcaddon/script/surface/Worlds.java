@@ -142,6 +142,58 @@ public final class Worlds extends Surface {
         return triples(found);
     }
 
+    /**
+     * `Dimension.cloneBlocks`, carried out by Java's own `/clone`.
+     *
+     * Bedrock's three modes are Java's `normal`, `force` and `move` in that order, which is the
+     * number `CloneMode` gives each. The command is what copies a block's stored data, which each
+     * supported version writes its own way. Java's command takes one block predicate where a filter
+     * may name several, so a filtered clone copies each block it keeps as a clone of its own. False
+     * when the game refused: a `Copy` over the region it copies from, or a region not loaded.
+     */
+    @HostAccess.Export
+    public boolean cloneBlocks(String dimension, int fromX, int fromY, int fromZ, int toX, int toY,
+        int toZ, int atX, int atY, int atZ, int mode, String filterJson) {
+        ServerLevel level = level(dimension);
+        if (level == null || mode < 0 || mode >= CLONE_MODES.size()) return false;
+
+        String how = " replace " + CLONE_MODES.get(mode);
+        JsonObject filter = parse(filterJson);
+        if (filter.size() == 0) {
+            return run(level, "clone " + fromX + " " + fromY + " " + fromZ + " " + toX + " " + toY
+                + " " + toZ + " " + atX + " " + atY + " " + atZ + how) > 0;
+        }
+
+        BlockPos min = new BlockPos(Math.min(fromX, toX), Math.min(fromY, toY), Math.min(fromZ, toZ));
+        BlockPos max = new BlockPos(Math.max(fromX, toX), Math.max(fromY, toY), Math.max(fromZ, toZ));
+        if (mode == 0 && overlaps(min, max, new BlockPos(atX, atY, atZ))) return false;
+
+        Predicate<BlockState> matches = blockFilter(filter);
+        String single = " replace " + (mode == 2 ? "move" : "force");
+        for (BlockPos position : BlockPos.betweenClosed(min, max)) {
+            if (!level.hasChunkAt(position)) return false;
+            if (!matches.test(level.getBlockState(position))) continue;
+
+            BlockPos to = position.offset(atX - min.getX(), atY - min.getY(), atZ - min.getZ());
+            String at = position.getX() + " " + position.getY() + " " + position.getZ();
+            run(level, "clone " + at + " " + at + " " + to.getX() + " " + to.getY() + " "
+                + to.getZ() + single);
+        }
+        return true;
+    }
+
+    /** Java's clone modes, in the order Bedrock's `CloneMode` numbers them. */
+    private static final List<String> CLONE_MODES = List.of("normal", "force", "move");
+
+    /** Whether a box of this size placed at its new corner covers any of where it came from. */
+    private static boolean overlaps(BlockPos min, BlockPos max, BlockPos at) {
+        BlockPos far = at.offset(max.getX() - min.getX(), max.getY() - min.getY(),
+            max.getZ() - min.getZ());
+        return at.getX() <= max.getX() && far.getX() >= min.getX()
+            && at.getY() <= max.getY() && far.getY() >= min.getY()
+            && at.getZ() <= max.getZ() && far.getZ() >= min.getZ();
+    }
+
     @HostAccess.Export
     public boolean containsBlock(String dimension, int fromX, int fromY, int fromZ, int toX, int toY,
         int toZ, String filterJson, boolean allowUnloadedChunks) {

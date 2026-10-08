@@ -44,6 +44,7 @@ public final class AddonEntities {
     private static final Map<EntityType<?>, Map<String, TradeTable>> TRADES = new LinkedHashMap<>();
     private static final Map<EntityType<?>, String> NAMESPACES = new LinkedHashMap<>();
     private static final Map<EntityType<?>, EntitySounds> SOUNDS = new LinkedHashMap<>();
+    private static final Map<EntityType<?>, net.minecraft.world.item.Item> BUCKETS = new LinkedHashMap<>();
 
     /** The clips and controllers each type's own behaviour pack ships, kept apart per pack. */
     private static final Map<EntityType<?>, at.ioexception.mcaddon.bedrock.BedrockAssets> CLIPS =
@@ -84,6 +85,19 @@ public final class AddonEntities {
     /** What `sounds.json` says this entity makes, or null where no resource pack named it. */
     public static EntitySounds soundsOf(EntityType<?> type) {
         return SOUNDS.get(type);
+    }
+
+    /** The bucket an entity of this type is scooped into, or null for a type no bucket holds. */
+    public static net.minecraft.world.item.Item bucketOf(EntityType<?> type) {
+        return BUCKETS.get(type);
+    }
+
+    /**
+     * The id of the bucket an entity is scooped into, which is the entity's own with `_bucket` after
+     * it, the way Java names its fish buckets.
+     */
+    public static Identifier bucketId(Identifier entity) {
+        return Platform.id(entity.getNamespace(), entity.getPath() + "_bucket");
     }
 
     public static TradeTable tradeTable(EntityType<?> type, String table) {
@@ -240,6 +254,26 @@ public final class AddonEntities {
         if (!trades.isEmpty()) TRADES.put(type, trades);
         Registry.register(BuiltInRegistries.ENTITY_TYPE, id, type);
         FabricDefaultAttributeRegistry.register(type, AddonEntity.attributes(definition));
+        registerBucket(definition, type, id);
+    }
+
+    /**
+     * The bucket an entity is scooped into, for a type `minecraft:bucketable` names anywhere.
+     *
+     * Java holds a fish in an item of its own per kind of fish, so a type whose groups may make it
+     * scoopable is given one before any entity of it exists. An id a pack already gave an item of
+     * its own is left alone, and its entity is then scooped into nothing.
+     */
+    private static void registerBucket(ServerEntityDefinition definition, EntityType<AddonEntity> type,
+        Identifier id) {
+        boolean scoopable = definition.components().containsKey("minecraft:bucketable")
+            || definition.componentGroups().values().stream()
+                .anyMatch(group -> group.has("minecraft:bucketable"));
+        Identifier bucket = bucketId(id);
+        if (!scoopable || BuiltInRegistries.ITEM.containsKey(bucket)) return;
+
+        BUCKETS.put(type, Registry.register(BuiltInRegistries.ITEM, bucket,
+            at.ioexception.mcaddon.item.AddonBucketItem.build(type, bucket)));
     }
 
     /**
@@ -322,6 +356,7 @@ public final class AddonEntities {
      */
     private static final Map<String, Set<String>> UNREAD_FIELDS = Map.of(
         "minecraft:experience_reward", Set.of("on_bred"),
+        "minecraft:block_movement_slowdown_immunity", Set.of("tags"),
         "minecraft:angry", Set.of("broadcastAnger", "broadcast_anger", "broadcast_range",
             "broadcast_filters", "broadcast_targets", "broadcast_anger_when_dying",
             "broadcast_anger_on_attack", "broadcast_anger_on_being_attacked", "angry_sound",
@@ -398,6 +433,9 @@ public final class AddonEntities {
         "minecraft:shareables",
         "minecraft:home", "minecraft:dweller", "minecraft:target_nearby_sensor",
         "minecraft:color", "minecraft:color2", "minecraft:breedable", "minecraft:offspring",
+        "minecraft:freezing_immune", "minecraft:freezing_vulnerable",
+        "minecraft:can_stand_on_powder_snow", "minecraft:block_movement_slowdown_immunity",
+        "minecraft:uses_legacy_ambient_sounds", "minecraft:bucketable",
         "minecraft:leashable_to", "minecraft:spawn_egg_interaction",
         "minecraft:behavior.breed", "minecraft:behavior.sleep",
         "minecraft:behavior.drink_milk", "minecraft:behavior.drink_potion",

@@ -70,7 +70,7 @@ public final class Players extends Surface {
             unsupported("Player.setSpawnPoint(" + dimension + ")");
             return;
         }
-        respawnAt(player, level, new BlockPos(x, y, z));
+        Platform.respawnAt(player, level, new BlockPos(x, y, z));
     }
 
     // Item cooldowns
@@ -322,6 +322,66 @@ public final class Players extends Surface {
         if (player != null && seen != null) player.setCamera(seen);
     }
 
+    /**
+     * `Camera.addShake`, which is `/camerashake add` for one player, and `Camera.stopShaking`, which
+     * is a shake of no length.
+     */
+    @HostAccess.Export
+    public void shakeCamera(String id, double intensity, double seconds, boolean rotational) {
+        ServerPlayer player = player(id);
+        if (player == null) return;
+
+        at.ioexception.mcaddon.network.Channels.sendCameraShake(player,
+            new at.ioexception.mcaddon.bedrock.camera.CameraShake((float) intensity, (float) seconds,
+                rotational).encode());
+    }
+
+    // Fog
+
+    /** Where the fog went on the stack, or -1 when no pack describes it or the stack is full. */
+    @HostAccess.Export
+    public int pushFog(String id, String fogId, String tag) {
+        ServerPlayer player = player(id);
+        return player == null ? -1 : at.ioexception.mcaddon.server.PlayerFogs.push(player, fogId, tag);
+    }
+
+    @HostAccess.Export
+    public String popFog(String id, String tag) {
+        ServerPlayer player = player(id);
+        return player == null ? null : at.ioexception.mcaddon.server.PlayerFogs.pop(player, tag);
+    }
+
+    @HostAccess.Export
+    public boolean removeFog(String id, String tag) {
+        ServerPlayer player = player(id);
+        return player != null && at.ioexception.mcaddon.server.PlayerFogs.remove(player, tag);
+    }
+
+    @HostAccess.Export
+    public boolean replaceFogs(String id, String fogIdsJson, String tag) {
+        ServerPlayer player = player(id);
+        if (player == null) return false;
+
+        JsonElement parsed = JsonParser.parseString(fogIdsJson);
+        if (!parsed.isJsonArray()) return false;
+        return at.ioexception.mcaddon.server.PlayerFogs.replace(player,
+            parsed.getAsJsonArray().asList().stream().map(JsonElement::getAsString).toList(), tag);
+    }
+
+    @HostAccess.Export
+    public String[] fogs(String id) {
+        ServerPlayer player = player(id);
+        return player == null ? new String[0]
+            : at.ioexception.mcaddon.server.PlayerFogs.fogs(player).toArray(String[]::new);
+    }
+
+    @HostAccess.Export
+    public String[] fogTags(String id) {
+        ServerPlayer player = player(id);
+        return player == null ? new String[0]
+            : at.ioexception.mcaddon.server.PlayerFogs.tags(player).toArray(String[]::new);
+    }
+
     /** The language the client asked for, which a 1.20.1 server is sent but keeps to itself. */
     @HostAccess.Export
     public String locale(String id) {
@@ -435,21 +495,6 @@ public final class Players extends Surface {
         /*BlockPos at = player.getRespawnPosition();
         if (at == null) return null;
         return spawnJson(Platform.idOf(player.getRespawnDimension()).toString(), at);
-        *///?}
-    }
-
-    /** A null level clears the spawn point. The setter took a record from 26 and five values before. */
-    private static void respawnAt(ServerPlayer player, ServerLevel level, BlockPos at) {
-        //? if >=26 {
-        net.minecraft.server.level.ServerPlayer.RespawnConfig config = level == null ? null
-            : new net.minecraft.server.level.ServerPlayer.RespawnConfig(
-                net.minecraft.world.level.storage.LevelData.RespawnData.of(level.dimension(), at, 0f, 0f),
-                false);
-        player.setRespawnPosition(config, false);
-        //?} else {
-        /*player.setRespawnPosition(
-            level == null ? net.minecraft.world.level.Level.OVERWORLD : level.dimension(),
-            level == null ? null : at, 0f, false, false);
         *///?}
     }
 

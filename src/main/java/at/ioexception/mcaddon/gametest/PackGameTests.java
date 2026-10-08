@@ -150,6 +150,46 @@ public final class PackGameTests {
     }
 
     /**
+     * A projectile that turns `isolated_physics` off is held back by the cobwebs it flies through.
+     *
+     * The pack's spark turns the flag off, as Mojang's own arrows do, which puts its flight on the
+     * path every other entity is moved along. A flight still teleported along its arc crosses the
+     * webs at the speed it was fired at.
+     */
+    @GameTest()
+    public void aProjectileOffItsIsolatedPathIsHeldBackByCobwebs(GameTestHelper helper) {
+        EntityType<?> type = AddonEntities.typeOf(PROJECTILE);
+        if (type == null) {
+            helper.succeed();
+            return;
+        }
+
+        for (int z = STAND.getZ(); z < STAND.getZ() + WEBS; z++) {
+            helper.setBlock(new BlockPos(STAND.getX(), STAND.getY(), z),
+                net.minecraft.world.level.block.Blocks.COBWEB);
+        }
+        ServerLevel level = helper.getLevel();
+        Entity shot = Platform.createMob(type, level);
+        BlockPos at = helper.absolutePos(STAND);
+        Platform.placeAt(shot, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        helper.assertTrue(level.addFreshEntity(shot), PROJECTILE + " was refused by the world.");
+
+        double from = shot.getZ();
+        ((AddonEntity) shot).launchAsProjectile(null, new net.minecraft.world.phys.Vec3(0, 0, 1));
+        helper.runAfterDelay(3, () -> {
+            double flown = shot.getZ() - from;
+            helper.assertTrue(flown > 0, PROJECTILE + " did not move through the webs at all.");
+            helper.assertTrue(flown < WEBBED_REACH,
+                PROJECTILE + " flew " + flown + " blocks through cobwebs in three ticks.");
+            helper.succeed();
+        });
+    }
+
+    /** The cobwebs laid in the spark's path, and less than three unhindered ticks of its flight. */
+    private static final int WEBS = 6;
+    private static final double WEBBED_REACH = 3;
+
+    /**
      * `minecraft:custom_hit_test` widens what a hit may land on and leaves the collision box alone.
      *
      * The two are separate components in Bedrock and one question in Java, so the check is that the
@@ -296,6 +336,80 @@ public final class PackGameTests {
             BLOCK + " could not be placed.");
         helper.assertBlockPresent(block, STAND);
         helper.succeed();
+    }
+
+    /**
+     * A pack's block makes the sounds of the group its own `minecraft:sound` names.
+     *
+     * The lamp names glass in its behaviour definition and the pack ships no `blocks.json`, so a
+     * block made from the definition alone keeps the stone a block falls back on.
+     */
+    @GameTest()
+    public void aPackBlockSoundsLikeTheGroupItNames(GameTestHelper helper) {
+        net.minecraft.world.level.block.Block block = BuiltInRegistries.BLOCK
+            .getOptional(Platform.id("tp", "lamp")).orElse(null);
+        if (block == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.assertTrue(block.defaultBlockState().getSoundType()
+                == net.minecraft.world.level.block.SoundType.GLASS,
+            BLOCK + " names the glass sound group and does not sound like glass.");
+        helper.succeed();
+    }
+
+    /**
+     * A block's geometry reaches the Java model with its faces' material instances and the way its
+     * item is shown.
+     *
+     * The lamp's shade names a `glow` material instance on its top face, which the lamp's own
+     * `minecraft:material_instances` paints with a texture of its own, and its geometry states how
+     * the item is turned in the inventory and lifted on a shelf. A face reading `#all` or a model
+     * with no `display` is the converter having dropped both.
+     */
+    @GameTest()
+    public void aBlockModelKeepsItsMaterialInstancesAndItsItemDisplay(GameTestHelper helper) {
+        ConvertedPack pack = AddonPacks.all().stream()
+            .filter(one -> Files.isRegularFile(lampModel(one)))
+            .findFirst().orElse(null);
+        if (pack == null) {
+            helper.succeed();
+            return;
+        }
+
+        com.google.gson.JsonObject model;
+        try {
+            model = com.google.gson.JsonParser.parseString(Files.readString(lampModel(pack)))
+                .getAsJsonObject();
+        } catch (IOException unreadable) {
+            helper.fail("The converted lamp model could not be read: " + unreadable.getMessage());
+            return;
+        }
+
+        String shadeTop = model.getAsJsonArray("elements").get(1).getAsJsonObject()
+            .getAsJsonObject("faces").getAsJsonObject("up").get("texture").getAsString();
+        helper.assertTrue(shadeTop.equals("#glow"),
+            "The lamp's shade top names the glow instance and wears " + shadeTop + ".");
+        helper.assertTrue(model.getAsJsonObject("textures").has("glow"),
+            "The lamp's model declares no texture for its glow instance.");
+
+        com.google.gson.JsonObject display = model.getAsJsonObject("display");
+        helper.assertTrue(display != null && display.has("gui"),
+            "The lamp's geometry says how its item is shown and the model carries no display.");
+        helper.assertTrue(display.getAsJsonObject("gui").getAsJsonArray("rotation").get(1)
+            .getAsFloat() == GUI_TURN, "The lamp's item is turned otherwise than its geometry says.");
+        helper.assertTrue(!display.has("embedded"),
+            "A display context Java has no form of reached the model.");
+        helper.succeed();
+    }
+
+    /** The turn about the vertical axis the lamp's geometry gives its item in the inventory. */
+    private static final float GUI_TURN = 45f;
+
+    private static Path lampModel(ConvertedPack pack) {
+        return pack.root().resolve("assets").resolve("tp").resolve("models").resolve("block")
+            .resolve("lamp.json");
     }
 
     /**

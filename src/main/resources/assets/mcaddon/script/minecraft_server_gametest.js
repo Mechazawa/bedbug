@@ -949,13 +949,17 @@ export class SimulatedPlayer extends Player {
     set isSprinting(sprinting) {
         runtime().unsupported("SimulatedPlayer.isSprinting");
     }
+
+    fly() {
+        runtime().unsupported("SimulatedPlayer.fly");
+    }
 }
 
 // Every remaining member of a simulated player, named so that calling one reports it. Written as a
 // list because each answers the same way and forty near-identical bodies would say nothing more.
 const SIMULATED_PLAYER_MEMBERS = Object.freeze({
     attack: false, attackEntity: false, breakBlock: false, chat: undefined, disconnect: undefined,
-    dropSelectedItem: false, fly: undefined, giveItem: false, glide: false, interact: false,
+    dropSelectedItem: false, giveItem: false, glide: false, interact: false,
     interactWithBlock: false, interactWithEntity: false, jump: false, lookAtBlock: undefined,
     lookAtEntity: undefined, lookAtLocation: undefined, move: undefined, moveRelative: undefined,
     moveToBlock: undefined, moveToLocation: undefined, respawn: false, rotateBody: undefined,

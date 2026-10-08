@@ -20,11 +20,31 @@
             {
               "origin": [4, 12, 4],
               "size": [8, 4, 8],
-              "uv": [0, 0]
+              "uv": {
+                "north": {"uv": [0, 0], "uv_size": [8, 4]},
+                "east": {"uv": [0, 4], "uv_size": [8, 4]},
+                "south": {"uv": [0, 8], "uv_size": [8, 4]},
+                "west": {"uv": [0, 12], "uv_size": [8, 4]},
+                "up": {"uv": [8, 0], "uv_size": [8, 8], "material_instance": "glow"},
+                "down": {"uv": [8, 8], "uv_size": [8, 8]}
+              }
             }
           ]
         }
-      ]
+      ],
+      "item_display_transforms": {
+        "gui": {
+          "rotation": [30, 45, 0],
+          "scale": [0.6, 0.6, 0.6]
+        },
+        "shelf": {
+          "translation": [0, 2, 0]
+        },
+        "embedded": {
+          "scale": [0.5, 0.5, 0.5],
+          "rotation_pivot": [0, 8, 0]
+        }
+      }
     },
     {
       "description": {

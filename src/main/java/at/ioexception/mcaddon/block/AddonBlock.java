@@ -352,7 +352,7 @@ public class AddonBlock extends Block {
     }
 
     /**
-     * Hands a moment of the block's life to whatever `minecraft:custom_components` named.
+     * Hands a moment of the block's life to the custom components it names.
      *
      * A custom component answers the moment itself rather than an event the pack declared, so this
      * runs beside the pack's own events rather than through them. `who` is whoever brought the
@@ -381,7 +381,7 @@ public class AddonBlock extends Block {
             if (who instanceof Player) fields.addProperty("player", who.getStringUUID());
         }
 
-        String arguments = fields.toString();
-        components.scripted().forEach(name -> scripts.runBlockComponent(name, callback, arguments));
+        components.scripted().run(fields,
+            (name, arguments) -> scripts.runBlockComponent(name, callback, arguments));
     }
 }

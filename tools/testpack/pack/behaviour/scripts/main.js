@@ -15,8 +15,11 @@
 // `minecraft:xp_orb`. Every answer is a tag on the entity it is about.
 //
 // A look at the game's own blocks in the same spelling, which a server game test reads back.
+//
+// The rest are probes the game tests run as a player. Each answers by tagging that player with what
+// the script read back, which is what the test asserts on.
 
-import { BlockPermutation, system, world } from "@minecraft/server";
+import { BlockPermutation, BlockVolume, CameraShakeType, CloneMode, system, world } from "@minecraft/server";
 import { ActionFormData, CustomForm, ObservableBoolean, ObservableString } from "@minecraft/server-ui";
 
 const VILLAGER = "minecraft:villager_v2";
@@ -40,6 +43,54 @@ function openHandbook(player) {
         .closeButton();
 
     form.show().then(reason => player.addTag("tp:handbook_" + reason));
+}
+
+/** Pushes the pack's fog twice, once tagged and once not, then takes both off again. */
+function stackFogs(player) {
+    const fog = player.fogSettings;
+    const tagged = fog.push("tp:dusk", "probe");
+    const untagged = fog.push("tp:dusk");
+    player.addTag("tp:fog_pushed_" + tagged + "_" + untagged + "_" + fog.getTags().join("+"));
+    const popped = fog.pop("probe");
+    player.addTag("tp:fog_popped_" + popped + "_" + fog.getStack().length);
+    fog.remove();
+    player.addTag("tp:fog_left_" + fog.getStack().length);
+}
+
+/**
+ * Copies the stone of a stone and dirt pair two blocks up, then moves the pair four blocks up.
+ *
+ * The message is the corner the test laid the pair at, the dirt one block east of the stone.
+ */
+function cloneTheRow(player, message) {
+    const [x, y, z] = message.split(" ").map(Number);
+    const end = { x: x + 1, y, z };
+    player.dimension.cloneBlocks({ x, y, z }, end, { x, y: y + 2, z }, CloneMode.Copy,
+        { includeTypes: ["minecraft:stone"] });
+    player.dimension.cloneBlocks({ x, y, z }, end, { x, y: y + 4, z }, CloneMode.Move);
+}
+
+function measureTheRow(player) {
+    const row = new BlockVolume({ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 });
+    const from = { x: 0, y: 0, z: 0 };
+    player.addTag("tp:row_" + row.getClosest(1, from)[0].x + "_" + row.getFarthest(1, from)[0].x);
+}
+
+/** What a note block plays off the block at the message's position, and what that block keeps. */
+function readTheBlock(player, message) {
+    const [x, y, z] = message.split(" ").map(Number);
+    const block = player.dimension.getBlock({ x, y, z });
+    const instrument = block.getComponent("minecraft:instrument_sound");
+    player.addTag("tp:plays_" + instrument.getInstrumentName("Up") + "_"
+        + instrument.getInstrumentName("Down"));
+
+    const kept = block.getComponent("minecraft:dynamic_properties");
+    if (kept === undefined) {
+        player.addTag("tp:keeps_nothing");
+        return;
+    }
+    kept.set("tp:probe", 7);
+    player.addTag("tp:keeps_" + kept.get("tp:probe"));
 }
 
 // `/scriptevent "tp:names" <x> <y> <z>` reads the block there by Bedrock's id and answers in blocks
@@ -77,16 +128,29 @@ function openCatalogue(player) {
 system.afterEvents.scriptEventReceive.subscribe(event => {
     const player = event.sourceEntity;
     if (player === undefined) return;
-    if (event.id === "tp:commands") runBedrockCommands(player);
-    // A pack handing out one of its own items unless the player already carries it.
-    if (event.id === "tp:stock_up") {
-        player.runCommand("execute unless entity @s[hasitem={item=tp:dust}] run give @s tp:dust");
-    }
-    if (event.id === "tp:handbook") openHandbook(player);
-    if (event.id === "tp:catalogue") openCatalogue(player);
-    if (event.id === "tp:villager") {
-        const { x, y, z } = player.location;
-        player.dimension.spawnEntity(VILLAGER, { x: x - 3, y, z }).addTag("tp:spawned_as_villager_v2");
+
+    switch (event.id) {
+        case "tp:handbook": openHandbook(player); break;
+        case "tp:catalogue": openCatalogue(player); break;
+        case "tp:commands": runBedrockCommands(player); break;
+        // A pack handing out one of its own items unless the player already carries it.
+        case "tp:stock_up":
+            player.runCommand("execute unless entity @s[hasitem={item=tp:dust}] run give @s tp:dust");
+            break;
+        case "tp:villager": {
+            const { x, y, z } = player.location;
+            player.dimension.spawnEntity(VILLAGER, { x: x - 3, y, z }).addTag("tp:spawned_as_villager_v2");
+            break;
+        }
+        case "tp:fog": stackFogs(player); break;
+        case "tp:clone": cloneTheRow(player, event.message); break;
+        case "tp:row": measureTheRow(player); break;
+        case "tp:block": readTheBlock(player, event.message); break;
+        case "tp:shake":
+            player.camera.addShake({ intensity: 2, duration: 30, type: CameraShakeType.Rotational });
+            break;
+        case "tp:still": player.camera.stopShaking(); break;
+        default: break;
     }
 });
 
@@ -137,3 +201,24 @@ system.runInterval(() => {
         if (spawnedSprites.has(sprite)) sprite.addTag("tp:same_object_as_spawned");
     }
 });
+
+// `tp:tally` names this component the way a 1.21.90 pack does, as a key of its own with its
+// parameters as the body, and using the item tags whoever used it with the step it was given.
+system.beforeEvents.startup.subscribe(event => {
+    event.itemComponentRegistry.registerCustomComponent("tp:counting", {
+        onUse(use, { params }) {
+            use.source.addTag("tp:counted_" + params.step);
+        },
+    });
+});
+
+world.beforeEvents.entityTamed.subscribe(event => {
+    if (event.entity.hasTag("tp:untameable")) event.cancel = true;
+});
+
+world.afterEvents.entityTamed.subscribe(event => {
+    if (event.tamingEntity.typeId === "minecraft:player") event.entity.addTag("tp:tamed_by_a_player");
+});
+
+world.afterEvents.entityStartSneaking.subscribe(event => event.entity.addTag("tp:crouched"));
+world.afterEvents.entityStopSneaking.subscribe(event => event.entity.addTag("tp:stood_up"));

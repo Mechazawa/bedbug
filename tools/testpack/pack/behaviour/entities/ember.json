@@ -213,7 +213,11 @@
           "restriction_radius": 5
         },
         "minecraft:leashable": {
-          "can_be_stolen": false
+          "can_be_stolen": false,
+          "unleash_on_removal": true
+        },
+        "minecraft:leashable_to": {
+          "unleash_on_removal": true
         },
         "minecraft:input_ground_controlled": {},
         "minecraft:sittable": {
@@ -271,6 +275,22 @@
           "display_name": "Ember",
           "table": "trading/ember_restock.json"
         }
+      },
+      "tp:ember_wintry": {
+        "minecraft:freezing_immune": {},
+        "minecraft:can_stand_on_powder_snow": {},
+        "minecraft:block_movement_slowdown_immunity": {
+          "blocks": ["minecraft:web"]
+        }
+      },
+      "tp:ember_thawing": {
+        "minecraft:freezing_vulnerable": {}
+      },
+      "tp:ember_chatty": {
+        "minecraft:uses_legacy_ambient_sounds": {}
+      },
+      "tp:ember_scoopable": {
+        "minecraft:bucketable": {}
       },
       "tp:ember_alert": {
         "minecraft:timer": {
@@ -385,6 +405,26 @@
       "tp:ember_sensed": {
         "set_property": {
           "tp:sensed": true
+        }
+      },
+      "tp:ember_winter": {
+        "add": {
+          "component_groups": ["tp:ember_wintry"]
+        }
+      },
+      "tp:ember_thaw": {
+        "add": {
+          "component_groups": ["tp:ember_thawing"]
+        }
+      },
+      "tp:ember_chatter": {
+        "add": {
+          "component_groups": ["tp:ember_chatty"]
+        }
+      },
+      "tp:ember_make_scoopable": {
+        "add": {
+          "component_groups": ["tp:ember_scoopable"]
         }
       },
       "tp:ember_load": {

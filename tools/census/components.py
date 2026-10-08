@@ -26,12 +26,13 @@ GOAL_PREFIXES = ("minecraft:behavior.", "minecraft:annotation.")
 class Surface:
     """One vocabulary, the names the mod acts on, and where each side was read."""
 
-    def __init__(self, title, published, implemented, source, legacy=()):
+    def __init__(self, title, published, implemented, source, legacy=(), unanswerable=()):
         self.title = title
         self.published = set(published)
         self.implemented = set(implemented)
         self.source = source
         self.legacy = set(legacy)
+        self.unanswerable = set(unanswerable)
 
     @property
     def covered(self):
@@ -40,6 +41,16 @@ class Surface:
     @property
     def missing(self):
         return self.published - self.implemented
+
+    @property
+    def undecided(self):
+        """Missing names no declaration says Java has nothing for, which is what `--strict` fails on."""
+        return self.missing - self.unanswerable
+
+    @property
+    def misnamed(self):
+        """Names declared as having no Java counterpart that are implemented or not published."""
+        return self.unanswerable - (self.published - self.implemented)
 
     @property
     def unpublished(self):
@@ -328,18 +339,19 @@ def surfaces(samples):
     found.append(Surface(
         "block components",
         schema_properties(
-            (metadata / "json_schemas/server/block_components").glob("*/Block Components.json"))
+            (metadata / "json_schemas/server/block").glob("*/Components.json"))
         | block_doc_names(samples)
         | vanilla_components(samples, "behavior_pack/blocks", "minecraft:block"),
         literal_set(JAVA / "registry/AddonBlocks.java", "IMPLEMENTED = List.of"),
         "the block component schema, the block docs and the vanilla blocks"))
     found.append(Surface(
         "item components",
-        schema_properties((metadata / "json_schemas/server/item").glob("*/Components.json"))
+        schema_properties((metadata / "json_schemas/server/item").glob("*/Item Components*.json"))
         | vanilla_components(samples, "behavior_pack/items", "minecraft:item"),
         literal_set(JAVA / "registry/AddonItems.java", "IMPLEMENTED = List.of"),
         "the item component schemas and the vanilla items",
-        literal_set(JAVA / "registry/AddonItems.java", "LEGACY = Set.of")))
+        literal_set(JAVA / "registry/AddonItems.java", "LEGACY = Set.of"),
+        literal_set(JAVA / "registry/AddonItems.java", "BEDROCK_ONLY = Set.of")))
     return found
 
 
@@ -374,7 +386,7 @@ def main():
     parser.add_argument("--samples", type=Path, default=DEFAULT_SAMPLES,
                         help="a bedrock-samples checkout (default: %(default)s)")
     parser.add_argument("--strict", action="store_true",
-                        help="exit non-zero when anything is missing or claimed without a reader")
+                        help="exit non-zero when anything is missing without a decision naming it")
     arguments = parser.parse_args()
 
     if not arguments.samples.is_dir():
@@ -386,7 +398,11 @@ def main():
     found = surfaces(arguments.samples)
     print_table(found)
     for surface in found:
-        print_names(f"Missing, {surface.title}", surface.missing)
+        print_names(f"Missing, {surface.title}", surface.undecided)
+        print_names(f"Missing and named as having no Java counterpart, {surface.title}",
+                    surface.missing & surface.unanswerable)
+        print_names(f"Named as having no Java counterpart and implemented or not published, "
+                    f"{surface.title}", surface.misnamed)
         print_names(f"Named in the source but absent from the published {surface.title}",
                     surface.unpublished)
         print_names(f"Read for packs older than the published {surface.title}", surface.tolerated)
@@ -395,7 +411,8 @@ def main():
     for kind, names in sorted(unbacked_claims().items()):
         print_names(f"Listed as implemented with no reader of their own, {kind} components", names)
 
-    return 1 if arguments.strict and any(surface.missing for surface in found) else 0
+    return 1 if arguments.strict and any(surface.undecided or surface.misnamed
+                                         for surface in found) else 0
 
 
 if __name__ == "__main__":

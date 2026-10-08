@@ -44,7 +44,9 @@ public final class GeometryParser {
                 optionalFloat(description, "visible_bounds_width"),
                 optionalFloat(description, "visible_bounds_height"),
                 optionalVector(description, "visible_bounds_offset")),
-            List.copyOf(bones));
+            List.copyOf(bones),
+            json.has("item_display_transforms") && json.get("item_display_transforms").isJsonObject()
+                ? json.getAsJsonObject("item_display_transforms") : null);
     }
 
     /**
@@ -135,7 +137,8 @@ public final class GeometryParser {
                 uv.get(0).getAsFloat(), uv.get(1).getAsFloat(),
                 size == null ? fallback.x : size.get(0).getAsFloat(),
                 size == null ? fallback.y : size.get(1).getAsFloat(),
-                optionalInt(value, "uv_rotation", 0)));
+                optionalInt(value, "uv_rotation", 0),
+                value.has("material_instance") ? value.get("material_instance").getAsString() : null));
         }
         return new CubeUv.PerFace(Map.copyOf(faces));
     }
