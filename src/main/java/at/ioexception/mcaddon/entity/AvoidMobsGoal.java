@@ -18,6 +18,10 @@ import java.util.List;
  * each with the distance it is noticed from and the speeds to flee at, and Java's own goal does the
  * fleeing. What Java keeps nowhere is the fact of fleeing, which a pack reads back through
  * `is_avoiding_mobs`, so the entity carries it while the goal holds.
+ *
+ * What is fled is decided by those filters alone. Java's own goal picks what to flee the way it
+ * picks what to attack, which leaves out a creative player and every player on peaceful; a Bedrock
+ * pack says so itself with `is_game_mode` when it means that.
  */
 public final class AvoidMobsGoal extends AvoidEntityGoal<LivingEntity> {
     /** Bedrock's reach for an entry that states none, and for a goal that states none either. */
@@ -34,6 +38,29 @@ public final class AvoidMobsGoal extends AvoidEntityGoal<LivingEntity> {
             entries.isEmpty() ? 1 : entries.get(0).walk(), entries.isEmpty() ? 1 : entries.get(0).sprint(),
             candidate -> entries.stream().anyMatch(entry -> entry.frightens(mob, candidate)));
         this.mob = mob;
+    }
+
+    /** The one widening of the search Java's goal makes up and down, from its own `canUse`. */
+    private static final double VERTICAL_REACH = 3;
+
+    /** How far away a spot to flee to is looked for, the distances Java's own goal uses. */
+    private static final int FLEE_HORIZONTAL = 16;
+    private static final int FLEE_VERTICAL = 7;
+
+    @Override
+    public boolean canUse() {
+        toAvoid = mob.level().getEntitiesOfClass(LivingEntity.class,
+                mob.getBoundingBox().inflate(maxDist, VERTICAL_REACH, maxDist),
+                candidate -> candidate != mob && !candidate.isSpectator() && predicateOnAvoidEntity.test(candidate))
+            .stream().min(java.util.Comparator.comparingDouble(mob::distanceToSqr)).orElse(null);
+        if (toAvoid == null) return false;
+
+        net.minecraft.world.phys.Vec3 away = net.minecraft.world.entity.ai.util.DefaultRandomPos.getPosAway(
+            mob, FLEE_HORIZONTAL, FLEE_VERTICAL, toAvoid.position());
+        if (away == null || toAvoid.distanceToSqr(away) < toAvoid.distanceToSqr(mob)) return false;
+
+        path = pathNav.createPath(away.x, away.y, away.z, 0);
+        return path != null;
     }
 
     @Override

@@ -179,8 +179,11 @@ These are the checks it runs, and what each one catches:
   runs them for the checked-out version only. The two 26.x test APIs differ in a few spellings,
   which `Worlds` holds. A world built with the builder's consistent settings opens in survival on
   peaceful, so a test that needs the creative inventory, or a mob reacting to the player, sets the
-  game mode and the difficulty itself: Java's avoid and target goals ignore a creative player and
-  every player on peaceful.
+  game mode and the difficulty itself: Java's target goals ignore a creative player and every player
+  on peaceful. A pack's avoid goal does not, because what it flees is its filters' call alone.
+
+  A test that measures an entity standing still freezes the world with `tick freeze` and moves it on
+  with `tick step`, because a pack's scripts and goals move entities that `NoAI` leaves alone.
 
   `-Paddons=<directory>` installs every `.mcaddon` in that directory beside the synthetic one, for
   either game test task, so the same tests can be run against a real pack that may never be
