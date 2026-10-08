@@ -197,6 +197,42 @@ public final class AddonGameTests {
         helper.succeed();
     }
 
+    /**
+     * A pack's dimension is written on the version that can hold one and named on the one that
+     * cannot, and a generator nothing converts is named on every version that reads dimensions.
+     *
+     * A world opened a second time reads the conversion the first one cached, and what the packs
+     * asked for and did not get has to be named then as well.
+     */
+    @GameTest()
+    public void aPackDimensionIsWrittenOrNamed(GameTestHelper helper) {
+        at.ioexception.mcaddon.convert.ConvertedPack pack = at.ioexception.mcaddon.resource.AddonPacks.all()
+            .stream().filter(one -> one.namespace().equals("tp")).findFirst().orElse(null);
+        if (pack == null) {
+            helper.succeed();
+            return;
+        }
+
+        java.nio.file.Path data = pack.root().resolve("data").resolve("tp");
+        boolean written = java.nio.file.Files.isRegularFile(data.resolve("dimension").resolve("grove.json"))
+            && java.nio.file.Files.isRegularFile(data.resolve("dimension_type").resolve("grove.json"));
+        java.util.List<String> report = AddonEntities.report();
+        if (Platform.convertsDimensions()) {
+            helper.assertTrue(written, "tp:grove was not written as a dimension and its type.");
+            helper.assertTrue(!java.nio.file.Files.exists(data.resolve("dimension").resolve("chasm.json")),
+                "tp:chasm names a generator nothing converts and was written anyway.");
+        } else {
+            helper.assertTrue(!written, "tp:grove was written on a version that makes such a world experimental.");
+            helper.assertTrue(report.stream().anyMatch(line -> line.contains("behaviour pack dimensions (needs ")),
+                "tp:grove is not named among what the packs asked for: " + report);
+        }
+        if (Platform.convertsWorldgen()) {
+            helper.assertTrue(report.stream().anyMatch(line -> line.contains("dimension generator_type overworld")),
+                "tp:chasm's generator is not named among what the packs asked for: " + report);
+        }
+        helper.succeed();
+    }
+
     private static <T> void decodes(GameTestHelper helper, String what,
         com.mojang.serialization.Codec<T> codec,
         com.mojang.serialization.DynamicOps<com.google.gson.JsonElement> ops,

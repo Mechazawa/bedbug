@@ -1,0 +1,28 @@
+{
+  "format_version": "1.21.110",
+  "minecraft:biome": {
+    "description": {
+      "identifier": "tp:soot_fields"
+    },
+    "components": {
+      "minecraft:climate": {
+        "downfall": 0.0,
+        "temperature": 1.6
+      },
+      "minecraft:multinoise_generation_rules": {
+        "target_temperature": -0.7,
+        "target_humidity": 0.7,
+        "target_altitude": 0.0,
+        "target_weirdness": 0.0,
+        "weight": 0.2
+      },
+      "minecraft:map_tints": {
+        "grass": "#8c5a3c",
+        "foliage": "#5c3a28"
+      },
+      "minecraft:tags": {
+        "tags": ["nether", "soot"]
+      }
+    }
+  }
+}

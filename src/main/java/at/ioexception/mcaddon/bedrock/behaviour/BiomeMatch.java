@@ -5,9 +5,11 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 
 /**
  * The biome filter a spawn rule carries, answered against a Java biome id.
@@ -17,10 +19,27 @@ import java.util.Set;
  * know is counted through `/mcaddon entities` and then left out of the tree, so the rest of the
  * filter still decides where the entity spawns.
  *
+ * A pack's own biome is the exception: it carries the tags its pack declared, so a filter is
+ * answered on those alone, the world tags included, exactly as Bedrock answers it.
+ *
  * The grammar is Bedrock's own filter grammar, where a bare array is an `all_of`.
  */
 public sealed interface BiomeMatch {
+    /** Whether one of Java's own biomes, named by the path of its id, is allowed. */
     boolean matches(String biome);
+
+    /** Whether a biome carrying exactly these tags is allowed. */
+    boolean matchesDeclared(Collection<String> tags);
+
+    /**
+     * Whether the biome with this id is allowed: a pack's own on the tags its pack gave it, and one
+     * of Java's on its id, provided it lies in the world the filter points at.
+     */
+    default boolean allows(String id, BooleanSupplier inWorld) {
+        List<String> declared = PackBiomes.tagsOf(id);
+        if (declared != null) return matchesDeclared(declared);
+        return inWorld.getAsBoolean() && matches(id.substring(id.indexOf(':') + 1));
+    }
 
     /** A tag naming a world rather than a place. The biome selector already answers those. */
     Set<String> WORLDS = Set.of("overworld", "nether", "the_end", "monster", "animal");
@@ -103,12 +122,22 @@ public sealed interface BiomeMatch {
         public boolean matches(String biome) {
             return parts.stream().allMatch(part -> part.matches(biome));
         }
+
+        @Override
+        public boolean matchesDeclared(Collection<String> tags) {
+            return parts.stream().allMatch(part -> part.matchesDeclared(tags));
+        }
     }
 
     record Any(List<BiomeMatch> parts) implements BiomeMatch {
         @Override
         public boolean matches(String biome) {
             return parts.stream().anyMatch(part -> part.matches(biome));
+        }
+
+        @Override
+        public boolean matchesDeclared(Collection<String> tags) {
+            return parts.stream().anyMatch(part -> part.matchesDeclared(tags));
         }
     }
 
@@ -117,9 +146,18 @@ public sealed interface BiomeMatch {
         public boolean matches(String biome) {
             return parts.stream().noneMatch(part -> part.matches(biome));
         }
+
+        @Override
+        public boolean matchesDeclared(Collection<String> tags) {
+            return parts.stream().noneMatch(part -> part.matchesDeclared(tags));
+        }
     }
 
-    /** One `has_biome_tag` test, with the `!=` and `not` operators folded into `negated`. */
+    /**
+     * One `has_biome_tag` test, with the `!=` and `not` operators folded into `negated`.
+     *
+     * A tag only a pack's own biomes carry is carried by none of Java's.
+     */
     record Tag(String name, boolean negated) implements BiomeMatch {
         @Override
         public boolean matches(String biome) {
@@ -127,7 +165,14 @@ public sealed interface BiomeMatch {
 
             List<String> excluded = NOT_BIOMES.get(name);
             if (excluded != null) return negated == excluded.stream().anyMatch(biome::contains);
-            return negated != JAVA_BIOMES.get(name).stream().anyMatch(biome::contains);
+
+            List<String> java = JAVA_BIOMES.get(name);
+            return negated != (java != null && java.stream().anyMatch(biome::contains));
+        }
+
+        @Override
+        public boolean matchesDeclared(Collection<String> tags) {
+            return negated != tags.contains(name);
         }
     }
 
@@ -135,6 +180,11 @@ public sealed interface BiomeMatch {
     record Always() implements BiomeMatch {
         @Override
         public boolean matches(String biome) {
+            return true;
+        }
+
+        @Override
+        public boolean matchesDeclared(Collection<String> tags) {
             return true;
         }
     }
@@ -157,11 +207,17 @@ public sealed interface BiomeMatch {
         }
 
         String tag = body.has("value") ? body.get("value").getAsString() : "";
-        if (!WORLDS.contains(tag) && !JAVA_BIOMES.containsKey(tag) && !NOT_BIOMES.containsKey(tag)) {
+        if (!known(tag)) {
             AddonEntities.unsupported("spawn rule biome tag " + tag);
             return new Always();
         }
         return new Tag(tag, negated(body));
+    }
+
+    /** Whether a tag means anything here, which a tag no Java biome and no pack's biome carries does not. */
+    static boolean known(String tag) {
+        return WORLDS.contains(tag) || JAVA_BIOMES.containsKey(tag) || NOT_BIOMES.containsKey(tag)
+            || PackBiomes.anyCarries(tag);
     }
 
     /** Which of the three worlds the filter points at, from the first tag naming one. */

@@ -1,0 +1,22 @@
+{
+  "format_version": "1.16.100",
+  "minecraft:fog_settings": {
+    "description": {
+      "identifier": "tp:fog_soot"
+    },
+    "distance": {
+      "air": {
+        "fog_start": 4.0,
+        "fog_end": 40.0,
+        "fog_color": "#3c2a24",
+        "render_distance_type": "fixed"
+      },
+      "water": {
+        "fog_start": 0.0,
+        "fog_end": 9.0,
+        "fog_color": "#24463c",
+        "render_distance_type": "fixed"
+      }
+    }
+  }
+}

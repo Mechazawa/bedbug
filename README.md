@@ -204,9 +204,14 @@ add-ons, or with another release of it, is told which in chat.
   `@s[hasitem={item=apple,location=slot.weapon.mainhand,quantity=2..}]` selects in both editions.
 - Natural spawning from a pack's `spawn_rules`, with each alternative the rule lists becoming a
   biome spawn entry of its own. The weight, the group size and the biome tags decide which biomes
-  it is offered in; the brightness, height, difficulty, world age, distance, density, delay, the
-  surface and underwater and lava markers and the blocks it may stand on are asked again of the
-  spot the game is trying, so a mob that a pack said belongs on sand at night stays there.
+  it is offered in, a pack's own biome answering on the tags its pack gave it; the brightness,
+  height, difficulty, world age, distance, density, delay, the surface and underwater and lava
+  markers and the blocks it may stand on are asked again of the spot the game is trying, so a mob
+  that a pack said belongs on sand at night stays there. The population a rule names is the one
+  the entity counts against, so a pack's monster fills the monster cap rather than the animals'.
+- A pack's own `structures/*.mcstructure`, placed by `/structure load` and a script's
+  `StructureManager` under the name its path gives it, the first folder being the namespace and a
+  file with none taking Bedrock's `mystructure`.
 - The world a behaviour pack describes: the biomes it declares, the features it builds and the rules
   that place them. A Bedrock biome states the climate a player feels and a list of tags, and both
   become the band of Java's own climate space the biome is searched for in. A biome the pack's tags

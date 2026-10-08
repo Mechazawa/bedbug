@@ -11,7 +11,6 @@ import net.fabricmc.fabric.api.biome.v1.BiomeSelectionContext;
 import net.fabricmc.fabric.api.biome.v1.BiomeSelectors;
 import net.fabricmc.fabric.api.biome.v1.ModificationPhase;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.MobCategory;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -58,7 +57,7 @@ public final class AddonSpawns {
             BiomeModifications
                 .create(McAddon.id("spawn_" + Math.abs(rule.identifier().hashCode()) + "_" + index++))
                 .add(ModificationPhase.ADDITIONS, selector(condition), context ->
-                    Platform.addSpawn(context, category(rule.category()), type, condition.weight(),
+                    Platform.addSpawn(context, rule.population(), type, condition.weight(),
                         condition.minimumHerd(), condition.maximumHerd()));
         }
         CONDITIONS.put(type, rule.conditions());
@@ -68,8 +67,9 @@ public final class AddonSpawns {
     /**
      * The biomes one alternative allows.
      *
-     * The world comes first because Java holds the three of them apart with selectors of its own,
-     * and the tags are then matched against the id of each biome in that world.
+     * Java holds its three worlds apart with selectors of its own, so one of its biomes has to be in
+     * the world the filter points at before its id is matched. A pack's own biome says which world
+     * it belongs to among its tags.
      */
     private static Predicate<BiomeSelectionContext> selector(SpawnRuleDefinition.Condition condition) {
         Predicate<BiomeSelectionContext> world = switch (condition.world()) {
@@ -77,18 +77,7 @@ public final class AddonSpawns {
             case "end" -> BiomeSelectors.foundInTheEnd();
             default -> BiomeSelectors.foundInOverworld();
         };
-        return context -> world.test(context)
-            && condition.biomes().matches(Platform.idOf(context.getBiomeKey()).getPath());
-    }
-
-    /** Bedrock's population control names line up with Java's spawn categories. */
-    private static MobCategory category(String control) {
-        return switch (control) {
-            case "monster" -> MobCategory.MONSTER;
-            case "water_animal" -> MobCategory.WATER_CREATURE;
-            case "ambient" -> MobCategory.AMBIENT;
-            case "pillager", "cat", "villager" -> MobCategory.CREATURE;
-            default -> MobCategory.CREATURE;
-        };
+        return context -> condition.biomes().allows(Platform.idOf(context.getBiomeKey()).toString(),
+            () -> world.test(context));
     }
 }

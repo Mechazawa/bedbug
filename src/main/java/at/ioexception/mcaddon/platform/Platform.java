@@ -1145,11 +1145,11 @@ public final class Platform {
         return context.getLevel().getCurrentDifficultyAt(lootOrigin(context)).getSpecialMultiplier();
     }
 
-    /** The biome the drop is happening in, by the path of its id, which is what a tag is read of. */
+    /** The id of the biome the drop is happening in, which is what a tag is read of. */
     public static String lootBiome(
         net.minecraft.world.level.storage.loot.LootContext context) {
         return context.getLevel().getBiome(lootOrigin(context)).unwrapKey()
-            .map(key -> idOf(key).getPath()).orElse("");
+            .map(key -> idOf(key).toString()).orElse("");
     }
 
     /**
@@ -1536,6 +1536,21 @@ public final class Platform {
             new net.minecraft.server.permissions.Permission.HasCommandLevel(level));
         //?} else {
         /*return source.hasPermission(Math.min(4, bedrockLevel + 1));
+        *///?}
+    }
+
+    /**
+     * Reads a template out of Java's structure NBT, its block names looked up in the registry.
+     *
+     * A registry is its own lookup from 1.21.2; before that it hands one out.
+     */
+    public static void loadTemplate(
+        net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate template,
+        net.minecraft.nbt.CompoundTag tag) {
+        //? if >=1.21.2 {
+        template.load(BuiltInRegistries.BLOCK, tag);
+        //?} else {
+        /*template.load(BuiltInRegistries.BLOCK.asLookup(), tag);
         *///?}
     }
 

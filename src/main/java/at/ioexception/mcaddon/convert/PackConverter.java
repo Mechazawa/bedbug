@@ -183,12 +183,12 @@ public final class PackConverter {
                 writeParticles(pack, root, textures.paths());
                 writeFunctions(bundle, root, namespace, functions);
                 writeFont(pack, root, namespace);
-                Worldgen.write(root, namespace, biomes,
-                    at.ioexception.mcaddon.bedrock.ClientBiomeDefinition.readAll(pack,
-                        name -> BedrockSoundNames.java(name, namespace, sounds)),
-                    features, featureRules, dimensions);
-                Timelines.write(root, namespace, lightings, atmospheres);
             }
+            Worldgen.write(root, fresh, namespace, biomes,
+                at.ioexception.mcaddon.bedrock.ClientBiomeDefinition.readAll(pack,
+                    name -> BedrockSoundNames.java(name, namespace, sounds)),
+                features, featureRules, dimensions);
+            Timelines.write(root, fresh, namespace, lightings, atmospheres);
 
             if (fresh) {
                 Files.writeString(root.resolve(MARKER), stamp);

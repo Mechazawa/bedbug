@@ -115,6 +115,14 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
     if (readAsGoldenRail) dimension.getBlock({ x, y: y + 2, z })?.setType("minecraft:gold_block");
 });
 
+// `/scriptevent "tp:hut" <x> <y> <z>` places the pack's own structure there through the structure
+// manager, by the name its path gives it.
+system.afterEvents.scriptEventReceive.subscribe(event => {
+    if (event.id !== "tp:hut") return;
+    const [x, y, z] = event.message.split(" ").map(Number);
+    world.structureManager.place("tp:hut", world.getDimension("overworld"), { x, y, z });
+});
+
 // Commands written the way a pack writes them, none of which Java's parser reads as they stand: a
 // selector asking about an inventory, a selector naming Bedrock's villager, a function named by its
 // path alone and a command Java has nothing like. Each answer is a tag on the entity running them.

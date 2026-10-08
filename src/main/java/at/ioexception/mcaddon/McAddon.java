@@ -75,8 +75,10 @@ public final class McAddon implements ModInitializer {
         AddonItems.register(packs);
         // After the items, because a brewing recipe naming a pack's own bottle has to find it.
         AddonBrewing.register(packs);
-        AddonSpawns.register(packs);
+        // The worldgen before the spawn rules, because a spawn rule may select on a tag only a
+        // pack's own biome carries.
         AddonWorldgen.register(AddonPacks.all());
+        AddonSpawns.register(packs);
         // Logged after the spawn rules are read, because the conditions they drop belong in the
         // same register as the components an entity declares.
         AddonEntities.report().forEach(LOGGER::info);
@@ -86,6 +88,7 @@ public final class McAddon implements ModInitializer {
         at.ioexception.mcaddon.server.Dialogues.read(packs);
         Channels.register();
         ServerHooks.register();
+        at.ioexception.mcaddon.structure.PackStructures.register();
         at.ioexception.mcaddon.server.HasItem.register();
     }
 }
