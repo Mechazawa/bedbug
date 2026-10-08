@@ -88,6 +88,7 @@ public final class McAddon implements ModInitializer {
         at.ioexception.mcaddon.server.Dialogues.read(packs);
         Channels.register();
         ServerHooks.register();
+        at.ioexception.mcaddon.structure.PackStructures.register();
         at.ioexception.mcaddon.server.HasItem.register();
     }
 }

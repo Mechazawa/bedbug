@@ -1532,6 +1532,21 @@ public final class Platform {
     }
 
     /**
+     * Reads a template out of Java's structure NBT, its block names looked up in the registry.
+     *
+     * A registry is its own lookup from 1.21.2; before that it hands one out.
+     */
+    public static void loadTemplate(
+        net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate template,
+        net.minecraft.nbt.CompoundTag tag) {
+        //? if >=1.21.2 {
+        template.load(BuiltInRegistries.BLOCK, tag);
+        //?} else {
+        /*template.load(BuiltInRegistries.BLOCK.asLookup(), tag);
+        *///?}
+    }
+
+    /**
      * Copies a region of the world into a structure template.
      *
      * What to leave out changed from one block to a list of them in 1.21.2; nothing is left out

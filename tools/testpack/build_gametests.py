@@ -15,11 +15,11 @@ repository comes from anybody's pack.
 
 from __future__ import annotations
 
-import struct
 import sys
 from pathlib import Path
 
 from build import ROOT, main, pack_files
+from mcstructure import structure
 
 SOURCE = Path(__file__).resolve().parent / "gametests"
 
@@ -29,63 +29,11 @@ INSIDE = "GameTest Probe BP"
 # The structure both tests build: a stone floor with air above it, in the palette order below.
 STRUCTURE_PATH = "structures/probe/floor.mcstructure"
 STRUCTURE_SIZE = (3, 3, 3)
-STRUCTURE_PALETTE = ("minecraft:air", "minecraft:stone")
-
-# The game version Bedrock stamps every palette entry with. Nothing reads it; a real file has one.
-BLOCK_VERSION = 18168865
-
-
-# The tag types this writes, by the number NBT gives each of them.
-INT, STRING, LIST, COMPOUND = 3, 8, 9, 10
-
-
-def named(tag_type: int, name: str, payload: bytes) -> bytes:
-    """A tag inside a compound, which carries its type and its name before its payload."""
-    encoded = name.encode("utf-8")
-    return bytes([tag_type]) + struct.pack("<H", len(encoded)) + encoded + payload
-
-
-def text(value: str) -> bytes:
-    encoded = value.encode("utf-8")
-    return struct.pack("<H", len(encoded)) + encoded
-
-
-def compound(body: bytes) -> bytes:
-    return body + b"\x00"
-
-
-def listed(element_type: int, payloads: list[bytes]) -> bytes:
-    """A list payload. Its elements carry neither a type nor a name, only the values."""
-    return struct.pack("<bi", element_type, len(payloads)) + b"".join(payloads)
-
-
-def ints(values: list[int]) -> bytes:
-    return listed(INT, [struct.pack("<i", value) for value in values])
+STRUCTURE_PALETTE = [("minecraft:air", {}), ("minecraft:stone", {})]
 
 
 def mcstructure() -> bytes:
-    """One `.mcstructure`: little endian NBT, uncompressed, x major then y then z."""
-    width, height, depth = STRUCTURE_SIZE
-    floor = [1 if y == 0 else 0
-             for _ in range(width) for y in range(height) for _ in range(depth)]
-    untouched = [-1] * (width * height * depth)
-
-    palette = [compound(named(STRING, "name", text(name))
-                        + named(COMPOUND, "states", compound(b""))
-                        + named(INT, "version", struct.pack("<i", BLOCK_VERSION)))
-               for name in STRUCTURE_PALETTE]
-
-    default = compound(named(LIST, "block_palette", listed(COMPOUND, palette))
-                       + named(COMPOUND, "block_position_data", compound(b"")))
-    structure = compound(named(LIST, "block_indices", listed(LIST, [ints(floor), ints(untouched)]))
-                         + named(LIST, "entities", listed(COMPOUND, []))
-                         + named(COMPOUND, "palette", compound(named(COMPOUND, "default", default))))
-
-    return named(COMPOUND, "", compound(
-        named(INT, "format_version", struct.pack("<i", 1))
-        + named(LIST, "size", ints(list(STRUCTURE_SIZE)))
-        + named(COMPOUND, "structure", structure)
-        + named(LIST, "structure_world_origin", ints([0, 0, 0]))))
+    return structure(STRUCTURE_SIZE, STRUCTURE_PALETTE, lambda x, y, z: 1 if y == 0 else 0)
 
 
 if __name__ == "__main__":

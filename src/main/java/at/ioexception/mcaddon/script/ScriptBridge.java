@@ -4,6 +4,7 @@ import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.structure.McStructure;
 import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.registry.AddonItems;
@@ -1070,7 +1071,7 @@ public final class ScriptBridge {
         ServerLevel level = level(dimension);
         if (level == null) return false;
 
-        String placed = "place template " + structure + " " + x + " " + y + " " + z
+        String placed = "place template " + McStructure.javaName(structure) + " " + x + " " + y + " " + z
             + " " + javaRotation(rotation) + " " + javaMirror(mirror);
         return run(server.createCommandSourceStack().withLevel(level), placed) > 0;
     }
@@ -1085,7 +1086,7 @@ public final class ScriptBridge {
     public boolean saveStructure(String dimension, String structure, int x, int y, int z,
         int width, int height, int depth) {
         ServerLevel level = level(dimension);
-        Identifier id = structure == null ? null : Identifier.tryParse(structure);
+        Identifier id = structureId(structure);
         if (level == null || id == null) return false;
 
         StructureTemplate template = server.getStructureManager().getOrCreate(id);
@@ -1094,9 +1095,14 @@ public final class ScriptBridge {
         return server.getStructureManager().save(id);
     }
 
+    /** The id a structure name a script passes means, read the way Bedrock reads it. */
+    private static Identifier structureId(String structure) {
+        return structure == null ? null : Identifier.tryParse(McStructure.javaName(structure));
+    }
+
     @HostAccess.Export
     public int[] structureSize(String structure) {
-        Identifier id = structure == null ? null : Identifier.tryParse(structure);
+        Identifier id = structureId(structure);
         if (id == null) return new int[] {0, 0, 0};
 
         return server.getStructureManager().get(id)
@@ -1113,14 +1119,14 @@ public final class ScriptBridge {
 
     @HostAccess.Export
     public boolean structureExists(String structure) {
-        Identifier id = structure == null ? null : Identifier.tryParse(structure);
+        Identifier id = structureId(structure);
         return id != null && server.getStructureManager().get(id).isPresent();
     }
 
     /** Writes a structure the world was holding in memory out to disk, under the id it has. */
     @HostAccess.Export
     public boolean saveStructureToWorld(String structure) {
-        Identifier id = structure == null ? null : Identifier.tryParse(structure);
+        Identifier id = structureId(structure);
         return id != null && server.getStructureManager().save(id);
     }
 
@@ -1128,7 +1134,7 @@ public final class ScriptBridge {
     @HostAccess.Export
     public boolean deleteStructure(String structure) {
         if (!structureExists(structure)) return false;
-        server.getStructureManager().remove(Identifier.tryParse(structure));
+        server.getStructureManager().remove(structureId(structure));
         return true;
     }
 

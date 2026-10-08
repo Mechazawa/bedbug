@@ -26,6 +26,7 @@ still works:
     an entity texture with a band written the way Bedrock marks a cut-out texel
     a page of the pack's own glyphs, and the locale list naming the languages it ships
     a function using the commands and selector arguments that need translating
+    a structure naming a block of the pack's own, one Bedrock spells differently and air
 
     python3 tools/testpack/build.py                  # build/testpack/test-addon.mcaddon
     python3 tools/testpack/build.py --version 26.2   # and into that version's addons/
@@ -39,6 +40,8 @@ import sys
 import zipfile
 import zlib
 from pathlib import Path
+
+from mcstructure import structure
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -254,6 +257,24 @@ TEXTURES = (
 )
 
 
+# `structure load tp:hut` places this: a stone floor, the pack's own lamp in the middle of the layer
+# above it with a jack o'lantern written by its Bedrock name in each corner, and air on top. The rest
+# of the middle layer is left as the world has it.
+HUT_PATH = "structures/tp/hut.mcstructure"
+HUT_PALETTE = [("minecraft:air", {}), ("minecraft:stone", {}), ("tp:lamp", {}),
+               ("minecraft:lit_pumpkin", {})]
+
+
+def hut_cell(x: int, y: int, z: int) -> int:
+    if y == 0:
+        return 1
+    if y == 2:
+        return 0
+    if x == 1 and z == 1:
+        return 2
+    return 3 if x != 1 and z != 1 else -1
+
+
 def pack_files(directory: Path) -> dict[str, bytes]:
     """Everything one pack ships, keyed by its path inside that pack."""
     if not directory.is_dir():
@@ -263,12 +284,15 @@ def pack_files(directory: Path) -> dict[str, bytes]:
 
 
 def addon_contents() -> dict[str, bytes]:
-    """Both packs, each under the name it takes inside the archive, with the textures painted in."""
+    """Both packs, each under the name it takes inside the archive, with the textures painted in
+    and the structure written."""
     packed = {f"{inside}/{name}": body
               for source, inside in PACK_DIRECTORIES
               for name, body in pack_files(SOURCE / source).items()}
-    return packed | {f"{PACK_DIRECTORIES[1][1]}/{name}": png(size, size, paint)
-                     for name, size, paint in TEXTURES}
+    painted = {f"{PACK_DIRECTORIES[1][1]}/{name}": png(size, size, paint)
+               for name, size, paint in TEXTURES}
+    hut = {f"{PACK_DIRECTORIES[0][1]}/{HUT_PATH}": structure((3, 3, 3), HUT_PALETTE, hut_cell)}
+    return packed | painted | hut
 
 
 def write_addon(contents: dict[str, bytes], destination: Path) -> None:

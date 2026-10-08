@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.gametest;
 
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.script.ScriptCoverage;
 import at.ioexception.mcaddon.script.surface.Containers;
@@ -9,9 +10,14 @@ import com.google.gson.JsonObject;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+
+import java.util.List;
 
 /**
  * What holds inside a scene the test was given rather than one it built.
@@ -36,6 +42,10 @@ public final class StructureGameTests {
     /** The scene's floor, and the space above it a test can put something in. */
     private static final BlockPos GROUND = new BlockPos(3, FLOOR, 3);
     private static final BlockPos ABOVE_FLOOR = new BlockPos(3, FLOOR + 1, 3);
+
+    /** Where the two copies of the pack's hut go, side by side on the platform's floor. */
+    private static final BlockPos HUT_BY_FUNCTION = new BlockPos(0, FLOOR + 1, 0);
+    private static final BlockPos HUT_BY_SCRIPT = new BlockPos(4, FLOOR + 1, 4);
 
     /** Where `chest_room` puts its chest, one layer above its own floor. */
     private static final BlockPos CHEST = new BlockPos(1, FLOOR + 1, 1);
@@ -166,5 +176,49 @@ public final class StructureGameTests {
         helper.destroyBlock(ABOVE_FLOOR);
         helper.assertBlockNotPresent(block, ABOVE_FLOOR);
         helper.succeed();
+    }
+
+    /**
+     * A pack's own `.mcstructure` is placed by the name its path gives it, from a function and from
+     * a script.
+     *
+     * The hut is a stone floor, a layer holding the pack's lamp and four jack o'lanterns written by
+     * their Bedrock name with the rest of it left alone, and a layer of air. Glass is put where the
+     * hut leaves the world alone and where it writes air, so each kind of cell shows. Nothing places
+     * a pack's structure unless the game's own structure manager holds it.
+     */
+    @GameTest(structure = "mcaddon:platform")
+    public void aPacksStructureLoadsByItsName(GameTestHelper helper) {
+        Block lamp = AddonBlocks.named("tp:lamp");
+        if (lamp == null) {
+            helper.succeed();
+            return;
+        }
+
+        List<BlockPos> origins = List.of(HUT_BY_FUNCTION, HUT_BY_SCRIPT);
+        for (BlockPos origin : origins) {
+            helper.setBlock(origin.offset(1, 1, 0), Blocks.GLASS);
+            helper.setBlock(origin.offset(1, 2, 1), Blocks.GLASS);
+        }
+
+        BlockPos function = helper.absolutePos(HUT_BY_FUNCTION);
+        run(helper, "execute positioned " + function.getX() + " " + function.getY() + " " + function.getZ()
+            + " run function tp:hut");
+        BlockPos script = helper.absolutePos(HUT_BY_SCRIPT);
+        run(helper, "scriptevent \"tp:hut\" " + script.getX() + " " + script.getY() + " " + script.getZ());
+
+        helper.succeedWhen(() -> origins.forEach(origin -> {
+            helper.assertBlockPresent(Blocks.STONE, origin.offset(2, 0, 2));
+            helper.assertBlockPresent(lamp, origin.offset(1, 1, 1));
+            helper.assertBlockPresent(Blocks.JACK_O_LANTERN, origin.offset(0, 1, 2));
+            helper.assertBlockPresent(Blocks.GLASS, origin.offset(1, 1, 0));
+            helper.assertBlockPresent(Blocks.AIR, origin.offset(1, 2, 1));
+        }));
+    }
+
+    private static void run(GameTestHelper helper, String command) {
+        MinecraftServer server = helper.getLevel().getServer();
+        server.getCommands().performPrefixedCommand(server.createCommandSourceStack().withSuppressedOutput(),
+            command);
     }
 }

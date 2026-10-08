@@ -2,6 +2,10 @@ package at.ioexception.mcaddon.structure;
 
 import at.ioexception.mcaddon.registry.AddonBlocks;
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.IntTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.NbtUtils;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -12,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -27,6 +32,8 @@ import java.util.function.Consumer;
  * Bedrock puts the second layer to. That layer becomes Java's waterlogged state.
  */
 public final class McStructure {
+    private static final String DEFAULT_NAMESPACE = "mystructure";
+
     /** A palette entry a cell has none of, which Bedrock writes to mean "leave what is there". */
     private static final int KEEP = -1;
 
@@ -51,6 +58,18 @@ public final class McStructure {
         this.liquids = liquids;
         this.carried = carried;
         this.living = living;
+    }
+
+    /**
+     * The Java id a structure name a pack writes means.
+     *
+     * Bedrock reads a name with no namespace as one of its own default namespace, the one a file
+     * written straight into `structures/` takes, and folds case, where Java reads such a name as
+     * the game's and refuses a capital letter.
+     */
+    public static String javaName(String bedrock) {
+        String name = bedrock.toLowerCase(Locale.ROOT);
+        return name.indexOf(':') < 0 ? DEFAULT_NAMESPACE + ":" + name : name;
     }
 
     /** Null when the bytes are not a structure this can read, which a caller reports as a miss. */
@@ -121,6 +140,52 @@ public final class McStructure {
                 }
             }
         }
+    }
+
+    /**
+     * The structure as the NBT a Java structure template is read from.
+     *
+     * A cell left alone is left out of the block list, which is how a Java template leaves the
+     * world alone too, so placing the template writes what {@link #place} writes.
+     */
+    public CompoundTag javaTemplate(Consumer<String> report) {
+        if (carried > 0) report.accept("Structure block contents");
+        if (living > 0) report.accept("Structure entities");
+
+        BlockState[] resolved = resolvedPalette(report);
+        Map<BlockState, Integer> indices = new LinkedHashMap<>();
+        ListTag cells = new ListTag();
+        for (int x = 0; x < width; x++) {
+            for (int y = 0; y < height; y++) {
+                for (int z = 0; z < depth; z++) {
+                    int cell = (x * height + y) * depth + z;
+                    BlockState state = stateAt(resolved, cell);
+                    if (state == null) continue;
+
+                    CompoundTag block = new CompoundTag();
+                    block.put("pos", ints(x, y, z));
+                    block.putInt("state", indices.computeIfAbsent(waterlogged(resolved, state, cell),
+                        added -> indices.size()));
+                    cells.add(block);
+                }
+            }
+        }
+
+        ListTag states = new ListTag();
+        indices.keySet().forEach(state -> states.add(NbtUtils.writeBlockState(state)));
+
+        CompoundTag template = new CompoundTag();
+        template.put("size", ints(width, height, depth));
+        template.put("palette", states);
+        template.put("blocks", cells);
+        template.put("entities", new ListTag());
+        return template;
+    }
+
+    private static ListTag ints(int... values) {
+        ListTag list = new ListTag();
+        for (int value : values) list.add(IntTag.valueOf(value));
+        return list;
     }
 
     /**

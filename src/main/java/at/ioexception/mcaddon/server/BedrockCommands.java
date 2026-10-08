@@ -5,6 +5,7 @@ import at.ioexception.mcaddon.bedrock.camera.CameraView;
 import at.ioexception.mcaddon.bedrock.camera.Easing;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.structure.McStructure;
 import at.ioexception.mcaddon.registry.AddonFogs;
 import at.ioexception.mcaddon.registry.AddonParticles;
 import at.ioexception.mcaddon.script.ScriptHost;
@@ -407,7 +408,7 @@ public final class BedrockCommands {
     /** The region between the two corners, kept under the name the pack gave it. */
     private static int saveStructure(CommandContext<CommandSourceStack> command)
         throws com.mojang.brigadier.exceptions.CommandSyntaxException {
-        Identifier id = Identifier.tryParse(StringArgumentType.getString(command, "name"));
+        Identifier id = Identifier.tryParse(McStructure.javaName(StringArgumentType.getString(command, "name")));
         if (id == null) {
             command.getSource().sendFailure(Component.literal("That is not a usable structure name."));
             return 0;
@@ -429,13 +430,13 @@ public final class BedrockCommands {
         throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         BlockPos at = BlockPosArgument.getLoadedBlockPos(command, "to");
         return run(command.getSource(), "place template "
-            + StringArgumentType.getString(command, "name") + " " + at.getX() + " " + at.getY()
+            + McStructure.javaName(StringArgumentType.getString(command, "name")) + " " + at.getX() + " " + at.getY()
             + " " + at.getZ());
     }
 
     /** Forgets a structure saved under that name, which is what Bedrock's own delete does. */
     private static int deleteStructure(CommandContext<CommandSourceStack> command) {
-        Identifier id = Identifier.tryParse(StringArgumentType.getString(command, "name"));
+        Identifier id = Identifier.tryParse(McStructure.javaName(StringArgumentType.getString(command, "name")));
         if (id == null) {
             command.getSource().sendFailure(Component.literal("That is not a usable structure name."));
             return 0;

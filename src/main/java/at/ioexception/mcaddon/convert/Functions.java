@@ -5,6 +5,7 @@ import at.ioexception.mcaddon.bedrock.camera.CameraView;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.structure.McStructure;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -1265,7 +1266,8 @@ public final class Functions {
             unsupported.add("command structure load with nowhere to put it");
             return null;
         }
-        StringBuilder placement = new StringBuilder("place template " + parts[1] + " "
+        StringBuilder placement = new StringBuilder("place template "
+            + McStructure.javaName(parts[1].replace("\"", "")) + " "
             + String.join(" ", Arrays.copyOfRange(parts, 2, 5)));
 
         for (int at = 5; at < parts.length; at++) {
