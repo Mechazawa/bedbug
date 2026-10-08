@@ -38,7 +38,7 @@ public final class GroupGoalClientGameTest implements FabricClientGameTest {
 
             // The ember strolls while it waits, so it is put back within reach before it is made wary.
             world.getServer().runCommand("execute as @p at @s run tp @e[type=tp:ember] ~2 ~ ~");
-            world.getServer().runCommand("event entity @e[type=tp:ember] tp:ember_wary_on");
+            world.getServer().runCommand("bedrock event entity @e[type=tp:ember] tp:ember_wary_on");
             Worlds.waitForServer(context, world.getServer(), GroupGoalClientGameTest::avoiding, 200,
                 "tp:ember never fled a player two blocks away once its tp:ember_wary group was on.");
             context.waitTicks(40);
@@ -46,7 +46,7 @@ public final class GroupGoalClientGameTest implements FabricClientGameTest {
                 .computeOnServer(server -> (double) ember(server).distanceTo(player(server)));
             Assert.that(distance > 5, "tp:ember was avoiding the player and is still " + distance + " blocks away.");
 
-            world.getServer().runCommand("event entity @e[type=tp:ember] tp:ember_wary_off");
+            world.getServer().runCommand("bedrock event entity @e[type=tp:ember] tp:ember_wary_off");
             Worlds.waitForServer(context, world.getServer(), server -> !avoiding(server), 200,
                 "tp:ember kept fleeing after its tp:ember_wary group was taken away.");
         }

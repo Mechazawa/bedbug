@@ -27,10 +27,10 @@ public final class PackCommandClientGameTest implements FabricClientGameTest {
         try (TestSingleplayerContext world = context.worldBuilder().create()) {
             Worlds.waitForChunks(world);
 
-            world.getServer().runCommand("execute as @a run scriptevent \"tp:stock_up\"");
+            world.getServer().runCommand("bedrock execute as @a run scriptevent tp:stock_up");
             Worlds.waitForServer(context, world.getServer(), server -> carried(server) == 1, WAIT_TICKS,
                 "The script's give, guarded by hasitem, never handed over " + GIVEN + ".");
-            world.getServer().runCommand("execute as @a run scriptevent \"tp:stock_up\"");
+            world.getServer().runCommand("bedrock execute as @a run scriptevent tp:stock_up");
             context.waitTicks(5);
             int carried = world.getServer().computeOnServer(PackCommandClientGameTest::carried);
             Assert.that(carried == 1,
@@ -39,7 +39,7 @@ public final class PackCommandClientGameTest implements FabricClientGameTest {
             int levels = world.getServer().computeOnServer(server -> player(server).experienceLevel);
             world.getServer().runCommand("execute as @p at @s run summon tp:ember ~2 ~ ~ {NoAI:1b}");
             context.waitTicks(5);
-            world.getServer().runCommand("dialogue open @e[type=tp:ember,limit=1] @p \"tp:greeting\"");
+            world.getServer().runCommand("bedrock dialogue open @e[type=tp:ember,c=1] @p tp:greeting");
             context.waitForScreen(AddonFormScreen.class);
             context.clickScreenButton("Feed it");
             context.waitForScreen(null);

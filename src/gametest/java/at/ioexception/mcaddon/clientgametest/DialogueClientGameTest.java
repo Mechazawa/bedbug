@@ -35,7 +35,7 @@ public final class DialogueClientGameTest implements FabricClientGameTest {
             world.getServer().runCommand("scoreboard objectives add tp.dialogue dummy");
             world.getServer().runCommand("summon tp:wisp " + NPC.x + " " + NPC.y + " " + NPC.z + " {NoAI:1b}");
             Entities.waitForClient(context, "tp:wisp");
-            world.getServer().runCommand("dialogue change @e[type=tp:wisp] \"tp:greeting\"");
+            world.getServer().runCommand("bedrock dialogue change @e[type=tp:wisp] tp:greeting");
 
             Stage.lookAt(context, NPC.add(0, 0.3, 0));
             context.waitFor(client -> client.hitResult instanceof EntityHitResult hit

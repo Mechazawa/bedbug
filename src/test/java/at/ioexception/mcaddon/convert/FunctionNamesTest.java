@@ -73,7 +73,8 @@ class FunctionNamesTest {
     void writesTheIdOfACallTheCallerAnswersDifferently() {
         FunctionNames second = functions.issuedBy("second");
         assertEquals("execute as @a run function second:shared", second.pinned("execute as @a run function shared"));
-        assertEquals("schedule delay add second:shared 20 append", second.pinned("schedule delay add shared 20 append"));
+        assertEquals("schedule delay add second:shared 20 append",
+            second.pinned("schedule delay add shared 20 append"));
         assertEquals("schedule clear second:shared", second.pinned("schedule clear shared"));
     }
 

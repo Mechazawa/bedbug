@@ -243,7 +243,8 @@ public final class Platform {
 
             com.mojang.brigadier.context.ContextChain<CommandSourceStack> chain;
             try {
-                chain = com.mojang.brigadier.context.ContextChain.tryFlatten(read.parsed().getContext().build(read.line()))
+                chain = com.mojang.brigadier.context.ContextChain
+                    .tryFlatten(read.parsed().getContext().build(read.line()))
                     .orElseThrow(() -> com.mojang.brigadier.exceptions.CommandSyntaxException.BUILT_IN_EXCEPTIONS
                         .dispatcherUnknownCommand().createWithContext(read.parsed().getReader()));
             } catch (com.mojang.brigadier.exceptions.CommandSyntaxException unfinished) {

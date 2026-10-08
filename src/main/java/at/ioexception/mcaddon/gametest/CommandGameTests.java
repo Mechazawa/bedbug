@@ -163,7 +163,8 @@ public final class CommandGameTests {
         List<String> tags = List.copyOf(Platform.tagsOf(stand));
         helper.assertTrue(tags.contains("tp_before_the_gap") && tags.contains("tp_after_the_gap"),
             "the lines either side of the one that cannot run did not both run: " + tags);
-        helper.assertTrue(AddonEntities.report().stream().anyMatch(line -> line.startsWith("    command inputpermission x")),
+        helper.assertTrue(AddonEntities.report().stream()
+                .anyMatch(line -> line.startsWith("    command inputpermission x")),
             "the line that cannot run is not reported: " + AddonEntities.report());
         helper.succeed();
     }

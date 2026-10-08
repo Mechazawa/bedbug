@@ -20,14 +20,14 @@ public final class CameraShakeClientGameTest implements FabricClientGameTest {
     public void runTest(ClientGameTestContext context) {
         try (TestSingleplayerContext world = context.worldBuilder().create()) {
             Worlds.waitForChunks(world);
-            world.getServer().runCommand("execute as @a run scriptevent \"tp:shake\"");
+            world.getServer().runCommand("bedrock execute as @a run scriptevent tp:shake");
             context.waitFor(client -> !PlayerCamera.shakes().isEmpty());
             List<CameraShake> running = context.computeOnClient(client -> PlayerCamera.shakes());
             Assert.that(running.size() == 1 && running.get(0).rotational(),
                 "The script asked for one rotational shake and the client runs " + running + ".");
             Assert.near(running.get(0).intensity(), 2, 0.001, "the shake's intensity");
 
-            world.getServer().runCommand("execute as @a run scriptevent \"tp:still\"");
+            world.getServer().runCommand("bedrock execute as @a run scriptevent tp:still");
             context.waitFor(client -> PlayerCamera.shakes().isEmpty());
         }
     }
