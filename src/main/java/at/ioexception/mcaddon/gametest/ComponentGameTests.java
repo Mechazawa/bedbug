@@ -270,7 +270,7 @@ public final class ComponentGameTests {
      * gives it one, and the owner standing fifteen blocks off is past the twelve Java's pets
      * teleport at.
      */
-    @GameTest()
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = AI_TEST_TICKS)
     public void anEntityFollowingItsOwnerCatchesUpWithThem(GameTestHelper helper) {
         AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
         if (ember == null) {
@@ -285,10 +285,11 @@ public final class ComponentGameTests {
         EntityEvents.trigger(ember, "tp:ember_befriend", null, ServerHooks.state());
         ember.setNoAi(false);
 
-        live(ember, CATCH_UP_TICKS);
-        helper.assertTrue(ember.distanceTo(owner) < FAR_AHEAD / 2,
-            EMBER + " follows its owner and is still " + ember.distanceTo(owner) + " blocks behind.");
-        helper.succeed();
+        helper.runAfterDelay(CATCH_UP_TICKS, () -> {
+            helper.assertTrue(ember.distanceTo(owner) < FAR_AHEAD / 2,
+                EMBER + " follows its owner and is still " + ember.distanceTo(owner) + " blocks behind.");
+            helper.succeed();
+        });
     }
 
     /** How far ahead the owner stands, past the distance a pet teleports at. */
@@ -303,7 +304,7 @@ public final class ComponentGameTests {
      * The ember's hunting group names the wisp's own family, which no Java class stands for, so a
      * goal choosing by class alone falls back to hunting players.
      */
-    @GameTest()
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = AI_TEST_TICKS)
     public void aHunterPicksTheFamilyItsFiltersName(GameTestHelper helper) {
         AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
         AddonEntity wisp = BehaviourGameTests.spawn(helper, WISP, STAND.east(4));
@@ -319,10 +320,8 @@ public final class ComponentGameTests {
 
         EntityEvents.trigger(ember, "tp:ember_hunt", null, ServerHooks.state());
         ember.setNoAi(false);
-        live(ember, SEARCH_TICKS);
-        helper.assertTrue(ember.getTarget() == wisp,
-            EMBER + " hunts the wisp's family and set its sights on " + ember.getTarget() + ".");
-        helper.succeed();
+        helper.succeedWhen(() -> helper.assertTrue(ember.getTarget() == wisp,
+            EMBER + " hunts the wisp's family and set its sights on " + ember.getTarget() + "."));
     }
 
     /**
@@ -330,7 +329,7 @@ public final class ComponentGameTests {
      *
      * The ember's vengeful group names the wisp's family, so a player's blow goes unanswered.
      */
-    @GameTest()
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = AI_TEST_TICKS)
     public void anEntityAnswersOnlyTheAttackersItsEntriesName(GameTestHelper helper) {
         AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
         AddonEntity wisp = BehaviourGameTests.spawn(helper, WISP, STAND.east(2));
@@ -345,21 +344,27 @@ public final class ComponentGameTests {
         ember.setNoAi(false);
 
         Platform.hurt(ember, helper.getLevel(), ember.damageSources().playerAttack(player), 0.5f);
-        live(ember, SEARCH_TICKS);
-        helper.assertTrue(ember.getTarget() == null,
-            EMBER + " answers only the wisp's family and turned on the player who hit it.");
+        helper.runAfterDelay(SEARCH_TICKS, () -> {
+            helper.assertTrue(ember.getTarget() == null,
+                EMBER + " answers only the wisp's family and turned on the player who hit it.");
 
-        // Out of the moment after a blow in which Java ignores the next one.
-        ember.invulnerableTime = 0;
-        Platform.hurt(ember, helper.getLevel(), ember.damageSources().mobAttack(wisp), 0.5f);
-        live(ember, SEARCH_TICKS);
-        helper.assertTrue(ember.getTarget() == wisp,
-            EMBER + " was hit by the wisp its entries name and set its sights on " + ember.getTarget() + ".");
-        helper.succeed();
+            // Out of the moment after a blow in which Java ignores the next one.
+            ember.invulnerableTime = 0;
+            Platform.hurt(ember, helper.getLevel(), ember.damageSources().mobAttack(wisp), 0.5f);
+            helper.succeedWhen(() -> helper.assertTrue(ember.getTarget() == wisp,
+                EMBER + " was hit by the wisp its entries name and set its sights on " + ember.getTarget() + "."));
+        });
     }
 
-    /** Long enough for a target goal searching every tick to have run several times. */
+    /** Long enough for a target goal searching every other tick to have run several times. */
     private static final int SEARCH_TICKS = 10;
+
+    /**
+     * How long a test waiting on the entity's own goals may run. The goals are left to the level's
+     * own ticks: on the older versions a mob chooses a new goal on every other tick of the server,
+     * which a test stepping the entity by hand never advances.
+     */
+    private static final int AI_TEST_TICKS = 100;
 
     /**
      * An entity looks at a player for the `look_time` its pack states, in seconds.
@@ -367,7 +372,7 @@ public final class ComponentGameTests {
      * The watchful group asks for half a second; Java's own goal looks for two to four whatever it
      * is told, so a goal that ignored the field sets out to look four times as long at the least.
      */
-    @GameTest()
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = AI_TEST_TICKS)
     public void anEntityLooksForTheTimeItsPackStates(GameTestHelper helper) {
         AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
         if (ember == null) {
@@ -381,12 +386,15 @@ public final class ComponentGameTests {
         EntityEvents.trigger(ember, "tp:ember_watch", null, ServerHooks.state());
         ember.setNoAi(false);
 
-        int waited = 0;
-        while (lookLeft(ember) < 0 && waited++ < LOOK_LIMIT) live(ember, 1);
-        helper.assertTrue(lookLeft(ember) >= 0, EMBER + " never looked at the player beside it.");
-        helper.assertTrue(lookLeft(ember) <= LOOK_TICKS,
-            EMBER + " looks for half a second and set out to look for " + lookLeft(ember) + " ticks.");
-        helper.succeed();
+        int[] first = {-1};
+        helper.onEachTick(() -> {
+            if (first[0] < 0) first[0] = lookLeft(ember);
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(first[0] >= 0, EMBER + " never looked at the player beside it.");
+            helper.assertTrue(first[0] <= LOOK_TICKS,
+                EMBER + " looks for half a second and set out to look for " + first[0] + " ticks.");
+        });
     }
 
     /** How many ticks the running look goal has left, or -1 while none runs. */
@@ -401,9 +409,6 @@ public final class ComponentGameTests {
     /** The half second the watchful group looks for, in Java's ticks. */
     private static final int LOOK_TICKS = 10;
 
-    /** Well past the four seconds Java's own goal would look for. */
-    private static final int LOOK_LIMIT = 100;
-
     /**
      * An entity walks to an item lying within its reach and picks it up there.
      *
@@ -411,7 +416,7 @@ public final class ComponentGameTests {
      * than taking it from where it stands. The gathering group puts the behaviour above the
      * ember's wandering, which would otherwise be free to take the ember elsewhere first.
      */
-    @GameTest()
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = AI_TEST_TICKS + SETTLE_TICKS)
     public void anEntityWalksToTheItemItPicksUp(GameTestHelper helper) {
         AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
         if (ember == null) {
@@ -422,23 +427,22 @@ public final class ComponentGameTests {
         // On the floor beside the ember rather than where it was put down, which it falls from.
         EntityEvents.trigger(ember, "tp:ember_gather", null, ServerHooks.state());
         ember.setNoAi(false);
-        live(ember, SETTLE_TICKS);
-        double start = ember.getX();
-        net.minecraft.world.entity.item.ItemEntity dropped = new net.minecraft.world.entity.item.ItemEntity(
-            helper.getLevel(), start + ITEM_AWAY, ember.getY(), ember.getZ(), new ItemStack(Items.GOLD_INGOT));
-        dropped.setNoPickUpDelay();
-        helper.getLevel().addFreshEntity(dropped);
+        helper.runAfterDelay(SETTLE_TICKS, () -> {
+            double start = ember.getX();
+            net.minecraft.world.entity.item.ItemEntity dropped = new net.minecraft.world.entity.item.ItemEntity(
+                helper.getLevel(), start + ITEM_AWAY, ember.getY(), ember.getZ(), new ItemStack(Items.GOLD_INGOT));
+            dropped.setNoPickUpDelay();
+            helper.getLevel().addFreshEntity(dropped);
 
-        double furthest = 0;
-        for (int tick = 0; tick < WALK_TICKS && dropped.isAlive(); tick++) {
-            live(ember, 1);
-            furthest = Math.max(furthest, ember.getX() - start);
-        }
-        helper.assertTrue(ember.getMainHandItem().is(Items.GOLD_INGOT),
-            EMBER + " never picked up the gold lying " + ITEM_AWAY + " blocks off.");
-        helper.assertTrue(furthest > ITEM_AWAY - GOAL_RADIUS - 0.5,
-            EMBER + " picked up an item without going to it, having moved " + furthest + ".");
-        helper.succeed();
+            double[] furthest = {0};
+            helper.onEachTick(() -> furthest[0] = Math.max(furthest[0], ember.getX() - start));
+            helper.succeedWhen(() -> {
+                helper.assertTrue(ember.getMainHandItem().is(Items.GOLD_INGOT),
+                    EMBER + " never picked up the gold lying " + ITEM_AWAY + " blocks off.");
+                helper.assertTrue(furthest[0] > ITEM_AWAY - GOAL_RADIUS - 0.5,
+                    EMBER + " picked up an item without going to it, having moved " + furthest[0] + ".");
+            });
+        });
     }
 
     /** How far off the item lies, inside the four blocks the gathering group reaches. */
@@ -449,9 +453,6 @@ public final class ComponentGameTests {
 
     /** Long enough for the ember to land on the floor it was put above. */
     private static final int SETTLE_TICKS = 20;
-
-    /** Long enough to walk three blocks at the ember's pace. */
-    private static final int WALK_TICKS = 100;
 
     /**
      * An angry entity that broadcasts hands its quarry to the others of its kind around it.
@@ -489,7 +490,7 @@ public final class ComponentGameTests {
      * The pottering group asks for one block across; Java's own stroll goal looks ten blocks out
      * whatever it is told.
      */
-    @GameTest()
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = AI_TEST_TICKS)
     public void aStrollStaysWithinTheDistanceItsPackStates(GameTestHelper helper) {
         // The structure's own floor is barrier, which a ground navigator will not stop on.
         for (int x = 0; x < STRUCTURE_SIDE; x++) {
@@ -505,19 +506,20 @@ public final class ComponentGameTests {
 
         EntityEvents.trigger(ember, "tp:ember_potter", null, ServerHooks.state());
         ember.setNoAi(false);
-        double furthest = 0;
-        for (int tick = 0; tick < STROLL_TICKS; tick++) {
-            live(ember, 1);
+        double[] furthest = {0};
+        helper.onEachTick(() -> {
             BlockPos heading = ember.getNavigation().getTargetPos();
-            if (heading == null || ember.getNavigation().isDone()) continue;
+            if (heading == null || ember.getNavigation().isDone()) return;
 
-            furthest = Math.max(furthest, Math.max(Math.abs(heading.getX() + 0.5 - ember.getX()),
+            furthest[0] = Math.max(furthest[0], Math.max(Math.abs(heading.getX() + 0.5 - ember.getX()),
                 Math.abs(heading.getZ() + 0.5 - ember.getZ())));
-        }
-        helper.assertTrue(furthest > 0, EMBER + " never set out on a stroll.");
-        helper.assertTrue(furthest <= STROLL_ACROSS + 1,
-            EMBER + " strolls one block across and set out for somewhere " + furthest + " away.");
-        helper.succeed();
+        });
+        helper.runAfterDelay(STROLL_TICKS, () -> {
+            helper.assertTrue(furthest[0] > 0, EMBER + " never set out on a stroll.");
+            helper.assertTrue(furthest[0] <= STROLL_ACROSS + 1,
+                EMBER + " strolls one block across and set out for somewhere " + furthest[0] + " away.");
+            helper.succeed();
+        });
     }
 
     /** The width of the empty structure every test here stands in. */
@@ -679,7 +681,7 @@ public final class ComponentGameTests {
      * own ten would have it, and wheat two blocks across and six up is within reach, which Java's
      * goal measuring in every direction would refuse.
      */
-    @GameTest()
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = AI_TEST_TICKS)
     public void temptationReachesAsFarAcrossAsThePackSays(GameTestHelper helper) {
         AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER, MIDDLE);
         if (ember == null) {
@@ -693,14 +695,15 @@ public final class ComponentGameTests {
         ember.setNoAi(false);
 
         Platform.placeAt(player, ember.getX() + FAR_ACROSS, ember.getY(), ember.getZ(), 0f, 0f);
-        live(ember, TEMPT_TICKS);
-        helper.assertFalse(tempted(ember), EMBER + " is tempted three blocks off and followed wheat five away.");
+        boolean[] ever = {false};
+        helper.onEachTick(() -> ever[0] |= tempted(ember));
+        helper.runAfterDelay(TEMPT_TICKS, () -> {
+            helper.assertFalse(ever[0], EMBER + " is tempted three blocks off and followed wheat five away.");
 
-        Platform.placeAt(player, ember.getX() + NEAR_ACROSS, ember.getY() + HIGH_UP, ember.getZ(), 0f, 0f);
-        live(ember, TEMPT_TICKS);
-        helper.assertTrue(tempted(ember),
-            EMBER + " is tempted across rather than up and ignored wheat two across and six up.");
-        helper.succeed();
+            Platform.placeAt(player, ember.getX() + NEAR_ACROSS, ember.getY() + HIGH_UP, ember.getZ(), 0f, 0f);
+            helper.succeedWhen(() -> helper.assertTrue(tempted(ember),
+                EMBER + " is tempted across rather than up and ignored wheat two across and six up."));
+        });
     }
 
     private static boolean tempted(AddonEntity entity) {
@@ -711,8 +714,8 @@ public final class ComponentGameTests {
     private static final int NEAR_ACROSS = 2;
     private static final int HIGH_UP = 6;
 
-    /** Long enough for a goal selector to have looked for a goal to start a few times. */
-    private static final int TEMPT_TICKS = 6;
+    /** Long enough for a goal selector to have looked for a goal to start several times. */
+    private static final int TEMPT_TICKS = 20;
 
     /**
      * A group bringing a lit fuse goes off once `fuse_length` has burned, with nothing to kill it.
