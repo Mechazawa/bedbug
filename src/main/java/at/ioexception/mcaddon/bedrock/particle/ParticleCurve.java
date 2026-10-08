@@ -113,17 +113,26 @@ public record ParticleCurve(Kind kind, MolangExpression input, MolangExpression 
         }
     }
 
-    /** The curve's answer for where its input stands right now. */
+    /**
+     * The curve's answer for where its input stands right now.
+     *
+     * A chain's nodes are keyed by the input itself, so the range is not applied to it: Bedrock
+     * ignores `horizontal_range` on a chain, and dividing by it would read every node somewhere else.
+     */
     public float at(MolangEnvironment environment) {
-        float range = horizontalRange.asFloat(environment);
-        float along = input.asFloat(environment) / (range == 0 ? 1 : range);
-
+        float read = input.asFloat(environment);
         return switch (kind) {
-            case BEZIER_CHAIN -> chain(environment, along);
-            case BEZIER -> bezier(environment, clamp(along));
-            case CATMULL_ROM -> catmullRom(environment, clamp(along));
-            case LINEAR -> linear(environment, clamp(along));
+            case BEZIER_CHAIN -> chain(environment, read);
+            case BEZIER -> bezier(environment, along(read, environment));
+            case CATMULL_ROM -> catmullRom(environment, along(read, environment));
+            case LINEAR -> linear(environment, along(read, environment));
         };
+    }
+
+    /** How far along the nodes an input lands, measured against the range and kept inside it. */
+    private float along(float read, MolangEnvironment environment) {
+        float range = horizontalRange.asFloat(environment);
+        return clamp(read / (range == 0 ? 1 : range));
     }
 
     private static float clamp(float along) {

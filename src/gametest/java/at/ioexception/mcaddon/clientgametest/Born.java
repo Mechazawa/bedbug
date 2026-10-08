@@ -24,6 +24,11 @@ public final class Born {
             AddonParticleAccessor seconds = (AddonParticleAccessor) particle;
             return seconds.mcaddon$age() / seconds.mcaddon$maxLifetime();
         }
+
+        /** How old the particle is, in seconds, which is what `variable.particle_age` answers. */
+        public float age() {
+            return ((AddonParticleAccessor) particle).mcaddon$age();
+        }
     }
 
     /** One quad as the particle hands it to the frame: its turn, its size, its patch and its colour. */
