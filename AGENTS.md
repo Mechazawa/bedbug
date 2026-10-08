@@ -359,6 +359,24 @@ These are the checks it runs, and what each one catches:
   `minecraft:leashable_to` beside its `minecraft:leashable`, both stating `unleash_on_removal`, so
   unloading it lets go of both ends of a lead.
 
+  The rest of the ember's groups each carry one field Java has a place for, and `ComponentGameTests`
+  reads each back through that place. The gilled group breathes water alone for two seconds and the
+  wisp states seven seconds of air at the top level; the wading group prices water, damaging blocks
+  and lava, and the finned group is a navigation that swims and never walks; the fertile group breeds
+  into pregnancy with a two second rest; the loyal group follows an owner; the hunting and the
+  vengeful groups name the wisp's family in their `entity_types`; the watchful group looks for half
+  a second, the pottering group strolls one block, the gathering group picks items up at the top
+  priority, the peckish group is tempted three blocks across, the springy group jumps at eight
+  tenths and the hopping group rests a second between hops; the furious group spreads its anger;
+  the turning group transforms after a second; the hoarding group's inventory is private; the
+  anchored group is pushed by a preset; the lit group's fuse burns half a second; the remembering
+  group's home restricts nothing and the nesting group's does; the lava buoyant group floats on lava
+  alone; and the nameable group raises one event for a listed name and another for any other. The
+  laden group's lead carries two presets and refuses to be stolen. The plain ember is the other half
+  of most of these assertions, which is why it carries none of them: no `minecraft:breathable`, no
+  `minecraft:leashable` and no `minecraft:nameable`, so it never drowns, takes no lead and takes no
+  name tag.
+
   Two more entities are there for what a mob walking about never reaches. One is a projectile with
   hit boxes wider than the box it collides in, which turns `isolated_physics` off the way Mojang's
   own arrows do, so it is moved the way any entity is and a row of cobwebs holds it back; the other
@@ -966,6 +984,22 @@ These are the checks it runs, and what each one catches:
   `minecraft:angry` was read as a flag, so an entity was angry for life and its `calm_event` never
   ran; and the goals ran in the order their components happened to be written in, because nothing
   read the `priority` all sixty-eight `behavior.look_at_player` declarations carry.
+
+  **A reason is a claim about Java, and it is checked against Java.** Read the class it names in the
+  game jar before believing it: of the reasons this table once carried, most named something Java
+  does let an entity set, a protected method, an overridable getter or a price on the mob. Checking
+  them turned up defects a reason had been covering: `breed_cooldown` was read as how long the mood
+  lasts; `avoid_water` was overwritten by the price `minecraft:preferred_path` sets and
+  `can_pass_doors` was read as `can_open_doors`; `base_buoyancy` was read under a name no schema has;
+  `can_be_stolen` was read as whether the entity takes a lead at all; an empty `minecraft:home` held
+  the entity to sixteen blocks where Bedrock restricts nothing; `nearest_attackable_target` fell back
+  to hunting players for any family no Java class stands for; and the anger a reason said already
+  spread spread nowhere. A default a pack leaves out is the same kind of claim: Bedrock turns at
+  thirty degrees a tick, breeds only what is tamed and avoids no damaging block unless told to.
+
+  **The census sees a method only by its modifier.** A reader written as a package-private method
+  with no `public`, `private`, `static` or `final` in front of it is not found, so the fields it reads
+  are credited to nothing and a field read there can fail `--strict`. Give such a method a modifier.
 
   With no `scratchpad/bedrock/bedrock-samples` checkout it reports that there is nothing to measure
   and passes, the way the rest of the harness does with no add-on present.
