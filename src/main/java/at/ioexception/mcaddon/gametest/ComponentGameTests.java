@@ -673,6 +673,48 @@ public final class ComponentGameTests {
     private static final double JAVA_PUSH = 0.05;
 
     /**
+     * Food tempts within the `within_radius` a pack states, measured across unless it says height counts.
+     *
+     * The peckish group reaches three blocks, so wheat five blocks off is out of reach where Java's
+     * own ten would have it, and wheat two blocks across and six up is within reach, which Java's
+     * goal measuring in every direction would refuse.
+     */
+    @GameTest()
+    public void temptationReachesAsFarAcrossAsThePackSays(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER, MIDDLE);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        net.minecraft.server.level.ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.WHEAT));
+        EntityEvents.trigger(ember, "tp:ember_hunger", null, ServerHooks.state());
+        ember.setNoAi(false);
+
+        Platform.placeAt(player, ember.getX() + FAR_ACROSS, ember.getY(), ember.getZ(), 0f, 0f);
+        live(ember, TEMPT_TICKS);
+        helper.assertFalse(tempted(ember), EMBER + " is tempted three blocks off and followed wheat five away.");
+
+        Platform.placeAt(player, ember.getX() + NEAR_ACROSS, ember.getY() + HIGH_UP, ember.getZ(), 0f, 0f);
+        live(ember, TEMPT_TICKS);
+        helper.assertTrue(tempted(ember),
+            EMBER + " is tempted across rather than up and ignored wheat two across and six up.");
+        helper.succeed();
+    }
+
+    private static boolean tempted(AddonEntity entity) {
+        return entity.runningGoals().stream().anyMatch(goal -> goal.startsWith("TemptedGoal"));
+    }
+
+    private static final int FAR_ACROSS = 5;
+    private static final int NEAR_ACROSS = 2;
+    private static final int HIGH_UP = 6;
+
+    /** Long enough for a goal selector to have looked for a goal to start a few times. */
+    private static final int TEMPT_TICKS = 6;
+
+    /**
      * Runs the entity's own ticks the way the level does, which counts its age first: Java's goals
      * tell one blow from the next by the age it landed at.
      */

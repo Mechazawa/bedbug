@@ -2764,7 +2764,8 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:memory_behavior.move_to_position" ->
                 goals.add(priority, MemoryGoal.movingToPosition(this));
 
-            case "minecraft:behavior.tempt", "minecraft:behavior.float_tempt" ->
+            case "minecraft:behavior.tempt" -> goals.add(priority, new TemptedGoal(this, goal, tempting(goal)));
+            case "minecraft:behavior.float_tempt" ->
                 goals.add(priority, Platform.temptGoal(this, speed, tempting(goal)));
             case "minecraft:behavior.open_door", "minecraft:annotation.open_door" ->
                 goals.add(priority,

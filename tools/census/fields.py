@@ -54,6 +54,10 @@ AMPHIBIOUS = ("Walking the bottom under water: a Java mob that may not float sin
               "priced at nothing unless `avoid_water` says otherwise, so nothing is left to set.")
 FROM_AIR = "Java's flying navigator starts a path from wherever the entity is, the air included."
 
+TEMPT_SOUND = ("Mojang's documentation counts the gap between tempt sounds in ticks, and its cat writes "
+               "[0, 100] where its strider writes 2 to 5, which no one unit fits; the sound is left unmade "
+               "rather than made at one of the two rates.")
+
 # A field a reader may skip, and why. Keyed by component, then by field; the key "*" covers every
 # field of that component that no reader names.
 REASONS = {
@@ -194,8 +198,8 @@ REASONS = {
              "preference for water.",
     },
     "minecraft:behavior.tempt": {
-        "*": "Java's tempt goal takes the items and the speed and decides the rest: it has no sound, no "
-             "vertical reach and no fright.",
+        "tempt_sound": TEMPT_SOUND,
+        "sound_interval": TEMPT_SOUND,
     },
     "minecraft:behavior.melee_attack": {
         "reach_multiplier": "Java reaches as far as the mob's own size allows.",

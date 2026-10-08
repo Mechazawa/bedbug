@@ -446,6 +446,14 @@
           ]
         }
       },
+      "tp:ember_peckish": {
+        "minecraft:behavior.tempt": {
+          "priority": 0,
+          "items": ["minecraft:wheat"],
+          "within_radius": 3,
+          "stop_distance": 1
+        }
+      },
       "tp:ember_alert": {
         "minecraft:timer": {
           "time": 1.0,
@@ -644,6 +652,11 @@
       "tp:ember_anchor": {
         "add": {
           "component_groups": ["tp:ember_anchored"]
+        }
+      },
+      "tp:ember_hunger": {
+        "add": {
+          "component_groups": ["tp:ember_peckish"]
         }
       },
       "tp:ember_winter": {
