@@ -561,6 +561,39 @@ public final class ComponentGameTests {
     private static final int TRANSFORM_TICKS = 21;
 
     /**
+     * A `private` inventory goes with the entity when it dies rather than onto the ground.
+     *
+     * The hoarding group's three slots are private; the laden group's nine are not, and spill.
+     */
+    @GameTest()
+    public void aPrivateInventoryIsNotDroppedOnDeath(GameTestHelper helper) {
+        AddonEntity hoarder = BehaviourGameTests.spawn(helper, EMBER);
+        AddonEntity hauler = BehaviourGameTests.spawn(helper, EMBER, MIDDLE);
+        if (hoarder == null || hauler == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(hoarder, "tp:ember_hoard", null, ServerHooks.state());
+        EntityEvents.trigger(hauler, "tp:ember_load", null, ServerHooks.state());
+        hoarder.inventory().setItem(0, new ItemStack(Items.DIAMOND));
+        hauler.inventory().setItem(0, new ItemStack(Items.EMERALD));
+        Platform.kill(hoarder, helper.getLevel());
+        Platform.kill(hauler, helper.getLevel());
+
+        helper.assertTrue(dropped(helper, hauler, Items.EMERALD),
+            EMBER + " died hauling an emerald in an inventory nobody called private and left nothing.");
+        helper.assertFalse(dropped(helper, hoarder, Items.DIAMOND),
+            EMBER + " died with a diamond in its private inventory and spilled it.");
+        helper.succeed();
+    }
+
+    private static boolean dropped(GameTestHelper helper, AddonEntity where, Item item) {
+        return !helper.getLevel().getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
+            where.getBoundingBox().inflate(2), lying -> lying.getItem().is(item)).isEmpty();
+    }
+
+    /**
      * Runs the entity's own ticks the way the level does, which counts its age first: Java's goals
      * tell one blow from the next by the age it landed at.
      */

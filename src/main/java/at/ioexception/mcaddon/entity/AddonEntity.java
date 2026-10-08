@@ -1170,6 +1170,11 @@ public class AddonEntity extends PathfinderMob
      * hand and a body, so what is picked up is held rather than stored, which is what a pack using
      * this for a villager carrying bread is describing anyway.
      */
+    /** The slots `minecraft:inventory` or `minecraft:strength` gives the entity, or null while it has none. */
+    public net.minecraft.world.Container inventory() {
+        return carried;
+    }
+
     /** Whether the entity has slots of its own to put what it picks up in. */
     boolean carriesInventory() {
         return carried != null;
@@ -4677,8 +4682,11 @@ public class AddonEntity extends PathfinderMob
             broadcastAnger(killer);
         }
 
-        // What a mob was hauling belongs on the ground once it is dead, the same as a chest's does.
-        if (carried != null) net.minecraft.world.Containers.dropContents(level, blockPosition(), carried);
+        // What a mob was hauling belongs on the ground once it is dead, the same as a chest's does,
+        // unless `private` says the inventory goes with it.
+        if (carried != null && !Goals.flag(liveComponent("minecraft:inventory"), "private", false)) {
+            net.minecraft.world.Containers.dropContents(level, blockPosition(), carried);
+        }
         spawnOnDeath(level);
         explode(level);
     }

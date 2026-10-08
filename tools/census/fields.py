@@ -85,7 +85,14 @@ REASONS = {
     "minecraft:nameable": {"*": "Java lets a name tag name any mob, which is what the component asks for."},
     "minecraft:can_climb": {"*": "Carries no fields; declaring it is the whole statement."},
     "minecraft:inventory": {
-        "*": "Bedrock gives a mob a container of its own; a Java mob has hands and armour and no chest.",
+        "container_type": "The screen a player opens onto the entity's slots, which Java builds for its own "
+                          "horses, chest minecarts and hoppers by class. The entity holds the slots here and "
+                          "has no screen onto them, so a player cannot open them.",
+        "can_be_siphoned_from": "A Java hopper draws from an entity that is a container, which only Java's "
+                                "own minecarts and boats are.",
+        "additional_slots_per_strength": "Only Mojang's llama writes it, beside an `inventory_size`, and the "
+                                         "documentation leaves open how the two add up; its "
+                                         "`minecraft:strength` sizes a container alone at three slots a point.",
     },
     "minecraft:equipment": {
         "*": "Names a loot table Java rolls for a mob's gear at spawn, which the loot reader covers.",

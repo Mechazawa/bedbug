@@ -415,6 +415,12 @@
           }
         }
       },
+      "tp:ember_hoarding": {
+        "minecraft:inventory": {
+          "inventory_size": 3,
+          "private": true
+        }
+      },
       "tp:ember_alert": {
         "minecraft:timer": {
           "time": 1.0,
@@ -603,6 +609,11 @@
       "tp:ember_turn": {
         "add": {
           "component_groups": ["tp:ember_turning"]
+        }
+      },
+      "tp:ember_hoard": {
+        "add": {
+          "component_groups": ["tp:ember_hoarding"]
         }
       },
       "tp:ember_winter": {
