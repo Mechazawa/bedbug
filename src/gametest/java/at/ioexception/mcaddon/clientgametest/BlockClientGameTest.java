@@ -84,8 +84,8 @@ public final class BlockClientGameTest implements FabricClientGameTest {
             context.getInput().pressKey(options -> options.keyUse);
             int wanted = taps;
             Worlds.waitForServer(context, world,
-                server -> String.valueOf(wanted).equals(stateValue(server, "tp:taps")), 40,
-                "tp:totem was used " + taps + " times and its tp:taps state never reached " + taps + "; it holds "
+                server -> String.valueOf(wanted).equals(stateValue(server, "tp:taps")), 40, () ->
+                "tp:totem was used " + wanted + " times and its tp:taps state never reached " + wanted + "; it holds "
                     + world.getServer().computeOnServer(server -> stateValue(server, "tp:taps")) + ".");
         }
         boolean tagged = world.getServer().computeOnServer(server ->
@@ -151,7 +151,7 @@ public final class BlockClientGameTest implements FabricClientGameTest {
             + " of " + hardness + " to take " + expected + " ticks to mine by hand and it took " + ticks + ".");
         Worlds.waitForServer(context, world, server -> Stage.blockAt(server, BLOCK).equals("minecraft:air"), 40,
             "The client broke " + block + " and the server still holds it.");
-        Worlds.waitForServer(context, world, server -> dropped(server, drop) >= count, 60,
+        Worlds.waitForServer(context, world, server -> dropped(server, drop) >= count, 60, () ->
             "Expected breaking " + block + " to drop " + count + " " + drop + " and "
                 + world.getServer().computeOnServer(server -> dropped(server, drop)) + " came of it.");
         int found = world.getServer().computeOnServer(server -> dropped(server, drop));

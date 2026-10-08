@@ -5,14 +5,16 @@ import at.ioexception.mcaddon.platform.Platform;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
-import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.MerchantScreen;
+import net.minecraft.client.input.MouseButtonInfo;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
@@ -46,7 +48,7 @@ public final class TradeClientGameTest implements FabricClientGameTest {
                 + " {NoAI:1b}");
             Entities.waitForClient(context, "tp:ember");
             world.getServer().runCommand("item replace entity @a inventory.0 with minecraft:emerald " + EMERALDS);
-            context.waitFor(client -> client.player.getInventory().countItem(net.minecraft.world.item.Items.EMERALD)
+            context.waitFor(client -> client.player.getInventory().countItem(Items.EMERALD)
                 == EMERALDS);
 
             Stage.lookAt(context, TRADER.add(0, 0.2, 0));
@@ -67,7 +69,9 @@ public final class TradeClientGameTest implements FabricClientGameTest {
                 + shown + ".");
 
             int wool = shown.indexOf("2 minecraft:emerald -> 1 minecraft:lime_wool");
-            clickWidget(context, context.computeOnClient(client -> tradeButtons(client).get(wool)));
+            // Pressed the way Fabric's own clickScreenButton presses a button, which an offer's has no
+            // label for: what a click on it would run, without depending on where the pointer is.
+            context.runOnClient(client -> tradeButtons(client).get(wool).onPress(new MouseButtonInfo(0, 0)));
             context.waitFor(client -> id(client.player.containerMenu.getSlot(RESULT_SLOT).getItem())
                 .equals("minecraft:lime_wool"));
             // Picked up rather than shift-clicked, which would buy for as long as the payment lasts.
@@ -89,26 +93,14 @@ public final class TradeClientGameTest implements FabricClientGameTest {
         }
     }
 
-    private static List<MerchantOffer> offers(net.minecraft.client.Minecraft client) {
+    private static List<MerchantOffer> offers(Minecraft client) {
         return Platform.currentScreen() instanceof MerchantScreen screen ? screen.getMenu().getOffers() : List.of();
     }
 
     /** The screen's trade buttons, top to bottom, which is the order of the offers they stand for. */
-    private static List<Button> tradeButtons(net.minecraft.client.Minecraft client) {
+    private static List<Button> tradeButtons(Minecraft client) {
         return Platform.currentScreen().children().stream()
             .filter(Button.class::isInstance).map(Button.class::cast).toList();
-    }
-
-    /** Moves the pointer onto a widget and presses the left button there, which is how a player clicks it. */
-    private static void clickWidget(ClientGameTestContext context, AbstractWidget widget) {
-        double[] at = context.computeOnClient(client -> {
-            double scale = (double) client.getWindow().getScreenWidth() / client.getWindow().getGuiScaledWidth();
-            return new double[] {(widget.getX() + widget.getWidth() / 2.0) * scale,
-                (widget.getY() + widget.getHeight() / 2.0) * scale};
-        });
-        context.getInput().setCursorPos(at[0], at[1]);
-        context.getInput().pressMouse(0);
-        context.waitTick();
     }
 
     private static String describe(MerchantOffer offer) {

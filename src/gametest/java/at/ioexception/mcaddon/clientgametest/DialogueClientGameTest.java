@@ -10,6 +10,9 @@ import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.scores.Objective;
+import net.minecraft.world.scores.ReadOnlyScoreInfo;
+import net.minecraft.world.scores.Scoreboard;
 
 import java.util.List;
 
@@ -55,16 +58,16 @@ public final class DialogueClientGameTest implements FabricClientGameTest {
 
             context.clickScreenButton("Feed it");
             context.waitForScreen(null);
-            Worlds.waitForServer(context, world, server -> score(server) == 111, 40,
+            Worlds.waitForServer(context, world, server -> score(server) == 111, 40, () ->
                 "Expected \"Feed it\" to add 100 and the scene's closing to add 10, leaving the reader on 111, and the"
                     + " score is " + world.getServer().computeOnServer(DialogueClientGameTest::score) + ".");
         }
     }
 
     private static int score(MinecraftServer server) {
-        net.minecraft.world.scores.Scoreboard board = server.getScoreboard();
-        net.minecraft.world.scores.Objective objective = board.getObjective("tp.dialogue");
-        net.minecraft.world.scores.ReadOnlyScoreInfo score = objective == null ? null
+        Scoreboard board = server.getScoreboard();
+        Objective objective = board.getObjective("tp.dialogue");
+        ReadOnlyScoreInfo score = objective == null ? null
             : board.getPlayerScoreInfo(Stage.player(server), objective);
         return score == null ? -1 : score.value();
     }
