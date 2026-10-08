@@ -8,11 +8,8 @@ import org.joml.Quaternionf;
 import java.util.List;
 
 /**
- * A pack's particle effect started by `/particle` makes particles the way its file describes.
- *
- * The effect is quoted, which is how a pack's own command reaches the server once it is translated:
- * unquoted, the colon ends the mod's own argument and Java's `/particle` answers instead, with one
- * particle and no emitter.
+ * A pack's particle effect started by Bedrock's `/particle` makes particles the way its file
+ * describes, and Java's own `/particle` stays Java's.
  *
  * `tp:burst` emits all 24 of its particles at once from a point a fifth of a block above where it
  * was started, each leaving at three blocks a second, living 0.9 seconds, a tenth of a block across,
@@ -48,13 +45,24 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
 
     @Override
     public void runTest(ClientGameTestContext context) {
-        try (TestSingleplayerContext world = context.worldBuilder().create()) {
+        try (TestSingleplayerContext world = context.worldBuilder()
+            .adjustSettings(ui -> ui.setAllowCommands(true)).create()) {
             Worlds.waitForChunks(world);
             burst(context, world);
-            unquoted(context, world);
+            typed(context, world);
+            javas(context, world);
             trail(context, world);
             curves(context, world);
         }
+    }
+
+    /** The same effect typed by an operator, in Bedrock's words, starts the whole emitter. */
+    private static void typed(ClientGameTestContext context, TestSingleplayerContext world) {
+        context.runOnClient(client -> Born.clear());
+        context.runOnClient(client -> client.player.connection.sendCommand("bedrock particle tp:burst ~ ~1 ~3"));
+        Worlds.waitForClient(context, client -> Born.of("tp:burst").size() >= BURST_COUNT, PATIENCE,
+            () -> "/bedrock particle tp:burst typed by the player starts the pack's emitter of " + BURST_COUNT
+                + " particles, and " + Born.of("tp:burst").size() + " were made.");
     }
 
     /**
@@ -68,7 +76,7 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
      */
     private static void curves(ClientGameTestContext context, TestSingleplayerContext world) {
         context.runOnClient(client -> Born.clear());
-        world.getServer().runCommand("execute as @p at @s run particle \"tp:fade\" ~ ~1 ~3");
+        world.getServer().runCommand("bedrock execute as @p at @s run particle tp:fade ~ ~1 ~3");
         Worlds.waitForClient(context, client -> !Born.of("tp:fade").isEmpty(), PATIENCE,
             () -> "tp:fade emits one particle at once and none was made.");
         Born.Particle fade = Born.of("tp:fade").get(0);
@@ -135,20 +143,22 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
     }
 
     /**
-     * The same effect typed the way an operator types it, unquoted, which Java's own `/particle`
-     * reads as a particle type: what comes of it is the whole emitter rather than one particle.
+     * Java's own `/particle` reads the effect as the particle type it is registered as, and makes the
+     * one particle Java makes of any type rather than the effect's emitter.
      */
-    private static void unquoted(ClientGameTestContext context, TestSingleplayerContext world) {
+    private static void javas(ClientGameTestContext context, TestSingleplayerContext world) {
         context.runOnClient(client -> Born.clear());
         world.getServer().runCommand("execute as @p at @s run particle tp:burst ~ ~1 ~3");
-        Worlds.waitForClient(context, client -> Born.of("tp:burst").size() >= BURST_COUNT, PATIENCE,
-            () -> "particle tp:burst typed unquoted starts the pack's emitter of " + BURST_COUNT
-                + " particles, and " + Born.of("tp:burst").size() + " were made.");
+        Worlds.waitForClient(context, client -> !Born.of("tp:burst").isEmpty(), PATIENCE,
+            () -> "Java's /particle tp:burst made no particle at all.");
+        context.waitTicks(5);
+        int made = context.computeOnClient(client -> Born.of("tp:burst").size());
+        Assert.that(made == 1, "Java's /particle tp:burst made " + made + " particles rather than Java's one.");
     }
 
     private static void burst(ClientGameTestContext context, TestSingleplayerContext world) {
         context.runOnClient(client -> Born.clear());
-        world.getServer().runCommand("execute as @p at @s run particle \"tp:burst\" ~ ~1 ~3");
+        world.getServer().runCommand("bedrock execute as @p at @s run particle tp:burst ~ ~1 ~3");
         Worlds.waitForClient(context, client -> Born.of("tp:burst").size() >= BURST_COUNT, PATIENCE,
             () -> "tp:burst emits " + BURST_COUNT + " particles at once, and " + Born.of("tp:burst").size()
                 + " were made.");
@@ -180,7 +190,7 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
 
     private static void trail(ClientGameTestContext context, TestSingleplayerContext world) {
         context.runOnClient(client -> Born.clear());
-        world.getServer().runCommand("execute as @p at @s run particle \"tp:ember_trail\" ~ ~1 ~3");
+        world.getServer().runCommand("bedrock execute as @p at @s run particle tp:ember_trail ~ ~1 ~3");
         Worlds.waitForClient(context, client -> Born.of("tp:ember_trail").size() >= 3, PATIENCE,
             () -> "tp:ember_trail emits twenty particles a second and none were made.");
 

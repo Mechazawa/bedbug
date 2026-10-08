@@ -19,6 +19,9 @@ import java.util.List;
 /**
  * `/camera` and `/camerashake` move the camera a frame is drawn from.
  *
+ * The first `/camera` is a line of a Java data pack's function this test mod ships, which reaches the
+ * Bedrock command the way an operator's line does: through `/bedrock`.
+ *
  * A free camera set at a position and a rotation is drawn from exactly there, an ease moves it there
  * over the seconds asked for rather than at once, a shake moves it off that place until it is
  * stopped, and clearing gives back the player's own first person view.
@@ -45,15 +48,17 @@ public final class CameraClientGameTest implements FabricClientGameTest {
             Worlds.waitForChunks(world);
             CameraType chosen = context.computeOnClient(client -> client.options.getCameraType());
 
-            world.getServer().runCommand("camera @a set minecraft:free pos 0.5 100 0.5 rot 30 45");
+            world.getServer().runCommand("function mcaddon_gametest:free_camera");
             Worlds.waitForClient(context, client -> at(client, PLACED), PATIENCE,
-                () -> "the camera was set free at " + PLACED + " and is at " + position(Minecraft.getInstance()) + ".");
+                () -> "a Java function's /bedrock camera set the camera free at " + PLACED + " and it is at "
+                    + position(Minecraft.getInstance()) + ".");
             Assert.near(context.computeOnClient(client -> Worlds.camera(client).xRot()), 30, TOLERANCE,
                 "the camera's pitch under /camera ... rot 30 45");
             Assert.near(context.computeOnClient(client -> Worlds.camera(client).yRot()), 45, TOLERANCE,
                 "the camera's yaw under /camera ... rot 30 45");
 
-            world.getServer().runCommand("camera @a set minecraft:free ease 2 linear pos 0.5 110 0.5 rot 30 45");
+            world.getServer().runCommand(
+                "bedrock camera @a set minecraft:free ease 2 linear pos 0.5 110 0.5 rot 30 45");
             Worlds.waitForClient(context, client -> {
                 double height = position(client).y;
                 return height > PLACED.y + 1 && height < EASED.y - 1;
@@ -63,14 +68,14 @@ public final class CameraClientGameTest implements FabricClientGameTest {
                 () -> "the camera's ease never reached " + EASED + "; it is at "
                     + position(Minecraft.getInstance()) + ".");
 
-            world.getServer().runCommand("camerashake add @a 1 10 positional");
+            world.getServer().runCommand("bedrock camerashake add @a 1 10 positional");
             Worlds.waitForClient(context, client -> position(client).distanceTo(EASED) > 0.01, PATIENCE,
                 () -> "a shake was added and the camera never moved off " + EASED + ".");
-            world.getServer().runCommand("camerashake stop @a");
+            world.getServer().runCommand("bedrock camerashake stop @a");
             Worlds.waitForClient(context, client -> at(client, EASED), PATIENCE,
                 () -> "the shake was stopped and the camera never settled back at " + EASED + ".");
 
-            world.getServer().runCommand("camera @a clear");
+            world.getServer().runCommand("bedrock camera @a clear");
             Worlds.waitForClient(context, client -> position(client).distanceTo(client.player.getEyePosition()) < 0.01
                     && client.options.getCameraType() == chosen, PATIENCE,
                 () -> "the camera was cleared and was not given back to the player's own " + chosen + " view.");
@@ -78,7 +83,7 @@ public final class CameraClientGameTest implements FabricClientGameTest {
             presets(context, world, chosen);
             facing(context, world);
             refused(context, world);
-            world.getServer().runCommand("camera @a clear");
+            world.getServer().runCommand("bedrock camera @a clear");
         }
     }
 
@@ -93,14 +98,14 @@ public final class CameraClientGameTest implements FabricClientGameTest {
 
         preset(context, world, "minecraft:free default", CameraType.THIRD_PERSON_BACK, true);
 
-        world.getServer().runCommand("camera @a clear");
+        world.getServer().runCommand("bedrock camera @a clear");
         Worlds.waitForClient(context, client -> client.options.getCameraType() == chosen, PATIENCE,
             () -> "the camera was cleared after a preset and the player's own " + chosen + " view was not given back.");
     }
 
     private static void preset(ClientGameTestContext context, TestSingleplayerContext world, String preset,
         CameraType wanted, boolean detached) {
-        world.getServer().runCommand("camera @a set " + preset);
+        world.getServer().runCommand("bedrock camera @a set " + preset);
         Worlds.waitForClient(context, client -> client.options.getCameraType() == wanted
                 && Worlds.camera(client).isDetached() == detached, PATIENCE,
             () -> "/camera @a set " + preset + " asks for Java's " + wanted + " camera, " + (detached ? "" : "not ")
@@ -113,7 +118,8 @@ public final class CameraClientGameTest implements FabricClientGameTest {
      * preset put the camera. An entity is faced at the middle of its box.
      */
     private static void facing(ClientGameTestContext context, TestSingleplayerContext world) {
-        world.getServer().runCommand("camera @a set minecraft:free pos 0.5 100 0.5 facing 10.5 100 0.5");
+        world.getServer().runCommand(
+            "bedrock camera @a set minecraft:free pos 0.5 100 0.5 facing 10.5 100 0.5");
         rotated(context, -90, 0, "/camera ... pos 0.5 100 0.5 facing 10.5 100 0.5, a point due east");
 
         world.getServer().runCommand("summon minecraft:armor_stand " + STAND.x + " " + STAND.y + " " + STAND.z
@@ -122,14 +128,14 @@ public final class CameraClientGameTest implements FabricClientGameTest {
             "an armour stand was summoned to be faced and never stood in the world.");
         Vec3 middle = world.getServer().computeOnServer(CameraClientGameTest::standMiddle);
 
-        world.getServer().runCommand("camera @a set minecraft:free ease 1 linear pos 0.5 100 0.5"
-            + " facing @e[type=minecraft:armor_stand,limit=1]");
+        world.getServer().runCommand("bedrock camera @a set minecraft:free ease 1 linear pos 0.5 100 0.5"
+            + " facing @e[type=minecraft:armor_stand,c=1]");
         Vec3 towards = middle.subtract(PLACED);
         rotated(context, yaw(towards), pitch(towards),
             "/camera ... ease 1 linear pos 0.5 100 0.5 facing an armour stand whose box is centred on " + middle);
 
-        world.getServer().runCommand("camera @a set minecraft:third_person facing " + middle.x + " " + middle.y
-            + " " + middle.z);
+        world.getServer().runCommand("bedrock camera @a set minecraft:third_person facing " + middle.x + " "
+            + middle.y + " " + middle.z);
         Worlds.waitForClient(context, client -> {
             Vec3 from = middle.subtract(position(client));
             return client.options.getCameraType() == CameraType.THIRD_PERSON_BACK
@@ -182,15 +188,15 @@ public final class CameraClientGameTest implements FabricClientGameTest {
      * mod cannot draw is named as one, and neither changes the view the player has.
      */
     private static void refused(ClientGameTestContext context, TestSingleplayerContext world) {
-        world.getServer().runCommand("camera @a set minecraft:free pos 0.5 100 0.5 rot 0 0");
+        world.getServer().runCommand("bedrock camera @a set minecraft:free pos 0.5 100 0.5 rot 0 0");
         Worlds.waitForClient(context, client -> at(client, PLACED), PATIENCE,
             () -> "the camera was set free at " + PLACED + " and is at " + position(Minecraft.getInstance()) + ".");
 
-        String eased = said(world, "camera @a set minecraft:third_person ease 1 linear");
+        String eased = said(world, "bedrock camera @a set minecraft:third_person ease 1 linear");
         Assert.that(eased.contains("Easing to non-stationary cameras is not supported"), "an ease to"
             + " minecraft:third_person is refused the way Bedrock refuses it, and the command said: " + eased);
-        String boom = said(world, "camera @a set minecraft:fixed_boom");
-        Assert.that(boom.contains("minecraft:fixed_boom is a Bedrock camera that Java has no counterpart for"),
+        String boom = said(world, "bedrock camera @a set minecraft:fixed_boom");
+        Assert.that(boom.contains("camera minecraft:fixed_boom, which Java has no form of"),
             "minecraft:fixed_boom is reported as a Bedrock camera Java cannot draw, and the command said: " + boom);
 
         context.waitTicks(5);

@@ -72,7 +72,7 @@ public final class ServerEntityClientGameTest implements FabricClientGameTest {
         Assert.that(still != null, "tp:wisp has a client definition and nothing was drawn for it.");
         Assert.near(still.minY, 0, TOLERANCE, "the lowest drawn point of tp:wisp before any clip is played");
 
-        server.runCommand("playanimation @e[type=tp:wisp,tag=near] animation.tp.wisp.lift");
+        server.runCommand("bedrock playanimation @e[type=tp:wisp,tag=near] animation.tp.wisp.lift");
         waitForDrawn(context, wisp, bounds -> Math.abs(bounds.minY - LIFT) < TOLERANCE,
             "/playanimation of animation.tp.wisp.lift on the server never raised the client's tp:wisp by "
                 + LIFT + " blocks.");
@@ -81,7 +81,7 @@ public final class ServerEntityClientGameTest implements FabricClientGameTest {
     }
 
     private static void groups(ClientGameTestContext context, TestServerContext server, AddonEntity wisp) {
-        server.runCommand("event entity @e[type=tp:wisp,tag=near] tp:settle");
+        server.runCommand("bedrock event entity @e[type=tp:wisp,tag=near] tp:settle");
         double calmed = WISP_BOX_HEIGHT * CALMED_SCALE;
         Worlds.waitForClient(context, client -> Math.abs(wisp.getBbHeight() - calmed) < 0.001, PATIENCE,
             () -> "Expected tp:settle on the server to scale the client's tp:wisp box to " + calmed
@@ -106,7 +106,7 @@ public final class ServerEntityClientGameTest implements FabricClientGameTest {
         Worlds.waitForServer(context, server, ServerEntityClientGameTest::farChunkLoaded, PATIENCE,
             "The chunk " + FAR + " blocks from the player was force loaded and never loaded.");
         int far = summon(context, server, "~" + FAR + " ~ ~", "far");
-        server.runCommand("event entity @e[type=tp:wisp,tag=far] tp:settle");
+        server.runCommand("bedrock event entity @e[type=tp:wisp,tag=far] tp:settle");
         Worlds.waitForServer(context, server,
             minecraft -> Math.abs(tagged(minecraft, "far").getBbHeight() - WISP_BOX_HEIGHT * CALMED_SCALE) < 0.001,
             PATIENCE, minecraft -> "Expected tp:settle to scale the far tp:wisp's box to "
@@ -130,7 +130,7 @@ public final class ServerEntityClientGameTest implements FabricClientGameTest {
         float before = context.computeOnClient(client -> PosedParts.of(villager)).get("head").xScale();
         Assert.near(before, 1, TOLERANCE, "the villager's head scale before any clip is played");
 
-        server.runCommand("playanimation @e[type=minecraft:villager] animation.tp.vanilla.duck");
+        server.runCommand("bedrock playanimation @e[type=minecraft:villager] animation.tp.vanilla.duck");
         Worlds.waitForClient(context, client -> PosedParts.of(villager).get("head").xScale() == 0f, PATIENCE,
             () -> "Expected /playanimation of animation.tp.vanilla.duck on the server to scale the client's "
                 + "villager head to 0 and found " + PosedParts.of(villager).get("head").xScale() + ".");

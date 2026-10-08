@@ -65,6 +65,27 @@ class FunctionNamesTest {
         assertNull(functions.issuedBy("first").qualify("missing"));
     }
 
+    /**
+     * A converted line runs with nobody known to have written it, so a call the caller's own add-on
+     * would answer differently is written as the id it reaches, in each place a line names a function.
+     */
+    @Test
+    void writesTheIdOfACallTheCallerAnswersDifferently() {
+        FunctionNames second = functions.issuedBy("second");
+        assertEquals("execute as @a run function second:shared", second.pinned("execute as @a run function shared"));
+        assertEquals("schedule delay add second:shared 20 append",
+            second.pinned("schedule delay add shared 20 append"));
+        assertEquals("schedule clear second:shared", second.pinned("schedule clear shared"));
+    }
+
+    @Test
+    void leavesACallAnyAddOnWouldAnswerTheSameWayAsItWasWritten() {
+        assertEquals("function shared", functions.issuedBy("first").pinned("function shared"));
+        assertEquals("function tools/only_first", functions.issuedBy("second").pinned("function tools/only_first"));
+        assertEquals("function missing", functions.issuedBy("second").pinned("function missing"));
+        assertEquals("say shared", functions.issuedBy("second").pinned("say shared"));
+    }
+
     /** A converted file names other add-ons' functions, so a change to their list has to show. */
     @Test
     void stampsTheFunctionsOfEveryAddOn() throws IOException {

@@ -48,7 +48,7 @@ public final class DrawnSizeClientGameTest implements FabricClientGameTest {
         Assert.near(plain.minY, 0, TOLERANCE, "the lowest drawn point of tp:wisp above its feet");
         Assert.near(plain.getYsize(), CUBE_HEIGHT, TOLERANCE, "the drawn height of tp:wisp");
 
-        world.getServer().runCommand("event entity @e[type=tp:wisp] tp:settle");
+        world.getServer().runCommand("bedrock event entity @e[type=tp:wisp] tp:settle");
         context.waitFor(client -> Math.abs(wisp.getBbHeight() - WISP_BOX_HEIGHT * CALMED_SCALE) < 0.001);
 
         AABB calmed = context.computeOnClient(client -> Submitted.entity(wisp).box());

@@ -5,6 +5,7 @@ import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.resource.AddonPacks;
 import com.mojang.brigadier.ParseResults;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.exceptions.DynamicCommandExceptionType;
 import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
@@ -16,13 +17,14 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * A command line an add-on runs while the game is going, on its way to Java's dispatcher.
+ * One Bedrock line, translated and read against the {@link BedrockTree}.
  *
- * A script, an entity event, an animation, a dialogue scene and a block all hand over lines in
- * Bedrock's dialect, which is the dialect a function file is written in, so each is translated by
- * the same code a function file is converted with and as the add-on that wrote it: a bare function
- * name reaches the function that add-on ships. The same few lines are run every tick, so a
- * translation is kept per add-on and line.
+ * Every Bedrock line reaches the game through here: the ones an operator or a function types after
+ * `/bedrock`, and the ones a script, an entity event, an animation, a dialogue scene and a block run.
+ * Each is translated by the same code and as the add-on that wrote it, so a bare function name
+ * reaches the function that add-on ships; a line with no add-on behind it looks for the function in
+ * every add-on alike. The same few lines are run every tick, so a translation is kept per add-on and
+ * line.
  *
  * Brigadier raises the same kind of failure for a line it cannot read and one that read fine and
  * then declined, and only the first says this mod is missing something, so running a line reports
@@ -31,6 +33,9 @@ import java.util.Set;
 public final class PackCommand {
     /** Lines kept translated, beyond which the least recently run is translated again when next run. */
     private static final int KEPT = 2048;
+
+    private static final DynamicCommandExceptionType UNTRANSLATABLE = new DynamicCommandExceptionType(
+        what -> Component.literal("This line cannot run here: " + what));
 
     private static final Map<String, PackCommand> TRANSLATED = new LinkedHashMap<>(64, 0.75f, true) {
         @Override
@@ -65,7 +70,7 @@ public final class PackCommand {
         }
     }
 
-    /** A line this mod built in Java's dialect, which only needs running and reporting. */
+    /** A line this mod built in the words the tree reads, which only needs running and reporting. */
     public static PackCommand java(String line) {
         return new PackCommand(line.startsWith("/") ? line.substring(1) : line, List.of());
     }
@@ -73,27 +78,65 @@ public final class PackCommand {
     /**
      * What the command returned, and zero for one that could not be run at all.
      *
-     * It runs with the authority Java gives a function, and says nothing to whoever runs it.
+     * It runs to its end before this returns, with the authority Java gives a function, and says
+     * nothing to whoever runs it.
      */
     public int run(CommandSourceStack source, CommandReport report) {
-        untranslatable.forEach(report::untranslatable);
-        if (java == null) return 0;
-
         Heard heard = new Heard();
-        ParseResults<CommandSourceStack> parsed = source.getServer().getCommands().getDispatcher()
-            .parse(java, Platform.withFunctionPermission(source).withSource(heard));
-        if (!parsed.getExceptions().isEmpty() || parsed.getReader().canRead()) {
-            report.unreadable(java, unreadable(parsed));
+        Platform.ReadLine read;
+        try {
+            read = read(Platform.withFunctionPermission(source).withSource(heard), report);
+        } catch (CommandSyntaxException reported) {
             return 0;
         }
 
         try {
-            int returned = Platform.runToEnd(parsed, java);
+            int returned = Platform.runToEnd(read.parsed(), read.line());
             if (heard.failure != null) report.declined(java, heard.failure);
             return returned;
         } catch (CommandSyntaxException declined) {
             report.declined(java, declined.getMessage());
             return 0;
+        } finally {
+            read.finish();
+        }
+    }
+
+    /**
+     * The line read for this source against the tree, its `hasitem` arguments already answered.
+     *
+     * What could not be translated or read is reported and thrown, so a source that typed the line
+     * is told why nothing ran.
+     */
+    public Platform.ReadLine read(CommandSourceStack source, CommandReport report) throws CommandSyntaxException {
+        untranslatable.forEach(report::untranslatable);
+        if (java == null) throw UNTRANSLATABLE.create(String.join("; ", untranslatable));
+
+        CarriedItems carried;
+        try {
+            carried = CarriedItems.tryFrom(java);
+        } catch (CommandSyntaxException unreadable) {
+            report.unreadable(java, unreadable.getMessage());
+            throw unreadable;
+        }
+
+        String line = carried == null ? java : carried.line();
+        ParseResults<CommandSourceStack> parsed = BedrockTree.of(source.getServer()).parse(line, source);
+        if (!parsed.getExceptions().isEmpty() || parsed.getReader().canRead()) {
+            CommandSyntaxException unreadable = unreadable(parsed);
+            report.unreadable(java, unreadable.getMessage());
+            throw unreadable;
+        }
+
+        if (carried != null) carried.tag(source.getServer());
+        return new Read(parsed, line, carried);
+    }
+
+    private record Read(ParseResults<CommandSourceStack> parsed, String line, CarriedItems carried)
+        implements Platform.ReadLine {
+        @Override
+        public void finish() {
+            if (carried != null) carried.finish();
         }
     }
 
@@ -123,9 +166,9 @@ public final class PackCommand {
     }
 
     /** What Brigadier objected to, or where it stopped reading when it said nothing. */
-    private static String unreadable(ParseResults<CommandSourceStack> parsed) {
+    private static CommandSyntaxException unreadable(ParseResults<CommandSourceStack> parsed) {
         return parsed.getExceptions().values().stream().findFirst()
-            .map(CommandSyntaxException::getMessage)
-            .orElseGet(() -> "unread from position " + parsed.getReader().getCursor());
+            .orElseGet(() -> CommandSyntaxException.BUILT_IN_EXCEPTIONS.dispatcherUnknownCommand()
+                .createWithContext(parsed.getReader()));
     }
 }

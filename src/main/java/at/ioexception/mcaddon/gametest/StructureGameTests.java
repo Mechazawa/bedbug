@@ -207,7 +207,7 @@ public final class StructureGameTests {
         run(helper, "execute positioned " + function.getX() + " " + function.getY() + " " + function.getZ()
             + " run function tp:hut");
         BlockPos script = helper.absolutePos(HUT_BY_SCRIPT);
-        run(helper, "scriptevent \"tp:hut\" " + script.getX() + " " + script.getY() + " " + script.getZ());
+        run(helper, "bedrock scriptevent tp:hut " + script.getX() + " " + script.getY() + " " + script.getZ());
 
         helper.succeedWhen(() -> origins.forEach(origin -> {
             helper.assertBlockPresent(Blocks.STONE, origin.offset(2, 0, 2));

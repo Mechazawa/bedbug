@@ -38,7 +38,7 @@ public final class FogClientGameTest implements FabricClientGameTest {
     }
 
     private static void stack(ClientGameTestContext context, TestSingleplayerContext world) {
-        world.getServer().runCommand("fog @a push tp:dusk dusk");
+        world.getServer().runCommand("bedrock fog @a push tp:dusk dusk");
         waitForColour(context, DUSK, "tp:dusk was pushed and the frame's fog never took its colour.");
         float distance = context.computeOnClient(client -> PlayerFog.renderDistanceBlocks());
         FogData dusk = context.computeOnClient(Worlds::fog);
@@ -47,12 +47,12 @@ public final class FogClientGameTest implements FabricClientGameTest {
         Assert.near(dusk.environmentalEnd, 0.9f * distance, DISTANCE_TOLERANCE,
             "where tp:dusk's fog ends, nine tenths of the render distance");
 
-        world.getServer().runCommand("fog @a push tp:fog_glade glade");
+        world.getServer().runCommand("bedrock fog @a push tp:fog_glade glade");
         waitForColour(context, GLADE, "tp:fog_glade was pushed over tp:dusk and the frame's fog never took it.");
-        world.getServer().runCommand("fog @a pop glade");
+        world.getServer().runCommand("bedrock fog @a pop glade");
         waitForColour(context, DUSK, "tp:fog_glade was popped and the frame's fog never went back to tp:dusk.");
 
-        world.getServer().runCommand("fog @a pop dusk");
+        world.getServer().runCommand("bedrock fog @a pop dusk");
         Worlds.waitForClient(context, client -> PlayerFog.active() == null && !matches(Worlds.fog(client), DUSK),
             PATIENCE, () -> "the last fog on the stack was popped and the frame kept tp:dusk's colour.");
     }

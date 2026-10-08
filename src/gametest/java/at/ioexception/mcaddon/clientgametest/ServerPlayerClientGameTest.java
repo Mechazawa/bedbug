@@ -65,7 +65,7 @@ public final class ServerPlayerClientGameTest implements FabricClientGameTest {
      */
     private static void forms(ClientGameTestContext context, TestServerContext server, String player,
         Bystander bystander) {
-        server.runCommand("execute as " + Bystander.NAME + " run scriptevent \"tp:handbook\"");
+        server.runCommand("bedrock execute as " + Bystander.NAME + " run scriptevent tp:handbook");
         waitForSent(context, server, bystander, FORM, 1);
         quiet(context, client -> !(Platform.currentScreen() instanceof AddonFormScreen),
             "a form shown to " + Bystander.NAME + " opened on the client");
@@ -74,7 +74,7 @@ public final class ServerPlayerClientGameTest implements FabricClientGameTest {
         context.runOnClient(client -> Channels.sendFormResponse(theirs,
             "{\"canceled\":true,\"values\":{},\"cancelationReason\":\"UserClosed\"}"));
 
-        server.runCommand("execute as " + player + " run scriptevent \"tp:handbook\"");
+        server.runCommand("bedrock execute as " + player + " run scriptevent tp:handbook");
         Worlds.waitForClient(context, client -> Platform.currentScreen() instanceof AddonFormScreen, PATIENCE,
             () -> "Expected the handbook shown to " + player + " to open on the client and found "
                 + Platform.currentScreen() + ".");
@@ -98,7 +98,7 @@ public final class ServerPlayerClientGameTest implements FabricClientGameTest {
 
     /** A form whose description is longer than a plain network string, pressed and answered. */
     private static void catalogue(ClientGameTestContext context, TestServerContext server, String player) {
-        server.runCommand("execute as " + player + " run scriptevent \"tp:catalogue\"");
+        server.runCommand("bedrock execute as " + player + " run scriptevent tp:catalogue");
         Worlds.waitForClient(context,
             client -> shown(Platform.currentScreen()).contains("Ware 800 of the catalogue"), PATIENCE,
             () -> "Expected the eight hundred buttons of the catalogue on the client and found the screen "
@@ -115,35 +115,35 @@ public final class ServerPlayerClientGameTest implements FabricClientGameTest {
         Bystander bystander) {
         CameraType own = context.computeOnClient(client -> client.options.getCameraType());
 
-        server.runCommand("camera " + Bystander.NAME + " set minecraft:third_person_front");
+        server.runCommand("bedrock camera " + Bystander.NAME + " set minecraft:third_person_front");
         waitForSent(context, server, bystander, CAMERA, 1);
         quiet(context, client -> client.options.getCameraType() == own,
             "/camera set for " + Bystander.NAME + " changed the client's camera");
 
         Vec3 above = server.computeOnServer(minecraft -> client(minecraft).position().add(0, 10, 0));
-        server.runCommand("camera " + player + " set minecraft:free pos " + above.x + " " + above.y + " "
+        server.runCommand("bedrock camera " + player + " set minecraft:free pos " + above.x + " " + above.y + " "
             + above.z + " rot 30 60");
         Worlds.waitForClient(context, client -> Platform.cameraPosition().distanceTo(above) < TOLERANCE, PATIENCE,
             () -> "Expected /camera set with pos " + above + " to put the client's camera there and found it at "
                 + Platform.cameraPosition() + ".");
         stillSent(server, bystander, CAMERA, "the camera set for " + player);
 
-        server.runCommand("camerashake add " + Bystander.NAME + " 4 10");
+        server.runCommand("bedrock camerashake add " + Bystander.NAME + " 4 10");
         waitForSent(context, server, bystander, SHAKE, 1);
         quiet(context, client -> Platform.cameraPosition().distanceTo(above) < TOLERANCE,
             "a camera shake for " + Bystander.NAME + " moved the client's camera off " + above);
 
-        server.runCommand("camerashake add " + player + " 4 10");
+        server.runCommand("bedrock camerashake add " + player + " 4 10");
         Worlds.waitForClient(context, client -> Platform.cameraPosition().distanceTo(above) > 0.05, PATIENCE,
             () -> "Expected a camera shake for " + player + " to move the client's camera off " + above
                 + " and found it at " + Platform.cameraPosition() + ".");
-        server.runCommand("camerashake stop " + player);
+        server.runCommand("bedrock camerashake stop " + player);
         Worlds.waitForClient(context, client -> Platform.cameraPosition().distanceTo(above) < TOLERANCE, PATIENCE,
             () -> "Expected /camerashake stop to put the client's camera back at " + above + " and found it at "
                 + Platform.cameraPosition() + ".");
         stillSent(server, bystander, SHAKE, "the shakes for " + player);
 
-        server.runCommand("camera " + player + " clear");
+        server.runCommand("bedrock camera " + player + " clear");
         Worlds.waitForClient(context, client -> client.options.getCameraType() == own, PATIENCE,
             () -> "Expected /camera clear to give the client back its " + own + " camera and found "
                 + context.computeOnClient(client -> client.options.getCameraType()) + ".");
@@ -151,16 +151,16 @@ public final class ServerPlayerClientGameTest implements FabricClientGameTest {
 
     private static void fog(ClientGameTestContext context, TestServerContext server, String player,
         Bystander bystander) {
-        server.runCommand("fog " + Bystander.NAME + " push tp:dusk theirs");
+        server.runCommand("bedrock fog " + Bystander.NAME + " push tp:dusk theirs");
         waitForSent(context, server, bystander, FOG, 1);
         quiet(context, client -> PlayerFog.active() == null, "a fog pushed for " + Bystander.NAME
             + " reached the client");
 
-        server.runCommand("fog " + player + " push tp:dusk mine");
+        server.runCommand("bedrock fog " + player + " push tp:dusk mine");
         Worlds.waitForClient(context, client -> fogShown().equals("tp:dusk"), PATIENCE,
             () -> "Expected the fog pushed for " + player + " to be tp:dusk on the client and found "
                 + fogShown() + ".");
-        server.runCommand("fog " + player + " pop mine");
+        server.runCommand("bedrock fog " + player + " pop mine");
         Worlds.waitForClient(context, client -> PlayerFog.active() == null, PATIENCE,
             () -> "Expected /fog pop to leave the client with no fog and found " + fogShown() + ".");
         stillSent(server, bystander, FOG, "the fog pushed and popped for " + player);

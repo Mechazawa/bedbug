@@ -3,7 +3,6 @@ package at.ioexception.mcaddon.gametest;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.server.ServerHooks;
-import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -48,7 +47,7 @@ public final class NamesGameTests {
         helper.setBlock(STAND.below(), Blocks.STONE);
         helper.setBlock(STAND, Blocks.POWERED_RAIL);
         BlockPos at = helper.absolutePos(STAND);
-        run(helper, "scriptevent \"tp:names\" " + at.getX() + " " + at.getY() + " " + at.getZ());
+        BedrockLines.run(helper, "scriptevent tp:names " + at.getX() + " " + at.getY() + " " + at.getZ());
 
         helper.succeedWhen(() -> {
             helper.assertBlockPresent(Blocks.JACK_O_LANTERN, STAND.above());
@@ -125,15 +124,5 @@ public final class NamesGameTests {
 
     private static Block block(String name) {
         return BuiltInRegistries.BLOCK.getOptional(Platform.id("minecraft", name)).orElseThrow();
-    }
-
-    private static int run(GameTestHelper helper, String command) {
-        MinecraftServer server = helper.getLevel().getServer();
-        try {
-            return server.getCommands().getDispatcher().execute(command, server.createCommandSourceStack());
-        } catch (CommandSyntaxException error) {
-            helper.fail("/" + command + " did not run: " + error.getMessage());
-            return 0;
-        }
     }
 }

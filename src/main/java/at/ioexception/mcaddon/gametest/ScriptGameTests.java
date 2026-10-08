@@ -2,7 +2,6 @@ package at.ioexception.mcaddon.gametest;
 
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.server.ServerHooks;
-import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -223,13 +222,11 @@ public final class ScriptGameTests {
         BlockPos at = helper.absolutePos(STAND);
         Platform.placeAt(player, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
         try {
-            helper.getLevel().getServer().getCommands().getDispatcher().execute(
-                "scriptevent \"" + id + "\"" + (message.isEmpty() ? "" : " " + message),
-                Platform.commandSourceOf(player, helper.getLevel()));
-        } catch (CommandSyntaxException error) {
+            BedrockLines.run(helper, Platform.commandSourceOf(player, helper.getLevel()),
+                "scriptevent " + id + (message.isEmpty() ? "" : " " + message));
+        } catch (RuntimeException failed) {
             helper.getLevel().getServer().getPlayerList().remove(player);
-            helper.fail("The probe " + id + " did not run: " + error.getMessage());
-            return;
+            throw failed;
         }
         helper.runAfterDelay(DELIVERED, () -> {
             helper.getLevel().getServer().getPlayerList().remove(player);

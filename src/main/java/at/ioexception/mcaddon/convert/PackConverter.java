@@ -1210,11 +1210,9 @@ public final class PackConverter {
 
     private static void writeFunctions(Bundle bundle, Path root, String namespace, FunctionNames functions)
         throws IOException {
-        Set<String> unsupported = new java.util.LinkedHashSet<>();
         for (BedrockPack behaviour : bundle.behaviours()) {
-            Functions.convert(behaviour, root, namespace, functions, unsupported);
+            Functions.convert(behaviour, root, namespace, functions);
         }
-        unsupported.forEach(at.ioexception.mcaddon.registry.AddonEntities::unsupported);
     }
 
     /**

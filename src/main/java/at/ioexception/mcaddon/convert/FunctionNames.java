@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
@@ -23,6 +25,11 @@ import java.util.stream.Stream;
  */
 public final class FunctionNames {
     public static final FunctionNames NONE = new FunctionNames(Map.of(), null);
+
+    /** The three places a Bedrock line names a function: after `function` and in both schedules. */
+    private static final Pattern CALL = Pattern.compile(
+        "\\b(function|schedule\\s+delay\\s+(?:add|clear)|schedule\\s+clear)(\\s+)([^\\s:#]+)",
+        Pattern.CASE_INSENSITIVE);
 
     private final Map<String, Set<String>> paths;
     private final String issuer;
@@ -61,6 +68,22 @@ public final class FunctionNames {
             .findFirst()
             .map(namespace -> namespace + ":" + path)
             .orElse(null);
+    }
+
+    /**
+     * The line with each function it calls by a bare name written as the Java id this issuer's call
+     * reaches, wherever a call nobody is known to have issued would reach another add-on's.
+     *
+     * A converted function line is translated as it runs, when nothing says which add-on wrote it.
+     * Where the answer is the same either way the line keeps the name the pack wrote.
+     */
+    public String pinned(String line) {
+        FunctionNames anyone = issuedBy(null);
+        return CALL.matcher(line).replaceAll(call -> {
+            String own = qualify(call.group(3));
+            boolean differs = own != null && !own.equals(anyone.qualify(call.group(3)));
+            return Matcher.quoteReplacement(differs ? call.group(1) + call.group(2) + own : call.group());
+        });
     }
 
     /**

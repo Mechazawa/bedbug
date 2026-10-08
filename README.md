@@ -138,13 +138,13 @@ add-ons, or with another release of it, is told which in chat.
   An item the pack lets into the off hand goes there and one it does not is refused, an item that
   clips liquids aims at water and lava, and one carrying a durability sensor shows the particle and
   plays the sound its threshold names as it wears down.
-- `/camera` and `/camerashake`, which set one player's own view: the four presets, a position and a
+- `/bedrock camera` and `/bedrock camerashake`, which set one player's own view: the four presets, a position and a
   rotation of the pack's choosing or a point or an entity to face, all thirty-one of Bedrock's easing
   curves, and a shake that moves the camera or turns it. An ease to one of the three cameras that
   follow the player is refused the way Bedrock refuses it, and `minecraft:fixed_boom`,
   `minecraft:follow_orbit` and `minecraft:control_scheme_camera` are named as cameras Java has no
   counterpart for.
-- `/fog`, which layers a pack's own `fogs/` settings over the one the game would draw, with a stack
+- `/bedrock fog`, which layers a pack's own `fogs/` settings over the one the game would draw, with a stack
   per player that `pop` and `remove` take apart the way Bedrock's do. Like the two camera commands it
   is decided on the server and sent to each player alone, so setting one player's view in a
   multiplayer world leaves everybody else's as it was.
@@ -213,16 +213,31 @@ add-ons, or with another release of it, is told which in chat.
   meal goes down, so the mob doing the killing is the entity the loot is about. A function Java has
   none of is answered the same way: a book drops carrying one of the enchantments the pack listed,
   at a level out of that enchantment's own range.
-- `.mcfunction` files translated into Java's command dialect with a `tick` function tag. A function
-  called by its Bedrock name, which is a path with no namespace, is written naming the add-on that
-  ships it: the calling add-on's own first, then whichever installed add-on has it.
+- `/bedrock <line>`, which is how every Bedrock command reaches the game. It takes a whole line in
+  Bedrock's dialect, translates it into Java's and runs it, so an operator types
+  `/bedrock camera @s set minecraft:free` and a Java data pack's function may hold
+  `bedrock playanimation @e[type=minecraft:villager] animation.wave`. Java's own command tree stays
+  as Java builds it: `/bedrock` and `/mcaddon` are the only commands this mod adds there, `/particle`
+  and `/transfer` take Java's arguments alone, and a Java data pack's `@e[...]` knows only Java's
+  selector options. The Bedrock commands Java has not got, `camera`, `camerashake`,
+  `clearspawnpoint`, `dialogue`, `event`, `fog`, `gametest`, `mobevent`, `music`, `playanimation`,
+  `scriptevent`, `structure`, `toggledownfall`, Bedrock's `particle` and `transfer` and the commands
+  a pack's script declares, are reached through it and nowhere else. It asks for the level Java runs
+  a function at, and every command the line names asks for its own on top of that.
+- `.mcfunction` files, written as Java functions whose every line is `bedrock <the line>`, with a
+  `tick` function tag. Java's parser reads `/bedrock` and a string, so a file always loads, and a
+  line that cannot be translated fails alone and is reported when it runs. A function called by its
+  Bedrock name, which is a path with no namespace, reaches the add-on that ships it: the calling
+  add-on's own first, then whichever installed add-on has it.
 - The commands a pack runs while the game is going, translated the same way and as the add-on that
   wrote them: a script's `runCommand`, an entity event's `queue_command`, a command on an animation
   or controller timeline, a dialogue scene's buttons and a block event's `run_command`. Each runs to
   its end, functions it calls included, with the authority Java gives a function, and what could
   not be translated, what Java would not parse and what the game declined are each reported.
-- Bedrock's `hasitem` selector argument, registered as an option of Java's own selector, so
-  `@s[hasitem={item=apple,location=slot.weapon.mainhand,quantity=2..}]` selects in both editions.
+- Bedrock's selector arguments inside a Bedrock line, `hasitem` among them:
+  `@s[hasitem={item=apple,location=slot.weapon.mainhand,quantity=2..}]` is answered by tagging every
+  entity carrying what it asks for while the line runs, so it selects anywhere in an `execute` chain
+  and Java's own selector never learns the word.
 - Natural spawning from a pack's `spawn_rules`, with each alternative the rule lists becoming a
   biome spawn entry of its own. The weight, the group size and the biome tags decide which biomes
   it is offered in, a pack's own biome answering on the tags its pack gave it; the brightness,
@@ -230,7 +245,7 @@ add-ons, or with another release of it, is told which in chat.
   markers and the blocks it may stand on are asked again of the spot the game is trying, so a mob
   that a pack said belongs on sand at night stays there. The population a rule names is the one
   the entity counts against, so a pack's monster fills the monster cap rather than the animals'.
-- A pack's own `structures/*.mcstructure`, placed by `/structure load` and a script's
+- A pack's own `structures/*.mcstructure`, placed by `/bedrock structure load` and a script's
   `StructureManager` under the name its path gives it, the first folder being the namespace and a
   file with none taking Bedrock's `mystructure`.
 - The world a behaviour pack describes: the biomes it declares, the features it builds and the rules
@@ -302,10 +317,11 @@ add-ons, or with another release of it, is told which in chat.
   of buttons, which is what one of Bedrock's own forms states, so it is drawn by the screen this mod
   already turns a form into. Each button runs the commands the scene gave it as the NPC, with the
   authority Java gives a function and with `@initiator` standing for whoever is reading the screen,
-  and the scene's opening and closing commands run either side of that. `/dialogue change` says which scene an NPC shows,
-  `/dialogue open` shows one now, and interacting with an NPC that has been given a scene opens it.
+  and the scene's opening and closing commands run either side of that. `/bedrock dialogue change`
+  says which scene an NPC shows, `/bedrock dialogue open` shows one now, and interacting with an NPC
+  that has been given a scene opens it.
 - Behaviour pack scripts against `@minecraft/server`, sandboxed: a script sees its own pack's files
-  and nothing else on disk. Commands a script registers on startup become real commands,
+  and nothing else on disk. Commands a script registers on startup become commands `/bedrock` runs,
   `@minecraft/server-ui` forms become real screens (a 2.x `CustomForm` stays open while its buttons
   run their handlers and redraws as its observables change), and the world, system, entity, dimension, block,
   scoreboard, game rule and structure surfaces are answered by the game. The game's own mobs, items
@@ -327,10 +343,10 @@ add-ons, or with another release of it, is told which in chat.
   and a wolf, a cat, a parrot, a horse or a pack's own entity being tamed. An explosion and a tame
   are offered first as before events, so a listener can call one off, and the blocks an explosion
   names are the ones still standing.
-- The tests a behaviour pack ships through `@minecraft/server-gametest`. `/gametest run <name>`,
-  `/gametest runset <tag>` and `/gametest runall` build the structure a test named out of the pack's
-  own `.mcstructure`, place it beside you, hand the pack's function a `Test` bound to that area and
-  report what it decided. `/gametest clearall` takes the areas back.
+- The tests a behaviour pack ships through `@minecraft/server-gametest`. `/bedrock gametest run <name>`,
+  `/bedrock gametest runset <tag>` and `/bedrock gametest runall` build the structure a test named out
+  of the pack's own `.mcstructure`, place it beside you, hand the pack's function a `Test` bound to
+  that area and report what it decided. `/bedrock gametest clearall` takes the areas back.
 - The other modules a pack may import: `@minecraft/math`, `@minecraft/common`, and
   `@minecraft/vanilla-data`, whose tables of vanilla ids are read from this game's own registries so
   they hold what the version you play ships.
@@ -659,8 +675,8 @@ empties a vehicle, a `music` that loops, a `structure` mirrored on both axes or 
 time, a `summon` that turns or aims what it summons, a `gametest` that lays out a test area, the
 ender dragon's mob event, `replaceitem` into the slot a Bedrock equippable component fills,
 `tickingarea` picked out by name or as a circle, `save query`, `place featurerule` and the setting
-that says whether cheats are allowed: each is a form Java has no way to say. The line goes and the
-form is named, rather than being handed to a parser that would refuse it and take the file with it.
+that says whether cheats are allowed: each is a form Java has no way to say. The line does not run
+and the form is named, rather than being handed to a parser that would refuse it over the wrong word.
 
 Everything else is translated or registered. `effect`, `xp`, `playsound`, `stopsound`,
 `spreadplayers`, `replaceitem`, `ride`, `tickingarea`, `save`, `gamerule`, `gamemode`, `difficulty`,
@@ -673,8 +689,10 @@ Java's `schedule function <function> <time> [append|replace]` with one keyword m
 words at the end, and `schedule clear` is spelled alike in both. `schedule on_area_loaded`, which
 waits for chunks, is the form Java keeps no queue for and the one that is reported.
 `playanimation`, `event`, `scriptevent`, `music`, `toggledownfall`, `structure`, `mobevent`,
-`particle`, `dialogue`, `gametest`, `transfer` and `clearspawnpoint` are registered by this mod, and
-a line using one is written out in the form the command built here reads. `clearspawnpoint` takes a
+`particle`, `dialogue`, `gametest`, `transfer`, `camera`, `camerashake`, `fog` and `clearspawnpoint`
+are registered by this mod in the tree a Bedrock line is read against, beside Java's own commands
+and never in Java's tree, and a line using one is written out in the form the command built there
+reads. `clearspawnpoint` takes a
 player's respawn point away, which Java's `/spawnpoint` can only give. `transfer` hands a player to another server,
 which Java carries as `ClientboundTransferPacket` from 1.20.5 rather than as a command of its own; a
 line naming no port means the port a Java server listens on, because a Java client sent to Bedrock's

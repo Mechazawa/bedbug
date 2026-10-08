@@ -167,11 +167,11 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
         Assert.that(lit.renderType() == Platform.renderType(glow, false, false, true),
             "tp:prism's glowing layer was drawn with " + lit.renderType() + " instead of lit and blended.");
 
-        world.getServer().runCommand("event entity @e[type=tp:prism] tp:prism_square");
+        world.getServer().runCommand("bedrock event entity @e[type=tp:prism] tp:prism_square");
         Frames.waitFor(context, prism, frame -> Math.abs(reach(frame.geometry().get(0)) - SQUARE_REACH) < TOLERANCE,
             "tp:prism's tp:facet property was set to square and its controller never picked Geometry.square.");
 
-        world.getServer().runCommand("event entity @e[type=tp:prism] tp:prism_dye");
+        world.getServer().runCommand("bedrock event entity @e[type=tp:prism] tp:prism_dye");
         Submitted dyedFrame = Frames.waitFor(context, prism,
             frame -> frame.geometry().get(0).renderType() == Platform.renderType(dyed, false, false, false),
             "tp:prism's variant became 1 and its controller never picked Texture.dyed out of Array.skins.");
@@ -183,7 +183,7 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
         Assert.that(dyedFrame.geometry().size() == 1,
             "textures/entity/prism_dyed has no texture set, and a glowing layer was still drawn over it.");
 
-        world.getServer().runCommand("event entity @e[type=tp:prism] tp:prism_mark");
+        world.getServer().runCommand("bedrock event entity @e[type=tp:prism] tp:prism_mark");
         Submitted marked = Frames.waitFor(context, prism,
             frame -> Math.abs(frame.geometry().get(0).box().maxY - CORE_TOP) < TOLERANCE,
             "tp:prism's mark variant became 1 and its part_visibility never hid the mark bone.");
@@ -191,7 +191,7 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
             "tp:prism's overlay_color lays blue over it at half while its mark variant is 1, and it was drawn in "
                 + Integer.toHexString(marked.geometry().get(0).vertices().get(0).colour()) + ".");
 
-        world.getServer().runCommand("event entity @e[type=tp:prism] tp:prism_glaze");
+        world.getServer().runCommand("bedrock event entity @e[type=tp:prism] tp:prism_glaze");
         Frames.waitFor(context, prism,
             frame -> frame.geometry().get(0).renderType() == Platform.renderType(dyed, true, false, false),
             "tp:prism's tp:prism_glassy group picks Material.glass, entity_alphablend, and its pass was never"
@@ -201,7 +201,7 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
         Frames.waitFor(context, prism, frame -> colours(frame.geometry().get(0), ON_FIRE),
             "tp:prism was set on fire and its on_fire_color never painted it red.");
 
-        world.getServer().runCommand("event entity @e[type=tp:prism] tp:prism_shrink");
+        world.getServer().runCommand("bedrock event entity @e[type=tp:prism] tp:prism_shrink");
         Frames.waitFor(context, prism, frame -> Math.abs(reach(frame.geometry().get(0)) - YOUNG_REACH) < TOLERANCE,
             "tp:prism was made young and its controller never picked Geometry.young off q.is_baby.");
     }
