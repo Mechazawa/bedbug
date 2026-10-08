@@ -150,7 +150,8 @@ public final class PackFeatureClientGameTest implements FabricClientGameTest {
             for (int dz = -REACH * 16; dz <= REACH * 16; dz += 4) {
                 BlockPos top = overworld.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING, centre.offset(dx, 0, dz));
                 String biome = overworld.getBiome(top).unwrapKey().map(key -> key.identifier().toString()).orElse("?");
-                String ground = BuiltInRegistries.BLOCK.getKey(overworld.getBlockState(top.below()).getBlock()).toString();
+                String ground = BuiltInRegistries.BLOCK.getKey(overworld.getBlockState(top.below()).getBlock())
+                    .toString();
                 seen.merge(biome + " on " + ground, 1, Integer::sum);
             }
         }

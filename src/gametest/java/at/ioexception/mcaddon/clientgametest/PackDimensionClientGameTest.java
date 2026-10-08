@@ -74,7 +74,8 @@ public final class PackDimensionClientGameTest implements FabricClientGameTest {
 
         Assert.that(server.computeOnServer(minecraft -> minecraft.getLevel(CHASM) == null),
             "tp:chasm names a generator nothing converts and became a level anyway.");
-        Assert.that(AddonEntities.report().stream().anyMatch(line -> line.contains("dimension generator_type overworld")),
+        Assert.that(AddonEntities.report().stream()
+            .anyMatch(line -> line.contains("dimension generator_type overworld")),
             "tp:chasm's generator is not named among what the packs asked for: " + AddonEntities.report());
     }
 

@@ -67,7 +67,8 @@ public final class PackStructures {
         String relative = pack.relative(file).toString().replace('\\', '/');
         String inside = relative.substring(DIRECTORY.length() + 1, relative.length() - EXTENSION.length());
         int slash = inside.indexOf('/');
-        return McStructure.javaName(slash < 0 ? inside : inside.substring(0, slash) + ":" + inside.substring(slash + 1));
+        String named = slash < 0 ? inside : inside.substring(0, slash) + ":" + inside.substring(slash + 1);
+        return McStructure.javaName(named);
     }
 
     private static McStructure read(BedrockPack pack, Path file) {
