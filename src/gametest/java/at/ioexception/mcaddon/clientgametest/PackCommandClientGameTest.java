@@ -28,7 +28,7 @@ public final class PackCommandClientGameTest implements FabricClientGameTest {
             Worlds.waitForChunks(world);
 
             world.getServer().runCommand("execute as @a run scriptevent \"tp:stock_up\"");
-            Worlds.waitForServer(context, world, server -> carried(server) == 1, WAIT_TICKS,
+            Worlds.waitForServer(context, world.getServer(), server -> carried(server) == 1, WAIT_TICKS,
                 "The script's give, guarded by hasitem, never handed over " + GIVEN + ".");
             world.getServer().runCommand("execute as @a run scriptevent \"tp:stock_up\"");
             context.waitTicks(5);
@@ -44,7 +44,8 @@ public final class PackCommandClientGameTest implements FabricClientGameTest {
             context.clickScreenButton("Feed it");
             context.waitForScreen(null);
 
-            Worlds.waitForServer(context, world, server -> player(server).experienceLevel == levels + 1, WAIT_TICKS,
+            Worlds.waitForServer(context, world.getServer(),
+                server -> player(server).experienceLevel == levels + 1, WAIT_TICKS,
                 "The dialogue button's xp 1L never raised the player a level.");
         }
     }
