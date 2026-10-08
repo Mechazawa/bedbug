@@ -348,7 +348,6 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
     public static BlockBehaviour.Properties settings(BlockDefinition definition,
         ClientBlockDefinition appearance) {
         JsonObject components = definition.components();
-        int emission = (int) number(components, "minecraft:light_emission", "light_emission", 0);
         boolean conductor = flag(components, "minecraft:redstone_conductivity", "redstone_conductor")
             || flag(components, "minecraft:redstone_consumer", "propagates_power");
         if (object(components, "minecraft:redstone_consumer").has("min_power")) {
@@ -357,7 +356,9 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
 
         BlockBehaviour.Properties properties = BlockBehaviour.Properties.of()
             .strength(hardness(components), resistance(components))
-            .lightLevel(state -> emission)
+            .lightLevel(state -> (int) number(
+                definition.componentsAt(name -> AddonBlock.stateValue(definition, state, name)),
+                "minecraft:light_emission", "light_emission", 0))
             .friction(javaFriction(number(components, "minecraft:friction", "friction", 0.4f)))
             .pushReaction(pushReaction(text(components, "minecraft:movable", "movement_type")))
             .isRedstoneConductor((state, level, position) -> conductor);

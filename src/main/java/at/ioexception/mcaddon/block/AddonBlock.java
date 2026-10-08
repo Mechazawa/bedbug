@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.block;
 
 import at.ioexception.mcaddon.bedrock.behaviour.BlockDefinition;
+import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.server.BlockEvents;
 import at.ioexception.mcaddon.server.ServerHooks;
@@ -87,14 +88,42 @@ public class AddonBlock extends Block {
     public static Map<String, Property<?>> propertiesOf(BlockDefinition definition) {
         Map<String, Property<?>> properties = new LinkedHashMap<>();
         definition.states().forEach((name, values) -> {
-            String java = Names.sanitise(name).replace(':', '_').replace('.', '_').replace('/', '_');
             if (isBoolean(values)) {
-                properties.put(name, BooleanProperty.create(java));
+                properties.put(name, BooleanProperty.create(javaName(name)));
             } else {
-                properties.put(name, IntegerProperty.create(java, 0, values.size() - 1));
+                properties.put(name, IntegerProperty.create(javaName(name), 0, values.size() - 1));
             }
         });
         return properties;
+    }
+
+    private static String javaName(String state) {
+        return Names.sanitise(state).replace(':', '_').replace('.', '_').replace('/', '_');
+    }
+
+    /**
+     * What `q.block_state` answers for one of a pack's states in a block state, by its Bedrock name.
+     *
+     * A state the pack declared with values other than the two booleans is held as the index of its
+     * value, so the value is read back out of the pack's own list.
+     */
+    public static MolangValue stateValue(BlockDefinition definition, BlockState state, String name) {
+        List<JsonElement> values = definition.states().get(name);
+        if (values == null) return MolangValue.ZERO;
+
+        for (Property<?> property : state.getProperties()) {
+            if (!property.getName().equals(javaName(name))) continue;
+
+            Object value = state.getValue(property);
+            if (value instanceof Boolean flag) return MolangValue.of(flag);
+
+            JsonElement chosen = values.get((Integer) value);
+            if (!chosen.isJsonPrimitive()) return MolangValue.ZERO;
+            if (chosen.getAsJsonPrimitive().isBoolean()) return MolangValue.of(chosen.getAsBoolean());
+            if (chosen.getAsJsonPrimitive().isNumber()) return MolangValue.of(chosen.getAsDouble());
+            return MolangValue.of(chosen.getAsString());
+        }
+        return MolangValue.ZERO;
     }
 
     public static boolean isBoolean(List<JsonElement> values) {

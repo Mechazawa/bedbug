@@ -1,6 +1,9 @@
 package at.ioexception.mcaddon.bedrock.behaviour;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
+import at.ioexception.mcaddon.bedrock.molang.MolangParser;
+import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
@@ -12,6 +15,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * A block a behaviour pack declares.
@@ -30,6 +34,26 @@ public record BlockDefinition(String identifier, Map<String, String> faceTexture
 
     /** One `permutations` entry: the components that apply while its Molang condition holds. */
     public record Permutation(String condition, JsonObject components) {
+    }
+
+    /**
+     * The components in force for one combination of the block's states.
+     *
+     * Every permutation whose condition holds is laid over the block's own components in the order
+     * the pack wrote them, so a later one answers for a component an earlier one also set. `state`
+     * answers `q.block_state` for a state's Bedrock name.
+     */
+    public JsonObject componentsAt(Function<String, MolangValue> state) {
+        MolangEnvironment environment = new MolangEnvironment();
+        environment.setQueries((query, arguments) -> query.equals("block_state") && !arguments.isEmpty()
+            ? state.apply(arguments.get(0).text()) : MolangValue.ZERO);
+
+        JsonObject merged = components.deepCopy();
+        for (Permutation permutation : permutations) {
+            if (!MolangParser.parse(permutation.condition()).evaluate(environment).truthy()) continue;
+            permutation.components().entrySet().forEach(entry -> merged.add(entry.getKey(), entry.getValue()));
+        }
+        return merged;
     }
 
     public static List<BlockDefinition> readAll(BedrockPack pack) {
