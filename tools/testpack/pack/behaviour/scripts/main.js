@@ -93,6 +93,16 @@ function readTheBlock(player, message) {
     player.addTag("tp:keeps_" + kept.get("tp:probe"));
 }
 
+// `tp:totem` names this component, so using that block reaches the callback, and the tag it leaves
+// says the player who used it was handed over as well.
+system.beforeEvents.startup.subscribe(event => {
+    event.blockComponentRegistry.registerCustomComponent("tp:tapped", {
+        onPlayerInteract(interaction) {
+            interaction.player?.addTag("tp:tapped");
+        },
+    });
+});
+
 // `/scriptevent "tp:names" <x> <y> <z>` reads the block there by Bedrock's id and answers in blocks
 // above it: a lit pumpkin resolved under Bedrock's id one up, and a gold block two up when the block
 // read back as Bedrock's `golden_rail`.

@@ -143,14 +143,31 @@ These are the checks it runs, and what each one catches:
   Only the 26.x targets ship that API, so the tests are a source set of their own (`gametest`, with
   its own `fabric.mod.json` listing them) that the two older targets never compile, and `check`
   runs them for the checked-out version only. The two 26.x test APIs differ in a few spellings,
-  which `Worlds` holds. A world built with the builder's consistent settings is on peaceful, so a
-  test about a mob reacting to the player sets the game mode and the difficulty itself: Java's
-  avoid and target goals ignore a creative player and every player on peaceful.
+  which `Worlds` holds. A world built with the builder's consistent settings opens in survival on
+  peaceful, so a test that needs the creative inventory, or a mob reacting to the player, sets the
+  game mode and the difficulty itself: Java's avoid and target goals ignore a creative player and
+  every player on peaceful.
 
   `-Paddons=<directory>` installs every `.mcaddon` in that directory beside the synthetic one, for
   either game test task, so the same tests can be run against a real pack that may never be
   committed here. Both tasks delete their world before running, because each run of the server
   tests places them somewhere new and a kept world only grows.
+
+  What a player does with a pack's items and blocks is driven through the client's own input: the
+  use, attack and inventory keys, the view turned onto a block or an entity, and container clicks
+  sent the way a screen sends them. `ItemUseClientGameTest` eats, wears, throws and spawns from an
+  egg; `BlockClientGameTest` places a block by its placement trait, uses it, stands on it, aims over
+  it and mines it, timing the break against the state's hardness and counting what it drops;
+  `CreativeTabClientGameTest`, `CraftingClientGameTest`, `TradeClientGameTest`,
+  `DialogueClientGameTest` and `RecordClientGameTest` cover the creative tabs, the crafting table,
+  furnace and brewing stand, the merchant screen, an NPC's scene and a jukebox. Each starts from
+  `Stage`, a stone floor high over the world with the player on it in the game mode the test asks
+  for. The client runs on its own clock, so time is counted on the server's (`getTickCount`) or
+  from the first tick the client itself reports progress (`getDestroyStage`), never from the key
+  press; and a teleport turns the view, so `Stage` waits for the teleport to land before a test
+  turns it. A killed mob stays in the crosshair while it dies, so `Stage` discards what it clears
+  away, and a widget with no label is pressed with `onPress`, the way `clickScreenButton` presses
+  one, because a click placed with the pointer did not always land.
 
   `VillageClientGameTest` makes a normal world with structures, teleports to the nearest village and
   waits for villagers to be standing in it, which is what a player calls a village. Two traps met
@@ -215,6 +232,13 @@ These are the checks it runs, and what each one catches:
   water blocks are written differently from each other, a texture set whose emissive
   channel has pixels in it, a glyph page beside the locale list and the locale names a pack declares,
   and a function using the commands and selector arguments that need translating.
+
+  The hands-on client tests use a few things of their own. `tp:berry` is food eaten in 0.8 seconds,
+  half Java's default, and `tp:pebble` throws `tp:spark`. `tp:totem` is a block with a
+  `minecraft:placement_direction` trait turned by a `y_rotation_offset`, a use counter driven by
+  `minecraft:on_interact`, a script component (`tp:tapped`, registered by the pack's script) that
+  tags whoever uses it, half-high boxes a permutation makes whole on the third use, and a loot
+  table of its own, against `tp:lamp`, which names none and so drops itself.
 
   A third entity, `tp:wisp`, states the numbers whose unit differs between the two editions: a health
   `value` below its `max`, a goal priority that is neither the first nor the last of its goals, an

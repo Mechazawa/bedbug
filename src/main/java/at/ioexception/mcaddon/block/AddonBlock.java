@@ -17,6 +17,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.ContainerLevelAccess;
 import net.minecraft.world.inventory.CraftingMenu;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelReader;
@@ -134,16 +135,44 @@ public class AddonBlock extends Block {
     @Override
     public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos position,
         CollisionContext context) {
-        VoxelShape selection = components == null ? null : components.selection();
+        VoxelShape selection = components == null ? null : components.selectionAt(state);
         return selection == null ? super.getShape(state, level, position, context) : selection;
     }
 
     @Override
     public VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos position,
         CollisionContext context) {
-        VoxelShape collision = components == null ? null : components.collision();
+        VoxelShape collision = components == null ? null : components.collisionAt(state);
         return collision == null ? super.getCollisionShape(state, level, position, context) : collision;
     }
+
+    /** The states the pack's placement traits set, from how the player placed the block. */
+    @Override
+    public BlockState getStateForPlacement(BlockPlaceContext context) {
+        BlockState state = super.getStateForPlacement(context);
+        return state == null || components == null || components.traits() == null ? state
+            : components.traits().placed(state, context);
+    }
+
+    /**
+     * How much of the block one tick of mining takes off, from the hardness of the state being mined.
+     *
+     * Java keeps one hardness per block and a permutation's `destructible_by_mining` gives each state
+     * its own, so the sum Java would do is done here over that state's hardness instead.
+     */
+    @Override
+    public float getDestroyProgress(BlockState state, Player player, BlockGetter level, BlockPos position) {
+        float own = state.getDestroySpeed(level, position);
+        float hardness = components == null ? own : components.hardnessAt(state, own);
+        if (hardness < 0) return 0f;
+
+        int divisor = player.hasCorrectToolForDrops(state) ? CORRECT_TOOL : WRONG_TOOL;
+        return player.getDestroySpeed(state) / hardness / divisor;
+    }
+
+    /** What Java divides a block's hardness by, with and without the tool its drops need. */
+    private static final int CORRECT_TOOL = 30;
+    private static final int WRONG_TOOL = 100;
 
     @Override
     public VoxelShape getBlockSupportShape(BlockState state, BlockGetter level, BlockPos position) {

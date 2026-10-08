@@ -50,7 +50,7 @@ public class AddonWaterloggedBlock extends AddonBlock implements SimpleWaterlogg
 
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
-        return defaultBlockState().setValue(BlockStateProperties.WATERLOGGED,
+        return super.getStateForPlacement(context).setValue(BlockStateProperties.WATERLOGGED,
             context.getLevel().getFluidState(context.getClickedPos()).getType() == Fluids.WATER);
     }
 

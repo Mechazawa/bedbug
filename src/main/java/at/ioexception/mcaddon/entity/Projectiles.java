@@ -81,6 +81,10 @@ public final class Projectiles {
         return from.position().add(0, height, 0).add(shift);
     }
 
+    public LivingEntity shooter() {
+        return shooter;
+    }
+
     /** Whether the shot is aimed at what the shooter is hunting rather than straight ahead. */
     public boolean aimsAtTarget() {
         return Json.bool(body, "shoot_target", true);

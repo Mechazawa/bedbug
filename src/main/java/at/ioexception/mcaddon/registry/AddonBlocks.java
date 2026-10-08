@@ -7,6 +7,7 @@ import at.ioexception.mcaddon.block.AddonBlock;
 import at.ioexception.mcaddon.block.AddonWaterloggedBlock;
 import at.ioexception.mcaddon.block.BlockComponents;
 import at.ioexception.mcaddon.block.PackShapes;
+import at.ioexception.mcaddon.block.Permutations;
 import at.ioexception.mcaddon.convert.BedrockBlockNames;
 import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.pack.BedrockPack;
@@ -35,9 +36,9 @@ import java.util.function.Consumer;
 /**
  * A block per block a behaviour pack declares, with an item so it can be placed.
  *
- * Bedrock's states and permutations are not mapped: a Java block's states have to exist before the
- * registries freeze and a pack's permutation conditions are Molang over them. A pack that uses them
- * gets its default look and is told so.
+ * A pack's states, and the ones its placement traits add, become Java properties. A permutation's
+ * shapes, hardness and light are answered per state, its textures and turn are drawn per state, and
+ * any other component it names is fixed with the block and reported.
  */
 public final class AddonBlocks {
     private static final Map<String, Block> BY_IDENTIFIER = new LinkedHashMap<>();
@@ -146,10 +147,13 @@ public final class AddonBlocks {
         for (String part : BlockComponents.unmappedTransformation(definition)) {
             AddonEntities.unsupported("minecraft:transformation " + part);
         }
+        for (String component : Permutations.fixed(definition)) {
+            AddonEntities.unsupported(component + " in a permutation");
+        }
 
         Map<String, Property<?>> states = AddonBlock.propertiesOf(definition);
         BlockComponents components = BlockComponents.of(definition, states, shapes);
-        BlockBehaviour.Properties properties = BlockComponents.settings(definition, appearance);
+        BlockBehaviour.Properties properties = components.settings(definition, appearance);
         List<Property<?>> declared = new ArrayList<>(states.values());
 
         Block block = AddonBlock.carrying(components, () -> BlockComponents.waterlogged(definition)

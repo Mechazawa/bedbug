@@ -72,7 +72,9 @@ add-ons, or with another release of it, is told which in chat.
 - What a pack's entity can be besides a mob that walks about. One a pack calls a projectile flies
   the arc its own component describes, spread by the inaccuracy the pack asked for, and on landing
   it damages, burns, poisons, sticks in the ground, drops experience, throws its particles and fires
-  the pack's own event; what shoots it is an ordinary `minecraft:shooter`. One that belongs on rails
+  the pack's own event; what shoots it is an ordinary `minecraft:shooter`, or a player's bow or
+  throwable item, which sends it off at its own power and leaves the thrower safe from it for the
+  ticks the pack says and named in its damage. One that belongs on rails
   stays on the track at the speed the pack allows and answers a live rail with its own event,
   putting its riders off where it was told to. One that remembers writes down what came near it and
   where it heard something happen, and its memory behaviours walk to that, flee it, or hold the
@@ -108,7 +110,11 @@ add-ons, or with another release of it, is told which in chat.
   that have the enchantment. A price is met by scaling what Java was about to spend, so the distance
   in a movement charge and the weight of the damage type in a damage charge both survive it. A field
   the pack leaves out stays Java's own.
-- Items, including edible and wearable ones, spawn eggs, and a creative tab per add-on. A dyeable
+- Items, including edible and wearable ones, spawn eggs, and a creative tab per add-on. An item or a
+  block naming its category in `menu_category` also joins the Java tab that category stands for:
+  construction is building blocks, nature is natural blocks, equipment is combat and items is
+  ingredients. Food takes as long to eat as the pack says, which before 1.21.2 is one of Java's two
+  eating times, the quick one for a pack asking for 0.8 seconds or less. A dyeable
   item takes the colour the pack painted it and the one a player dyes it. A bow draws and fires
   whatever the pack loads it with. A bag holds other items. A drop the pack asks to keep lies there.
   An item the pack lets into the off hand goes there and one it does not is refused, an item that
@@ -132,13 +138,18 @@ add-ons, or with another release of it, is told which in chat.
   1.21.90 each component as a key of its own, whose body reaches the callback as its `params`.
 - Blocks, with the states and permutations a pack declares: each combination gets its own model, the
   permutation conditions are evaluated through the Molang evaluator, and a block drawn with its own
-  geometry keeps it. A block naming one of the pack's own `shapes/` under `culling_shape` hides the
-  faces that shape covers, which is what a Bedrock voxel shape is for and what a Java occlusion
-  shape does. A face of a block's geometry naming a material instance wears the texture the block's
-  `minecraft:material_instances` gives that instance, and the geometry's `item_display_transforms`
-  turn, move and scale the block's item in either hand, on the head, on the ground, in a frame, in
-  the inventory and, from 26, on a shelf. A block's own `minecraft:sound` names the sound group it
-  makes its noises from, and outranks the one `blocks.json` names.
+  geometry keeps it. What a permutation changes about a state follows the block into that state: its
+  textures and its turn, its collision and selection boxes, how long it takes to mine and the light
+  it gives. The placement traits add their states too, set as the player places the block: the way
+  they faced, turned by `y_rotation_offset`, the face they clicked and the half of it. A block
+  naming no `minecraft:loot` breaks into one of itself, as it does in Bedrock. A block naming one of
+  the pack's own `shapes/` under `culling_shape` hides the faces that shape covers, which is what a
+  Bedrock voxel shape is for and what a Java occlusion shape does. A face of a block's geometry
+  naming a material instance wears the texture the block's `minecraft:material_instances` gives that
+  instance, and the geometry's `item_display_transforms` turn, move and scale the block's item in
+  either hand, on the head, on the ground, in a frame, in the inventory and, from 26, on a shelf. A
+  block's own `minecraft:sound` names the sound group it makes its noises from, and outranks the one
+  `blocks.json` names.
 - The events a block declares, fired the way Bedrock fires them: on its own clock, on a random tick,
   and on the block being placed, broken, clicked, stepped on, stepped off or landed on. Each one runs
   the commands the event queues and writes back the states it sets, with its Molang condition checked
@@ -263,9 +274,9 @@ add-ons, or with another release of it, is told which in chat.
   states outright or takes off the velocity once it is moving faster than the threshold it named.
 - The conversations an NPC opens. A scene under `dialogue/` states a name, a body of text and a row
   of buttons, which is what one of Bedrock's own forms states, so it is drawn by the screen this mod
-  already turns a form into. Each button runs the commands the scene gave it with the NPC's own
-  authority and with `@initiator` standing for whoever is reading the screen, and the scene's opening
-  and closing commands run either side of that. `/dialogue change` says which scene an NPC shows,
+  already turns a form into. Each button runs the commands the scene gave it as the NPC, with the
+  authority Java gives a function and with `@initiator` standing for whoever is reading the screen,
+  and the scene's opening and closing commands run either side of that. `/dialogue change` says which scene an NPC shows,
   `/dialogue open` shows one now, and interacting with an NPC that has been given a scene opens it.
 - Behaviour pack scripts against `@minecraft/server`, sandboxed: a script sees its own pack's files
   and nothing else on disk. Commands a script registers on startup become real commands,
