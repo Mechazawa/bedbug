@@ -471,6 +471,12 @@
           "restriction_radius": 5
         }
       },
+      "tp:ember_lava_buoyant": {
+        "minecraft:buoyant": {
+          "liquid_blocks": ["minecraft:lava", "minecraft:flowing_lava"],
+          "base_buoyancy": 4
+        }
+      },
       "tp:ember_alert": {
         "minecraft:timer": {
           "time": 1.0,
@@ -689,6 +695,11 @@
       "tp:ember_nest": {
         "add": {
           "component_groups": ["tp:ember_nesting"]
+        }
+      },
+      "tp:ember_float_on_lava": {
+        "add": {
+          "component_groups": ["tp:ember_lava_buoyant"]
         }
       },
       "tp:ember_winter": {

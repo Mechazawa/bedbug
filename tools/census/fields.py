@@ -58,6 +58,9 @@ TEMPT_SOUND = ("Mojang's documentation counts the gap between tempt sounds in ti
                "[0, 100] where its strider writes 2 to 5, which no one unit fits; the sound is left unmade "
                "rather than made at one of the two rates.")
 
+BOBBING = ("The shape of the rise and fall on the surface. The lift above gives a floating entity Java's own "
+           "bob, and nothing in Java lets an entity choose another.")
+
 # A field a reader may skip, and why. Keyed by component, then by field; the key "*" covers every
 # field of that component that no reader names.
 REASONS = {
@@ -162,10 +165,14 @@ REASONS = {
     "minecraft:movement.jump": {"*": "Java's jump control has no delay of its own."},
 
     "minecraft:buoyant": {
-        "liquid_blocks": "Java floats a mob in water and in nothing else, so a list of liquids has "
-                         "only the one entry it can be given.",
-        "apply_gravity": "Java applies gravity to every mob and offers no per-entity switch.",
-        "base_buoyancy": "Read as the lift the entity is given, under the scale beside it.",
+        "apply_gravity": "The lift is added on top of the gravity Java applies in a liquid, so an entity "
+                         "saying no to gravity still has it; every vanilla mob declaring this says yes.",
+        "movement_type": BOBBING,
+        "big_wave_probability": BOBBING,
+        "big_wave_speed": BOBBING,
+        "can_auto_step_from_liquid": "Java lets a mob pushing against the bank climb out of water already.",
+        "drag_down_on_buoyancy_removed": "A boat's sinking when it stops floating; the two vanilla entities "
+                                         "writing it are Mojang's boats.",
     },
 
     # Goals. Java's goal of the same name takes fewer parameters than Bedrock states.

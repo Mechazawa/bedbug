@@ -2316,12 +2316,33 @@ public class AddonEntity extends PathfinderMob
 
     /** Rises through the liquid it is in, which is the whole of what a buoyant entity does. */
     private void rideLiquid() {
-        if (!declaresNow("minecraft:buoyant") && !declaresNow("minecraft:floats_in_liquid")) return;
-        if (!isInWater() && !isInLava()) return;
+        com.google.gson.JsonObject buoyant = liveComponent("minecraft:buoyant");
+        boolean floating = declaresNow("minecraft:floats_in_liquid") ? isInWater() || isInLava()
+            : buoyant != null
+                && ((isInWater() && floatsOn(buoyant, "water")) || (isInLava() && floatsOn(buoyant, "lava")));
+        if (!floating) return;
 
-        double lift = liveNumber("minecraft:buoyant", "liquid_blocks_scale", 1) * 0.03;
+        double lift = Goals.number(buoyant, "base_buoyancy", 1) * BUOYANT_LIFT;
         setDeltaMovement(getDeltaMovement().add(0, lift, 0));
         fallDistance = 0;
+    }
+
+    /** The lift a `base_buoyancy` of one gives each tick, in blocks a tick each tick. */
+    private static final double BUOYANT_LIFT = 0.03;
+
+    /**
+     * Whether `liquid_blocks` names the liquid, still or flowing. A component naming none floats in
+     * water, which is where Java floats every mob that floats.
+     */
+    private static boolean floatsOn(com.google.gson.JsonObject buoyant, String liquid) {
+        java.util.List<com.google.gson.JsonElement> named =
+            at.ioexception.mcaddon.util.Json.list(buoyant, "liquid_blocks");
+        if (named.isEmpty()) return liquid.equals("water");
+
+        return named.stream()
+            .filter(com.google.gson.JsonElement::isJsonPrimitive)
+            .map(block -> block.getAsString().replace("minecraft:", "").replace("flowing_", ""))
+            .anyMatch(liquid::equals);
     }
 
     /** Ticks of the entity's own age at which something last hurt it, for the components that wait. */

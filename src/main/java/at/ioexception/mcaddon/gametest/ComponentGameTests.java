@@ -768,6 +768,33 @@ public final class ComponentGameTests {
     }
 
     /**
+     * A buoyant entity floats on the liquids its `liquid_blocks` names and in no other.
+     *
+     * The lava group gives the ember four times the usual lift in lava, so in water it has none of
+     * it: an ember lifted there would be pushed up through the water it stands in.
+     */
+    @GameTest()
+    public void aBuoyantEntityFloatsOnlyOnTheLiquidsItNames(GameTestHelper helper) {
+        helper.setBlock(STAND, Blocks.WATER);
+        helper.setBlock(STAND.above(), Blocks.WATER);
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_float_on_lava", null, ServerHooks.state());
+        double start = ember.getY();
+        live(ember, FLOAT_TICKS);
+        helper.assertTrue(ember.getY() <= start,
+            EMBER + " floats on lava alone and rose " + (ember.getY() - start) + " through water.");
+        helper.succeed();
+    }
+
+    /** Long enough for a lift four times the usual to carry the ember up through the water. */
+    private static final int FLOAT_TICKS = 20;
+
+    /**
      * Runs the entity's own ticks the way the level does, which counts its age first: Java's goals
      * tell one blow from the next by the age it landed at.
      */
