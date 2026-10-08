@@ -3,6 +3,7 @@ package at.ioexception.mcaddon.registry;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.behaviour.ItemDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
+import at.ioexception.mcaddon.convert.BedrockItemNames;
 import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.convert.SpawnEggAppearance;
 import at.ioexception.mcaddon.item.AddonScriptedItem;
@@ -40,6 +41,14 @@ import java.util.Set;
  */
 public final class AddonItems {
     private static final Map<String, Item> BY_IDENTIFIER = new LinkedHashMap<>();
+
+    /**
+     * The answers of the two `identifierOf`, which an entity asks of what it is offered and which
+     * never change once a name has an item. A name no item answers yet is asked again, because a
+     * pack's own items are registered after the first packs are read.
+     */
+    private static final Map<Item, String> REPORTED = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final Map<String, String> NAMED = new java.util.concurrent.ConcurrentHashMap<>();
     private static final List<Item> DYEABLE = new ArrayList<>();
     private static final Set<Item> KEPT = new HashSet<>();
     private static final Map<Item, String> PROJECTILES = new LinkedHashMap<>();
@@ -77,10 +86,38 @@ public final class AddonItems {
         return DYEABLE;
     }
 
-    /** The item a Bedrock name refers to, a pack's own or the game's. */
+    /**
+     * The item a Bedrock name refers to, a pack's own or the game's, under either edition's
+     * spelling and with any data value written after it.
+     */
     public static Item named(String bedrock) {
         Item own = BY_IDENTIFIER.get(bedrock);
         return own != null ? own : itemNamed(bedrock);
+    }
+
+    /**
+     * The identifier a pack knows this item by, which `named` reads back: Bedrock's spelling for
+     * one the game has, and the registered one for a pack's own.
+     */
+    public static String identifierOf(Item item) {
+        return REPORTED.computeIfAbsent(item,
+            asked -> BedrockItemNames.bedrock(BuiltInRegistries.ITEM.getKey(asked).toString()));
+    }
+
+    /**
+     * The identifier an item a pack names is reported under, whichever edition's spelling it wrote,
+     * so that two names for one item compare equal. A name no item answers comes back as written.
+     */
+    public static String identifierOf(String bedrock) {
+        String known = bedrock == null ? null : NAMED.get(bedrock);
+        if (known != null) return known;
+
+        Item item = bedrock == null ? null : named(bedrock);
+        if (item == null) return bedrock;
+
+        String identifier = identifierOf(item);
+        NAMED.put(bedrock, identifier);
+        return identifier;
     }
 
     /**
@@ -820,12 +857,12 @@ public final class AddonItems {
     }
 
     private static Block blockNamed(String name) {
-        Identifier id = identifier(name);
-        return id == null ? null : BuiltInRegistries.BLOCK.getOptional(id).orElse(null);
+        return AddonBlocks.named(name);
     }
 
     private static Item itemNamed(String name) {
-        Identifier id = identifier(name);
+        String java = BedrockItemNames.java(name);
+        Identifier id = java == null ? null : Identifier.tryParse(java);
         return id == null ? null : BuiltInRegistries.ITEM.getOptional(id).orElse(null);
     }
 

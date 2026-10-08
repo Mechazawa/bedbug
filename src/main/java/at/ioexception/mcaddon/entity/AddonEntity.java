@@ -7,7 +7,9 @@ import at.ioexception.mcaddon.bedrock.behaviour.SpawnRuleDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.TargetSelection;
 import at.ioexception.mcaddon.bedrock.behaviour.TradeTable;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.registry.AddonSpawns;
 import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.Sensors;
@@ -1011,7 +1013,7 @@ public class AddonEntity extends PathfinderMob
         com.google.gson.JsonObject reins = liveComponent("minecraft:item_controllable");
         if (reins == null) return true;
 
-        String held = BuiltInRegistries.ITEM.getKey(rider.getMainHandItem().getItem()).toString();
+        String held = AddonItems.identifierOf(rider.getMainHandItem().getItem());
         for (com.google.gson.JsonElement item
             : at.ioexception.mcaddon.util.Json.list(reins, "control_items")) {
             if (item.isJsonPrimitive() && names(item.getAsString(), held)) return true;
@@ -1177,13 +1179,12 @@ public class AddonEntity extends PathfinderMob
             at.ioexception.mcaddon.util.Json.list(body, field);
         if (listed.isEmpty()) return false;
 
-        String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+        String id = AddonItems.identifierOf(stack.getItem());
         return listed.stream()
             .map(entry -> entry.isJsonObject()
                 ? at.ioexception.mcaddon.util.Json.text(entry.getAsJsonObject(), "item", null)
                 : entry.isJsonPrimitive() ? entry.getAsString() : null)
-            .filter(java.util.Objects::nonNull)
-            .anyMatch(name -> name.equals(id) || ("minecraft:" + name).equals(id));
+            .anyMatch(name -> names(name, id));
     }
 
     /**
@@ -1318,7 +1319,7 @@ public class AddonEntity extends PathfinderMob
         ItemStack held = player.getItemInHand(hand);
         if (held.isEmpty()) return false;
 
-        String id = BuiltInRegistries.ITEM.getKey(held.getItem()).toString();
+        String id = AddonItems.identifierOf(held.getItem());
         boolean wanted = at.ioexception.mcaddon.util.Json.list(
                 componentBody("minecraft:bribeable"), "bribe_items").stream()
             .anyMatch(item -> item.isJsonPrimitive() && names(item.getAsString(), id));
@@ -1344,12 +1345,9 @@ public class AddonEntity extends PathfinderMob
         com.google.gson.JsonArray items = breedable.getAsJsonArray("breed_items");
         if (items == null || offered.isEmpty()) return false;
 
-        String id = BuiltInRegistries.ITEM.getKey(offered.getItem()).toString();
+        String id = AddonItems.identifierOf(offered.getItem());
         for (com.google.gson.JsonElement item : items) {
-            if (!item.isJsonPrimitive()) continue;
-
-            String named = item.getAsString();
-            if (named.equals(id) || ("minecraft:" + named).equals(id)) return true;
+            if (item.isJsonPrimitive() && names(item.getAsString(), id)) return true;
         }
         return false;
     }
@@ -1819,14 +1817,13 @@ public class AddonEntity extends PathfinderMob
         java.util.Set<String> wanted = new java.util.LinkedHashSet<>();
         for (com.google.gson.JsonElement named
             : at.ioexception.mcaddon.util.Json.list(componentBody("minecraft:break_blocks"), "breakable_blocks")) {
-            if (named.isJsonPrimitive()) wanted.add(named.getAsString());
+            if (named.isJsonPrimitive()) wanted.add(AddonBlocks.identifierOf(named.getAsString()));
         }
         if (wanted.isEmpty()) return;
 
         net.minecraft.world.phys.AABB box = getBoundingBox().inflate(0.2);
         net.minecraft.core.BlockPos.betweenClosedStream(box)
-            .filter(at -> wanted.contains(
-                BuiltInRegistries.BLOCK.getKey(level.getBlockState(at).getBlock()).toString()))
+            .filter(at -> wanted.contains(AddonBlocks.identifierOf(level.getBlockState(at))))
             .map(net.minecraft.core.BlockPos::immutable)
             .toList()
             .forEach(at -> level.destroyBlock(at, true, this));
@@ -1895,10 +1892,9 @@ public class AddonEntity extends PathfinderMob
         if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
 
         String named = liveText("minecraft:trail", "block_type");
-        Identifier id = named == null ? null : Identifier.tryParse(named);
-        net.minecraft.world.level.block.Block block = id == null ? null
-            : BuiltInRegistries.BLOCK.getOptional(id).orElse(null);
-        if (block == null) return;
+        net.minecraft.world.level.block.state.BlockState trail = named == null ? null
+            : AddonBlocks.stateOf(named, java.util.Map.of(), AddonEntities::unsupported);
+        if (trail == null) return;
 
         if (!Filter.parse(componentBody("minecraft:trail").get("spawn_filter"))
             .matches(new Filter.Context(this, this, null, ServerHooks.state()))) {
@@ -1908,7 +1904,7 @@ public class AddonEntity extends PathfinderMob
         net.minecraft.core.BlockPos under = blockPosition().below();
         if (!level.getBlockState(under).canBeReplaced()) return;
 
-        level.setBlockAndUpdate(under, block.defaultBlockState());
+        level.setBlockAndUpdate(under, trail);
     }
 
     /**
@@ -3263,8 +3259,7 @@ public class AddonEntity extends PathfinderMob
     private void noticeTheBlockItIsIn() {
         if (!declares("minecraft:inside_block_notifier")) return;
 
-        String inside = net.minecraft.core.registries.BuiltInRegistries.BLOCK
-            .getKey(level().getBlockState(blockPosition()).getBlock()).toString();
+        String inside = AddonBlocks.identifierOf(level().getBlockState(blockPosition()));
         if (inside.equals(lastBlockInside)) return;
 
         for (com.google.gson.JsonElement element : at.ioexception.mcaddon.util.Json.list(
@@ -3345,8 +3340,7 @@ public class AddonEntity extends PathfinderMob
         net.minecraft.core.BlockPos broken, net.minecraft.world.level.block.state.BlockState state) {
         if (level.isClientSide() || !AddonEntities.anyoneDeclares("minecraft:block_sensor")) return;
 
-        String name = net.minecraft.core.registries.BuiltInRegistries.BLOCK
-            .getKey(state.getBlock()).toString();
+        String name = AddonBlocks.identifierOf(state);
         for (AddonEntity nearby : level.getEntitiesOfClass(AddonEntity.class,
             new net.minecraft.world.phys.AABB(broken).inflate(BLOCK_SENSOR_RANGE))) {
             nearby.noticeBrokenBlock(broken, name);
@@ -3371,22 +3365,22 @@ public class AddonEntity extends PathfinderMob
             boolean listed = at.ioexception.mcaddon.util.Json.list(entry, "block_list").stream()
                 .filter(com.google.gson.JsonElement::isJsonPrimitive)
                 .map(com.google.gson.JsonElement::getAsString)
-                .anyMatch(listedName -> (listedName.contains(":")
-                    ? listedName : "minecraft:" + listedName).equals(name));
+                .anyMatch(listedName -> AddonBlocks.identifierOf(listedName).equals(name));
             if (listed) fire(Goals.event(entry, "on_block_broken"));
         }
     }
 
-    /** A block descriptor names itself either bare or under `name`, in both shapes a pack writes. */
+    /**
+     * A block descriptor names itself either bare or under `name`, in both shapes a pack writes,
+     * and is answered under the id a block in the world reports itself by.
+     */
     private static String blockNameOf(com.google.gson.JsonObject entry) {
         com.google.gson.JsonElement block = entry.get("block");
         String named = block == null ? null
             : block.isJsonPrimitive() ? block.getAsString()
             : block.isJsonObject()
                 ? at.ioexception.mcaddon.util.Json.text(block.getAsJsonObject(), "name", null) : null;
-        if (named == null) return null;
-
-        return named.contains(":") ? named : "minecraft:" + named;
+        return named == null ? null : AddonBlocks.identifierOf(named);
     }
 
     /** The sound a pack named, or the one the game already plays for this when it named none. */
@@ -3959,7 +3953,7 @@ public class AddonEntity extends PathfinderMob
             return false;
         }
 
-        String id = BuiltInRegistries.ITEM.getKey(held.getItem()).toString();
+        String id = AddonItems.identifierOf(held.getItem());
         for (com.google.gson.JsonElement element
             : at.ioexception.mcaddon.util.Json.list(componentBody("minecraft:healable"), "items")) {
             if (!element.isJsonObject()) continue;
@@ -3984,7 +3978,7 @@ public class AddonEntity extends PathfinderMob
         ItemStack held = player.getItemInHand(hand);
         if (held.isEmpty()) return false;
 
-        String id = BuiltInRegistries.ITEM.getKey(held.getItem()).toString();
+        String id = AddonItems.identifierOf(held.getItem());
         for (String component
             : new String[] {"minecraft:tameable", "minecraft:tamemount", "minecraft:trusting"}) {
             if (!declaresNow(component) || !foodOf(component, id)) continue;
@@ -4044,7 +4038,7 @@ public class AddonEntity extends PathfinderMob
         ItemStack held = player.getItemInHand(hand);
         if (held.isEmpty()) return false;
 
-        String id = BuiltInRegistries.ITEM.getKey(held.getItem()).toString();
+        String id = AddonItems.identifierOf(held.getItem());
         java.util.List<com.google.gson.JsonElement> slots =
             at.ioexception.mcaddon.util.Json.list(componentBody("minecraft:equippable"), "slots");
         for (int index = 0; index < slots.size(); index++) {
@@ -4089,7 +4083,7 @@ public class AddonEntity extends PathfinderMob
         ItemStack held = player.getItemInHand(hand);
         if (held.isEmpty()) return false;
 
-        String id = BuiltInRegistries.ITEM.getKey(held.getItem()).toString();
+        String id = AddonItems.identifierOf(held.getItem());
         for (com.google.gson.JsonElement element
             : at.ioexception.mcaddon.util.Json.list(componentBody("minecraft:giveable"), "triggers")) {
             if (!element.isJsonObject()) continue;
@@ -4124,8 +4118,8 @@ public class AddonEntity extends PathfinderMob
     }
 
     /** Bedrock writes an item without its namespace as often as with one, and means the same thing. */
-    private static boolean names(String bedrock, String javaId) {
-        return bedrock != null && (bedrock.equals(javaId) || ("minecraft:" + bedrock).equals(javaId));
+    private static boolean names(String bedrock, String identifier) {
+        return bedrock != null && AddonItems.identifierOf(bedrock).equals(identifier);
     }
 
     /** One of `minecraft:ageable`'s own feed items, which brings growing up forward. */

@@ -425,6 +425,15 @@ These are the checks it runs, and what each one catches:
   `tp:dust` unless `hasitem` finds one on them; `PackCommandClientGameTest` presses the button and
   asks for the dust twice, and reads back one level gained and one dust carried.
 
+  Four more things name the game's own items and blocks by Bedrock's ids, each of which Java's
+  parser refuses as written and refuses whole: `loot_tables/names.json` drops `golden_rail`,
+  `muttonRaw` and `wool` with a data value of fourteen, `recipes/lantern_from_rail.json` crafts a
+  `lit_pumpkin` out of a `golden_rail`, `functions/names.mcfunction` gives `record_13` and places a
+  `golden_rail` and a `wool` written with `["color"="red"]`, and `/scriptevent "tp:names" <x> <y> <z>`
+  has the script read a powered rail's `typeId` and place a `BlockPermutation` resolved from
+  `minecraft:lit_pumpkin`. `NamesGameTests` reads each back as the Java item or block, and every
+  one of the four fails when the mapping is taken out.
+
   Beside the handbook the script answers probes, each a script event `ScriptGameTests` runs as a
   mock player and each answered by tagging that player with what the script read back: one pushes
   and pops the pack's fog on the player's fog stack, one clones a row of blocks through a filter and
@@ -1186,6 +1195,37 @@ player who starts watching later sees whatever the pack plays next, as on an add
   the attribute instance rather than the supplier. What is left off is a name with no read at all,
   taken from the same set `components.py` prints as implemented with no reader of its own: those
   are the components Java does for every mob anyway, so where a pack declared one decides nothing.
+- **`tools/census/ids.py`** counts the nouns rather than the vocabulary: which of the item and block
+  ids Bedrock's own material writes resolve to a Java one. A pack names vanilla things by Bedrock's
+  ids, a few hundred of which are not Java's, and one that resolves to nothing costs a whole loot
+  table, recipe or function.
+
+  ```bash
+  bash tools/census/fetch.sh
+  python3 tools/census/ids.py            # the table, then every unanswered id and where it is written
+  python3 tools/census/ids.py --own      # and the ids declared Bedrock's own
+  python3 tools/census/ids.py --strict   # exits non-zero while an id is unanswered
+  ```
+
+  The published side is the vanilla data modules under `metadata/vanilladata_modules` in
+  `bedrock-samples`, every id its behaviour pack writes in a loot table, recipe, trade table, entity,
+  spawn rule, biome, block, item, feature or feature rule (by the keys that name an item or a block,
+  less anything the same material uses as an item tag), and the `@minecraft/vanilla-data` 1.20.0
+  tables `fetch.sh` puts in `scratchpad/mcapi`, which still carry the family ids (`wool`, `log`,
+  `stone_block_slab`) packs of that time write. The mod's side is the mapping itself rather than a
+  reading of its source: `./gradlew :<version>:idCensus` runs every id through `BedrockItemNames`
+  and `BedrockBlockNames` on the unit tests' classpath, because which Java spelling answers depends
+  on the registry of the version that runs it.
+
+  An id is answered, Bedrock's own, or unanswered. **Bedrock's own** is what
+  `BedrockBlockNames.bedrockOnly` and `BedrockItemNames.bedrockOnly` declare Java has nothing for:
+  the education edition's chemistry and hardened glass, the building permission blocks, Bedrock's
+  technical blocks, the experiments Java has not shipped, an item frame (an entity in Java), and
+  an item Java keeps none of. **The unanswered column has to stay at zero.**
+
+  Measured on 26.2 against bedrock-samples, over 1979 item ids and 1711 block ids written there:
+  1632 items and 1166 blocks resolved as written, and with the mapping 1869 items and 1408 blocks
+  resolve, the 110 and 303 left being Bedrock's own and none unanswered.
 
 ## Conventions
 
@@ -1265,6 +1305,7 @@ tools/census/data.py         The same, for loot tables, recipes and trade tables
 tools/census/packfiles.py    Coverage of the file kinds a pack may ship, against the ones read
 tools/census/manifest.py     Coverage of the fields a manifest may carry, against the ones read
 tools/census/declaration.py  Where a pack declares a component, against where the mod reads it
+tools/census/ids.py          Which item and block ids Bedrock writes resolve to a Java one
 tools/checkall.sh            Every check, in the order that fails fastest
 tools/census/script.py       How much of the published script API this mod offers
 tools/scene/scene.py         Scenes run inside the game, with nobody at the keyboard
@@ -1316,5 +1357,13 @@ the surface reports (`typeId`, `EntityTypes`, event payloads, families) and `Add
 is what it accepts (spawns, queries, filters), with `BedrockEntityNames` holding the vanilla ids
 the two editions spell differently in both directions. Compare two names through `identifierOf`,
 never the raw registry key, or `minecraft:villager` and `minecraft:villager_v2` read as two types.
-Item and block ids cross unchanged, so Bedrock-only spellings such as `minecraft:golden_rail` do
-not resolve in a script.
+
+**So does an item and a block, everywhere a pack names one.** `AddonItems.named` and
+`AddonBlocks.named` (or `AddonBlocks.stateOf`, where Bedrock's states pick the block) are what a
+name from a pack becomes, and `AddonItems.identifierOf` and `AddonBlocks.identifierOf` are what the
+game's own item or block state is reported and compared as. `BedrockItemNames` and
+`BedrockBlockNames` hold the spellings in both directions, with `DataValues` for the families a data
+value or a named state picks a member of. A Bedrock id may be a Java block in a state of its own, so
+the way back starts from a `BlockState`: a lit furnace reports itself as `minecraft:lit_furnace`. A
+command line is translated through `BedrockBlockNames.Resolved.command`, which writes only the
+properties the pack named, because a test for a block asks about those and no others.

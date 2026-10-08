@@ -75,7 +75,7 @@ class FunctionsTest {
     @ParameterizedTest
     @CsvSource({
         "'testfor @p', 'execute if entity @p'",
-        "'testforblock ~ ~ ~ stone', 'execute if block ~ ~ ~ stone'",
+        "'testforblock ~ ~ ~ stone', 'execute if block ~ ~ ~ minecraft:stone'",
         "'testforblocks 0 0 0 1 1 1 2 2 2 all', 'execute if blocks 0 0 0 1 1 1 2 2 2 all'",
         "'/say hello', 'say hello'",
         "'say hello', 'say hello'",
@@ -91,9 +91,9 @@ class FunctionsTest {
         "'stopsound @a note.harp', 'stopsound @a * note.harp'",
         "'spreadplayers 0 0 10 40 @a', 'spreadplayers 0 0 10 40 false @a'",
         "'replaceitem entity @s slot.weapon.mainhand 0 stone', "
-            + "'item replace entity @s weapon.mainhand with stone'",
+            + "'item replace entity @s weapon.mainhand with minecraft:stone'",
         "'replaceitem block ~ ~ ~ slot.container 3 stone 2', "
-            + "'item replace block ~ ~ ~ container.3 with stone 2'",
+            + "'item replace block ~ ~ ~ container.3 with minecraft:stone 2'",
         "'ride @s start_riding @e[type=pig]', "
             + "'execute as @s at @s run ride @s mount @e[type=minecraft:pig,limit=1]'",
         "'ride @s stop_riding', 'execute as @s run ride @s dismount'",
@@ -108,8 +108,8 @@ class FunctionsTest {
         "'execute in nether run say hi', 'execute in the_nether run say hi'",
         "'tickingarea remove 10 64 20', 'forceload remove 10 20'",
         "'replaceitem entity @s slot.armor 2 iron_leggings', "
-            + "'item replace entity @s armor.legs with iron_leggings'",
-        "'replaceitem entity @s slot.chest 0 chest', 'item replace entity @s horse.chest with chest'",
+            + "'item replace entity @s armor.legs with minecraft:iron_leggings'",
+        "'replaceitem entity @s slot.chest 0 chest', 'item replace entity @s horse.chest with minecraft:chest'",
         "'loot replace entity @s slot.armor.head 0 loot tp:hat', "
             + "'loot replace entity @s armor.head loot tp:hat'",
         "'ride @e[type=zombie] start_riding @e[type=pig] teleport_rider', "
@@ -177,7 +177,7 @@ class FunctionsTest {
     /** A saddle moved off the horse in 26, so which slot it is has to be asked for. */
     @Test
     void putsASaddleInTheSlotThisVersionOfJavaKeepsItIn() throws IOException {
-        assertEquals("item replace entity @s " + Platform.saddleSlot() + " with saddle",
+        assertEquals("item replace entity @s " + Platform.saddleSlot() + " with minecraft:saddle",
             only("replaceitem entity @s slot.saddle 0 saddle"));
     }
 
@@ -209,6 +209,58 @@ class FunctionsTest {
     void unwrapsTheRawTextOfATellraw() throws IOException {
         assertEquals("tellraw @a [{\"text\":\"hi\"}]",
             only("tellraw @a {\"rawtext\":[{\"text\":\"hi\"}]}"));
+    }
+
+    /**
+     * A vanilla item or block named by Bedrock's id, which Java's parser rejects along with the
+     * whole function, written as the Java id it is.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiterString = "->", value = {
+        "give @p record_13 -> give @p minecraft:music_disc_13",
+        "give @p minecraft:muttonRaw 3 -> give @p minecraft:mutton 3",
+        "give @p wool 2 14 -> give @p minecraft:red_wool 2",
+        "clear @p golden_rail -> clear @p minecraft:powered_rail",
+        "clear @p dye -1 5 -> clear @p minecraft:ink_sac 5",
+        "clear @p wool 14 -> clear @p minecraft:red_wool",
+        "clear @p -> clear @p",
+        "setblock ~ ~1 ~ lit_pumpkin -> setblock ~ ~1 ~ minecraft:jack_o_lantern",
+        "setblock ~ ~ ~ wool [\"color\"=\"red\"] replace -> setblock ~ ~ ~ minecraft:red_wool replace",
+        "setblock ~ ~ ~ wool 14 -> setblock ~ ~ ~ minecraft:red_wool",
+        "setblock 0 64 0 lit_furnace [\"facing_direction\"=3] -> "
+            + "setblock 0 64 0 minecraft:furnace[lit=true,facing=south]",
+        "fill 0 0 0 1 1 1 golden_rail -> fill 0 0 0 1 1 1 minecraft:powered_rail",
+        "fill 0 0 0 1 1 1 stone 1 replace grass_path -> fill 0 0 0 1 1 1 minecraft:granite replace minecraft:dirt_path",
+        "fill 0 0 0 1 1 1 air 0 hollow -> fill 0 0 0 1 1 1 minecraft:air hollow",
+        "testforblock 0 64 0 log [\"old_log_type\":\"spruce\"] -> execute if block 0 64 0 minecraft:spruce_log",
+        "execute if block ~ ~-1 ~ grass_path run say on a path -> "
+            + "execute if block ~ ~-1 ~ minecraft:dirt_path run say on a path",
+        "execute unless block ~ ~ ~ stained_glass [\"color\"=\"silver\"] run say clear -> "
+            + "execute unless block ~ ~ ~ minecraft:light_gray_stained_glass run say clear",
+        "execute @p ~ ~ ~ detect ~ ~-1 ~ wool 14 say red -> "
+            + "execute as @p at @s positioned ~ ~ ~ if block ~ ~-1 ~ minecraft:red_wool run say red",
+        "execute @p ~ ~ ~ detect ~ ~-1 ~ golden_rail -1 say rail -> "
+            + "execute as @p at @s positioned ~ ~ ~ if block ~ ~-1 ~ minecraft:powered_rail run say rail",
+        "clone 0 0 0 1 1 1 5 5 5 filtered move magma -> clone 0 0 0 1 1 1 5 5 5 filtered minecraft:magma_block move",
+        "clone 0 0 0 1 1 1 5 5 5 masked force -> clone 0 0 0 1 1 1 5 5 5 masked force",
+        "replaceitem entity @s slot.weapon.mainhand 0 frame -> "
+            + "item replace entity @s weapon.mainhand with minecraft:item_frame",
+    })
+    void writesBedrocksItemAndBlockIdsAsJavasOwn(String source, String expected) throws IOException {
+        assertEquals(expected.strip(), only(source.strip()));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "'give @p minecraft:border_block', 'command give, which names an item Java does not have'",
+        "'setblock ~ ~ ~ element_3', 'command setblock, which names a block Java does not have'",
+        "'testforblock ~ ~ ~ furnace 2', 'command testforblock with a block data value'",
+        "'execute if block ~ ~ ~ minecraft:allow run say no', "
+            + "'command execute, which names a block Java does not have'",
+    })
+    void dropsALineNamingAnItemOrBlockJavaCannotMatch(String source, String reported) throws IOException {
+        assertEquals(List.of(), translate(source));
+        assertTrue(problems.contains(reported), problems.toString());
     }
 
     /** Bedrock ran a command as an entity and at a place by writing both before the command. */

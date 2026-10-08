@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.bedrock.behaviour;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.convert.BedrockItemNames;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.util.Json;
@@ -10,6 +11,7 @@ import com.google.gson.JsonObject;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -197,8 +199,25 @@ public record RecipeDefinition(String identifier, Kind kind, List<String> patter
         String result = itemOf(output);
         if (result == null && kind != Kind.SMITHING_TRIM) return null;
 
-        return new RecipeDefinition(identifier, kind, pattern, key, ingredients, result,
+        RecipeDefinition recipe = new RecipeDefinition(identifier, kind, pattern, key, ingredients, result,
             count(output), Json.text(body, "group", null), tags, smithing, unlock(body), null);
+        return recipe.complete() ? recipe : null;
+    }
+
+    /**
+     * Whether every item the recipe names has a Java item behind it.
+     *
+     * Java's recipe parser refuses a recipe naming an item it does not have and logs it as an
+     * error, so a recipe with one such reference is left out once the reference is reported.
+     */
+    private boolean complete() {
+        List<String> named = new ArrayList<>(key.values());
+        ingredients.forEach(ingredient -> named.add(ingredient.item()));
+        named.add(result);
+        if (smithing != null) {
+            named.addAll(Arrays.asList(smithing.template(), smithing.base(), smithing.addition()));
+        }
+        return !named.contains(MISSING);
     }
 
     /**
@@ -221,7 +240,7 @@ public record RecipeDefinition(String identifier, Kind kind, List<String> patter
             }
 
             String item = itemOf(entry);
-            if (item != null) items.add(item);
+            if (item != null && !item.equals(MISSING)) items.add(item);
         }
         return items;
     }
@@ -234,20 +253,46 @@ public record RecipeDefinition(String identifier, Kind kind, List<String> patter
      */
     private static String itemOf(JsonElement element) {
         if (element == null || element.isJsonNull()) return null;
-        if (element.isJsonPrimitive()) return element.getAsString();
+        if (element.isJsonPrimitive()) return javaItem(element.getAsString(), 0);
         if (element.isJsonArray()) {
             return element.getAsJsonArray().isEmpty() ? null : itemOf(element.getAsJsonArray().get(0));
         }
         if (!element.isJsonObject()) return null;
 
         JsonObject body = element.getAsJsonObject();
-        // A data value picks one of the blocks or items an id used to stand for, which Java stopped
-        // having when it gave each of them an id of its own.
-        if (body.has("data")) AddonEntities.unsupported("recipe item data value");
-
         String tag = Json.text(body, "tag", null);
-        return tag != null ? "#" + tag : Json.text(body, "item", null);
+        if (tag != null) return "#" + tag;
+
+        String item = Json.text(body, "item", null);
+        return item == null ? null : javaItem(item, (int) Json.number(body, "data", 0));
     }
+
+    /** What an item reference that names an item Java has nothing for reads as. */
+    private static final String MISSING = "";
+
+    /**
+     * The Java item a recipe names, with the data value beside it picking a family member.
+     *
+     * A data value picks one of the blocks or items an id used to stand for, which Java stopped
+     * having when it gave each of them an id of its own, so `wool` beside a fourteen is red wool.
+     * Bedrock's own wildcard, and a value on an id Java never split, pick a variant Java keeps
+     * inside the stack or not at all, which a recipe cannot ask for, so each is reported.
+     */
+    private static String javaItem(String bedrock, int data) {
+        boolean any = data == WILDCARD || data < 0;
+        if (data != 0 && (any || !DataValues.split(bedrock))) {
+            AddonEntities.unsupported("recipe item data value");
+        }
+
+        String java = BedrockItemNames.java(bedrock, any && !DataValues.split(bedrock) ? 0 : data);
+        if (java != null) return java;
+
+        AddonEntities.unsupported("recipe item " + bedrock + (data == 0 ? "" : " " + data));
+        return MISSING;
+    }
+
+    /** The data value Bedrock's older recipes wrote to mean any of them. */
+    private static final int WILDCARD = Short.MAX_VALUE;
 
     private static int count(JsonElement element) {
         if (element == null) return 1;

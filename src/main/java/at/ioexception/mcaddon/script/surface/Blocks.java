@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.script.surface;
 
-import at.ioexception.mcaddon.convert.Names;
+import at.ioexception.mcaddon.registry.AddonBlocks;
+import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.script.ScriptCoverage;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -60,7 +61,7 @@ public final class Blocks extends Surface {
     public String permutationAt(String dimension, int x, int y, int z) {
         BlockState state = stateAt(dimension, x, y, z);
         JsonObject permutation = new JsonObject();
-        permutation.addProperty("typeId", idOf(state.getBlock()));
+        permutation.addProperty("typeId", AddonBlocks.identifierOf(state));
         permutation.add("states", statesOf(state));
         return permutation.toString();
     }
@@ -73,28 +74,31 @@ public final class Blocks extends Surface {
      */
     @HostAccess.Export
     public String resolve(String typeId, String statesJson) {
-        Block block = block(typeId);
-        if (block == null) return null;
+        BlockState state = permutation(typeId, statesJson);
+        if (state == null) return null;
 
         JsonObject permutation = new JsonObject();
-        permutation.addProperty("typeId", idOf(block));
-        permutation.add("states", statesOf(withStates(block.defaultBlockState(), statesJson, typeId)));
+        permutation.addProperty("typeId", AddonBlocks.identifierOf(state));
+        permutation.add("states", statesOf(state));
         return permutation.toString();
     }
 
-    /** The registry's spelling of a block name, so a pack writing `dirt` names `minecraft:dirt`. */
+    /**
+     * Bedrock's spelling of a block name, so a pack writing `dirt` names `minecraft:dirt` and one
+     * writing Java's `powered_rail` names `minecraft:golden_rail`.
+     */
     @HostAccess.Export
     public String canonicalId(String typeId) {
-        Block block = block(typeId);
-        return block == null ? null : idOf(block);
+        BlockState state = permutation(typeId, null);
+        return state == null ? null : AddonBlocks.identifierOf(state);
     }
 
     @HostAccess.Export
     public void setPermutation(String dimension, int x, int y, int z, String typeId, String statesJson) {
         ServerLevel level = level(dimension);
-        Block block = block(typeId);
-        if (level == null || block == null) return;
-        level.setBlockAndUpdate(new BlockPos(x, y, z), withStates(block.defaultBlockState(), statesJson, typeId));
+        BlockState state = permutation(typeId, statesJson);
+        if (level == null || state == null) return;
+        level.setBlockAndUpdate(new BlockPos(x, y, z), state);
     }
 
     /** True while the position is inside the world and its chunk is loaded. */
@@ -125,7 +129,7 @@ public final class Blocks extends Surface {
         BlockPos position = new BlockPos(x, y, z);
         BlockState state = level.getBlockState(position);
         if (!state.hasProperty(BlockStateProperties.WATERLOGGED)) {
-            unsupported("Block.setWaterlogged on " + idOf(state.getBlock()));
+            unsupported("Block.setWaterlogged on " + AddonBlocks.identifierOf(state));
             return;
         }
         level.setBlockAndUpdate(position, state.setValue(BlockStateProperties.WATERLOGGED, waterlogged));
@@ -147,8 +151,8 @@ public final class Blocks extends Surface {
     @HostAccess.Export
     public boolean canPlace(String dimension, int x, int y, int z, String typeId, String statesJson, String face) {
         ServerLevel level = level(dimension);
-        Block block = block(typeId);
-        if (level == null || block == null) return false;
+        BlockState placed = permutation(typeId, statesJson);
+        if (level == null || placed == null) return false;
 
         Direction side = direction(face);
         if (face != null && side == null) {
@@ -158,14 +162,14 @@ public final class Blocks extends Surface {
 
         BlockPos target = side == null ? new BlockPos(x, y, z) : new BlockPos(x, y, z).relative(side);
         return level.getBlockState(target).canBeReplaced()
-            && withStates(block.defaultBlockState(), statesJson, typeId).canSurvive(level, target);
+            && placed.canSurvive(level, target);
     }
 
     /** Whether a liquid can be placed over the type, which in Java is the waterlogged state. */
     @HostAccess.Export
     public boolean canContainLiquid(String typeId) {
-        Block block = block(typeId);
-        return block != null && block.defaultBlockState().hasProperty(BlockStateProperties.WATERLOGGED);
+        BlockState state = permutation(typeId, null);
+        return state != null && state.hasProperty(BlockStateProperties.WATERLOGGED);
     }
 
     /**
@@ -221,7 +225,7 @@ public final class Blocks extends Surface {
     public String itemId(String typeId) {
         Block block = block(typeId);
         Item item = block == null ? Items.AIR : block.asItem();
-        return item == Items.AIR ? null : BuiltInRegistries.ITEM.getKey(item).toString();
+        return item == Items.AIR ? null : AddonItems.identifierOf(item);
     }
 
     @HostAccess.Export
@@ -230,9 +234,17 @@ public final class Blocks extends Surface {
         return block == null ? null : block.getDescriptionId();
     }
 
+    /**
+     * Every block type under Bedrock's ids, which counts as a type of its own each state Bedrock
+     * gives an id: a lit furnace, a double slab, a powered repeater.
+     */
     @HostAccess.Export
     public String[] typeIds() {
-        return BuiltInRegistries.BLOCK.keySet().stream().map(Identifier::toString).toArray(String[]::new);
+        return BuiltInRegistries.BLOCK.stream()
+            .flatMap(block -> block.getStateDefinition().getPossibleStates().stream())
+            .map(AddonBlocks::identifierOf)
+            .distinct()
+            .toArray(String[]::new);
     }
 
     /** How a piston treats the block, under Bedrock's names for the two answers. */
@@ -471,8 +483,7 @@ public final class Blocks extends Surface {
 
     private static String dropsJson(ServerLevel level, BlockState state, BlockPos at,
         net.minecraft.world.level.block.entity.BlockEntity holder, String toolId) {
-        Item tool = toolId == null ? null : BuiltInRegistries.ITEM
-            .getOptional(Identifier.tryParse(toolId)).orElse(null);
+        Item tool = toolId == null ? null : AddonItems.named(toolId);
         JsonArray dropped = new JsonArray();
         Block.getDrops(state, level, at, holder, null,
                 tool == null ? net.minecraft.world.item.ItemStack.EMPTY
@@ -483,7 +494,7 @@ public final class Blocks extends Surface {
 
     private static JsonObject stackJson(net.minecraft.world.item.ItemStack stack) {
         JsonObject item = new JsonObject();
-        item.addProperty("typeId", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+        item.addProperty("typeId", AddonItems.identifierOf(stack.getItem()));
         item.addProperty("amount", stack.getCount());
         item.addProperty("damage", stack.getDamageValue());
         item.addProperty("maxDurability", stack.getMaxDamage());
@@ -497,53 +508,34 @@ public final class Blocks extends Surface {
     }
 
     private static Block block(String typeId) {
-        Identifier parsed = typeId == null ? null : Identifier.tryParse(typeId);
-        return parsed == null ? null : BuiltInRegistries.BLOCK.getOptional(parsed).orElse(null);
+        return typeId == null ? null : AddonBlocks.named(typeId);
     }
 
     private static String tagName(Identifier tag) {
         return tag.getNamespace().equals("minecraft") ? tag.getPath() : tag.toString();
     }
 
-    private static String idOf(Block block) {
-        return BuiltInRegistries.BLOCK.getKey(block).toString();
-    }
-
-    private BlockState withStates(BlockState state, String statesJson, String typeId) {
-        JsonObject wanted = JsonParser.parseString(statesJson == null ? "{}" : statesJson).getAsJsonObject();
-        BlockState built = state;
-        for (String name : wanted.keySet()) {
-            Property<?> property = wanted.get(name).isJsonPrimitive() ? propertyNamed(built, name) : null;
-            if (property == null) {
-                unsupported("BlockPermutation state " + typeId + "[" + name + "]");
-                continue;
-            }
-            built = applied(built, property, wanted.get(name).getAsString());
-        }
-        return built;
-    }
-
     /**
-     * The property a pack's state name means.
+     * The state a type id and a partial set of states name, over the block's defaults, or null for
+     * a type no block answers.
      *
-     * A pack's own block carries its states under the sanitised names the block registry built them
-     * with, so a state written as `custom:facing` is the property `custom_facing` here.
+     * Either edition's spelling reaches the same state: `minecraft:wool` with `{ color: "red" }` is
+     * red wool and `minecraft:lit_furnace` is a furnace with `lit` set. A state is read under the
+     * Java property's own name as well as Bedrock's, and the Java name is what a permutation reports.
      */
-    private static Property<?> propertyNamed(BlockState state, String name) {
-        Property<?> exact = state.getBlock().getStateDefinition().getProperty(name);
-        if (exact != null) return exact;
+    private BlockState permutation(String typeId, String statesJson) {
+        if (typeId == null) return null;
 
-        String sanitised = Names.sanitise(name).replace('.', '_').replace('/', '_');
-        return state.getBlock().getStateDefinition().getProperty(sanitised);
-    }
-
-    private <T extends Comparable<T>> BlockState applied(BlockState state, Property<T> property, String value) {
-        T parsed = property.getValue(value).orElse(null);
-        if (parsed == null) {
-            unsupported("BlockPermutation state value " + property.getName() + "=" + value);
-            return state;
+        JsonObject wanted = JsonParser.parseString(statesJson == null ? "{}" : statesJson).getAsJsonObject();
+        Map<String, String> states = new LinkedHashMap<>();
+        for (String name : wanted.keySet()) {
+            if (wanted.get(name).isJsonPrimitive()) {
+                states.put(name, wanted.get(name).getAsString());
+            } else {
+                unsupported("BlockPermutation state " + typeId + "[" + name + "]");
+            }
         }
-        return state.setValue(property, parsed);
+        return AddonBlocks.stateOf(typeId, states, detail -> unsupported("BlockPermutation " + detail));
     }
 
     private static JsonObject statesOf(BlockState state) {
@@ -571,11 +563,6 @@ public final class Blocks extends Surface {
         if (property instanceof BooleanProperty) return new JsonPrimitive(Boolean.valueOf(name));
         if (property instanceof IntegerProperty) return new JsonPrimitive(Integer.valueOf(name));
         return new JsonPrimitive(name);
-    }
-
-    private BlockState permutation(String typeId, String statesJson) {
-        Block block = block(typeId);
-        return block == null ? null : withStates(block.defaultBlockState(), statesJson, typeId);
     }
 
     private SignBlockEntity signAt(String dimension, int x, int y, int z) {

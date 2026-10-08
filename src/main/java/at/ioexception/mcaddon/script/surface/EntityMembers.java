@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.script.surface;
 
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.script.ScriptCoverage;
 import at.ioexception.mcaddon.server.EntityPropertySync;
@@ -13,7 +14,6 @@ import com.google.gson.JsonParser;
 import net.minecraft.commands.arguments.EntityAnchorArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -367,12 +367,12 @@ public final class EntityMembers extends Surface {
         Set<String> includeTags, Set<String> excludeTags) {
         static BlockFilter parse(JsonObject filter) {
             return filter == null ? new BlockFilter(Set.of(), Set.of(), Set.of(), Set.of())
-                : new BlockFilter(names(filter, "includeTypes"), names(filter, "excludeTypes"),
+                : new BlockFilter(types(filter, "includeTypes"), types(filter, "excludeTypes"),
                     names(filter, "includeTags"), names(filter, "excludeTags"));
         }
 
         boolean keeps(BlockState block) {
-            String type = BuiltInRegistries.BLOCK.getKey(block.getBlock()).toString();
+            String type = AddonBlocks.identifierOf(block);
             if (!includeTypes.isEmpty() && !includeTypes.contains(type)) return false;
             if (excludeTypes.contains(type)) return false;
             if (includeTags.isEmpty() && excludeTags.isEmpty()) return true;
@@ -385,6 +385,11 @@ public final class EntityMembers extends Surface {
         }
 
         /** A type or tag written without a namespace is a vanilla one, the way Bedrock writes it. */
+        /** Block types under the id a block reports itself by, whichever edition's spelling named them. */
+        private static Set<String> types(JsonObject filter, String key) {
+            return names(filter, key).stream().map(AddonBlocks::identifierOf).collect(Collectors.toSet());
+        }
+
         private static Set<String> names(JsonObject filter, String key) {
             if (!filter.has(key) || !filter.get(key).isJsonArray()) return Set.of();
             Set<String> names = new LinkedHashSet<>();

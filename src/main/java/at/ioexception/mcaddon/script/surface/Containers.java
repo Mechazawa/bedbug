@@ -1,14 +1,13 @@
 package at.ioexception.mcaddon.script.surface;
 
+import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.script.ScriptCoverage;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -278,7 +277,7 @@ public final class Containers extends Surface {
         if (stack.isEmpty()) return null;
 
         JsonObject item = new JsonObject();
-        item.addProperty("typeId", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+        item.addProperty("typeId", AddonItems.identifierOf(stack.getItem()));
         item.addProperty("amount", stack.getCount());
         item.addProperty("damage", stack.getDamageValue());
         item.addProperty("maxDurability", stack.getMaxDamage());
@@ -300,8 +299,7 @@ public final class Containers extends Surface {
         if (itemJson == null || itemJson.isBlank()) return ItemStack.EMPTY;
 
         JsonObject item = JsonParser.parseString(itemJson).getAsJsonObject();
-        Identifier parsed = item.has("typeId") ? Identifier.tryParse(item.get("typeId").getAsString()) : null;
-        Item type = parsed == null ? null : BuiltInRegistries.ITEM.getOptional(parsed).orElse(null);
+        Item type = item.has("typeId") ? AddonItems.named(item.get("typeId").getAsString()) : null;
         if (type == null) return ItemStack.EMPTY;
 
         int amount = Math.max(1, item.has("amount") ? item.get("amount").getAsInt() : 1);

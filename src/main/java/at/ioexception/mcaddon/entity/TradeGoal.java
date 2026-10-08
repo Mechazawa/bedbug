@@ -2,9 +2,9 @@ package at.ioexception.mcaddon.entity;
 
 import at.ioexception.mcaddon.bedrock.behaviour.Filter;
 import at.ioexception.mcaddon.bedrock.behaviour.TradeTable;
+import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.server.ServerHooks;
 import com.google.gson.JsonObject;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.player.Player;
@@ -115,10 +115,10 @@ public final class TradeGoal extends Goal {
         TradeTable trades = mob.trades();
         if (trades == null || player.getMainHandItem().isEmpty()) return false;
 
-        String held = BuiltInRegistries.ITEM.getKey(player.getMainHandItem().getItem()).toString();
+        net.minecraft.world.item.Item held = player.getMainHandItem().getItem();
         return trades.offers().stream()
-            .anyMatch(offer -> held.equals(offer.cost().item())
-                || (offer.secondCost() != null && held.equals(offer.secondCost().item())));
+            .anyMatch(offer -> AddonItems.named(offer.cost().item()) == held
+                || (offer.secondCost() != null && AddonItems.named(offer.secondCost().item()) == held));
     }
 
     /** The first thing the trader sells, which is what it holds up to be noticed. */
@@ -133,9 +133,7 @@ public final class TradeGoal extends Goal {
     }
 
     private static ItemStack stack(String item) {
-        net.minecraft.resources.Identifier id = item == null
-            ? null : net.minecraft.resources.Identifier.tryParse(item);
-        return id == null ? ItemStack.EMPTY
-            : BuiltInRegistries.ITEM.getOptional(id).map(ItemStack::new).orElse(ItemStack.EMPTY);
+        net.minecraft.world.item.Item found = item == null ? null : AddonItems.named(item);
+        return found == null ? ItemStack.EMPTY : new ItemStack(found);
     }
 }

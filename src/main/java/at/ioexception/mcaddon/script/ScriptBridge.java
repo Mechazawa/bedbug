@@ -4,7 +4,9 @@ import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.script.surface.Blocks;
 import at.ioexception.mcaddon.script.surface.Containers;
 import at.ioexception.mcaddon.script.surface.EntityMembers;
@@ -784,7 +786,7 @@ public final class ScriptBridge {
         ItemStack held = living.getItemBySlot(which);
         if (held.isEmpty()) return null;
         JsonObject item = new JsonObject();
-        item.addProperty("typeId", BuiltInRegistries.ITEM.getKey(held.getItem()).toString());
+        item.addProperty("typeId", AddonItems.identifierOf(held.getItem()));
         item.addProperty("amount", held.getCount());
         item.addProperty("damage", held.getDamageValue());
         item.addProperty("maxDurability", held.getMaxDamage());
@@ -895,7 +897,7 @@ public final class ScriptBridge {
     public String blockTypeId(String dimension, int x, int y, int z) {
         ServerLevel level = level(dimension);
         if (level == null) return "minecraft:air";
-        return BuiltInRegistries.BLOCK.getKey(level.getBlockState(new BlockPos(x, y, z)).getBlock()).toString();
+        return AddonBlocks.identifierOf(level.getBlockState(new BlockPos(x, y, z)));
     }
 
     @HostAccess.Export
@@ -920,10 +922,9 @@ public final class ScriptBridge {
     @HostAccess.Export
     public void setBlockType(String dimension, int x, int y, int z, String type) {
         ServerLevel level = level(dimension);
-        Identifier parsed = type == null ? null : Identifier.tryParse(type);
-        if (level == null || parsed == null) return;
-        BuiltInRegistries.BLOCK.getOptional(parsed)
-            .ifPresent(block -> level.setBlockAndUpdate(new BlockPos(x, y, z), block.defaultBlockState()));
+        BlockState state = type == null ? null : AddonBlocks.stateOf(type, Map.of(), ignored -> { });
+        if (level == null || state == null) return;
+        level.setBlockAndUpdate(new BlockPos(x, y, z), state);
     }
 
     @HostAccess.Export
@@ -1209,17 +1210,14 @@ public final class ScriptBridge {
     /** How much wear an item of this kind takes before it breaks, or zero when it never does. */
     @HostAccess.Export
     public int itemMaxDurability(String itemId) {
-        Identifier parsed = Identifier.tryParse(itemId);
-        net.minecraft.world.item.Item item = parsed == null ? null
-            : BuiltInRegistries.ITEM.getOptional(parsed).orElse(null);
+        Item item = itemId == null ? null : AddonItems.named(itemId);
         return item == null ? 0 : new ItemStack(item).getMaxDamage();
     }
 
     /** The tags the item is in, under Java's names for them: a pack reading these sees `swords`. */
     @HostAccess.Export
     public String[] itemTags(String itemId) {
-        Identifier parsed = itemId == null ? null : Identifier.tryParse(itemId);
-        Item item = parsed == null ? null : BuiltInRegistries.ITEM.getOptional(parsed).orElse(null);
+        Item item = itemId == null ? null : AddonItems.named(itemId);
         return item == null ? new String[0] : item.builtInRegistryHolder().tags()
             .map(tag -> tag.location().toString())
             .toArray(String[]::new);
@@ -1314,8 +1312,7 @@ public final class ScriptBridge {
     }
 
     private ItemStack stack(String itemId, int amount) {
-        Identifier parsed = itemId == null ? null : Identifier.tryParse(itemId);
-        Item item = parsed == null ? null : BuiltInRegistries.ITEM.getOptional(parsed).orElse(null);
+        Item item = itemId == null ? null : AddonItems.named(itemId);
         return item == null ? ItemStack.EMPTY : new ItemStack(item, Math.max(1, amount));
     }
 

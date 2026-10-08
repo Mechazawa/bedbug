@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.script.surface;
 
 import at.ioexception.mcaddon.pack.PackSettings;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.script.ScriptBridge;
 import at.ioexception.mcaddon.script.ScriptCoverage;
@@ -15,8 +16,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
@@ -680,6 +679,8 @@ public final class Worlds extends Surface {
         Set<String> exclude = new LinkedHashSet<>(strings(filter, "excludeTypes"));
         include.addAll(permutationTypes(filter, "includePermutations"));
         exclude.addAll(permutationTypes(filter, "excludePermutations"));
+        include = bedrockIds(include);
+        exclude = bedrockIds(exclude);
         Set<String> includeTags = strings(filter, "includeTags");
         Set<String> excludeTags = strings(filter, "excludeTags");
 
@@ -687,13 +688,25 @@ public final class Worlds extends Surface {
             return state -> true;
         }
 
+        Set<String> included = include;
+        Set<String> excluded = exclude;
         return state -> {
-            String id = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
+            String id = AddonBlocks.identifierOf(state);
             Set<String> tags = tagNames(state.getBlock().builtInRegistryHolder().tags().toList());
-            if (exclude.contains(id) || tags.stream().anyMatch(excludeTags::contains)) return false;
-            if (include.isEmpty() && includeTags.isEmpty()) return true;
-            return include.contains(id) || tags.stream().anyMatch(includeTags::contains);
+            if (excluded.contains(id) || tags.stream().anyMatch(excludeTags::contains)) return false;
+            if (included.isEmpty() && includeTags.isEmpty()) return true;
+            return included.contains(id) || tags.stream().anyMatch(includeTags::contains);
         };
+    }
+
+    /**
+     * Each type a filter names under the id a block reports itself by, so a pack naming Java's
+     * `powered_rail` or a bare `golden_rail` matches the rail it reads back as `minecraft:golden_rail`.
+     */
+    private static Set<String> bedrockIds(Set<String> types) {
+        Set<String> ids = new LinkedHashSet<>();
+        types.forEach(type -> ids.add(AddonBlocks.identifierOf(type)));
+        return ids;
     }
 
     /** A pack writes a block tag without a namespace, so both spellings of a Java tag are offered. */
@@ -722,11 +735,9 @@ public final class Worlds extends Surface {
         return biome.unwrapKey().map(key -> Platform.idOf(key).toString()).orElse("minecraft:plains");
     }
 
+    /** The state a block type names in either edition's spelling, which a bare id names fully. */
     private static BlockState blockState(String type) {
-        Identifier parsed = type == null ? null : Identifier.tryParse(type);
-        return parsed == null ? null : BuiltInRegistries.BLOCK.getOptional(parsed)
-            .map(net.minecraft.world.level.block.Block::defaultBlockState)
-            .orElse(null);
+        return type == null ? null : AddonBlocks.stateOf(type, Map.of(), ignored -> { });
     }
 
     /** The corners plus a point every four blocks, which is as fine as the biome storage gets. */

@@ -1,5 +1,8 @@
 package at.ioexception.mcaddon.bedrock.behaviour;
 
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -18,6 +21,12 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 class RecipeDefinitionTest {
     @TempDir
     Path root;
+
+    @BeforeAll
+    static void bootstrap() {
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
+    }
 
     @Test
     void readsATagReferenceAsATagRatherThanAsAnItemName() throws IOException {
@@ -137,6 +146,37 @@ class RecipeDefinitionTest {
               "ingredients": [{"item": "probe:log"}],
               "result": {"item": "probe:planks", "count": 4}}}
             """).group());
+    }
+
+    /** A recipe names vanilla items by Bedrock's ids, and a data value picks a family member. */
+    @Test
+    void namesEachItemByTheJavaIdBedrocksSpellingStandsFor() throws IOException {
+        RecipeDefinition recipe = read("""
+            {"minecraft:recipe_shaped": {
+              "description": {"identifier": "probe:rail_lamp"},
+              "tags": ["crafting_table"],
+              "pattern": ["#W", "M#"],
+              "key": {"#": {"item": "minecraft:golden_rail"}, "W": {"item": "minecraft:wool", "data": 14},
+                      "M": "minecraft:muttonRaw"},
+              "result": {"item": "minecraft:lit_pumpkin", "count": 1}}}
+            """);
+
+        assertEquals("minecraft:powered_rail", recipe.key().get("#"));
+        assertEquals("minecraft:red_wool", recipe.key().get("W"));
+        assertEquals("minecraft:mutton", recipe.key().get("M"));
+        assertEquals("minecraft:jack_o_lantern", recipe.result());
+    }
+
+    /** Java refuses a recipe naming an item it has not got, so such a recipe is not written at all. */
+    @Test
+    void leavesOutARecipeNamingAnItemJavaHasNot() throws IOException {
+        assertEquals(0, RecipeDefinition.readAll(BehaviourPackFixture.holding(root, "recipes/probe.json", """
+            {"minecraft:recipe_shapeless": {
+              "description": {"identifier": "probe:fence"},
+              "tags": ["crafting_table"],
+              "ingredients": [{"item": "minecraft:border_block"}],
+              "result": {"item": "minecraft:stick", "count": 1}}}
+            """)).size());
     }
 
     private RecipeDefinition read(String recipe) throws IOException {

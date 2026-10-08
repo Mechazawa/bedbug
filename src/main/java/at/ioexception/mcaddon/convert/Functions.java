@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.convert;
 
+import at.ioexception.mcaddon.bedrock.behaviour.DataValues;
 import at.ioexception.mcaddon.bedrock.camera.CameraView;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.pack.BedrockPack;
@@ -22,6 +23,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -48,9 +50,9 @@ public final class Functions {
      * accepts, so the line is passed through whole. `tp`, `w` and `msg` are aliases Java has too.
      */
     private static final Set<String> SHARED_WITH_JAVA = Set.of(
-        "clear", "clone", "deop", "enchant", "fill", "function", "give", "help", "kick", "kill",
-        "list", "me", "msg", "op", "recipe", "reload", "say", "scoreboard", "setblock",
-        "setworldspawn", "spawnpoint", "stop", "tag", "teleport", "tell", "tp", "w", "weather");
+        "deop", "enchant", "function", "help", "kick", "kill", "list", "me", "msg", "op", "recipe",
+        "reload", "say", "scoreboard", "setworldspawn", "spawnpoint", "stop", "tag", "teleport",
+        "tell", "tp", "w", "weather");
 
     /**
      * Commands Bedrock has that this mod registers itself, so a function may use them.
@@ -108,10 +110,11 @@ public final class Functions {
      *
      * Java's own parser reads every word further along, so which of those forms survive is its
      * answer rather than anything spelled out here: `effect ... infinite`, `execute if blocks ...
-     * masked`, `loot spawn`, `time query gametime` and `title @a times` all reach it as written.
+     * masked`, `loot spawn`, `time query gametime` and `title @a times` all reach it as written. A
+     * `clone` is rewritten only where it names a block to keep, so `clone ... masked force` does too.
      */
     private static final Set<String> TAIL_REACHES_JAVA =
-        Set.of("effect", "execute", "locate", "loot", "schedule", "time", "title", "titleraw");
+        Set.of("clone", "effect", "execute", "locate", "loot", "schedule", "time", "title", "titleraw");
 
     /**
      * Forms of a command this mod does translate that Java has no way to say.
@@ -155,7 +158,6 @@ public final class Functions {
         "whitelist", "whitelist",
         "?", "help",
         "testfor", "execute if entity",
-        "testforblock", "execute if block",
         "testforblocks", "execute if blocks");
 
     /** Selector arguments Java spells the same way and reads the same values for. */
@@ -294,6 +296,13 @@ public final class Functions {
 
     private static final Pattern SELECTOR = Pattern.compile("@[aeprsn]\\[");
     private static final Pattern SPACE = Pattern.compile("\\s+");
+    private static final Pattern NUMBER = Pattern.compile("-?\\d+");
+
+    /**
+     * A double quote, spelled by its code so that no quote character stands alone in this file:
+     * `tools/census/commands.py` reads the string literals here as the keywords this translates.
+     */
+    private static final char QUOTE = 0x22;
 
     /** Bedrock's own name for the dimension, as an `execute` clause writes it. */
     private static final Pattern NETHER_CLAUSE =
@@ -400,6 +409,12 @@ public final class Functions {
         Set<String> unsupported) {
         return switch (name) {
             case "summon" -> summon(rest, unsupported);
+            case "give" -> give(rest, unsupported);
+            case "clear" -> clear(rest, unsupported);
+            case "setblock" -> setBlock(rest, unsupported);
+            case "fill" -> fill(rest, unsupported);
+            case "testforblock" -> testForBlock(rest, unsupported);
+            case "clone" -> cloneBlocks(rest, unsupported);
             case "execute" -> execute(rest, functions, unsupported);
             case "damage" -> damage(rest, unsupported);
             case "locate" -> locate(rest, unsupported);
@@ -464,6 +479,235 @@ public final class Functions {
             return null;
         }
         return "summon " + type + " " + String.join(" ", Arrays.copyOfRange(arguments, 1, 4));
+    }
+
+    /**
+     * `give <player> <item> [amount] [data] [components]`, which Java writes without the data value.
+     *
+     * The data value picks a family member, so `give @p wool 1 14` is red wool. The components a
+     * Bedrock line can carry restrict where the item may be placed and what it may break, which
+     * Java writes as data inside the item, so they are reported and the item is given without them.
+     */
+    private static String give(String rest, Set<String> unsupported) {
+        List<String> words = words(rest);
+        if (words.size() < 2) return "give " + rest;
+
+        String item = item(words.get(1), words.size() > 3 ? words.get(3) : null, "give", unsupported);
+        if (item == null) return null;
+        if (words.size() > 4) unsupported.add("command give with item components, which Java writes as item data");
+        return "give " + words.get(0) + " " + item + (words.size() > 2 ? " " + words.get(2) : "");
+    }
+
+    /**
+     * `clear [player] [item] [data] [maxCount]`, which Java writes without the data value.
+     *
+     * Bedrock's `-1` is any data value, which is what an item with none beside it means in Java.
+     */
+    private static String clear(String rest, Set<String> unsupported) {
+        List<String> words = words(rest);
+        if (words.size() < 2) return "clear" + (rest.isEmpty() ? "" : " " + rest);
+
+        String data = words.size() > 2 && !words.get(2).equals("-1") ? words.get(2) : null;
+        String item = item(words.get(1), data, "clear", unsupported);
+        if (item == null) return null;
+        return "clear " + words.get(0) + " " + item + (words.size() > 3 ? " " + words.get(3) : "");
+    }
+
+    /** `setblock <position> <block> [states|data] [destroy|keep|replace]`. */
+    private static String setBlock(String rest, Set<String> unsupported) {
+        List<String> words = words(rest);
+        if (words.size() < 4) return "setblock " + rest;
+
+        BlockArgument block = block(words, 3, false, "setblock", unsupported);
+        if (block == null) return null;
+
+        StringBuilder line = new StringBuilder("setblock " + String.join(" ", words.subList(0, 3)) + " "
+            + block.java());
+        for (String mode : words.subList(3 + block.words(), words.size())) {
+            String word = mode.toLowerCase(Locale.ROOT);
+            if (!word.equals("destroy") && !word.equals("keep") && !word.equals("replace")) {
+                return dropped("setblock", word, unsupported);
+            }
+            line.append(' ').append(word);
+        }
+        return line.toString();
+    }
+
+    /**
+     * `fill <from> <to> <block> [states|data] [destroy|hollow|keep|outline|replace [block] [states|data]]`.
+     *
+     * Java names the block a `replace` is limited to after the keyword the same way, so the line
+     * keeps its shape and each of its two blocks is translated.
+     */
+    private static String fill(String rest, Set<String> unsupported) {
+        List<String> words = words(rest);
+        if (words.size() < 7) return "fill " + rest;
+
+        BlockArgument block = block(words, 6, false, "fill", unsupported);
+        if (block == null) return null;
+
+        StringBuilder line = new StringBuilder("fill " + String.join(" ", words.subList(0, 6)) + " "
+            + block.java());
+        int at = 6 + block.words();
+        if (at >= words.size()) return line.toString();
+
+        String mode = words.get(at).toLowerCase(Locale.ROOT);
+        switch (mode) {
+            case "destroy", "hollow", "keep", "outline" -> {
+                return line.append(' ').append(mode).toString();
+            }
+            case "replace" -> {
+                line.append(" replace");
+                if (at + 1 >= words.size()) return line.toString();
+
+                BlockArgument filter = block(words, at + 1, true, "fill", unsupported);
+                return filter == null ? null : line.append(' ').append(filter.java()).toString();
+            }
+            default -> {
+                return dropped("fill", mode, unsupported);
+            }
+        }
+    }
+
+    /** `testforblock <position> <block> [states|data]`, which is Java's `execute if block`. */
+    private static String testForBlock(String rest, Set<String> unsupported) {
+        List<String> words = words(rest);
+        if (words.size() < 4) return "execute if block " + rest;
+
+        BlockArgument block = block(words, 3, true, "testforblock", unsupported);
+        return block == null ? null
+            : "execute if block " + String.join(" ", words.subList(0, 3)) + " " + block.java();
+    }
+
+    /**
+     * `clone <begin> <end> <destination> [masked|replace|filtered] [force|move|normal] [block] [states|data]`.
+     *
+     * Java names the block a `filtered` clone keeps right after the keyword and the clone mode after
+     * that, where Bedrock names the mode first.
+     */
+    private static String cloneBlocks(String rest, Set<String> unsupported) {
+        List<String> words = words(rest);
+        if (words.size() < 11 || !words.get(9).equalsIgnoreCase("filtered")) return "clone " + rest;
+
+        String mode = words.get(10).toLowerCase(Locale.ROOT);
+        if (!mode.equals("force") && !mode.equals("move") && !mode.equals("normal")) {
+            return dropped("clone", mode, unsupported);
+        }
+        if (words.size() < 12) {
+            unsupported.add("command clone filtered with no block to keep");
+            return null;
+        }
+
+        BlockArgument block = block(words, 11, true, "clone", unsupported);
+        return block == null ? null
+            : "clone " + String.join(" ", words.subList(0, 9)) + " filtered " + block.java() + " " + mode;
+    }
+
+    /**
+     * The Java id an item argument and the data value beside it name, or null after reporting.
+     *
+     * A data value picks a member of a family Java split. Anywhere else it picks a variant Java
+     * keeps inside the item, which a command line has no room for, so it is reported.
+     */
+    private static String item(String name, String data, String command, Set<String> unsupported) {
+        int value = data != null && NUMBER.matcher(data).matches() ? Integer.parseInt(data) : 0;
+        String java = BedrockItemNames.java(name, value);
+        if (java == null) {
+            unsupported.add("command " + command + ", which names an item Java does not have");
+            return null;
+        }
+        if (value > 0 && !DataValues.split(name)) {
+            unsupported.add("command " + command + " with an item data value");
+        }
+        return java;
+    }
+
+    /** A block argument as Java reads it, and how many words of the Bedrock line it took. */
+    private record BlockArgument(String java, int words) {
+    }
+
+    /**
+     * The block a Bedrock command names at `at`, with the states or the data value after it.
+     *
+     * A test asks about the states it names and no others, as Bedrock's does, and Bedrock's `-1`
+     * is any state at all. A data value outside a family Java split picks a state by a number Java
+     * has no reading of: a test asking for one would match more than the pack meant, so it loses
+     * the line, and a placement places the block in its default state and says so.
+     */
+    private static BlockArgument block(List<String> words, int at, boolean test, String command,
+        Set<String> unsupported) {
+        String name = words.get(at);
+        String next = at + 1 < words.size() ? words.get(at + 1) : null;
+        Consumer<String> report = detail -> unsupported.add("command " + command + " " + detail);
+
+        BedrockBlockNames.Resolved resolved;
+        int taken = 1;
+        if (next != null && next.startsWith("[")) {
+            resolved = BedrockBlockNames.state(name, states(next), report);
+            taken = 2;
+        } else if (next != null && NUMBER.matcher(next).matches()) {
+            int data = Integer.parseInt(next);
+            taken = 2;
+            if (data > 0 && !BedrockBlockNames.family(name)) {
+                if (test) {
+                    unsupported.add("command " + command + " with a block data value");
+                    return null;
+                }
+                unsupported.add("command " + command + " with a block data value, placed in its default state");
+            }
+            resolved = data < 0 || !BedrockBlockNames.family(name)
+                ? BedrockBlockNames.state(name, Map.of(), report) : BedrockBlockNames.state(name, data, report);
+        } else {
+            resolved = BedrockBlockNames.state(name, Map.of(), report);
+        }
+
+        if (resolved == null) {
+            unsupported.add("command " + command + ", which names a block Java does not have");
+            return null;
+        }
+        return new BlockArgument(resolved.command(), taken);
+    }
+
+    /** `["color"="red",facing_direction=2]`, or the older `["color":"red"]`, as names and values. */
+    private static Map<String, String> states(String written) {
+        Map<String, String> states = new LinkedHashMap<>();
+        String inside = written.substring(1, written.endsWith("]") ? written.length() - 1 : written.length());
+        for (String pair : inside.split(",")) {
+            String[] sides = pair.split("[=:]", 2);
+            if (sides.length == 2) states.put(unquoted(sides[0]), unquoted(sides[1]));
+        }
+        return states;
+    }
+
+    private static String unquoted(String text) {
+        String stripped = text.strip();
+        return stripped.length() >= 2 && stripped.charAt(0) == QUOTE
+            && stripped.charAt(stripped.length() - 1) == QUOTE
+            ? stripped.substring(1, stripped.length() - 1) : stripped;
+    }
+
+    /**
+     * The words of a command's arguments, keeping a bracketed state list, a JSON object and a quoted
+     * string whole however many spaces each holds.
+     */
+    private static List<String> words(String rest) {
+        List<String> words = new ArrayList<>();
+        StringBuilder word = new StringBuilder();
+        int depth = 0;
+        boolean quoted = false;
+        for (char character : rest.strip().toCharArray()) {
+            if (character == QUOTE) quoted = !quoted;
+            if (!quoted && (character == '[' || character == '{')) depth++;
+            if (!quoted && (character == ']' || character == '}')) depth--;
+            if (Character.isWhitespace(character) && depth == 0 && !quoted) {
+                if (!word.isEmpty()) words.add(word.toString());
+                word.setLength(0);
+                continue;
+            }
+            word.append(character);
+        }
+        if (!word.isEmpty()) words.add(word.toString());
+        return words;
     }
 
     /**
@@ -556,10 +800,36 @@ public final class Functions {
         }
 
         int run = rest.indexOf(" run ");
-        if (run < 0) return "execute " + dimensions(rest);
+        String clauses = blockClauses(run < 0 ? rest : rest.substring(0, run), unsupported);
+        if (clauses == null) return null;
+        if (run < 0) return "execute " + dimensions(clauses);
 
         String inner = translate(rest.substring(run + " run ".length()), functions, unsupported);
-        return inner == null ? null : "execute " + dimensions(rest.substring(0, run)) + " run " + inner;
+        return inner == null ? null : "execute " + dimensions(clauses) + " run " + inner;
+    }
+
+    /**
+     * The clauses of an `execute` with the block each `if block` and `unless block` tests for
+     * written as Java reads it, or null when one names a block Java does not have.
+     */
+    private static String blockClauses(String clauses, Set<String> unsupported) {
+        List<String> words = words(clauses);
+        List<String> written = new ArrayList<>();
+        for (int at = 0; at < words.size(); at++) {
+            String word = words.get(at);
+            boolean test = word.equalsIgnoreCase("if") || word.equalsIgnoreCase("unless");
+            if (!test || at + 5 >= words.size() || !words.get(at + 1).equalsIgnoreCase("block")) {
+                written.add(word);
+                continue;
+            }
+
+            BlockArgument block = block(words, at + 5, true, "execute", unsupported);
+            if (block == null) return null;
+            written.addAll(words.subList(at, at + 5));
+            written.add(block.java());
+            at += 4 + block.words();
+        }
+        return String.join(" ", written);
     }
 
     /**
@@ -576,8 +846,8 @@ public final class Functions {
      * `execute <origin> <position> [detect <position> <block> <data>] <command>`.
      *
      * Bedrock ran the command as the origin entity and at a position relative to it, which the
-     * modern form says with `as`, `at` and `positioned`. The block data value has no Java form: a
-     * pack asking for anything but `-1`, which Bedrock reads as any state, loses the line.
+     * modern form says with `as`, `at` and `positioned`. The block's data value is read the way a
+     * `testforblock` reads one: `-1` is any state and a family member is its own Java block.
      */
     private static String legacyExecute(String rest, FunctionNames functions, Set<String> unsupported) {
         String[] parts = SPACE.split(rest);
@@ -594,12 +864,10 @@ public final class Functions {
                 unsupported.add("command execute detect with nothing to run");
                 return null;
             }
-            if (!parts[at + 5].equals("-1")) {
-                unsupported.add("command execute detect with a block data value");
-                return null;
-            }
+            BlockArgument block = block(Arrays.asList(parts), at + 4, true, "execute detect", unsupported);
+            if (block == null) return null;
             clauses.append(" if block ").append(parts[at + 1]).append(' ').append(parts[at + 2])
-                .append(' ').append(parts[at + 3]).append(' ').append(parts[at + 4]);
+                .append(' ').append(parts[at + 3]).append(' ').append(block.java());
             at += 6;
         }
 
@@ -782,8 +1050,15 @@ public final class Functions {
             return null;
         }
 
+        String java = item(parts[item], item + 2 < parts.length ? parts[item + 2] : null, "replaceitem",
+            unsupported);
+        if (java == null) return null;
+        if (item + 3 < parts.length) {
+            unsupported.add("command replaceitem with item components, which Java writes as item data");
+        }
+
         String where = String.join(" ", Arrays.copyOfRange(parts, 0, named));
-        String what = parts[item] + (item + 1 < parts.length ? " " + parts[item + 1] : "");
+        String what = java + (item + 1 < parts.length ? " " + parts[item + 1] : "");
         return "item replace " + where + " " + slot + " with " + what;
     }
 

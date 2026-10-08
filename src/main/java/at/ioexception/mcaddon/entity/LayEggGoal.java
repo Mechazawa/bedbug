@@ -1,11 +1,10 @@
 package at.ioexception.mcaddon.entity;
 
+import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.ServerHooks;
 import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.entity.ai.goal.Goal;
@@ -113,8 +112,7 @@ public final class LayEggGoal extends Goal {
 
     /** The block a pack lays, which is a turtle egg wherever the pack named nothing else. */
     private static Block named(String egg) {
-        Identifier id = egg == null ? null : Identifier.tryParse(egg);
-        return id == null ? Blocks.TURTLE_EGG
-            : BuiltInRegistries.BLOCK.getOptional(id).orElse(Blocks.TURTLE_EGG);
+        Block block = egg == null ? null : AddonBlocks.named(egg);
+        return block == null ? Blocks.TURTLE_EGG : block;
     }
 }

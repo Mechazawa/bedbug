@@ -1,7 +1,9 @@
 package at.ioexception.mcaddon.script.surface;
 
 import at.ioexception.mcaddon.convert.BedrockEntityNames;
+import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.script.ScriptCoverage;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -138,8 +140,12 @@ public final class Registries extends Surface {
     @HostAccess.Export
     public String vanillaTypes() {
         JsonObject tables = new JsonObject();
-        tables.add("blocks", vanillaIds(BuiltInRegistries.BLOCK));
-        tables.add("items", vanillaIds(BuiltInRegistries.ITEM));
+        tables.add("blocks", bothSpellings(BuiltInRegistries.BLOCK.stream()
+            .flatMap(block -> block.getStateDefinition().getPossibleStates().stream())
+            .map(state -> List.of(BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString(),
+                AddonBlocks.identifierOf(state)))));
+        tables.add("items", bothSpellings(BuiltInRegistries.ITEM.stream()
+            .map(item -> List.of(BuiltInRegistries.ITEM.getKey(item).toString(), AddonItems.identifierOf(item)))));
         tables.add("entities", vanillaEntityIds());
         tables.add("effects", vanillaIds(BuiltInRegistries.MOB_EFFECT));
         tables.add("potionEffects", vanillaIds(BuiltInRegistries.POTION));
@@ -164,6 +170,18 @@ public final class Registries extends Surface {
             .filter(id -> id.getNamespace().equals("minecraft"))
             .forEach(id -> ids.add(id.toString()));
         return ids;
+    }
+
+    /**
+     * Each vanilla block or item under both editions' ids, Java's beside Bedrock's: `PoweredRail`
+     * beside `GoldenRail`, and `Furnace` beside the `LitFurnace` Bedrock counts as a type of its own.
+     */
+    private static JsonArray bothSpellings(java.util.stream.Stream<List<String>> pairs) {
+        Set<String> ids = new LinkedHashSet<>();
+        pairs.flatMap(List::stream).filter(id -> id.startsWith("minecraft:")).forEach(ids::add);
+        JsonArray all = new JsonArray();
+        ids.forEach(all::add);
+        return all;
     }
 
     /**
