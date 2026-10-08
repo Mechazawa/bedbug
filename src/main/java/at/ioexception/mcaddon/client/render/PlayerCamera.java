@@ -109,10 +109,16 @@ public final class PlayerCamera {
         camera.mcaddon$placeAt(placed);
     }
 
-    /** The view's own placement: whatever the preset gives, with the parts the command named on top. */
+    /**
+     * The view's own placement: whatever the preset gives, with the parts the command named on top.
+     *
+     * A point to face is turned into a rotation on the first frame the view is drawn, from where its
+     * camera stands on that frame, and is kept as that rotation afterwards.
+     */
     private static CameraPlacement target(CameraPlacement natural) {
         if (view.cleared()) return natural;
 
+        view = view.facingFrom(natural.position());
         return new CameraPlacement(view.position() == null ? natural.position() : view.position(),
             view.xRot() == null ? natural.xRot() : view.xRot(),
             view.yRot() == null ? natural.yRot() : view.yRot(),
