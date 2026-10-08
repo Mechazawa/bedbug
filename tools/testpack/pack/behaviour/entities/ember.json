@@ -399,6 +399,14 @@
           "broadcast_range": 6
         }
       },
+      "tp:ember_pottering": {
+        "minecraft:behavior.random_stroll": {
+          "priority": 0,
+          "interval": 1,
+          "xz_dist": 1,
+          "y_dist": 1
+        }
+      },
       "tp:ember_alert": {
         "minecraft:timer": {
           "time": 1.0,
@@ -577,6 +585,11 @@
       "tp:ember_rage": {
         "add": {
           "component_groups": ["tp:ember_furious"]
+        }
+      },
+      "tp:ember_potter": {
+        "add": {
+          "component_groups": ["tp:ember_pottering"]
         }
       },
       "tp:ember_winter": {

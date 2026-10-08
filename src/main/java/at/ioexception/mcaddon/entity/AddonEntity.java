@@ -33,7 +33,6 @@ import net.minecraft.world.entity.ai.goal.MoveTowardsTargetGoal;
 import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
 import net.minecraft.world.entity.ai.goal.PanicGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
-import net.minecraft.world.entity.ai.goal.RandomSwimmingGoal;
 import net.minecraft.world.entity.ai.goal.RestrictSunGoal;
 import net.minecraft.world.entity.ai.goal.StrollThroughVillageGoal;
 import net.minecraft.world.entity.ai.goal.TryFindWaterGoal;
@@ -2555,8 +2554,8 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.slime_attack" ->
                 goals.add(priority, SlimeGoal.attacking(this, goal));
 
-            case "minecraft:behavior.random_stroll", "minecraft:behavior.move_outdoors",
-                 "minecraft:behavior.explore_outskirts" -> {
+            case "minecraft:behavior.random_stroll" -> goals.add(priority, StrollGoal.walking(this, goal));
+            case "minecraft:behavior.move_outdoors", "minecraft:behavior.explore_outskirts" -> {
                 // `interval` is the one in N chance of choosing the goal, which Java counts the
                 // same way.
                 WaterAvoidingRandomStrollGoal stroll = new WaterAvoidingRandomStrollGoal(this, speed);
@@ -2596,11 +2595,8 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.random_fly", "minecraft:behavior.random_hover",
                  "minecraft:behavior.hover", "minecraft:behavior.float_wander" ->
                 goals.add(priority, new WaterAvoidingRandomFlyingGoal(this, 1.0));
-            // `interval` is the one in N chance of choosing the goal, which Java counts the
-            // same way.
             case "minecraft:behavior.random_swim", "minecraft:behavior.swim_wander" ->
-                goals.add(priority, new RandomSwimmingGoal(this, speed,
-                    (int) Goals.number(goal, "interval", 120)));
+                goals.add(priority, StrollGoal.swimming(this, goal));
             case "minecraft:behavior.move_to_water", "minecraft:behavior.move_to_liquid" ->
                 goals.add(priority, new TryFindWaterGoal(this));
             case "minecraft:behavior.swim_up_for_breath" ->

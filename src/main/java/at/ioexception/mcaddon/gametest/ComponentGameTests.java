@@ -429,11 +429,15 @@ public final class ComponentGameTests {
         dropped.setNoPickUpDelay();
         helper.getLevel().addFreshEntity(dropped);
 
-        live(ember, WALK_TICKS);
+        double furthest = 0;
+        for (int tick = 0; tick < WALK_TICKS && dropped.isAlive(); tick++) {
+            live(ember, 1);
+            furthest = Math.max(furthest, ember.getX() - start);
+        }
         helper.assertTrue(ember.getMainHandItem().is(Items.GOLD_INGOT),
             EMBER + " never picked up the gold lying " + ITEM_AWAY + " blocks off.");
-        helper.assertTrue(ember.getX() - start > ITEM_AWAY - GOAL_RADIUS - 0.5,
-            EMBER + " picked up an item without going to it, having moved " + (ember.getX() - start) + ".");
+        helper.assertTrue(furthest > ITEM_AWAY - GOAL_RADIUS - 0.5,
+            EMBER + " picked up an item without going to it, having moved " + furthest + ".");
         helper.succeed();
     }
 
@@ -478,6 +482,55 @@ public final class ComponentGameTests {
 
     /** One full round of the entity's own interval checks. */
     private static final int SENSOR_INTERVAL = 10;
+
+    /**
+     * A stroll sets out for somewhere within the `xz_dist` its pack states.
+     *
+     * The pottering group asks for one block across; Java's own stroll goal looks ten blocks out
+     * whatever it is told.
+     */
+    @GameTest()
+    public void aStrollStaysWithinTheDistanceItsPackStates(GameTestHelper helper) {
+        // The structure's own floor is barrier, which a ground navigator will not stop on.
+        for (int x = 0; x < STRUCTURE_SIDE; x++) {
+            for (int z = 0; z < STRUCTURE_SIDE; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+            }
+        }
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER, MIDDLE);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_potter", null, ServerHooks.state());
+        ember.setNoAi(false);
+        double furthest = 0;
+        for (int tick = 0; tick < STROLL_TICKS; tick++) {
+            live(ember, 1);
+            BlockPos heading = ember.getNavigation().getTargetPos();
+            if (heading == null || ember.getNavigation().isDone()) continue;
+
+            furthest = Math.max(furthest, Math.max(Math.abs(heading.getX() + 0.5 - ember.getX()),
+                Math.abs(heading.getZ() + 0.5 - ember.getZ())));
+        }
+        helper.assertTrue(furthest > 0, EMBER + " never set out on a stroll.");
+        helper.assertTrue(furthest <= STROLL_ACROSS + 1,
+            EMBER + " strolls one block across and set out for somewhere " + furthest + " away.");
+        helper.succeed();
+    }
+
+    /** The width of the empty structure every test here stands in. */
+    private static final int STRUCTURE_SIDE = 8;
+
+    /** The middle of that structure, standing on its floor. */
+    private static final BlockPos MIDDLE = new BlockPos(4, 1, 4);
+
+    /** The pottering group's `xz_dist`, in blocks. */
+    private static final int STROLL_ACROSS = 1;
+
+    /** Long enough for a stroll chosen at one in one to have been set out on. */
+    private static final int STROLL_TICKS = 40;
 
     /**
      * Runs the entity's own ticks the way the level does, which counts its age first: Java's goals
