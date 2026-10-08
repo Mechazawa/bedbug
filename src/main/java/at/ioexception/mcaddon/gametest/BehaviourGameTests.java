@@ -1557,6 +1557,8 @@ public final class BehaviourGameTests {
         EntityEvents.trigger(ember, "tp:ember_load", null, ServerHooks.state());
         ItemEntity wanted = drop(helper, ember, net.minecraft.world.item.Items.GOLD_INGOT);
         ItemEntity refused = drop(helper, ember, net.minecraft.world.item.Items.IRON_INGOT);
+        // Picking up is a behaviour like any other, so the entity has to be thinking to do it.
+        ember.setNoAi(false);
 
         helper.runAfterDelay(PICKED_UP_BY, () -> {
             helper.assertFalse(wanted.isAlive(),

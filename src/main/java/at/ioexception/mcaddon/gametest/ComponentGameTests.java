@@ -405,6 +405,51 @@ public final class ComponentGameTests {
     private static final int LOOK_LIMIT = 100;
 
     /**
+     * An entity walks to an item lying within its reach and picks it up there.
+     *
+     * Picking up is a behaviour with a priority and a speed, so the ember goes to the item rather
+     * than taking it from where it stands. The gathering group puts the behaviour above the
+     * ember's wandering, which would otherwise be free to take the ember elsewhere first.
+     */
+    @GameTest()
+    public void anEntityWalksToTheItemItPicksUp(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        // On the floor beside the ember rather than where it was put down, which it falls from.
+        EntityEvents.trigger(ember, "tp:ember_gather", null, ServerHooks.state());
+        ember.setNoAi(false);
+        live(ember, SETTLE_TICKS);
+        double start = ember.getX();
+        net.minecraft.world.entity.item.ItemEntity dropped = new net.minecraft.world.entity.item.ItemEntity(
+            helper.getLevel(), start + ITEM_AWAY, ember.getY(), ember.getZ(), new ItemStack(Items.GOLD_INGOT));
+        dropped.setNoPickUpDelay();
+        helper.getLevel().addFreshEntity(dropped);
+
+        live(ember, WALK_TICKS);
+        helper.assertTrue(ember.getMainHandItem().is(Items.GOLD_INGOT),
+            EMBER + " never picked up the gold lying " + ITEM_AWAY + " blocks off.");
+        helper.assertTrue(ember.getX() - start > ITEM_AWAY - GOAL_RADIUS - 0.5,
+            EMBER + " picked up an item without going to it, having moved " + (ember.getX() - start) + ".");
+        helper.succeed();
+    }
+
+    /** How far off the item lies, inside the four blocks the gathering group reaches. */
+    private static final int ITEM_AWAY = 3;
+
+    /** How close the gathering group has to come to an item to take it, Mojang's own two blocks. */
+    private static final int GOAL_RADIUS = 2;
+
+    /** Long enough for the ember to land on the floor it was put above. */
+    private static final int SETTLE_TICKS = 20;
+
+    /** Long enough to walk three blocks at the ember's pace. */
+    private static final int WALK_TICKS = 100;
+
+    /**
      * Runs the entity's own ticks the way the level does, which counts its age first: Java's goals
      * tell one blow from the next by the age it landed at.
      */

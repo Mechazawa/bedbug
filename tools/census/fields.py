@@ -214,10 +214,6 @@ REASONS = {
         "ignore_vibration": "Whether a vibration interrupts the following. Only the allay says it does, and "
                             "its note block goals sit above this one in priority, which is what interrupts it.",
     },
-    "minecraft:behavior.pickup_items": {
-        "*": "Picking up happens on this entity's own clock rather than through a path, so there is no "
-             "arrival radius, no search height and no cooldown to honour.",
-    },
     "minecraft:behavior.drink_milk": {"filters": "Drinking clears what is harmful whenever there is any."},
     "minecraft:behavior.drink_potion": {
         "*": "Drinking clears what is harmful rather than applying a potion Java would have to hold.",

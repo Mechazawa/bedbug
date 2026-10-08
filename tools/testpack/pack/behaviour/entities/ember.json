@@ -384,6 +384,14 @@
           }
         }
       },
+      "tp:ember_gathering": {
+        "minecraft:behavior.pickup_items": {
+          "priority": 0,
+          "max_dist": 4,
+          "goal_radius": 2,
+          "speed_multiplier": 1.0
+        }
+      },
       "tp:ember_alert": {
         "minecraft:timer": {
           "time": 1.0,
@@ -552,6 +560,11 @@
       "tp:ember_watch": {
         "add": {
           "component_groups": ["tp:ember_watchful"]
+        }
+      },
+      "tp:ember_gather": {
+        "add": {
+          "component_groups": ["tp:ember_gathering"]
         }
       },
       "tp:ember_winter": {

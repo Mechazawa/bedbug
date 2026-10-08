@@ -1171,48 +1171,53 @@ public class AddonEntity extends PathfinderMob
      * hand and a body, so what is picked up is held rather than stored, which is what a pack using
      * this for a villager carrying bread is describing anyway.
      */
-    private void pickUpNearby() {
-        if (!declares("minecraft:behavior.pickup_items") || level().isClientSide()) return;
-        if (carried == null && !getMainHandItem().isEmpty()) return;
+    /** Whether the entity has slots of its own to put what it picks up in. */
+    boolean carriesInventory() {
+        return carried != null;
+    }
 
-        com.google.gson.JsonObject goal = componentBody("minecraft:behavior.pickup_items");
-        double range = number(goal, "max_dist", 3);
-        boolean anything = ServerEntityDefinition.flag(goal, "can_pickup_any_item", false);
+    /** Whether the slot Java would wear this item in is empty, a hand for most things. */
+    boolean slotFreeFor(ItemStack stack) {
+        return getItemBySlot(getEquipmentSlotForItem(stack)).isEmpty();
+    }
 
-        for (net.minecraft.world.entity.item.ItemEntity dropped
-            : level().getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
-                getBoundingBox().inflate(range))) {
-            if (!dropped.isAlive() || dropped.hasPickUpDelay()) continue;
-            if (named(goal, "excluded_items", dropped.getItem())) continue;
-            if (!anything && !shareable(dropped.getItem())) continue;
-
-            // `singular_pickup` is the pack asking for one of the stack rather than all of it.
-            ItemStack taken = dropped.getItem().copy();
-            if (ServerEntityDefinition.flag(liveComponent("minecraft:shareables"),
-                "singular_pickup", false)) {
-                taken.setCount(1);
-            }
-            if (!stow(taken)) return;
-
-            dropped.getItem().shrink(taken.getCount());
-            if (dropped.getItem().isEmpty()) dropped.discard();
-            return;
+    /**
+     * Takes what the dropped stack holds into wherever the entity keeps things, and answers whether
+     * any of it fitted.
+     */
+    boolean pickUp(net.minecraft.world.entity.item.ItemEntity dropped) {
+        // `singular_pickup` is the pack asking for one of the stack rather than all of it.
+        ItemStack taken = dropped.getItem().copy();
+        if (ServerEntityDefinition.flag(liveComponent("minecraft:shareables"), "singular_pickup", false)) {
+            taken.setCount(1);
         }
+        if (!stow(taken)) return false;
+
+        dropped.getItem().shrink(taken.getCount());
+        if (dropped.getItem().isEmpty()) dropped.discard();
+        return true;
+    }
+
+    /** Raises one of the entity's own events, for a goal that names one. */
+    void raiseEvent(String event) {
+        fire(event);
     }
 
     /**
      * Puts one item where the pack said this entity keeps what it collects.
      *
      * `minecraft:inventory` gives the entity slots of its own, which is what a pack describes for
-     * something that hauls goods. Without it there is one hand, which is enough for the villager
-     * carrying bread that most packs use this for. False when there is nowhere left to put it.
+     * something that hauls goods. Without it the item goes to the slot Java would wear it in, a
+     * hand for most things and the head for a helmet. False when there is nowhere left to put it.
      */
     private boolean stow(ItemStack stack) {
-        if (carried == null) {
-            setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, stack);
-            return true;
-        }
-        return carried.addItem(stack).isEmpty();
+        if (carried != null) return carried.addItem(stack).isEmpty();
+
+        net.minecraft.world.entity.EquipmentSlot slot = getEquipmentSlotForItem(stack);
+        if (!getItemBySlot(slot).isEmpty()) return false;
+
+        setItemSlot(slot, stack);
+        return true;
     }
 
     /**
@@ -1221,7 +1226,7 @@ public class AddonEntity extends PathfinderMob
      * `all_items` is the pack saying the list is a preference rather than a gate, so an entity
      * declaring it takes whatever it finds.
      */
-    private boolean shareable(net.minecraft.world.item.ItemStack stack) {
+    boolean shareable(net.minecraft.world.item.ItemStack stack) {
         com.google.gson.JsonObject body = liveComponent("minecraft:shareables");
         if (body == null || !body.has("items")) return true;
         if (ServerEntityDefinition.flag(body, "all_items", false)) return true;
@@ -1229,7 +1234,7 @@ public class AddonEntity extends PathfinderMob
     }
 
     /** Whether an item list a component carries names this stack, in either spelling of an entry. */
-    private static boolean named(com.google.gson.JsonObject body, String field,
+    static boolean named(com.google.gson.JsonObject body, String field,
         net.minecraft.world.item.ItemStack stack) {
         java.util.List<com.google.gson.JsonElement> listed =
             at.ioexception.mcaddon.util.Json.list(body, field);
@@ -2563,6 +2568,9 @@ public class AddonEntity extends PathfinderMob
             // attack goal runs is the mount's, at the reach that goal keeps.
             case "minecraft:behavior.mount_pathing" -> { }
 
+            case "minecraft:behavior.pickup_items" ->
+                goals.add(priority, new PickupItemsGoal(this, goal));
+
             case "minecraft:behavior.avoid_mob_type" ->
                 goals.add(priority, new AvoidMobsGoal(this, goal));
             // Hiding and playing are both a Bedrock villager moving somewhere for a reason Java
@@ -3001,7 +3009,6 @@ public class AddonEntity extends PathfinderMob
             rememberSomethingNearby();
             resupply();
             teleportAbout();
-            pickUpNearby();
             rest();
             drink();
             leashChanged(isLeashed());
