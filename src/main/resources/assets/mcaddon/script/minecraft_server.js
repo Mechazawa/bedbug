@@ -4087,6 +4087,7 @@ function payloadsFor(group) {
         itemUse: ItemUseAfterEvent, playerBreakBlock: PlayerBreakBlockAfterEvent,
         playerDimensionChange: PlayerDimensionChangeAfterEvent,
         playerGameModeChange: PlayerGameModeChangeAfterEvent,
+        playerInputPermissionCategoryChange: PlayerInputPermissionCategoryChangeAfterEvent,
         playerInteractWithBlock: PlayerInteractWithBlockAfterEvent,
         playerInteractWithEntity: PlayerInteractWithEntityAfterEvent,
         playerInventoryItemChange: PlayerInventoryItemChangeAfterEvent,
@@ -4154,7 +4155,6 @@ function unraisedFor(group) {
         entityUpgrade: EntityUpgradeAfterEventSignal,
         playerEmote: PlayerEmoteAfterEventSignal,
         playerInputModeChange: PlayerInputModeChangeAfterEventSignal,
-        playerInputPermissionCategoryChange: PlayerInputPermissionCategoryChangeAfterEventSignal,
         soundCompleted: SoundCompletedAfterEventSignal,
     },
     worldBefore: {},
@@ -4217,6 +4217,7 @@ export class PlayerBreakBlockAfterEventSignal extends EventSignal {}
 export class PlayerBreakBlockBeforeEventSignal extends EventSignal {}
 export class PlayerDimensionChangeAfterEventSignal extends EventSignal {}
 export class PlayerGameModeChangeAfterEventSignal extends EventSignal {}
+export class PlayerInputPermissionCategoryChangeAfterEventSignal extends EventSignal {}
 export class PlayerInteractWithBlockAfterEventSignal extends EventSignal {}
 export class PlayerInteractWithBlockBeforeEventSignal extends EventSignal {}
 export class PlayerInteractWithEntityAfterEventSignal extends EventSignal {}
@@ -4277,6 +4278,7 @@ const RAISED = {
         itemUse: ItemUseAfterEventSignal, playerBreakBlock: PlayerBreakBlockAfterEventSignal,
         playerDimensionChange: PlayerDimensionChangeAfterEventSignal,
         playerGameModeChange: PlayerGameModeChangeAfterEventSignal,
+        playerInputPermissionCategoryChange: PlayerInputPermissionCategoryChangeAfterEventSignal,
         playerInteractWithBlock: PlayerInteractWithBlockAfterEventSignal,
         playerInteractWithEntity: PlayerInteractWithEntityAfterEventSignal,
         playerInventoryItemChange: PlayerInventoryItemChangeAfterEventSignal,
@@ -6422,7 +6424,6 @@ export class PlayerInputPermissionCategoryChangeAfterEvent {
         return unsupported("PlayerInputPermissionCategoryChangeAfterEvent.player");
     }
 }
-export class PlayerInputPermissionCategoryChangeAfterEventSignal extends EventSignal {}
 export class PlayerInteractWithBlockAfterEvent {
     get beforeItemStack() {
         return unsupported("PlayerInteractWithBlockAfterEvent.beforeItemStack");

@@ -321,6 +321,11 @@ public final class CommandGameTests {
                     .noneMatch(tag -> tag.startsWith("mcaddon.haspermission.")),
                 "a tag haspermission was answered through is still on the player: " + Platform.tagsOf(locked));
 
+            // The synthetic pack's script tags a player with each category that changes, by number.
+            helper.assertTrue(AddonEntities.typeOf(ENTITY) == null
+                    || Platform.tagsOf(locked).contains("tp:input_1_false"),
+                "the script heard nothing of the camera input taken away: " + Platform.tagsOf(locked));
+
             Entity minecart = place(helper, vanilla("minecart"), STAND);
             helper.assertFalse(locked.startRiding(minecart), "a player whose mount input is off got into a minecart.");
             helper.assertTrue(free.startRiding(minecart), "a player with every input could not get into a minecart.");

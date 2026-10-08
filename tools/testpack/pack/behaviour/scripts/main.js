@@ -157,6 +157,10 @@ function resetTheHud(player) {
     if (player.onScreenDisplay.getHiddenHudElements().length === 0) player.addTag("tp:hud_all_drawn");
 }
 
+// Each kind of input taken away from a player or given back, named on that player by its number.
+world.afterEvents.playerInputPermissionCategoryChange.subscribe(({ player, category, enabled }) =>
+    player.addTag("tp:input_" + category + "_" + enabled));
+
 system.afterEvents.scriptEventReceive.subscribe(event => {
     const player = event.sourceEntity;
     if (player === undefined) return;

@@ -2,10 +2,12 @@ package at.ioexception.mcaddon.server;
 
 import at.ioexception.mcaddon.bedrock.input.InputPermission;
 import at.ioexception.mcaddon.network.Channels;
+import at.ioexception.mcaddon.script.ScriptHost;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -23,13 +25,26 @@ public final class PlayerInputs {
     private PlayerInputs() {
     }
 
-    /** Switches one category on or off, and answers whether that changed anything. */
+    /**
+     * Switches one category on or off, and answers whether that changed anything. A change is sent
+     * to the player's client and raised to the packs' scripts.
+     */
     public static boolean set(ServerPlayer player, InputPermission permission, boolean enabled) {
         Set<InputPermission> disabled = DISABLED.computeIfAbsent(player.getUUID(),
             key -> EnumSet.noneOf(InputPermission.class));
         boolean changed = enabled ? disabled.remove(permission) : disabled.add(permission);
-        if (changed) Channels.sendInputPermissions(player, InputPermission.bits(disabled));
-        return changed;
+        if (!changed) return false;
+
+        Channels.sendInputPermissions(player, InputPermission.bits(disabled));
+        ScriptHost scripts = ServerHooks.scripts();
+        if (scripts != null) {
+            Map<String, Object> fields = new LinkedHashMap<>();
+            fields.put("player", ScriptHost.EntityHandle.of(player));
+            fields.put("category", permission.scriptValue());
+            fields.put("enabled", enabled);
+            scripts.raiseWorldEvent("playerInputPermissionCategoryChange", fields);
+        }
+        return true;
     }
 
     /** Whether the category itself is switched on, which is what a query and a selector read. */
