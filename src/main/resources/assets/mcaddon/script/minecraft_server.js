@@ -3072,7 +3072,7 @@ export class Player extends Entity {
     }
 
     get inputPermissions() {
-        return new PlayerInputPermissions();
+        return new PlayerInputPermissions(this.id);
     }
 
     get isEmoting() {
@@ -3202,10 +3202,8 @@ function rawText(message) {
 }
 
 /**
- * The title, subtitle and action bar one player is being shown.
- *
- * The HUD members are the rest of it, and a Java server has no say over which pieces of a client's
- * HUD are drawn, so each of those is reported rather than answered.
+ * The title, subtitle and action bar one player is being shown, and which pieces of their heads-up
+ * display are hidden, which is the set `/hud` changes as well.
  */
 export class ScreenDisplay {
     #playerId;
@@ -3231,23 +3229,25 @@ export class ScreenDisplay {
     }
 
     getHiddenHudElements() {
-        return unsupported("ScreenDisplay.getHiddenHudElements", []);
+        return Array.from(bridge.players.hiddenHud(this.#playerId));
     }
 
-    hideAllExcept() {
-        unsupported("ScreenDisplay.hideAllExcept");
+    hideAllExcept(hudElements) {
+        bridge.players.hideHudExcept(this.#playerId, JSON.stringify(hudElements ?? []));
     }
 
-    isForcedHidden() {
-        return unsupported("ScreenDisplay.isForcedHidden", false);
+    isForcedHidden(hudElement) {
+        return this.getHiddenHudElements().includes(hudElement);
     }
 
     resetHudElementsVisibility() {
-        unsupported("ScreenDisplay.resetHudElementsVisibility");
+        bridge.players.changeHud(this.#playerId, false, null);
     }
 
-    setHudVisibility() {
-        unsupported("ScreenDisplay.setHudVisibility");
+    /** `/hud` for this one player, on every piece when none are named. */
+    setHudVisibility(visible, hudElements) {
+        bridge.players.changeHud(this.#playerId, visible === HudVisibility.Hide,
+            hudElements === undefined ? null : JSON.stringify(hudElements));
     }
 }
 
@@ -3448,15 +3448,20 @@ export class MolangVariableMap {
     }
 }
 
-/** Bedrock locks a player out of one kind of input at a time; Java has no packet that does this. */
+/** The kinds of input one player may give, which is the set `/inputpermission` changes as well. */
 export class PlayerInputPermissions {
-    isPermissionCategoryEnabled() {
-        unsupported("PlayerInputPermissions.isPermissionCategoryEnabled");
-        return true;
+    #playerId;
+
+    constructor(playerId) {
+        this.#playerId = playerId;
     }
 
-    setPermissionCategory() {
-        unsupported("PlayerInputPermissions.setPermissionCategory");
+    isPermissionCategoryEnabled(permissionCategory) {
+        return bridge.players.inputEnabled(this.#playerId, permissionCategory);
+    }
+
+    setPermissionCategory(permissionCategory, isEnabled) {
+        bridge.players.setInputEnabled(this.#playerId, permissionCategory, isEnabled);
     }
 }
 

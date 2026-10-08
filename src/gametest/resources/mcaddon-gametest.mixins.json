@@ -8,6 +8,7 @@
   },
   "client": [
     "AddonParticleAccessor",
+    "GuiGraphicsExtractorMixin",
     "ParticleEngineMixin",
     "ParticleMotionAccessor",
     "SoundManagerMixin"

@@ -79,8 +79,11 @@ public final class McAddon implements ModInitializer {
         // pack's own biome carries.
         AddonWorldgen.register(AddonPacks.all());
         AddonSpawns.register(packs);
-        // Logged after the spawn rules are read, because the conditions they drop belong in the
-        // same register as the components an entity declares.
+        // Once the add-ons' own entities, items and blocks are registered, because a function line
+        // naming one of them translates only once the name can be found.
+        AddonPacks.reportFunctionLines();
+        // Logged after the spawn rules are read and the function lines translated, because what
+        // either drops belongs in the same register as the components an entity declares.
         AddonEntities.report().forEach(LOGGER::info);
         AddonParticles.register(AddonPacks.all());
         AddonFogs.register(AddonPacks.all());

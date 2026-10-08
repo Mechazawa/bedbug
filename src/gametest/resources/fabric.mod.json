@@ -27,6 +27,7 @@
       "at.ioexception.mcaddon.clientgametest.ServerRegistryClientGameTest",
       "at.ioexception.mcaddon.clientgametest.ServerEntityClientGameTest",
       "at.ioexception.mcaddon.clientgametest.ServerPlayerClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.HudClientGameTest",
       "at.ioexception.mcaddon.clientgametest.CameraShakeClientGameTest",
       "at.ioexception.mcaddon.clientgametest.RenderControllerClientGameTest",
       "at.ioexception.mcaddon.clientgametest.AnimationClientGameTest",

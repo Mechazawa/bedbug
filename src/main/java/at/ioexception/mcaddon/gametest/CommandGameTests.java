@@ -1,8 +1,10 @@
 package at.ioexception.mcaddon.gametest;
 
+import at.ioexception.mcaddon.bedrock.input.InputPermission;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.server.EntityEvents;
+import at.ioexception.mcaddon.server.PlayerInputs;
 import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -10,6 +12,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -90,16 +93,16 @@ public final class CommandGameTests {
                 "a selector naming minecraft:villager_v2 did not select the villager.");
 
             List<String> report = ServerHooks.scripts().coverage().report();
-            helper.assertTrue(reportedUnder(report, UNTRANSLATED, "    command hud x"),
-                "the script's hud command is not reported as untranslatable: " + report);
+            helper.assertTrue(reportedUnder(report, UNTRANSLATED, "    command aimassist x"),
+                "the script's aimassist command is not reported as untranslatable: " + report);
         });
     }
 
     /**
      * An entity event's commands are translated, and the one with no Java form is reported.
      *
-     * The ember's event tags it through a selector with a Bedrock radius and asks for a heads-up
-     * display change Java has no command for, which `/mcaddon entities` has to name.
+     * The ember's event tags it through a selector with a Bedrock radius and asks for an aim assist
+     * Java has no command for, which `/mcaddon entities` has to name.
      */
     @GameTest()
     public void anEntityEventsCommandsAreTranslated(GameTestHelper helper) {
@@ -115,8 +118,9 @@ public final class CommandGameTests {
         helper.succeedWhen(() -> {
             helper.assertTrue(Platform.tagsOf(ember).contains("tp_event_command_translated"),
                 ENTITY + "'s event ran a selector with a Bedrock radius and it did not reach the ember.");
-            helper.assertTrue(AddonEntities.report().stream().anyMatch(line -> line.startsWith("    command hud x")),
-                "the event's hud command is not reported: " + AddonEntities.report());
+            helper.assertTrue(AddonEntities.report().stream()
+                    .anyMatch(line -> line.startsWith("    command aimassist x")),
+                "the event's aimassist command is not reported: " + AddonEntities.report());
         });
     }
 
@@ -164,8 +168,27 @@ public final class CommandGameTests {
         helper.assertTrue(tags.contains("tp_before_the_gap") && tags.contains("tp_after_the_gap"),
             "the lines either side of the one that cannot run did not both run: " + tags);
         helper.assertTrue(AddonEntities.report().stream()
-                .anyMatch(line -> line.startsWith("    command inputpermission x")),
+                .anyMatch(line -> line.startsWith("    command controlscheme x")),
             "the line that cannot run is not reported: " + AddonEntities.report());
+        helper.succeed();
+    }
+
+    /**
+     * A function line this mod cannot translate is named as the pack loads, in a function nothing
+     * runs: `tp:tp/unrun` asks for the paper doll to be hidden, which no Java client draws.
+     */
+    @GameTest()
+    public void aFunctionLineIsReportedBeforeAnythingRunsIt(GameTestHelper helper) {
+        if (AddonEntities.typeOf(ENTITY) == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.assertTrue(helper.getLevel().getServer().getFunctions().get(Platform.id("tp", "tp/unrun")).isPresent(),
+            "tp:tp/unrun did not load.");
+        helper.assertTrue(AddonEntities.report().stream()
+                .anyMatch(line -> line.startsWith("    command hud paperdoll, which Java has no form of x")),
+            "the line of tp:tp/unrun that cannot run is not reported: " + AddonEntities.report());
         helper.succeed();
     }
 
@@ -230,6 +253,82 @@ public final class CommandGameTests {
         Entity stand = place(helper, vanilla("armor_stand"), STAND);
         run(helper, "execute as " + stand.getStringUUID() + " run function tp:tp/loop");
         helper.assertTrue(Platform.tagsOf(stand).contains("tp_looped"), "tp:tp/loop never ran its first line.");
+        helper.succeed();
+    }
+
+    /**
+     * `/bedrock` selects by an entity property, asking the values this mod keeps for each entity:
+     * one ember is lit and the other holds the default its pack declared.
+     */
+    @GameTest()
+    public void bedrockSelectsByAnEntityProperty(GameTestHelper helper) {
+        EntityType<?> ember = AddonEntities.typeOf(ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        Entity lit = place(helper, ember, STAND);
+        Entity cold = place(helper, ember, STAND.offset(1, 0, 0));
+        ServerHooks.state().setProperty(lit.getUUID(), "tp:kindled", true);
+        BlockPos at = helper.absolutePos(STAND);
+        String near = "bedrock execute positioned " + at.getX() + " " + at.getY() + " " + at.getZ()
+            + " as @e[type=tp:ember,r=3,";
+        run(helper, near + "has_property={tp:kindled=true}] run tag @s add tp_selected_lit");
+        run(helper, near + "has_property={property=tp:kindled,tp:kindled=!true}] run tag @s add tp_selected_cold");
+        run(helper, near + "has_property={property=tp:never_declared}] run tag @s add tp_selected_by_nothing");
+
+        helper.assertTrue(Platform.tagsOf(lit).contains("tp_selected_lit")
+                && !Platform.tagsOf(lit).contains("tp_selected_cold"),
+            "the lit ember was not selected by tp:kindled=true alone: " + Platform.tagsOf(lit));
+        helper.assertTrue(Platform.tagsOf(cold).contains("tp_selected_cold")
+                && !Platform.tagsOf(cold).contains("tp_selected_lit"),
+            "the ember at its declared default was not selected by tp:kindled=!true alone: "
+                + Platform.tagsOf(cold));
+        for (Entity entity : List.of(lit, cold)) {
+            helper.assertFalse(Platform.tagsOf(entity).contains("tp_selected_by_nothing"),
+                "an ember was selected as having a property its pack never declared.");
+            helper.assertTrue(Platform.tagsOf(entity).stream()
+                    .noneMatch(tag -> tag.startsWith("mcaddon.has_property.")),
+                "a tag has_property was answered through is still on " + entity + ": " + Platform.tagsOf(entity));
+        }
+        helper.succeed();
+    }
+
+    /**
+     * `/bedrock inputpermission` takes a kind of input away from one player, `/bedrock` selects by it
+     * through `haspermission`, and a player whose mount permission is off is refused a vehicle.
+     */
+    @GameTest()
+    public void bedrockSelectsByAPlayersInputPermission(GameTestHelper helper) {
+        ServerPlayer locked = helper.makeMockServerPlayerInLevel();
+        ServerPlayer free = helper.makeMockServerPlayerInLevel();
+        try {
+            // Both mock players carry one name, and a player argument takes no uuid, so a tag tells them apart.
+            locked.addTag("tp_to_lock");
+            run(helper, "bedrock inputpermission set @a[tag=tp_to_lock] camera disabled");
+            run(helper, "bedrock inputpermission set @a[tag=tp_to_lock] mount disabled");
+            helper.assertFalse(PlayerInputs.enabled(locked, InputPermission.CAMERA),
+                "/bedrock inputpermission set did not take the camera input away.");
+            run(helper, "bedrock execute as @a[haspermission={camera=disabled,jump=enabled}]"
+                + " run tag @s add tp_camera_locked");
+
+            helper.assertTrue(Platform.tagsOf(locked).contains("tp_camera_locked"),
+                "the player whose camera input was taken away was not selected: " + Platform.tagsOf(locked));
+            helper.assertFalse(Platform.tagsOf(free).contains("tp_camera_locked"),
+                "a player with every input was selected as one whose camera was taken away.");
+            helper.assertTrue(Platform.tagsOf(locked).stream()
+                    .noneMatch(tag -> tag.startsWith("mcaddon.haspermission.")),
+                "a tag haspermission was answered through is still on the player: " + Platform.tagsOf(locked));
+
+            Entity minecart = place(helper, vanilla("minecart"), STAND);
+            helper.assertFalse(locked.startRiding(minecart), "a player whose mount input is off got into a minecart.");
+            helper.assertTrue(free.startRiding(minecart), "a player with every input could not get into a minecart.");
+        } finally {
+            PlayerInputs.forget(locked);
+            helper.getLevel().getServer().getPlayerList().remove(locked);
+            helper.getLevel().getServer().getPlayerList().remove(free);
+        }
         helper.succeed();
     }
 

@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * The item lookup asks the registry, hence the bootstrap.
  */
-class CarriedItemsTest {
+class SelectorTagsTest {
     private static final Pattern TAG = Pattern.compile("mcaddon\\.hasitem\\.\\d+\\.\\d+");
 
     @BeforeAll
@@ -31,7 +31,7 @@ class CarriedItemsTest {
 
     @Test
     void asksJavasSelectorForATagInPlaceOfTheArgument() throws CommandSyntaxException {
-        String line = CarriedItems.tryFrom(
+        String line = SelectorTags.tryFrom(
             "execute as @e[type=minecraft:pig,hasitem={item=apple,quantity=2..},limit=1] run say hi").line();
 
         Matcher tag = TAG.matcher(line);
@@ -42,7 +42,7 @@ class CarriedItemsTest {
     /** Each selector asks its own question, so each gets a tag of its own. */
     @Test
     void givesEachArgumentInTheLineATagOfItsOwn() throws CommandSyntaxException {
-        String line = CarriedItems.tryFrom(
+        String line = SelectorTags.tryFrom(
             "execute if entity @s[hasitem=[{item=apple},{item=stone}]] run kill @e[hasitem={item=apple}]").line();
 
         Matcher tags = TAG.matcher(line);
@@ -53,21 +53,34 @@ class CarriedItemsTest {
         assertEquals("execute if entity @s[tag=" + first + "] run kill @e[tag=" + tags.group() + "]", line);
     }
 
+    /** An input permission and an entity property are asked the same way, each under a tag naming it. */
+    @Test
+    void asksAPermissionAndAPropertyThroughTagsOfTheirOwn() throws CommandSyntaxException {
+        String line = SelectorTags.tryFrom("execute as @a[haspermission={camera=disabled}] run kill "
+            + "@e[has_property={tp:mood=\"calm\",property=tp:lit},limit=1]").line();
+
+        Matcher permission = Pattern.compile("mcaddon\\.haspermission\\.\\d+\\.0").matcher(line);
+        Matcher property = Pattern.compile("mcaddon\\.has_property\\.\\d+\\.1").matcher(line);
+        assertTrue(permission.find() && property.find(), line);
+        assertEquals("execute as @a[tag=" + permission.group() + "] run kill @e[tag=" + property.group()
+            + ",limit=1]", line);
+    }
+
     /** A line a function runs while its caller's line is still open must not share the caller's tags. */
     @Test
     void namesEveryRunOfOneLineDifferently() throws CommandSyntaxException {
         String line = "kill @e[hasitem={item=apple}]";
-        assertNotEquals(CarriedItems.tryFrom(line).line(), CarriedItems.tryFrom(line).line());
+        assertNotEquals(SelectorTags.tryFrom(line).line(), SelectorTags.tryFrom(line).line());
     }
 
     @Test
     void leavesALineAskingAboutNoInventoryToJava() throws CommandSyntaxException {
-        assertNull(CarriedItems.tryFrom("kill @e[type=minecraft:pig,tag=hasitem]"));
-        assertNull(CarriedItems.tryFrom("say hasitem={item=apple}"));
+        assertNull(SelectorTags.tryFrom("kill @e[type=minecraft:pig,tag=hasitem]"));
+        assertNull(SelectorTags.tryFrom("say hasitem={item=apple}"));
     }
 
     @Test
     void refusesAnArgumentItCannotRead() {
-        assertThrows(CommandSyntaxException.class, () -> CarriedItems.tryFrom("kill @e[hasitem={item=tp:nothing}]"));
+        assertThrows(CommandSyntaxException.class, () -> SelectorTags.tryFrom("kill @e[hasitem={item=tp:nothing}]"));
     }
 }

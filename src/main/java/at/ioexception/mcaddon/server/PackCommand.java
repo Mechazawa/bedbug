@@ -103,7 +103,8 @@ public final class PackCommand {
     }
 
     /**
-     * The line read for this source against the tree, its `hasitem` arguments already answered.
+     * The line read for this source against the tree, its `hasitem`, `haspermission` and
+     * `has_property` arguments already answered.
      *
      * What could not be translated or read is reported and thrown, so a source that typed the line
      * is told why nothing ran.
@@ -112,15 +113,15 @@ public final class PackCommand {
         untranslatable.forEach(report::untranslatable);
         if (java == null) throw UNTRANSLATABLE.create(String.join("; ", untranslatable));
 
-        CarriedItems carried;
+        SelectorTags tags;
         try {
-            carried = CarriedItems.tryFrom(java);
+            tags = SelectorTags.tryFrom(java);
         } catch (CommandSyntaxException unreadable) {
             report.unreadable(java, unreadable.getMessage());
             throw unreadable;
         }
 
-        String line = carried == null ? java : carried.line();
+        String line = tags == null ? java : tags.line();
         ParseResults<CommandSourceStack> parsed = BedrockTree.of(source.getServer()).parse(line, source);
         if (!parsed.getExceptions().isEmpty() || parsed.getReader().canRead()) {
             CommandSyntaxException unreadable = unreadable(parsed);
@@ -128,15 +129,15 @@ public final class PackCommand {
             throw unreadable;
         }
 
-        if (carried != null) carried.tag(source.getServer());
-        return new Read(parsed, line, carried);
+        if (tags != null) tags.tag(source.getServer());
+        return new Read(parsed, line, tags);
     }
 
-    private record Read(ParseResults<CommandSourceStack> parsed, String line, CarriedItems carried)
+    private record Read(ParseResults<CommandSourceStack> parsed, String line, SelectorTags tags)
         implements Platform.ReadLine {
         @Override
         public void finish() {
-            if (carried != null) carried.finish();
+            if (tags != null) tags.finish();
         }
     }
 

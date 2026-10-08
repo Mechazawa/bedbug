@@ -19,7 +19,9 @@
 // The rest are probes the game tests run as a player. Each answers by tagging that player with what
 // the script read back, which is what the test asserts on.
 
-import { BlockPermutation, BlockVolume, CameraShakeType, CloneMode, system, world } from "@minecraft/server";
+import {
+    BlockPermutation, BlockVolume, CameraShakeType, CloneMode, HudElement, HudVisibility, system, world,
+} from "@minecraft/server";
 import { ActionFormData, CustomForm, ObservableBoolean, ObservableString } from "@minecraft/server-ui";
 
 const VILLAGER = "minecraft:villager_v2";
@@ -132,7 +134,7 @@ function runBedrockCommands(entity) {
     entity.runCommand("execute unless entity @s[hasitem={item=diamond}] run tag @s add tp_has_no_diamond");
     entity.runCommand("tag @e[type=villager_v2,r=4] add tp_selected_as_villager_v2");
     entity.runCommand("function tp/relay");
-    entity.runCommand("hud @s hide hotbar");
+    entity.runCommand("aimassist @s clear");
 }
 
 const WARES = 800;
@@ -141,6 +143,18 @@ function openCatalogue(player) {
     const catalogue = new ActionFormData().title("Catalogue");
     for (let ware = 1; ware <= WARES; ware++) catalogue.button("Ware " + ware + " of the catalogue");
     catalogue.show(player).then(response => player.addTag("tp:catalogue_" + response.selection));
+}
+
+// The script half of `/hud`, which hides the same pieces on the same player's client. What the
+// script reads back about the display afterwards is a tag on that player.
+function hideTheHotbar(player) {
+    player.onScreenDisplay.setHudVisibility(HudVisibility.Hide, [HudElement.Hotbar]);
+    if (player.onScreenDisplay.isForcedHidden(HudElement.Hotbar)) player.addTag("tp:hud_hotbar_hidden");
+}
+
+function resetTheHud(player) {
+    player.onScreenDisplay.resetHudElementsVisibility();
+    if (player.onScreenDisplay.getHiddenHudElements().length === 0) player.addTag("tp:hud_all_drawn");
 }
 
 system.afterEvents.scriptEventReceive.subscribe(event => {
@@ -168,6 +182,8 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
             player.camera.addShake({ intensity: 2, duration: 30, type: CameraShakeType.Rotational });
             break;
         case "tp:still": player.camera.stopShaking(); break;
+        case "tp:hud_hide": hideTheHotbar(player); break;
+        case "tp:hud_reset": resetTheHud(player); break;
         default: break;
     }
 });

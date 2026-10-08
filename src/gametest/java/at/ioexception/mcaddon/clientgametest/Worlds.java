@@ -79,6 +79,37 @@ final class Worlds {
         throw new AssertionError(context.computeOnClient(client -> failure.get()));
     }
 
+    /** Everything a command typed into the server console sends back, joined into one line. */
+    static String said(TestServerContext server, String command) {
+        return server.computeOnServer(minecraft -> {
+            java.util.List<String> lines = new java.util.ArrayList<>();
+            net.minecraft.commands.CommandSource listener = new net.minecraft.commands.CommandSource() {
+                @Override
+                public void sendSystemMessage(net.minecraft.network.chat.Component message) {
+                    lines.add(message.getString());
+                }
+
+                @Override
+                public boolean acceptsSuccess() {
+                    return true;
+                }
+
+                @Override
+                public boolean acceptsFailure() {
+                    return true;
+                }
+
+                @Override
+                public boolean shouldInformAdmins() {
+                    return false;
+                }
+            };
+            minecraft.getCommands().performPrefixedCommand(minecraft.createCommandSourceStack().withSource(listener),
+                command);
+            return String.join(" ", lines);
+        });
+    }
+
     /**
      * A dedicated server on a port nothing else holds, because two checkouts running their client
      * game tests at once would otherwise both ask for the default one and the second could not bind.

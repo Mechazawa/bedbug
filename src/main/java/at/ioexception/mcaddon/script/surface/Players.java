@@ -1,9 +1,13 @@
 package at.ioexception.mcaddon.script.surface;
 
+import at.ioexception.mcaddon.bedrock.hud.HudElement;
+import at.ioexception.mcaddon.bedrock.input.InputPermission;
 import at.ioexception.mcaddon.client.render.BedrockParticles;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonParticles;
 import at.ioexception.mcaddon.script.ScriptCoverage;
+import at.ioexception.mcaddon.server.PlayerHuds;
+import at.ioexception.mcaddon.server.PlayerInputs;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -27,8 +31,11 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.scores.Objective;
 import org.graalvm.polyglot.HostAccess;
 
+import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * The part of `@minecraft/server` that answers about one player.
@@ -380,6 +387,80 @@ public final class Players extends Surface {
         ServerPlayer player = player(id);
         return player == null ? new String[0]
             : at.ioexception.mcaddon.server.PlayerFogs.tags(player).toArray(String[]::new);
+    }
+
+    // Heads-up display
+
+    /**
+     * `ScreenDisplay.setHudVisibility`, which is `/hud` for this one player, on the pieces a script
+     * names by number or on every piece when it names none.
+     *
+     * A piece no Java client draws is reported when it is named, as `/hud` reports a line naming it.
+     */
+    @HostAccess.Export
+    public void changeHud(String id, boolean hide, String elementsJson) {
+        ServerPlayer player = player(id);
+        if (player == null) return;
+
+        List<HudElement> named = hudElements(elementsJson);
+        named.stream().filter(element -> !element.drawnByJava())
+            .forEach(element -> unsupported("ScreenDisplay.setHudVisibility(" + element.bedrockName() + ")"));
+        List<HudElement> elements = elementsJson == null ? List.of(HudElement.values()) : named;
+        if (hide) {
+            PlayerHuds.hide(player, elements);
+        } else {
+            PlayerHuds.reset(player, elements);
+        }
+    }
+
+    /** `ScreenDisplay.hideAllExcept`: every piece hidden but the ones named, which are drawn again. */
+    @HostAccess.Export
+    public void hideHudExcept(String id, String elementsJson) {
+        ServerPlayer player = player(id);
+        if (player == null) return;
+
+        List<HudElement> kept = hudElements(elementsJson);
+        PlayerHuds.reset(player, kept);
+        PlayerHuds.hide(player, Arrays.stream(HudElement.values()).filter(element -> !kept.contains(element)).toList());
+    }
+
+    /** The numbers a script names each hidden piece by. */
+    @HostAccess.Export
+    public int[] hiddenHud(String id) {
+        ServerPlayer player = player(id);
+        return player == null ? new int[0]
+            : PlayerHuds.hidden(player).stream().mapToInt(HudElement::scriptValue).sorted().toArray();
+    }
+
+    private static List<HudElement> hudElements(String elementsJson) {
+        JsonElement parsed = elementsJson == null ? null : JsonParser.parseString(elementsJson);
+        if (parsed == null || !parsed.isJsonArray()) return List.of();
+        return parsed.getAsJsonArray().asList().stream()
+            .map(number -> HudElement.tryFrom(number.getAsInt()))
+            .filter(Objects::nonNull)
+            .toList();
+    }
+
+    // Input permissions
+
+    /** A category a script names by a number no category has is reported and reads as enabled. */
+    @HostAccess.Export
+    public boolean inputEnabled(String id, int category) {
+        ServerPlayer player = player(id);
+        InputPermission permission = InputPermission.tryFrom(category);
+        if (permission == null) unsupported("InputPermissionCategory " + category);
+        return player == null || permission == null || PlayerInputs.enabled(player, permission);
+    }
+
+    @HostAccess.Export
+    public void setInputEnabled(String id, int category, boolean enabled) {
+        ServerPlayer player = player(id);
+        InputPermission permission = InputPermission.tryFrom(category);
+        if (permission == null) {
+            unsupported("InputPermissionCategory " + category);
+        } else if (player != null) {
+            PlayerInputs.set(player, permission, enabled);
+        }
     }
 
     /** The language the client asked for, which a 1.20.1 server is sent but keeps to itself. */

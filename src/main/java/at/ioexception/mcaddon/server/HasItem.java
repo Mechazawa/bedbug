@@ -26,7 +26,7 @@ import java.util.stream.IntStream;
  *
  * `@s[hasitem={item=apple,location=slot.weapon.mainhand,quantity=2..}]` keeps an entity carrying
  * what the braces describe, and `hasitem=[{...},{...}]` one carrying all of them. Java's selector
- * has no way to ask about an inventory, so {@link CarriedItems} asks each entity here and hands
+ * has no way to ask about an inventory, so {@link SelectorTags} asks each entity here and hands
  * Java's selector a tag on the ones that answer yes.
  *
  * `quantity` counts every matching item across the slots asked about, and `slot` narrows those
@@ -65,17 +65,9 @@ public record HasItem(Item item, Range quantity, String location, Range slot) {
     }
 
     private static HasItem read(StringReader reader) throws CommandSyntaxException {
-        reader.expect('{');
         Map<String, String> fields = new LinkedHashMap<>();
-        while (true) {
-            reader.skipWhitespace();
-            if (reader.canRead() && reader.peek() == '}') break;
-            String key = until(reader, "=").toLowerCase(Locale.ROOT);
-            reader.expect('=');
-            fields.put(key, until(reader, ",}"));
-            if (reader.canRead() && reader.peek() == ',') reader.skip();
-        }
-        reader.skip();
+        BracedArguments.read(reader)
+            .forEach(field -> fields.put(field.getKey().toLowerCase(Locale.ROOT), field.getValue()));
         return of(fields, reader);
     }
 
@@ -108,13 +100,6 @@ public record HasItem(Item item, Range quantity, String location, Range slot) {
         } catch (NumberFormatException unreadable) {
             throw UNREADABLE.createWithContext(reader, "a range " + unreadable.getMessage());
         }
-    }
-
-    /** What the reader holds up to the first of these characters, which it leaves unread. */
-    private static String until(StringReader reader, String stops) {
-        int start = reader.getCursor();
-        while (reader.canRead() && stops.indexOf(reader.peek()) < 0) reader.skip();
-        return reader.getString().substring(start, reader.getCursor()).strip();
     }
 
     public boolean carriedBy(Entity entity) {

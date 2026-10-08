@@ -3,6 +3,8 @@ package at.ioexception.mcaddon.server;
 import at.ioexception.mcaddon.bedrock.camera.CameraShake;
 import at.ioexception.mcaddon.bedrock.camera.CameraView;
 import at.ioexception.mcaddon.bedrock.camera.Easing;
+import at.ioexception.mcaddon.bedrock.hud.HudElement;
+import at.ioexception.mcaddon.bedrock.input.InputPermission;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.structure.McStructure;
@@ -19,6 +21,7 @@ import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.context.ParsedCommandNode;
 import com.mojang.brigadier.suggestion.Suggestions;
@@ -42,6 +45,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 
 /**
@@ -53,8 +57,8 @@ import java.util.function.Predicate;
  * `/playanimation`'s `next_state` and `controller`, which name a scratch animation controller; a
  * stop expression covers what packs actually use them for.
  *
- * `/camera` and `/camerashake` act on one player's own view, which only that player's client can
- * draw, so both are decided here and sent to each named player alone.
+ * `/camera`, `/camerashake` and `/hud` act on one player's own view, which only that player's client
+ * can draw, so each is decided here and sent to each named player alone.
  */
 public final class BedrockCommands {
     /** Bedrock's two shakes: one moves the camera about, the other turns it. Positional is default. */
@@ -184,6 +188,8 @@ public final class BedrockCommands {
         registerCamera(dispatcher);
         registerCameraShake(dispatcher);
         registerFog(dispatcher);
+        registerHud(dispatcher);
+        registerInputPermission(dispatcher);
         // The tests a behaviour pack registered through `@minecraft/server-gametest`. A test names
         // itself `class:name`, which Brigadier's unquoted string stops at, so the name is greedy.
         dispatcher.register(Commands.literal("gametest")
@@ -310,6 +316,86 @@ public final class BedrockCommands {
                 .then(Commands.literal("remove")
                     .then(Commands.argument("userId", StringArgumentType.string())
                         .executes(command -> takeFog(command, true))))));
+    }
+
+    /**
+     * `/hud <targets> <hide|reset> [element]`, where no element and `all` both name every piece.
+     *
+     * Only the pieces a Java client draws are words here. The translation reports and drops a line
+     * naming one of the others, so none of those ever reaches this tree.
+     */
+    private static void registerHud(CommandDispatcher<CommandSourceStack> dispatcher) {
+        dispatcher.register(Commands.literal("hud")
+            .requires(source -> Platform.allowedAt(source, 1))
+            .then(Commands.argument("targets", EntityArgument.players())
+                .then(hudVisibility("hide", PlayerHuds::hide))
+                .then(hudVisibility("reset", PlayerHuds::reset))));
+    }
+
+    /**
+     * `/inputpermission set <targets> <permission> <enabled|disabled>` and `/inputpermission query
+     * <targets> <permission> [enabled|disabled]`.
+     *
+     * A query tells whoever asked whether the category itself is on for each target, and returns how
+     * many targets are in the state it names, or how many have the category on when it names none.
+     */
+    private static void registerInputPermission(CommandDispatcher<CommandSourceStack> dispatcher) {
+        RequiredArgumentBuilder<CommandSourceStack, ?> set = Commands.argument("targets", EntityArgument.players());
+        RequiredArgumentBuilder<CommandSourceStack, ?> query = Commands.argument("targets", EntityArgument.players());
+        for (InputPermission permission : InputPermission.values()) {
+            set.then(Commands.literal(permission.bedrockName())
+                .then(Commands.literal("enabled").executes(command -> setInput(command, permission, true)))
+                .then(Commands.literal("disabled").executes(command -> setInput(command, permission, false))));
+            query.then(Commands.literal(permission.bedrockName())
+                .executes(command -> queryInput(command, permission, true))
+                .then(Commands.literal("enabled").executes(command -> queryInput(command, permission, true)))
+                .then(Commands.literal("disabled").executes(command -> queryInput(command, permission, false))));
+        }
+        dispatcher.register(Commands.literal("inputpermission")
+            .requires(source -> Platform.allowedAt(source, 1))
+            .then(Commands.literal("set").then(set))
+            .then(Commands.literal("query").then(query)));
+    }
+
+    private static int setInput(CommandContext<CommandSourceStack> command, InputPermission permission,
+        boolean enabled) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        Collection<ServerPlayer> targets = EntityArgument.getPlayers(command, "targets");
+        targets.forEach(player -> PlayerInputs.set(player, permission, enabled));
+        return targets.size();
+    }
+
+    private static int queryInput(CommandContext<CommandSourceStack> command, InputPermission permission,
+        boolean state) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        int matching = 0;
+        for (ServerPlayer player : EntityArgument.getPlayers(command, "targets")) {
+            boolean enabled = PlayerInputs.enabled(player, permission);
+            command.getSource().sendSuccess(() -> Component.literal(player.getName().getString() + " has "
+                + permission.bedrockName() + (enabled ? " enabled." : " disabled.")), false);
+            if (enabled == state) matching++;
+        }
+        return matching;
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> hudVisibility(String visibility,
+        BiConsumer<ServerPlayer, Collection<HudElement>> change) {
+        List<HudElement> every = List.of(HudElement.values());
+        LiteralArgumentBuilder<CommandSourceStack> node = Commands.literal(visibility)
+            .executes(command -> changeHud(command, change, every))
+            .then(Commands.literal("all").executes(command -> changeHud(command, change, every)));
+        for (HudElement element : HudElement.values()) {
+            if (!element.drawnByJava()) continue;
+            node.then(Commands.literal(element.bedrockName())
+                .executes(command -> changeHud(command, change, List.of(element))));
+        }
+        return node;
+    }
+
+    private static int changeHud(CommandContext<CommandSourceStack> command,
+        BiConsumer<ServerPlayer, Collection<HudElement>> change, Collection<HudElement> elements)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        Collection<ServerPlayer> targets = EntityArgument.getPlayers(command, "targets");
+        targets.forEach(player -> change.accept(player, elements));
+        return targets.size();
     }
 
     /**

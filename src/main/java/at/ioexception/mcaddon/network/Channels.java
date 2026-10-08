@@ -21,7 +21,7 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
  * The server owns every entity property a behaviour pack declares, because a pack's script sets them
  * and scripts only run there. The client needs them to answer `q.property` while it draws, so each
  * change and each newly tracked entity is pushed across. The same holds for everything else here: a
- * form, an effect, a clip and a camera are all decided on the server and sent to each player alone.
+ * form, an effect, a clip, a camera and a heads-up display are all decided on the server and sent to each player alone.
  *
  * Networking was rewritten in 1.21: payload objects with codecs replaced raw channel buffers.
  */
@@ -35,6 +35,8 @@ public final class Channels {
     private static final Identifier CAMERA = McAddon.id("camera_view");
     private static final Identifier SHAKE = McAddon.id("camera_shake");
     private static final Identifier FOG = McAddon.id("fog");
+    private static final Identifier HUD = McAddon.id("hud");
+    private static final Identifier INPUT = McAddon.id("input_permissions");
 
     /**
      * The longest form description, form answer or pack list in characters.
@@ -182,6 +184,34 @@ public final class Channels {
         }
     }
 
+    /** The pieces of one player's heads-up display that are hidden, one bit per `HudElement`. */
+    private record Hud(int hidden) implements CustomPacketPayload {
+        private static final CustomPacketPayload.Type<Hud> TYPE = new CustomPacketPayload.Type<>(HUD);
+
+        private static final StreamCodec<FriendlyByteBuf, Hud> CODEC = StreamCodec.composite(
+            ByteBufCodecs.VAR_INT, Hud::hidden,
+            Hud::new);
+
+        @Override
+        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /** The kinds of input one player has had taken away, one bit per `InputPermission`. */
+    private record Input(int disabled) implements CustomPacketPayload {
+        private static final CustomPacketPayload.Type<Input> TYPE = new CustomPacketPayload.Type<>(INPUT);
+
+        private static final StreamCodec<FriendlyByteBuf, Input> CODEC = StreamCodec.composite(
+            ByteBufCodecs.VAR_INT, Input::disabled,
+            Input::new);
+
+        @Override
+        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
     private record Fog(String fog) implements CustomPacketPayload {
         private static final CustomPacketPayload.Type<Fog> TYPE = new CustomPacketPayload.Type<>(FOG);
 
@@ -195,6 +225,56 @@ public final class Channels {
         }
     }
     //?}
+
+    public static void sendHud(ServerPlayer player, int hidden) {
+        //? if >=1.21 {
+        ServerPlayNetworking.send(player, new Hud(hidden));
+        //?} else {
+        /*FriendlyByteBuf buffer = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buffer.writeVarInt(hidden);
+        ServerPlayNetworking.send(player, HUD, buffer);
+        *///?}
+    }
+
+    public static void receiveHud(java.util.function.IntConsumer handler) {
+        //? if >=1.21 {
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+            Hud.TYPE,
+            (payload, context) -> context.client().execute(() -> handler.accept(payload.hidden())));
+        //?} else {
+        /*net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+            HUD,
+            (client, network, buffer, sender) -> {
+                int hidden = buffer.readVarInt();
+                client.execute(() -> handler.accept(hidden));
+            });
+        *///?}
+    }
+
+    public static void sendInputPermissions(ServerPlayer player, int disabled) {
+        //? if >=1.21 {
+        ServerPlayNetworking.send(player, new Input(disabled));
+        //?} else {
+        /*FriendlyByteBuf buffer = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buffer.writeVarInt(disabled);
+        ServerPlayNetworking.send(player, INPUT, buffer);
+        *///?}
+    }
+
+    public static void receiveInputPermissions(java.util.function.IntConsumer handler) {
+        //? if >=1.21 {
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+            Input.TYPE,
+            (payload, context) -> context.client().execute(() -> handler.accept(payload.disabled())));
+        //?} else {
+        /*net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+            INPUT,
+            (client, network, buffer, sender) -> {
+                int disabled = buffer.readVarInt();
+                client.execute(() -> handler.accept(disabled));
+            });
+        *///?}
+    }
 
     /** The fog now on top of a player's stack, or an empty description when nothing is left on it. */
     public static void sendFog(ServerPlayer player, String fog) {
@@ -361,6 +441,8 @@ public final class Channels {
         PayloadTypeRegistry.clientboundPlay().register(View.TYPE, View.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Shake.TYPE, Shake.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Fog.TYPE, Fog.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(Hud.TYPE, Hud.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(Input.TYPE, Input.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(FormResponse.TYPE, FormResponse.CODEC);
         //?}
     }

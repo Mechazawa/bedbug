@@ -29,8 +29,7 @@ another one. That
 last group is a claim rather than a measurement, the same kind `AddonEntities.IMPLEMENTED` makes, so
 the commands resting on it are listed at the end for a reader to audit.
 
-Every keyword is sorted into the same three groups the selector arguments are, and the first two are
-what the percentage counts:
+Every keyword is sorted into three groups, and the first two are what the percentage counts:
 
 * **passed through**: the whole Bedrock line reaches Java's own parser, or the rewrite names the
   front of the line only and leaves the rest as the pack wrote it. `Functions.TAIL_REACHES_JAVA`
@@ -48,7 +47,9 @@ decided on, and that is what `--strict` fails on. A named one still counts again
 
 Selector arguments have no surface of their own because the command metadata names none: a selector
 is one parameter type there and its contents are never spelled out. They are listed from the source
-instead, in the same three groups.
+instead, as rewritten or passed through. Every argument Bedrock writes is one or the other: the
+three Java's selector has no form of, `hasitem`, `haspermission` and `has_property`, are each answered
+with a tag for one run of the line, which is a rewrite.
 """
 
 import argparse
@@ -60,10 +61,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 JAVA = ROOT / "src/main/java/at/ioexception/mcaddon"
 FUNCTIONS = JAVA / "convert/Functions.java"
-# `CameraView` is here because the preset words `/camera set` accepts are its enum rather than a
-# literal in the command tree, and those words are keywords the metadata counts.
+# `CameraView`, `HudElement` and `InputPermission` are here because the preset words `/camera set`
+# accepts, the pieces `/hud` names and the categories `/inputpermission` names are their enums rather
+# than literals in the command tree, and those words are keywords the metadata counts.
 REGISTRATIONS = (JAVA / "server/BedrockCommands.java", JAVA / "server/Dialogues.java",
-                 JAVA / "bedrock/camera/CameraView.java")
+                 JAVA / "bedrock/camera/CameraView.java", JAVA / "bedrock/hud/HudElement.java",
+                 JAVA / "bedrock/input/InputPermission.java")
 DEFAULT_SAMPLES = ROOT / "scratchpad/bedrock/bedrock-samples"
 
 # Beyond this an enum is a vocabulary of blocks, items, entities or biomes rather than grammar.
@@ -181,7 +184,6 @@ def selector_arguments():
     return {
         "rewritten": case_labels(FUNCTIONS, "String arguments("),
         "passed through": literal_set(FUNCTIONS, "SHARED_SELECTOR_ARGUMENTS = Set.of"),
-        "dropped": literal_set(FUNCTIONS, "BEDROCK_ONLY_SELECTOR_ARGUMENTS = Set.of"),
     }
 
 

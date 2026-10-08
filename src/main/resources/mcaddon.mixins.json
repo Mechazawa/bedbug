@@ -37,7 +37,9 @@
     "PlayerAttackExhaustionMixin",
     "PlayerJumpExhaustionMixin",
     "PlayerMovementExhaustionMixin",
-    "LungeExhaustionMixin"
+    "LungeExhaustionMixin",
+    "MountPermissionMixin",
+    "DismountPermissionMixin"
   ],
   "injectors": {
     "defaultRequire": 1
@@ -45,6 +47,9 @@
   "client": [
     "CameraMixin",
     "FogRendererMixin",
+    "HudMixin",
+    "KeyboardInputMixin",
+    "MouseHandlerMixin",
     "LivingEntityRendererMixin",
     "ModelFeatureRendererMixin",
     "ModelPartMixin"

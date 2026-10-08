@@ -5,16 +5,12 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
-import net.minecraft.commands.CommandSource;
-import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * `/camera` and `/camerashake` move the camera a frame is drawn from.
@@ -192,10 +188,10 @@ public final class CameraClientGameTest implements FabricClientGameTest {
         Worlds.waitForClient(context, client -> at(client, PLACED), PATIENCE,
             () -> "the camera was set free at " + PLACED + " and is at " + position(Minecraft.getInstance()) + ".");
 
-        String eased = said(world, "bedrock camera @a set minecraft:third_person ease 1 linear");
+        String eased = Worlds.said(world.getServer(), "bedrock camera @a set minecraft:third_person ease 1 linear");
         Assert.that(eased.contains("Easing to non-stationary cameras is not supported"), "an ease to"
             + " minecraft:third_person is refused the way Bedrock refuses it, and the command said: " + eased);
-        String boom = said(world, "bedrock camera @a set minecraft:fixed_boom");
+        String boom = Worlds.said(world.getServer(), "bedrock camera @a set minecraft:fixed_boom");
         Assert.that(boom.contains("camera minecraft:fixed_boom, which Java has no form of"),
             "minecraft:fixed_boom is reported as a Bedrock camera Java cannot draw, and the command said: " + boom);
 
@@ -205,37 +201,6 @@ public final class CameraClientGameTest implements FabricClientGameTest {
             () -> "two refused /camera commands moved the free camera at " + PLACED + " to "
                 + position(Minecraft.getInstance()) + " under "
                 + Minecraft.getInstance().options.getCameraType() + ".");
-    }
-
-    /** Everything a command sends back to whoever ran it, joined into one line. */
-    private static String said(TestSingleplayerContext world, String command) {
-        return world.getServer().computeOnServer(server -> {
-            List<String> lines = new ArrayList<>();
-            CommandSource listener = new CommandSource() {
-                @Override
-                public void sendSystemMessage(Component message) {
-                    lines.add(message.getString());
-                }
-
-                @Override
-                public boolean acceptsSuccess() {
-                    return true;
-                }
-
-                @Override
-                public boolean acceptsFailure() {
-                    return true;
-                }
-
-                @Override
-                public boolean shouldInformAdmins() {
-                    return false;
-                }
-            };
-            server.getCommands().performPrefixedCommand(server.createCommandSourceStack().withSource(listener),
-                command);
-            return String.join(" ", lines);
-        });
     }
 
     private static boolean at(Minecraft client, Vec3 place) {

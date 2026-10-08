@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.convert;
 
 import at.ioexception.mcaddon.bedrock.behaviour.DataValues;
 import at.ioexception.mcaddon.bedrock.camera.CameraView;
+import at.ioexception.mcaddon.bedrock.hud.HudElement;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.platform.Platform;
@@ -20,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -40,7 +42,8 @@ import java.util.stream.Stream;
  *
  * A function file becomes one whose every line is `bedrock <the line as the pack wrote it>`, so
  * Java's parser reads `/bedrock` and a string and the file always loads. The line is translated as it
- * runs, and one this cannot translate fails alone and is reported where the line that ran it reports.
+ * runs, and one this cannot translate fails alone and is reported where the line that ran it reports,
+ * as well as once when the pack loads, whether or not anything ever runs it.
  * Nothing falls through: a command name that is neither shared with Java, registered by this mod nor
  * rewritten here is reported as well.
  */
@@ -65,16 +68,16 @@ public final class Functions {
     private static final Set<String> REGISTERED_HERE = Set.of(
         "playanimation", "event", "scriptevent", "music", "toggledownfall", "structure", "mobevent",
         "particle", "gametest", "dialogue", "transfer", "camera", "camerashake", "fog",
-        "clearspawnpoint");
+        "clearspawnpoint", "hud", "inputpermission");
 
     /**
      * The registered commands whose Bedrock line the command built here reads as it stands.
      *
-     * The other eight are rewritten, because a Bedrock form the command built here cannot read is a
+     * The other nine are rewritten, because a Bedrock form the command built here cannot read is a
      * line the tree rejects.
      */
     static final Set<String> REGISTERED_WHOLE_LINE = Set.of("playanimation", "event",
-        "toggledownfall", "transfer", "camerashake", "fog", "clearspawnpoint");
+        "toggledownfall", "transfer", "camerashake", "fog", "clearspawnpoint", "inputpermission");
 
     /**
      * Commands Bedrock has and Java has no counterpart for.
@@ -84,18 +87,6 @@ public final class Functions {
      * area loads, Java delays a function by a time. `transfer` and `save query` report progress
      * Java's own commands do not carry.
      *
-     * `hud` is the one that could be answered in part and is not. Bedrock names fourteen pieces of
-     * the heads-up display and Java draws each of the ones it has from its own method, so hiding one
-     * means cancelling that method on all four versions. Three of the fourteen have no Java method
-     * at any version: `paperdoll` and `touch_controls` are drawn by nothing, and `progress_bar` lost
-     * its `Gui.renderExperienceBar` in 26 to `contextualbar.ContextualBar`, which is chosen per
-     * frame. Three more have none on 1.20.1: `Gui.renderPlayerHealth` draws the armour, the hunger
-     * and the air bubbles with inline `GuiGraphics.blit` calls there, while 1.21.1 has
-     * `Gui.renderArmor` and `Gui.renderFood` and 26 has `extractArmor`, `extractFood` and
-     * `extractAirBubbles`. The class holding them moved twice as well: `Gui` up to 26.1.2, then
-     * `Hud` in 26.2. Four alternative mixin bodies over private drawing methods, answering ten of
-     * fourteen pieces on the newest version and seven on the oldest, costs more than it returns.
-     *
      * `serveridentity` saves, deletes and reports the key a Bedrock dedicated server identifies
      * itself to its services with, and a Java server holds no such key. `setmaxplayers` sets the
      * limit for one session where Java keeps it as `max-players` in `server.properties`: a final
@@ -103,7 +94,7 @@ public final class Functions {
      * the file again, so a limit Bedrock drops at the end of the session would outlive it here.
      */
     private static final Set<String> BEDROCK_ONLY = Set.of(
-        "aimassist", "connect", "controlscheme", "editor-allowlist", "hud", "inputpermission",
+        "aimassist", "connect", "controlscheme", "editor-allowlist",
         "packstack", "permission", "ops", "project", "reloadconfig", "reloadpacketlimitconfig",
         "script", "sendshowstoreoffer", "serveridentity", "setmaxplayers", "wsserver");
 
@@ -129,6 +120,7 @@ public final class Functions {
         "changesetting allow-cheats", "changesetting false", "changesetting true",
         "gametest create", "gametest pos", "gametest runsetuntilfail", "gametest runthese",
         "gametest runthis",
+        "hud paperdoll", "hud tooltips", "hud touch_controls",
         "loot slot.equippable",
         "mobevent minecraft:ender_dragon_event",
         "music loop", "music volume",
@@ -165,15 +157,6 @@ public final class Functions {
     /** Selector arguments Java spells the same way and reads the same values for. */
     private static final Set<String> SHARED_SELECTOR_ARGUMENTS = Set.of(
         "x", "y", "z", "dx", "dy", "dz", "scores", "tag", "name");
-
-    /**
-     * Selector arguments Java has no form of.
-     *
-     * Each narrows a selection by something Java's parser cannot express, so a line carrying one
-     * would match more entities than the pack asked for, so the line does not run.
-     */
-    private static final Set<String> BEDROCK_ONLY_SELECTOR_ARGUMENTS = Set.of(
-        "haspermission", "has_property");
 
     /**
      * The rules both editions have, under the name {@link Platform} looks one up by.
@@ -337,10 +320,7 @@ public final class Functions {
         for (Path file : pack.list("functions", ".mcfunction")) {
             String inside = FunctionNames.pathOf(pack, file);
 
-            String text = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
-            List<String> lines = Arrays.stream(text.split("\n"))
-                .map(String::strip)
-                .filter(line -> !line.isEmpty())
+            List<String> lines = lines(file).stream()
                 .map(line -> line.startsWith("#") ? line
                     : "bedrock " + calls.pinned(line.startsWith("/") ? line.substring(1) : line))
                 .toList();
@@ -354,6 +334,39 @@ public final class Functions {
 
         writeTickTag(pack, root, namespace, converted);
         return converted;
+    }
+
+    /**
+     * What every line of the pack's functions asks for that this cannot translate, once per line,
+     * found by translating each line and writing nothing.
+     *
+     * A converted function hands its lines to `/bedrock` untranslated, so without this a line is
+     * first heard of when it runs, and a line nothing runs is never heard of. The translation looks
+     * the names in a line up among the add-ons' own entities, items and blocks, so this is asked once
+     * those are registered.
+     */
+    public static List<String> untranslatable(BedrockPack pack, FunctionNames functions) {
+        List<String> found = new ArrayList<>();
+        for (Path file : pack.list("functions", ".mcfunction")) {
+            try {
+                lines(file).forEach(line -> {
+                    Set<String> unsupported = new LinkedHashSet<>();
+                    line(line, functions, unsupported);
+                    found.addAll(unsupported);
+                });
+            } catch (IOException | RuntimeException unreadable) {
+                McAddon.LOGGER.warn("Could not read {}: {}", file.getFileName(), unreadable.toString());
+            }
+        }
+        return found;
+    }
+
+    /** A function file's lines, stripped, with the blank ones left out. */
+    private static List<String> lines(Path file) throws IOException {
+        return Arrays.stream(Files.readString(file, StandardCharsets.UTF_8).split("\n"))
+            .map(String::strip)
+            .filter(line -> !line.isEmpty())
+            .toList();
     }
 
     /**
@@ -462,6 +475,7 @@ public final class Functions {
             case "dialogue" -> dialogue(rest, unsupported);
             case "schedule" -> schedule(rest, functions, unsupported);
             case "camera" -> camera(rest, unsupported);
+            case "hud" -> hud(rest, unsupported);
             default -> {
                 unsupported.add("command " + name);
                 yield null;
@@ -1393,6 +1407,17 @@ public final class Functions {
     }
 
     /**
+     * `/hud <targets> <hide|reset> [element]`, whose pieces the command built here hides on the
+     * targets' own clients, except for the ones no Java client draws.
+     */
+    private static String hud(String rest, Set<String> unsupported) {
+        List<String> words = words(rest);
+        HudElement element = words.size() > 2 ? HudElement.tryFrom(words.get(2)) : null;
+        return element != null && !element.drawnByJava()
+            ? dropped("hud", element.bedrockName(), unsupported) : "hud " + rest;
+    }
+
+    /**
      * `mobevent <event> [enabled]`, of whose four events three reach a Java game rule.
      *
      * `events_enabled` names every event at once. The ender dragon's is whether the fight may be
@@ -1518,17 +1543,14 @@ public final class Functions {
                     arguments.add("gamemode=" + mode);
                 }
                 case "family" -> arguments.add("tag=" + value);
-                // Answered by `server.CarriedItems` before the line is read, as a tag.
-                case "hasitem" -> arguments.add("hasitem=" + value);
+                // Answered by `server.SelectorTags` before the line is read, each as a tag.
+                case "hasitem", "haspermission", "has_property" -> arguments.add(key + "=" + value);
                 default -> {
-                    if (SHARED_SELECTOR_ARGUMENTS.contains(key)) {
-                        arguments.add(key + "=" + value);
-                    } else {
-                        unsupported.add(BEDROCK_ONLY_SELECTOR_ARGUMENTS.contains(key)
-                            ? "the selector argument " + key + ", which Java has no form of"
-                            : "the selector argument " + key);
+                    if (!SHARED_SELECTOR_ARGUMENTS.contains(key)) {
+                        unsupported.add("the selector argument " + key);
                         return null;
                     }
+                    arguments.add(key + "=" + value);
                 }
             }
         }

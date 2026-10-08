@@ -295,8 +295,8 @@ class FunctionsTest {
 
     @Test
     void dropsAnExecuteWhoseOwnCommandJavaHasNoCounterpartFor() throws IOException {
-        assertEquals(List.of(), translate("execute as @a run hud @s hide hotbar"));
-        assertTrue(problems.contains("command hud"), problems.toString());
+        assertEquals(List.of(), translate("execute as @a run controlscheme @s clear"));
+        assertTrue(problems.contains("command controlscheme"), problems.toString());
     }
 
     @Test
@@ -333,10 +333,20 @@ class FunctionsTest {
     }
 
     @Test
-    void dropsALineSelectingOnSomethingJavaCannotSelectOn() throws IOException {
-        assertEquals(List.of(), translate("kill @e[haspermission={movement=enabled}]"));
-        assertTrue(problems.contains("the selector argument haspermission, which Java has no form of"),
-            problems.toString());
+    void dropsALineSelectingOnAnArgumentBedrockDoesNotHave() throws IOException {
+        assertEquals(List.of(), translate("kill @e[mood=calm]"));
+        assertTrue(problems.contains("the selector argument mood"), problems.toString());
+    }
+
+    /** Answered by a tag once the line runs, so the translation leaves each whole for that. */
+    @ParameterizedTest
+    @CsvSource({
+        "'kill @e[haspermission={movement=enabled},c=1]', 'kill @e[haspermission={movement=enabled},limit=1]'",
+        "'kill @e[has_property={tp:mood=\"calm\",property=!tp:lit}]', "
+            + "'kill @e[has_property={tp:mood=\"calm\",property=!tp:lit}]'",
+    })
+    void keepsAnArgumentAnsweredAsTheLineRuns(String bedrock, String java) throws IOException {
+        assertEquals(java, only(bedrock));
     }
 
     /**
@@ -388,11 +398,11 @@ class FunctionsTest {
 
     @Test
     void dropsABedrockOnlyCommandAndSaysWhichOne() throws IOException {
-        assertEquals(List.of(), translate("inputpermission set @a movement disabled"));
-        assertTrue(problems.contains("command inputpermission"), problems.toString());
+        assertEquals(List.of(), translate("wsserver ws://127.0.0.1:19131"));
+        assertTrue(problems.contains("command wsserver"), problems.toString());
     }
 
-    /** The three that act on a player's own view keep the arguments a pack writes them with. */
+    /** The commands acting on a player's own view and input keep the arguments a pack writes them with. */
     @ParameterizedTest
     @CsvSource({
         "'camera @a set minecraft:free ease 2 in_out_quad pos 1 2 3 rot 30 90'",
@@ -402,15 +412,37 @@ class FunctionsTest {
         "'fog @a push minecraft:fog_crimson_forest my_fog'",
         "'fog @a pop my_fog'",
         "'fog @a remove my_fog'",
+        "'inputpermission set @a movement disabled'",
+        "'inputpermission query @s camera enabled'",
     })
     void keepsAViewLineWhole(String source) throws IOException {
         assertEquals(source, only(source));
     }
 
+    @ParameterizedTest
+    @CsvSource({
+        "'hud @a hide'",
+        "'hud @a reset all'",
+        "'hud @a[tag=watching] hide crosshair'",
+        "'hud @s reset progress_bar'",
+    })
+    void keepsAHudLineNamingAPieceJavaDrawsWhole(String source) throws IOException {
+        assertEquals(source, only(source));
+    }
+
+    /** No Java client draws the paper doll, the touch controls or Bedrock's interaction hints. */
+    @ParameterizedTest
+    @CsvSource({"paperdoll", "touch_controls", "tooltips"})
+    void dropsAHudLineNamingAPieceNoJavaClientDraws(String element) throws IOException {
+        assertEquals(List.of(), translate("hud @a hide " + element));
+        assertTrue(problems.contains("command hud " + element + ", which Java has no form of"),
+            problems.toString());
+    }
+
     @Test
     void keepsTheRestOfAFunctionThatHasOneDroppedLine() throws IOException {
         assertEquals(List.of("say before", "say after"),
-            translate("say before", "hud @a hide all", "say after"));
+            translate("say before", "controlscheme @a clear", "say after"));
     }
 
     /**
@@ -419,8 +451,9 @@ class FunctionsTest {
      */
     @Test
     void writesEveryLineOfAFunctionForBedrockToRun() throws IOException {
-        assertEquals(List.of("bedrock say before", "# a note", "bedrock hud @a hide all", "bedrock kill @e[r=5]"),
-            converted("say before", "# a note", "", "hud @a hide all", "/kill @e[r=5]"));
+        assertEquals(
+            List.of("bedrock say before", "# a note", "bedrock controlscheme @a clear", "bedrock kill @e[r=5]"),
+            converted("say before", "# a note", "", "controlscheme @a clear", "/kill @e[r=5]"));
         assertTrue(problems.isEmpty(), problems.toString());
     }
 

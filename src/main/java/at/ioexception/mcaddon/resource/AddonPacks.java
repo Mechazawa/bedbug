@@ -3,6 +3,7 @@ package at.ioexception.mcaddon.resource;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.convert.ConvertedPack;
 import at.ioexception.mcaddon.convert.FunctionNames;
+import at.ioexception.mcaddon.convert.Functions;
 import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.convert.PackConverter;
 import at.ioexception.mcaddon.pack.BedrockPack;
@@ -11,6 +12,7 @@ import at.ioexception.mcaddon.pack.PackFiles;
 import at.ioexception.mcaddon.pack.PackRole;
 import at.ioexception.mcaddon.pack.PackSet;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonEntities;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.repository.Pack;
 
@@ -93,6 +95,13 @@ public final class AddonPacks {
         converted = namespaces.entrySet().stream()
             .map(entry -> PackConverter.convert(entry.getKey(), entry.getValue(), functions, McAddonPaths.cache()))
             .toList();
+    }
+
+    /** Reports each function line of every add-on that cannot be translated, without running any. */
+    public static void reportFunctionLines() {
+        converted.forEach(pack -> pack.behaviours().forEach(behaviour ->
+            Functions.untranslatable(behaviour, functions.issuedBy(pack.namespace()))
+                .forEach(AddonEntities::unsupported)));
     }
 
     /**

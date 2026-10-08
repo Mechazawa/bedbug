@@ -138,6 +138,8 @@ public final class ServerHooks {
             ServerPlayer left = handler.player;
             server.execute(() -> {
                 PlayerFogs.forget(left);
+                PlayerHuds.forget(left);
+                PlayerInputs.forget(left);
                 playerLeft(left);
             });
         });
@@ -302,7 +304,7 @@ public final class ServerHooks {
     private static void tick(MinecraftServer server) {
         if (scripts != null) scripts.tick(server.getTickCount());
         WorldEvents.endTick(server);
-        CarriedItems.finishAll();
+        SelectorTags.finishAll();
         if (state != null && server.getTickCount() % 1200 == 0) state.save();
     }
 

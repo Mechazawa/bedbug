@@ -11,6 +11,7 @@ import at.ioexception.mcaddon.client.render.JavaModelPoses;
 import at.ioexception.mcaddon.client.render.EntityProperties;
 import at.ioexception.mcaddon.client.render.PlayerCamera;
 import at.ioexception.mcaddon.client.render.PlayerFog;
+import at.ioexception.mcaddon.client.render.PlayerHud;
 import at.ioexception.mcaddon.client.screen.AddonFormScreen;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.platform.Platform;
@@ -45,6 +46,8 @@ public final class McAddonClient implements ClientModInitializer {
         Channels.receiveCameraView(encoded -> PlayerCamera.accept(CameraView.decode(encoded)));
         Channels.receiveCameraShake(encoded -> PlayerCamera.shake(CameraShake.decode(encoded)));
         Channels.receiveFog(encoded -> PlayerFog.accept(FogDefinition.decode(encoded)));
+        Channels.receiveHud(PlayerHud::accept);
+        Channels.receiveInputPermissions(PlayerInput::accept);
         Channels.receivePacks(ServerAddons::receive);
         Channels.receiveAnimation(Animators::play);
         Channels.receiveParticle((effect, x, y, z) ->
@@ -76,6 +79,8 @@ public final class McAddonClient implements ClientModInitializer {
             EntityProperties.clear();
             PlayerCamera.clear();
             PlayerFog.clear();
+            PlayerHud.clear();
+            PlayerInput.clear();
             ServerAddons.clear();
             at.ioexception.mcaddon.client.render.AddonEmitters.clear();
         }));
