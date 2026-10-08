@@ -60,6 +60,29 @@ public final class PackConverter {
     }
 
     /**
+     * When the newest of this mod's classes was compiled, in a development run, and nothing outside one.
+     *
+     * A released jar's version changes with its code. A development run keeps one version across
+     * every edit to the converter, so without this a run after such an edit reads the output the
+     * code before it wrote.
+     */
+    private static final String CODE_BUILT = net.fabricmc.loader.api.FabricLoader.getInstance()
+        .isDevelopmentEnvironment() ? newestClass() : "";
+
+    private static String newestClass() {
+        try {
+            Path classes = Path.of(PackConverter.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            if (!Files.isDirectory(classes)) return "";
+            try (java.util.stream.Stream<Path> walk = Files.walk(classes)) {
+                return String.valueOf(walk.filter(path -> path.toString().endsWith(".class"))
+                    .mapToLong(path -> path.toFile().lastModified()).max().orElse(0));
+            }
+        } catch (IOException | java.net.URISyntaxException | SecurityException unreadable) {
+            return "";
+        }
+    }
+
+    /**
      * What the converted output was made from, as one line.
      *
      * Everything the conversion reads goes into it: every half of the add-on, and this mod's own
@@ -68,6 +91,7 @@ public final class PackConverter {
      */
     private static String stampOf(Bundle bundle, FunctionNames functions) {
         StringBuilder stamp = new StringBuilder(at.ioexception.mcaddon.McAddon.VERSION);
+        stamp.append(' ').append(CODE_BUILT);
         stamp.append(' ').append(functions.stamp());
         stamp.append(' ').append(bundle.resources().contentStamp());
         for (BedrockPack behaviour : bundle.behaviours()) {
