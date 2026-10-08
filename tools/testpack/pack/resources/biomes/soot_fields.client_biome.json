@@ -1,0 +1,31 @@
+{
+  "format_version": "1.21.120",
+  "minecraft:client_biome": {
+    "description": {
+      "identifier": "tp:soot_fields"
+    },
+    "components": {
+      "minecraft:water_appearance": {
+        "surface_color": "#4f6d7a"
+      },
+      "minecraft:fog_appearance": {
+        "fog_identifier": "tp:fog_soot"
+      },
+      "minecraft:precipitation": {
+        "ash": 0.1
+      },
+      "minecraft:ambient_sounds": {
+        "loop": "tp:ambient.glade.loop",
+        "mood": "ambient.basalt_deltas.mood",
+        "addition": {
+          "asset": "ambient.basalt_deltas.additions",
+          "chance": 0.0111
+        }
+      },
+      "minecraft:biome_music": {
+        "music_definition": "glade",
+        "volume_multiplier": 0.25
+      }
+    }
+  }
+}

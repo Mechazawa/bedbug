@@ -5,8 +5,8 @@
       "identifier": "tp:bloom_patch"
     },
     "features": [
-      ["tp:glow_bloom", 3],
-      ["tp:pale_bloom", 1]
+      ["tp:glow_bloom", 1],
+      ["tp:pale_bloom", 3]
     ]
   }
 }
