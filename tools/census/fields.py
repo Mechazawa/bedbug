@@ -136,7 +136,6 @@ REASONS = {
     "minecraft:follow_range": {"max": "Java fixes the attribute's own ceiling."},
     "minecraft:knockback_resistance": {"max": "Java fixes the attribute's own ceiling."},
     "minecraft:movement": {"max": "Java fixes the attribute's own ceiling."},
-    "minecraft:jump.static": {"jump_power": "Java jumps a mob at a fixed height with no attribute to set."},
 
     # Navigation. Java asks its node evaluator about doors and floating and the mob what each kind of
     # ground costs; what is left here is what it has no question for.
@@ -158,11 +157,11 @@ REASONS = {
     "minecraft:navigation.hover": {"can_path_from_air": FROM_AIR},
     "minecraft:navigation.fly": {"can_path_from_air": FROM_AIR},
 
-    # Movement styles. Java moves a mob through one controller with no turn rate or sway of its own.
-    "minecraft:movement.basic": {"*": "Java's move control turns a mob at a rate it fixes itself."},
-    "minecraft:movement.amphibious": {"*": "Java's move control turns a mob at a rate it fixes itself."},
-    "minecraft:movement.sway": {"*": "Java has no swimming sway to give an arbitrary mob."},
-    "minecraft:movement.jump": {"*": "Java's jump control has no delay of its own."},
+    # Movement styles.
+    "minecraft:movement.sway": {
+        "*": "The side to side sway of a swimming fish, which is how its body is drawn moving rather than "
+             "where it goes; Java's swimming move control steers it straight.",
+    },
 
     "minecraft:buoyant": {
         "apply_gravity": "The lift is added on top of the gravity Java applies in a liquid, so an entity "

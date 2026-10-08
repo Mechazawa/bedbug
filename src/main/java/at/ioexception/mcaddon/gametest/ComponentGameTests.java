@@ -795,6 +795,103 @@ public final class ComponentGameTests {
     private static final int FLOAT_TICKS = 20;
 
     /**
+     * An entity turns no further in a tick than its movement component's `max_turn`.
+     *
+     * The ember's `minecraft:movement.basic` states no turn rate, which is Bedrock's thirty degrees a
+     * tick; Java's own move control swings a mob ninety degrees in one.
+     */
+    @GameTest()
+    public void anEntityTurnsNoFasterThanItsMaxTurn(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER, MIDDLE);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        ember.setNoAi(false);
+        live(ember, SETTLE_TICKS);
+        ember.setYRot(0f);
+        ember.getMoveControl().setWantedPosition(ember.getX() - TURN_TOWARD, ember.getY(), ember.getZ(), 1.0);
+        live(ember, 1);
+        float turned = Math.abs(net.minecraft.util.Mth.wrapDegrees(ember.getYRot()));
+        helper.assertTrue(turned > 0 && turned <= MAX_TURN + 0.5f,
+            EMBER + " turns thirty degrees a tick and turned " + turned + ".");
+        helper.succeed();
+    }
+
+    /** Bedrock's default turn rate, in degrees a tick. */
+    private static final float MAX_TURN = 30f;
+
+    /** How far to the side the ember is sent, a quarter turn from where it faces. */
+    private static final double TURN_TOWARD = 5;
+
+    /**
+     * A jump starts at the `jump_power` its pack states, in blocks a tick.
+     *
+     * The springy group states eight tenths, almost twice the 0.42 Java jumps every mob at.
+     */
+    @GameTest()
+    public void aJumpStartsAtTheJumpPowerItsPackStates(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER, MIDDLE);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_spring", null, ServerHooks.state());
+        ember.setNoAi(false);
+        live(ember, SETTLE_TICKS);
+        ember.getJumpControl().jump();
+        live(ember, 1);
+        helper.assertTrue(ember.getDeltaMovement().y > JAVA_JUMP,
+            EMBER + " jumps at eight tenths and left the ground at " + ember.getDeltaMovement().y + ".");
+        helper.succeed();
+    }
+
+    /** Java's own jump speed, which the springy group's jump leaves well behind even after a tick. */
+    private static final double JAVA_JUMP = 0.42;
+
+    /**
+     * A hopping entity rests for its `jump_delay` after each landing before it leaves the ground again.
+     *
+     * The hopping group rests a second, so in two seconds the ember leaves the ground twice at most;
+     * hopping again the moment it lands, it would be off the ground every few ticks.
+     */
+    @GameTest()
+    public void aHopperRestsForItsJumpDelay(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER, MIDDLE);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_hop", null, ServerHooks.state());
+        ember.setNoAi(false);
+        live(ember, SETTLE_TICKS);
+
+        int takeoffs = 0;
+        boolean grounded = ember.onGround();
+        for (int tick = 0; tick < HOP_TICKS; tick++) {
+            ember.getMoveControl().setWantedPosition(ember.getX() + HOP_TOWARD, ember.getY(), ember.getZ(), 1.0);
+            live(ember, 1);
+            if (grounded && !ember.onGround()) takeoffs++;
+            grounded = ember.onGround();
+        }
+        helper.assertTrue(takeoffs > 0 && takeoffs <= MOST_HOPS,
+            EMBER + " rests a second between hops and left the ground " + takeoffs + " times in two.");
+        helper.succeed();
+    }
+
+    /** Two seconds of hopping, in Java's ticks. */
+    private static final int HOP_TICKS = 40;
+
+    /** The most takeoffs two seconds allows with a one second rest after each landing. */
+    private static final int MOST_HOPS = 2;
+
+    /** Far enough off that the ember never arrives. */
+    private static final double HOP_TOWARD = 20;
+
+    /**
      * Runs the entity's own ticks the way the level does, which counts its age first: Java's goals
      * tell one blow from the next by the age it landed at.
      */

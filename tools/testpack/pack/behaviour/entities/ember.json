@@ -477,6 +477,16 @@
           "base_buoyancy": 4
         }
       },
+      "tp:ember_springy": {
+        "minecraft:jump.static": {
+          "jump_power": 0.8
+        }
+      },
+      "tp:ember_hopping": {
+        "minecraft:movement.jump": {
+          "jump_delay": [1.0, 1.0]
+        }
+      },
       "tp:ember_alert": {
         "minecraft:timer": {
           "time": 1.0,
@@ -700,6 +710,16 @@
       "tp:ember_float_on_lava": {
         "add": {
           "component_groups": ["tp:ember_lava_buoyant"]
+        }
+      },
+      "tp:ember_spring": {
+        "add": {
+          "component_groups": ["tp:ember_springy"]
+        }
+      },
+      "tp:ember_hop": {
+        "add": {
+          "component_groups": ["tp:ember_hopping"]
         }
       },
       "tp:ember_winter": {

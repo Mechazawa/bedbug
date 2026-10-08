@@ -3219,6 +3219,43 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
+     * Turns the entity no further in a tick than its `minecraft:movement.*` component's `max_turn`.
+     *
+     * Bedrock defaults the turn to thirty degrees a tick for every way of moving it describes, where
+     * Java's move controls swing a mob round by up to ninety, so a pack's entity that never states a
+     * turn rate still turns at a third of Java's pace. A rider steering the entity turns it as fast
+     * as they look round, which Bedrock leaves to the rider too.
+     */
+    @Override
+    public void aiStep() {
+        float facing = getYRot();
+        super.aiStep();
+        if (definition == null || isClientSide() || getControllingPassenger() instanceof Player) return;
+
+        float limit = maxTurn();
+        float turned = net.minecraft.util.Mth.wrapDegrees(getYRot() - facing);
+        if (limit >= 0 && Math.abs(turned) > limit) setYRot(facing + Math.signum(turned) * limit);
+    }
+
+    /** Bedrock's turn rate for a movement component that states none, in degrees a tick. */
+    private static final double DEFAULT_MAX_TURN = 30;
+
+    /**
+     * The `max_turn` of the `minecraft:movement.*` component the entity carries now, or below nought
+     * where it carries none and Java's own move control decides.
+     */
+    private float maxTurn() {
+        for (String component : java.util.List.of("minecraft:movement.basic", "minecraft:movement.generic",
+            "minecraft:movement.amphibious", "minecraft:movement.sway", "minecraft:movement.jump",
+            "minecraft:movement.skip", "minecraft:movement.dolphin", "minecraft:movement.fly",
+            "minecraft:movement.glide", "minecraft:movement.hover")) {
+            com.google.gson.JsonObject live = liveComponent(component);
+            if (live != null) return (float) Goals.number(live, "max_turn", DEFAULT_MAX_TURN);
+        }
+        return -1;
+    }
+
+    /**
      * Bedrock's sensors have no Java equivalent, so they are evaluated here rather than as goals.
      *
      * Staggered by entity id: a pack's two big entities carry dozens of subsensors each, and every
@@ -4050,12 +4087,18 @@ public class AddonEntity extends PathfinderMob
      */
     @Override
     protected float getJumpPower() {
-        if (definition == null || !declaresNow("minecraft:can_power_jump")) {
-            return super.getJumpPower();
-        }
+        if (definition == null) return super.getJumpPower();
+        if (declaresNow("minecraft:can_power_jump")) return (float) getAttributeValue(Attributes.JUMP_STRENGTH);
 
-        return (float) getAttributeValue(Attributes.JUMP_STRENGTH);
+        // `jump_power` is the jump's starting speed in blocks a tick, the 0.42 Java jumps every mob
+        // at unless the pack says otherwise.
+        com.google.gson.JsonObject jump = liveComponent("minecraft:jump.static");
+        if (jump == null || !jump.has("jump_power")) return super.getJumpPower();
+        return (float) Goals.number(jump, "jump_power", JAVA_JUMP) * getBlockJumpFactor() + getJumpBoostPower();
     }
+
+    /** The speed in blocks a tick Java starts every ordinary mob's jump at. */
+    private static final double JAVA_JUMP = 0.42;
 
     /**
      * The lunge `minecraft:dash_action` gives a mount, on the tick its rider asks for one.
