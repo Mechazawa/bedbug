@@ -215,6 +215,8 @@ def geometries(samples, tally):
         for body in bodies:
             for bone in (body.get("bones") or []):
                 tally.add("geometry bone", bone)
+                for mesh in (bone.get("texture_meshes") or []):
+                    tally.add("texture mesh", mesh)
                 for cube in (bone.get("cubes") or []):
                     tally.add("geometry cube", cube)
                     if isinstance(cube.get("uv"), dict):
@@ -294,6 +296,7 @@ def surfaces(samples):
         "geometry bone": ([(GEOMETRY, "BedrockBone readBone"),
                            (ASSETS, "JsonArray mergeBones")], "the bones of both shapes"),
         "geometry cube": ([(GEOMETRY, "BedrockCube readCube")], "the cubes of both shapes"),
+        "texture mesh": ([(GEOMETRY, "BedrockTextureMesh readTextureMesh")], "bones built from a texture"),
         "cube face uv": ([(GEOMETRY, "CubeUv readUv")], "per face textured cubes"),
         "animation": ([(ANIMATION, "BedrockAnimation readAnimation")], "animations"),
         "animation bone": ([(ANIMATION, "BoneAnimation readBone")], "the bones of an animation"),

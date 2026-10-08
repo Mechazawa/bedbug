@@ -165,7 +165,7 @@ class GeometryReadingTest {
             [{"name": "shield", "pivot": [1, 15.5, 3],
               "binding": "q.item_slot_to_bone_name('main_hand')",
               "cubes": [{"origin": [0, 0, 0], "size": [1, 1, 1], "uv": [0, 0]}]}]
-            """));
+            """), texture -> null);
 
         MolangEnvironment holder = new MolangEnvironment();
         holder.setQueries((name, arguments) -> MolangValue.of("rightitem"));
@@ -182,7 +182,7 @@ class GeometryReadingTest {
               {"name": "arm", "parent": "root", "cubes": [{"origin": [0, 0, 0], "size": [1, 1, 1],
                 "uv": [0, 0]}]}
             ]
-            """));
+            """), texture -> null);
 
         assertEquals(0, baked.bones().get("root").quads().size());
         assertEquals(6, baked.bones().get("arm").quads().size());

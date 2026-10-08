@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * Converts a Bedrock model into quads in Java Edition model space.
@@ -57,7 +58,11 @@ public final class GeometryBaker {
         };
     }
 
-    public static BakedGeometry bake(BedrockGeometry geometry) {
+    /**
+     * The geometry in Java model space. `textures` answers a texture mesh's texture name with which of
+     * that texture's texels are drawn, or null where there is no such texture, which leaves the mesh out.
+     */
+    public static BakedGeometry bake(BedrockGeometry geometry, Function<String, TexelMask> textures) {
         Map<String, List<BedrockBone>> childrenOf = new HashMap<>();
         List<BedrockBone> roots = new ArrayList<>();
 
@@ -69,7 +74,7 @@ public final class GeometryBaker {
         Map<String, BakedBone> byName = new HashMap<>();
         List<BakedBone> bakedRoots = new ArrayList<>();
         for (BedrockBone root : roots) {
-            bakedRoots.add(bakeBone(root, geometry, childrenOf, byName, new Vector3f()));
+            bakedRoots.add(bakeBone(root, geometry, textures, childrenOf, byName, new Vector3f()));
         }
 
         return new BakedGeometry(List.copyOf(bakedRoots), Map.copyOf(byName));
@@ -78,6 +83,7 @@ public final class GeometryBaker {
     private static BakedBone bakeBone(
         BedrockBone bone,
         BedrockGeometry geometry,
+        Function<String, TexelMask> textures,
         Map<String, List<BedrockBone>> childrenOf,
         Map<String, BakedBone> byName,
         Vector3f parentPivot
@@ -87,11 +93,15 @@ public final class GeometryBaker {
         List<BakedQuad> quads = new ArrayList<>();
         if (!bone.neverRender()) {
             for (BedrockCube cube : bone.cubes()) quads.addAll(bakeCube(cube, pivot, geometry));
+            for (BedrockTextureMesh mesh : bone.textureMeshes()) {
+                TexelMask mask = textures.apply(mesh.texture());
+                if (mask != null) quads.addAll(bakeTextureMesh(mesh, mask, pivot, geometry));
+            }
         }
 
         List<BakedBone> children = new ArrayList<>();
         for (BedrockBone child : childrenOf.getOrDefault(bone.name(), List.of())) {
-            children.add(bakeBone(child, geometry, childrenOf, byName, pivot));
+            children.add(bakeBone(child, geometry, textures, childrenOf, byName, pivot));
         }
 
         Map<String, Vector3f> locators = new HashMap<>();
@@ -132,8 +142,7 @@ public final class GeometryBaker {
         Quaternionf cubeRotation = null;
         if (cube.isRotated()) {
             Vector3f cubePivot = toModelSpace(cube.pivot());
-            Vector3f angles = toModelRotation(cube.rotation());
-            cubeRotation = new Quaternionf().rotationZYX(angles.z, angles.y, angles.x);
+            cubeRotation = rotationOf(cube.rotation());
             for (Vector3f corner : corners) {
                 corner.sub(cubePivot).rotate(cubeRotation).add(cubePivot);
             }
@@ -143,7 +152,52 @@ public final class GeometryBaker {
         Map<Face, float[]> rectangles = rectangles(cube, geometry);
         List<BakedQuad> quads = new ArrayList<>();
         for (Map.Entry<Face, float[]> entry : rectangles.entrySet()) {
-            quads.add(quad(entry.getKey(), entry.getValue(), corners, geometry, mirror, cubeRotation));
+            quads.add(quad(entry.getKey(), entry.getValue(), corners, geometry.textureWidth(),
+                geometry.textureHeight(), mirror, cubeRotation));
+        }
+        return quads;
+    }
+
+    /** How far inside its texel a side face samples, which keeps the neighbouring texel out of it. */
+    private static final float SIDE_INSET = 0.1f;
+
+    /**
+     * A voxel per drawn texel, keeping the faces that can be seen: both broad faces of every voxel
+     * and a side wherever the texel beside it is not drawn.
+     *
+     * That is the shape Java's item extrusion builds, except that the broad faces are cut per texel
+     * rather than spanning the texture, so a material without an alpha test draws the texels alone.
+     * Each face samples the texel it stands for, in the texture the mask was read from.
+     */
+    static List<BakedQuad> bakeTextureMesh(BedrockTextureMesh mesh, TexelMask mask, Vector3f bonePivot,
+        BedrockGeometry geometry) {
+        float texelWidth = geometry.textureWidth() / (float) mask.width();
+        Vector3f texel = new Vector3f(texelWidth, mesh.pixelDepth() ? 1f : texelWidth,
+            geometry.textureHeight() / (float) mask.height()).mul(mesh.scale());
+        Quaternionf rotation = rotationOf(mesh.rotation());
+        Vector3f origin = new Vector3f(
+            mesh.position().x - bonePivot.x, mesh.position().y, mesh.position().z - bonePivot.z);
+
+        List<BakedQuad> quads = new ArrayList<>();
+        for (int y = 0; y < mask.height(); y++) {
+            for (int x = 0; x < mask.width(); x++) {
+                if (!mask.drawn(x, y)) continue;
+
+                Vector3f[] corners = corners(x * texel.x, 0, y * texel.z,
+                    (x + 1) * texel.x, texel.y, (y + 1) * texel.z);
+                for (Vector3f corner : corners) corner.sub(mesh.localPivot()).rotate(rotation).add(origin);
+
+                float[] broad = {x, y, x + 1, y + 1, 0};
+                float[] side = {x + SIDE_INSET, y + SIDE_INSET, x + 1 - SIDE_INSET, y + 1 - SIDE_INSET, 0};
+                for (Face face : Face.values()) {
+                    boolean shows = face.normal.y != 0
+                        || !mask.drawn(x + (int) face.normal.x, y + (int) face.normal.z);
+                    if (shows) {
+                        quads.add(quad(face, face.normal.y != 0 ? broad : side, corners, mask.width(),
+                            mask.height(), false, rotation));
+                    }
+                }
+            }
         }
         return quads;
     }
@@ -179,12 +233,10 @@ public final class GeometryBaker {
     }
 
     private static BakedQuad quad(
-        Face face, float[] rectangle, Vector3f[] corners, BedrockGeometry geometry,
+        Face face, float[] rectangle, Vector3f[] corners, float texWidth, float texHeight,
         boolean mirror, Quaternionf cubeRotation
     ) {
         int[] indices = cornerIndices(face);
-        float texWidth = geometry.textureWidth();
-        float texHeight = geometry.textureHeight();
 
         float uMin = rectangle[0] / texWidth;
         float vMin = rectangle[1] / texHeight;
@@ -262,6 +314,12 @@ public final class GeometryBaker {
         rectangles.put(Face.MAX_Z, new float[]{
             u + depth * 2 + width, v + depth, u + depth * 2 + width * 2, v + depth + height, 0});
         return rectangles;
+    }
+
+    /** A cube's or a texture mesh's rotation, turned the way it turns about its pivot in model space. */
+    private static Quaternionf rotationOf(Vector3f degrees) {
+        Vector3f angles = toModelRotation(degrees);
+        return new Quaternionf().rotationZYX(angles.z, angles.y, angles.x);
     }
 
     private static Vector3f toModelSpace(Vector3f bedrock) {

@@ -167,8 +167,8 @@ These are the checks it runs, and what each one catches:
     client may have no audio device and the engine drops a sound before any listener hears it then.
 
   `RenderControllerClientGameTest`, `AnimationClientGameTest`, `AttachableClientGameTest`,
-  `CullingClientGameTest`, `ParticleClientGameTest`, `FogClientGameTest`, `CameraClientGameTest` and
-  `ItemAndBlockClientGameTest` are the drawing side's tests; each class's docblock names the pack
+  `TextureMeshClientGameTest`, `CullingClientGameTest`, `ParticleClientGameTest`, `FogClientGameTest`,
+  `CameraClientGameTest` and `ItemAndBlockClientGameTest` are the drawing side's tests; each class's docblock names the pack
   content it reads and what it asserts. Two things about the machine the tests run on: a window
   hidden by the compositor can stall the render thread inside `glfwSwapBuffers` until the server's
   watchdog ends the run, which reads as a hang in whatever test was running, and a dedicated server
@@ -301,6 +301,14 @@ These are the checks it runs, and what each one catches:
   discards, and the game test `aMarkedTexelIsConvertedOpaque` reads the converted file back to say
   the conversion raised it. A regression there costs an entity its markings and leaves it drawn in
   whatever is left of its texture, which no count here would report.
+
+  `tp:vane` is the one entity whose model is built from a texture rather than from boxes. Its only
+  bone carries a texture mesh over an eight by eight texture drawing an L, each texel painted a
+  colour of its own, placed by a local pivot, a position and a quarter turn and then turned half a
+  circle and lifted by its own animation. `TextureMeshClientGameTest` reads every face the renderer
+  submits back into the texel it stands for, so a face over a clear texel, a side between two drawn
+  ones, a layer of the wrong depth, a mesh left where its bone was not, or a face sampling a texel
+  other than its own each fails it by name.
 
   The behaviour side carries a clip and a controller of its own, which is the same pair of readers
   driving the world rather than a model. The ember's `scripts.animate` names the controller; its
@@ -1109,11 +1117,6 @@ what the census calls missing is what `/mcaddon entities` names. The field names
 beside the reader rather than inside it, because the census reads a reader's own string literals to
 decide what it acts on and a reported field is still a dropped one.
 
-- **`texture_meshes`** on a bone extrudes geometry from a texture's opaque pixels, placed by a
-  `local_pivot`, a `position` and a `rotation`. Java performs the same construction in
-  `ItemModelGenerator` for a flat item model, so what is absent is a reader rather than a Java form:
-  the geometry pipeline here bakes boxes out of JSON and never opens an image. All eleven published
-  declarations are item attachables, the bow and the crossbow among them.
 - **`rebuild_animation_matrices`** is declared by nine render controllers and Mojang documents none
   of them. Every one is a second pass over a *different* geometry than the first, the cape over the
   player, the clothes over a stray, the robes over a villager, which says it asks for the bone
@@ -1161,6 +1164,26 @@ Seven fields are read outside the renderer itself, which is where to look for th
   entity's animation script running while nobody can see it, which `Animators.tickOffscreen` does off
   the client tick. One pass advances the clips, fires their effects and poses the bones, so an entity
   asking only for its effects has its bones posed as well.
+
+`texture_meshes` is baked beside a bone's cubes, in `GeometryBaker.bakeTextureMesh`: a voxel per
+texel the texture draws, both broad faces of each and a side wherever the texel beside it is clear,
+every face sampling its own texel, which is `ItemModelGenerator`'s shape cut per texel so a material
+without an alpha test still draws only the texels. Mojang documents the fields and not the frame, so
+the frame is Blockbench's, the one tool that imports, previews and exports a texture mesh. The
+texture lies flat with its columns along X, its rows along Z and its layer running down, against
+Bedrock's Y; `scale` stretches it and `local_pivot` is then taken off in those units; `rotation`
+turns it the way a cube with the same rotation turns; and `position` puts the pivot at X and Z
+measured in the model and at Y measured down from the bone's pivot. Mojang's own declarations agree
+with the axes as far as they can be checked without a Bedrock client: the crossbow's turn lays its
+diagonal sprite along its holder's arm, pointing the way the arm reaches, and the bow's lays its
+arrow along an axis of the hand bone, though that axis is the hand's Z, which faces down rather than
+forward once the arm is raised to draw. A texel is the geometry's `texture_width` over the image's
+width across, so a geometry declaring its texture's own size draws a texel a model unit wide, and
+`use_pixel_depth` set false makes the layer as deep as a texel is wide rather than one unit. The mesh
+names its texture by the client definition's `textures` key, not by a path, so `AddonModels` bakes a
+geometry once per definition and reads the mask out of the converted image through
+`ConvertedPack.textureFile`. A block geometry carrying one is reported, since a block model is built
+from elements.
 
 `blend_transition` is acted on as well: a state declaring one is crossed out of rather than left, its
 clips staying at a falling weight while the state it moved to comes up. `blend_via_shortest_path`

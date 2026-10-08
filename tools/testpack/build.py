@@ -26,6 +26,7 @@ still works:
     two subpacks of the resource pack, each repainting the sprite, so the chosen one is readable
     the pack settings a manifest declares, at the values the Molang queries read back
     an entity texture with a band written the way Bedrock marks a cut-out texel
+    a bone built from nothing but a texture mesh over a texture drawing an L
     a page of the pack's own glyphs, and the locale list naming the languages it ships
     a function using the commands and selector arguments that need translating
     a structure naming a block of the pack's own, one Bedrock spells differently and air
@@ -243,6 +244,17 @@ def prism_mer(x: int, y: int) -> tuple[int, int, int, int]:
     return (0, 0, 220, 255)
 
 
+# The texels the vane's texture draws: an L standing in column 1 from row 1 to row 5 and running along
+# row 5 to column 3, on an otherwise clear eight by eight field. The vane's texture mesh is built
+# from exactly these, so `TextureMeshClientGameTest` names the same seven.
+VANE_TEXELS = {(1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (2, 5), (3, 5)}
+
+
+def vane(x: int, y: int) -> tuple[int, int, int, int]:
+    """The L, each texel coloured by where it is, so a face sampling the wrong texel shows."""
+    return (40 * x, 40 * y, 200, 255) if (x, y) in VANE_TEXELS else TRANSPARENT
+
+
 def particle_atlas(x: int, y: int) -> tuple[int, int, int, int]:
     """A 128x128 sheet of 8x8 cells, the layout the billboard components address by texel.
 
@@ -295,6 +307,7 @@ TEXTURES = (
     ("textures/entity/prism.png", 64, prism_skin((70, 120, 200, 255))),
     ("textures/entity/prism_dyed.png", 64, prism_skin((200, 70, 120, 255))),
     ("textures/entity/prism_mer.png", 64, prism_mer),
+    ("textures/entity/vane.png", 8, vane),
     ("textures/particle/particles.png", 128, particle_atlas),
 )
 

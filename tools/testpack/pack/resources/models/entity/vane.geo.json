@@ -1,0 +1,26 @@
+{
+  "format_version": "1.16.0",
+  "minecraft:geometry": [
+    {
+      "description": {
+        "identifier": "geometry.tp.vane",
+        "texture_width": 8,
+        "texture_height": 8
+      },
+      "bones": [
+        {
+          "name": "vane",
+          "pivot": [0, 4, 0],
+          "texture_meshes": [
+            {
+              "texture": "default",
+              "local_pivot": [1, 0.5, 5],
+              "position": [0, 2, 0],
+              "rotation": [-90, 0, 0]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

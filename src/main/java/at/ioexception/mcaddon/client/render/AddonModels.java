@@ -10,6 +10,7 @@ import at.ioexception.mcaddon.bedrock.model.GeometryBaker;
 import at.ioexception.mcaddon.bedrock.model.MaterialDefinition;
 import at.ioexception.mcaddon.bedrock.model.PartVisibility;
 import at.ioexception.mcaddon.bedrock.model.RenderController;
+import at.ioexception.mcaddon.bedrock.model.TexelMask;
 import at.ioexception.mcaddon.bedrock.model.UvShift;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
@@ -27,6 +28,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -86,6 +88,7 @@ public final class AddonModels {
     private final BedrockAssets assets;
     private final ConvertedPack converted;
     private final Map<String, BakedGeometry> baked = new HashMap<>();
+    private final Map<String, Optional<TexelMask>> masks = new HashMap<>();
     private final Map<String, AABB> bounds = new HashMap<>();
 
     public AddonModels(BedrockAssets assets, ConvertedPack converted) {
@@ -138,7 +141,7 @@ public final class AddonModels {
         String texturePath = definition.textures().getOrDefault("default",
             definition.textures().values().stream().findFirst().orElse(null));
 
-        BakedGeometry geometry = geometryId == null ? null : bake(geometryId);
+        BakedGeometry geometry = geometryId == null ? null : bake(geometryId, definition);
         if (geometry == null || texturePath == null) return List.of();
 
         if (REPORTED.add(definition.identifier())) {
@@ -159,7 +162,7 @@ public final class AddonModels {
         if (geometryKey == null) return null;
 
         String geometryId = definition.geometry().get(geometryKey);
-        BakedGeometry geometry = geometryId == null ? null : bake(geometryId);
+        BakedGeometry geometry = geometryId == null ? null : bake(geometryId, definition);
         if (geometry == null) return null;
 
         Identifier texture = null;
@@ -322,11 +325,27 @@ public final class AddonModels {
         return widest;
     }
 
-    private BakedGeometry bake(String identifier) {
-        return baked.computeIfAbsent(identifier, id -> {
-            BedrockGeometry geometry = assets.geometry(id);
-            return geometry == null ? null : GeometryBaker.bake(geometry);
+    /**
+     * A geometry baked for one definition, because a texture mesh names its texture the way that
+     * definition's own `textures` map does.
+     */
+    private BakedGeometry bake(String identifier, ClientEntityDefinition definition) {
+        return baked.computeIfAbsent(definition.identifier() + " " + identifier, key -> {
+            BedrockGeometry geometry = assets.geometry(identifier);
+            return geometry == null ? null : GeometryBaker.bake(geometry, name -> mask(definition, name));
         });
+    }
+
+    /** Which texels of the texture the definition calls `name` are drawn, null where it has none. */
+    private TexelMask mask(ClientEntityDefinition definition, String name) {
+        String path = definition.textures().get(name);
+        TexelMask mask = path == null ? null : masks.computeIfAbsent(path, bedrock -> Optional
+            .ofNullable(converted.textureFile(bedrock)).map(TexelMask::tryRead)).orElse(null);
+        if (mask == null) {
+            AddonEntities.unsupported("texture mesh " + name + " on " + definition.identifier()
+                + ", which has no such texture");
+        }
+        return mask;
     }
 
     private static float number(MolangExpression expression, MolangEnvironment environment, float fallback) {
