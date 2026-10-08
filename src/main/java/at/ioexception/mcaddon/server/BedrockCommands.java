@@ -37,6 +37,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.Collection;
 import java.util.List;
@@ -44,7 +45,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 
 /**
- * The Bedrock commands a pack expects to exist and Java does not ship.
+ * The Bedrock commands a pack expects to exist and Java does not ship, in the tree `/bedrock` reads
+ * a line against rather than in Java's own.
  *
  * Most are things this mod already does from script, so a `.mcfunction` or a command block gets the
  * same behaviour the pack's script half gets. What Bedrock's own form takes and this does not is
@@ -61,8 +63,20 @@ public final class BedrockCommands {
     private BedrockCommands() {
     }
 
+    /** Into the tree a Bedrock line is read against, which is not Java's own. */
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         Dialogues.registerCommand(dispatcher);
+
+        // A script event id carries the namespace of the pack that declared it, and Brigadier reads
+        // a colon only inside quotes, which is how the translated form of the command writes it.
+        dispatcher.register(Commands.literal("scriptevent")
+            .then(Commands.argument("id", StringArgumentType.string())
+                .then(Commands.argument("message", StringArgumentType.greedyString())
+                    .executes(command -> ServerHooks.scriptEvent(command.getSource(),
+                        StringArgumentType.getString(command, "id"),
+                        StringArgumentType.getString(command, "message"))))
+                .executes(command -> ServerHooks.scriptEvent(command.getSource(),
+                    StringArgumentType.getString(command, "id"), ""))));
 
         dispatcher.register(Commands.literal("playanimation")
             .requires(source -> Platform.allowedAt(source, 1))
@@ -146,8 +160,8 @@ public final class BedrockCommands {
             .then(mobEvent("minecraft:wandering_trader_event"))
             .then(mobEvent("events_enabled")));
 
-        // Java's own `/particle` knows nothing of a pack's effects, which are emitters rather than
-        // single particles, so the mod answers for those and hands the rest to the game.
+        // A pack's effects are emitters rather than single particles, which Java's own `/particle`
+        // knows nothing of, so this answers for those and hands any other particle to Java's.
         dispatcher.register(Commands.literal("particle")
             .requires(source -> Platform.allowedAt(source, 1))
             .then(Commands.argument("effect", StringArgumentType.string())
@@ -302,8 +316,9 @@ public final class BedrockCommands {
      * `/camera` sets what one player sees, so every part of it is decided here and sent to them.
      *
      * Bedrock lets `ease`, `pos` and `rot` be written in that order and each of them left out, which
-     * is why the same two tails hang off both the bare preset and the end of an ease. One executor
-     * reads whichever of them the player typed.
+     * is why the same tails hang off both the bare preset and the end of an ease. `facing` stands
+     * where `rot` would, and `default` stands for the preset's own placement with nothing over it.
+     * One executor reads whichever of them the player typed.
      */
     private static void registerCamera(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("camera")
@@ -318,6 +333,8 @@ public final class BedrockCommands {
                         .executes(BedrockCommands::camera)
                         .then(cameraPosition())
                         .then(cameraRotation())
+                        .then(cameraFacing())
+                        .then(Commands.literal("default").executes(BedrockCommands::camera))
                         .then(Commands.literal("ease")
                             .then(Commands.argument("seconds", FloatArgumentType.floatArg(0))
                                 .then(Commands.argument("easeType", StringArgumentType.word())
@@ -325,15 +342,31 @@ public final class BedrockCommands {
                                         Easing.names(), builder))
                                     .executes(BedrockCommands::camera)
                                     .then(cameraPosition())
-                                    .then(cameraRotation()))))))));
+                                    .then(cameraRotation())
+                                    .then(cameraFacing())
+                                    .then(Commands.literal("default")
+                                        .executes(BedrockCommands::camera)))))))));
     }
 
-    /** `pos` may be followed by `rot`, which is the only pairing Bedrock allows in that order. */
+    /** `pos` may be followed by `rot` or by `facing`, which are the pairings Bedrock allows. */
     private static LiteralArgumentBuilder<CommandSourceStack> cameraPosition() {
         return Commands.literal("pos")
             .then(Commands.argument("position", Vec3Argument.vec3())
                 .executes(BedrockCommands::camera)
-                .then(cameraRotation()));
+                .then(cameraRotation())
+                .then(cameraFacing()));
+    }
+
+    /**
+     * An entity or a point to look at. Brigadier keeps whichever of the two reads the whole of what
+     * was typed, so three numbers are a point and a selector is an entity.
+     */
+    private static LiteralArgumentBuilder<CommandSourceStack> cameraFacing() {
+        return Commands.literal("facing")
+            .then(Commands.argument("lookAtPosition", Vec3Argument.vec3())
+                .executes(BedrockCommands::camera))
+            .then(Commands.argument("lookAtEntity", EntityArgument.entity())
+                .executes(BedrockCommands::camera));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> cameraRotation() {
@@ -532,16 +565,18 @@ public final class BedrockCommands {
     /**
      * Sets what each named player sees.
      *
-     * A preset or an ease Bedrock has not got is reported rather than guessed at, because a camera
-     * pointing somewhere nobody asked for is worse than a line that says which word was wrong.
+     * A preset or an ease this mod cannot draw is reported rather than guessed at, because a camera
+     * pointing somewhere nobody asked for is worse than a line that says which word was wrong. An
+     * ease to a camera that follows the player is refused in Bedrock's own words.
+     *
+     * An entity to face is faced at the middle of its box, which is the point Bedrock documents.
      */
     private static int camera(CommandContext<CommandSourceStack> command)
         throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         String written = IdentifierArgument.getId(command, "preset").toString();
         CameraView.Preset preset = CameraView.Preset.tryFrom(written);
         if (preset == null) {
-            command.getSource().sendFailure(
-                Component.literal("There is no camera preset named " + written + "."));
+            command.getSource().sendFailure(Component.literal(CameraView.Preset.refusal(written)));
             return 0;
         }
 
@@ -553,12 +588,22 @@ public final class BedrockCommands {
                 command.getSource().sendFailure(Component.literal("There is no ease named " + name + "."));
                 return 0;
             }
+            if (!preset.stationary()) {
+                command.getSource().sendFailure(Component.literal(
+                    "Easing to non-stationary cameras is not supported, and " + preset.bedrockName()
+                        + " follows the player."));
+                return 0;
+            }
         }
 
+        Vec3 facing = given(command, "lookAtPosition") ? Vec3Argument.getVec3(command, "lookAtPosition")
+            : given(command, "lookAtEntity")
+                ? EntityArgument.getEntity(command, "lookAtEntity").getBoundingBox().getCenter() : null;
         return send(command, new CameraView(preset,
             given(command, "position") ? Vec3Argument.getVec3(command, "position") : null,
             given(command, "xRot") ? FloatArgumentType.getFloat(command, "xRot") : null,
             given(command, "yRot") ? FloatArgumentType.getFloat(command, "yRot") : null,
+            facing,
             given(command, "seconds") ? FloatArgumentType.getFloat(command, "seconds") : 0f,
             easing).encode());
     }

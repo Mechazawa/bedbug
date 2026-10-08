@@ -1,0 +1,69 @@
+{
+  "format_version": "1.10.0",
+  "particle_effect": {
+    "description": {
+      "identifier": "tp:fade",
+      "basic_render_parameters": {
+        "material": "particles_blend",
+        "texture": "textures/particle/particles"
+      }
+    },
+    "curves": {
+      "variable.fade": {
+        "type": "linear",
+        "input": "v.particle_age",
+        "horizontal_range": "v.particle_lifetime",
+        "nodes": [1.0, 0.8, 0.2]
+      },
+      "variable.warmth": {
+        "type": "bezier",
+        "input": "v.particle_age",
+        "horizontal_range": 2.0,
+        "nodes": [0.1, 0.9, 0.2, 1.0]
+      },
+      "variable.leaf": {
+        "type": "catmull_rom",
+        "input": "v.particle_age / v.particle_lifetime",
+        "nodes": [0.0, 0.2, 0.6, 0.8, 1.0]
+      },
+      "variable.span": {
+        "type": "bezier_chain",
+        "input": "v.particle_age",
+        "horizontal_range": 2.0,
+        "nodes": {
+          "2.0": {"left_value": 0.3, "right_value": 0.3, "left_slope": -0.1, "right_slope": 0},
+          "0.0": {"value": 0.05, "slope": 0},
+          "1.0": {"value": 0.2, "slope": 0.1}
+        }
+      }
+    },
+    "components": {
+      "minecraft:emitter_rate_instant": {
+        "num_particles": 1
+      },
+      "minecraft:emitter_lifetime_once": {
+        "active_time": 0.1
+      },
+      "minecraft:emitter_shape_point": {
+        "direction": [0, 1, 0]
+      },
+      "minecraft:particle_initial_speed": 0.0,
+      "minecraft:particle_lifetime_expression": {
+        "max_lifetime": 2.0
+      },
+      "minecraft:particle_appearance_billboard": {
+        "size": ["v.span", "v.span"],
+        "facing_camera_mode": "lookat_xyz",
+        "uv": {
+          "texturewidth": 128,
+          "textureheight": 128,
+          "uv": [0, 8],
+          "uv_size": [8, 8]
+        }
+      },
+      "minecraft:particle_appearance_tinting": {
+        "color": ["v.warmth", "v.leaf", 1.0, "v.fade"]
+      }
+    }
+  }
+}

@@ -14,22 +14,26 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * What a Bedrock `.mcfunction` line becomes in Java's command dialect.
+ * What a Bedrock command line becomes in the dialect the Bedrock command tree reads, and what a
+ * Bedrock `.mcfunction` file becomes as a Java function.
  *
  * The two languages share most of their spelling, so the cases here are the ones where they differ
- * and a copied line would be rejected by Java's parser. A rejected line takes the whole function
- * with it, which is why a command with no Java counterpart has to be left out and named instead.
+ * and a copied line would be rejected by Java's parser, which is why a command with no Java
+ * counterpart has to be named rather than handed on.
  *
- * The translation runs over a pack on disk, so every case writes one function and reads back what
- * was produced. The entity name lookup asks the registry, hence the bootstrap.
+ * Every case writes its lines as one function of a pack on disk, so a call by name has a function to
+ * find. The entity name lookup asks the registry, hence the bootstrap.
  */
 class FunctionsTest {
     @TempDir
@@ -275,6 +279,20 @@ class FunctionsTest {
         assertEquals("execute as @a run effect give @s speed", only("execute as @a run effect @s speed"));
     }
 
+    /**
+     * Every link of a chain is translated, so a Bedrock selector anywhere in it and a Bedrock command
+     * behind its last `run` reach the tree the way the pack meant them.
+     */
+    @Test
+    void translatesEveryLinkOfAnExecuteChain() throws IOException {
+        assertEquals("execute as @e[type=minecraft:villager,hasitem={item=apple}] at @s run execute "
+                + "if entity @s[distance=..3] run particle \"tp:burst\" ~ ~1 ~",
+            only("execute as @e[type=villager_v2,hasitem={item=apple}] at @s run execute if entity @s[r=3] "
+                + "run particle tp:burst ~ ~1 ~"));
+        assertEquals("execute as @a at @s positioned ~ ~ ~ run playanimation @s animation.wave",
+            only("execute @a ~ ~ ~ playanimation @s animation.wave"));
+    }
+
     @Test
     void dropsAnExecuteWhoseOwnCommandJavaHasNoCounterpartFor() throws IOException {
         assertEquals(List.of(), translate("execute as @a run hud @s hide hotbar"));
@@ -396,9 +414,26 @@ class FunctionsTest {
     }
 
     /**
-     * A command this mod registers reaches Java's parser unchanged.
+     * A function file hands every line to `/bedrock` as the pack wrote it, so Java's parser reads a
+     * line it could not translate as readily as any other and the file loads whole.
+     */
+    @Test
+    void writesEveryLineOfAFunctionForBedrockToRun() throws IOException {
+        assertEquals(List.of("bedrock say before", "# a note", "bedrock hud @a hide all", "bedrock kill @e[r=5]"),
+            converted("say before", "# a note", "", "hud @a hide all", "/kill @e[r=5]"));
+        assertTrue(problems.isEmpty(), problems.toString());
+    }
+
+    /** A script names the commands it declares with its namespace, and the tree holds them so. */
+    @Test
+    void passesACommandAPackDeclaredThrough() throws IOException {
+        assertEquals("tp:summon_guard @s 3", only("tp:summon_guard @s 3"));
+    }
+
+    /**
+     * A command this mod registers reaches the Bedrock tree unchanged.
      *
-     * Java's own dispatcher knows none of these names, so a line using one is only valid because
+     * Java's own tree knows none of these names, so a line using one is only valid because
      * `BedrockCommands` registered it. Dropping one here would cost a pack the line without saying so.
      */
     @ParameterizedTest
@@ -443,7 +478,7 @@ class FunctionsTest {
             "{\"values\": [\"greet\", \"never_converted\"]}");
 
         Path output = directory.resolve("out");
-        assertEquals(List.of("ns:greet"), Functions.convert(packAt(pack), output, "ns", problems));
+        assertEquals(List.of("ns:greet"), Functions.convert(packAt(pack), output, "ns"));
 
         Path tag = output.resolve("data/minecraft")
             .resolve(Platform.singularDataDirectories() ? "tags/function" : "tags/functions")
@@ -458,9 +493,17 @@ class FunctionsTest {
     }
 
     private List<String> translate(String... source) throws IOException {
-        Path pack = writeFunction(source);
+        FunctionNames functions = FunctionNames.of(Map.of("ns", List.of(packAt(writeFunction(source)))))
+            .issuedBy("ns");
+        return Arrays.stream(source)
+            .map(line -> Functions.line(line.strip(), functions, problems))
+            .filter(Objects::nonNull)
+            .toList();
+    }
+
+    private List<String> converted(String... source) throws IOException {
         Path output = directory.resolve("out");
-        Functions.convert(packAt(pack), output, "ns", problems);
+        Functions.convert(packAt(writeFunction(source)), output, "ns");
 
         String written = Files.readString(output.resolve("data/ns")
             .resolve(Platform.singularDataDirectories() ? "function" : "functions")

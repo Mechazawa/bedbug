@@ -315,12 +315,12 @@ def dialogue(version: str, entities: list[str]) -> dict:
         ["kill @e[type=!player]",
          f"summon {speaker} {stand}",
          f"tp @a {CAMERA_X} {FLOOR_Y + 2} {ROW_Z} facing {stand}",
-         f'dialogue change @e[type={speaker}] "{tags[0]}"'],
+         f"bedrock dialogue change @e[type={speaker}] {tags[0]}"],
         [f"OPENED {tags[0]}", "COUNTED speaker"],
         # The screen goes up last: a single player game pauses behind one, and a scheduled function
         # in a paused game never runs, so everything the scene still has to ask comes first.
         [f"execute if entity @e[type={speaker},limit=1] run say COUNTED speaker",
-         f'dialogue open @e[type={speaker},limit=1] @p "{tags[0]}"',
+         f"bedrock dialogue open @e[type={speaker},c=1] @p {tags[0]}",
          f"say OPENED {tags[0]}"],
     )
 

@@ -23,7 +23,7 @@ public final class FormClientGameTest implements FabricClientGameTest {
     public void runTest(ClientGameTestContext context) {
         try (TestSingleplayerContext world = context.worldBuilder().create()) {
             Worlds.waitForChunks(world);
-            world.getServer().runCommand("execute as @a run scriptevent \"tp:handbook\"");
+            world.getServer().runCommand("bedrock execute as @a run scriptevent tp:handbook");
 
             context.waitForScreen(AddonFormScreen.class);
             Screen handbook = context.computeOnClient(client -> Platform.currentScreen());
@@ -47,7 +47,7 @@ public final class FormClientGameTest implements FabricClientGameTest {
             waitForTag(context, world, "tp:handbook_ServerClosed");
 
             // The close button is the player closing the form rather than the pack.
-            world.getServer().runCommand("execute as @a run scriptevent \"tp:handbook\"");
+            world.getServer().runCommand("bedrock execute as @a run scriptevent tp:handbook");
             context.waitForScreen(AddonFormScreen.class);
             context.clickScreenButton("Close");
             context.waitForScreen(null);

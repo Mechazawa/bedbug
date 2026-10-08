@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.clientgametest;
 
 import at.ioexception.mcaddon.bedrock.animation.BonePose;
 import at.ioexception.mcaddon.client.render.ScriptClock;
+import at.ioexception.mcaddon.client.render.Submitted;
 import at.ioexception.mcaddon.entity.AddonEntity;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -9,6 +10,7 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContex
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 
 /**
  * An entity's animation script poses its bones the way its pack's clips and controllers say, and
@@ -32,9 +34,26 @@ import java.util.List;
  * `tp:sprite`'s `chime` clip is run by the renderer itself: at half a second it plays its pack's
  * sound and at two seconds it starts `tp:burst` at the `tip` locator, which sits seventeen pixels up
  * the young sprite. The burst's point emitter puts its particles a fifth of a block above that.
+ *
+ * The sprite's `idle` clip writes its body's channels as Molang rather than keyframes: a turn of
+ * `q.life_time * 45` degrees and a lift of `math.sin(q.life_time * 180) * 0.5` pixels, so the posed
+ * bone and the drawn body are both a function of the sprite's age. `chime`'s timeline sets
+ * `v.chimed` at two and a half seconds, the `ring` controller leaves its first state once that
+ * variable holds, writing the moment from `on_exit` and counting from `on_entry`, and the cap's render
+ * controller halves its green from then on.
  */
 public final class AnimationClientGameTest implements FabricClientGameTest {
     private static final float TOLERANCE = 0.01f;
+
+    /** The sprite's turn, in degrees a second, and the height of its bob, in pixels. */
+    private static final float SPIN = 45;
+    private static final float BOB = 0.5f;
+
+    /** The tick on which `chime`'s timeline reaches two and a half seconds. */
+    private static final int CHIMED = 50;
+
+    private static final int WHITE = 0xFFFFFFFF;
+    private static final int RUNG = 0xFFFF80FF;
 
     /** Five seconds of the prism's script, a tick at a time. */
     private static final int TICKS = 100;
@@ -53,7 +72,154 @@ public final class AnimationClientGameTest implements FabricClientGameTest {
             Worlds.waitForChunks(world);
             prism(context, world);
             chime(context, world);
+            molangChannels(context, world);
+            timeline(context, world);
         }
+    }
+
+    /** The idle clip's two Molang channels, on the bone at two moments and on the drawn body at two more. */
+    private static void molangChannels(ClientGameTestContext context, TestSingleplayerContext world) {
+        AddonEntity sprite = freshSprite(context, world);
+
+        List<BonePose> body = context.computeOnClient(client -> {
+            ScriptClock clock = ScriptClock.of(sprite);
+            List<BonePose> taken = new ArrayList<>();
+            for (int tick = 1; tick <= 30; tick++) {
+                clock.tick();
+                taken.add(Poses.copy(clock.pose("body")));
+            }
+            return taken;
+        });
+        for (int tick : new int[] {10, 30}) {
+            float seconds = tick / 20f;
+            BonePose pose = body.get(tick - 1);
+            Assert.near(pose.rotation.y, seconds * SPIN, TOLERANCE,
+                "the body's yaw " + seconds + " seconds in under q.life_time * 45, in degrees");
+            Assert.near(pose.position.y, lift(seconds), TOLERANCE,
+                "the body's lift " + seconds + " seconds in under math.sin(q.life_time * 180) * 0.5, in pixels");
+        }
+
+        drawnBody(context, sprite, 10);
+        drawnBody(context, sprite, 30);
+    }
+
+    /**
+     * The drawn body at an age where its bob is at one end, which is where a lift the renderer read in
+     * the wrong unit shows most.
+     *
+     * The lowest corners are the body's own bottom face, which stands the lift above the feet in
+     * sixteenths of a block. Seen from above they are a square turned by the body's yaw; a square
+     * looks the same every quarter turn and mirrored, so the turn is compared with the sprite's
+     * own facing taken off and folded into a quarter, either way round.
+     */
+    private static void drawnBody(ClientGameTestContext context, AddonEntity sprite, int phase) {
+        for (int wait = 0; wait < PATIENCE; wait++) {
+            DrawnBody drawn = context.computeOnClient(client -> sprite.tickCount % 40 == phase
+                ? new DrawnBody(sprite.tickCount, sprite.yBodyRot, Submitted.entity(sprite).geometry().get(0))
+                : null);
+            if (drawn == null) {
+                context.waitTick();
+                continue;
+            }
+
+            float seconds = drawn.age() / 20f;
+            double lowest = drawn.body().box().minY;
+            // The renderer stands every model a thousandth of a block clear of the ground.
+            Assert.near(lowest, lift(seconds) / 16, 0.002,
+                "the bottom of tp:sprite's body above its feet at " + seconds + " seconds, in blocks");
+
+            double turned = drawn.body().vertices().stream()
+                .filter(vertex -> Math.abs(vertex.y() - lowest) < 1e-4)
+                .mapToDouble(vertex -> quarter(Math.toDegrees(Math.atan2(vertex.z(), vertex.x())) - 45))
+                .findFirst().orElseThrow();
+            double yaw = seconds * SPIN;
+            double facing = 180 - drawn.facing();
+            List<Double> wanted = List.of(quarter(yaw + facing), quarter(yaw - facing),
+                quarter(-yaw + facing), quarter(-yaw - facing));
+            Assert.that(wanted.stream().anyMatch(angle -> Math.abs(angle - turned) < 0.1),
+                "tp:sprite's body is turned " + yaw + " degrees at " + seconds + " seconds on a body facing "
+                    + drawn.facing() + ", which folds to one of " + wanted + ", and its bottom corners fold to "
+                    + turned + ".");
+            return;
+        }
+        throw new AssertionError("tp:sprite never reached tick " + phase + " of a two second round.");
+    }
+
+    private record DrawnBody(int age, float facing, Submitted.Geometry body) {
+    }
+
+    private static double lift(float seconds) {
+        return Math.sin(Math.toRadians(seconds * 180)) * BOB;
+    }
+
+    /** An angle folded into the first quarter turn, which is all a square's corners can say about it. */
+    private static double quarter(double degrees) {
+        return ((degrees % 90) + 90) % 90;
+    }
+
+    /** `chime`'s timeline, the controller reading what it wrote, and the render controller reading that. */
+    private static void timeline(ClientGameTestContext context, TestSingleplayerContext world) {
+        AddonEntity sprite = freshSprite(context, world);
+
+        List<Rung> moments = context.computeOnClient(client -> {
+            ScriptClock clock = ScriptClock.of(sprite);
+            List<Rung> taken = new ArrayList<>();
+            for (int tick = 1; tick <= TICKS; tick++) {
+                clock.tick();
+                taken.add(new Rung(clock.variable("chimed"), clock.variable("rung"),
+                    clock.variable("quiet_until"), clock.passes().get(1).colour()));
+            }
+            return taken;
+        });
+
+        int chimed = first(moments, moment -> moment.chimed() == 1);
+        Assert.that(chimed == CHIMED || chimed == CHIMED + 1, "chime's timeline sets v.chimed at 2.5 seconds,"
+            + " tick " + CHIMED + ", and it was first set on tick " + chimed + ".");
+        int entered = first(moments, moment -> moment.rung() > 0);
+        Assert.that(entered == chimed || entered == chimed + 1, "ring leaves its quiet state once v.chimed holds,"
+            + " which it did from tick " + chimed + ", and its ringing state's on_entry first ran on tick "
+            + entered + ".");
+        Rung last = at(moments, TICKS);
+        Assert.near(last.rung(), 1, TOLERANCE, "v.rung, which on_entry adds one to as ringing is entered once");
+        Assert.near(last.quietUntil(), entered / 20f, 1e-4,
+            "v.quiet_until, the q.life_time quiet's on_exit wrote as the controller left it");
+        for (int tick = 1; tick <= TICKS; tick++) {
+            int wanted = tick < entered ? WHITE : RUNG;
+            int colour = at(moments, tick).cap();
+            Assert.that(colour == wanted, "the cap's colour on tick " + tick + ", whose controller halves its"
+                + " green once v.rung is set on tick " + entered + ", is " + Integer.toHexString(colour)
+                + " where " + Integer.toHexString(wanted) + " was expected.");
+        }
+
+        Submitted early = context.computeOnClient(client -> Submitted.entity(sprite));
+        int earlyAge = context.computeOnClient(client -> sprite.tickCount);
+        Assert.that(earlyAge < CHIMED && early.geometry().get(1).vertices().get(0).colour() == WHITE,
+            "the drawn cap of a tp:sprite " + earlyAge + " ticks old, before its chime, was "
+                + Integer.toHexString(early.geometry().get(1).vertices().get(0).colour()) + " and not white.");
+        Frames.waitFor(context, sprite, frame -> frame.geometry().get(1).vertices().get(0).colour() == RUNG,
+            drawn -> "tp:sprite's drawn cap is " + Integer.toHexString(RUNG) + " once its chime set v.chimed, and"
+                + " it was drawn in " + Integer.toHexString(drawn.geometry().get(1).vertices().get(0).colour()) + ".");
+        // The frames drawn during the tick before the chime may already be most of the way to it.
+        int rungAge = context.computeOnClient(client -> sprite.tickCount);
+        Assert.that(rungAge >= CHIMED - 1, "tp:sprite's drawn cap had its green halved " + rungAge
+            + " ticks into its life, before its chime at " + CHIMED + ".");
+    }
+
+    private record Rung(float chimed, float rung, float quietUntil, int cap) {
+    }
+
+    private static <T> int first(List<T> moments, Predicate<T> holds) {
+        for (int tick = 1; tick <= moments.size(); tick++) {
+            if (holds.test(moments.get(tick - 1))) return tick;
+        }
+        return -1;
+    }
+
+    /** A sprite of nobody else's, so its age starts at the summon. */
+    private static AddonEntity freshSprite(ClientGameTestContext context, TestSingleplayerContext world) {
+        Entities.discardAll(context, world.getServer(), "tp:sprite");
+        world.getServer().runCommand("summon tp:sprite ~ ~ ~3 {NoAI:1b,Rotation:[0f,0f]}");
+        return Entities.waitForClient(context, "tp:sprite");
     }
 
     private static void prism(ClientGameTestContext context, TestSingleplayerContext world) {
@@ -113,8 +279,8 @@ public final class AnimationClientGameTest implements FabricClientGameTest {
             "the needle's pitch under tilt, a 60 degree clip at the blend value 0.5 its state gives it");
     }
 
-    private static Poses at(List<Poses> poses, int tick) {
-        return poses.get(tick - 1);
+    private static <T> T at(List<T> moments, int tick) {
+        return moments.get(tick - 1);
     }
 
     private static float normalised(float degrees) {

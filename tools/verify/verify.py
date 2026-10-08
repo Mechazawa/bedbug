@@ -511,7 +511,7 @@ def console_script(identifiers: list[str], summons: int,
               for one in dimensions or []]
     steps += [(0.3, f"summon {identifier} 0 100 0") for identifier in chosen]
     steps += [(2.0, f"kill @e[type={identifier}]") for identifier in chosen]
-    steps += [(2.0, "gametest runall"), (4.0, "gametest clearall")]
+    steps += [(2.0, "bedrock gametest runall"), (4.0, "bedrock gametest clearall")]
     steps += [(2.0, "mcaddon scripts")]
     return steps
 

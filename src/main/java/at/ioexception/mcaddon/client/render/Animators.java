@@ -29,11 +29,19 @@ public final class Animators {
             return new Entry(animator, queries, new float[] {ageInTicks});
         }
 
-        /** Moves the animator on by however far the entity's clock has gone since the last call. */
+        /**
+         * Moves the animator on by however far the entity's clock has gone since the furthest it
+         * was moved to.
+         *
+         * A frame may ask for the entity at an earlier moment than the last one did, at a partial
+         * tick of nothing where the previous frame was most of the way through. Such a call poses
+         * the entity at its own moment and leaves the clock where it was, because winding the clock
+         * back would have the next call play the same stretch of every clip a second time.
+         */
         void advance(float partialTick, float ageInTicks, String itemSlot) {
             float now = ageInTicks + partialTick;
             float delta = Math.max(0, now - lastTime[0]) / 20f;
-            lastTime[0] = now;
+            lastTime[0] = Math.max(lastTime[0], now);
             queries.setPartialTick(partialTick);
             queries.setItemSlot(itemSlot);
             animator.tick(delta, now / 20f);

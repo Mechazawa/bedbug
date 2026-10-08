@@ -111,9 +111,10 @@ These are the checks it runs, and what each one catches:
 - **`./gradlew :26.2:runGameTest`** runs the Mojang game tests in
   `src/main/java/at/ioexception/mcaddon/gametest/`, headless, against a real world. `check` depends
   on it, so a failing one fails `./gradlew build`, and it is gated to the checked-out version like
-  everything else. What it covers is the half a unit test cannot reach: that `/playanimation` and
-  `/event entity` still parse and run, that an entity event no pack declares is answered instead of
-  thrown, that delivering a tick's data-driven triggers ends, that a script failing inside the
+  everything else. What it covers is the half a unit test cannot reach: that `/bedrock playanimation`
+  and `/bedrock event entity` still parse and run, that Java's own tree reads none of Bedrock's
+  commands or selector arguments and lets nobody below an operator run `/bedrock`, that an entity
+  event no pack declares is answered instead of thrown, that delivering a tick's data-driven triggers ends, that a script failing inside the
   tick costs the tick rather than the server, and that a converted dimension and its dimension type
   decode through this version's own codecs, whose field lists differ on each of the four.
 
@@ -146,11 +147,18 @@ These are the checks it runs, and what each one catches:
   - `client/render/Submitted` extracts an entity's render state the way the level renderer does,
     submits it to a collector that answers every call and keeps two kinds: each piece of custom
     geometry with the render type it asked for and every vertex it wrote (position from the feet,
-    colour, texture point, light), and each item with the pose it was hung at, its light and its
-    tints. The same collector takes an item's own render state, which is how an icon is asserted.
+    colour, texture point, light, overlay), and each item with the pose it was hung at, its light
+    and its tints. The same collector takes an item's own render state, which is how an icon is
+    asserted, and the overlay is where a hurt entity's red is read.
   - `client/render/ScriptClock` builds the animator the renderer builds for an entity and moves it
-    on a tick at a time, so a bone's pose can be asked for at an exact moment instead of at whatever
-    moment a frame happened to land on.
+    on a tick at a time, so a bone's pose, a script variable or the passes its render controllers
+    pick can be asked for at an exact moment instead of at whatever moment a frame happened to land
+    on. Its clips' sounds and particles go nowhere.
+
+  `Submitted` extracts at a partial tick of nothing, which is earlier than the frame before it
+  drew. An animator therefore never winds its clock back to a moment it has already passed: a clock
+  wound back replays a stretch of every clip on the next frame, so each probe would make the clips
+  run faster than the world and a test of anything timed would see it happen early.
   - `clientgametest/Born` and `clientgametest/Heard` write down every pack particle the client adds
     and every sound it is asked to play, through the test mod's own mixins in
     `mcaddon-gametest.mixins.json`. A particle is kept with its velocity and lifetime as it was
@@ -232,7 +240,7 @@ These are the checks it runs, and what each one catches:
   never does. `ServerRegistryClientGameTest` compares every add-on entity type, item, block, sound
   event and biome by number on both sides and sends an item stack and a block state across;
   `ServerEntityClientGameTest` follows a wisp's type, a `client_sync` property, a component group's
-  box and drawn size, a wisp settled before the client could see it, and `/playanimation` on a wisp
+  box and drawn size, a wisp settled before the client could see it, and `/bedrock playanimation` on a wisp
   and a villager; `ServerPlayerClientGameTest` adds a second player, `Bystander`, and asserts a form,
   `/camera`, `/camerashake` and `/fog` reach the player they name and nobody else, that a form's
   answer counts only from its own player, and that the test pack's eight hundred button catalogue
@@ -271,7 +279,7 @@ These are the checks it runs, and what each one catches:
   states and permutations drawn with its own geometry and culling against a named voxel shape, a
   recipe of each kind that converts, two
   entities whose spawn eggs take each of the two forms, an animation firing a sound and a particle
-  off its timeline, three `particles/*.json` in the 1.10.0 format, a `fogs/` file whose air and
+  off its timeline, four `particles/*.json` in the 1.10.0 format, a `fogs/` file whose air and
   water blocks are written differently from each other, a texture set whose emissive
   channel has pixels in it, a glyph page beside the locale list and the locale names a pack declares,
   and a function using the commands and selector arguments that need translating.
@@ -386,14 +394,25 @@ These are the checks it runs, and what each one catches:
   wrong one of the two draws nothing where the sprite should be. The sprite is also declared young,
   and one of its two controllers picks its body by `query.is_baby` while the other draws a cap
   written to sit on top of the young body, so a query answering the wrong way leaves the cap in the
-  air with a gap under it.
+  air with a gap under it. The sprite's idle clip writes its body's turn and lift as Molang over
+  `q.life_time` rather than as keyframes. Its chime clip's timeline sets a variable at two and a half
+  seconds, its `ring` controller leaves its first state once that variable holds and writes from
+  both `on_exit` and `on_entry`, and the cap's controller halves its green once the second of those
+  is set, so the whole chain from a timeline to a render controller reads off one colour. Neither
+  of the sprite's controllers states an `is_hurt_color`, so a hurt sprite is drawn with the red
+  every Bedrock entity flashes.
+
+  `tp:fade` is the particle painted by curves: one of each of the four kinds, read off
+  `variable.particle_age`, sets its alpha, its red, its green and its size, and the bezier chain
+  carries a `horizontal_range` Bedrock ignores on a chain.
 
   `tp:prism` exists to be drawn. Its one render controller picks everything about its one pass by
   Molang over the entity: the geometry from `q.is_baby` and an enum property, the texture from an
   array indexed by `q.variant`, the material from `q.had_component_group` between
   `entity_alphatest` and `entity_alphablend`, the mark bone's visibility from `q.mark_variant`, a
-  texture slide and a colour from the variant, an overlay from the mark variant and an
-  `on_fire_color`, and one event per group or property switches one of those. Its three geometries
+  texture slide and a colour from the variant, an overlay from the mark variant, an `is_hurt_color`
+  that replaces the red of a hit and an `on_fire_color`, and one event per group or property
+  switches one of those. Its three geometries
   differ in how far the core reaches from the middle, so which one was drawn reads off the vertices
   whichever way it faces. Its skin carries a texture set whose emissive channel glows over the mark,
   so a second, lit pass is drawn for the plain skin and none for the dyed one. Its script runs
@@ -484,7 +503,7 @@ These are the checks it runs, and what each one catches:
   NBT writer `build_gametests.py` uses too: a stone floor, the pack's lamp and four jack o'lanterns
   written as `minecraft:lit_pumpkin` in the layer above with the rest of that layer left alone, and
   air on top. `functions/hut.mcfunction` places it with `structure load tp:hut ~ ~ ~` and
-  `/scriptevent "tp:hut" <x> <y> <z>` has the script place it through `world.structureManager`, and
+  `/bedrock scriptevent tp:hut <x> <y> <z>` has the script place it through `world.structureManager`, and
   `StructureGameTests.aPacksStructureLoadsByItsName` reads both copies back on all four versions.
 
   Three dimension files and one dialogue file are there for the two directories with no count of
@@ -509,7 +528,7 @@ These are the checks it runs, and what each one catches:
   `enchant_book_for_trading` and no condition, so the loot function type this mod registers is
   exercised from the converted table through the codec to the enchanted book that comes back.
 
-  The behaviour pack's one script is a two-page handbook, opened by `/scriptevent "tp:handbook"`
+  The behaviour pack's one script is a two-page handbook, opened by `/bedrock scriptevent tp:handbook`
   run as a player. It is a single 2.x `CustomForm` holding both pages, each page's components shown
   through an `ObservableBoolean` and the title an `ObservableString`, with buttons whose handlers
   turn the page by setting those observables, one handler calling `form.close()` and a
@@ -518,39 +537,50 @@ These are the checks it runs, and what each one catches:
   turns the page and asserts the same screen now draws the second page and not the first, then
   closes it both ways and reads the tag back: a form whose button press closed the screen, or whose
   observables reached the screen only once, fails there. The same script answers
-  `/scriptevent "tp:catalogue"` with an `ActionFormData` of eight hundred buttons, whose description
+  `/bedrock scriptevent tp:catalogue` with an `ActionFormData` of eight hundred buttons, whose description
   is longer than the 32767 characters a plain network string carries.
 
   `animation.tp.wisp.lift` raises the wisp's one bone by four pixels for two seconds, which is what
-  `/playanimation` on an add-on entity is measured by.
+  `/bedrock playanimation` on an add-on entity is measured by.
 
   The same script watches the game's own villagers the way a pack replacing them does, in Bedrock's
   ids throughout: it compares `typeId` against `minecraft:villager_v2` and `minecraft:xp_orb` as
   each entity spawns, queries the overworld for `minecraft:villager_v2` every tick and spawns a
   sprite it then marks beside each one found, hears `entityHurt` through listeners narrowed to a
-  villager and to a zombie, and answers `/scriptevent "tp:villager"` with
+  villager and to a zombie, and answers `/bedrock scriptevent tp:villager` with
   `spawnEntity("minecraft:villager_v2")`. Every answer is a tag, which `VanillaNamesClientGameTest`
   reads back after summoning a Java villager and an experience orb: a surface reporting or accepting
   only Java's ids, a listener whose options are ignored, or an `entitySpawn` raised before
   `spawnEntity` has returned each fails there.
 
   Every command line in the pack that runs while the game is going is written so Java's parser
-  refuses it as it stands. On `/scriptevent "tp:commands"` the script runs, as whatever sent it, a
+  refuses it as it stands. On `/bedrock scriptevent tp:commands` the script runs, as whatever sent it, a
   selector asking with `hasitem` about the main hand and about everything carried, a selector naming
   `villager_v2`, `function tp/relay` by its path alone (which calls `tp/relayed` the same way inside
   the file) and `hud`, which nothing translates. The ember's `tp:ember_command` event tags it through
   a Bedrock radius and asks for `hud` as well, and its controller's command tags it through a Bedrock
   radius. `CommandGameTests` reads each of those back as a tag, and finds `hud` among what
   `/mcaddon scripts` and `/mcaddon entities` say cannot be translated rather than among what did not
-  parse. The dialogue's first button runs `xp 1L`, and `/scriptevent "tp:stock_up"` gives the player
-  `tp:dust` unless `hasitem` finds one on them; `PackCommandClientGameTest` presses the button and
-  asks for the dust twice, and reads back one level gained and one dust carried.
+  parse. The dialogue's first button runs `xp 1L`, and `/bedrock scriptevent tp:stock_up` gives the
+  player `tp:dust` unless `hasitem` finds one on them; `PackCommandClientGameTest` presses the button
+  and asks for the dust twice, and reads back one level gained and one dust carried.
+
+  `functions/tp/gap.mcfunction` tags whoever runs it on either side of an `inputpermission` line,
+  which nothing translates, so `CommandGameTests` can say the file loaded, both tags landed and the
+  middle line was reported. The same class types `/bedrock` itself: an `execute` chain selecting
+  embers by `hasitem` and running a Bedrock `event` behind its `run`, a function named by its
+  Bedrock path from Java's own `execute`, and the line a player who is no operator may not run. The
+  client game tests ship two functions of a Java data pack of their own under
+  `src/gametest/resources/data/mcaddon_gametest/`, whose `bedrock camera` and `bedrock
+  playanimation` lines `CameraClientGameTest` and `JavaModelPoseClientGameTest` measure, and
+  `ParticleClientGameTest` has the player type `/bedrock particle` and has Java's own `/particle`
+  make the one particle Java makes of any type.
 
   Four more things name the game's own items and blocks by Bedrock's ids, each of which Java's
   parser refuses as written and refuses whole: `loot_tables/names.json` drops `golden_rail`,
   `muttonRaw` and `wool` with a data value of fourteen, `recipes/lantern_from_rail.json` crafts a
   `lit_pumpkin` out of a `golden_rail`, `functions/names.mcfunction` gives `record_13` and places a
-  `golden_rail` and a `wool` written with `["color"="red"]`, and `/scriptevent "tp:names" <x> <y> <z>`
+  `golden_rail` and a `wool` written with `["color"="red"]`, and `/bedrock scriptevent tp:names <x> <y> <z>`
   has the script read a powered rail's `typeId` and place a `BlockPermutation` resolved from
   `minecraft:lit_pumpkin`. `NamesGameTests` reads each back as the Java item or block, and every
   one of the four fails when the mapping is taken out.
@@ -583,8 +613,9 @@ These are the checks it runs, and what each one catches:
   python3 tools/testpack/build_gametests.py --version 26.2
   ```
 
-  Started from the server console, `gametest run probe:floor_is_stone` has to answer `passed` and
-  `gametest run probe:diamond_is_missing` has to answer with the message the assertion raised. A
+  Started from the server console, `bedrock gametest run probe:floor_is_stone` has to answer
+  `passed` and `bedrock gametest run probe:diamond_is_missing` has to answer with the message the
+  assertion raised. A
   test only advances while the server ticks, so a server left empty past its
   `pause-when-empty-seconds` reaches no verdict at all; set it to `0` to work at that pace by hand.
   `verify.py` runs its tests well inside the default minute.
@@ -620,7 +651,7 @@ These are the checks it runs, and what each one catches:
 
   A green `run` proves the mod started, every mixin applied, the packs converted and registered, the
   server reached `Done (`, and no pack script hit a missing `@minecraft/server` member while the
-  pack's own entities were summoned and killed. It also types `gametest runall`, which is why the
+  pack's own entities were summoned and killed. It also types `bedrock gametest runall`, which is why the
   probe pack ships one test written to pass and one written to fail: a run has to report both, so a
   run where every test silently never started fails the same way as one where a test broke. It
   proves nothing about rendering.
@@ -1153,7 +1184,7 @@ plays once and stays finished while it is asked for, and `q.any_animation_finish
 counting once it has come round the first time. An effect a clip fires at a locator is born where
 the drawn model carries that locator, through its bone's pose.
 
-**A clip played on a mob Java draws moves Java's model of it.** `/playanimation` on a vanilla
+**A clip played on a mob Java draws moves Java's model of it.** `/bedrock playanimation` on a vanilla
 villager names the bones of Bedrock's own villager geometry, so `JavaModelPoses` runs the clip on an
 animator of its own and `JavaModelParts` finds each bone among the model's parts: the same name
 compared without case or underscores first, then the short `ALIASES` table for what Bedrock numbers
@@ -1417,14 +1448,26 @@ check when reading a component for the first time:
   disagrees with it. The doc modules under `metadata/doc_modules/` carry Mojang's own default and
   type per field, which is what to read it against.
 
-**A command a pack runs goes through `server.PackCommand`.** A script, an entity event, a timeline,
-a dialogue scene and a block all hand over Bedrock's dialect, which `Functions.line` translates
-exactly as it does a function file's line, as the add-on that wrote it so a bare function name
-reaches that add-on's function. `FunctionNames` is what a bare name is looked up in: every add-on's
-functions, the caller's first. The line then runs in an execution context of its own, because from
-1.20.3 the dispatcher alone refuses a `function` and the server's context runs a line queued during
-another command only once that command is done. A new path that runs a pack's commands takes the
-issuing add-on's namespace and a `CommandReport`, never the dispatcher directly.
+**Java's command tree stays Java's, and every Bedrock line goes through `/bedrock`.** The only
+commands this mod adds to Java's tree are `/bedrock` and `/mcaddon`; it adds no option to Java's
+selector and changes no command Java has, so a Java data pack's line means what it means without
+this mod. A Bedrock command Java has not got is registered in the tree `server.BedrockTree` builds,
+which holds Java's own commands beside them and an `execute` whose `run` looks there too, and
+`/bedrock <line>` is the one way in, for an operator and for a Java data pack's function alike.
+
+`server.PackCommand` is the interpreter behind it. `Functions.line` translates the line as the
+add-on that wrote it, so a bare function name reaches that add-on's function through
+`FunctionNames`, the caller's first; `server.CarriedItems` answers each `hasitem` with a tag that
+names the run and comes off when it ends; and the line is read against the Bedrock tree. A converted
+function file holds `bedrock <the line>` for every line, with a bare call another add-on also ships
+written as the id its own add-on reaches, and from 1.20.3 `/bedrock` queues the line onto the
+execution that is running it, so the command limit, a function's depth and `execute store` hold
+across it. A script, an entity event, a timeline, a dialogue scene and a block hand their lines to
+`PackCommand` directly, which runs each to its end in an execution context of its own with the
+authority of a function, because the server's context runs a line queued during another command
+only once that command is done. A new path that runs a pack's commands takes the issuing add-on's
+namespace and a `CommandReport`, never a dispatcher directly, and a new Bedrock command goes into
+`BedrockCommands`, never into Java's tree.
 
 **A gap and an answer are counted apart.** A command the game read and then declined, a selector that
 matched nothing, a structure holding a chest this cannot fill: those are listed after the verdict
@@ -1483,8 +1526,9 @@ src/main/java/at/ioexception/mcaddon/
   structure/                 Bedrock `.mcstructure` reading, whose NBT is little endian
   entity/                    The one mob class every add-on entity uses
   block/                     The block class that carries a pack's own states
-  server/                    Server lifecycle, commands, sensors, entity events, property sync,
-                             and the NPC dialogue an add-on's own screen is opened from
+  server/                    Server lifecycle, `/bedrock` and the tree it reads a line against,
+                             sensors, entity events, property sync, and the NPC dialogue an
+                             add-on's own screen is opened from
   gametest/                  The Mojang game tests, reached through the fabric-gametest entrypoint
   client/render/             Renderer, attachable layer, pass resolution, what only a client answers
   client/screen/             The screen a Bedrock form becomes

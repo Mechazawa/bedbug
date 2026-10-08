@@ -23,7 +23,8 @@ import java.util.List;
  * wrote; and items, with the pose they were hung at, their light and their tints.
  */
 public final class Submitted {
-    public record Vertex(float x, float y, float z, int colour, float u, float v, int light) {
+    /** The light and the overlay are packed the way a vertex carries them, U in the low half. */
+    public record Vertex(float x, float y, float z, int colour, float u, float v, int light, int overlay) {
     }
 
     public record Geometry(RenderType renderType, List<Vertex> vertices) {
@@ -136,10 +137,11 @@ public final class Submitted {
         private float u;
         private float v;
         private int light;
+        private int overlay;
         private boolean open;
 
         private void close() {
-            if (open) vertices.add(new Vertex(x, y, z, colour, u, v, light));
+            if (open) vertices.add(new Vertex(x, y, z, colour, u, v, light, overlay));
             open = false;
         }
 
@@ -173,6 +175,7 @@ public final class Submitted {
 
         @Override
         public VertexConsumer setUv1(int u, int v) {
+            this.overlay = u | v << 16;
             return this;
         }
 

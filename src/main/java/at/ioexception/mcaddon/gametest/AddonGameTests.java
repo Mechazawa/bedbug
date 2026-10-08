@@ -5,10 +5,7 @@ import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.script.ScriptHost;
 import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.ServerHooks;
-import com.mojang.brigadier.ParseResults;
-import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
-import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -55,17 +52,17 @@ public final class AddonGameTests {
     /**
      * The Bedrock commands this mod adds accept what a pack writes.
      *
-     * Parsing is what a `.mcfunction` line and a command block depend on, and it reaches the
-     * argument tree without needing a target to exist.
+     * Reading is what every Bedrock line depends on, and it reaches the argument tree without
+     * needing a target to exist.
      */
     @GameTest()
     public void bedrockCommandsParse(GameTestHelper helper) {
-        parses(helper, "playanimation @e animation.walk");
-        parses(helper, "playanimation @e animation.walk next.state 0.5 q.is_alive");
-        parses(helper, "event entity @e mcaddon:test_event");
+        BedrockLines.parses(helper, "playanimation @e animation.walk");
+        BedrockLines.parses(helper, "playanimation @e animation.walk next.state 0.5 q.is_alive");
+        BedrockLines.parses(helper, "event entity @e mcaddon:test_event");
         // Bedrock writes the port or leaves it out, and the line reaches the command as it stands.
-        parses(helper, "transfer @a \"example.test\"");
-        parses(helper, "transfer @a \"example.test\" 25565");
+        BedrockLines.parses(helper, "transfer @a \"example.test\"");
+        BedrockLines.parses(helper, "transfer @a \"example.test\" 25565");
         helper.succeed();
     }
 
@@ -78,21 +75,21 @@ public final class AddonGameTests {
      */
     @GameTest()
     public void cameraCommandsParse(GameTestHelper helper) {
-        parses(helper, "camera @a clear");
-        parses(helper, "camera @a set minecraft:free");
-        parses(helper, "camera @a set free rot 30 -90");
-        parses(helper, "camera @a set minecraft:free pos 1 2 3");
-        parses(helper, "camera @a set minecraft:free pos ~ ~ ~ rot 0 0");
-        parses(helper, "camera @a set minecraft:third_person ease 2 in_out_quad");
-        parses(helper, "camera @a set minecraft:third_person_front ease 0.5 linear pos 1 2 3 rot 0 0");
-        parses(helper, "camerashake add @a");
-        parses(helper, "camerashake add @a 0.5");
-        parses(helper, "camerashake add @a 0.5 3");
-        parses(helper, "camerashake add @a 0.5 3 rotational");
-        parses(helper, "camerashake stop @a");
-        parses(helper, "fog @a push minecraft:fog_crimson_forest \"my fog\"");
-        parses(helper, "fog @a pop \"my fog\"");
-        parses(helper, "fog @a remove \"my fog\"");
+        BedrockLines.parses(helper, "camera @a clear");
+        BedrockLines.parses(helper, "camera @a set minecraft:free");
+        BedrockLines.parses(helper, "camera @a set free rot 30 -90");
+        BedrockLines.parses(helper, "camera @a set minecraft:free pos 1 2 3");
+        BedrockLines.parses(helper, "camera @a set minecraft:free pos ~ ~ ~ rot 0 0");
+        BedrockLines.parses(helper, "camera @a set minecraft:third_person ease 2 in_out_quad");
+        BedrockLines.parses(helper, "camera @a set minecraft:third_person_front ease 0.5 linear pos 1 2 3 rot 0 0");
+        BedrockLines.parses(helper, "camerashake add @a");
+        BedrockLines.parses(helper, "camerashake add @a 0.5");
+        BedrockLines.parses(helper, "camerashake add @a 0.5 3");
+        BedrockLines.parses(helper, "camerashake add @a 0.5 3 rotational");
+        BedrockLines.parses(helper, "camerashake stop @a");
+        BedrockLines.parses(helper, "fog @a push minecraft:fog_crimson_forest \"my fog\"");
+        BedrockLines.parses(helper, "fog @a pop \"my fog\"");
+        BedrockLines.parses(helper, "fog @a remove \"my fog\"");
         helper.succeed();
     }
 
@@ -103,9 +100,9 @@ public final class AddonGameTests {
         helper.assertTrue(target != null, "minecraft:armor_stand could not be created.");
 
         String selector = target.getStringUUID();
-        helper.assertTrue(run(helper, "playanimation " + selector + " animation.walk") == 1,
+        helper.assertTrue(BedrockLines.run(helper, "playanimation " + selector + " animation.walk") == 1,
             "/playanimation reached no target.");
-        helper.assertTrue(run(helper, "event entity " + selector + " mcaddon:no_such_event") == 0,
+        helper.assertTrue(BedrockLines.run(helper, "event entity " + selector + " mcaddon:no_such_event") == 0,
             "/event fired an event nothing declares.");
         helper.succeed();
     }
@@ -123,7 +120,7 @@ public final class AddonGameTests {
             Platform.respawnAt(player, helper.getLevel(), helper.absolutePos(STAND));
             helper.assertTrue(Platform.respawnPosition(player) != null,
                 "The player was given no spawn point to clear.");
-            helper.assertTrue(run(helper, "clearspawnpoint " + player.getScoreboardName()) == 1,
+            helper.assertTrue(BedrockLines.run(helper, "clearspawnpoint " + player.getScoreboardName()) == 1,
                 "/clearspawnpoint reached no player.");
             helper.assertTrue(Platform.respawnPosition(player) == null,
                 "/clearspawnpoint left the player's spawn point where it was.");
@@ -257,24 +254,5 @@ public final class AddonGameTests {
         Platform.placeAt(entity, where.getX() + 0.5, where.getY(), where.getZ() + 0.5, 0f, 0f);
         level.addFreshEntity(entity);
         return entity;
-    }
-
-    private static void parses(GameTestHelper helper, String command) {
-        MinecraftServer server = helper.getLevel().getServer();
-        CommandSourceStack source = server.createCommandSourceStack();
-        ParseResults<CommandSourceStack> parsed = server.getCommands().getDispatcher().parse(command, source);
-
-        helper.assertTrue(parsed.getExceptions().isEmpty() && !parsed.getReader().canRead(),
-            "/" + command + " does not parse.");
-    }
-
-    private static int run(GameTestHelper helper, String command) {
-        MinecraftServer server = helper.getLevel().getServer();
-        try {
-            return server.getCommands().getDispatcher().execute(command, server.createCommandSourceStack());
-        } catch (CommandSyntaxException error) {
-            helper.fail("/" + command + " did not run: " + error.getMessage());
-            return 0;
-        }
     }
 }

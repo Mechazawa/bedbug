@@ -18,6 +18,9 @@ import java.util.function.Predicate;
  * calls the head, the right leg and the hat, and scales `held_item`, which Java's villager has no
  * part for. `animation.tp.vanilla.sway` loops, turning `leg1`, so only the stop expression it is
  * played with can end it, and the blend out it is played with lets it go over two seconds.
+ *
+ * The first clip is played by a Java data pack's function this test mod ships, whose line runs it
+ * through `/bedrock`.
  */
 public final class JavaModelPoseClientGameTest implements FabricClientGameTest {
     private static final float TOLERANCE = 1e-4f;
@@ -44,7 +47,7 @@ public final class JavaModelPoseClientGameTest implements FabricClientGameTest {
 
     private static void duck(ClientGameTestContext context, TestSingleplayerContext world, LivingEntity villager,
         Map<String, PosedParts.Part> own) {
-        world.getServer().runCommand("playanimation @e[type=minecraft:villager] animation.tp.vanilla.duck");
+        world.getServer().runCommand("function mcaddon_gametest:duck");
         Map<String, PosedParts.Part> ducked = waitForPose(context, villager,
             parts -> parts.get("head").xScale() == 0f,
             "animation.tp.vanilla.duck was played on a villager and its head was never scaled to nothing.");
@@ -73,7 +76,7 @@ public final class JavaModelPoseClientGameTest implements FabricClientGameTest {
     private static void sway(ClientGameTestContext context, TestSingleplayerContext world, LivingEntity villager,
         Map<String, PosedParts.Part> own) {
         float rest = own.get("left_leg").zRot();
-        world.getServer().runCommand("playanimation @e[type=minecraft:villager] animation.tp.vanilla.sway"
+        world.getServer().runCommand("bedrock playanimation @e[type=minecraft:villager] animation.tp.vanilla.sway"
             + " none 2 \"q.anim_time > 1\"");
         waitForPose(context, villager, parts -> Math.abs(parts.get("left_leg").zRot() - rest - SWAY) < TOLERANCE,
             "animation.tp.vanilla.sway was played on a villager and its left leg never rolled by 30 degrees.");

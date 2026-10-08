@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Coverage of Bedrock's published command vocabulary against what this mod translates.
 
-A `.mcfunction` is the one part of a pack Java refuses by halves: one line its parser rejects costs
-the whole file. `/mcaddon packs` reports what a loaded pack asked for, which only ever sees the
-commands that pack happens to use. This reads Mojang's own command metadata instead and compares it
-against `convert/Functions.java` and the commands this mod registers, so the answer needs no pack
-and no running game.
+Every Bedrock line reaches the game through `/bedrock`: a function file's lines, a script's, an
+entity event's and an operator's. Each is translated by `convert/Functions.java` and read against the
+tree `server/BedrockTree.java` builds, which holds Java's own commands beside the Bedrock commands
+this mod registers there, and a line that cannot be translated does not run. `/mcaddon packs`
+reports what a loaded pack asked for, which only ever sees the commands that pack happens to use.
+This reads Mojang's own command metadata instead and compares it against the translation and the
+commands registered in that tree, so the answer needs no pack and no running game.
 
 The published side is `metadata/command_modules/mojang-commands.json` from `bedrock-samples`. Fetch
 it once with:
@@ -21,8 +23,9 @@ vocabulary of blocks, items, entities or biomes, which is data rather than gramm
 rules** are the two rule enums, which matter because Bedrock writes a rule name in lower case and
 Java's parser is case sensitive.
 
-A name counts as translated when this mod rewrites it, registers a command of its own for it, or
-declares that Java's parser reads the Bedrock line under the same name or under another one. That
+A name counts as translated when this mod rewrites it, registers a command of its own for it in the
+Bedrock tree, or declares that Java's parser reads the Bedrock line under the same name or under
+another one. That
 last group is a claim rather than a measurement, the same kind `AddonEntities.IMPLEMENTED` makes, so
 the commands resting on it are listed at the end for a reader to audit.
 
@@ -36,8 +39,8 @@ what the percentage counts:
 * **rewritten**: the translation spells the literal out and decides what to do with it.
 * **dropped**: its command is named in `Functions.BEDROCK_ONLY`, so the keyword goes with it, or
   `Functions.BEDROCK_ONLY_KEYWORDS` names this one form of a command that otherwise translates. The
-  line carrying one is left out and the form is reported through `AddonEntities.unsupported`. A
-  dropped keyword never counts as covered, whatever literals the source happens to carry.
+  line carrying one does not run and the form is reported where the line was run from. A dropped
+  keyword never counts as covered, whatever literals the source happens to carry.
 
 Nothing else counts. The report ends with the check that says so, for names, keywords and game rules
 alike: one that is missing and is not named as having no Java counterpart would be a gap nobody
@@ -59,7 +62,7 @@ JAVA = ROOT / "src/main/java/at/ioexception/mcaddon"
 FUNCTIONS = JAVA / "convert/Functions.java"
 # `CameraView` is here because the preset words `/camera set` accepts are its enum rather than a
 # literal in the command tree, and those words are keywords the metadata counts.
-REGISTRATIONS = (JAVA / "server/BedrockCommands.java", JAVA / "server/ServerHooks.java",
+REGISTRATIONS = (JAVA / "server/BedrockCommands.java", JAVA / "server/Dialogues.java",
                  JAVA / "bedrock/camera/CameraView.java")
 DEFAULT_SAMPLES = ROOT / "scratchpad/bedrock/bedrock-samples"
 

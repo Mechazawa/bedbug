@@ -19,6 +19,7 @@ import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.convert.ConvertedPack;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.phys.AABB;
 
@@ -41,10 +42,18 @@ public final class AddonModels {
     /**
      * One pass: a baked model, the texture to draw it with, the bones it draws and its tint.
      *
-     * `colour` is packed ARGB and multiplies the texture, white leaving it as it is.
+     * `colour` is packed ARGB and multiplies the texture, white leaving it as it is. `redWhenHurt` is
+     * false for a pass whose controller states an `is_hurt_color`, which replaces the red Bedrock
+     * otherwise flashes a hurt entity with and is folded into `colour` instead.
      */
     public record Pass(BakedGeometry geometry, Identifier texture, PartVisibility visibility, UvShift shift,
-        MaterialDefinition material, int colour, boolean ignoresLighting, float lightMultiplier) {
+        MaterialDefinition material, int colour, boolean ignoresLighting, float lightMultiplier,
+        boolean redWhenHurt) {
+        /** The overlay Java's entity shaders lay over the pass: the red of a hit, or none at all. */
+        public int overlay(boolean hurt) {
+            return OverlayTexture.pack(OverlayTexture.u(0f), OverlayTexture.v(hurt && redWhenHurt));
+        }
+
         /**
          * What this pass draws under: the light around the entity, or none of it, scaled by what
          * the controller asked for.
@@ -141,7 +150,7 @@ public final class AddonModels {
                 definition.identifier());
         }
         return List.of(new Pass(geometry, textureId(texturePath), PartVisibility.EVERYTHING,
-            UvShift.NONE, null, OPAQUE_WHITE, false, 1f));
+            UvShift.NONE, null, OPAQUE_WHITE, false, 1f, true));
     }
 
     private Pass resolvePass(RenderController controller, ClientEntityDefinition definition,
@@ -184,7 +193,7 @@ public final class AddonModels {
             number(controller.uvScaleV(), environment, 1f));
         return new Pass(geometry, texture, new PartVisibility(visibility), shift, material,
             tint(controller, environment), controller.ignoresLighting(),
-            number(controller.lightMultiplier(), environment, 1f));
+            number(controller.lightMultiplier(), environment, 1f), controller.hurt() == null);
     }
 
     /** Opaque white, which leaves a texture drawn as it was painted. */
@@ -193,8 +202,12 @@ public final class AddonModels {
     /** The tint of a group that declares nothing, so an undeclared channel changes no pixel. */
     private static final int TRANSPARENT = 0;
 
-    /** The two conditions a controller may tint under, which only the entity's own state answers. */
-    private static final MolangExpression HURT = MolangParser.parse("query.hurt_time > 0");
+    /**
+     * The two conditions a controller may tint under, which only the entity's own state answers.
+     *
+     * Hurt covers dying as well, which is when Bedrock's own ender dragon fades its hurt colour out.
+     */
+    private static final MolangExpression HURT = MolangParser.parse("query.hurt_time > 0 || !query.is_alive");
     private static final MolangExpression ON_FIRE = MolangParser.parse("query.is_on_fire");
 
     /**
@@ -264,7 +277,7 @@ public final class AddonModels {
         Identifier texture = Platform.id(glow.substring(0, colon),
             "textures/" + glow.substring(colon + 1) + ".png");
         return new Pass(pass.geometry(), texture, pass.visibility(), pass.shift(), EMISSIVE,
-            pass.colour(), pass.ignoresLighting(), pass.lightMultiplier());
+            pass.colour(), pass.ignoresLighting(), pass.lightMultiplier(), pass.redWhenHurt());
     }
 
     /** The material an extracted emissive layer is drawn with: lit, and blended over what is below. */

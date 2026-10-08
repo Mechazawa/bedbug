@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * What Bedrock's `hasitem` selector argument asks for, read the way Java's selector parser hands
+ * What Bedrock's `hasitem` selector argument asks for, read the way `CarriedItems` hands
  * it over: from just after the `=`, leaving whatever follows the value for the parser.
  */
 class HasItemTest {

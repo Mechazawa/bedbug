@@ -112,7 +112,7 @@ public final class AttachableClientGameTest implements FabricClientGameTest {
         world.getServer().runCommand("item replace entity @e[type=tp:prism] weapon.mainhand with minecraft:stick");
         Frames.waitFor(context, prism, frame -> frame.items().size() == 1,
             "tp:prism held a stick while its hide_held_items expression is false, and the stick was never drawn.");
-        world.getServer().runCommand("event entity @e[type=tp:prism] tp:prism_mark");
+        world.getServer().runCommand("bedrock event entity @e[type=tp:prism] tp:prism_mark");
         Frames.waitFor(context, prism, frame -> frame.items().isEmpty(),
             "tp:prism's hide_held_items expression became true and its stick was still drawn.");
     }

@@ -9,7 +9,6 @@ import at.ioexception.mcaddon.script.CustomCommands;
 import at.ioexception.mcaddon.script.ScriptHost;
 import at.ioexception.mcaddon.state.AddonState;
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
@@ -303,6 +302,7 @@ public final class ServerHooks {
     private static void tick(MinecraftServer server) {
         if (scripts != null) scripts.tick(server.getTickCount());
         WorldEvents.endTick(server);
+        CarriedItems.finishAll();
         if (state != null && server.getTickCount() % 1200 == 0) state.save();
     }
 
@@ -335,23 +335,12 @@ public final class ServerHooks {
     }
 
     /**
-     * `scriptevent` is how a behaviour pack's data half talks to its script half, fired from entity
-     * events, animation timelines and functions. Without it, half of a pack's logic never runs.
+     * Java's tree gains `/bedrock`, which every Bedrock command is reached through, and `/mcaddon`,
+     * which reports what the packs asked for.
      */
     private static void registerCommands(CommandDispatcher<CommandSourceStack> dispatcher,
         CommandBuildContext context, Commands.CommandSelection selection) {
-        BedrockCommands.register(dispatcher);
-
-        // A script event id carries the namespace of the pack that declared it, and Brigadier reads
-        // a colon only inside quotes, which is how the translated form of the command writes it.
-        dispatcher.register(Commands.literal("scriptevent")
-            .then(Commands.argument("id", StringArgumentType.string())
-                .then(Commands.argument("message", StringArgumentType.greedyString())
-                    .executes(command -> scriptEvent(command.getSource(),
-                        StringArgumentType.getString(command, "id"),
-                        StringArgumentType.getString(command, "message"))))
-                .executes(command -> scriptEvent(command.getSource(),
-                    StringArgumentType.getString(command, "id"), ""))));
+        BedrockTree.register(dispatcher, context);
 
         dispatcher.register(Commands.literal("mcaddon")
             .then(Commands.literal("packs").executes(command -> {
@@ -377,7 +366,11 @@ public final class ServerHooks {
             })));
     }
 
-    private static int scriptEvent(CommandSourceStack source, String id, String message) {
+    /**
+     * `scriptevent` is how a behaviour pack's data half talks to its script half, fired from entity
+     * events, animation timelines and functions. Without it, half of a pack's logic never runs.
+     */
+    static int scriptEvent(CommandSourceStack source, String id, String message) {
         if (scripts == null) return 0;
 
         Map<String, Object> fields = new LinkedHashMap<>();

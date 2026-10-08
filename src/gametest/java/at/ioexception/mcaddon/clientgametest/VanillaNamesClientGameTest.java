@@ -54,7 +54,7 @@ public final class VanillaNamesClientGameTest implements FabricClientGameTest {
                     .anyMatch(orb -> javaId(orb).equals("minecraft:experience_orb")), WAIT_TICKS,
                 "An experience orb spawned and the script never read its typeId as minecraft:xp_orb.");
 
-            world.getServer().runCommand("execute as @a run scriptevent \"tp:villager\"");
+            world.getServer().runCommand("bedrock execute as @a run scriptevent tp:villager");
             Worlds.waitForServer(context, game, server -> !tagged(server, "tp:spawned_as_villager_v2").isEmpty(),
                 WAIT_TICKS, "spawnEntity(\"minecraft:villager_v2\") spawned nothing.");
             String spawned = world.getServer()
@@ -64,7 +64,7 @@ public final class VanillaNamesClientGameTest implements FabricClientGameTest {
 
             // Three sprites spawned by the script come back from a query each tick, and each has to be
             // the object spawnEntity answered with, the second and third as much as the first.
-            world.getServer().runCommand("execute as @a run scriptevent \"tp:sprites\"");
+            world.getServer().runCommand("bedrock execute as @a run scriptevent tp:sprites");
             Worlds.waitForServer(context, game,
                 server -> tagged(server, "tp:same_object_as_spawned").size() >= 3, WAIT_TICKS,
                 "A sprite the script spawned came back from getEntities as a different object.");
