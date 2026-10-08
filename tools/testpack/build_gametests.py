@@ -2,8 +2,8 @@
 """Builds the add-on that proves a pack's own `@minecraft/server-gametest` tests run.
 
 The pack registers two tests, one that passes and one that fails, and both name the structure the
-pack ships. `/gametest run probe:floor_is_stone` has to report a pass and
-`/gametest run probe:diamond_is_missing` has to report the failure with its message.
+pack ships. `/bedrock gametest run probe:floor_is_stone` has to report a pass and
+`/bedrock gametest run probe:diamond_is_missing` has to report the failure with its message.
 
 Everything it ships is written here: a manifest and one script under `gametests/`, and the
 `.mcstructure` is written by this script rather than exported from the game, so no file in this
