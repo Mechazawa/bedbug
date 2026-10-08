@@ -8,6 +8,7 @@ import at.ioexception.mcaddon.platform.Platform;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.Identifier;
 
 import java.util.function.Predicate;
@@ -46,6 +47,13 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
      */
     private static final int DYED_AND_MARKED = 0xFF407FFF;
     private static final int ON_FIRE = 0xFFFF0000;
+    /** Green laid over white at half, which eight bits of alpha carry as 128 parts in 255. */
+    private static final int HURT_GREEN = 0xFF7FFF7F;
+
+    private static final int NO_OVERLAY = OverlayTexture.NO_OVERLAY;
+    private static final int HURT_RED = OverlayTexture.pack(OverlayTexture.u(0f), OverlayTexture.v(true));
+
+    private static final int PATIENCE = 100;
 
     @Override
     public void runTest(ClientGameTestContext context) {
@@ -54,7 +62,79 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
             prism(context, world);
             newestDefinition(context, world);
             dimmedLight(context, world);
+            hurtRed(context, world);
+            hurtColour(context, world);
         }
+    }
+
+    /**
+     * A hurt `tp:sprite` is drawn red for as long as the hit lasts and plain once it is over.
+     *
+     * Neither of its controllers states an `is_hurt_color`, so the red is the one every Bedrock entity
+     * flashes, which Java's entity shaders draw from the overlay a vertex carries.
+     */
+    private static void hurtRed(ClientGameTestContext context, TestSingleplayerContext world) {
+        Entities.discardAll(context, world.getServer(), "tp:sprite");
+        world.getServer().runCommand("summon tp:sprite ~3 ~ ~-3 {NoAI:1b}");
+        AddonEntity sprite = Entities.waitForClient(context, "tp:sprite");
+        Submitted whole = Frames.waitFor(context, sprite, frame -> !frame.geometry().isEmpty(),
+            "tp:sprite has a client definition and nothing was drawn for it.");
+        Assert.that(overlays(whole, NO_OVERLAY), "an unhurt tp:sprite was drawn with the overlay "
+            + overlayOf(whole) + " where none was expected.");
+
+        world.getServer().runCommand("damage @e[type=tp:sprite,limit=1] 1");
+        Frames.waitFor(context, sprite, frame -> overlays(frame, HURT_RED),
+            last -> "tp:sprite was hurt and was drawn with the overlay " + overlayOf(last) + " rather than Java's red, "
+                + HURT_RED + ".");
+        for (int tick = 0; tick < PATIENCE; tick++) {
+            Hurt seen = context.computeOnClient(client -> new Hurt(sprite.hurtTime, Submitted.entity(sprite)));
+            int wanted = seen.hurtTime() > 0 ? HURT_RED : NO_OVERLAY;
+            Assert.that(overlays(seen.frame(), wanted), "tp:sprite with " + seen.hurtTime() + " ticks of its hit"
+                + " left was drawn with the overlay " + overlayOf(seen.frame()) + " where " + wanted
+                + " was expected.");
+            if (seen.hurtTime() == 0) return;
+            context.waitTick();
+        }
+        throw new AssertionError("tp:sprite's hit never ran out.");
+    }
+
+    /**
+     * A hurt `tp:prism` takes its controller's `is_hurt_color` instead of the red: green laid over its
+     * white at half, and no overlay, for as long as the hit lasts.
+     */
+    private static void hurtColour(ClientGameTestContext context, TestSingleplayerContext world) {
+        Entities.discardAll(context, world.getServer(), "tp:prism");
+        world.getServer().runCommand("summon tp:prism ~-3 ~ ~-3 {NoAI:1b}");
+        AddonEntity prism = Entities.waitForClient(context, "tp:prism");
+        Frames.waitFor(context, prism, frame -> !frame.geometry().isEmpty() && colours(frame.geometry().get(0), WHITE),
+            last -> "an unhurt tp:prism was drawn in " + colourOf(last) + " rather than white.");
+
+        world.getServer().runCommand("damage @e[type=tp:prism,limit=1] 1");
+        Submitted hurt = Frames.waitFor(context, prism, frame -> colours(frame.geometry().get(0), HURT_GREEN),
+            last -> "tp:prism's is_hurt_color lays green over it at half while it is hurt, which is "
+                + Integer.toHexString(HURT_GREEN) + ", and it was drawn in " + colourOf(last) + ".");
+        Assert.that(overlays(hurt, NO_OVERLAY), "tp:prism states an is_hurt_color, which replaces the red,"
+            + " and it was drawn with the overlay " + overlayOf(hurt) + ".");
+        Frames.waitFor(context, prism, frame -> prism.hurtTime == 0 && colours(frame.geometry().get(0), WHITE),
+            last -> "tp:prism's hit ran out and it was drawn in " + colourOf(last) + " rather than white again.");
+    }
+
+    private record Hurt(int hurtTime, Submitted frame) {
+    }
+
+    private static boolean overlays(Submitted frame, int overlay) {
+        return !frame.geometry().isEmpty() && frame.geometry().stream()
+            .allMatch(piece -> everyVertex(piece, vertex -> vertex.overlay() == overlay));
+    }
+
+    private static String colourOf(Submitted frame) {
+        return frame.geometry().isEmpty() || frame.geometry().get(0).vertices().isEmpty() ? "nothing"
+            : Integer.toHexString(frame.geometry().get(0).vertices().get(0).colour());
+    }
+
+    private static String overlayOf(Submitted frame) {
+        return frame.geometry().isEmpty() || frame.geometry().get(0).vertices().isEmpty() ? "nothing"
+            : String.valueOf(frame.geometry().get(0).vertices().get(0).overlay());
     }
 
     private static void prism(ClientGameTestContext context, TestSingleplayerContext world) {
