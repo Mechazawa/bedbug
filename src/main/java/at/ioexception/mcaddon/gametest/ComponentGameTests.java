@@ -715,6 +715,59 @@ public final class ComponentGameTests {
     private static final int TEMPT_TICKS = 6;
 
     /**
+     * A group bringing a lit fuse goes off once `fuse_length` has burned, with nothing to kill it.
+     *
+     * The lit group's fuse is half a second, so the ember is still there just after the group
+     * arrives and gone, with the ember beside it hurt, half a second later.
+     */
+    @GameTest()
+    public void aLitFuseGoesOffWhenItHasBurned(GameTestHelper helper) {
+        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER);
+        AddonEntity bystander = BehaviourGameTests.spawn(helper, EMBER, STAND.east(1));
+        if (ember == null || bystander == null) {
+            helper.succeed();
+            return;
+        }
+
+        float whole = bystander.getHealth();
+        EntityEvents.trigger(ember, "tp:ember_light", null, ServerHooks.state());
+        helper.assertTrue(ember.isAlive(), EMBER + " burns a half second fuse and went off at once.");
+
+        live(ember, FUSE_TICKS);
+        helper.assertTrue(ember.isRemoved(), EMBER + " burned its fuse down and never went off.");
+        helper.assertTrue(bystander.getHealth() < whole || !bystander.isAlive(),
+            EMBER + " went off and the ember beside it was not hurt.");
+        helper.succeed();
+    }
+
+    /** Past the half second the lit group's fuse burns, in Java's ticks. */
+    private static final int FUSE_TICKS = 11;
+
+    /**
+     * A home holds the entity to it only when its `restriction_type` says to.
+     *
+     * Bedrock's default is no restriction, which is what an empty `minecraft:home` is for; the
+     * nesting group asks for its wandering to stay within five blocks.
+     */
+    @GameTest()
+    public void aHomeHoldsTheEntityOnlyWhenItsRestrictionSaysSo(GameTestHelper helper) {
+        AddonEntity remembering = BehaviourGameTests.spawn(helper, EMBER);
+        AddonEntity nesting = BehaviourGameTests.spawn(helper, EMBER, MIDDLE);
+        if (remembering == null || nesting == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(remembering, "tp:ember_remember", null, ServerHooks.state());
+        EntityEvents.trigger(nesting, "tp:ember_nest", null, ServerHooks.state());
+        helper.assertFalse(Platform.hasHome(remembering),
+            EMBER + " has a home that restricts nothing and is held to it.");
+        helper.assertTrue(Platform.hasHome(nesting),
+            EMBER + " has a home that restricts its wandering and wanders freely.");
+        helper.succeed();
+    }
+
+    /**
      * Runs the entity's own ticks the way the level does, which counts its age first: Java's goals
      * tell one blow from the next by the age it landed at.
      */

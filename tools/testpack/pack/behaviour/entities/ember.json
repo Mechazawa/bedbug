@@ -454,6 +454,23 @@
           "stop_distance": 1
         }
       },
+      "tp:ember_lit": {
+        "minecraft:explode": {
+          "fuse_length": 0.5,
+          "fuse_lit": true,
+          "power": 1,
+          "breaks_blocks": false
+        }
+      },
+      "tp:ember_remembering": {
+        "minecraft:home": {}
+      },
+      "tp:ember_nesting": {
+        "minecraft:home": {
+          "restriction_type": "random_movement",
+          "restriction_radius": 5
+        }
+      },
       "tp:ember_alert": {
         "minecraft:timer": {
           "time": 1.0,
@@ -657,6 +674,21 @@
       "tp:ember_hunger": {
         "add": {
           "component_groups": ["tp:ember_peckish"]
+        }
+      },
+      "tp:ember_light": {
+        "add": {
+          "component_groups": ["tp:ember_lit"]
+        }
+      },
+      "tp:ember_remember": {
+        "add": {
+          "component_groups": ["tp:ember_remembering"]
+        }
+      },
+      "tp:ember_nest": {
+        "add": {
+          "component_groups": ["tp:ember_nesting"]
         }
       },
       "tp:ember_winter": {

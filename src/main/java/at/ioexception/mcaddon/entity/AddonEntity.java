@@ -612,6 +612,7 @@ public class AddonEntity extends PathfinderMob
             (float) liveNumber("minecraft:variable_max_auto_step", "base_value", 0.6));
 
         refreshBreath();
+        refreshFuse();
         refreshHome();
         refreshContainer();
         releaseLeadsAGroupTook();
@@ -659,6 +660,37 @@ public class AddonEntity extends PathfinderMob
     }
 
     private Breath breath;
+
+    /**
+     * Lights the fuse of a `minecraft:explode` that arrives with `fuse_lit`, and puts it out again
+     * when the component goes.
+     *
+     * This is how a Bedrock creeper goes off: its sensor adds the group carrying the explosion, and
+     * the fuse that group lights burns for `fuse_length` seconds, a range a random point of which is
+     * taken. A negative length goes off at once. A fuse already burning keeps the time it has left.
+     */
+    private void refreshFuse() {
+        com.google.gson.JsonObject explode = liveComponent("minecraft:explode");
+        if (explode == null || !Goals.flag(explode, "fuse_lit", false)) {
+            fuseEndsAt = -1;
+            return;
+        }
+        if (fuseEndsAt >= 0) return;
+
+        double low = Goals.low(explode, "fuse_length", 0);
+        double high = Math.max(low, Goals.high(explode, "fuse_length", low));
+        double seconds = low + random.nextDouble() * (high - low);
+        fuseEndsAt = tickCount + Math.max(0, (int) (seconds * Goals.TICKS_PER_SECOND));
+    }
+
+    private int fuseEndsAt = -1;
+
+    private void burnFuse() {
+        if (fuseEndsAt >= 0 && tickCount >= fuseEndsAt) {
+            fuseEndsAt = -1;
+            detonate();
+        }
+    }
 
     @Override
     public int getMaxAirSupply() {
@@ -718,6 +750,14 @@ public class AddonEntity extends PathfinderMob
     private void refreshHome() {
         String component = declaresNow("minecraft:home") ? "minecraft:home"
             : declaresNow("minecraft:dweller") ? "minecraft:dweller" : null;
+        // `restriction_type` is `none` unless the pack says otherwise, which keeps a home without
+        // holding the entity to it: Mojang writes an empty `minecraft:home` on entities whose events
+        // only need somewhere to remember.
+        if (component != null && component.equals("minecraft:home")
+            && "none".equals(at.ioexception.mcaddon.util.Json.text(
+                liveComponent("minecraft:home"), "restriction_type", "none"))) {
+            component = null;
+        }
         if (component == null) {
             Platform.clearHome(this);
             return;
@@ -3569,6 +3609,7 @@ public class AddonEntity extends PathfinderMob
      */
     private void everyTick() {
         holdBreath();
+        burnFuse();
         keepTransforming();
         noticeBeingHurt();
         noticeCatchingFire();

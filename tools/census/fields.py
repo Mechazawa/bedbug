@@ -101,8 +101,9 @@ REASONS = {
         "*": "Names a loot table Java rolls for a mob's gear at spawn, which the loot reader covers.",
     },
     "minecraft:dweller": {
-        "*": "Village membership: the points of interest, the professions and the migration are written "
-             "into Java's own villager brain and cannot be given to another mob.",
+        "*": "Village membership. Java's point of interest manager would let any mob claim a bed or a job "
+             "site, but the village those claims make up, its gossip, its golems and its raids, is kept by "
+             "Java's villager brain, which a pack's entity has none of; the restriction radius is read.",
     },
     "minecraft:offspring": {
         "*": "Inheritance between two parents. Java's own animals breed by class, so a child has no "
@@ -160,10 +161,6 @@ REASONS = {
     "minecraft:movement.sway": {"*": "Java has no swimming sway to give an arbitrary mob."},
     "minecraft:movement.jump": {"*": "Java's jump control has no delay of its own."},
 
-    "minecraft:explode": {
-        "fuse_lit": "The fuse is lit by the goal that swells the entity, so its starting state is "
-                    "whatever that goal has done rather than a field read at spawn.",
-    },
     "minecraft:buoyant": {
         "liquid_blocks": "Java floats a mob in water and in nothing else, so a list of liquids has "
                          "only the one entry it can be given.",
@@ -230,8 +227,9 @@ REASONS = {
 
     # The rest, one component at a time.
     "minecraft:home": {
-        "restriction_type": "Java holds a home as a position and a radius, with no kind.",
-        "home_block_list": "Java's home is a position rather than a block to stand on.",
+        "home_block_list": "Bedrock checks the list against the block an event set the home at; the home here "
+                           "is where the entity stood as the component arrived, which is no such block, so "
+                           "the list has nothing to be checked against.",
     },
     "minecraft:rideable": {
         "*": "The rider sits at the seat the pack gave and gets off where Java puts it: there is no "
