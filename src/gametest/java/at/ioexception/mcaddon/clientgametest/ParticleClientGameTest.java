@@ -19,6 +19,8 @@ import java.util.List;
  * coloured from a gradient read at its age over its lifetime: a warm white at birth and `#FFE06010`
  * at 0.4, blended in between. Its emitter starts `tp:burst` as it is created and again from its own
  * timeline two seconds in, which is an effect starting another while the running ones are advanced.
+ *
+ * `tp:fade` is painted and sized by curves, one of each of the four kinds.
  */
 public final class ParticleClientGameTest implements FabricClientGameTest {
     private static final double SPEED_TOLERANCE = 1e-4;
@@ -39,6 +41,8 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
     private static final float[] TRAIL_LATER = {0xE0 / 255f, 0x60 / 255f, 0x10 / 255f, 1.0f};
     private static final float TRAIL_LATER_AT = 0.4f;
 
+    private static final float FADE_LIFETIME = 2.0f;
+
     @Override
     public void runTest(ClientGameTestContext context) {
         try (TestSingleplayerContext world = context.worldBuilder()
@@ -48,6 +52,7 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
             typed(context, world);
             javas(context, world);
             trail(context, world);
+            curves(context, world);
         }
     }
 
@@ -58,6 +63,83 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
         Worlds.waitForClient(context, client -> Born.of("tp:burst").size() >= BURST_COUNT, PATIENCE,
             () -> "/bedrock particle tp:burst typed by the player starts the pack's emitter of " + BURST_COUNT
                 + " particles, and " + Born.of("tp:burst").size() + " were made.");
+    }
+
+    /**
+     * `tp:fade` makes one particle that stands still for two seconds while four curves read off
+     * `variable.particle_age` paint it: a linear curve its alpha, a bezier its red, a catmull-rom its
+     * green and a bezier chain its size. The chain carries a `horizontal_range` of two, which
+     * Bedrock ignores on a chain, so its nodes are read at the age itself.
+     *
+     * What the particle hands the frame is compared at two ages with each curve worked out here from
+     * its own definition.
+     */
+    private static void curves(ClientGameTestContext context, TestSingleplayerContext world) {
+        context.runOnClient(client -> Born.clear());
+        world.getServer().runCommand("bedrock execute as @p at @s run particle tp:fade ~ ~1 ~3");
+        Worlds.waitForClient(context, client -> !Born.of("tp:fade").isEmpty(), PATIENCE,
+            () -> "tp:fade emits one particle at once and none was made.");
+        Born.Particle fade = Born.of("tp:fade").get(0);
+
+        for (float age : new float[] {0.5f, 1.4f}) {
+            Worlds.waitForClient(context, client -> fade.age() >= age, PATIENCE,
+                () -> "tp:fade's particle lives two seconds and never reached " + age + " of them.");
+            Faded faded = context.computeOnClient(client ->
+                new Faded(fade.age(), Born.drawn(fade.particle(), Worlds.camera(client))));
+            float at = faded.age();
+            float along = at / FADE_LIFETIME;
+
+            Assert.near(faded.quad().size(), chain(at), 1e-4,
+                "tp:fade's size at " + at + " seconds, its bezier chain read at the age itself");
+            int wanted = Math.round(bezier(at / 2) * 255) << 16
+                | Math.round(catmullRom(along) * 255) << 8
+                | 0xFF
+                | Math.round(linear(along) * 255) << 24;
+            assertColour(faded.quad().colour(), wanted, "tp:fade's colour at " + at + " seconds, its red a"
+                + " bezier, its green a catmull-rom and its alpha a linear curve");
+        }
+    }
+
+    private record Faded(float age, Born.Quad quad) {
+    }
+
+    /** Three nodes evenly spread from the start of the particle's life to its end. */
+    private static float linear(float along) {
+        float[] nodes = {1.0f, 0.8f, 0.2f};
+        float step = Math.min(along, 1f) * (nodes.length - 1);
+        int from = Math.min((int) step, nodes.length - 2);
+        return nodes[from] + (nodes[from + 1] - nodes[from]) * (step - from);
+    }
+
+    private static float bezier(float along) {
+        float rest = 1 - along;
+        return rest * rest * rest * 0.1f + 3 * rest * rest * along * 0.9f + 3 * rest * along * along * 0.2f
+            + along * along * along * 1.0f;
+    }
+
+    /** Five nodes, so two segments run through the middle three with the outer two setting their slopes. */
+    private static float catmullRom(float along) {
+        float[] nodes = {0.0f, 0.2f, 0.6f, 0.8f, 1.0f};
+        float step = along * 2;
+        int segment = Math.min((int) step, 1);
+        float t = step - segment;
+        float before = nodes[segment];
+        float from = nodes[segment + 1];
+        float to = nodes[segment + 2];
+        float after = nodes[segment + 3];
+        return 0.5f * (2 * from + (to - before) * t + (2 * before - 5 * from + 4 * to - after) * t * t
+            + (3 * from - before - 3 * to + after) * t * t * t);
+    }
+
+    /** Knots at 0, 1 and 2 seconds with values 0.05, 0.2 and 0.3 and slopes 0, 0.1 and -0.1 a second. */
+    private static float chain(float seconds) {
+        float[][] knots = {{0.05f, 0f}, {0.2f, 0.1f}, {0.3f, -0.1f}};
+        int segment = Math.min((int) seconds, 1);
+        float t = seconds - segment;
+        float[] from = knots[segment];
+        float[] to = knots[segment + 1];
+        return (2 * t * t * t - 3 * t * t + 1) * from[0] + (t * t * t - 2 * t * t + t) * from[1]
+            + (-2 * t * t * t + 3 * t * t) * to[0] + (t * t * t - t * t) * to[1];
     }
 
     /**

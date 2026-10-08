@@ -17,7 +17,13 @@
           "*": "material.default"
         }
       ],
-      "textures": ["texture.default"]
+      "textures": ["texture.default"],
+      "color": {
+        "r": 1.0,
+        "g": "v.rung > 0 ? 0.5 : 1.0",
+        "b": 1.0,
+        "a": 1.0
+      }
     },
     "controller.render.tp.visor": {
       "geometry": "geometry.default",

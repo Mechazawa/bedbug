@@ -35,7 +35,7 @@ public final class PackCommand {
     private static final int KEPT = 2048;
 
     private static final DynamicCommandExceptionType UNTRANSLATABLE = new DynamicCommandExceptionType(
-        what -> Component.literal("Java has no form of " + what));
+        what -> Component.literal("This line cannot run here: " + what));
 
     private static final Map<String, PackCommand> TRANSLATED = new LinkedHashMap<>(64, 0.75f, true) {
         @Override

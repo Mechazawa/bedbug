@@ -88,6 +88,14 @@ class ParticleCurveTest {
             0.0001f);
     }
 
+    /** A chain's nodes are keyed by the input itself, and Bedrock ignores a range written beside them. */
+    @Test
+    void readsAChainAtTheInputWhateverItsRange() {
+        assertEquals(8f, at("{\"type\": \"bezier_chain\", \"input\": 0.75, \"horizontal_range\": 2, \"nodes\": {"
+            + "\"0.25\": {\"value\": 4, \"slope\": 0}, \"0.75\": {\"value\": 8, \"slope\": 0}}}"),
+            0.0001f);
+    }
+
     /** A chain is sorted on the way in, because a pack may write its nodes in any order. */
     @Test
     void sortsAChainWrittenOutOfOrder() {

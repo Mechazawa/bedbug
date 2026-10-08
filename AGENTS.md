@@ -147,11 +147,18 @@ These are the checks it runs, and what each one catches:
   - `client/render/Submitted` extracts an entity's render state the way the level renderer does,
     submits it to a collector that answers every call and keeps two kinds: each piece of custom
     geometry with the render type it asked for and every vertex it wrote (position from the feet,
-    colour, texture point, light), and each item with the pose it was hung at, its light and its
-    tints. The same collector takes an item's own render state, which is how an icon is asserted.
+    colour, texture point, light, overlay), and each item with the pose it was hung at, its light
+    and its tints. The same collector takes an item's own render state, which is how an icon is
+    asserted, and the overlay is where a hurt entity's red is read.
   - `client/render/ScriptClock` builds the animator the renderer builds for an entity and moves it
-    on a tick at a time, so a bone's pose can be asked for at an exact moment instead of at whatever
-    moment a frame happened to land on.
+    on a tick at a time, so a bone's pose, a script variable or the passes its render controllers
+    pick can be asked for at an exact moment instead of at whatever moment a frame happened to land
+    on. Its clips' sounds and particles go nowhere.
+
+  `Submitted` extracts at a partial tick of nothing, which is earlier than the frame before it
+  drew. An animator therefore never winds its clock back to a moment it has already passed: a clock
+  wound back replays a stretch of every clip on the next frame, so each probe would make the clips
+  run faster than the world and a test of anything timed would see it happen early.
   - `clientgametest/Born` and `clientgametest/Heard` write down every pack particle the client adds
     and every sound it is asked to play, through the test mod's own mixins in
     `mcaddon-gametest.mixins.json`. A particle is kept with its velocity and lifetime as it was
@@ -272,7 +279,7 @@ These are the checks it runs, and what each one catches:
   states and permutations drawn with its own geometry and culling against a named voxel shape, a
   recipe of each kind that converts, two
   entities whose spawn eggs take each of the two forms, an animation firing a sound and a particle
-  off its timeline, three `particles/*.json` in the 1.10.0 format, a `fogs/` file whose air and
+  off its timeline, four `particles/*.json` in the 1.10.0 format, a `fogs/` file whose air and
   water blocks are written differently from each other, a texture set whose emissive
   channel has pixels in it, a glyph page beside the locale list and the locale names a pack declares,
   and a function using the commands and selector arguments that need translating.
@@ -379,14 +386,25 @@ These are the checks it runs, and what each one catches:
   wrong one of the two draws nothing where the sprite should be. The sprite is also declared young,
   and one of its two controllers picks its body by `query.is_baby` while the other draws a cap
   written to sit on top of the young body, so a query answering the wrong way leaves the cap in the
-  air with a gap under it.
+  air with a gap under it. The sprite's idle clip writes its body's turn and lift as Molang over
+  `q.life_time` rather than as keyframes. Its chime clip's timeline sets a variable at two and a half
+  seconds, its `ring` controller leaves its first state once that variable holds and writes from
+  both `on_exit` and `on_entry`, and the cap's controller halves its green once the second of those
+  is set, so the whole chain from a timeline to a render controller reads off one colour. Neither
+  of the sprite's controllers states an `is_hurt_color`, so a hurt sprite is drawn with the red
+  every Bedrock entity flashes.
+
+  `tp:fade` is the particle painted by curves: one of each of the four kinds, read off
+  `variable.particle_age`, sets its alpha, its red, its green and its size, and the bezier chain
+  carries a `horizontal_range` Bedrock ignores on a chain.
 
   `tp:prism` exists to be drawn. Its one render controller picks everything about its one pass by
   Molang over the entity: the geometry from `q.is_baby` and an enum property, the texture from an
   array indexed by `q.variant`, the material from `q.had_component_group` between
   `entity_alphatest` and `entity_alphablend`, the mark bone's visibility from `q.mark_variant`, a
-  texture slide and a colour from the variant, an overlay from the mark variant and an
-  `on_fire_color`, and one event per group or property switches one of those. Its three geometries
+  texture slide and a colour from the variant, an overlay from the mark variant, an `is_hurt_color`
+  that replaces the red of a hit and an `on_fire_color`, and one event per group or property
+  switches one of those. Its three geometries
   differ in how far the core reaches from the middle, so which one was drawn reads off the vertices
   whichever way it faces. Its skin carries a texture set whose emissive channel glows over the mark,
   so a second, lit pass is drawn for the plain skin and none for the dyed one. Its script runs

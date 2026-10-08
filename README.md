@@ -45,7 +45,8 @@ add-ons, or with another release of it, is told which in chat.
 - Models, animations, animation controllers and render controllers, drawn through a full Molang
   evaluator, with each pass drawn the way its `.material` asks: alpha tested or blended, culled or
   not, plain or glowing, tinted the colour its controller worked out for it and lit by the light its
-  controller asked for. A model reaching past the box the server gave the entity is culled against
+  controller asked for. A hurt or dying entity flashes red the way every Bedrock entity does, unless
+  its controller states an `is_hurt_color` of its own, which is drawn instead. A model reaching past the box the server gave the entity is culled against
   the extent its own geometry declares, so wings and a tail stay drawn while the hitbox is off the
   side of the screen. A controller state a pack gave a blend transition is crossed out of rather
   than left, so a walk releases into an idle instead of snapping. An entity whose pack asked for it
@@ -121,8 +122,11 @@ add-ons, or with another release of it, is told which in chat.
   clips liquids aims at water and lava, and one carrying a durability sensor shows the particle and
   plays the sound its threshold names as it wears down.
 - `/bedrock camera` and `/bedrock camerashake`, which set one player's own view: the four presets, a position and a
-  rotation of the pack's choosing, all thirty-one of Bedrock's easing curves, and a shake that moves
-  the camera or turns it.
+  rotation of the pack's choosing or a point or an entity to face, all thirty-one of Bedrock's easing
+  curves, and a shake that moves the camera or turns it. An ease to one of the three cameras that
+  follow the player is refused the way Bedrock refuses it, and `minecraft:fixed_boom`,
+  `minecraft:follow_orbit` and `minecraft:control_scheme_camera` are named as cameras Java has no
+  counterpart for.
 - `/bedrock fog`, which layers a pack's own `fogs/` settings over the one the game would draw, with a stack
   per player that `pop` and `remove` take apart the way Bedrock's do. Like the two camera commands it
   is decided on the server and sent to each player alone, so setting one player's view in a
@@ -760,8 +764,9 @@ are. The server has no way to say that: `ServerPlayer.setCamera` calls `teleport
 entity's own position before it sends `ClientboundSetCameraPacket`, which is why
 `Camera.attachToEntity` works here and a preset does not. A client can say it, because
 `net.minecraft.client.Camera` keeps its `position`, `xRot`, `yRot` and `detached` as fields a mixin
-on `setup` may overwrite, which is what a free camera mod does; that is a payload of this mod's own,
-a client that acts on it, and the easing `/camera` states, and none of the three is built. Of the
+on `setup` may overwrite, and that is how the four built-in presets are drawn: a payload of this
+mod's own and a client that acts on it. What is not built is reading a pack's own presets out of
+`cameras`, so a name only such a file declares is refused as no preset at all. Of the
 fourteen things a preset states beside its identifier and what it inherits from, `pos_x`, `pos_y`,
 `pos_z`, `rot_x` and `rot_y` are the only ones naming anything Java holds at all. `player_effects`,
 `listener`, `extend_player_rendering`, `rotation_speed`, `snap_to_target`, `continue_targeting`,

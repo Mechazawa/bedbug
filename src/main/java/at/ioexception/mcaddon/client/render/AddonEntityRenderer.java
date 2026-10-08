@@ -122,6 +122,11 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
             && frustum.isVisible(declared.move(entity.getX(), entity.getY(), entity.getZ()));
     }
 
+    /** Java's own rule for when a mob is drawn red, which Bedrock flashes for the same two reasons. */
+    private static boolean hurt(AddonEntity entity) {
+        return entity.hurtTime > 0 || entity.deathTime > 0;
+    }
+
     /**
      * The render type a pass draws with, taken from the material its pack named.
      *
@@ -144,6 +149,7 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
         List<ItemStackRenderState> heldModels = new ArrayList<>();
         float bodyRotation;
         Vector3f scale = new Vector3f(1, 1, 1);
+        boolean hurt;
     }
 
     @Override
@@ -168,6 +174,7 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
         state.heldModels = state.drawing.held().stream().map(held -> itemModel(entity, held)).toList();
         state.bodyRotation = Mth.rotLerp(partialTick, entity.yBodyRotO, entity.yBodyRot);
         state.scale = drawnScale(entity, state.animator);
+        state.hurt = hurt(entity);
     }
 
     /** The item's own model, resolved while the entity it belongs to is still in hand. */
@@ -198,7 +205,7 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
                     PoseStack local = new PoseStack();
                     local.last().set(pose);
                     BedrockModelRenderer.render(pass.geometry(), animator, pass.visibility()::hides, pass.shift(),
-                        local, buffer, pass.light(light), OverlayTexture.NO_OVERLAY, pass.colour());
+                        local, buffer, pass.light(light), pass.overlay(state.hurt), pass.colour());
                 });
             poseStack.popPose();
         }
@@ -239,7 +246,7 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
             poseStack.pushPose();
             if (each.anchor() != null) Platform.mulPose(poseStack, each.anchor());
             BedrockModelRenderer.render(pass.geometry(), each.animator(), pass.visibility()::hides, pass.shift(),
-                poseStack, buffer, pass.light(light), OverlayTexture.NO_OVERLAY, pass.colour());
+                poseStack, buffer, pass.light(light), pass.overlay(hurt(entity)), pass.colour());
             poseStack.popPose();
         }
         for (HeldItems.Held held : drawing.held()) {
