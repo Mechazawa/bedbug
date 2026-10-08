@@ -344,16 +344,18 @@ public final class ComponentGameTests {
         ember.setNoAi(false);
 
         Platform.hurt(ember, helper.getLevel(), ember.damageSources().playerAttack(player), 0.5f);
-        helper.runAfterDelay(SEARCH_TICKS, () -> {
-            helper.assertTrue(ember.getTarget() == null,
-                EMBER + " answers only the wisp's family and turned on the player who hit it.");
+        helper.startSequence()
+            .thenExecuteAfter(SEARCH_TICKS, () -> {
+                helper.assertTrue(ember.getTarget() == null,
+                    EMBER + " answers only the wisp's family and turned on the player who hit it.");
 
-            // Out of the moment after a blow in which Java ignores the next one.
-            ember.invulnerableTime = 0;
-            Platform.hurt(ember, helper.getLevel(), ember.damageSources().mobAttack(wisp), 0.5f);
-            helper.succeedWhen(() -> helper.assertTrue(ember.getTarget() == wisp,
-                EMBER + " was hit by the wisp its entries name and set its sights on " + ember.getTarget() + "."));
-        });
+                // Out of the moment after a blow in which Java ignores the next one.
+                ember.invulnerableTime = 0;
+                Platform.hurt(ember, helper.getLevel(), ember.damageSources().mobAttack(wisp), 0.5f);
+            })
+            .thenWaitUntil(() -> helper.assertTrue(ember.getTarget() == wisp,
+                EMBER + " was hit by the wisp its entries name and set its sights on " + ember.getTarget() + "."))
+            .thenSucceed();
     }
 
     /** Long enough for a target goal searching every other tick to have run several times. */
@@ -427,22 +429,27 @@ public final class ComponentGameTests {
         // On the floor beside the ember rather than where it was put down, which it falls from.
         EntityEvents.trigger(ember, "tp:ember_gather", null, ServerHooks.state());
         ember.setNoAi(false);
-        helper.runAfterDelay(SETTLE_TICKS, () -> {
-            double start = ember.getX();
-            net.minecraft.world.entity.item.ItemEntity dropped = new net.minecraft.world.entity.item.ItemEntity(
-                helper.getLevel(), start + ITEM_AWAY, ember.getY(), ember.getZ(), new ItemStack(Items.GOLD_INGOT));
-            dropped.setNoPickUpDelay();
-            helper.getLevel().addFreshEntity(dropped);
-
-            double[] furthest = {0};
-            helper.onEachTick(() -> furthest[0] = Math.max(furthest[0], ember.getX() - start));
-            helper.succeedWhen(() -> {
+        double[] start = {Double.NaN};
+        double[] furthest = {0};
+        helper.onEachTick(() -> {
+            if (!Double.isNaN(start[0])) furthest[0] = Math.max(furthest[0], ember.getX() - start[0]);
+        });
+        helper.startSequence()
+            .thenExecuteAfter(SETTLE_TICKS, () -> {
+                start[0] = ember.getX();
+                net.minecraft.world.entity.item.ItemEntity dropped = new net.minecraft.world.entity.item.ItemEntity(
+                    helper.getLevel(), start[0] + ITEM_AWAY, ember.getY(), ember.getZ(),
+                    new ItemStack(Items.GOLD_INGOT));
+                dropped.setNoPickUpDelay();
+                helper.getLevel().addFreshEntity(dropped);
+            })
+            .thenWaitUntil(() -> {
                 helper.assertTrue(ember.getMainHandItem().is(Items.GOLD_INGOT),
                     EMBER + " never picked up the gold lying " + ITEM_AWAY + " blocks off.");
                 helper.assertTrue(furthest[0] > ITEM_AWAY - GOAL_RADIUS - 0.5,
                     EMBER + " picked up an item without going to it, having moved " + furthest[0] + ".");
-            });
-        });
+            })
+            .thenSucceed();
     }
 
     /** How far off the item lies, inside the four blocks the gathering group reaches. */
@@ -695,15 +702,18 @@ public final class ComponentGameTests {
         ember.setNoAi(false);
 
         Platform.placeAt(player, ember.getX() + FAR_ACROSS, ember.getY(), ember.getZ(), 0f, 0f);
-        boolean[] ever = {false};
-        helper.onEachTick(() -> ever[0] |= tempted(ember));
-        helper.runAfterDelay(TEMPT_TICKS, () -> {
-            helper.assertFalse(ever[0], EMBER + " is tempted three blocks off and followed wheat five away.");
-
-            Platform.placeAt(player, ember.getX() + NEAR_ACROSS, ember.getY() + HIGH_UP, ember.getZ(), 0f, 0f);
-            helper.succeedWhen(() -> helper.assertTrue(tempted(ember),
-                EMBER + " is tempted across rather than up and ignored wheat two across and six up."));
-        });
+        boolean[] early = {false};
+        boolean[] moved = {false};
+        helper.onEachTick(() -> early[0] |= !moved[0] && tempted(ember));
+        helper.startSequence()
+            .thenExecuteAfter(TEMPT_TICKS, () -> {
+                helper.assertFalse(early[0], EMBER + " is tempted three blocks off and followed wheat five away.");
+                moved[0] = true;
+                Platform.placeAt(player, ember.getX() + NEAR_ACROSS, ember.getY() + HIGH_UP, ember.getZ(), 0f, 0f);
+            })
+            .thenWaitUntil(() -> helper.assertTrue(tempted(ember),
+                EMBER + " is tempted across rather than up and ignored wheat two across and six up."))
+            .thenSucceed();
     }
 
     private static boolean tempted(AddonEntity entity) {
