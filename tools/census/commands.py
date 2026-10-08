@@ -39,8 +39,9 @@ what the percentage counts:
   line carrying one is left out and the form is reported through `AddonEntities.unsupported`. A
   dropped keyword never counts as covered, whatever literals the source happens to carry.
 
-Nothing else counts. The report ends with the check that says so, for names and for keywords alike:
-one that is missing and is not named as having no Java counterpart would be a gap nobody decided on.
+Nothing else counts. The report ends with the check that says so, for names, keywords and game rules
+alike: one that is missing and is not named as having no Java counterpart would be a gap nobody
+decided on, and that is what `--strict` fails on. A named one still counts against the percentage.
 
 Selector arguments have no surface of their own because the command metadata names none: a selector
 is one parameter type there and its contents are never spelled out. They are listed from the source
@@ -300,7 +301,7 @@ def main():
     parser.add_argument("--samples", type=Path, default=DEFAULT_SAMPLES,
                         help="a bedrock-samples checkout (default: %(default)s)")
     parser.add_argument("--strict", action="store_true",
-                        help="exit non-zero when anything is missing or claimed without a reader")
+                        help="exit non-zero when anything is missing without a decision naming it")
     arguments = parser.parse_args()
 
     metadata = arguments.samples / "metadata/command_modules/mojang-commands.json"
@@ -344,7 +345,7 @@ def main():
     unnamed = (found[0].missing - named) | groups["missing"] | (found[2].missing - named_rules)
     print_names("Missing and not named, so dropped without anybody deciding to", unnamed)
 
-    return 1 if arguments.strict and (unnamed or any(s.missing for s in found)) else 0
+    return 1 if arguments.strict and unnamed else 0
 
 
 if __name__ == "__main__":

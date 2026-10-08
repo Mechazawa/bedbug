@@ -4806,21 +4806,13 @@ public class AddonEntity extends PathfinderMob
             .anyMatch(id::equals);
     }
 
-    /**
-     * A block descriptor's name in Java's spelling.
-     *
-     * Bedrock calls the cobweb `web`, which makes it the one block holding back what is inside it
-     * that the two editions name differently.
-     */
+    /** A block descriptor's name in Java's spelling, which turns Bedrock's `web` into the cobweb. */
     private static String slowingBlockName(com.google.gson.JsonElement descriptor) {
         String named = descriptor.isJsonPrimitive() ? descriptor.getAsString()
             : descriptor.isJsonObject()
                 ? at.ioexception.mcaddon.util.Json.text(descriptor.getAsJsonObject(), "name", null)
                 : null;
-        if (named == null) return null;
-
-        String qualified = named.contains(":") ? named : "minecraft:" + named;
-        return qualified.equals("minecraft:web") ? "minecraft:cobweb" : qualified;
+        return named == null ? null : at.ioexception.mcaddon.convert.BedrockBlockNames.java(named);
     }
 
     /**

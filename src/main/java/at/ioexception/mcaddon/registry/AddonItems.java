@@ -214,7 +214,8 @@ public final class AddonItems {
         for (String component : definition.components().keySet()) {
             if (!IMPLEMENTED.contains(component)
                 && !at.ioexception.mcaddon.bedrock.behaviour.CustomComponents.isCustom(component)) {
-                AddonEntities.unsupported(component);
+                AddonEntities.unsupported(component
+                    + (BEDROCK_ONLY.contains(component) ? ", which Java has nothing for" : ""));
             }
         }
 
@@ -988,6 +989,26 @@ public final class AddonItems {
      */
     public static final Set<String> LEGACY = Set.of("minecraft:armor", "minecraft:weapon",
         "minecraft:custom_components");
+
+    /**
+     * Item components Java has nothing to answer with, each reported when an item declares it.
+     *
+     * `minecraft:camera` times the black bars, the shutter and the photograph sliding away while an
+     * Education Edition player takes a picture, and Java has neither the picture nor the screen.
+     * `minecraft:interact_button` writes the word on the button a touchscreen shows, and Java has no
+     * touch controls. `minecraft:storage_weight_limit` and `minecraft:storage_weight_modifier` set a
+     * bag's capacity and one item's weight inside one, where Java measures against the constant
+     * `Fraction.ONE` in `BundleContents.Mutable.getMaxAmountToAdd` and weighs an item in
+     * `BundleContents.getWeight` by its stack size, neither of which reads anything an item carries.
+     * `minecraft:swing_sounds` names Bedrock level sound events, which the engine resolves through a
+     * catalogue of its own that no table here maps onto Java's sound events.
+     *
+     * `tools/census/components.py` counts these as missing and does not fail on them, and names
+     * any that become implemented or stop being published.
+     */
+    public static final Set<String> BEDROCK_ONLY = Set.of("minecraft:camera",
+        "minecraft:interact_button", "minecraft:storage_weight_limit",
+        "minecraft:storage_weight_modifier", "minecraft:swing_sounds");
 
     private static Identifier identifier(String bedrock) {
         Names.Identifier split = Names.split(bedrock, "minecraft");

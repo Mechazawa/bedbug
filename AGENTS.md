@@ -78,7 +78,8 @@ that differs (the entity renderer, the network channels) carries two bodies inst
 ## Verifying a change
 
 `tools/checkall.sh` runs all of them in the order that fails fastest, which is what to reach for
-before saying a change is done.
+before saying a change is done. Every census runs there with `--strict`, so a gap Mojang publishes
+fails the run until it is answered or named with the reason Java cannot answer it.
 
 **Do not build while a game is running.** A dev client and a dev server read their classes out of
 `versions/<version>/build/`, and a build that replaces those underneath a running game gives it a
@@ -872,7 +873,7 @@ These are the checks it runs, and what each one catches:
   ```bash
   git clone --depth 1 https://github.com/Mojang/bedrock-samples scratchpad/bedrock/bedrock-samples
   python3 tools/census/components.py            # prints the table and the gaps
-  python3 tools/census/components.py --strict   # exits non-zero while anything is missing
+  python3 tools/census/components.py --strict   # exits non-zero while a gap has no decision
   ```
 
   The published side comes from `metadata/` in that checkout: the entity component schemas and the
@@ -908,6 +909,12 @@ These are the checks it runs, and what each one catches:
   declaration carries with no reader of their own are either a component Java does for every mob
   anyway, which is why the declaration names it, or a coverage claim nothing backs; each
   declaration's docblock says which it allows.
+
+  **A gap with a decision is listed apart from one without.** `AddonItems.BEDROCK_ONLY` names the
+  item components Java has nothing to answer with, each with its reason in the docblock. They still
+  count against the percentage and are still reported as a pack declares them, and `--strict` fails
+  only on a missing name no such declaration carries, or on a declared name that has since been
+  implemented or stopped being published.
 - **`tools/census/model.py`** does the same for the drawing side: geometry, animations, animation
   controllers, render controllers and client entity definitions. Mojang publishes a JSON schema per
   behaviour pack component and none for any of these, so this measures against the files instead.
@@ -917,7 +924,7 @@ These are the checks it runs, and what each one catches:
   ```bash
   bash tools/census/fetch.sh
   python3 tools/census/model.py            # the table, then what is dropped and what is stale
-  python3 tools/census/model.py --strict   # exits non-zero while a published field has no reader
+  python3 tools/census/model.py --strict   # exits non-zero while a dropped field goes unreported
   ```
 
   The published side is one counter per kind of declaration: how many geometries, bones, cubes,
@@ -931,7 +938,8 @@ These are the checks it runs, and what each one catches:
   defaulting it to zero holds every one of them on its first frame.
 
   Anything the census reports as dropped either has a reader now or is named below under what is
-  read and what is not. A field read that the published files never declare is a reader being more
+  read and what is not. A dropped field a reader names in one of its `UNREAD` constants is reported as
+  a pack declares it and is marked `(reported)`; `--strict` fails on the rest. A field read that the published files never declare is a reader being more
   tolerant than vanilla, which is fine, or a misspelling, which is not.
 
 ### What the drawing readers do not read
@@ -1019,7 +1027,7 @@ player who starts watching later sees whatever the pack plays next, as on an add
   ```bash
   bash tools/census/fetch.sh
   python3 tools/census/commands.py            # prints the table and the gaps
-  python3 tools/census/commands.py --strict   # exits non-zero while anything is missing
+  python3 tools/census/commands.py --strict   # exits non-zero while a gap has no decision
   ```
 
   The published side is `metadata/command_modules/mojang-commands.json`. Three surfaces come out of
@@ -1034,7 +1042,9 @@ player who starts watching later sees whatever the pack plays next, as on an add
   which say Java's own parser reads the line, the `REGISTERED_HERE` names, which this mod builds a
   command for, and the `case "..."` labels of `Functions.rewrite`. Everything else is dropped and
   named, and the report ends with the check for that: a published command that is missing and is not
-  in `BEDROCK_ONLY` would be a gap nobody decided on.
+  in `BEDROCK_ONLY`, a keyword in neither that nor `BEDROCK_ONLY_KEYWORDS`, or a game rule outside
+  `RULES_BEDROCK_ONLY` would be a gap nobody decided on, and that is what `--strict` fails on.
+  `RULES_JAVA_FOLDS` names a Bedrock rule whose limit Java keeps under another Bedrock rule's name.
 
   **What the keyword number counts.** Every published keyword goes into one of three groups, the
   same three the selector arguments use, and the first two are what the percentage is of:
