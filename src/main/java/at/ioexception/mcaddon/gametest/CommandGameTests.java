@@ -23,9 +23,9 @@ import java.util.List;
  * Commands an add-on runs while the game is going, in the dialect the add-on writes them in.
  *
  * Each line here is one Java's parser refuses as it stands, so a mark left on the world says the
- * line was translated on its way to the dispatcher, and the reports say what could not be. The
- * synthetic pack's script, its ember's event and its functions are what run them, so with no pack
- * installed each test succeeds without asserting.
+ * line was translated on its way to the Bedrock command tree, and the reports say what could not
+ * be. The synthetic pack's script, its ember's event and its functions are what run them, so with no
+ * pack installed each test that needs one succeeds without asserting.
  */
 public final class CommandGameTests {
     /** Inside the 8x8x8 the empty structure covers, clear of its edges. */
@@ -77,7 +77,7 @@ public final class CommandGameTests {
         LivingEntity stand = (LivingEntity) place(helper, vanilla("armor_stand"), STAND);
         stand.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.DIAMOND_SWORD));
         Entity villager = place(helper, vanilla("villager"), STAND.offset(2, 0, 0));
-        run(helper, "execute as " + stand.getStringUUID() + " run scriptevent \"tp:commands\"");
+        run(helper, "bedrock execute as " + stand.getStringUUID() + " run scriptevent tp:commands");
 
         helper.succeedWhen(() -> {
             List<String> tags = List.copyOf(Platform.tagsOf(stand));
@@ -118,6 +118,127 @@ public final class CommandGameTests {
             helper.assertTrue(AddonEntities.report().stream().anyMatch(line -> line.startsWith("    command hud x")),
                 "the event's hud command is not reported: " + AddonEntities.report());
         });
+    }
+
+    /**
+     * Java's own command tree reads exactly what Java reads, and nothing of Bedrock's.
+     *
+     * A Java data pack's line means what it means without this mod: `hasitem` is no option of Java's
+     * selector, `/particle` and `/transfer` take Java's arguments only, and a command Bedrock has and
+     * Java has not is reached through `/bedrock` alone.
+     */
+    @GameTest()
+    public void javasOwnTreeReadsNothingOfBedrocks(GameTestHelper helper) {
+        for (String bedrock : List.of("kill @e[hasitem={item=apple}]", "particle \"minecraft:flame\" ~ ~ ~",
+            "transfer @a \"example.test\"", "camera @a clear", "camerashake stop @a", "clearspawnpoint",
+            "dialogue change @e \"tp:greeting\"", "event entity @e tp:settle", "fog @a pop dusk",
+            "gametest runall", "mobevent events_enabled", "music stop", "playanimation @e animation.walk",
+            "scriptevent \"tp:demo\"", "structure delete \"tp:hut\"", "toggledownfall")) {
+            helper.assertFalse(readsAtTheRoot(helper, bedrock), "Java's own tree reads /" + bedrock + ".");
+        }
+        for (String java : List.of("kill @e[type=minecraft:pig,tag=near,limit=1]", "particle minecraft:flame ~ ~ ~",
+            "execute as @e[type=minecraft:pig] run say hi", "bedrock camera @a clear")) {
+            helper.assertTrue(readsAtTheRoot(helper, java), "Java's own tree does not read /" + java + ".");
+        }
+        helper.succeed();
+    }
+
+    /**
+     * A function holding a line this mod cannot translate loads, its other lines run, and the line is
+     * named among what the packs asked for.
+     */
+    @GameTest()
+    public void aFunctionLosesOnlyTheLineThatCannotRun(GameTestHelper helper) {
+        if (AddonEntities.typeOf(ENTITY) == null) {
+            helper.succeed();
+            return;
+        }
+
+        MinecraftServer server = helper.getLevel().getServer();
+        helper.assertTrue(server.getFunctions().get(Platform.id("tp", "tp/gap")).isPresent(),
+            "tp:tp/gap, which holds a line Java has no form of, did not load.");
+        Entity stand = place(helper, vanilla("armor_stand"), STAND);
+        run(helper, "execute as " + stand.getStringUUID() + " run function tp:tp/gap");
+
+        List<String> tags = List.copyOf(Platform.tagsOf(stand));
+        helper.assertTrue(tags.contains("tp_before_the_gap") && tags.contains("tp_after_the_gap"),
+            "the lines either side of the one that cannot run did not both run: " + tags);
+        helper.assertTrue(AddonEntities.report().stream().anyMatch(line -> line.startsWith("    command inputpermission x")),
+            "the line that cannot run is not reported: " + AddonEntities.report());
+        helper.succeed();
+    }
+
+    /**
+     * `/bedrock` reads a selector asking about an inventory anywhere in an `execute` chain, runs a
+     * Bedrock command behind its `run`, and leaves no mark of the question on anybody once it is done.
+     */
+    @GameTest()
+    public void bedrockAsksAnExecuteChainAboutWhatEachEntityCarries(GameTestHelper helper) {
+        EntityType<?> ember = AddonEntities.typeOf(ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        LivingEntity armed = (LivingEntity) place(helper, ember, STAND);
+        armed.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.DIAMOND_SWORD));
+        Entity bare = place(helper, ember, STAND.offset(1, 0, 0));
+        BlockPos at = helper.absolutePos(STAND);
+        run(helper, "bedrock execute positioned " + at.getX() + " " + at.getY() + " " + at.getZ()
+            + " as @e[type=tp:ember,r=3,hasitem={item=diamond_sword,location=slot.weapon.mainhand}] at @s"
+            + " run event entity @s tp:ember_command");
+
+        for (Entity entity : List.of(armed, bare)) {
+            helper.assertTrue(Platform.tagsOf(entity).stream().noneMatch(tag -> tag.startsWith("mcaddon.hasitem.")),
+                "a tag hasitem was answered through is still on " + entity + ": " + Platform.tagsOf(entity));
+        }
+        helper.succeedWhen(() -> {
+            helper.assertTrue(Platform.tagsOf(armed).contains("tp_event_command_translated"),
+                "the ember holding a sword was not selected, or its event never ran: " + Platform.tagsOf(armed));
+            helper.assertFalse(Platform.tagsOf(bare).contains("tp_event_command_translated"),
+                "an ember holding nothing was selected as holding a sword.");
+        });
+    }
+
+    /** A function named by its Bedrock path through `/bedrock`, from Java's own `execute`, runs. */
+    @GameTest()
+    public void bedrockCallsAFunctionByItsBedrockName(GameTestHelper helper) {
+        if (AddonEntities.typeOf(ENTITY) == null) {
+            helper.succeed();
+            return;
+        }
+
+        Entity stand = place(helper, vanilla("armor_stand"), STAND);
+        run(helper, "execute as " + stand.getStringUUID() + " run bedrock function tp/relayed");
+        helper.assertTrue(Platform.tagsOf(stand).contains("tp_relayed"),
+            "/bedrock function tp/relayed did not run the pack's function.");
+        helper.succeed();
+    }
+
+    /** `/bedrock` asks for the level Java runs a function at, which a player who is no operator lacks. */
+    @GameTest()
+    public void bedrockIsForOperators(GameTestHelper helper) {
+        net.minecraft.server.level.ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        try {
+            helper.assertFalse(readsAtTheRoot(helper, player.createCommandSourceStack(), "bedrock say hello"),
+                "a player who is no operator may run /bedrock.");
+            helper.assertTrue(readsAtTheRoot(helper, helper.getLevel().getServer().createCommandSourceStack(),
+                "bedrock say hello"), "the server console may not run /bedrock.");
+        } finally {
+            helper.getLevel().getServer().getPlayerList().remove(player);
+        }
+        helper.succeed();
+    }
+
+    private static boolean readsAtTheRoot(GameTestHelper helper, String line) {
+        return readsAtTheRoot(helper, helper.getLevel().getServer().createCommandSourceStack(), line);
+    }
+
+    private static boolean readsAtTheRoot(GameTestHelper helper, net.minecraft.commands.CommandSourceStack source,
+        String line) {
+        com.mojang.brigadier.ParseResults<net.minecraft.commands.CommandSourceStack> parsed =
+            helper.getLevel().getServer().getCommands().getDispatcher().parse(line, source);
+        return parsed.getExceptions().isEmpty() && !parsed.getReader().canRead();
     }
 
     private static boolean reportedUnder(List<String> report, String heading, String prefix) {

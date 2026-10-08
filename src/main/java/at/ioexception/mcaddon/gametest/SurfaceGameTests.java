@@ -220,8 +220,8 @@ public final class SurfaceGameTests {
         BlockPos at = helper.absolutePos(STAND);
         String where = at.getX() + " " + at.getY() + " " + at.getZ();
 
-        parses(helper, "particle minecraft:flame " + where);
-        parses(helper, "particle \"mcaddon:pack_effect\" " + where);
+        BedrockLines.parses(helper, "particle minecraft:flame " + where);
+        BedrockLines.parses(helper, "particle mcaddon:pack_effect " + where);
         helper.assertTrue(AddonParticles.definitionOf("mcaddon:pack_effect") == null,
             "A particle nothing declares was claimed by the mod.");
         helper.succeed();
@@ -236,15 +236,6 @@ public final class SurfaceGameTests {
     private static void equal(GameTestHelper helper, Object found, Object wanted, String what) {
         helper.assertTrue(wanted.equals(found),
             what + " came back as " + found + " rather than " + wanted + ".");
-    }
-
-    private static void parses(GameTestHelper helper, String command) {
-        MinecraftServer server = helper.getLevel().getServer();
-        com.mojang.brigadier.ParseResults<net.minecraft.commands.CommandSourceStack> parsed =
-            server.getCommands().getDispatcher().parse(command, server.createCommandSourceStack());
-
-        helper.assertTrue(parsed.getExceptions().isEmpty() && !parsed.getReader().canRead(),
-            "/" + command + " does not parse.");
     }
 
     /**
