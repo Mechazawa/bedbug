@@ -1,0 +1,29 @@
+{
+  "format_version": "1.10.0",
+  "animation_controllers": {
+    "controller.animation.tp.prism.turn": {
+      "initial_state": "risen",
+      "states": {
+        "risen": {
+          "animations": ["rise"],
+          "blend_transition": 1.0,
+          "blend_via_shortest_path": true,
+          "transitions": [{"fallen": "q.state_time >= 1.0"}]
+        },
+        "fallen": {
+          "animations": ["fall", {"tilt": "0.5"}]
+        }
+      }
+    },
+    "controller.animation.tp.prism.wave": {
+      "initial_state": "waving",
+      "states": {
+        "waving": {
+          "animations": ["blink"],
+          "transitions": [{"rested": "q.all_animations_finished"}]
+        },
+        "rested": {}
+      }
+    }
+  }
+}

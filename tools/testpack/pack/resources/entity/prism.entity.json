@@ -1,0 +1,41 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "tp:prism",
+      "materials": {
+        "default": "entity_alphatest",
+        "glass": "entity_alphablend"
+      },
+      "textures": {
+        "plain": "textures/entity/prism",
+        "dyed": "textures/entity/prism_dyed"
+      },
+      "geometry": {
+        "round": "geometry.tp.prism.round",
+        "square": "geometry.tp.prism.square",
+        "young": "geometry.tp.prism.young"
+      },
+      "animations": {
+        "turn": "controller.animation.tp.prism.turn",
+        "wave": "controller.animation.tp.prism.wave",
+        "rise": "animation.tp.prism.rise",
+        "fall": "animation.tp.prism.fall",
+        "tilt": "animation.tp.prism.tilt",
+        "lean": "animation.tp.prism.lean",
+        "pulse": "animation.tp.prism.pulse",
+        "spin": "animation.tp.prism.spin",
+        "blink": "animation.tp.prism.blink",
+        "settle": "animation.tp.prism.settle"
+      },
+      "scripts": {
+        "pre_animation": ["v.lean = 0.25;"],
+        "animate": ["turn", "wave", {"lean": "v.lean"}, "pulse", "spin", "settle"]
+      },
+      "render_controllers": ["controller.render.tp.prism"],
+      "enable_attachables": true,
+      "hide_armor": true,
+      "hide_held_items": "q.mark_variant == 1"
+    }
+  }
+}

@@ -16,6 +16,9 @@
       "at.ioexception.mcaddon.clientgametest.PackCommandClientGameTest"
     ]
   },
+  "mixins": [
+    "mcaddon-gametest.mixins.json"
+  ],
   "depends": {
     "mcaddon": "*",
     "fabric-client-gametest-api-v1": "*"

@@ -1,0 +1,91 @@
+{
+  "format_version": "1.20.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:prism",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false,
+      "properties": {
+        "tp:facet": {
+          "type": "enum",
+          "values": ["round", "square"],
+          "default": "round",
+          "client_sync": true
+        }
+      }
+    },
+    "component_groups": {
+      "tp:prism_dyed": {
+        "minecraft:variant": {
+          "value": 1
+        }
+      },
+      "tp:prism_marked": {
+        "minecraft:mark_variant": {
+          "value": 1
+        }
+      },
+      "tp:prism_young": {
+        "minecraft:is_baby": {}
+      },
+      "tp:prism_glassy": {
+        "minecraft:scale": {
+          "value": 1.0
+        }
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": ["tp_prism", "mob"]
+      },
+      "minecraft:collision_box": {
+        "width": 0.5,
+        "height": 0.5
+      },
+      "minecraft:health": {
+        "value": 20,
+        "max": 20
+      },
+      "minecraft:physics": {},
+      "minecraft:movement": {
+        "value": 0.2
+      },
+      "minecraft:movement.basic": {},
+      "minecraft:navigation.walk": {},
+      "minecraft:variant": {
+        "value": 0
+      },
+      "minecraft:mark_variant": {
+        "value": 0
+      }
+    },
+    "events": {
+      "tp:prism_square": {
+        "set_property": {
+          "tp:facet": "square"
+        }
+      },
+      "tp:prism_dye": {
+        "add": {
+          "component_groups": ["tp:prism_dyed"]
+        }
+      },
+      "tp:prism_mark": {
+        "add": {
+          "component_groups": ["tp:prism_marked"]
+        }
+      },
+      "tp:prism_glaze": {
+        "add": {
+          "component_groups": ["tp:prism_glassy"]
+        }
+      },
+      "tp:prism_shrink": {
+        "add": {
+          "component_groups": ["tp:prism_young"]
+        }
+      }
+    }
+  }
+}
