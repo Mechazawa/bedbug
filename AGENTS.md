@@ -196,6 +196,13 @@ These are the checks it runs, and what each one catches:
   across every checkout on the machine (`-PclientSlots=<n>` changes the count, and
   `cpu-lock --status` shows who holds them and who waits).
 
+  A client that stops logging with a window the desktop calls not responding and almost no CPU is
+  worth a `jstack <pid>` before it is killed. One such stop on 26.1.2 had the render thread parked
+  in `IntegratedServer.halt` under Fabric's `deferDisconnect`, the server thread and the test thread
+  both parked in Fabric's `ThreadingImpl.enterPhase`, and the test thread inside
+  `TestSingleplayerContextImpl.close`: the three wait on each other while a test world closes, and
+  no code of this mod is on any of the three stacks.
+
   Only the 26.x targets ship that API, so the tests are a source set of their own (`gametest`, with
   its own `fabric.mod.json` listing them) that the two older targets never compile, and `check`
   runs them for the checked-out version only. The two 26.x test APIs differ in a few spellings,
