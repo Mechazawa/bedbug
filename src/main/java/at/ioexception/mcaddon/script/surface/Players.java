@@ -6,6 +6,7 @@ import at.ioexception.mcaddon.bedrock.camera.CameraRequest;
 import at.ioexception.mcaddon.bedrock.camera.CameraSpline;
 import at.ioexception.mcaddon.bedrock.camera.Easing;
 import at.ioexception.mcaddon.bedrock.hud.HudElement;
+import at.ioexception.mcaddon.bedrock.input.ControlScheme;
 import at.ioexception.mcaddon.bedrock.input.InputPermission;
 import at.ioexception.mcaddon.client.render.BedrockParticles;
 import at.ioexception.mcaddon.network.Channels;
@@ -14,6 +15,7 @@ import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.registry.AddonParticles;
 import at.ioexception.mcaddon.script.ScriptCoverage;
 import at.ioexception.mcaddon.server.PlayerCameras;
+import at.ioexception.mcaddon.server.PlayerControlSchemes;
 import at.ioexception.mcaddon.server.PlayerHuds;
 import at.ioexception.mcaddon.server.PlayerInputs;
 import at.ioexception.mcaddon.server.PropertyOverrides;
@@ -531,6 +533,33 @@ public final class Players extends Surface {
         } else if (player != null) {
             PlayerInputs.set(player, permission, enabled);
         }
+    }
+
+    // Control schemes
+
+    @HostAccess.Export
+    public String controlScheme(String id) {
+        ServerPlayer player = player(id);
+        return (player == null ? ControlScheme.DEFAULT : PlayerControlSchemes.of(player)).scriptName();
+    }
+
+    /**
+     * Puts the player on a scheme, or back on their camera's with none, and answers why that was
+     * refused or null once it is set.
+     */
+    @HostAccess.Export
+    public String setControlScheme(String id, String name) {
+        ServerPlayer player = player(id);
+        if (player == null) return null;
+        if (name == null) {
+            PlayerControlSchemes.clear(player);
+            return null;
+        }
+
+        ControlScheme scheme = ControlScheme.tryFrom(name);
+        if (scheme == null) return "There is no control scheme named " + name + ".";
+        return PlayerControlSchemes.set(player, scheme) ? null
+            : "The camera " + player.getName().getString() + " is on does not allow " + scheme.scriptName() + ".";
     }
 
     /** The language the client asked for, which a 1.20.1 server is sent but keeps to itself. */

@@ -141,6 +141,7 @@ public final class ServerHooks {
             ServerPlayer left = handler.player;
             server.execute(() -> {
                 PlayerCameras.forget(left);
+                PlayerControlSchemes.forget(left);
                 PlayerFogs.forget(left);
                 PlayerHuds.forget(left);
                 PlayerInputs.forget(left);

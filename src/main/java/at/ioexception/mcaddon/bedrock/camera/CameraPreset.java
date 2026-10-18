@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.bedrock.camera;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.input.ControlScheme;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.util.Json;
@@ -26,16 +27,18 @@ import java.util.Set;
  *
  * `listener` says where the player hears from. Bedrock hears from the camera unless a preset names
  * the player, and so does Java once the camera has moved.
+ *
+ * `controlScheme` is the scheme a player starts on under this camera, or null for the locked one.
  */
 public record CameraPreset(String identifier, String root, CameraView.Preset camera, Vec3 position, Float xRot,
-    Float yRot, boolean listensFromPlayer, CameraOrbit orbit, CameraTracking tracking) {
+    Float yRot, boolean listensFromPlayer, CameraOrbit orbit, CameraTracking tracking, ControlScheme controlScheme) {
 
     /** The fields a preset file states that this reads. Every other field is reported as it is read. */
     private static final Set<String> READ = Set.of(
         "identifier", "inherit_from", "pos_x", "pos_y", "pos_z", "rot_x", "rot_y", "listener",
         "radius", "view_offset", "entity_offset", "starting_rot_x", "starting_rot_y",
         "align_target_and_camera_forward", "rotation_speed", "snap_to_target", "horizontal_rotation_limit",
-        "vertical_rotation_limit", "continue_targeting", "tracking_radius");
+        "vertical_rotation_limit", "continue_targeting", "tracking_radius", "control_scheme");
 
     /** Null for a name that is no built-in preset. The namespace may be left off, and usually is. */
     public static CameraPreset builtIn(String written) {
@@ -44,7 +47,7 @@ public record CameraPreset(String identifier, String root, CameraView.Preset cam
         CameraView.Preset camera = CameraView.Preset.tryFrom(full);
         return camera == null ? null
             : new CameraPreset(full, full, camera, null, null, null, false, CameraOrbit.DEFAULT,
-                CameraTracking.DEFAULT);
+                CameraTracking.DEFAULT, null);
     }
 
     /**
@@ -67,6 +70,10 @@ public record CameraPreset(String identifier, String root, CameraView.Preset cam
 
                 body.keySet().stream().filter(field -> !READ.contains(field))
                     .forEach(field -> AddonEntities.unsupported("camera preset " + field));
+                String scheme = Json.text(body, "control_scheme", null);
+                if (scheme != null && ControlScheme.tryFrom(scheme) == null) {
+                    AddonEntities.unsupported("camera preset control_scheme " + scheme);
+                }
                 presets.put(identifier.toLowerCase(Locale.ROOT), body);
             } catch (IOException | RuntimeException error) {
                 McAddon.LOGGER.warn("Could not read {}: {}", file.getFileName(), error.toString());
@@ -90,7 +97,8 @@ public record CameraPreset(String identifier, String root, CameraView.Preset cam
             body.has("rot_x") ? Float.valueOf((float) Json.number(body, "rot_x", 0)) : xRot,
             body.has("rot_y") ? Float.valueOf((float) Json.number(body, "rot_y", 0)) : yRot,
             body.has("listener") ? Json.text(body, "listener", "").equals("player") : listensFromPlayer,
-            orbit.inheritedBy(body), tracking.inheritedBy(body));
+            orbit.inheritedBy(body), tracking.inheritedBy(body),
+            body.has("control_scheme") ? ControlScheme.tryFrom(Json.text(body, "control_scheme", "")) : controlScheme);
     }
 
     /**

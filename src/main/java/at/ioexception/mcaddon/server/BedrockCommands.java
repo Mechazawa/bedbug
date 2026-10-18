@@ -6,6 +6,7 @@ import at.ioexception.mcaddon.bedrock.camera.CameraView;
 import at.ioexception.mcaddon.bedrock.camera.CameraSpline;
 import at.ioexception.mcaddon.bedrock.camera.Easing;
 import at.ioexception.mcaddon.bedrock.hud.HudElement;
+import at.ioexception.mcaddon.bedrock.input.ControlScheme;
 import at.ioexception.mcaddon.bedrock.input.InputPermission;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.platform.Platform;
@@ -34,7 +35,9 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 import java.util.function.Function;
 
 /**
@@ -163,6 +166,7 @@ public final class BedrockCommands {
         registerFog(dispatcher);
         registerHud(dispatcher);
         registerInputPermission(dispatcher);
+        registerControlScheme(dispatcher);
         GameTestCommand.registerCommand(dispatcher);
     }
 
@@ -228,6 +232,45 @@ public final class BedrockCommands {
             .requires(source -> Platform.allowedAt(source, 1))
             .then(Commands.literal("set").then(set))
             .then(Commands.literal("query").then(query)));
+    }
+
+    /**
+     * `/controlscheme <targets> set <scheme>` and `/controlscheme <targets> clear`.
+     *
+     * A target whose camera does not allow the scheme is named in a failure and left on the scheme
+     * they had, and the command counts the targets it put on it.
+     */
+    private static void registerControlScheme(CommandDispatcher<CommandSourceStack> dispatcher) {
+        LiteralArgumentBuilder<CommandSourceStack> set = Commands.literal("set");
+        for (ControlScheme scheme : ControlScheme.values()) {
+            set.then(Commands.literal(scheme.bedrockName()).executes(command -> setControlScheme(command, scheme)));
+        }
+        dispatcher.register(Commands.literal("controlscheme")
+            .requires(source -> Platform.allowedAt(source, 1))
+            .then(Commands.argument("targets", EntityArgument.players())
+                .then(set)
+                .then(Commands.literal("clear").executes(command -> {
+                    Collection<ServerPlayer> targets = EntityArgument.getPlayers(command, "targets");
+                    targets.forEach(PlayerControlSchemes::clear);
+                    return targets.size();
+                }))));
+    }
+
+    private static int setControlScheme(CommandContext<CommandSourceStack> command, ControlScheme scheme)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        Map<Boolean, List<String>> applied = EntityArgument.getPlayers(command, "targets").stream()
+            .collect(Collectors.partitioningBy(player -> PlayerControlSchemes.set(player, scheme),
+                Collectors.mapping(player -> player.getName().getString(),
+                    Collectors.toList())));
+        if (!applied.get(true).isEmpty()) {
+            command.getSource().sendSuccess(() -> Component.literal(
+                "Applied control scheme to the following player(s): " + String.join(", ", applied.get(true))), false);
+        }
+        if (!applied.get(false).isEmpty()) {
+            command.getSource().sendFailure(Component.literal("Failed to apply control scheme to the following"
+                + " player(s): " + String.join(", ", applied.get(false))));
+        }
+        return applied.get(true).size();
     }
 
     private static int setInput(CommandContext<CommandSourceStack> command, InputPermission permission,

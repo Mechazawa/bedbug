@@ -3088,11 +3088,13 @@ export class Player extends Entity {
     }
 
     getControlScheme() {
-        return unsupported("Player.getControlScheme");
+        return bridge.players.controlScheme(this.id);
     }
 
-    setControlScheme() {
-        unsupported("Player.setControlScheme");
+    /** With no scheme the player goes back to the one their camera starts on. */
+    setControlScheme(controlScheme) {
+        const refused = bridge.players.setControlScheme(this.id, controlScheme ?? null);
+        if (refused !== null) throw new Error(refused);
     }
 
     // An override changes what this player's client draws the entity from, and nothing else.

@@ -844,7 +844,13 @@ These are the checks it runs, and what each one catches:
   alone, and nothing the client is told may reach the bystander. `InputPermissionClientGameTest`
   holds the forward key and moves the mouse the way a player would, and reads back that the player
   neither walked nor turned while `/bedrock inputpermission` had taken the input away, and did both
-  once it was given back.
+  once it was given back. `ControlSchemeClientGameTest` drives each control scheme the same way and
+  reads where the player stands and faces: the right key turning the player in place under
+  `player_relative`, the mouse turning a follow orbit camera and not the player, the test pack's
+  `tp:steered` (a free camera looking west whose preset names `camera_relative`) walking the player
+  west whichever way they faced, and the pointer of `camera_relative_strafe` under a camera looking
+  straight down turning the player toward it. The script's `tp:control_scheme <scheme>` probe calls
+  `Player.setControlScheme` and tags the player with `getControlScheme()` or with the refusal.
 
   Four more things name the game's own items and blocks by Bedrock's ids, each of which Java's
   parser refuses as written and refuses whole: `loot_tables/names.json` drops `golden_rail`,
@@ -1953,7 +1959,19 @@ three bodies: `Gui` up to 26.1.2 and `Hud` from 26.2 hold the same `extract*` me
 before 26 the armour, the hunger and the air bubbles are drawn inline in `renderPlayerHealth` (the
 air bubbles alone on 1.21.1), so the drawing calls inside Mojang's own profiler section of that name
 are what is skipped there. A script's `ScreenDisplay` and `Player.inputPermissions` reach the same two
-classes, so a command and a script never disagree about one player. A script, an entity event, a timeline, a dialogue scene and a block hand their lines to
+classes, so a command and a script never disagree about one player.
+
+`/controlscheme`, a camera preset's `control_scheme` and `Player.setControlScheme` go through
+`server.PlayerControlSchemes`, which keeps the chosen `bedrock.input.ControlScheme` per player and
+works out the one in force against the camera `server.PlayerCameras` holds: the chosen scheme where
+the camera allows it, else the preset's own, else the locked one, which is Java's. A camera change
+works it out again, and the client is sent it as an instruction whenever it changes.
+`client.PlayerControl` acts on it from `KeyboardInputMixin`, which hands it each tick's movement, and
+`MouseHandlerMixin`, which hands it each mouse turn; under the schemes that turn the camera the
+camera keeps a turn of its own, which `PlayerCamera.apply` puts in place of the player's. Mojang's
+table of the schemes each camera allows leaves out `minecraft:control_scheme_camera`, which allows
+all five here, and publishes no rate for the side keys' turn under `player_relative`, which is half
+a circle a second here. A script, an entity event, a timeline, a dialogue scene and a block hand their lines to
 `PackCommand` directly, which runs each to its end in an execution context of its own with the
 authority of a function, because the server's context runs a line queued during another command
 only once that command is done. A new path that runs a pack's commands takes the issuing add-on's
