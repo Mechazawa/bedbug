@@ -43,6 +43,7 @@ public final class PlayerCameras {
 
         SET.put(player.getUUID(), preset);
         send(player, preset.view(request));
+        PlayerAimAssists.send(player);
         return null;
     }
 
@@ -50,6 +51,12 @@ public final class PlayerCameras {
     public static void clear(ServerPlayer player) {
         SET.remove(player.getUUID());
         send(player, CameraView.CLEARED);
+        PlayerAimAssists.send(player);
+    }
+
+    /** Null while the player is on no preset. */
+    public static CameraPreset presetOf(ServerPlayer player) {
+        return SET.get(player.getUUID());
     }
 
     /** Turns the player's free camera after an entity, looking `offset` away from the middle of its box. */

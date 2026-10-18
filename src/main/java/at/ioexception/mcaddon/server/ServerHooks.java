@@ -144,6 +144,7 @@ public final class ServerHooks {
                 PlayerFogs.forget(left);
                 PlayerHuds.forget(left);
                 PlayerInputs.forget(left);
+                PlayerAimAssists.forget(left);
                 PropertyOverrides.forget(left);
                 playerLeft(left);
             });

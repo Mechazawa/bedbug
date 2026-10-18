@@ -879,6 +879,14 @@ These are the checks it runs, and what each one catches:
   spline in a pack's own namespace unread, because the functions are converted before the cameras
   are read; the command looks the name up as it runs.
 
+  `aim_assist/` holds the preset `tp:aim` and the categories `tp:cow_first` and `tp:pig_first`. An
+  empty hand takes `tp:cow_first`, which gives a cow ten times the priority of anything else, and
+  the preset leaves sheep out. `cameras/presets/aimed.json` is `tp:aimed`, a third person camera whose
+  `aim_assist` names `tp:aim`. `AimAssistClientGameTest` floats a pig 20 degrees to one side of where
+  the player faces, a cow 40 degrees to the other and a sheep straight ahead out of reach, and reads
+  `PlayerAimAssist.target()` and the client's own `crosshairPickEntity` back under the default
+  preset, `tp:aim`, `clear`, first person and `tp:aimed`.
+
   The rest of the presets and `camera/splines/sweep.json` are there for the cameras that move on
   their own, and five client game tests read each one back off the client's camera, all of them on
   `Stage` with the player at 0.5 120 0.5 looking south:
@@ -1959,6 +1967,22 @@ authority of a function, because the server's context runs a line queued during 
 only once that command is done. A new path that runs a pack's commands takes the issuing add-on's
 namespace and a `CommandReport`, never a dispatcher directly, and a new Bedrock command goes into
 `BedrockCommands`, never into Java's tree.
+
+**Aim assist is picked on the client.** `server.PlayerAimAssists` keeps what `/aimassist` and a
+script set, and sends the player an `AimAssistTargeting` (the settings, the preset and every category
+it names, as `AddonAimAssist.targeting` resolves them) under `Channels.sendInstruction`, again whenever
+the player's camera preset changes, because a camera preset's `aim_assist` overrides the command's
+while it is set. `client.PlayerAimAssist` picks the target at the start of each client tick, and
+`AimAssistPickMixin` lays it over every pick after it (`Minecraft.pick` from 26, `GameRenderer.pick`
+before), where it becomes the hit result only within the player's reach. Ids are kept as
+`identifierOf` reports them on both sides, so a preset naming either edition's spelling matches.
+What Mojang does not publish, decided here: the cone reaches its X and Y angle either side of the way
+the player faces, not across its whole width; a candidate is scored at the middle of its box; a
+priority of 0 or below leaves a target out; a hand with no `hand_settings`, and an item with no
+setting and no `default_item_settings`, use `minecraft:default`, which like `minecraft:aim_assist_default`
+gives everything a priority of 1 and leaves nothing out; a target out of reach is marked but never
+acted on. Before 26 the reticle is placed with the player's own field of view, which leaves out what
+sprinting does to it.
 
 **A gap and an answer are counted apart.** A command the game read and then declined, a selector that
 matched nothing, a structure holding a chest this cannot fill: those are listed after the verdict

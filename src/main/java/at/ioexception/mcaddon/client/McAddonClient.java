@@ -62,6 +62,7 @@ public final class McAddonClient implements ClientModInitializer {
                 case CameraView.FADE -> at.ioexception.mcaddon.client.render.PlayerFade.accept(body);
                 case CameraView.FOV -> at.ioexception.mcaddon.client.render.PlayerFov.accept(body,
                     net.minecraft.client.Minecraft.getInstance().options.fov().get());
+                case at.ioexception.mcaddon.bedrock.aim.AimAssistTargeting.KIND -> PlayerAimAssist.accept(body);
                 case at.ioexception.mcaddon.server.BedrockRules.KIND ->
                     at.ioexception.mcaddon.client.render.PlayerRules.accept(body);
                 default -> {
@@ -70,9 +71,13 @@ public final class McAddonClient implements ClientModInitializer {
         });
         Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("bedrock_rules"),
             at.ioexception.mcaddon.client.render.PlayerRules::draw);
+        Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("aim_assist"), PlayerAimAssist::draw);
         Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("bedrock_screen"),
             at.ioexception.mcaddon.client.render.PlayerFade::draw);
 
+        // Before the client's own tick, whose pick the target is laid over.
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.START_CLIENT_TICK
+            .register(PlayerAimAssist::tick);
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK
             .register(client -> {
                 at.ioexception.mcaddon.client.render.AddonEmitters.tick();
@@ -102,6 +107,7 @@ public final class McAddonClient implements ClientModInitializer {
             PlayerFog.clear();
             PlayerHud.clear();
             PlayerInput.clear();
+            PlayerAimAssist.clear();
             PlayerMusic.clear();
             at.ioexception.mcaddon.client.render.PlayerFade.clear();
             at.ioexception.mcaddon.client.render.PlayerFov.clear();

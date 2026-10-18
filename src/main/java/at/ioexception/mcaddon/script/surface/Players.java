@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.script.surface;
 
+import at.ioexception.mcaddon.bedrock.aim.AimAssistSettings;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
 import at.ioexception.mcaddon.bedrock.camera.AttachPoint;
 import at.ioexception.mcaddon.bedrock.camera.CameraRequest;
@@ -13,6 +14,7 @@ import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.registry.AddonParticles;
 import at.ioexception.mcaddon.script.ScriptCoverage;
+import at.ioexception.mcaddon.server.PlayerAimAssists;
 import at.ioexception.mcaddon.server.PlayerCameras;
 import at.ioexception.mcaddon.server.PlayerHuds;
 import at.ioexception.mcaddon.server.PlayerInputs;
@@ -531,6 +533,31 @@ public final class Players extends Surface {
         } else if (player != null) {
             PlayerInputs.set(player, permission, enabled);
         }
+    }
+
+    /** What `/aimassist` or a script set for the player, in a camera preset's `aim_assist` shape, or null. */
+    @HostAccess.Export
+    public String aimAssist(String id) {
+        ServerPlayer player = player(id);
+        AimAssistSettings settings = player == null ? null : PlayerAimAssists.of(player);
+        return settings == null ? null : settings.toJson().toString();
+    }
+
+    /** Turns aim assist off for a null body. Answers why it was refused, in Bedrock's words, or null. */
+    @HostAccess.Export
+    public String setAimAssist(String id, String body) {
+        ServerPlayer player = player(id);
+        if (player == null) return "The player is not valid.";
+        if (body == null) {
+            PlayerAimAssists.clear(player);
+            return null;
+        }
+        JsonObject json = JsonParser.parseString(body).getAsJsonObject();
+        JsonArray angle = json.getAsJsonArray("angle");
+        AimAssistSettings.TargetMode mode = AimAssistSettings.TargetMode.tryFrom(Json.text(json, "target_mode", ""));
+        return PlayerAimAssists.set(player, new AimAssistSettings(Json.text(json, "preset", ""),
+            mode == null ? AimAssistSettings.TargetMode.ANGLE : mode, angle.get(0).getAsFloat(),
+            angle.get(1).getAsFloat(), (float) Json.number(json, "distance", AimAssistSettings.DEFAULT_DISTANCE)));
     }
 
     /** The language the client asked for, which a 1.20.1 server is sent but keeps to itself. */

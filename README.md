@@ -264,6 +264,17 @@ Against a server without this mod a client plays with its own add-ons.
   category back, `haspermission` selects by it, a script's `Player.inputPermissions` changes the
   same set, and `playerInputPermissionCategoryChange` is raised on every change. A player's set lasts
   as long as they are connected.
+- `/bedrock aimassist`, which picks what a player's hand acts on while they play in third person.
+  Among the blocks and entities inside a cone round the way the player faces, out to the distance
+  the line gives, it takes the nearest or the one nearest the cone's middle, weighed by the
+  priorities of the category the held item names in the preset, leaving out what the preset
+  excludes and liquids unless the held item is on its liquid list. A reticle is drawn over the
+  target, from the pack's `textures/ui/aimassist_entity_highlight` or `aimassist_block_highlight`
+  where an add-on ships one. The target becomes what the player attacks, uses or mines while it is
+  within reach. Presets and categories come from a behaviour pack's `aim_assist/` (or beside its
+  camera presets) and from a script's `world.getAimAssist()`, a camera preset's `aim_assist`
+  overrides the command while that camera is set, and `Player.getAimAssist()` reads and sets the
+  same settings. First person has no aim assist, as in Bedrock.
 - Records. A record a pack ships goes into a jukebox and plays, for the length the pack stated, with
   the comparator reading it asked for. Bedrock lets a pack give a record music of its own by writing
   one of the engine's own record sound names in its `sound_definitions.json`, which is the only way
@@ -344,7 +355,7 @@ Against a server without this mod a client plays with its own add-ons.
   as Java builds it: `/bedrock` and `/mcaddon` are the only commands this mod adds there, `/particle`
   and `/transfer` take Java's arguments alone, and a Java data pack's `@e[...]` knows only Java's
   selector options. The Bedrock commands Java has not got, `camera`, `camerashake`,
-  `clearspawnpoint`, `dialogue`, `event`, `fog`, `gametest`, `hud`, `inputpermission`, `mobevent`,
+  `aimassist`, `clearspawnpoint`, `dialogue`, `event`, `fog`, `gametest`, `hud`, `inputpermission`, `mobevent`,
   `music`, `playanimation`, `scriptevent`, `structure`, `toggledownfall`, Bedrock's `particle` and
   `transfer` and the commands a pack's script declares, are reached through it and nowhere else. It asks for the level Java runs
   a function at, and every command the line names asks for its own on top of that.
@@ -865,8 +876,8 @@ description with its own scattering coefficients. `/fog` carries the `air` block
 pack pushes a fog for; Java draws its own fog for the other media and has no volumetric fog to give
 the second block to.
 
-**Eleven of Bedrock's commands.** `aimassist` and `controlscheme` change how a Bedrock client turns
-a controller or a touchscreen into aim and movement, and `project` and `editor-allowlist` belong to
+**Ten of Bedrock's commands.** `controlscheme` changes how a Bedrock client turns a controller or a
+touchscreen into movement, and `project` and `editor-allowlist` belong to
 the Bedrock Editor. `connect` and `wsserver` speak to a WebSocket server, `sendshowstoreoffer` to the
 marketplace, `script` to the debugger and profiler of Bedrock's own script engine, and
 `reloadconfig`, `reloadpacketlimitconfig` and `serveridentity` to a Bedrock server's own
@@ -895,7 +906,7 @@ words at the end, and `schedule clear` is spelled alike in both.
 `playanimation`, `event`, `scriptevent`, `music`, `toggledownfall`, `structure`, `mobevent`,
 `particle`, `dialogue`, `gametest`, `transfer`, `camera`, `camerashake`, `fog`, `clearspawnpoint`,
 `hud`, `inputpermission`, `ride`, `summon`, `tickingarea`, `packstack`, `setmaxplayers`,
-`permission` and `ops` are registered by this mod in the tree a Bedrock line is read against,
+`permission`, `ops` and `aimassist` are registered by this mod in the tree a Bedrock line is read against,
 beside Java's own commands and never in Java's tree, as are Bedrock's own forms of `place`,
 `schedule` and `gamerule`, and a line using one is written out in the form the command built there
 reads. `clearspawnpoint` takes a
@@ -994,8 +1005,9 @@ fields that shape how a free camera follows its target (`rotation_speed`, `snap_
 two rotation limits, `continue_targeting` and `tracking_radius`) are drawn. The rest is named by
 `/mcaddon entities` as the pack loads. `player_effects` and `extend_player_rendering` describe the
 Bedrock client's renderer: Java draws the player's effects whatever the camera and draws every entity
-the loaded chunks hold. `aim_assist` and `control_scheme` belong to two systems this mod has not got,
-aim assist and `/controlscheme`. Mojang describes `align_target_and_camera_forward` nowhere, so it is
+the loaded chunks hold. `aim_assist` is aim assist's own, described with `/bedrock aimassist`, and
+`control_scheme` belongs to `/controlscheme`, which this mod has not got. Mojang describes
+`align_target_and_camera_forward` nowhere, so it is
 read by its name: a fixed boom stating it turns the player to face the way the camera looks when it
 is set. Bedrock keeps a player's `pos` and `rot` for a preset until `default` or a rejoin clears them;
 here a `/camera set` with neither places the camera where the preset says.

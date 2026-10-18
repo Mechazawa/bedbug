@@ -163,6 +163,7 @@ public final class BedrockCommands {
         registerFog(dispatcher);
         registerHud(dispatcher);
         registerInputPermission(dispatcher);
+        PlayerAimAssists.registerCommand(dispatcher);
         GameTestCommand.registerCommand(dispatcher);
     }
 
