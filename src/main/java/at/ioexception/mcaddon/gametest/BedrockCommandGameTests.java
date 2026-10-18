@@ -255,7 +255,8 @@ public final class BedrockCommandGameTests {
      * `/schedule on_area_loaded` holds a function back until a ticking area loads the chunk it waits
      * for, which the synthetic pack's `tp/loaded` counts.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 400)
+    // The far chunk is generated as it loads, which a loaded machine can take many seconds over.
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 1200)
     public void tickingAreasForceChunksAndAScheduleWaitsForThem(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos here = helper.absolutePos(BlockPos.ZERO);
