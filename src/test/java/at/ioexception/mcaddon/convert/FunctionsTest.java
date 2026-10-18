@@ -180,7 +180,10 @@ class FunctionsTest {
     @ParameterizedTest
     @CsvSource({
         "'place structure minecraft:trail_ruins ~ ~ ~ false false false ignore_waterlogging', "
-            + "'command place ignore_waterlogging, which Java has no form of'",
+            + "'command place structure with a placement Java builds for itself'",
+        "'place jigsaw minecraft:village/plains/town_centers minecraft:bottom 7 ~ ~ ~ false false', "
+            + "'command place jigsaw leaving out its entities'",
+        "'camera @s set minecraft:follow_orbit', 'command camera minecraft:follow_orbit, which Java has no form of'",
         "'permission set @p visitor', 'command permission visitor, which Java has no form of'",
     })
     void dropsAFormOfATranslatedCommandJavaCannotSay(String source, String reported) throws IOException {
@@ -325,9 +328,23 @@ class FunctionsTest {
 
     @Test
     void dropsAGameRuleJavaDoesNotHave() throws IOException {
-        assertEquals(List.of(), translate("gamerule showcoordinates true"));
-        assertTrue(problems.contains("game rule showcoordinates, which Java keeps no rule for"),
+        assertEquals(List.of(), translate("gamerule showbordereffect true"));
+        assertTrue(problems.contains("game rule showbordereffect, which Java keeps no rule for"),
             problems.toString());
+    }
+
+    /** A rule Java keeps none of is read by the `gamerule` the Bedrock tree holds, under its own name. */
+    @Test
+    void writesARuleHeldHereUnderItsBedrockName() throws IOException {
+        assertEquals("gamerule showCoordinates true", only("gamerule showcoordinates TRUE"));
+    }
+
+    /** Bedrock's words after a jigsaw's position reach the `place jigsaw` built here as written. */
+    @Test
+    void passesAJigsawsSettingsToTheCommandBuiltHere() throws IOException {
+        String line = "place jigsaw minecraft:village/plains/town_centers minecraft:bottom 7 ~ ~ ~ true true "
+            + "apply_waterlogging";
+        assertEquals(line, only(line));
     }
 
     /** Bedrock caps a function's commands with a rule of its own; Java caps them with its chain rule. */
