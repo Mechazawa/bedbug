@@ -646,7 +646,10 @@ These are the checks it runs, and what each one catches:
   each of the three ride rules; `/summon` turns what it makes to a rotation, a point and an entity,
   takes a name written before the position, and raises a spawn event the ember answers;
   `/replaceitem` saddles a horse and arms it through `slot.equippable`, and `keep` leaves its armour
-  alone and fills an armour stand's empty head.
+  alone and fills an armour stand's empty head; `/structure` saves a region of six different blocks
+  to memory and to disk, deletes the disk copy, and loads the region mirrored both ways, turned a
+  quarter, without its blocks, at no integrity, into water with and without waterlogging, and a
+  layer at a time, each checked block by block where Bedrock puts it.
 
   `HudClientGameTest` hides and resets pieces of the heads-up display on a dedicated server, one
   piece at a time, all of them, and through the script's `tp:hud_hide` and `tp:hud_reset` probes.

@@ -6,7 +6,6 @@ import at.ioexception.mcaddon.bedrock.hud.HudElement;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.platform.Platform;
-import at.ioexception.mcaddon.structure.McStructure;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -131,7 +130,6 @@ public final class Functions {
         "camera target_center_offset", "camera target_entity", "camera view_offset",
         "save query",
         "schedule on_area_loaded",
-        "structure block_by_block", "structure layer_by_layer", "structure memory", "structure xz",
         "tickingarea all-dimensions", "tickingarea circle", "tickingarea preload");
 
     /**
@@ -253,25 +251,6 @@ public final class Functions {
     /** The Java slots numbered one per place, which take the Bedrock slot index after a dot. */
     private static final Set<String> NUMBERED_SLOTS =
         Set.of("container", "hotbar", "inventory", "enderchest");
-
-    /** The Java rotation a Bedrock structure rotation names. */
-    private static final Map<String, String> STRUCTURE_ROTATIONS = Map.of(
-        "0_degrees", "none",
-        "90_degrees", "clockwise_90",
-        "180_degrees", "180",
-        "270_degrees", "counterclockwise_90");
-
-    /**
-     * The Java mirror a Bedrock structure mirror names.
-     *
-     * Java names the pair of faces a mirror swaps where Bedrock names the axis it runs along, so
-     * mirroring x swaps east for west and mirroring z swaps north for south. Bedrock's `xz` mirrors
-     * both at once, which Java has no single mirror for.
-     */
-    private static final Map<String, String> STRUCTURE_MIRRORS = Map.of(
-        "none", "none",
-        "x", "front_back",
-        "z", "left_right");
 
     private static final Pattern SELECTOR = Pattern.compile("@[aeprsn]\\[");
     private static final Pattern SPACE = Pattern.compile("\\s+");
@@ -1250,71 +1229,22 @@ public final class Functions {
             + (parts.length > 2 ? " " + parts[2] : "");
     }
 
-    /** Bedrock saves a region under a name, places it again and forgets it. */
+    /**
+     * `structure save|load|delete <name> ...`, which the command built here reads in Bedrock's own
+     * form, with the name quoted because it carries a namespace as often as not.
+     */
     private static String structure(String rest, Set<String> unsupported) {
-        String[] parts = SPACE.split(rest);
-        return switch (parts[0].toLowerCase(Locale.ROOT)) {
-            case "save" -> saveStructure(parts, unsupported);
-            case "load" -> loadStructure(parts, unsupported);
-            case "delete" -> {
-                if (parts.length < 2) {
-                    unsupported.add("command structure delete with no name");
-                    yield null;
-                }
-                yield "structure delete " + new JsonPrimitive(parts[1]);
-            }
-            default -> dropped("structure", parts[0], unsupported);
-        };
-    }
-
-    /**
-     * `structure save <name> <from> <to> [includeEntities] [saveMode] [includeBlocks]`.
-     *
-     * A Java template holds the blocks and the entities of the region either way and is written as
-     * a file, which is what `disk` asks for. `memory` asks for one the world never keeps.
-     */
-    private static String saveStructure(String[] parts, Set<String> unsupported) {
-        if (parts.length < 8) {
-            unsupported.add("command structure save with no region to save");
+        String[] parts = SPACE.split(rest, 3);
+        String mode = parts[0].toLowerCase(Locale.ROOT);
+        if (!mode.equals("save") && !mode.equals("load") && !mode.equals("delete")) {
+            return dropped("structure", mode, unsupported);
+        }
+        if (parts.length < 2) {
+            unsupported.add("command structure " + mode + " with no name");
             return null;
         }
-        for (String option : Arrays.copyOfRange(parts, 8, parts.length)) {
-            String word = option.toLowerCase(Locale.ROOT);
-            if (word.equals("disk") || word.equals("true") || word.equals("false")) continue;
-            return dropped("structure", word, unsupported);
-        }
-        return "structure save " + new JsonPrimitive(parts[1]) + " "
-            + String.join(" ", Arrays.copyOfRange(parts, 2, 8));
-    }
-
-    /**
-     * `structure load <name> <to> [rotation] [mirror] ...`, which Java places as a template.
-     *
-     * Java's own `place template` turns and mirrors a template as it places it, and takes the name
-     * as a resource location, so the line goes to it rather than to the command registered here.
-     * Everything Bedrock writes after the mirror describes a placement Java builds in its own code:
-     * an animation it plays none of, and the entity, block and waterlogging choices it makes itself.
-     */
-    private static String loadStructure(String[] parts, Set<String> unsupported) {
-        if (parts.length < 5) {
-            unsupported.add("command structure load with nowhere to put it");
-            return null;
-        }
-        StringBuilder placement = new StringBuilder("place template "
-            + McStructure.javaName(parts[1].replace("\"", "")) + " "
-            + String.join(" ", Arrays.copyOfRange(parts, 2, 5)));
-
-        for (int at = 5; at < parts.length; at++) {
-            String word = parts[at].toLowerCase(Locale.ROOT);
-            String java = switch (at) {
-                case 5 -> STRUCTURE_ROTATIONS.get(word);
-                case 6 -> STRUCTURE_MIRRORS.get(word);
-                default -> null;
-            };
-            if (java == null) return dropped("structure", word, unsupported);
-            placement.append(' ').append(java);
-        }
-        return placement.toString();
+        return "structure " + mode + " " + new JsonPrimitive(parts[1].replace(String.valueOf(QUOTE), ""))
+            + (parts.length > 2 ? " " + parts[2] : "");
     }
 
     /**

@@ -66,6 +66,7 @@ FUNCTIONS = JAVA / "convert/Functions.java"
 # than literals in the command tree, and those words are keywords the metadata counts.
 REGISTRATIONS = (JAVA / "server/BedrockCommands.java", JAVA / "server/Dialogues.java",
                  JAVA / "server/Rides.java", JAVA / "server/Summons.java",
+                 JAVA / "server/StructureCommand.java",
                  JAVA / "bedrock/camera/CameraView.java", JAVA / "bedrock/hud/HudElement.java",
                  JAVA / "bedrock/input/InputPermission.java")
 DEFAULT_SAMPLES = ROOT / "scratchpad/bedrock/bedrock-samples"

@@ -1120,7 +1120,7 @@ public final class ScriptBridge {
 
         StructureTemplate template = server.getStructureManager().getOrCreate(id);
         Platform.fillFromWorld(template, level, new BlockPos(x, y, z),
-            new net.minecraft.core.Vec3i(width, height, depth));
+            new net.minecraft.core.Vec3i(width, height, depth), false);
         return server.getStructureManager().save(id);
     }
 

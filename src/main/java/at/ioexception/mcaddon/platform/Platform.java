@@ -1707,19 +1707,43 @@ public final class Platform {
         *///?}
     }
 
+    /** Where a structure the world saved under this id is written. */
+    public static java.nio.file.Path savedStructureFile(
+        net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager manager, Identifier id) {
+        //? if >=26 {
+        return manager.worldTemplates().createAndValidatePathToStructure(id, manager.WORLD_STRUCTURE_LISTER);
+        //?} else if >=1.21 {
+        /*return manager.createAndValidatePathToGeneratedStructure(id, ".nbt");
+        *///?} else {
+        /*return manager.getPathToGeneratedStructure(id, ".nbt");
+        *///?}
+    }
+
+    /** Whether a block a template places into water keeps the water, which 1.21 made a setting. */
+    public static void keepLiquids(
+        net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings settings, boolean keep) {
+        //? if >=1.21 {
+        settings.setLiquidSettings(keep
+            ? net.minecraft.world.level.levelgen.structure.templatesystem.LiquidSettings.APPLY_WATERLOGGING
+            : net.minecraft.world.level.levelgen.structure.templatesystem.LiquidSettings.IGNORE_WATERLOGGING);
+        //?} else {
+        /*settings.setKeepLiquids(keep);
+        *///?}
+    }
+
     /**
-     * Copies a region of the world into a structure template.
-     *
-     * What to leave out changed from one block to a list of them in 1.21.2; nothing is left out
-     * either way, which is what Bedrock does when a pack does not say otherwise.
+     * Copies a region of the world into a structure template, leaving out structure voids the way a
+     * structure block does in either edition.
      */
     public static void fillFromWorld(
         net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate template,
-        ServerLevel level, net.minecraft.core.BlockPos corner, net.minecraft.core.Vec3i size) {
+        ServerLevel level, net.minecraft.core.BlockPos corner, net.minecraft.core.Vec3i size, boolean entities) {
         //? if >=1.21.2 {
-        template.fillFromWorld(level, corner, size, false, List.of());
+        template.fillFromWorld(level, corner, size, entities,
+            List.of(net.minecraft.world.level.block.Blocks.STRUCTURE_VOID));
         //?} else {
-        /*template.fillFromWorld(level, corner, size, false, (Block) null);
+        /*template.fillFromWorld(level, corner, size, entities,
+            net.minecraft.world.level.block.Blocks.STRUCTURE_VOID);
         *///?}
     }
 

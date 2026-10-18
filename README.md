@@ -262,6 +262,13 @@ add-ons, or with another release of it, is told which in chat.
   second is the horse's armour or the llama's carpet, as on every vanilla entity carrying a
   `minecraft:equippable`. `replaceitem ... keep` fills a slot only while it is empty, through Java's
   own `execute unless items`, which 1.20.1 does not have, so there the line is reported instead.
+- `/bedrock structure` in Bedrock's own form. `save` keeps a region in memory, which is Bedrock's
+  default and lasts as long as the server, or writes it beside the world with `disk`, with or
+  without its entities and its blocks; `delete` forgets it and deletes its file. `load` puts the
+  lowest corner of what the structure fills at the position the line names whichever way it is
+  turned or mirrored, mirroring along both axes as a half turn, and takes the entities, the blocks,
+  waterlogging, integrity and seed, and Bedrock's animation, which places the structure a block or
+  a layer at a time over the seconds the line gives.
 - Clips on a mob Java draws with a model of its own, such as `playanimation` on a vanilla villager.
   Each Bedrock bone is found among the Java model's parts, and on a mob whose Bedrock geometry hangs
   the head, arms and legs under `body`, those parts move, turn and scale with the body, so a pack

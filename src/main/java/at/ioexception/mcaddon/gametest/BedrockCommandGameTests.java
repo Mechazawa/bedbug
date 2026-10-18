@@ -5,6 +5,7 @@ import at.ioexception.mcaddon.registry.AddonEntities;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
@@ -12,9 +13,16 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 
+import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The Bedrock commands whose forms Java's own command of the same name has no word for, run through
@@ -161,6 +169,92 @@ public final class BedrockCommandGameTests {
         helper.assertTrue(stand.getItemBySlot(EquipmentSlot.HEAD).is(Items.DIAMOND_HELMET),
             "keep did not fill an empty slot.");
         helper.succeed();
+    }
+
+    /**
+     * `/structure` saves a region to memory and to disk, deletes it, and places it again mirrored
+     * both ways, turned, without its blocks, at no integrity, into water with and without
+     * waterlogging, and a layer at a time.
+     *
+     * The region is two layers of six blocks, no two alike, so every placement can be checked block
+     * by block against where Bedrock puts each one: the lowest corner of what it fills at the
+     * position the line names, whichever way it was turned.
+     */
+    @GameTest()
+    public void structureSavesAndLoadsInBedrocksForms(GameTestHelper helper) {
+        Map<BlockPos, Block> region = new LinkedHashMap<>();
+        region.put(new BlockPos(0, 0, 0), Blocks.STONE);
+        region.put(new BlockPos(1, 0, 0), Blocks.DIRT);
+        region.put(new BlockPos(2, 0, 0), Blocks.GOLD_BLOCK);
+        region.put(new BlockPos(0, 0, 1), Blocks.OAK_PLANKS);
+        region.put(new BlockPos(2, 0, 1), Blocks.OAK_SLAB);
+        region.put(new BlockPos(1, 1, 0), Blocks.GLASS);
+        BlockPos source = new BlockPos(0, 1, 0);
+        region.forEach((offset, block) -> helper.setBlock(source.offset(offset), block));
+
+        String name = "t_structure_" + helper.absolutePos(BlockPos.ZERO).asLong();
+        BedrockLines.run(helper, "structure save " + name + " " + at(helper, source) + " "
+            + at(helper, source.offset(2, 1, 1)) + " false");
+        BedrockLines.run(helper, "structure save " + name + "_disk " + at(helper, source) + " "
+            + at(helper, source.offset(2, 1, 1)) + " disk");
+        MinecraftServer server = helper.getLevel().getServer();
+        StructureTemplateManager templates = server.getStructureManager();
+        helper.assertFalse(Files.exists(Platform.savedStructureFile(templates, Platform.id("mystructure", name))),
+            "a structure saved to memory was written to disk.");
+        java.nio.file.Path disk = Platform.savedStructureFile(templates, Platform.id("mystructure", name + "_disk"));
+        helper.assertTrue(Files.exists(disk), "a structure saved to disk was not written to " + disk.toAbsolutePath());
+        BedrockLines.run(helper, "structure delete " + name + "_disk");
+        helper.assertFalse(Files.exists(disk) || templates.get(Platform.id("mystructure", name + "_disk")).isPresent(),
+            "structure delete left the structure behind.");
+
+        BlockPos mirrored = new BlockPos(4, 1, 0);
+        BedrockLines.run(helper, "structure load " + name + " " + at(helper, mirrored) + " 0_degrees xz");
+        region.forEach((offset, block) -> expect(helper, mirrored.offset(2 - offset.getX(), offset.getY(),
+            1 - offset.getZ()), block, "mirrored both ways"));
+
+        BlockPos turned = new BlockPos(0, 1, 3);
+        BedrockLines.run(helper, "structure load " + name + " " + at(helper, turned) + " 90_degrees");
+        region.forEach((offset, block) -> expect(helper, turned.offset(1 - offset.getZ(), offset.getY(),
+            offset.getX()), block, "turned a quarter"));
+
+        BlockPos bare = new BlockPos(4, 1, 3);
+        BedrockLines.run(helper, "structure load " + name + " " + at(helper, bare) + " 0_degrees none true false");
+        BlockPos crumbled = new BlockPos(4, 4, 3);
+        BedrockLines.run(helper, "structure load " + name + " " + at(helper, crumbled)
+            + " 0_degrees none true true false 0 seven");
+        region.forEach((offset, block) -> {
+            expect(helper, bare.offset(offset), Blocks.AIR, "loaded without its blocks");
+            expect(helper, crumbled.offset(offset), Blocks.AIR, "loaded at no integrity");
+        });
+
+        BlockPos wet = new BlockPos(4, 4, 0);
+        BlockPos dry = new BlockPos(0, 6, 3);
+        helper.setBlock(wet.offset(2, 0, 1), Blocks.WATER);
+        helper.setBlock(dry.offset(2, 0, 1), Blocks.WATER);
+        BedrockLines.run(helper, "structure load " + name + " " + at(helper, wet) + " 0_degrees none true true true");
+        BedrockLines.run(helper, "structure load " + name + " " + at(helper, dry));
+        helper.assertTrue(helper.getBlockState(wet.offset(2, 0, 1)).getValue(BlockStateProperties.WATERLOGGED),
+            "a slab loaded into water with waterlogged true lost the water.");
+        helper.assertFalse(helper.getBlockState(dry.offset(2, 0, 1)).getValue(BlockStateProperties.WATERLOGGED),
+            "a slab loaded into water by default kept the water, which Bedrock's default does not.");
+
+        BlockPos animated = new BlockPos(0, 4, 0);
+        BedrockLines.run(helper, "structure load " + name + " " + at(helper, animated)
+            + " 0_degrees none layer_by_layer 1");
+        expect(helper, animated, Blocks.AIR, "the first moment of a structure loaded layer by layer");
+        helper.succeedWhen(() -> region.forEach((offset, block) ->
+            expect(helper, animated.offset(offset), block, "loaded layer by layer")));
+    }
+
+    private static String at(GameTestHelper helper, BlockPos relative) {
+        BlockPos absolute = helper.absolutePos(relative);
+        return absolute.getX() + " " + absolute.getY() + " " + absolute.getZ();
+    }
+
+    private static void expect(GameTestHelper helper, BlockPos relative, Block block, String placement) {
+        Block found = helper.getBlockState(relative).getBlock();
+        helper.assertTrue(found == block, "the structure " + placement + " holds " + found + " at " + relative
+            + " where " + block + " belongs.");
     }
 
     private static boolean named(Entity entity, String name) {

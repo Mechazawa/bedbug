@@ -134,9 +134,10 @@ class FunctionsTest {
         "'gametest stopall', 'gametest stopall'",
         "'mobevent events_enabled false', 'mobevent events_enabled false'",
         "'music stop 2', 'music stop'",
-        "'structure save tp:hut 0 0 0 4 4 4 true disk', 'structure save \"tp:hut\" 0 0 0 4 4 4'",
-        "'structure load tp:hut 0 64 0 90_degrees x', "
-            + "'place template tp:hut 0 64 0 clockwise_90 front_back'",
+        "'structure save tp:hut 0 0 0 4 4 4 true disk', 'structure save \"tp:hut\" 0 0 0 4 4 4 true disk'",
+        "'structure load tp:hut 0 64 0 90_degrees x', 'structure load \"tp:hut\" 0 64 0 90_degrees x'",
+        "'structure load hut 0 64 0 0_degrees xz layer_by_layer 2 true false true 50 seed', "
+            + "'structure load \"hut\" 0 64 0 0_degrees xz layer_by_layer 2 true false true 50 seed'",
         "'structure delete tp:hut', 'structure delete \"tp:hut\"'",
         "'music play tp:theme 0.4', 'music play \"tp:theme\" 0.4'",
         "'particle tp:sparkle ~ ~ ~', 'particle \"tp:sparkle\" ~ ~ ~'",
@@ -166,7 +167,6 @@ class FunctionsTest {
         "'gametest runthis', 'command gametest runthis, which Java has no form of'",
         "'music play tp:theme 1 0 loop', 'command music loop, which Java has no form of'",
         "'save query', 'command save query, which Java has no form of'",
-        "'structure load tp:hut 0 64 0 0_degrees xz', 'command structure xz, which Java has no form of'",
         "'tickingarea preload 0 0 0', 'command tickingarea preload, which Java has no form of'",
         "'mobevent minecraft:ender_dragon_event true', "
             + "'command mobevent minecraft:ender_dragon_event, which Java has no form of'",

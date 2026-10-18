@@ -7,7 +7,6 @@ import at.ioexception.mcaddon.bedrock.hud.HudElement;
 import at.ioexception.mcaddon.bedrock.input.InputPermission;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.platform.Platform;
-import at.ioexception.mcaddon.structure.McStructure;
 import at.ioexception.mcaddon.registry.AddonCameras;
 import at.ioexception.mcaddon.registry.AddonFogs;
 import at.ioexception.mcaddon.registry.AddonParticles;
@@ -32,13 +31,8 @@ import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.commands.arguments.IdentifierArgument;
-import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.commands.arguments.coordinates.Vec3Argument;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Vec3i;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
@@ -139,22 +133,7 @@ public final class BedrockCommands {
                 .executes(command ->
                     clearSpawnPoint(EntityArgument.getPlayers(command, "player")))));
 
-        // Bedrock saves a region under a name and places it again; Java has the same two operations
-        // behind a structure block and `/place template`, and no command that names them.
-        dispatcher.register(Commands.literal("structure")
-            .requires(source -> Platform.allowedAt(source, 1))
-            .then(Commands.literal("save")
-                .then(Commands.argument("name", StringArgumentType.string())
-                    .then(Commands.argument("from", BlockPosArgument.blockPos())
-                        .then(Commands.argument("to", BlockPosArgument.blockPos())
-                            .executes(BedrockCommands::saveStructure)))))
-            .then(Commands.literal("load")
-                .then(Commands.argument("name", StringArgumentType.string())
-                    .then(Commands.argument("to", BlockPosArgument.blockPos())
-                        .executes(BedrockCommands::loadStructure))))
-            .then(Commands.literal("delete")
-                .then(Commands.argument("name", StringArgumentType.string())
-                    .executes(BedrockCommands::deleteStructure))));
+        StructureCommand.registerCommand(dispatcher);
 
         // A mob event switches a kind of spawning on or off, which Java states as a game rule. Each
         // event is a literal because its Bedrock name carries a colon, which an unquoted string
@@ -539,46 +518,6 @@ public final class BedrockCommands {
         command.getSource().sendSuccess(
             () -> Component.literal("Sent " + moved + " player(s) to " + host + ":" + port), true);
         return (int) moved;
-    }
-
-    /** The region between the two corners, kept under the name the pack gave it. */
-    private static int saveStructure(CommandContext<CommandSourceStack> command)
-        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
-        Identifier id = Identifier.tryParse(McStructure.javaName(StringArgumentType.getString(command, "name")));
-        if (id == null) {
-            command.getSource().sendFailure(Component.literal("That is not a usable structure name."));
-            return 0;
-        }
-
-        BlockPos from = BlockPosArgument.getLoadedBlockPos(command, "from");
-        BlockPos to = BlockPosArgument.getLoadedBlockPos(command, "to");
-        BlockPos corner = new BlockPos(Math.min(from.getX(), to.getX()), Math.min(from.getY(), to.getY()),
-            Math.min(from.getZ(), to.getZ()));
-        Vec3i size = new Vec3i(Math.abs(from.getX() - to.getX()) + 1,
-            Math.abs(from.getY() - to.getY()) + 1, Math.abs(from.getZ() - to.getZ()) + 1);
-
-        StructureTemplateManager manager = command.getSource().getServer().getStructureManager();
-        Platform.fillFromWorld(manager.getOrCreate(id), command.getSource().getLevel(), corner, size);
-        return manager.save(id) ? 1 : 0;
-    }
-
-    private static int loadStructure(CommandContext<CommandSourceStack> command)
-        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
-        BlockPos at = BlockPosArgument.getLoadedBlockPos(command, "to");
-        return run(command.getSource(), "place template "
-            + McStructure.javaName(StringArgumentType.getString(command, "name")) + " " + at.getX() + " " + at.getY()
-            + " " + at.getZ());
-    }
-
-    /** Forgets a structure saved under that name, which is what Bedrock's own delete does. */
-    private static int deleteStructure(CommandContext<CommandSourceStack> command) {
-        Identifier id = Identifier.tryParse(McStructure.javaName(StringArgumentType.getString(command, "name")));
-        if (id == null) {
-            command.getSource().sendFailure(Component.literal("That is not a usable structure name."));
-            return 0;
-        }
-        command.getSource().getServer().getStructureManager().remove(id);
-        return 1;
     }
 
     /**

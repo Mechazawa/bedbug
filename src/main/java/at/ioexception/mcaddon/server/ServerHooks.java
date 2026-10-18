@@ -297,6 +297,7 @@ public final class ServerHooks {
             scripts = null;
         }
         WorldEvents.forget();
+        at.ioexception.mcaddon.structure.StructurePlacement.forget();
         if (state != null) state.save();
     }
 
@@ -304,6 +305,7 @@ public final class ServerHooks {
     private static void tick(MinecraftServer server) {
         if (scripts != null) scripts.tick(server.getTickCount());
         WorldEvents.endTick(server);
+        at.ioexception.mcaddon.structure.StructurePlacement.tick();
         SelectorTags.finishAll();
         if (state != null && server.getTickCount() % 1200 == 0) state.save();
     }
