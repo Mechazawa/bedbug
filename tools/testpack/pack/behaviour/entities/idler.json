@@ -156,6 +156,25 @@
           "look_distance": 12
         }
       },
+      "tp:idler_playing_dead": {
+        "minecraft:behavior.play_dead": {
+          "priority": 0,
+          "duration": 2,
+          "random_start_chance": 0,
+          "random_damage_range": {
+            "min": 3,
+            "max": 6
+          }
+        }
+      },
+      "tp:idler_forced_dead": {
+        "minecraft:behavior.play_dead": {
+          "priority": 0,
+          "duration": 2,
+          "random_start_chance": 0,
+          "force_below_health": 10
+        }
+      },
       "tp:idler_insomniac": {
         "minecraft:behavior.nap": {
           "priority": 0,
@@ -284,6 +303,20 @@
         "add": {
           "component_groups": [
             "tp:idler_watching"
+          ]
+        }
+      },
+      "tp:idler_make_playing_dead": {
+        "add": {
+          "component_groups": [
+            "tp:idler_playing_dead"
+          ]
+        }
+      },
+      "tp:idler_make_forced_dead": {
+        "add": {
+          "component_groups": [
+            "tp:idler_forced_dead"
           ]
         }
       },

@@ -260,6 +260,59 @@ public final class IdleGoalGameTests {
         });
     }
 
+    /** Damage under `random_damage_range` never starts it, damage inside rolls the chance, damage over always does. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 60)
+    public void aHitSetsAMobPlayingDeadByWhereItFallsInTheDamageRange(GameTestHelper helper) {
+        AddonEntity small = idler(helper, "tp:idler_make_playing_dead");
+        AddonEntity middling = BehaviourGameTests.spawn(helper, IDLER, STAND.south(2));
+        AddonEntity large = BehaviourGameTests.spawn(helper, IDLER, STAND.south(4));
+        if (small == null || middling == null || large == null) {
+            helper.succeed();
+            return;
+        }
+
+        for (AddonEntity entity : new AddonEntity[] {middling, large}) {
+            EntityEvents.trigger(entity, "tp:idler_make_playing_dead", null, ServerHooks.state());
+            entity.setNoAi(false);
+        }
+        helper.runAtTickTime(6, () -> {
+            small.setHealth(small.getMaxHealth() - 2);
+            middling.setHealth(middling.getMaxHealth() - 4);
+            large.setHealth(large.getMaxHealth() - 8);
+        });
+        helper.runAtTickTime(20, () -> {
+            helper.assertFalse(Boolean.TRUE.equals(small.value("is_playing_dead")),
+                IDLER + " played dead for damage under the least a range of three to six allows.");
+            helper.assertFalse(Boolean.TRUE.equals(middling.value("is_playing_dead")),
+                IDLER + " played dead inside the range on a chance of nothing.");
+            helper.assertTrue(Boolean.TRUE.equals(large.value("is_playing_dead")),
+                IDLER + " did not play dead for damage over the top of the range.");
+            helper.succeed();
+        });
+    }
+
+    /** Health at or under `force_below_health` starts it whatever the chance says. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 60)
+    public void aHitThatLeavesTheForcedHealthSetsAMobPlayingDead(GameTestHelper helper) {
+        AddonEntity idler = idler(helper, "tp:idler_make_forced_dead");
+        if (idler == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.runAtTickTime(6, () -> idler.setHealth(15));
+        helper.runAtTickTime(16, () -> {
+            helper.assertFalse(Boolean.TRUE.equals(idler.value("is_playing_dead")),
+                IDLER + " played dead at fifteen health with the limit at ten and no chance.");
+            idler.setHealth(9);
+        });
+        helper.runAtTickTime(30, () -> {
+            helper.assertTrue(Boolean.TRUE.equals(idler.value("is_playing_dead")),
+                IDLER + " did not play dead at nine health with the limit at ten.");
+            helper.succeed();
+        });
+    }
+
     /** Switches a group on and checks when the pose begins, how long it lasts and how long until it begins again. */
     private static void cycle(GameTestHelper helper, String event, Pose pose, int first, int length, int gap) {
         AddonEntity idler = idler(helper, event);
