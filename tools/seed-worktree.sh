@@ -16,10 +16,19 @@ fi
 rm -rf "$worktree/.gradle/loom-cache/projects"
 for version_dir in "$worktree"/versions/*/; do
     rm -rf "${version_dir}build/loom-cache" "${version_dir}build/reports"
-    # Worlds, run directories and the converted-pack cache are state of the checkout that made them.
-    rm -rf "${version_dir}build/run" "${version_dir}run/saves" "${version_dir}run/world" \
-        "${version_dir}run/.mcaddon" "${version_dir}run/logs" "${version_dir}run/crash-reports"
 done
+
+# Worlds, run directories and the converted-pack cache copied in are state of the checkout that made
+# them. Only the first run in this worktree removes them, so a later run leaves the worlds this
+# worktree made alone. The marker names the worktree, because `wt add` run from another worktree
+# copies that worktree's marker along with everything else.
+seeded="$worktree/.gradle/seeded-worktree"
+if [ "$(cat "$seeded" 2>/dev/null)" != "$worktree" ]; then
+    for version_dir in "$worktree"/versions/*/; do
+        rm -rf "${version_dir}build/run" "${version_dir}run/saves" "${version_dir}run/world" \
+            "${version_dir}run/.mcaddon" "${version_dir}run/logs" "${version_dir}run/crash-reports"
+    done
+fi
 
 if cp --reflink=auto --version >/dev/null 2>&1; then
     clone() { cp --reflink=auto -a -n "$@"; }
@@ -35,4 +44,5 @@ for cache in minecraftMaven remapped_mods natives; do
     clone "$source_dir/." "$worktree/.gradle/loom-cache/$cache/"
 done
 
+echo "$worktree" > "$seeded"
 echo "seed-worktree: seeded $worktree from $main"
