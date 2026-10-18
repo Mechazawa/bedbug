@@ -289,6 +289,12 @@ add-ons, or with another release of it, is told which in chat.
   packs; `permission` and `ops` list Java's operators, read `ops.json` again and make a player an
   operator or a member. Like Bedrock's, each asks for more than a function's authority, so an
   operator types it after `/bedrock` and a pack's function cannot run it.
+- `/bedrock music`, which plays a track to everyone as music rather than as a sound somewhere in the
+  world: in the music category, with the game's own background music waiting until it is over,
+  faded in and out over the seconds the line gives, looped when asked, turned up or down while it
+  plays, and queued behind a track that plays once. A queue behind a looping track is refused, as
+  in Bedrock. A track is a pack's own sound or one of the game's under its full name, or a Bedrock
+  name such as `record.cat` or `cat`.
 - Clips on a mob Java draws with a model of its own, such as `playanimation` on a vanilla villager.
   Each Bedrock bone is found among the Java model's parts, and on a mob whose Bedrock geometry hangs
   the head, arms and legs under `body`, those parts move, turn and scale with the body, so a pack

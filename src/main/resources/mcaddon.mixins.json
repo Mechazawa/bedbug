@@ -58,6 +58,7 @@
     "LivingEntityRendererMixin",
     "ModelFeatureRendererMixin",
     "ModelPartMixin",
-    "SoundEngineMixin"
+    "SoundEngineMixin",
+    "MusicManagerMixin"
   ]
 }

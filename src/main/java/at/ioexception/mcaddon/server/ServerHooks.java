@@ -129,6 +129,7 @@ public final class ServerHooks {
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             Channels.sendPacks(handler.player, PackList.of(McAddon.packs()).encode());
             startState(handler.player);
+            Music.joined(handler.player);
             playerJoined(handler.player);
         });
         // A connection is dropped on the thread reading it, and a script and the fog stacks belong
@@ -301,6 +302,7 @@ public final class ServerHooks {
         }
         WorldEvents.forget();
         at.ioexception.mcaddon.structure.StructurePlacement.forget();
+        Music.forget();
         if (state != null) state.save();
     }
 

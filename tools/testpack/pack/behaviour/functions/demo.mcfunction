@@ -45,5 +45,5 @@ ride @e[type=pig] evict_riders
 summon pig ~ ~ ~ facing ~ ~1 ~
 structure load tp:hut 0 64 0 0_degrees xz
 gametest runthis
-# Each of these is a form Java has no way to say, so the line goes and the rest of the file stays.
 music play tp:sprite.chime 1 0 loop
+# Each of these is a form Java has no way to say, so the line goes and the rest of the file stays.

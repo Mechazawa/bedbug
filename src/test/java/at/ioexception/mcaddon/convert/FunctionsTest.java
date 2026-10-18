@@ -143,13 +143,15 @@ class FunctionsTest {
         "'gametest runsetuntilfail tp:until_fail', 'gametest runsetuntilfail tp:until_fail'",
         "'mobevent events_enabled false', 'mobevent events_enabled false'",
         "'mobevent minecraft:ender_dragon_event true', 'mobevent minecraft:ender_dragon_event true'",
-        "'music stop 2', 'music stop'",
+        "'music stop 2', 'music stop 2'",
         "'structure save tp:hut 0 0 0 4 4 4 true disk', 'structure save \"tp:hut\" 0 0 0 4 4 4 true disk'",
         "'structure load tp:hut 0 64 0 90_degrees x', 'structure load \"tp:hut\" 0 64 0 90_degrees x'",
         "'structure load hut 0 64 0 0_degrees xz layer_by_layer 2 true false true 50 seed', "
             + "'structure load \"hut\" 0 64 0 0_degrees xz layer_by_layer 2 true false true 50 seed'",
         "'structure delete tp:hut', 'structure delete \"tp:hut\"'",
-        "'music play tp:theme 0.4', 'music play \"tp:theme\" 0.4'",
+        "'music play tp:theme 0.4', 'music play tp:theme 0.4'",
+        "'music queue record.cat 1 2 loop', 'music queue record.cat 1 2 loop'",
+        "'music volume 0.5', 'music volume 0.5'",
         "'particle tp:sparkle ~ ~ ~', 'particle \"tp:sparkle\" ~ ~ ~'",
         "'scriptevent tp:reset go', 'scriptevent \"tp:reset\" go'",
         "'dialogue open @e[type=tp:ember,c=1] @p tp:greeting', "
@@ -176,7 +178,6 @@ class FunctionsTest {
      */
     @ParameterizedTest
     @CsvSource({
-        "'music play tp:theme 1 0 loop', 'command music loop, which Java has no form of'",
         "'place structure minecraft:trail_ruins ~ ~ ~ false false false ignore_waterlogging', "
             + "'command place ignore_waterlogging, which Java has no form of'",
         "'permission set @p visitor', 'command permission visitor, which Java has no form of'",

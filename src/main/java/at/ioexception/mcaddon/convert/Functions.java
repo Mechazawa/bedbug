@@ -78,7 +78,7 @@ public final class Functions {
      */
     static final Set<String> REGISTERED_WHOLE_LINE = Set.of("playanimation", "event",
         "toggledownfall", "transfer", "camerashake", "fog", "clearspawnpoint", "inputpermission",
-        "tickingarea", "packstack", "setmaxplayers");
+        "tickingarea", "packstack", "setmaxplayers", "music");
 
     /**
      * Commands Bedrock has and Java has no counterpart for.
@@ -119,7 +119,6 @@ public final class Functions {
     private static final Set<String> BEDROCK_ONLY_KEYWORDS = Set.of(
         "changesetting allow-cheats", "changesetting false", "changesetting true",
         "hud paperdoll", "hud tooltips", "hud touch_controls",
-        "music loop", "music volume",
         "permission visitor",
         "place apply_waterlogging", "place ignore_waterlogging",
         "camera attach_to_entity", "camera color", "camera detach_from_entity",
@@ -437,7 +436,6 @@ public final class Functions {
             case "permission", "ops" -> permission(name, rest, unsupported);
             case "time" -> time(rest);
             case "changesetting" -> changeSetting(rest, unsupported);
-            case "music" -> music(rest, unsupported);
             case "structure" -> structure(rest, unsupported);
             case "mobevent" -> mobEvent(rest, unsupported);
             case "gametest" -> gameTest(rest, unsupported);
@@ -1197,26 +1195,6 @@ public final class Functions {
             return dropped("changesetting", parts[0], unsupported);
         }
         return "difficulty " + difficulty(parts[1]);
-    }
-
-    /**
-     * `music play|queue <track> [volume] [fade] [repeat]`, `music stop [fade]` and `music volume`.
-     *
-     * A track is played as a sound in the music category, which fades in and out on its own and
-     * plays through once. A repeating track and a mixer level have no command behind them.
-     */
-    private static String music(String rest, Set<String> unsupported) {
-        String[] parts = SPACE.split(rest);
-        String action = parts[0].toLowerCase(Locale.ROOT);
-        if (action.equals("stop")) return "music stop";
-        if (parts.length < 2 || !action.equals("play") && !action.equals("queue")) {
-            return dropped("music", action, unsupported);
-        }
-
-        String repeat = parts.length > 4 ? parts[4].toLowerCase(Locale.ROOT) : "play_once";
-        if (!repeat.equals("play_once")) return dropped("music", repeat, unsupported);
-        return "music " + action + " " + new JsonPrimitive(parts[1])
-            + (parts.length > 2 ? " " + parts[2] : "");
     }
 
     /**

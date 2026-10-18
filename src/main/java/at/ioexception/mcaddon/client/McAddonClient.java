@@ -54,10 +54,14 @@ public final class McAddonClient implements ClientModInitializer {
             at.ioexception.mcaddon.client.render.AddonEmitters.start(effect, null,
                 new net.minecraft.world.phys.Vec3(x, y, z)));
         Channels.receiveForm(AddonFormScreen::receive);
+        Channels.receiveInstructions((kind, body) -> {
+            if (kind.equals(at.ioexception.mcaddon.server.Music.KIND)) PlayerMusic.accept(body);
+        });
 
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK
             .register(client -> {
                 at.ioexception.mcaddon.client.render.AddonEmitters.tick();
+                PlayerMusic.tick();
                 if (client.level != null) Animators.tickOffscreen(client.level);
             });
         if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
@@ -81,6 +85,7 @@ public final class McAddonClient implements ClientModInitializer {
             PlayerFog.clear();
             PlayerHud.clear();
             PlayerInput.clear();
+            PlayerMusic.clear();
             ServerAddons.clear();
             at.ioexception.mcaddon.client.render.AddonEmitters.clear();
         }));

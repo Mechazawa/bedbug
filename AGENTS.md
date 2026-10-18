@@ -672,6 +672,15 @@ These are the checks it runs, and what each one catches:
   `setmaxplayers` and `permission` parse only for an operator typing `/bedrock`. A test of one of
   those types it through Java's own tree instead of through `BedrockLines`.
 
+  `MusicClientGameTest` plays the test pack's chime through `/bedrock music` and reads back the
+  track the client plays: music heard everywhere, looping when asked, turned down by `music volume`,
+  queued behind a track that plays once and not behind one that loops, and gone after `music
+  stop`. A server tells a client what only it acts on through `Channels.sendInstruction`, one payload
+  carrying a kind and a body, which `McAddonClient` hands to the class the kind names.
+
+  One client game test at a time: the entry point list in `src/gametest/resources/fabric.mod.json`
+  is the whole selection, so cutting it down to one class runs that class alone. Put it back after.
+
   `HudClientGameTest` hides and resets pieces of the heads-up display on a dedicated server, one
   piece at a time, all of them, and through the script's `tp:hud_hide` and `tp:hud_reset` probes.
   A piece is watched through the sprite Java draws it with, which a mixin of the test source set,

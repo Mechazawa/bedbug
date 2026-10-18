@@ -82,20 +82,7 @@ public final class BedrockCommands {
                                     StringArgumentType.getString(command, "stop_expression"),
                                     FloatArgumentType.getFloat(command, "blend_out_time")))))))));
 
-        // Bedrock plays a track for everyone; Java's own music is a sound in its own category, which
-        // is what `volume` and `fade` in Bedrock's form control and what a pack ships as a sound.
-        dispatcher.register(Commands.literal("music")
-            .requires(source -> Platform.allowedAt(source, 1))
-            .then(Commands.literal("stop").executes(command -> stopMusic(command.getSource())))
-            .then(Commands.literal("play")
-                .then(Commands.argument("track", StringArgumentType.string())
-                    .executes(command -> playMusic(command, 1f))
-                    .then(Commands.argument("volume", FloatArgumentType.floatArg(0))
-                        .executes(command -> playMusic(command,
-                            FloatArgumentType.getFloat(command, "volume"))))))
-            .then(Commands.literal("queue")
-                .then(Commands.argument("track", StringArgumentType.string())
-                    .executes(command -> playMusic(command, 1f)))));
+        Music.registerCommand(dispatcher);
 
         // Bedrock toggles between clear and raining, which is the pair Java's own command names.
         dispatcher.register(Commands.literal("toggledownfall")
@@ -360,16 +347,6 @@ public final class BedrockCommands {
     private static int run(CommandSourceStack source, String command) {
         source.getServer().getCommands().performPrefixedCommand(source.withSuppressedOutput(), command);
         return 1;
-    }
-
-    /** A track is a sound in the music category, which is the slider a player turns down. */
-    private static int playMusic(CommandContext<CommandSourceStack> command, float volume) {
-        String track = StringArgumentType.getString(command, "track");
-        return run(command.getSource(), "playsound " + track + " music @a ~ ~ ~ " + volume);
-    }
-
-    private static int stopMusic(CommandSourceStack source) {
-        return run(source, "stopsound @a music");
     }
 
     private static int toggleDownfall(CommandSourceStack source) {
