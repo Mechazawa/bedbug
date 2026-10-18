@@ -2663,6 +2663,9 @@ public class AddonEntity extends PathfinderMob
         return items;
     }
 
+    /** Where `minecraft:behavior.trade_with_player` sits among `villager_v2`'s goals, after floating and panic. */
+    private static final int UNSTATED_TRADE_PRIORITY = 2;
+
     private void addGoals() {
         int order = 0;
         int priority = 0;
@@ -2679,6 +2682,16 @@ public class AddonEntity extends PathfinderMob
                 priority = addBehaviour(behaviour, declared.isJsonObject()
                     ? declared.getAsJsonObject() : new com.google.gson.JsonObject(), ++order, site.getKey());
             }
+        }
+
+        // A trader whose pack states no `minecraft:behavior.trade_with_player` anywhere still stands
+        // still for whoever has its shop open, at the priority Mojang's own villager gives the goal.
+        // What Bedrock does with such a trader is documented nowhere, and a shop that walks off and
+        // closes under the player is the more surprising of the two answers. The goal starts only
+        // while somebody trades, which only a trade table lets them do.
+        if (!definition.behaviours().contains("minecraft:behavior.trade_with_player")) {
+            goalSelector.addGoal(UNSTATED_TRADE_PRIORITY,
+                TradeGoal.whileTrading(this, new com.google.gson.JsonObject()));
         }
 
         // Bedrock spells answering the worst attacker both as a behaviour and as a plain component,

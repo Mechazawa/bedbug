@@ -1,10 +1,13 @@
 package at.ioexception.mcaddon.clientgametest;
 
 import at.ioexception.mcaddon.bedrock.fog.FogDefinition;
+import at.ioexception.mcaddon.client.render.EntityProperties;
 import at.ioexception.mcaddon.client.render.PlayerFog;
 import at.ioexception.mcaddon.client.screen.AddonFormScreen;
 import at.ioexception.mcaddon.network.Channels;
+import at.ioexception.mcaddon.entity.AddonEntity;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerContext;
@@ -26,15 +29,16 @@ import java.util.function.Predicate;
  * The client is the server's first player and a {@link Bystander} its second. Each order is given
  * once to the bystander, where it has to arrive in the bystander's queue and leave the client alone,
  * and once to the client, where it has to change what the client shows: a form opened by the pack's
- * script, `/camera`, `/camerashake` and `/fog`. The form's answers go back the other way, so the
- * client's press has to reach the pack's handler and an answer naming the bystander's form has to
- * reach nothing.
+ * script, `/camera`, `/camerashake`, `/fog` and an entity property overridden for one player. The
+ * form's answers go back the other way, so the client's press has to reach the pack's handler and an
+ * answer naming the bystander's form has to reach nothing.
  */
 public final class ServerPlayerClientGameTest implements FabricClientGameTest {
     private static final String FORM = "mcaddon:form";
     private static final String CAMERA = "mcaddon:camera_view";
     private static final String SHAKE = "mcaddon:camera_shake";
     private static final String FOG = "mcaddon:fog";
+    private static final String PROPERTIES = "mcaddon:entity_properties";
     private static final String SECOND_PAGE = "The second page tells of sprites.";
 
     /** How long a client is watched for something meant for the bystander, which it must never show. */
@@ -55,6 +59,7 @@ public final class ServerPlayerClientGameTest implements FabricClientGameTest {
             catalogue(context, server, player);
             camera(context, server, player, bystander);
             fog(context, server, player, bystander);
+            overrides(context, server, player, bystander);
         }
     }
 
@@ -164,6 +169,47 @@ public final class ServerPlayerClientGameTest implements FabricClientGameTest {
         Worlds.waitForClient(context, client -> PlayerFog.active() == null, PATIENCE,
             () -> "Expected /fog pop to leave the client with no fog and found " + fogShown() + ".");
         stillSent(server, bystander, FOG, "the fog pushed and popped for " + player);
+    }
+
+    /**
+     * A property the pack's script overrides for the client changes what the client draws the wisp
+     * from and nothing else. A wisp settles a second after it arrives and the override shows the
+     * client one that has not, while the wisp's own value stays settled and the bystander is never
+     * told otherwise. Clearing the override shows the client the wisp's own value again.
+     */
+    private static void overrides(ClientGameTestContext context, TestServerContext server, String player,
+        Bystander bystander) {
+        server.runCommand("execute at " + player + " run summon tp:wisp ~2 ~ ~ {NoAI:1b}");
+        AddonEntity wisp = Entities.waitForClient(context, "tp:wisp");
+        int id = context.computeOnClient(client -> wisp.getId());
+        Worlds.waitForClient(context, client -> Boolean.TRUE.equals(settled(id)), PATIENCE,
+            () -> "Expected the client to be told tp:wisp settled and found " + settled(id) + ".");
+
+        server.runCommand("bedrock execute as " + player + " run scriptevent tp:override");
+        Worlds.waitForClient(context, client -> Boolean.FALSE.equals(settled(id)), PATIENCE,
+            () -> "Expected the override " + player + " was given to draw tp:wisp unsettled on the client and"
+                + " found " + settled(id) + ".");
+        Object own = server.computeOnServer(minecraft -> ServerHooks.state().property(wisp.getUUID(), "tp:settled"));
+        Assert.that(Boolean.TRUE.equals(own), "Expected an override to leave tp:wisp's own tp:settled true and"
+            + " found " + own + ".");
+        Assert.that(server.computeOnServer(minecraft -> client(minecraft).entityTags().contains("tp:override_refused")),
+            "Expected an override of a property tp:wisp does not declare to be refused.");
+        List<String> theirs = server.computeOnServer(minecraft -> bystander.sent(PROPERTIES).stream()
+            .filter(payload -> (int) Bystander.field(payload, "entityId") == id)
+            .map(payload -> (String) Bystander.field(payload, "values")).toList());
+        Assert.that(!theirs.isEmpty() && theirs.get(theirs.size() - 1).contains("\"tp:settled\":true"),
+            () -> "Expected " + Bystander.NAME + " to be shown tp:wisp settled while " + player + " has it"
+                + " overridden, and it was sent " + theirs + ".");
+
+        server.runCommand("bedrock execute as " + player + " run scriptevent tp:override_clear");
+        Worlds.waitForClient(context, client -> Boolean.TRUE.equals(settled(id)), PATIENCE,
+            () -> "Expected clearing the override to show the client tp:wisp's own tp:settled again and found "
+                + settled(id) + ".");
+        Entities.discardAll(context, server, "tp:wisp");
+    }
+
+    private static Object settled(int entityId) {
+        return EntityProperties.of(entityId).get("tp:settled");
     }
 
     private static String fogShown() {

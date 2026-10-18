@@ -60,16 +60,13 @@ public final class EntityPropertySync {
     public static void sendTo(ServerPlayer player, Entity entity, AddonState state) {
         Map<String, Object> properties = state.properties(entity.getUUID());
         if (properties.isEmpty()) return;
-        Channels.sendProperties(player, entity.getId(), Json.encode(properties));
+        Channels.sendProperties(player, entity.getId(),
+            Json.encode(PropertyOverrides.seenBy(player, entity, properties)));
     }
 
     public static void broadcast(Entity entity, AddonState state) {
-        Map<String, Object> properties = state.properties(entity.getUUID());
-        if (properties.isEmpty()) return;
+        if (state.properties(entity.getUUID()).isEmpty()) return;
 
-        String encoded = Json.encode(properties);
-        for (ServerPlayer player : PlayerLookup.tracking(entity)) {
-            Channels.sendProperties(player, entity.getId(), encoded);
-        }
+        for (ServerPlayer player : PlayerLookup.tracking(entity)) sendTo(player, entity, state);
     }
 }

@@ -3095,19 +3095,21 @@ export class Player extends Entity {
         unsupported("Player.setControlScheme");
     }
 
-    // An override shows one entity differently to one player, which needs a per-player entity state
-    // Java has no packet for.
+    // An override changes what this player's client draws the entity from, and nothing else.
 
-    setPropertyOverrideForEntity() {
-        unsupported("Player.setPropertyOverrideForEntity");
+    setPropertyOverrideForEntity(targetEntity, identifier, value) {
+        const refusal = bridge.players.overrideProperty(this.id, targetEntity?.id, identifier, JSON.stringify(value ?? null));
+        if (refusal !== null) throw new Error(refusal);
     }
 
-    removePropertyOverrideForEntity() {
-        unsupported("Player.removePropertyOverrideForEntity");
+    removePropertyOverrideForEntity(targetEntity, identifier) {
+        const refusal = bridge.players.overrideProperty(this.id, targetEntity?.id, identifier, null);
+        if (refusal !== null) throw new Error(refusal);
     }
 
-    clearPropertyOverridesForEntity() {
-        unsupported("Player.clearPropertyOverridesForEntity");
+    clearPropertyOverridesForEntity(targetEntity) {
+        const id = typeof targetEntity === "string" ? targetEntity : targetEntity?.id;
+        if (!bridge.players.clearPropertyOverrides(this.id, id)) throw new Error("The entity is not valid.");
     }
 
     get onScreenDisplay() {

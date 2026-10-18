@@ -1808,6 +1808,60 @@ public final class BehaviourGameTests {
     }
 
     /**
+     * A trader whose pack states no `minecraft:behavior.trade_with_player` stands still while a
+     * player has its shop open, and strolls again once nobody does.
+     *
+     * `tp:pedlar` sets out on a stroll at every chance it gets, so a trader that is left to its goals
+     * while the screen is open walks away from the counter within a second.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200)
+    public void aTraderWithNoTradingGoalStandsStillWhileTrading(GameTestHelper helper) {
+        for (int x = 0; x < 8; x++) {
+            for (int z = 0; z < 8; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), net.minecraft.world.level.block.Blocks.STONE);
+            }
+        }
+        AddonEntity pedlar = spawn(helper, TRADER, COUNTER);
+        if (pedlar == null) {
+            helper.succeed();
+            return;
+        }
+
+        Player customer = Platform.mockPlayer(helper);
+        BlockPos beside = helper.absolutePos(COUNTER.east());
+        Platform.placeAt(customer, beside.getX() + 0.5, beside.getY(), beside.getZ() + 0.5, 0f, 0f);
+        pedlar.setTradingPlayer(customer);
+        pedlar.setNoAi(false);
+        net.minecraft.world.phys.Vec3 counter = pedlar.position();
+
+        helper.runAfterDelay(TRADE_WATCH, () -> {
+            helper.assertTrue(pedlar.position().distanceTo(counter) < STOOD_STILL,
+                TRADER + " walked " + pedlar.position().distanceTo(counter) + " blocks while "
+                    + customer.getName().getString() + " had its shop open.");
+            pedlar.setTradingPlayer(null);
+            net.minecraft.world.phys.Vec3 closed = pedlar.position();
+            helper.runAfterDelay(TRADE_WATCH, () -> {
+                helper.assertTrue(pedlar.position().distanceTo(closed) >= STOOD_STILL,
+                    TRADER + " stayed put once nobody was trading, so standing still says nothing"
+                        + " about the shop.");
+                helper.succeed();
+            });
+        });
+    }
+
+    /** The trader the synthetic pack declares with a trade table and no trading goal. */
+    private static final String TRADER = "tp:pedlar";
+
+    /** Where the trader is put, in the middle of the floor the test lays. */
+    private static final BlockPos COUNTER = new BlockPos(4, 1, 4);
+
+    /** Ticks a trader with somewhere to go is watched for, long enough for a stroll to start and carry it. */
+    private static final int TRADE_WATCH = 40;
+
+    /** Less than a stroll moves anything, more than a trader standing still drifts. */
+    private static final double STOOD_STILL = 0.2;
+
+    /**
      * A group carrying `minecraft:trade_table` changes what is on the counter.
      *
      * Bedrock states the table inside the group that gives a trader its stock, which is how a
