@@ -22,6 +22,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.IntStream;
 
 /**
  * The fields inside a pack's behaviours that decide how a goal plays out, read back off the world.
@@ -839,6 +840,223 @@ public final class GoalGameTests {
     private static final float STEERED_STEP = 1.5f;
     private static final float LONE_STEP = 0.6f;
 
+    /** On a block that cuts a jump short, which is honey in Java, the step is `jump_prevented_value`. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void anEntityOnHoneyStepsAsHighAsItsJumpPreventedValue(GameTestHelper helper) {
+        helper.setBlock(STAND, Blocks.HONEY_BLOCK);
+        AddonEntity brute = withGroup(helper, "tp:brute_steady_up", STAND.above());
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.succeedWhen(() -> helper.assertTrue(Math.abs(Platform.stepHeight(brute) - HONEY_STEP) < 0.01,
+            BRUTE + " steps a quarter of a block on honey and steps " + Platform.stepHeight(brute) + "."));
+    }
+
+    private static final float HONEY_STEP = 0.25f;
+
+    /**
+     * `minecraft:water_movement` keeps `drag_factor` of the entity's speed each tick in water. Two
+     * brutes set off down a channel at the same speed, and the one keeping more of it goes further.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void anEntityKeepsTheShareOfItsSpeedItsWaterDragStates(GameTestHelper helper) {
+        BlockPos.betweenClosed(new BlockPos(-1, 0, 0), new BlockPos(CHANNEL + 1, 0, 6))
+            .forEach(at -> helper.setBlock(at, Blocks.STONE));
+        IntStream.rangeClosed(0, CHANNEL).forEach(x -> {
+            helper.setBlock(new BlockPos(x, 0, 2), Blocks.WATER);
+            helper.setBlock(new BlockPos(x, 0, 4), Blocks.WATER);
+        });
+        AddonEntity slick = withGroup(helper, "tp:brute_slip", new BlockPos(0, 0, 2));
+        AddonEntity plain = BehaviourGameTests.spawn(helper, BRUTE, new BlockPos(0, 0, 4));
+        if (slick == null || plain == null) {
+            helper.succeed();
+            return;
+        }
+
+        plain.setNoAi(false);
+        double from = slick.getX();
+        helper.runAfterDelay(1, () -> {
+            slick.setDeltaMovement(LAUNCH, 0, 0);
+            plain.setDeltaMovement(LAUNCH, 0, 0);
+        });
+        helper.runAfterDelay(GLIDE_TICKS, () -> {
+            helper.assertTrue(slick.getX() - from > plain.getX() - from + 1,
+                BRUTE + " keeps nineteen twentieths of its speed in water and went " + (slick.getX() - from)
+                    + " beside one keeping Java's four fifths, which went " + (plain.getX() - from) + ".");
+            helper.succeed();
+        });
+    }
+
+    private static final int CHANNEL = 12;
+    private static final double LAUNCH = 0.5;
+    private static final int GLIDE_TICKS = 30;
+
+    /** `minecraft:behavior.random_swim` with an `interval` of nought, as Mojang's fish write it, sets off. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aSwimWithNoIntervalSetsOffAtOnce(GameTestHelper helper) {
+        AddonEntity brute = inAPool(helper, "tp:brute_fidget");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.succeedWhen(() -> helper.assertTrue(brute.getNavigation().getTargetPos() != null,
+            BRUTE + " swims about at every chance and never set off."));
+    }
+
+    /**
+     * `minecraft:behavior.swim_wander` gives up a wander after `wander_time` and, its `interval` being a
+     * chance of a half each time, soon sets off on another. A quarter of a second a wander leaves time for
+     * several in the five seconds the test watches.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aSwimWanderEndsAfterItsWanderTime(GameTestHelper helper) {
+        AddonEntity brute = inAPool(helper, "tp:brute_drift");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        setsOffAgain(helper, brute, "wanders for a quarter of a second at a time");
+    }
+
+    /**
+     * `minecraft:behavior.random_fly` flies to a spot `y_offset` higher than the one it picked, which
+     * with a `y_dist` of one is well above where the brute stands.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = FLIGHT_TICKS)
+    public void aRandomFlightAimsAsHighAsItsOffset(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_loft");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        aimsHigh(helper, brute, "flies four blocks over the spot it picked");
+    }
+
+    /** `minecraft:behavior.random_hover` keeps the spot it picks within `hover_height` of the ground. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = FLIGHT_TICKS)
+    public void aRandomHoverAimsWithinItsHeight(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_hover");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        aimsHigh(helper, brute, "hovers five to six blocks over the ground");
+    }
+
+    /** `minecraft:behavior.float_wander` gives a float up after `float_duration` and floats off again. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aFloatEndsAfterItsDuration(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_float");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        setsOffAgain(helper, brute, "floats for a quarter of a second at a time");
+    }
+
+    /** `minecraft:behavior.float_wander` under `random_reselect` picks new spots on the way to the last. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aFloatThatReselectsPicksNewSpotsOnTheWay(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_waver");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        setsOffAgain(helper, brute, "picks a new spot on the way at every chance");
+    }
+
+    /**
+     * `minecraft:behavior.follow_mob` looks for a mob to follow as far as `search_range`, past the seven
+     * blocks Java's own goal looks, and stops `stop_distance` short of it.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS * 2)
+    public void aFollowerLooksAsFarAndStopsAsShortAsItsPackSays(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_tag_along", new BlockPos(0, 0, 4));
+        Mob pig = pig(helper, new BlockPos(FOLLOWED, 0, 4), BLOWS_TO_KILL);
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        double[] nearest = {Double.MAX_VALUE};
+        helper.onEachTick(() -> nearest[0] = Math.min(nearest[0], brute.distanceTo(pig)));
+        helper.runAfterDelay(GOAL_TICKS * 2 - 10, () -> {
+            helper.assertTrue(brute.distanceTo(pig) < FOLLOWED - 3,
+                BRUTE + " follows a pig ten blocks off and stands " + brute.distanceTo(pig) + " from it.");
+            helper.assertTrue(nearest[0] > KEPT_OFF,
+                BRUTE + " stops five blocks short of the pig and came to " + nearest[0] + ".");
+            helper.succeed();
+        });
+    }
+
+    private static final int FOLLOWED = 10;
+    /** Inside the five blocks the brute stops at, and outside the three Java's goal stops at. */
+    private static final double KEPT_OFF = 4;
+
+    /** Long enough for a one in 120 chance to come up all but certainly. */
+    private static final int FLIGHT_TICKS = 1000;
+    /** Over the highest a spot one block up or down from the floor reaches, hovering included. */
+    private static final int HIGH_AIM = 4;
+
+    /** Asks that every spot the brute headed for while the test ran was high over the floor. */
+    private static void aimsHigh(GameTestHelper helper, AddonEntity brute, String why) {
+        int ground = helper.absolutePos(BlockPos.ZERO).getY();
+        int[] lowest = {Integer.MAX_VALUE};
+        helper.onEachTick(() -> {
+            // Java's strolls stop setting off once a mob has gone five seconds with no player near.
+            brute.setNoActionTime(0);
+            BlockPos heading = brute.getNavigation().getTargetPos();
+            if (heading != null) lowest[0] = Math.min(lowest[0], heading.getY() - ground);
+        });
+        helper.runAfterDelay(FLIGHT_TICKS - 10, () -> {
+            helper.assertTrue(lowest[0] != Integer.MAX_VALUE, BRUTE + " " + why + " and never set off.");
+            helper.assertTrue(lowest[0] >= HIGH_AIM,
+                BRUTE + " " + why + " and headed for a spot " + lowest[0] + " over the floor.");
+            helper.succeed();
+        });
+    }
+
+    /** Waits five seconds and asks that the brute headed for several spots in them. */
+    private static void setsOffAgain(GameTestHelper helper, AddonEntity brute, String why) {
+        java.util.Set<BlockPos> headings = new java.util.HashSet<>();
+        helper.onEachTick(() -> {
+            BlockPos heading = brute.getNavigation().getTargetPos();
+            if (heading != null && brute.getNavigation().isInProgress()) headings.add(heading);
+        });
+        helper.runAfterDelay(WANDER_TICKS, () -> {
+            helper.assertTrue(headings.size() >= WANDERS,
+                BRUTE + " " + why + " and set off " + headings.size() + " times.");
+            helper.succeed();
+        });
+    }
+
+    private static final int WANDER_TICKS = 100;
+    private static final int WANDERS = 3;
+
+    /**
+     * A brute at the bottom of a pool three blocks deep and nine across, walled in so the water lies
+     * still. Java's swim goals try ten spots and keep the last whether it is water or not, so a pool
+     * with room in it is what makes a swim set off at most chances.
+     */
+    private static AddonEntity inAPool(GameTestHelper helper, String event) {
+        BlockPos.betweenClosed(new BlockPos(-1, 0, -1), new BlockPos(POOL + 1, POOL_DEPTH - 1, POOL + 1))
+            .forEach(at -> helper.setBlock(at, Blocks.STONE));
+        BlockPos.betweenClosed(BlockPos.ZERO, new BlockPos(POOL, POOL_DEPTH - 1, POOL))
+            .forEach(at -> helper.setBlock(at, Blocks.WATER));
+        return withGroup(helper, event, new BlockPos(POOL / 2, 0, POOL / 2));
+    }
+
+    private static final int POOL = 8;
+    private static final int POOL_DEPTH = 3;
+
     /**
      * A leap rises at the `yd` its pack states. The springing group says nine tenths, more than
      * twice the four tenths every leap used to take.
@@ -980,6 +1198,77 @@ public final class GoalGameTests {
                 BRUTE + " is a loner and drifted " + (loner.getX() - lonerFrom) + " towards the brute beside it.");
             helper.succeed();
         });
+    }
+
+    /** A solid block nearer than `block_distance` pushes a flocker away, with no flockmate about. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = FLOCK_TICKS)
+    public void aFlockerKeepsOffTheBlocksBesideIt(GameTestHelper helper) {
+        AddonEntity brute = flocker(helper, "tp:brute_wall", 4, 1);
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.setBlock(new BlockPos(5, 0, 4), Blocks.STONE);
+        drawsTowardsAlike(helper, brute, "keeps two blocks off a wall");
+    }
+
+    /**
+     * A flocker floating with nothing to hold it up is pushed up while lower over the ground than its
+     * `min_height` and down while higher than its `max_height`.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = FLOCK_TICKS)
+    public void aFlockerKeepsBetweenItsHeights(GameTestHelper helper) {
+        AddonEntity low = floating(helper, "tp:brute_band", new BlockPos(2, 0, 4), 0);
+        AddonEntity high = floating(helper, "tp:brute_band", new BlockPos(6, 0, 4), HIGH_FLOAT);
+        if (low == null || high == null) {
+            helper.succeed();
+            return;
+        }
+
+        double ground = helper.absolutePos(BlockPos.ZERO).getY();
+        helper.succeedWhen(() -> {
+            helper.assertTrue(low.getY() - ground > 1,
+                BRUTE + " keeps two blocks over the ground and floats " + (low.getY() - ground) + " over it.");
+            helper.assertTrue(high.getY() - ground < HIGH_FLOAT - 1,
+                BRUTE + " keeps three blocks over the ground and floats " + (high.getY() - ground) + " over it.");
+        });
+    }
+
+    private static final double HIGH_FLOAT = 6;
+
+    /** A flocker `in_water` whose eyes are out of the water is pushed back under by `breach_influence`. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = FLOCK_TICKS)
+    public void aFlockerBreachingTheSurfaceIsPushedBackUnder(GameTestHelper helper) {
+        BlockPos pool = new BlockPos(4, 0, 4);
+        IntStream.rangeClosed(0, 2).forEach(depth -> {
+            Direction.Plane.HORIZONTAL.stream().forEach(side -> helper.setBlock(pool.above(depth).relative(side),
+                Blocks.STONE));
+            helper.setBlock(pool.above(depth), Blocks.WATER);
+        });
+        AddonEntity brute = floating(helper, "tp:brute_breach", pool, SURFACING);
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        double ground = helper.absolutePos(BlockPos.ZERO).getY();
+        helper.succeedWhen(() -> helper.assertTrue(brute.getY() - ground < SURFACING - SUNK,
+            BRUTE + " breached the surface and floats " + (brute.getY() - ground) + " over the pool's floor."));
+    }
+
+    /** Feet in the top block of a pool three deep, with the eyes over its surface. */
+    private static final double SURFACING = 2.2;
+    private static final double SUNK = 0.3;
+
+    /** A brute with its feet held and no gravity, so flocking alone moves it up or down. */
+    private static AddonEntity floating(GameTestHelper helper, String event, BlockPos where, double over) {
+        AddonEntity brute = heldInPlace(helper, event, where);
+        if (brute == null) return null;
+
+        brute.setNoGravity(true);
+        brute.setPos(brute.getX(), helper.absolutePos(where).getY() + over, brute.getZ());
+        return brute;
     }
 
     private static final int FLOCK_TICKS = 60;

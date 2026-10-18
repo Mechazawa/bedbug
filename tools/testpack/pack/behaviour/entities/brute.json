@@ -494,6 +494,89 @@
           "cohesion_weight": 2
         }
       },
+      "tp:brute_walled": {
+        "minecraft:flocking": {
+          "goal_weight": 2,
+          "block_distance": 2,
+          "block_weight": 1
+        }
+      },
+      "tp:brute_banded": {
+        "minecraft:flocking": {
+          "goal_weight": 2,
+          "min_height": 2,
+          "max_height": 3
+        }
+      },
+      "tp:brute_breaching": {
+        "minecraft:flocking": {
+          "goal_weight": 2,
+          "in_water": true,
+          "breach_influence": 7
+        }
+      },
+      "tp:brute_slick": {
+        "minecraft:water_movement": {
+          "drag_factor": 0.95
+        }
+      },
+      "tp:brute_restless": {
+        "minecraft:navigation.swim": {},
+        "minecraft:behavior.random_swim": {
+          "priority": 0,
+          "interval": 0,
+          "xz_dist": 4,
+          "y_dist": 1
+        }
+      },
+      "tp:brute_drifting": {
+        "minecraft:navigation.swim": {},
+        "minecraft:behavior.swim_wander": {
+          "priority": 0,
+          "interval": 0.5,
+          "wander_time": 0.25
+        }
+      },
+      "tp:brute_lofty": {
+        "minecraft:navigation.fly": {},
+        "minecraft:behavior.random_fly": {
+          "priority": 0,
+          "xz_dist": 2,
+          "y_dist": 1,
+          "y_offset": 4
+        }
+      },
+      "tp:brute_hovering": {
+        "minecraft:navigation.fly": {},
+        "minecraft:behavior.random_hover": {
+          "priority": 0,
+          "interval": 1,
+          "xz_dist": 2,
+          "y_dist": 1,
+          "hover_height": [5, 6]
+        }
+      },
+      "tp:brute_floating": {
+        "minecraft:navigation.fly": {},
+        "minecraft:behavior.float_wander": {
+          "priority": 0,
+          "float_duration": [0.25, 0.25]
+        }
+      },
+      "tp:brute_fickle": {
+        "minecraft:navigation.fly": {},
+        "minecraft:behavior.float_wander": {
+          "priority": 0,
+          "random_reselect": true
+        }
+      },
+      "tp:brute_tagging": {
+        "minecraft:behavior.follow_mob": {
+          "priority": 0,
+          "search_range": 12,
+          "stop_distance": 5
+        }
+      },
       "tp:brute_springing": {
         "minecraft:behavior.leap_at_target": {
           "priority": 0,
@@ -510,7 +593,8 @@
       "tp:brute_steady": {
         "minecraft:variable_max_auto_step": {
           "base_value": 0.6,
-          "controlled_value": 1.5
+          "controlled_value": 1.5,
+          "jump_prevented_value": 0.25
         },
         "minecraft:rideable": {
           "seat_count": 1,
@@ -857,6 +941,83 @@
         "add": {
           "component_groups": [
             "tp:brute_parched"
+          ]
+        }
+      },
+      "tp:brute_wall": {
+        "add": {
+          "component_groups": [
+            "tp:brute_walled"
+          ]
+        }
+      },
+      "tp:brute_band": {
+        "add": {
+          "component_groups": [
+            "tp:brute_banded"
+          ]
+        }
+      },
+      "tp:brute_breach": {
+        "add": {
+          "component_groups": [
+            "tp:brute_breaching"
+          ]
+        }
+      },
+      "tp:brute_slip": {
+        "add": {
+          "component_groups": [
+            "tp:brute_slick"
+          ]
+        }
+      },
+      "tp:brute_fidget": {
+        "add": {
+          "component_groups": [
+            "tp:brute_restless"
+          ]
+        }
+      },
+      "tp:brute_drift": {
+        "add": {
+          "component_groups": [
+            "tp:brute_drifting"
+          ]
+        }
+      },
+      "tp:brute_loft": {
+        "add": {
+          "component_groups": [
+            "tp:brute_lofty"
+          ]
+        }
+      },
+      "tp:brute_hover": {
+        "add": {
+          "component_groups": [
+            "tp:brute_hovering"
+          ]
+        }
+      },
+      "tp:brute_float": {
+        "add": {
+          "component_groups": [
+            "tp:brute_floating"
+          ]
+        }
+      },
+      "tp:brute_waver": {
+        "add": {
+          "component_groups": [
+            "tp:brute_fickle"
+          ]
+        }
+      },
+      "tp:brute_tag_along": {
+        "add": {
+          "component_groups": [
+            "tp:brute_tagging"
           ]
         }
       },
