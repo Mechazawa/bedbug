@@ -96,6 +96,7 @@ public class AddonEntity extends PathfinderMob
     private Anger anger;
     private Genetics genetics;
     private Rails rails;
+    private final LookedAt lookedAt = new LookedAt(this);
     private Memories memories;
     private Projectiles flight;
     private net.minecraft.server.level.ServerBossEvent bossBar;
@@ -2606,28 +2607,6 @@ public class AddonEntity extends PathfinderMob
     private int cropCharges = -1;
 
     /**
-     * Fires the event a pack asked for while somebody is looking at the entity.
-     *
-     * `minecraft:looked_at` is what makes an enderman's stare work, and a pack uses it for anything
-     * that should react to being watched. Bedrock measures the angle rather than the distance.
-     */
-    private void noticeBeingWatched() {
-        if (!declares("minecraft:looked_at")) return;
-
-        String event = liveText("minecraft:looked_at", "looked_at_event");
-        if (event == null) return;
-
-        double reach = number(definition, "minecraft:looked_at", "search_radius", 10);
-        for (Player player : level().getEntitiesOfClass(Player.class, getBoundingBox().inflate(reach))) {
-            net.minecraft.world.phys.Vec3 towards = position().subtract(player.getEyePosition()).normalize();
-            if (player.getLookAngle().normalize().dot(towards) < 0.95) continue;
-
-            EntityEvents.trigger(this, event, player, ServerHooks.state());
-            return;
-        }
-    }
-
-    /**
      * Heals the entity back up once nothing has hurt it for a while.
      *
      * `minecraft:combat_regeneration` is Bedrock's name for a mob that recovers between fights.
@@ -3648,7 +3627,6 @@ public class AddonEntity extends PathfinderMob
             attackAround();
             leaveTrail();
             growCrops();
-            noticeBeingWatched();
             regenerate();
             dryOut();
             showBossBar();
@@ -4055,6 +4033,7 @@ public class AddonEntity extends PathfinderMob
         celebrateTheKill();
         publishBeingInLove();
         if (rails != null) rails.tick();
+        lookedAt.tick();
         if (flight != null) flight.tick();
         if (bossBar != null) bossBar.setProgress(getMaxHealth() <= 0 ? 0 : getHealth() / getMaxHealth());
     }
