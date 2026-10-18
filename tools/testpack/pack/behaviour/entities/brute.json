@@ -447,7 +447,7 @@
       },
       "tp:brute_crowded": {
         "minecraft:flocking": {
-          "influence_radius": 6,
+          "influence_radius": 4,
           "goal_weight": 2,
           "separation_threshold": 3,
           "separation_weight": 2,
@@ -456,32 +456,32 @@
       },
       "tp:brute_schooling": {
         "minecraft:flocking": {
-          "influence_radius": 8,
+          "influence_radius": 4,
           "goal_weight": 2,
           "match_variants": true,
           "separation_threshold": 0.5,
-          "cohesion_threshold": 8,
+          "cohesion_threshold": 4,
           "cohesion_weight": 2,
           "high_flock_limit": 4
         }
       },
       "tp:brute_solitary": {
         "minecraft:flocking": {
-          "influence_radius": 8,
+          "influence_radius": 4,
           "goal_weight": 2,
           "loner_chance": 1,
           "separation_threshold": 0.5,
-          "cohesion_threshold": 8,
+          "cohesion_threshold": 4,
           "cohesion_weight": 2
         }
       },
       "tp:brute_paired": {
         "minecraft:flocking": {
-          "influence_radius": 8,
+          "influence_radius": 4,
           "goal_weight": 2,
           "high_flock_limit": 1,
           "separation_threshold": 0.5,
-          "cohesion_threshold": 8,
+          "cohesion_threshold": 4,
           "cohesion_weight": 2
         }
       },
@@ -489,6 +489,52 @@
         "minecraft:behavior.leap_at_target": {
           "priority": 0,
           "yd": 0.9
+        }
+      },
+      "tp:brute_thorny": {
+        "minecraft:area_attack": {
+          "damage_range": 0.5,
+          "damage_per_tick": 1,
+          "damage_cooldown": 1.5
+        }
+      },
+      "tp:brute_steady": {
+        "minecraft:variable_max_auto_step": {
+          "base_value": 0.6,
+          "controlled_value": 1.5
+        },
+        "minecraft:rideable": {
+          "seat_count": 1,
+          "family_types": [
+            "player"
+          ],
+          "seats": {
+            "position": [
+              0,
+              1.0,
+              0
+            ]
+          }
+        },
+        "minecraft:input_ground_controlled": {}
+      },
+      "tp:brute_flocking_near": {
+        "minecraft:flocking": {
+          "influence_radius": 4,
+          "goal_weight": 2,
+          "separation_threshold": 0.5,
+          "cohesion_threshold": 4,
+          "cohesion_weight": 2,
+          "innner_cohesion_threshold": 1.5
+        }
+      },
+      "tp:brute_digging": {
+        "minecraft:behavior.random_search_and_dig": {
+          "priority": 0,
+          "target_blocks": [
+            "minecraft:gold_block"
+          ],
+          "goal_radius": 3
         }
       }
     },
@@ -770,6 +816,34 @@
         "add": {
           "component_groups": [
             "tp:brute_springing"
+          ]
+        }
+      },
+      "tp:brute_bristle": {
+        "add": {
+          "component_groups": [
+            "tp:brute_thorny"
+          ]
+        }
+      },
+      "tp:brute_steady_up": {
+        "add": {
+          "component_groups": [
+            "tp:brute_steady"
+          ]
+        }
+      },
+      "tp:brute_flock_near": {
+        "add": {
+          "component_groups": [
+            "tp:brute_flocking_near"
+          ]
+        }
+      },
+      "tp:brute_dig": {
+        "add": {
+          "component_groups": [
+            "tp:brute_digging"
           ]
         }
       }

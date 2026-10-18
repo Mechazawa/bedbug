@@ -606,9 +606,8 @@ public class AddonEntity extends PathfinderMob
         if (declaresNow("minecraft:preferred_path")) Platform.priceWater(this, true);
 
         // `minecraft:variable_max_auto_step` arrives with the group that lets an entity climb what
-        // it otherwise could not. Six tenths of a block is what a Java mob steps otherwise.
-        Platform.setStepHeight(this,
-            (float) liveNumber("minecraft:variable_max_auto_step", "base_value", 0.6));
+        // it otherwise could not.
+        refreshStep();
 
         refreshBreath();
         refreshFuse();
@@ -1067,11 +1066,24 @@ public class AddonEntity extends PathfinderMob
         return ridableBy(passenger);
     }
 
+    /**
+     * `minecraft:variable_max_auto_step` steps as high as `controlled_value` while a player steers
+     * the entity and as high as `base_value` otherwise. Six tenths of a block is what a Java mob
+     * steps when the pack says nothing.
+     */
+    private void refreshStep() {
+        String height = getControllingPassenger() instanceof Player ? "controlled_value" : "base_value";
+        Platform.setStepHeight(this, (float) liveNumber("minecraft:variable_max_auto_step", height,
+            liveNumber("minecraft:variable_max_auto_step", "base_value", 0.6)));
+    }
+
     /** `on_rider_enter_event` runs on this entity, with the rider as the other, as somebody gets on. */
     @Override
     protected void addPassenger(net.minecraft.world.entity.Entity passenger) {
         super.addPassenger(passenger);
         if (definition == null || isClientSide()) return;
+
+        refreshStep();
 
         String event = Goals.event(liveComponent("minecraft:rideable"), "on_rider_enter_event");
         if (event != null) EntityEvents.trigger(this, event, passenger, ServerHooks.state());
@@ -1082,6 +1094,8 @@ public class AddonEntity extends PathfinderMob
     protected void removePassenger(net.minecraft.world.entity.Entity passenger) {
         super.removePassenger(passenger);
         if (definition == null || isClientSide()) return;
+
+        refreshStep();
 
         String event = Goals.event(liveComponent("minecraft:rideable"), "on_rider_exit_event");
         if (event != null) EntityEvents.trigger(this, event, passenger, ServerHooks.state());
@@ -2352,25 +2366,27 @@ public class AddonEntity extends PathfinderMob
      * Hurts whatever is standing against the entity, which is what `minecraft:area_attack` does.
      *
      * `damage_per_tick` is the damage of one hit rather than a rate: a large magma cube writes six
-     * and hits for six, the same six Java deals. What paces it is the half second a hurt entity is
-     * invulnerable for, which is also the sensor interval this runs on.
+     * and hits for six, the same six Java deals. It runs on the sensor pass, and after a hit waits
+     * `damage_cooldown` seconds before the next; with none, what paces it is the half second a hurt
+     * entity is invulnerable for, which is also the sensor interval.
      */
     private void attackAround() {
-        if (!declares("minecraft:area_attack")) return;
+        com.google.gson.JsonObject attack = liveComponent("minecraft:area_attack");
+        if (attack == null || tickCount < areaAttackReadyAt) return;
         if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
 
-        double range = number(definition, "minecraft:area_attack", "damage_range", 0.2);
-        float damage = (float) number(definition, "minecraft:area_attack", "damage_per_tick", 2);
-        Filter filter = Filter.parse(componentBody("minecraft:area_attack").get("entity_filter"));
-
-        for (net.minecraft.world.entity.LivingEntity nearby : level.getEntitiesOfClass(
-            net.minecraft.world.entity.LivingEntity.class, getBoundingBox().inflate(range))) {
-            if (nearby == this) continue;
-            if (!filter.matches(new Filter.Context(this, nearby, nearby, ServerHooks.state()))) continue;
-
-            Platform.hurt(nearby, level, damageSources().mobAttack(this), damage);
-        }
+        double range = Goals.number(attack, "damage_range", 0.2);
+        float damage = (float) Goals.number(attack, "damage_per_tick", 2);
+        Filter filter = Goals.filter(attack, "entity_filter");
+        java.util.List<net.minecraft.world.entity.LivingEntity> struck = level.getEntitiesOfClass(
+                net.minecraft.world.entity.LivingEntity.class, getBoundingBox().inflate(range),
+                nearby -> nearby != this
+                    && filter.matches(new Filter.Context(this, nearby, nearby, ServerHooks.state())));
+        struck.forEach(nearby -> Platform.hurt(nearby, level, damageSources().mobAttack(this), damage));
+        if (!struck.isEmpty()) areaAttackReadyAt = tickCount + Goals.ticks(attack, "damage_cooldown", 0);
     }
+
+    private int areaAttackReadyAt;
 
     /**
      * Leaves a block behind as the entity moves, the way `minecraft:trail` describes.
@@ -2941,8 +2957,8 @@ public class AddonEntity extends PathfinderMob
                 goals.add(priority, new WaterAvoidingRandomFlyingGoal(this, 1.0));
             case "minecraft:behavior.random_swim", "minecraft:behavior.swim_wander" ->
                 goals.add(priority, StrollGoal.swimming(this, goal));
-            case "minecraft:behavior.move_to_water", "minecraft:behavior.move_to_liquid" ->
-                goals.add(priority, new TryFindWaterGoal(this));
+            case "minecraft:behavior.move_to_water" -> goals.add(priority, MoveToMatchingBlockGoal.water(this, goal));
+            case "minecraft:behavior.move_to_liquid" -> goals.add(priority, new TryFindWaterGoal(this));
             case "minecraft:behavior.swim_up_for_breath" ->
                 goals.add(priority, new BreathAirGoal(this));
 
@@ -2959,8 +2975,11 @@ public class AddonEntity extends PathfinderMob
                 goals.add(priority, new BreakDoorGoal(this, difficulty -> true));
             case "minecraft:behavior.follow_mob" ->
                 goals.add(priority, new FollowMobGoal(this, 1.0, 3f, 7f));
-            case "minecraft:behavior.leap_at_target",
-                 "minecraft:behavior.stalk_and_pounce_on_target" ->
+            // Mojang documents `yd` as a height, but every number its own entities write is the upward
+            // speed Java's goal takes for the same animal: four tenths for the wolf, the cat and the spider.
+            case "minecraft:behavior.leap_at_target" ->
+                goals.add(priority, new LeapAtTargetGoal(this, (float) Goals.number(goal, "yd", 0)));
+            case "minecraft:behavior.stalk_and_pounce_on_target" ->
                 goals.add(priority, new LeapAtTargetGoal(this, 0.4f));
             case "minecraft:behavior.play", "minecraft:behavior.stroll_towards_village" ->
                 goals.add(priority, new WaterAvoidingRandomStrollGoal(this, speed));
@@ -4402,42 +4421,19 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
-     * `minecraft:flocking` steers the entity towards the others of its kind swimming around it.
-     *
-     * Bedrock states a dozen weights for how tightly a school holds together. What carries across is
-     * the school itself: an entity outside the distance the pack allows is pulled back towards the
-     * middle of whatever it can see. Both numbers default to nothing, so a component with an empty
-     * body schools no one, which is what a pack writing one means.
-     *
-     * `innner_cohesion_threshold` carries the third `n` every published pack writes it with.
+     * `minecraft:flocking` steers the entity among the others of its kind around it, unless the
+     * entity rolled `loner_chance` the first time it flocked and keeps to itself.
      */
     private void flock() {
-        if (!declares("minecraft:flocking")) return;
+        Flocking flocking = Flocking.tryFrom(liveComponent("minecraft:flocking"));
+        if (flocking == null) return;
 
-        double influence = number(definition, "minecraft:flocking", "influence_radius", 0);
-        if (influence <= 0) return;
-
-        double innerRadius =
-            number(definition, "minecraft:flocking", "innner_cohesion_threshold", 0);
-        java.util.List<AddonEntity> school = level().getEntitiesOfClass(AddonEntity.class,
-            getBoundingBox().inflate(influence),
-            other -> other != this && other.getType() == getType());
-        if (school.isEmpty()) return;
-
-        net.minecraft.world.phys.Vec3 middle = net.minecraft.world.phys.Vec3.ZERO;
-        for (AddonEntity other : school) middle = middle.add(other.position());
-        middle = middle.scale(1d / school.size());
-
-        net.minecraft.world.phys.Vec3 towards = middle.subtract(position());
-        double apart = towards.length();
-        if (apart < innerRadius) return;
-
-        double pull = number(definition, "minecraft:flocking", "goal_weight", 0) * FLOCK_PULL;
-        setDeltaMovement(getDeltaMovement().add(towards.normalize().scale(pull)));
+        if (loner == null) loner = flocking.rollsLoner(random);
+        if (!loner) setDeltaMovement(getDeltaMovement().add(flocking.steer(this)));
     }
 
-    /** How hard one tick of schooling pulls, at the weight a pack states as one. */
-    private static final double FLOCK_PULL = 0.01;
+    /** Whether the entity keeps out of flocks, rolled the first time it flocked. */
+    private Boolean loner;
 
     /**
      * `minecraft:boostable` lets whoever is riding spend an item to go faster for a while.

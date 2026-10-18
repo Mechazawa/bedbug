@@ -557,8 +557,8 @@ public final class GoalGameTests {
 
     private static final int SHELTER_TICKS = 240;
 
-    /** The light settling and three seconds after it, which is plenty for a three block walk. */
-    private static final int OUTDOOR_TICKS = 80;
+    /** The light settling and five seconds after it, which is plenty for a three block walk. */
+    private static final int OUTDOOR_TICKS = 120;
 
     /** Java works out the light under a new roof over the ticks after it is built. */
     private static final int LIGHT_SETTLES = 20;
@@ -612,6 +612,227 @@ public final class GoalGameTests {
             new net.minecraft.world.item.ItemStack(item, count));
         helper.getLevel().addFreshEntity(lying);
         return lying;
+    }
+
+    /**
+     * An area attack waits `damage_cooldown` seconds after a hit before the next, a second and a half
+     * for the thorny group, where it otherwise hits on every sensor pass the target is not still
+     * invulnerable for.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void anAreaAttackWaitsItsCooldown(GameTestHelper helper) {
+        AddonEntity brute = BehaviourGameTests.spawn(helper, BRUTE, STAND);
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(brute, "tp:brute_bristle", null, ServerHooks.state());
+        Mob pig = pig(helper, STAND.east(1), BLOWS_TO_KILL);
+        Platform.placeAt(pig, brute.getX() + 0.6, brute.getY(), brute.getZ(), 0f, 0f);
+        List<Long> hits = new ArrayList<>();
+        float[] health = {pig.getHealth()};
+        helper.onEachTick(() -> {
+            if (pig.getHealth() < health[0]) hits.add(helper.getLevel().getGameTime());
+            health[0] = pig.getHealth();
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(hits.size() >= 2, BRUTE + " struck what touches it " + hits.size() + " times.");
+            long gap = hits.get(1) - hits.get(0);
+            helper.assertTrue(gap >= THORNY_COOLDOWN,
+                BRUTE + " waits a second and a half between hits and hit again after " + gap + " ticks.");
+        });
+    }
+
+    /** The second and a half the thorny group waits, in Java's ticks. */
+    private static final int THORNY_COOLDOWN = 30;
+
+    /**
+     * `minecraft:variable_max_auto_step` steps as high as `controlled_value` while a player steers the
+     * entity, and back down to `base_value` once nobody does.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aSteeredEntityStepsAsHighAsItsControlledValue(GameTestHelper helper) {
+        AddonEntity brute = BehaviourGameTests.spawn(helper, BRUTE, STAND);
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(brute, "tp:brute_steady_up", null, ServerHooks.state());
+        net.minecraft.server.level.ServerPlayer rider = helper.makeMockServerPlayerInLevel();
+        helper.assertTrue(rider.startRiding(brute), BRUTE + " is rideable and a player could not get on.");
+        helper.assertTrue(Math.abs(Platform.stepHeight(brute) - STEERED_STEP) < 0.01,
+            BRUTE + " steps a block and a half while steered and steps " + Platform.stepHeight(brute) + ".");
+        rider.stopRiding();
+        helper.assertTrue(Math.abs(Platform.stepHeight(brute) - LONE_STEP) < 0.01,
+            BRUTE + " steps six tenths with nobody aboard and steps " + Platform.stepHeight(brute) + ".");
+        helper.succeed();
+    }
+
+    private static final float STEERED_STEP = 1.5f;
+    private static final float LONE_STEP = 0.6f;
+
+    /**
+     * A leap rises at the `yd` its pack states. The springing group says nine tenths, more than
+     * twice the four tenths every leap used to take.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aLeapRisesAtTheSpeedItsPackStates(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_spring");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob pig = pig(helper, STAND.east(3), BLOWS_TO_KILL);
+        brute.setTarget(pig);
+        double[] highest = {0};
+        helper.onEachTick(() -> highest[0] = Math.max(highest[0], brute.getDeltaMovement().y));
+        helper.succeedWhen(() -> helper.assertTrue(highest[0] > HIGH_LEAP,
+            BRUTE + " leaps at nine tenths and rose at no more than " + highest[0] + "."));
+    }
+
+    /** Above anything a leap of four tenths reaches. */
+    private static final double HIGH_LEAP = 0.6;
+
+    /**
+     * `minecraft:behavior.move_to_water` looks for water as far as its `search_range` and walks to
+     * it. The pool is five blocks off, past the two Java's own goal for this looks.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = SHELTER_TICKS)
+    public void anEntityLooksAsFarForWaterAsItsPackSays(GameTestHelper helper) {
+        BlockPos.betweenClosed(BlockPos.ZERO, new BlockPos(7, 0, 7))
+            .forEach(at -> helper.setBlock(at, net.minecraft.world.level.block.Blocks.STONE));
+        helper.setBlock(new BlockPos(6, 0, 4), net.minecraft.world.level.block.Blocks.WATER);
+        AddonEntity brute = withGroup(helper, "tp:brute_parch", new BlockPos(1, 1, 4));
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        BlockPos pool = helper.absolutePos(new BlockPos(6, 0, 4));
+        helper.succeedWhen(() -> helper.assertTrue(
+            Math.hypot(brute.getX() - pool.getX() - 0.5, brute.getZ() - pool.getZ() - 0.5) < AT_THE_POOL,
+            BRUTE + " looks eight blocks for water and never reached the pool five blocks off."));
+    }
+
+    /**
+     * A walk to a block counts as there within the `goal_radius` its pack states. The digging group
+     * says three, so a brute held two blocks from the gold it digs for digs it where it stands.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aWalkToABlockArrivesWithinItsGoalRadius(GameTestHelper helper) {
+        helper.setBlock(STAND.east(2), net.minecraft.world.level.block.Blocks.GOLD_BLOCK);
+        AddonEntity brute = heldInPlace(helper, "tp:brute_dig");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.succeedWhen(() -> helper.assertTrue(helper.getBlockState(STAND.east(2)).isAir(),
+            BRUTE + " counts three blocks as there and never dug the gold two blocks off."));
+    }
+
+    /** Beside the pool, where a mob that walks to water stops. */
+    private static final double AT_THE_POOL = 1.5;
+
+    /**
+     * A flockmate nearer than `separation_threshold` pushes the entity away, by `separation_weight`.
+     * Two crowded brutes a block apart, their feet held, drift apart on the push alone.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = FLOCK_TICKS)
+    public void aFlockmateTooCloseIsPushedAway(GameTestHelper helper) {
+        AddonEntity one = flocker(helper, "tp:brute_crowd", 4, 1);
+        AddonEntity other = flocker(helper, "tp:brute_crowd", 5, 1);
+        if (one == null || other == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.succeedWhen(() -> helper.assertTrue(one.distanceTo(other) > CROWDED_APART,
+            BRUTE + " keeps three blocks from its flock and stands " + one.distanceTo(other) + " from the next."));
+    }
+
+    /** Half a block further apart than the two brutes start. */
+    private static final double CROWDED_APART = 1.5;
+
+    /**
+     * Under `match_variants` the flock is the ones drawn alike: the middle brute is pulled towards the
+     * brute of its own variant on one side and not towards the middle of both, which lies the other way.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = FLOCK_TICKS)
+    public void aFlockOfMatchingVariantsLeavesOthersOut(GameTestHelper helper) {
+        AddonEntity middle = flocker(helper, "tp:brute_school", 4, 1);
+        AddonEntity alike = flocker(helper, "tp:brute_school", 2, 1);
+        AddonEntity unlike = flocker(helper, "tp:brute_school", 7, 2);
+        if (middle == null || alike == null || unlike == null) {
+            helper.succeed();
+            return;
+        }
+
+        drawsTowardsAlike(helper, middle, "flocks with its own variant alone");
+    }
+
+    /**
+     * `high_flock_limit` caps the flock at the nearest so many: under a limit of one the middle brute is
+     * pulled towards its nearest flockmate, and not towards the middle of all three.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = FLOCK_TICKS)
+    public void aFlockIsCappedAtItsHighLimit(GameTestHelper helper) {
+        AddonEntity middle = flocker(helper, "tp:brute_pair", 4, 1);
+        AddonEntity nearest = flocker(helper, "tp:brute_pair", 2, 1);
+        AddonEntity further = flocker(helper, "tp:brute_pair", 7, 1);
+        AddonEntity furthest = flocker(helper, "tp:brute_pair", 7, 1);
+        if (middle == null || nearest == null || further == null || furthest == null) {
+            helper.succeed();
+            return;
+        }
+
+        drawsTowardsAlike(helper, middle, "flocks with its one nearest");
+    }
+
+    /**
+     * A brute whose `loner_chance` is certain keeps out of the flock beside it, while the flocking
+     * brute beside it is drawn towards it all the same.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = FLOCK_TICKS)
+    public void aLonerKeepsOutOfTheFlock(GameTestHelper helper) {
+        AddonEntity loner = flocker(helper, "tp:brute_keep_apart", 4, 1);
+        AddonEntity other = flocker(helper, "tp:brute_flock_near", 2, 1);
+        if (loner == null || other == null) {
+            helper.succeed();
+            return;
+        }
+
+        double lonerFrom = loner.getX();
+        double otherFrom = other.getX();
+        helper.runAfterDelay(FLOCK_TICKS - 10, () -> {
+            helper.assertTrue(other.getX() > otherFrom + DRIFT,
+                BRUTE + " flocks and moved " + (other.getX() - otherFrom) + " towards the loner beside it.");
+            helper.assertTrue(Math.abs(loner.getX() - lonerFrom) < STILL,
+                BRUTE + " is a loner and drifted " + (loner.getX() - lonerFrom) + " towards the brute beside it.");
+            helper.succeed();
+        });
+    }
+
+    private static final int FLOCK_TICKS = 60;
+    private static final double STILL = 0.05;
+
+    /** Waits for the middle brute to have drifted west, towards the flockmate two blocks off on that side. */
+    private static void drawsTowardsAlike(GameTestHelper helper, AddonEntity middle, String why) {
+        double from = middle.getX();
+        helper.succeedWhen(() -> helper.assertTrue(middle.getX() < from - DRIFT,
+            BRUTE + " " + why + " and moved " + (middle.getX() - from) + " along the row."));
+    }
+
+    private static final double DRIFT = 0.2;
+
+    /** A brute along the middle row with its feet held, so flocking is all that moves it. */
+    private static AddonEntity flocker(GameTestHelper helper, String event, int x, double variant) {
+        AddonEntity brute = heldInPlace(helper, event, new BlockPos(x, 0, 4));
+        if (brute != null) brute.setValue("variant", variant);
+        return brute;
     }
 
     /**
@@ -797,7 +1018,11 @@ public final class GoalGameTests {
      * it can hit.
      */
     private static AddonEntity heldInPlace(GameTestHelper helper, String event) {
-        AddonEntity brute = withGroup(helper, event);
+        return heldInPlace(helper, event, STAND);
+    }
+
+    private static AddonEntity heldInPlace(GameTestHelper helper, String event, BlockPos where) {
+        AddonEntity brute = withGroup(helper, event, where);
         if (brute != null) brute.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(0);
         return brute;
     }
