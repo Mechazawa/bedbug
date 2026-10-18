@@ -3575,6 +3575,9 @@ public class AddonEntity extends PathfinderMob
     @Override
     public void aiStep() {
         float facing = getYRot();
+        // Java counts a swing down only for monsters and players, and a swing never counted down
+        // leaves every later one unseen by whatever watches for the arm going up.
+        updateSwingTime();
         super.aiStep();
         if (definition == null || isClientSide() || getControllingPassenger() instanceof Player) return;
 

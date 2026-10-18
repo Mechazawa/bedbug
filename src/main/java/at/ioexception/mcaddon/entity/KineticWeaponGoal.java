@@ -39,7 +39,7 @@ public final class KineticWeaponGoal extends Goal {
     private final boolean movesTheMount;
     private final String onAttack;
     private double backingOffTo;
-    private int untilNext;
+    private int readyAt;
     private boolean spent;
 
     public KineticWeaponGoal(AddonEntity mob, JsonObject component) {
@@ -64,7 +64,7 @@ public final class KineticWeaponGoal extends Goal {
 
     @Override
     public boolean canUse() {
-        if (spent || untilNext-- > 0) return false;
+        if (spent || mob.tickCount < readyAt) return false;
 
         LivingEntity target = mob.getTarget();
         return target != null && target.isAlive() && mob.distanceTo(target) <= approachDistance;
@@ -124,7 +124,7 @@ public final class KineticWeaponGoal extends Goal {
 
         rider().getNavigation().moveTo(target, cooldownSpeed);
         backingOffTo = 0;
-        untilNext = cooldownTicks;
+        readyAt = mob.tickCount + cooldownTicks;
         holdAt(target);
     }
 

@@ -530,7 +530,8 @@
           "priority": 0,
           "reach_multiplier": 4,
           "attack_duration": 2,
-          "hit_delay_pct": 0.5
+          "hit_delay_pct": 0.5,
+          "track_target": true
         }
       },
       "tp:brute_touchy": {

@@ -1396,33 +1396,35 @@ public final class GoalGameTests {
     private static final double HOP_LANDS_FROM = 6.2;
     private static final double HOP_LANDS_TO = 7.3;
 
-    /**
-     * A leap rises at the three tenths of a block a tick the ocelot writes as `target_dist`, and
-     * under `must_be_on_ground` set false it leaps from the air as well.
-     */
+    /** A leap rises at the speed the ocelot writes as `target_dist`, six tenths for the vaulting brute. */
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
-    public void aLeapRisesAtItsTargetDistanceAndLeavesTheAir(GameTestHelper helper) {
-        AddonEntity grounded = heldInPlace(helper, "tp:brute_vault");
-        AddonEntity aloft = heldInPlace(helper, "tp:brute_vault", new BlockPos(1, 2, 4));
-        if (grounded == null || aloft == null) {
+    public void aLeapRisesAtItsTargetDistance(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_vault");
+        if (brute == null) {
             helper.succeed();
             return;
         }
 
-        aloft.setNoGravity(true);
-        grounded.setTarget(pig(helper, STAND.east(3), BLOWS_TO_KILL));
-        aloft.setTarget(pig(helper, new BlockPos(4, 0, 4), BLOWS_TO_KILL));
+        brute.setTarget(pig(helper, STAND.east(3), BLOWS_TO_KILL));
         double[] rise = {0};
-        AtomicBoolean leaptAloft = new AtomicBoolean();
-        helper.onEachTick(() -> {
-            rise[0] = Math.max(rise[0], grounded.getDeltaMovement().y);
-            if (aloft.getDeltaMovement().y > LEAPING) leaptAloft.set(true);
-        });
-        helper.succeedWhen(() -> {
-            helper.assertTrue(Math.abs(rise[0] - VAULT_RISE) < RISE_MARGIN,
-                BRUTE + " leaps at six tenths and rose at " + rise[0] + ".");
-            helper.assertTrue(leaptAloft.get(), BRUTE + " may leap from the air and never left it upward.");
-        });
+        helper.onEachTick(() -> rise[0] = Math.max(rise[0], brute.getDeltaMovement().y));
+        helper.succeedWhen(() -> helper.assertTrue(Math.abs(rise[0] - VAULT_RISE) < RISE_MARGIN,
+            BRUTE + " leaps at six tenths and rose at " + rise[0] + "."));
+    }
+
+    /** Under `must_be_on_ground` set false a leap leaves from the air as well. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aLeapLeavesFromTheAir(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_vault", new BlockPos(1, 2, 4));
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        brute.setNoGravity(true);
+        brute.setTarget(pig(helper, new BlockPos(3, 0, 4), BLOWS_TO_KILL));
+        helper.succeedWhen(() -> helper.assertTrue(brute.getDeltaMovement().y > LEAPING,
+            BRUTE + " may leap from the air and never left it upward."));
     }
 
     /** Six tenths of a block a tick less one tick of gravity and drag. */
@@ -1559,7 +1561,7 @@ public final class GoalGameTests {
      * `attack_duration`, and swings again only once that has passed: the winding brute swings for
      * two seconds and lands each blow one second in.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = POUNCE_TICKS)
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = WINDING_TICKS)
     public void aDelayedAttackLandsPartWayThroughItsSwing(GameTestHelper helper) {
         AddonEntity brute = heldInPlace(helper, "tp:brute_wind_up");
         if (brute == null) {
@@ -1581,18 +1583,21 @@ public final class GoalGameTests {
             health[0] = pig.getHealth();
         });
         helper.succeedWhen(() -> {
-            helper.assertTrue(blows.size() >= 2 && !swings.isEmpty(),
+            helper.assertTrue(swings.size() >= 2 && !blows.isEmpty(),
                 BRUTE + " swung " + swings.size() + " times and struck " + blows.size() + " times.");
             helper.assertTrue(Math.abs(blows.get(0) - swings.get(0) - WIND_UP) <= 1,
                 BRUTE + " lands a second into its swing and landed after " + (blows.get(0) - swings.get(0))
                     + " ticks.");
-            helper.assertTrue(Math.abs(blows.get(1) - blows.get(0) - 2 * WIND_UP) <= 1,
-                BRUTE + " swings every two seconds and struck again after " + (blows.get(1) - blows.get(0))
+            helper.assertTrue(Math.abs(swings.get(1) - swings.get(0) - 2 * WIND_UP) <= 1,
+                BRUTE + " swings every two seconds and swung again after " + (swings.get(1) - swings.get(0))
                     + " ticks.");
         });
     }
 
     private static final long WIND_UP = 20;
+
+    /** Room for a slow start beside every other test and three swings of two seconds. */
+    private static final int WINDING_TICKS = 400;
 
     /** `minecraft:behavior.target_when_pushed` turns on the pig pushing into it, at a chance of one. */
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
@@ -1667,6 +1672,33 @@ public final class GoalGameTests {
             helper.assertFalse(firedBehind.get(), BRUTE + " fires only inside its view and fired at a pig behind it.");
         });
     }
+
+    /**
+     * A shot fired at a target waits `pre_shoot_delay`, then `post_shoot_delay`, then
+     * `attack_cooldown` before the next, each counted on the game's clock: the gunning brute fires
+     * every fourteen ticks. Java runs a goal's tick and its start check every second tick unless the
+     * goal asks otherwise, which doubles any of those counted per call.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = VOLLEY_TICKS)
+    public void aShotIsFiredAsOftenAsItsDelaysSay(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_gun");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        brute.setTarget(pig(helper, new BlockPos(1, 0, 4), BLOWS_TO_KILL));
+        List<Long> shots = shotsBy(helper, brute);
+        helper.succeedWhen(() -> {
+            helper.assertTrue(shots.size() >= 2, BRUTE + " fired " + shots.size() + " times.");
+            long gap = shots.get(1) - shots.get(0);
+            helper.assertTrue(Math.abs(gap - GUN_CYCLE) <= 2,
+                BRUTE + " fires every fourteen ticks and fired again after " + gap + ".");
+        });
+    }
+
+    /** Two ticks before the shot, two after and a rest of ten. */
+    private static final long GUN_CYCLE = 14;
 
     private static final double SHOT_HEIGHT = 2;
     private static final double SHOT_MARGIN = 0.5;
