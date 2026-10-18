@@ -93,7 +93,8 @@ around fills a disk, and everything then fails at once in ways that look like an
 disk. Remove a worktree as soon as its branch is merged: `git worktree remove --force <path>`, or
 `rm -rf <worktree>/versions/*/build` to keep the checkout and drop only what a build can make again.
 
-**Run `tools/seed-worktree.sh` once in a new worktree, before its first build.** It copies the
+**Run `tools/seed-worktree.sh` once in a new worktree, before its first build.** `wt add` runs it
+by itself through `.wt-post-add`; a worktree made any other way runs it by hand. It copies the
 Loom downloads and remapped companion jars (`.gradle/loom-cache/{minecraftMaven,remapped_mods,natives}`)
 from the main checkout with reflinks where the filesystem has them, which takes a first
 `./gradlew assemble` from about 65 seconds to about 16. It is safe on a worktree that already holds a
