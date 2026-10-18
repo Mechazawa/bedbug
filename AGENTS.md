@@ -211,10 +211,17 @@ These are the checks it runs, and what each one catches:
   `TestSingleplayerContextImpl.close`: the three wait on each other while a test world closes, and
   no code of this mod is on any of the three stacks.
   The render thread has left Fabric's phaser to run the deferred disconnect, and `IntegratedServer.halt`
-  waits for the server thread to run a task, while the server thread waits at the phaser for the render
-  thread to arrive: a race inside the API (version 6.0.2 on 26.2), seen with a server still busy
-  generating chunks. Nothing in this repository's tests or mod touches those phases, and no report of it
-  was found in a search of the public trackers.
+  waits for the server thread to run a task, while the server thread, already halted by its owner's
+  logout, waits at the phaser for the render thread to arrive: a race inside the API (version 6.0.2 on
+  26.2), seen with a server still busy generating chunks. Nothing in this repository's tests or mod
+  touches those phases.
+  The `gametest` source set works around it with `IntegratedServerHaltMixin`, which redirects the
+  `executeBlocking` call in `halt` to run the guest removal in place on the server thread, queue it
+  with `execute` otherwise, and drop it once the server has stopped. It is in
+  `mcaddon-gametest.mixins.json` only, so the mod jar never carries it. To reproduce the deadlock
+  on demand, add a temporary mixin sleeping 300 ms on the render thread at the head of
+  `IntegratedServer.halt` (the server thread calls `halt` too, and must not sleep) and close a world:
+  without the redirect the first close hangs.
 
   Only the 26.x targets ship that API, so the tests are a source set of their own (`gametest`, with
   its own `fabric.mod.json` listing them) that the two older targets never compile, and `check`
