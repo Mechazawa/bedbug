@@ -253,8 +253,8 @@ Against a server without this mod a client plays with its own add-ons.
   multiplayer world leaves everybody else's as it was.
 - `/bedrock hud`, which hides pieces of one player's heads-up display and draws them again: the
   hotbar, the crosshair, the health, the hunger, the armour, the air bubbles, the bar above the
-  hotbar, the status effects, the held item's name and a ridden mob's health, on every supported
-  version. `all` and a line naming no piece hide every one of them, and a script's
+  hotbar, the status effects, the held item's name, a ridden mob's health and the paper doll, on
+  every supported version. `all` and a line naming no piece hide every one of them, and a script's
   `ScreenDisplay.setHudVisibility`, `hideAllExcept` and `resetHudElementsVisibility` change the same
   set that `getHiddenHudElements` reads back. Like the camera it reaches the targets' clients alone.
 - `/bedrock inputpermission`, which takes one kind of input away from a player and gives it back. The
@@ -853,11 +853,17 @@ the whole vocabulary, so the four that aim a quad along the particle's direction
 instead of being turned into one of Java's. 1.20.1 has no such interface and turns every quad to the
 camera, so those four are counted and named there.
 
-**Three pieces of the heads-up display.** `/hud` names the paper doll, the touch controls and the
-hints Bedrock calls tooltips, which say what a key would do to whatever is under the crosshair. No
-Java client draws any of the three; the one such hint Java shows, how to get off a mount, is written
-to the action bar a pack writes to as well. A line naming one of them is dropped and reported, and a
-script naming one is reported while the rest of what it asked for is done.
+**Two pieces of the heads-up display.** `/hud` names the touch controls, the buttons Bedrock draws
+on a touch screen, which a Java client never runs on, and the tooltips, Bedrock's lists of button
+prompts saying what a key would do to whatever is under the crosshair. Which prompts Bedrock shows,
+for which key, on which side and in what order is decided in engine code Mojang publishes nowhere.
+A line naming one of them is dropped and reported, and a script naming one is reported while the
+rest of what it asked for is done.
+
+**The paper doll** is drawn the way Bedrock draws it: the player, small and turned a little, in
+the top left corner while they sneak, swim, fly, glide or ride and for 15 ticks after, with the
+coordinates and the day count moved below it. It shows with or without an add-on installed, and
+`/hud` hides it.
 
 **The fog a pack describes for water, lava and powder snow, and its volumetric block.** A Bedrock fog
 file says what the world looks like through each medium the camera can be in, and adds a second
@@ -876,8 +882,8 @@ command is reported.
 **One form of a command the rest of which translates.** The cameras Bedrock draws behind or round an
 entity (`minecraft:follow_orbit`, `minecraft:fixed_boom` and `minecraft:control_scheme_camera`), and
 the camera forms that follow a spline, hang the camera off an entity, turn it towards one or offset
-it from one, which would each be a camera this mod draws itself; the paper doll, the input hints
-and the touch controls `hud` names, which a Java client draws none of; a `permission` visitor, a
+it from one, which would each be a camera this mod draws itself; the button prompts and the touch
+controls `hud` names, for the reasons above; a `permission` visitor, a
 level below Java's member; `changesetting allow-cheats`, because a Java server always lets an
 operator run commands; and the liquid setting `ignore_waterlogging` on 1.20.1, which waterlogs
 every block a jigsaw or structure places. The line does not run and the form is named, rather than being handed to a

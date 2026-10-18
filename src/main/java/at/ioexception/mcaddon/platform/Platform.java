@@ -2034,7 +2034,7 @@ public final class Platform {
      * writes, so nothing is registered here. 1.21 reads tints from a colour provider instead, and
      * 1.20.1 has no dyed colour on a stack at all.
      */
-    /** What a layer drawn over the heads-up display may do: fill a rectangle and write a line. */
+    /** What a layer drawn over the heads-up display may do: fill a rectangle, write a line, draw a mob. */
     public interface Painter {
         int width();
 
@@ -2044,6 +2044,13 @@ public final class Platform {
 
         /** Writes one line with a shadow under it, in the game's own font. */
         void text(String line, int left, int top, int argb);
+
+        /**
+         * Draws a mob standing in a box the way the inventory draws the player, turned to look at a
+         * point `lookX` and `lookY` from the middle of the box.
+         */
+        void entity(LivingEntity entity, int left, int top, int right, int bottom, int size, float lookX,
+            float lookY);
     }
 
     /** Draws a layer of this mod's own over everything the heads-up display draws, every frame. */
@@ -2070,6 +2077,14 @@ public final class Platform {
                 public void text(String line, int left, int top, int argb) {
                     graphics.text(net.minecraft.client.Minecraft.getInstance().font, line, left, top, argb, true);
                 }
+
+                @Override
+                public void entity(LivingEntity entity, int left, int top, int right, int bottom, int size,
+                    float lookX, float lookY) {
+                    net.minecraft.client.gui.screens.inventory.InventoryScreen.extractEntityInInventoryFollowsMouse(
+                        graphics, left, top, right, bottom, size, 0.0625F,
+                        (left + right) / 2F + lookX, (top + bottom) / 2F + lookY, entity);
+                }
             }));
         //?} else {
         /*net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback.EVENT.register((graphics, delta) ->
@@ -2092,6 +2107,19 @@ public final class Platform {
                 @Override
                 public void text(String line, int left, int top, int argb) {
                     graphics.drawString(net.minecraft.client.Minecraft.getInstance().font, line, left, top, argb, true);
+                }
+
+                @Override
+                public void entity(LivingEntity entity, int left, int top, int right, int bottom, int size,
+                    float lookX, float lookY) {
+                    //? if >=1.21 {
+                    net.minecraft.client.gui.screens.inventory.InventoryScreen.renderEntityInInventoryFollowsMouse(
+                        graphics, left, top, right, bottom, size, 0.0625F,
+                        (left + right) / 2F + lookX, (top + bottom) / 2F + lookY, entity);
+                    //?} else {
+                    /^net.minecraft.client.gui.screens.inventory.InventoryScreen.renderEntityInInventoryFollowsMouse(
+                        graphics, (left + right) / 2, bottom, size, -lookX, -lookY, entity);
+                    ^///?}
                 }
             }));
         *///?}

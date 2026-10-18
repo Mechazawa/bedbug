@@ -475,14 +475,15 @@ class FunctionsTest {
         "'hud @a reset all'",
         "'hud @a[tag=watching] hide crosshair'",
         "'hud @s reset progress_bar'",
+        "'hud @s hide paperdoll'",
     })
     void keepsAHudLineNamingAPieceJavaDrawsWhole(String source) throws IOException {
         assertEquals(source, only(source));
     }
 
-    /** No Java client draws the paper doll, the touch controls or Bedrock's interaction hints. */
+    /** No Java client draws the touch controls or Bedrock's button prompts. */
     @ParameterizedTest
-    @CsvSource({"paperdoll", "touch_controls", "tooltips"})
+    @CsvSource({"touch_controls", "tooltips"})
     void dropsAHudLineNamingAPieceNoJavaClientDraws(String element) throws IOException {
         assertEquals(List.of(), translate("hud @a hide " + element));
         assertTrue(problems.contains("command hud " + element + ", which Java has no form of"),
