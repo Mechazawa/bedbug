@@ -107,11 +107,12 @@ public final class Platform {
         *///?}
     }
 
-    public static void hurt(Entity entity, ServerLevel level, DamageSource source, float amount) {
+    /** Answers whether the blow landed. */
+    public static boolean hurt(Entity entity, ServerLevel level, DamageSource source, float amount) {
         //? if >=1.21.2 {
-        entity.hurtServer(level, source, amount);
+        return entity.hurtServer(level, source, amount);
         //?} else {
-        /*entity.hurt(source, amount);
+        /*return entity.hurt(source, amount);
         *///?}
     }
 

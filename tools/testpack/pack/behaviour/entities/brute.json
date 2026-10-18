@@ -15,6 +15,10 @@
           "type": "bool",
           "default": false
         },
+        "tp:roared": {
+          "type": "bool",
+          "default": false
+        },
         "tp:escaped": {
           "type": "bool",
           "default": false
@@ -323,6 +327,32 @@
             "min": 0,
             "max": 8
           }
+        }
+      },
+      "tp:brute_roaring": {
+        "minecraft:behavior.knockback_roar": {
+          "priority": 0,
+          "duration": 1,
+          "attack_time": 0.5,
+          "knockback_damage": 3,
+          "knockback_horizontal_strength": 1,
+          "knockback_vertical_strength": 1,
+          "knockback_height_cap": 0.3,
+          "knockback_range": 3,
+          "knockback_filters": {
+            "test": "has_tag",
+            "subject": "other",
+            "value": "tp_pushable"
+          },
+          "damage_filters": {
+            "test": "has_tag",
+            "subject": "other",
+            "value": "tp_hurtable"
+          },
+          "on_roar_end": {
+            "event": "tp:brute_roared"
+          },
+          "cooldown_time": 10
         }
       },
       "tp:brute_poisoner": {
@@ -808,6 +838,18 @@
           "component_groups": [
             "tp:brute_archer"
           ]
+        }
+      },
+      "tp:brute_roar": {
+        "add": {
+          "component_groups": [
+            "tp:brute_roaring"
+          ]
+        }
+      },
+      "tp:brute_roared": {
+        "set_property": {
+          "tp:roared": true
         }
       },
       "tp:brute_poison_arrows": {

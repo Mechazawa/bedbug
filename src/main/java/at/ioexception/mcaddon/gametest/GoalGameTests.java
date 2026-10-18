@@ -690,6 +690,132 @@ public final class GoalGameTests {
     private static final int STANDING = 60;
 
     /**
+     * A projectile stops at the first entity it hits unless `multiple_targets` lets it on.
+     *
+     * Two darts fly east through two pigs each; the plain one hurts the first pig alone and the
+     * piercing one hurts both.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aProjectileStopsAtItsFirstTargetUnlessItHitsMany(GameTestHelper helper) {
+        if (BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("tp", "dart")).isEmpty()) {
+            helper.succeed();
+            return;
+        }
+
+        Mob first = pig(helper, STAND.east(2), BLOWS_TO_KILL);
+        Mob second = pig(helper, STAND.east(4), BLOWS_TO_KILL);
+        Mob pierced = pig(helper, STAND.east(2).south(2), BLOWS_TO_KILL);
+        Mob piercedToo = pig(helper, STAND.east(4).south(2), BLOWS_TO_KILL);
+        dartEast(helper, STAND, null);
+        dartEast(helper, STAND.south(2), "tp:make_piercing");
+        helper.runAfterDelay(DART_TICKS, () -> {
+            helper.assertTrue(first.getHealth() < BLOWS_TO_KILL, "tp:dart never hurt the first pig in its way.");
+            helper.assertTrue(second.getHealth() == BLOWS_TO_KILL,
+                "tp:dart stops at the first entity it hits and hurt the second pig as well.");
+            helper.assertTrue(pierced.getHealth() < BLOWS_TO_KILL && piercedToo.getHealth() < BLOWS_TO_KILL,
+                "tp:dart hits every entity in its way under multiple_targets and left a pig unhurt.");
+            helper.succeed();
+        });
+    }
+
+    /**
+     * Under `should_bounce` `if_invulnerable` a projectile bounces back off an entity no blow can
+     * hurt, the way Java's arrow bounces off one.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aProjectileBouncesOffAnInvulnerableEntity(GameTestHelper helper) {
+        if (BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("tp", "dart")).isEmpty()) {
+            helper.succeed();
+            return;
+        }
+
+        Mob pig = pig(helper, STAND.east(2), BLOWS_TO_KILL);
+        pig.setInvulnerable(true);
+        AddonEntity dart = dartEast(helper, STAND, "tp:make_bouncing");
+        helper.succeedWhen(() -> helper.assertTrue(dart.getDeltaMovement().x < 0,
+            "tp:dart bounces off an invulnerable pig and flies at " + dart.getDeltaMovement() + "."));
+    }
+
+    private static final int DART_TICKS = 30;
+
+    /**
+     * A knockback roar throws back what `knockback_filters` accepts within `knockback_range` and
+     * hurts what `damage_filters` accepts by `knockback_damage`, `attack_time` into a roar lasting
+     * `duration`, and raises `on_roar_end` as it ends.
+     *
+     * The roaring brute pushes pigs tagged pushable and hurts pigs tagged hurtable by three, half a
+     * second into a one second roar reaching three blocks.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aKnockbackRoarSortsWhatItThrowsFromWhatItHurts(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_roar");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob pushed = pig(helper, STAND.east(2), BLOWS_TO_KILL);
+        Mob hurt = pig(helper, STAND.south(2), BLOWS_TO_KILL);
+        Mob far = pig(helper, STAND.east(5), BLOWS_TO_KILL);
+        pushed.addTag("tp_pushable");
+        far.addTag("tp_pushable");
+        hurt.addTag("tp_hurtable");
+        // A mob without its AI is not moved by a push, so these keep it and stand still by speed.
+        // The hurt pig keeps its resistance, because the blow itself knocks back what it lands on.
+        for (Mob pig : List.of(pushed, hurt, far)) {
+            pig.setNoAi(false);
+            pig.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(0);
+        }
+        pushed.getAttribute(Attributes.KNOCKBACK_RESISTANCE).setBaseValue(0);
+        far.getAttribute(Attributes.KNOCKBACK_RESISTANCE).setBaseValue(0);
+        Vec3 pushedFrom = pushed.position();
+        Vec3 hurtFrom = hurt.position();
+        Vec3 farFrom = far.position();
+        long[] knocked = {-1};
+        long[] ended = {-1};
+        helper.onEachTick(() -> {
+            long now = helper.getLevel().getGameTime();
+            if (knocked[0] < 0 && hurt.getHealth() < BLOWS_TO_KILL) knocked[0] = now;
+            if (ended[0] < 0 && Boolean.TRUE.equals(brute.value("tp:roared"))) ended[0] = now;
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(ended[0] >= 0, BRUTE + " never ended a roar.");
+            helper.assertTrue(hurt.getHealth() == BLOWS_TO_KILL - ROAR_DAMAGE,
+                BRUTE + " roars for three and the hurtable pig has " + hurt.getHealth() + " health.");
+            helper.assertTrue(pushed.getHealth() == BLOWS_TO_KILL,
+                BRUTE + " hurts only what its damage filters accept and hurt the pushable pig.");
+            helper.assertTrue(pushed.position().x - pushedFrom.x > ROAR_THROW,
+                BRUTE + " throws back the pushable pig and it moved from " + pushedFrom + " to " + pushed.position());
+            helper.assertTrue(hurt.position().distanceTo(hurtFrom) < ROAR_THROW,
+                BRUTE + " throws back only what its knockback filters accept and moved the hurtable pig.");
+            helper.assertTrue(far.position().distanceTo(farFrom) < ROAR_THROW,
+                BRUTE + " roars three blocks far and moved a pig five blocks off.");
+            helper.assertTrue(Math.abs(ended[0] - knocked[0] - ROAR_TAIL) <= 1,
+                BRUTE + " strikes half a second before its roar ends and struck at " + knocked[0]
+                    + " for an end at " + ended[0] + ".");
+        });
+    }
+
+    private static final float ROAR_DAMAGE = 3;
+    private static final double ROAR_THROW = 0.5;
+    private static final long ROAR_TAIL = 10;
+
+    /** A dart fired east by nobody at a pig's middle, with the group the event names switched on. */
+    private static AddonEntity dartEast(GameTestHelper helper, BlockPos where, String event) {
+        ServerLevel level = helper.getLevel();
+        AddonEntity dart = (AddonEntity) Platform.createMob(
+            BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("tp", "dart")).orElseThrow(), level);
+        BlockPos at = helper.absolutePos(where);
+        Platform.placeAt(dart, at.getX() + 0.5, at.getY() + PIG_MIDDLE, at.getZ() + 0.5, 0f, 0f);
+        level.addFreshEntity(dart);
+        if (event != null) EntityEvents.trigger(dart, event, null, ServerHooks.state());
+        dart.launchAsProjectile(null, new Vec3(1, 0, 0));
+        return dart;
+    }
+
+    private static final double PIG_MIDDLE = 0.4;
+
+    /**
      * A rideable entity under `pull_in_entities` takes on board a mob touching it, raising
      * `on_rider_enter_event`; the mob gets off on top of it under `dismount_mode` `on_top_center`,
      * raising `on_rider_exit_event`; and `passenger_max_width` keeps a wider mob off altogether.

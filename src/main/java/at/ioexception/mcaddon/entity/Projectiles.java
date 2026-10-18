@@ -46,6 +46,9 @@ public final class Projectiles {
     private final JsonObject onHit;
     private final Set<String> ignored = new LinkedHashSet<>();
 
+    /** What the projectile has already hit, which it passes through from then on. */
+    private final Set<Entity> struck = new java.util.HashSet<>();
+
     /** Whoever fired it, which is what its own damage names and what it may not hit at first. */
     private LivingEntity shooter;
     private int flownFor;
@@ -121,7 +124,7 @@ public final class Projectiles {
         if (stuck || !(mob.level() instanceof ServerLevel level)) return;
 
         flownFor++;
-        HitResult hit = ProjectileUtil.getHitResultOnMoveVector(mob, this::mayHit);
+        HitResult hit = sweep(level, ProjectileUtil.getHitResultOnMoveVector(mob, this::mayHit));
         if (hit.getType() != HitResult.Type.MISS) strike(level, hit);
         if (stuck || mob.isRemoved()) return;
 
@@ -146,13 +149,32 @@ public final class Projectiles {
     }
 
     /**
+     * The nearest entity the projectile's box sweeps through this tick, short of any block the ray
+     * met. Bedrock hits with the box, and the ray from the projectile's feet alone lets it fly
+     * straight through a mob standing in its way.
+     */
+    private HitResult sweep(ServerLevel level, HitResult ray) {
+        if (ray.getType() == HitResult.Type.ENTITY) return ray;
+
+        Vec3 from = mob.position();
+        double blocked = ray.getType() == HitResult.Type.MISS
+            ? Double.MAX_VALUE : ray.getLocation().distanceToSqr(from);
+        return level.getEntities(mob, mob.getBoundingBox().expandTowards(mob.getDeltaMovement()), this::mayHit)
+            .stream()
+            .filter(other -> other.distanceToSqr(from) < blocked)
+            .min(java.util.Comparator.comparingDouble(other -> other.distanceToSqr(from)))
+            .<HitResult>map(EntityHitResult::new)
+            .orElse(ray);
+    }
+
+    /**
      * Whether the projectile registers a hit on this entity.
      *
      * `ignored_entities` names what it passes through, and a shooter is safe from its own shot for
      * the few ticks it takes to leave the barrel, which is what stops a bow hurting its holder.
      */
     private boolean mayHit(Entity other) {
-        if (other == mob || !other.isPickable()) return false;
+        if (other == mob || !other.isPickable() || struck.contains(other)) return false;
         if (other == shooter
             && flownFor <= Json.number(body, "owner_launch_immunity_ticks",
                 DEFAULT_OWNER_IMMUNITY_TICKS)) {
@@ -202,8 +224,9 @@ public final class Projectiles {
     private static final int HURT_SPARKS = 8;
 
     private void strike(ServerLevel level, HitResult hit) {
-        if (hit instanceof EntityHitResult on && on.getEntity() instanceof LivingEntity struck) {
-            hitEntity(struck);
+        if (hit instanceof EntityHitResult on && on.getEntity() instanceof LivingEntity target) {
+            struck.add(target);
+            hitEntity(target);
         } else if (hit instanceof BlockHitResult on) {
             hitBlock(on);
         }
@@ -213,20 +236,42 @@ public final class Projectiles {
         if (onHit.has("remove_on_hit")) mob.discard();
     }
 
+    /**
+     * Hurts what the projectile hit, then sends it on, back or down.
+     *
+     * Under `should_bounce` it bounces back off an entity the blow did not hurt, or off one no blow
+     * can, at a tenth of its speed as Java's arrow does. Otherwise it stops at the first entity it
+     * hits, dropping where it struck as Java's trident does, unless `multiple_targets` lets it fly
+     * on to the next.
+     */
     private void hitEntity(LivingEntity struck) {
         play(Json.text(body, "hit_sound", null));
         applyEffect(struck);
         JsonObject damage = onHit.getAsJsonObject("impact_damage");
-        if (damage == null) {
-            burn(struck, Json.bool(body, "catch_fire", false) || onHit.has("catch_fire"));
+        boolean hurt = damage != null && damaged(damage, struck);
+        if (damage == null || hurt) {
+            burn(struck, Json.bool(body, "catch_fire", false) || onHit.has("catch_fire")
+                || hurt && Json.bool(damage, "catch_fire", false));
+        }
+        if (hurt && Json.bool(damage, "destroy_on_hit", false)) {
+            mob.discard();
             return;
         }
-        if (!damaged(damage, struck)) return;
 
-        burn(struck, Json.bool(damage, "catch_fire", false) || Json.bool(body, "catch_fire", false)
-            || onHit.has("catch_fire"));
-        if (Json.bool(damage, "destroy_on_hit", false)) mob.discard();
+        JsonObject live = java.util.Objects.requireNonNullElse(mob.liveComponent("minecraft:projectile"), body);
+        String bounce = Json.text(live, "should_bounce", "no");
+        if ("if_no_damage_dealt".equals(bounce) && !hurt
+            || "if_invulnerable".equals(bounce) && struck.isInvulnerable()) {
+            mob.setDeltaMovement(mob.getDeltaMovement().scale(BOUNCE));
+        } else if (!Json.bool(live, "multiple_targets", false)) {
+            mob.setDeltaMovement(mob.getDeltaMovement().multiply(DROP));
+        }
     }
+
+    private static final double BOUNCE = -0.1;
+
+    /** What Java's trident keeps of its speed after it hits, which leaves it falling where it struck. */
+    private static final Vec3 DROP = new Vec3(-0.01, -0.1, -0.01);
 
     /** Rolls the damage range the pack wrote and deals it, with the knockback it asked for. */
     private boolean damaged(JsonObject damage, LivingEntity struck) {
@@ -239,8 +284,10 @@ public final class Projectiles {
         double high = Goals.high(damage, "damage", low);
         float dealt = (float) (low + mob.getRandom().nextDouble() * Math.max(0, high - low)
             + Json.number(damage, "power_multiplier", 0) * mob.getDeltaMovement().length());
-        Platform.hurt(struck, (ServerLevel) mob.level(),
-            mob.level().damageSources().mobProjectile(mob, shooter), dealt);
+        if (!Platform.hurt(struck, (ServerLevel) mob.level(),
+            mob.level().damageSources().mobProjectile(mob, shooter), dealt)) {
+            return false;
+        }
         if (Json.bool(damage, "knockback", false)) {
             Vec3 away = mob.getDeltaMovement().normalize();
             struck.push(away.x, 0.1, away.z);

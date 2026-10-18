@@ -175,7 +175,9 @@ Against a server without this mod a client plays with its own add-ons.
   `prefer_water` and needs no hurt under `force`; fleeing a block raises `on_escape` once clear; and
   the panic and the flight make the sound the pack names for them. A teleporter closes on a far
   target and blinks away from a projectile, a pack's own projectile is batted back, stopped or
-  removed when struck, and a blast breaks blocks whatever the griefing rule says unless the pack asks
+  removed when struck, hits what its box sweeps through, stops at the first entity it hits unless
+  `multiple_targets` lets it on, and bounces back under `should_bounce`; a knockback roar throws
+  back and hurts what its two filters name, `attack_time` into the roar, and raises `on_roar_end`; and a blast breaks blocks whatever the griefing rule says unless the pack asks
   for the rule, under a cap on what a block withstands. A child bred under `minecraft:offspring`
   takes a tamed parent's owner, a parent's variant, mark variant, colour and listed properties
   unless a mutation keeps its own, the dye two colours make, and attributes blended the way Java

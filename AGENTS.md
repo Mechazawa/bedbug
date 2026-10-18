@@ -444,7 +444,10 @@ These are the checks it runs, and what each one catches:
   where it broke a block. `GoalSoundClientGameTest` hears the panic and retreat sounds the brute's
   `sounds.json` entry names, which a sound moment no Java question reaches has to be kept for.
   `tp:spark` reflects when struck after a tenth of a second, and its brittle and dull groups are
-  removed and stopped when struck instead.
+  removed and stopped when struck instead. `tp:dart` is a slow projectile with no gravity that GoalGameTests
+  fires through pigs: plain it stops at the first, `tp:dart_piercing` hits every one and
+  `tp:dart_bouncing` bounces off an invulnerable one. The brute's `tp:brute_roaring` group roars,
+  pushing pigs tagged `tp_pushable` and hurting those tagged `tp_hurtable`.
 
   The ember's sensing group carries a `minecraft:damage_sensor` with one trigger per cause, each
   setting the enum property `tp:felt` to the cause it heard: `fall`, `entity_attack`, `projectile`,
