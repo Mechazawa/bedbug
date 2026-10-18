@@ -43,6 +43,11 @@
       "at.ioexception.mcaddon.clientgametest.CullingClientGameTest",
       "at.ioexception.mcaddon.clientgametest.ParticleClientGameTest",
       "at.ioexception.mcaddon.clientgametest.FogClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.OrbitCameraClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.BoomCameraClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.AttachedCameraClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.TargetCameraClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.SplineCameraClientGameTest",
       "at.ioexception.mcaddon.clientgametest.CameraClientGameTest",
       "at.ioexception.mcaddon.clientgametest.CameraPresetClientGameTest",
       "at.ioexception.mcaddon.clientgametest.ItemAndBlockClientGameTest"

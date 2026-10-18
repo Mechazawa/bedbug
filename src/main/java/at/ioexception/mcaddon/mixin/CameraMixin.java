@@ -39,14 +39,14 @@ public abstract class CameraMixin implements PlayerCamera.Adjustable {
     //? if >=26 {
     @Inject(method = "update", at = @At("RETURN"))
     private void mcaddon$applyAddonView(net.minecraft.client.DeltaTracker delta, CallbackInfo info) {
-        PlayerCamera.apply(this);
+        PlayerCamera.apply(this, delta.getGameTimeDeltaPartialTick(true));
     }
     //?} else {
     /*@Inject(method = "setup", at = @At("RETURN"))
     private void mcaddon$applyAddonView(net.minecraft.world.level.BlockGetter level,
         net.minecraft.world.entity.Entity entity, boolean thirdPerson, boolean reversed,
         float partialTick, CallbackInfo info) {
-        PlayerCamera.apply(this);
+        PlayerCamera.apply(this, partialTick);
     }
     *///?}
 

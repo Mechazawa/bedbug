@@ -32,7 +32,7 @@ public final class PackFiles {
     /** The behaviour pack paths a reader opens. */
     private static final Set<String> BEHAVIOUR_READ = Set.of(
         "manifest.json", "pack_icon.png", "animation_controllers", "animations", "biomes", "blocks",
-        "cameras", "dialogue", "dimensions", "entities", "feature_rules", "features", "functions",
+        "camera", "cameras", "dialogue", "dimensions", "entities", "feature_rules", "features", "functions",
         "item_catalog", "items", "loot_tables", "recipes", "scripts", "shapes", "spawn_rules",
         "structures", "subpacks", "texts", "trading", "texts/language_names.json",
         "texts/languages.json");
