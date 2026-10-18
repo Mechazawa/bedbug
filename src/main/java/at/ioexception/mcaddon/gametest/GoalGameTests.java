@@ -519,6 +519,56 @@ public final class GoalGameTests {
         });
     }
 
+    /**
+     * `minecraft:equip_item`'s `can_wear_armor` set false leaves a helmet lying at the entity's feet,
+     * while a brute whose own group says nothing puts one on.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void anEntityThatCannotWearArmourLeavesAHelmetLying(GameTestHelper helper) {
+        AddonEntity dresser = withGroup(helper, "tp:brute_dress");
+        AddonEntity plain = withGroup(helper, "tp:brute_go_unarmoured", FAR_CORNER);
+        if (dresser == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.spawnItem(net.minecraft.world.item.Items.IRON_HELMET, STAND);
+        helper.spawnItem(net.minecraft.world.item.Items.IRON_HELMET, FAR_CORNER);
+        helper.runAfterDelay(GOAL_TICKS - 10, () -> {
+            helper.assertFalse(dresser.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.HEAD).isEmpty(),
+                BRUTE + " can wear armour and never put the helmet on.");
+            helper.assertTrue(plain.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.HEAD).isEmpty(),
+                BRUTE + " put on a helmet though its can_wear_armor is false.");
+            helper.succeed();
+        });
+    }
+
+    /**
+     * `minecraft:celebrate_hunt` with `broadcast` off lets the hunter credited with the kill
+     * celebrate and leaves the hunter beside it quiet.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aHuntThatIsNotBroadcastIsCelebratedByItsKillerAlone(GameTestHelper helper) {
+        AddonEntity killer = withGroup(helper, "tp:brute_hunt_alone");
+        AddonEntity bystander = withGroup(helper, "tp:brute_hunt_alone", STAND.east(2));
+        if (killer == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob quarry = pig(helper, MIDDLE, 1);
+        Platform.hurt(quarry, helper.getLevel(), quarry.damageSources().mobAttack(killer), KILLING_BLOW);
+        helper.succeedWhen(() -> {
+            helper.assertTrue(Boolean.TRUE.equals(killer.value("is_celebrating")),
+                BRUTE + " killed the pig and is not celebrating.");
+            helper.assertFalse(Boolean.TRUE.equals(bystander.value("is_celebrating")),
+                BRUTE + " celebrates a kill it did not make, which its hunter did not broadcast.");
+        });
+    }
+
+    /** Far more than the pig's one health. */
+    private static final float KILLING_BLOW = 20;
+
     /** `minecraft:admire_item`'s `duration` is how long the entity turns over what it holds. */
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = ADMIRE_TICKS)
     public void anAdmirerAdmiresForItsDuration(GameTestHelper helper) {

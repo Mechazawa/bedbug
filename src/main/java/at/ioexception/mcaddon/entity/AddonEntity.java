@@ -3202,7 +3202,7 @@ public class AddonEntity extends PathfinderMob
                 MoveToMatchingBlockGoal.anywhere(this, goal));
 
             case "minecraft:behavior.equip_item" -> goals.add(priority,
-                new EquipItemGoal(this, componentBody("minecraft:equip_item")));
+                new EquipItemGoal(this));
             case "minecraft:behavior.hold_ground" ->
                 goals.add(priority, HoldGroundGoal.standing(this));
             case "minecraft:behavior.look_at_target" ->
@@ -4080,41 +4080,40 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
-     * Tells the hunters nearby that something they were after has died.
+     * Lets the hunter that made a kill celebrate it, and tells the hunters around it.
      *
-     * `minecraft:celebrate_hunt` is what makes a piglin cheer over a hoglin. `broadcast` says the
-     * cheer spreads to its own kind within the radius, which is why every entity in range is asked
-     * rather than only whatever landed the kill.
+     * `minecraft:celebrate_hunt` is what makes a piglin cheer over a hoglin. The entity credited with
+     * the kill celebrates, and with `broadcast` on every other entity carrying the component within
+     * its `radius` celebrates with it.
      */
     public static void noticeHuntSucceeded(net.minecraft.world.entity.LivingEntity quarry) {
         if (quarry.level().isClientSide()
-            || !AddonEntities.anyoneDeclares("minecraft:celebrate_hunt")) {
+            || !AddonEntities.anyoneDeclares("minecraft:celebrate_hunt")
+            || !(quarry.getKillCredit() instanceof AddonEntity killer)
+            || !killer.celebrateTheHunt(quarry)) {
             return;
         }
 
-        for (AddonEntity hunter : quarry.level().getEntitiesOfClass(AddonEntity.class,
-            quarry.getBoundingBox().inflate(CELEBRATION_RANGE))) {
-            hunter.celebrateTheHunt(quarry);
-        }
+        com.google.gson.JsonObject hunt = killer.liveComponent("minecraft:celebrate_hunt");
+        if (!Goals.flag(hunt, "broadcast", true)) return;
+
+        double radius = Goals.number(hunt, "radius", 16);
+        quarry.level().getEntitiesOfClass(AddonEntity.class, killer.getBoundingBox().inflate(radius),
+                hunter -> hunter != killer && hunter.distanceToSqr(killer) <= radius * radius)
+            .forEach(hunter -> hunter.celebrateTheHunt(quarry));
     }
 
-    /** The widest radius `minecraft:celebrate_hunt` is given, which bounds the search for hunters. */
-    private static final double CELEBRATION_RANGE = 32;
+    /** Starts celebrating a kill its `celebration_targets` count, and answers whether it did. */
+    private boolean celebrateTheHunt(net.minecraft.world.entity.LivingEntity quarry) {
+        com.google.gson.JsonObject hunt = liveComponent("minecraft:celebrate_hunt");
+        if (hunt == null || quarry == this) return false;
 
-    private void celebrateTheHunt(net.minecraft.world.entity.LivingEntity quarry) {
-        if (definition == null || quarry == this || !declares("minecraft:celebrate_hunt")) return;
+        Filter celebrated = Filter.parse(hunt.get("celebration_targets"));
+        if (!celebrated.matches(new Filter.Context(this, quarry, quarry, ServerHooks.state()))) return false;
 
-        double radius = number(definition, "minecraft:celebrate_hunt", "radius", 16);
-        if (distanceToSqr(quarry) > radius * radius) return;
-
-        Filter celebrated = Filter.parse(componentBody("minecraft:celebrate_hunt")
-            .get("celebration_targets"));
-        if (!celebrated.matches(new Filter.Context(this, quarry, quarry, ServerHooks.state()))) return;
-
-        celebrateUntilTick = tickCount
-            + (int) (number(definition, "minecraft:celebrate_hunt", "duration", 4)
-                * Goals.TICKS_PER_SECOND);
+        celebrateUntilTick = tickCount + Goals.ticks(hunt, "duration", 4);
         ServerHooks.state().setProperty(getUUID(), "is_celebrating", true);
+        return true;
     }
 
     /** Cheers for as long as the hunt's celebration lasts, and stops cheering when it is over. */

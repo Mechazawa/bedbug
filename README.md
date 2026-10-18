@@ -192,7 +192,9 @@ Against a server without this mod a client plays with its own add-ons.
   while its group is on: a raider jumps and makes its `celebration_sound`, a villager sends up
   fireworks, and either raises its end event after its `duration`. An entity hurt recently neither
   admires nor barters until its `cooldown_after_being_attacked` is over, and an admirer and an egg
-  layer make their pack's own sound. A villager
+  layer make their pack's own sound. An entity whose `minecraft:equip_item` says `can_wear_armor` false
+  leaves armour lying, and a hunt is celebrated by the entity credited with the kill and, with
+  `broadcast` on, by the hunters within its `radius`. A villager
   explores past the edge of its village by `explore_dist`, a fox strolls to the nearest village, a
   child plays with the friend its `friend_types` name, and `minecraft:behavior.hide` runs to the bed
   or other place `poi_type` names when a bell rings or a raid is on. Java's village is the beds, job

@@ -642,6 +642,20 @@
           "sound_interval": { "min": 0.2, "max": 0.3 }
         }
       },
+      "tp:brute_dressing": {
+        "minecraft:behavior.equip_item": { "priority": 1 },
+        "minecraft:equip_item": {}
+      },
+      "tp:brute_unarmoured": {
+        "minecraft:behavior.equip_item": { "priority": 1 },
+        "minecraft:equip_item": { "can_wear_armor": false }
+      },
+      "tp:brute_hunting_alone": {
+        "minecraft:celebrate_hunt": {
+          "broadcast": false,
+          "duration": 4
+        }
+      },
       "tp:brute_stomping_near": {
         "minecraft:behavior.stomp_turtle_egg": {
           "priority": 1,
@@ -1088,6 +1102,27 @@
       "tp:brute_celebrated": {
         "set_property": {
           "tp:celebrated": true
+        }
+      },
+      "tp:brute_dress": {
+        "add": {
+          "component_groups": [
+            "tp:brute_dressing"
+          ]
+        }
+      },
+      "tp:brute_go_unarmoured": {
+        "add": {
+          "component_groups": [
+            "tp:brute_unarmoured"
+          ]
+        }
+      },
+      "tp:brute_hunt_alone": {
+        "add": {
+          "component_groups": [
+            "tp:brute_hunting_alone"
+          ]
         }
       },
       "tp:brute_stomp_near": {
