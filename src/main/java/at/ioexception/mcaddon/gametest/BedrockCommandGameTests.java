@@ -246,6 +246,73 @@ public final class BedrockCommandGameTests {
             expect(helper, animated.offset(offset), block, "loaded layer by layer")));
     }
 
+    /**
+     * `/tickingarea` forces the chunks of a rectangle and of a circle under their names, marks one to
+     * preload, lists them and lets go of a rectangle removed by a position inside it, and
+     * `/schedule on_area_loaded` holds a function back until a ticking area loads the chunk it waits
+     * for, which the synthetic pack's `tp/loaded` counts.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 400)
+    public void tickingAreasForceChunksAndAScheduleWaitsForThem(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos here = helper.absolutePos(BlockPos.ZERO);
+        String tag = Long.toString(Math.abs(here.asLong()), 36);
+        int x = here.getX();
+        int z = here.getZ();
+
+        BedrockLines.run(helper, "tickingarea add " + x + " 0 " + z + " " + (x + 16) + " 0 " + z + " t_rect_" + tag);
+        helper.assertTrue(Platform.forcedChunks(level).contains(Platform.chunkKey(x >> 4, z >> 4))
+                && Platform.forcedChunks(level).contains(Platform.chunkKey((x + 16) >> 4, z >> 4)),
+            "a rectangle did not force both chunks it covers.");
+
+        int farX = x + 20000;
+        BedrockLines.run(helper, "tickingarea add circle " + farX + " 0 " + z + " 1 t_circle_" + tag + " true");
+        for (int[] step : new int[][] {{0, 0}, {1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+            helper.assertTrue(Platform.forcedChunks(level).contains(
+                    Platform.chunkKey((farX >> 4) + step[0], (z >> 4) + step[1])),
+                "a circle of one chunk did not force the chunk " + step[0] + ", " + step[1] + " from its middle.");
+        }
+        helper.assertFalse(Platform.forcedChunks(level).contains(Platform.chunkKey((farX >> 4) + 1, (z >> 4) + 1)),
+            "a circle of one chunk forced the chunk on its diagonal.");
+        helper.assertTrue(BedrockLines.run(helper, "tickingarea preload t_circle_" + tag) == 1,
+            "an area added with preload true is not marked to preload.");
+        helper.assertTrue(BedrockLines.run(helper, "tickingarea preload t_circle_" + tag + " false") == 0,
+            "an area whose preload was set false is still marked.");
+        helper.assertTrue(BedrockLines.run(helper, "tickingarea list all-dimensions") >= 2,
+            "the list does not hold both areas.");
+
+        helper.assertTrue(BedrockLines.run(helper, "tickingarea remove " + (x + 2) + " 70 " + z) == 1,
+            "removing by a position inside the rectangle removed nothing.");
+        helper.assertFalse(Platform.forcedChunks(level).contains(Platform.chunkKey(x >> 4, z >> 4)),
+            "a removed rectangle still forces its chunk.");
+        BedrockLines.run(helper, "tickingarea remove t_circle_" + tag);
+
+        if (AddonEntities.typeOf("tp:ember") == null) {
+            helper.succeed();
+            return;
+        }
+        int waitX = x - 30000;
+        helper.assertFalse(level.hasChunk(waitX >> 4, z >> 4), "the chunk the schedule waits for is loaded already.");
+        BedrockLines.run(helper, "schedule on_area_loaded add " + waitX + " 0 " + z + " " + waitX + " 0 " + z
+            + " tp/loaded");
+        helper.runAfterDelay(20, () -> {
+            helper.assertTrue(loadedCount(helper) == 0, "the function ran before its area loaded.");
+            BedrockLines.run(helper, "tickingarea add " + waitX + " 0 " + z + " " + waitX + " 0 " + z
+                + " t_wait_" + tag);
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(loadedCount(helper) == 1, "the function did not run once its area loaded.");
+            BedrockLines.run(helper, "tickingarea remove t_wait_" + tag);
+        });
+    }
+
+    private static int loadedCount(GameTestHelper helper) {
+        net.minecraft.world.scores.Scoreboard scores = helper.getLevel().getServer().getScoreboard();
+        net.minecraft.world.scores.Objective objective = scores.getObjective("tp_loaded");
+        Integer score = objective == null ? null : Platform.score(scores, objective, "area");
+        return score == null ? 0 : score;
+    }
+
     private static String at(GameTestHelper helper, BlockPos relative) {
         BlockPos absolute = helper.absolutePos(relative);
         return absolute.getX() + " " + absolute.getY() + " " + absolute.getZ();

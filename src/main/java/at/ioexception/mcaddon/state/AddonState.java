@@ -18,7 +18,8 @@ import java.util.UUID;
 
 /**
  * What a pack has stored: the dynamic properties of the world, of an entity and of a single block,
- * the entity properties a behaviour pack declares, and the dialogue scene each NPC is showing.
+ * the entity properties a behaviour pack declares, the dialogue scene each NPC is showing, and the
+ * sections a Bedrock command keeps about the world, such as its ticking areas.
  *
  * This lives in a file beside the world rather than in entity NBT, which keeps it out of the way of
  * the save format and lets the same code run on every supported Minecraft version. Entity properties
@@ -37,6 +38,7 @@ public final class AddonState {
     private final Map<UUID, Map<String, Object>> entityProperties = new HashMap<>();
     private final Map<String, Map<String, Object>> blockDynamic = new LinkedHashMap<>();
     private final Map<UUID, Map<String, Object>> dialogue = new HashMap<>();
+    private final Map<String, JsonElement> sections = new LinkedHashMap<>();
     private boolean dirty;
 
     private AddonState(Path file) {
@@ -54,6 +56,10 @@ public final class AddonState {
             readEntities(root.getAsJsonObject("entityProperties"), state.entityProperties);
             readBlocks(root.getAsJsonObject("blockDynamic"), state.blockDynamic);
             readEntities(root.getAsJsonObject("dialogue"), state.dialogue);
+            JsonObject sections = root.getAsJsonObject("sections");
+            if (sections != null) {
+                sections.entrySet().forEach(entry -> state.sections.put(entry.getKey(), entry.getValue()));
+            }
         } catch (IOException | RuntimeException error) {
             McAddon.LOGGER.error("Could not read {}; starting from empty add-on state.", file, error);
         }
@@ -68,6 +74,9 @@ public final class AddonState {
         root.add("entityProperties", writeGroups(entityProperties));
         root.add("blockDynamic", writeGroups(blockDynamic));
         root.add("dialogue", writeGroups(dialogue));
+        JsonObject written = new JsonObject();
+        sections.forEach(written::add);
+        root.add("sections", written);
 
         try {
             Files.createDirectories(file.getParent());
@@ -128,6 +137,20 @@ public final class AddonState {
 
     public void setDialogueScene(UUID entity, String scene) {
         put(dialogue.computeIfAbsent(entity, key -> new LinkedHashMap<>()), SCENE, scene);
+    }
+
+    /**
+     * A whole part of the state one owner reads and writes as a unit, such as the ticking areas a
+     * pack added. Null when the owner has written nothing.
+     */
+    public JsonElement section(String name) {
+        JsonElement found = sections.get(name);
+        return found == null ? null : found.deepCopy();
+    }
+
+    public void setSection(String name, JsonElement value) {
+        JsonElement previous = value == null ? sections.remove(name) : sections.put(name, value.deepCopy());
+        dirty |= value == null ? previous != null : !value.equals(previous);
     }
 
     /** Called when an entity is gone for good, so no map grows for the life of the world. */

@@ -115,15 +115,16 @@ class FunctionsTest {
             + "'item replace entity @s armor.body with minecraft:iron_horse_armor'",
         "'loot replace entity @s slot.equippable 1 loot tp:hat', 'loot replace entity @s armor.body loot tp:hat'",
         "'save hold', 'save-off'",
-        "'tickingarea add 0 0 0 32 0 32 named', 'forceload add 0 0 32 32'",
-        "'tickingarea remove_all', 'forceload remove all'",
+        "'tickingarea add 0 0 0 32 0 32 named', 'tickingarea add 0 0 0 32 0 32 named'",
+        "'tickingarea remove_all', 'tickingarea remove_all'",
+        "'tickingarea preload 0 0 0 true', 'tickingarea preload 0 0 0 true'",
         "'time set sunrise', 'time set 23000'",
         "'time set day', 'time set day'",
         "'changesetting difficulty h', 'difficulty hard'",
         "'damage @s 4 fall', 'damage @s 4'",
         "'damage @s 4 fall entity @p', 'damage @s 4 minecraft:generic by @p'",
         "'execute in nether run say hi', 'execute in the_nether run say hi'",
-        "'tickingarea remove 10 64 20', 'forceload remove 10 20'",
+        "'tickingarea remove 10 64 20', 'tickingarea remove 10 64 20'",
         "'replaceitem entity @s slot.armor 2 iron_leggings', "
             + "'item replace entity @s armor.legs with minecraft:iron_leggings'",
         "'replaceitem entity @s slot.chest 0 chest', 'item replace entity @s horse.chest with minecraft:chest'",
@@ -151,6 +152,8 @@ class FunctionsTest {
         "'schedule delay add tp:tick 20 append', 'schedule function tp:tick 20 append'",
         "'schedule delay clear tp:tick', 'schedule clear tp:tick'",
         "'schedule clear tp:tick', 'schedule clear tp:tick'",
+        "'schedule on_area_loaded add 0 0 0 8 8 8 tp:tick', 'schedule on_area_loaded add 0 0 0 8 8 8 tp:tick'",
+        "'schedule on_area_loaded clear tickingarea home', 'schedule on_area_loaded clear tickingarea home'",
     })
     void rewritesTheCommandsJavaSpellsDifferently(String source, String expected) throws IOException {
         assertEquals(expected, only(source));
@@ -167,12 +170,9 @@ class FunctionsTest {
         "'gametest runthis', 'command gametest runthis, which Java has no form of'",
         "'music play tp:theme 1 0 loop', 'command music loop, which Java has no form of'",
         "'save query', 'command save query, which Java has no form of'",
-        "'tickingarea preload 0 0 0', 'command tickingarea preload, which Java has no form of'",
         "'mobevent minecraft:ender_dragon_event true', "
             + "'command mobevent minecraft:ender_dragon_event, which Java has no form of'",
         "'place featurerule tp:rule ~ ~ ~', 'command place featurerule, which Java has no form of'",
-        "'schedule on_area_loaded add 0 0 0 8 8 8 tp:tick', "
-            + "'command schedule on_area_loaded, which Java has no form of'",
     })
     void dropsAFormOfATranslatedCommandJavaCannotSay(String source, String reported) throws IOException {
         assertEquals(List.of(), translate(source));
@@ -370,6 +370,9 @@ class FunctionsTest {
         "'execute @a ~ ~ ~ function greet', 'execute as @a at @s positioned ~ ~ ~ run function ns:greet'",
         "'schedule delay add greet 20 append', 'schedule function ns:greet 20 append'",
         "'schedule clear greet', 'schedule clear ns:greet'",
+        "'schedule on_area_loaded add circle 0 0 0 2 greet', 'schedule on_area_loaded add circle 0 0 0 2 ns:greet'",
+        "'schedule on_area_loaded clear tickingarea home greet', "
+            + "'schedule on_area_loaded clear tickingarea home ns:greet'",
         "'function other:greet', 'function other:greet'",
     })
     void namesTheAddOnShippingTheFunctionACallNames(String source, String expected) throws IOException {

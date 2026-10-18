@@ -67,7 +67,7 @@ public final class Functions {
     private static final Set<String> REGISTERED_HERE = Set.of(
         "playanimation", "event", "scriptevent", "music", "toggledownfall", "structure", "mobevent",
         "particle", "gametest", "dialogue", "transfer", "camera", "camerashake", "fog",
-        "clearspawnpoint", "hud", "inputpermission", "ride", "summon");
+        "clearspawnpoint", "hud", "inputpermission", "ride", "summon", "tickingarea");
 
     /**
      * The registered commands whose Bedrock line the command built here reads as it stands.
@@ -76,7 +76,8 @@ public final class Functions {
      * line the tree rejects.
      */
     static final Set<String> REGISTERED_WHOLE_LINE = Set.of("playanimation", "event",
-        "toggledownfall", "transfer", "camerashake", "fog", "clearspawnpoint", "inputpermission");
+        "toggledownfall", "transfer", "camerashake", "fog", "clearspawnpoint", "inputpermission",
+        "tickingarea");
 
     /**
      * Commands Bedrock has and Java has no counterpart for.
@@ -128,9 +129,7 @@ public final class Functions {
         "camera minecraft:control_scheme_camera", "camera minecraft:fixed_boom",
         "camera minecraft:follow_orbit", "camera play_spline", "camera remove_target",
         "camera target_center_offset", "camera target_entity", "camera view_offset",
-        "save query",
-        "schedule on_area_loaded",
-        "tickingarea all-dimensions", "tickingarea circle", "tickingarea preload");
+        "save query");
 
     /**
      * Commands Java says the same thing with under another name, and nothing else.
@@ -438,7 +437,6 @@ public final class Functions {
             case "replaceitem" -> replaceItem(rest, unsupported);
             case "ride" -> ride(rest, unsupported);
             case "save" -> save(rest, unsupported);
-            case "tickingarea" -> tickingArea(rest, unsupported);
             case "time" -> time(rest);
             case "changesetting" -> changeSetting(rest, unsupported);
             case "music" -> music(rest, unsupported);
@@ -1131,36 +1129,6 @@ public final class Functions {
     }
 
     /**
-     * A Bedrock ticking area is Java's forceload, which works in whole chunks.
-     *
-     * Java's takes the two corners as columns, so the heights are left out. A circular area and one
-     * picked out by the name it was added under have no Java form, and neither does a preload: Java
-     * loads a forced chunk as soon as it is named, with nothing to ask again later.
-     */
-    private static String tickingArea(String rest, Set<String> unsupported) {
-        String[] parts = SPACE.split(rest);
-        String mode = parts[0].toLowerCase(Locale.ROOT);
-
-        if (mode.equals("remove_all")) return "forceload remove all";
-        if (mode.equals("list")) {
-            if (parts.length == 1) return "forceload query";
-            return dropped("tickingarea", parts[1], unsupported);
-        }
-        if (mode.equals("remove") && parts.length >= 4) {
-            return "forceload remove " + parts[1] + " " + parts[3];
-        }
-        if (mode.equals("add")) {
-            if (parts.length > 1 && parts[1].equalsIgnoreCase("circle")) {
-                return dropped("tickingarea", parts[1], unsupported);
-            }
-            if (parts.length >= 7) {
-                return "forceload add " + parts[1] + " " + parts[3] + " " + parts[4] + " " + parts[6];
-            }
-        }
-        return dropped("tickingarea", mode, unsupported);
-    }
-
-    /**
      * The line with its first argument quoted, which is how a name carrying a colon reaches Java.
      *
      * Brigadier reads letters, digits and a few marks as an unquoted string and stops at a colon, so
@@ -1248,13 +1216,14 @@ public final class Functions {
     }
 
     /**
-     * `schedule delay`, which is the form both editions mean the same thing by.
+     * `schedule delay`, which is the form both editions mean the same thing by, and
+     * `schedule on_area_loaded`, which the command built here answers.
      *
      * Bedrock writes `schedule delay add <function> <time> <replace|append>` and Java writes
      * `schedule function <function> <time> [append|replace]`, with the same two words for the last
      * argument, so the whole of the delay half crosses by swapping one keyword. `schedule clear` is
-     * spelled alike in both and `schedule delay clear` is the same thing said the longer way.
-     * `on_area_loaded` waits for chunks to be loaded, which Java keeps no queue for.
+     * spelled alike in both and `schedule delay clear` is the same thing said the longer way. A
+     * waiting form keeps its words and has its function named the way `function` names one.
      */
     private static String schedule(String rest, FunctionNames functions, Set<String> unsupported) {
         String[] parts = SPACE.split(rest, 2);
@@ -1262,6 +1231,7 @@ public final class Functions {
         String tail = parts.length > 1 ? parts[1] : "";
 
         if (mode.equals("clear")) return scheduled("schedule clear", tail, functions, unsupported);
+        if (mode.equals("on_area_loaded")) return areaLoaded(tail, functions, unsupported);
         if (!mode.equals("delay")) return dropped("schedule", mode, unsupported);
 
         String[] action = SPACE.split(tail, 2);
@@ -1272,6 +1242,26 @@ public final class Functions {
                 ? scheduled("schedule clear", action[1], functions, unsupported) : null;
             default -> dropped("schedule", action[0].toLowerCase(Locale.ROOT), unsupported);
         };
+    }
+
+    /**
+     * `schedule on_area_loaded add|clear ...`, whose function is its last word, except where a clear
+     * by ticking area leaves it out.
+     */
+    private static String areaLoaded(String rest, FunctionNames functions, Set<String> unsupported) {
+        List<String> words = new ArrayList<>(words(rest));
+        boolean named = words.size() >= 2 && words.get(0).equalsIgnoreCase("clear")
+            && words.get(1).equalsIgnoreCase("tickingarea");
+        if (words.size() < 2 || named && words.size() < 3) {
+            unsupported.add("command schedule on_area_loaded with nothing to wait for");
+            return null;
+        }
+        if (!named || words.size() > 3) {
+            String called = function(words.get(words.size() - 1), functions, unsupported);
+            if (called == null) return null;
+            words.set(words.size() - 1, called.substring("function ".length()));
+        }
+        return "schedule on_area_loaded " + String.join(" ", words);
     }
 
     /** A schedule whose function is named the way `function` names one. */

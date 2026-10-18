@@ -134,6 +134,7 @@ public final class BedrockCommands {
                     clearSpawnPoint(EntityArgument.getPlayers(command, "player")))));
 
         StructureCommand.registerCommand(dispatcher);
+        TickingAreas.registerCommand(dispatcher);
 
         // A mob event switches a kind of spawning on or off, which Java states as a game rule. Each
         // event is a literal because its Bedrock name carries a colon, which an unquoted string

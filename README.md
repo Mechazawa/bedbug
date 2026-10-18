@@ -269,6 +269,15 @@ add-ons, or with another release of it, is told which in chat.
   turned or mirrored, mirroring along both axes as a half turn, and takes the entities, the blocks,
   waterlogging, integrity and seed, and Bedrock's animation, which places the structure a block or
   a layer at a time over the seconds the line gives.
+- `/bedrock tickingarea`, which forces the chunks of a rectangle or of a circle under a name, as
+  Java's `/forceload` forces a chunk, and keeps the name, the shape and the `preload` mark beside the
+  world, so an area is listed, found by a position inside it or by its name, and let go of without
+  releasing a chunk another area still covers. Bedrock's limits hold: ten areas, a hundred chunks to
+  an area and a circle four chunks across its radius. Java loads every forced chunk before the
+  world starts, which is what `preload` asks for, so the mark is kept and reported.
+- `/bedrock schedule on_area_loaded`, which holds a function back until every chunk of a rectangle,
+  a circle or a ticking area is loaded with its entities and then runs it once as the server.
+  What is waiting is kept beside the world.
 - Clips on a mob Java draws with a model of its own, such as `playanimation` on a vanilla villager.
   Each Bedrock bone is found among the Java model's parts, and on a mob whose Bedrock geometry hangs
   the head, arms and legs under `body`, those parts move, turn and scale with the body, so a pack

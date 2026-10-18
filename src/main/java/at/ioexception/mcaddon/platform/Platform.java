@@ -290,6 +290,24 @@ public final class Platform {
         *///?}
     }
 
+    /** One chunk's coordinates packed into the number Java keys its chunk maps by. */
+    public static long chunkKey(int x, int z) {
+        //? if >=26 {
+        return net.minecraft.world.level.ChunkPos.pack(x, z);
+        //?} else {
+        /*return net.minecraft.world.level.ChunkPos.asLong(x, z);
+        *///?}
+    }
+
+    /** The chunks a level holds forced, by their packed coordinates. */
+    public static it.unimi.dsi.fastutil.longs.LongSet forcedChunks(ServerLevel level) {
+        //? if >=26 {
+        return level.getForceLoadedChunks();
+        //?} else {
+        /*return level.getForcedChunks();
+        *///?}
+    }
+
     /** Puts a rider on a vehicle whether or not the rider could climb on by itself. */
     public static boolean mount(Entity rider, Entity vehicle) {
         //? if >=26 {

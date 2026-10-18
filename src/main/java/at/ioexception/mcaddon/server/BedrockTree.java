@@ -43,6 +43,7 @@ public final class BedrockTree {
     public static void register(CommandDispatcher<CommandSourceStack> java, CommandBuildContext context) {
         BedrockTree tree = new BedrockTree();
         BedrockCommands.register(tree.bedrock);
+        AreaSchedules.registerCommand(tree.bedrock, java);
         ExecuteCommand.register(tree.bedrock, context);
         BY_JAVA_TREE.put(java, tree);
 
