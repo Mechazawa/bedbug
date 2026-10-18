@@ -104,7 +104,8 @@ class FunctionsTest {
             + "'ride @e[type=minecraft:pig] summon_rider minecraft:zombie minecraft:as_baby_jockey'",
         "'ride @s summon_ride zombie_pigman skip_riders', 'ride @s summon_ride minecraft:zombified_piglin skip_riders'",
         "'summon pig ~ ~ ~ facing ~ ~1 ~', 'summon minecraft:pig ~ ~ ~ facing ~ ~1 ~'",
-        "'summon pig ~ ~ ~ 90 0 minecraft:entity_born Bob', 'summon minecraft:pig ~ ~ ~ 90 0 minecraft:entity_born Bob'",
+        "'summon pig ~ ~ ~ 90 0 minecraft:entity_born Bob', "
+            + "'summon minecraft:pig ~ ~ ~ 90 0 minecraft:entity_born Bob'",
         "'replaceitem entity @s slot.armor.head 0 keep diamond_helmet', "
             + "'execute as @s unless items entity @s armor.head * run item replace entity @s armor.head "
             + "with minecraft:diamond_helmet'",
