@@ -751,35 +751,30 @@ public final class Functions {
     }
 
     /**
-     * `place`, whose feature and structure forms Java's own command reads, and whose feature rule and
-     * jigsaw the commands built here place.
+     * `place`, whose feature form Java's own command reads and whose feature rule, jigsaw and
+     * structure the commands built here place.
      *
-     * What Bedrock writes after a structure's position says how it is built, and Java builds a
-     * structure with the settings its own definition states: a jigsaw structure's waterlogging is the
-     * `liquid_settings` of its file, and `Structure.generate` takes no other. So a structure line
-     * carrying any of them loses its line. A jigsaw is placed from a pool, which states none of them,
-     * so every word of Bedrock's form reaches it except leaving its entities out, which Java's jigsaw
-     * pieces never do.
+     * A jigsaw and a jigsaw structure take every word Bedrock writes after the position. Only the
+     * liquid setting that leaves water out of a piece has nothing behind it on a version with no
+     * liquid settings. A structure Java builds some other way takes none of the words, which the
+     * command reports as it runs, because the translation cannot tell which kind a name is.
      */
     private static String place(String rest, Set<String> unsupported) {
         String[] parts = SPACE.split(rest);
         String kind = parts[0].toLowerCase(Locale.ROOT);
-        int most = switch (kind) {
-            case "feature", "structure", "featurerule" -> 5;
-            case "jigsaw" -> 10;
-            default -> 0;
+        int liquidAt = switch (kind) {
+            case "feature", "featurerule" -> 0;
+            case "structure" -> 8;
+            case "jigsaw" -> 9;
+            default -> -1;
         };
 
-        if (most == 0) return dropped("place", kind, unsupported);
-        if (kind.equals("jigsaw") && parts.length > 8 && parts[8].equalsIgnoreCase("false")) {
-            unsupported.add("command place jigsaw leaving out its entities");
-            return null;
-        }
-        if (kind.equals("jigsaw") && parts.length > 9 && parts[9].equalsIgnoreCase("ignore_waterlogging")
+        if (liquidAt < 0) return dropped("place", kind, unsupported);
+        if (liquidAt > 0 && parts.length > liquidAt && parts[liquidAt].equalsIgnoreCase("ignore_waterlogging")
             && !Platform.placesJigsawsDry()) {
-            return dropped("place", parts[9], unsupported);
+            return dropped("place", parts[liquidAt], unsupported);
         }
-        if (parts.length <= most) return "place " + rest;
+        if (parts.length <= Math.max(liquidAt + 1, 5)) return "place " + rest;
 
         unsupported.add("command place " + kind + " with a placement Java builds for itself");
         return null;
