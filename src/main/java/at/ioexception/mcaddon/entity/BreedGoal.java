@@ -86,7 +86,7 @@ public final class BreedGoal extends Goal {
 
         Platform.placeAt(child, mob.getX(), mob.getY(), mob.getZ(), mob.getYRot(), 0f);
         if (child instanceof AddonEntity young) {
-            young.setYoung();
+            young.beBorn();
             young.inherit(mob, mate);
         }
         level.addFreshEntity(child);

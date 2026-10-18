@@ -128,8 +128,9 @@ class FunctionsTest {
         "'time set sunrise', 'time set 23000'",
         "'time set day', 'time set day'",
         "'changesetting difficulty h', 'difficulty hard'",
-        "'damage @s 4 fall', 'damage @s 4'",
-        "'damage @s 4 fall entity @p', 'damage @s 4 minecraft:generic by @p'",
+        "'damage @s 4 fall', 'damage @s 4 minecraft:fall'",
+        "'damage @s 4 fire_tick', 'damage @s 4 minecraft:on_fire'",
+        "'damage @s 4 entity_attack entity @p', 'damage @s 4 minecraft:mob_attack by @p'",
         "'execute in nether run say hi', 'execute in the_nether run say hi'",
         "'tickingarea remove 10 64 20', 'tickingarea remove 10 64 20'",
         "'replaceitem entity @s slot.armor 2 iron_leggings', "

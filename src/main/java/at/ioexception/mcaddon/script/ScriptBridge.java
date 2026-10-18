@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.script;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.behaviour.BedrockVillager;
+import at.ioexception.mcaddon.bedrock.behaviour.DamageCause;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.structure.McStructure;
@@ -17,7 +18,6 @@ import at.ioexception.mcaddon.script.surface.Players;
 import at.ioexception.mcaddon.script.surface.Registries;
 import at.ioexception.mcaddon.script.surface.TickingAreas;
 import at.ioexception.mcaddon.script.surface.Worlds;
-import at.ioexception.mcaddon.server.DamageSources;
 import at.ioexception.mcaddon.server.PackCommand;
 import at.ioexception.mcaddon.state.AddonState;
 import com.google.gson.JsonArray;
@@ -756,7 +756,9 @@ public final class ScriptBridge {
     public boolean applyDamage(String id, double amount, String cause, String sourceId) {
         Entity entity = entity(id);
         if (entity == null || !(entity.level() instanceof ServerLevel level)) return false;
-        return hurt(entity, level, DamageSources.forCause(level, cause, entity(sourceId)), (float) amount);
+        DamageCause named = DamageCause.named(cause);
+        return hurt(entity, level, (named == null ? DamageCause.NONE : named)
+            .source(level.registryAccess(), entity(sourceId)), (float) amount);
     }
 
     /**
