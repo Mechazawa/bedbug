@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.entity;
 
 import at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits;
 import com.google.gson.JsonObject;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.PoiTypeTags;
 import net.minecraft.world.entity.ai.goal.Goal;
@@ -116,7 +117,7 @@ public final class ExploreOutskirtsGoal extends Goal {
         } else if (mob.tickCount > travelUntil) {
             finished = true;
         } else if (mob.getNavigation().isDone()) {
-            mob.getNavigation().moveTo(target.x, target.y, target.z, speed);
+            walkTo(target);
         }
     }
 
@@ -128,7 +129,12 @@ public final class ExploreOutskirtsGoal extends Goal {
 
     private void walk() {
         travelUntil = mob.tickCount + travelTime;
-        mob.getNavigation().moveTo(target.x, target.y, target.z, speed);
+        walkTo(target);
+    }
+
+    /** Paths to the target block itself, because a position target ends the path a block short. */
+    private void walkTo(Vec3 place) {
+        mob.getNavigation().moveTo(mob.getNavigation().createPath(BlockPos.containing(place), 0), speed);
     }
 
     /** `explore_dist` past the edge of the village on the side the entity stands. */
