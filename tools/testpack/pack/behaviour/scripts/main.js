@@ -178,6 +178,24 @@ function resetTheHud(player) {
     if (player.onScreenDisplay.getHiddenHudElements().length === 0) player.addTag("tp:hud_all_drawn");
 }
 
+// The nearest wisp drawn unsettled for this player alone. A wisp settles a second after it arrives,
+// and its own value, and what every other player is shown, stay settled. A property the wisp does not
+// declare is refused.
+function overrideTheWisp(player, overridden) {
+    const [wisp] = player.dimension.getEntities({ type: "tp:wisp", location: player.location, closest: 1 });
+    if (wisp === undefined) return;
+    if (!overridden) {
+        player.clearPropertyOverridesForEntity(wisp);
+        return;
+    }
+    player.setPropertyOverrideForEntity(wisp, "tp:settled", false);
+    try {
+        player.setPropertyOverrideForEntity(wisp, "tp:undeclared", true);
+    } catch {
+        player.addTag("tp:override_refused");
+    }
+}
+
 // `tp:orbit` is built on a Bedrock camera Java has no counterpart for, so setting it throws.
 function setTheOrbit(player) {
     try {
@@ -225,6 +243,8 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
         case "tp:camera_clear": player.camera.clear(); break;
         case "tp:hud_hide": hideTheHotbar(player); break;
         case "tp:hud_reset": resetTheHud(player); break;
+        case "tp:override": overrideTheWisp(player, true); break;
+        case "tp:override_clear": overrideTheWisp(player, false); break;
         default: break;
     }
 });

@@ -44,6 +44,25 @@ public record ServerEntityDefinition(
     /** A data-driven entity property, which is how a behaviour pack tells a resource pack what to draw. */
     public record Property(String name, String type, double min, double max, List<String> values,
         Object initial, boolean clientSync) {
+        /**
+         * Why a script may not give this property `value`, or null where it may.
+         *
+         * A number crosses from a script as a double whatever the property's type, so an `int`
+         * property asks for a whole one.
+         */
+        public String refusal(Object value) {
+            return switch (type) {
+                case "bool" -> value instanceof Boolean ? null : name + " takes true or false";
+                case "enum" -> value instanceof String text && values.contains(text)
+                    ? null : name + " takes one of " + values;
+                case "int", "float" -> !(value instanceof Number number) ? name + " takes a number"
+                    : type.equals("int") && number.doubleValue() != Math.rint(number.doubleValue())
+                        ? name + " takes a whole number"
+                    : number.doubleValue() < min || number.doubleValue() > max
+                        ? name + " takes a number from " + min + " to " + max : null;
+                default -> name + " is of a type no script may set: " + type;
+            };
+        }
     }
 
     public boolean has(String component) {
