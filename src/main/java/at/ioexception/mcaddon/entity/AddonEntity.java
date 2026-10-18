@@ -1120,6 +1120,16 @@ public class AddonEntity extends PathfinderMob
     /** How far past its own box the entity reaches for something to pull in, which is Java's boat's. */
     private static final double PULL_REACH = 0.2;
 
+    /**
+     * How far the pathfinder lets the entity drop off an edge, which Java asks the mob for as it
+     * plans: `minecraft:preferred_path` states it as `max_fall_blocks`.
+     */
+    @Override
+    public int getMaxFallDistance() {
+        com.google.gson.JsonObject path = definition == null ? null : liveComponent("minecraft:preferred_path");
+        return path == null ? super.getMaxFallDistance() : (int) Goals.number(path, "max_fall_blocks", 3);
+    }
+
     /** A pack listing `family_types` is naming who may ride; listing none allows anyone. */
     private boolean ridableBy(net.minecraft.world.entity.Entity passenger) {
         java.util.List<com.google.gson.JsonElement> families = at.ioexception.mcaddon.util.Json.list(

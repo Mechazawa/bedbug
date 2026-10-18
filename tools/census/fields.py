@@ -113,8 +113,9 @@ REASONS = {
                             "own horse breeding.",
     },
     "minecraft:preferred_path": {
-        "*": "Per-block path costs. Java's navigator prices a route by path type rather than by block, "
-             "so a list of blocks and their prices has nothing to be applied to.",
+        "*": "Per-block path costs. Java's walk node evaluator prices each node by the path type it "
+             "classes the block as and keeps no price per block, so the prices need an evaluator of this "
+             "mod's own, which is not written; `max_fall_blocks` is read.",
     },
 
     # Fields read somewhere other than through a field helper.
