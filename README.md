@@ -1018,14 +1018,11 @@ than over its length. Neither orbit camera is pulled in when a wall stands betwe
 it follows.
 
 **The index beside a pack's textures.** `textures/texture_list.json` is a flat list of texture paths
-written without their extensions, which the Bedrock client keeps so it can resolve a texture by name
-without searching the directory. It states nothing the pack's own files do not: Mojang's resource
-pack lists 20 of the 8039 images it ships, every one of them a file that is there and already named
-by `terrain_texture.json` or `item_texture.json`. The conversion walks `textures/` itself, so what it
-writes covers whatever the index names and reading the index would change nothing. It is counted and
-named all the same, because a file this mod never opens is a fact the pack's author is owed.
-`/mcaddon entities` names each of the four kinds nothing reads, `ui`, this index, `color_grading` and
-`water`, together with the reason Java has no place for it.
+written without their extensions, which the Bedrock client loads up front. The conversion walks
+`textures/` itself, so the list adds no texture. What it can state is a path the pack does not ship,
+which Bedrock logs as a missing texture; `/mcaddon entities` names each such path.
+`/mcaddon entities` also names each of the three kinds nothing reads, `ui`, `color_grading`
+and `water`, together with the reason Java has no place for it.
 
 **A dimension with a generator nobody wrote down.** Bedrock builds a dimension a pack declares as
 empty space and accepts `void` and no other generator, so a file naming another one is counted and

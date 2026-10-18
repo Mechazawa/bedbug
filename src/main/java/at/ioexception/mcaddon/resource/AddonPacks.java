@@ -11,6 +11,7 @@ import at.ioexception.mcaddon.pack.McAddonPaths;
 import at.ioexception.mcaddon.pack.PackFiles;
 import at.ioexception.mcaddon.pack.PackRole;
 import at.ioexception.mcaddon.pack.PackSet;
+import at.ioexception.mcaddon.pack.TextureList;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.ActiveAddons;
 import at.ioexception.mcaddon.registry.AddonEntities;
@@ -48,6 +49,7 @@ public final class AddonPacks {
         Map<String, List<BedrockPack>> behavioursByOrigin = new LinkedHashMap<>();
         for (BedrockPack pack : packs.packs()) {
             PackFiles.report(pack);
+            TextureList.report(pack);
             pack.manifest().report();
             if (pack.role() == PackRole.BEHAVIOUR) {
                 behavioursByOrigin.computeIfAbsent(pack.origin(), origin -> new ArrayList<>()).add(pack);

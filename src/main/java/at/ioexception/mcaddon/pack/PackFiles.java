@@ -41,8 +41,6 @@ public final class PackFiles {
     private static final Map<String, String> RESOURCE_UNREAD = Map.ofEntries(
         Map.entry("ui", "a change to a control inside one of the Bedrock client's own screens, "
             + "where a Java screen is a class with no named controls to patch"),
-        Map.entry("textures/texture_list.json", "an index of the textures the pack ships, which "
-            + "the conversion writes by walking textures/ itself"),
         Map.entry("color_grading", "a grade of the finished frame, where a Java post effect "
             + "carries no grading term and is bound to no biome or dimension"),
         Map.entry("water", "read by Vibrant Visuals alone, whose engine turns the three particle "
@@ -57,7 +55,7 @@ public final class PackFiles {
         "sounds.json", "subpacks", "texts", "textures",
         "sounds/music_definitions.json", "sounds/sound_definitions.json",
         "textures/flipbook_textures.json", "textures/item_texture.json",
-        "textures/terrain_texture.json",
+        "textures/terrain_texture.json", "textures/texture_list.json",
         "texts/language_names.json", "texts/languages.json");
 
     /**
