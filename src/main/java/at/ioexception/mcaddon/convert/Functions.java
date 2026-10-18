@@ -121,13 +121,14 @@ public final class Functions {
      * A line carrying one does not run and the form is reported, rather than reaching a parser that
      * would reject it with a message about the wrong word.
      *
-     * `changesetting allow-cheats` is the reason given at `changeSetting`. The three `hud` pieces are
-     * drawn by nothing on a Java client, as `HudElement` says. A `permission` visitor may only look,
+     * `changesetting allow-cheats` is the reason given at `changeSetting`. `hud touch_controls` names
+     * buttons only a touch screen shows, and `hud tooltips` the button prompts whose rules Mojang
+     * publishes nowhere, as `HudElement` says. A `permission` visitor may only look,
      * and Java has no level below a member.
      */
     private static final Set<String> BEDROCK_ONLY_KEYWORDS = Set.of(
         "changesetting allow-cheats", "changesetting false", "changesetting true",
-        "hud paperdoll", "hud tooltips", "hud touch_controls",
+        "hud tooltips", "hud touch_controls",
         "permission visitor");
 
     /**

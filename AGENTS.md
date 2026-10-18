@@ -754,7 +754,7 @@ These are the checks it runs, and what each one catches:
 
   `functions/tp/gap.mcfunction` tags whoever runs it on either side of a `controlscheme` line,
   which nothing translates, so `CommandGameTests` can say the file loaded and both tags landed.
-  `functions/tp/unrun.mcfunction` is run by nothing, and its `hud @s hide paperdoll` line, a piece no
+  `functions/tp/unrun.mcfunction` is run by nothing, and its `hud @s hide touch_controls` line, a piece no
   Java client draws, has to be among what `/mcaddon entities` names all the same: that is the
   report `Functions.untranslatable` makes of every function line as the pack loads. The same class
   types `/bedrock` itself: an `execute` chain selecting embers by `hasitem` and running a Bedrock
@@ -840,7 +840,11 @@ These are the checks it runs, and what each one catches:
   A piece is watched through the sprite Java draws it with, which a mixin of the test source set,
   `GuiGraphicsExtractorMixin`, counts into `Drawn`: a hidden piece's sprite stops being drawn while
   another piece's goes on. The bystander's display is hidden first and has to leave the client's
-  alone, and nothing the client is told may reach the bystander. `InputPermissionClientGameTest`
+  alone, and nothing the client is told may reach the bystander. The paper doll is this mod's own
+  layer, `client.render.PaperDoll`, drawn through `Platform.Painter.entity` with the inventory's
+  own helper for a mob that follows the pointer, so the mixin counts it at `GuiGraphicsExtractor.entity`:
+  the test puts the player in a boat with `/ride`, hides and resets the doll, and reads it gone once
+  the player has left the boat for longer than the 15 ticks it stays. `InputPermissionClientGameTest`
   holds the forward key and moves the mouse the way a player would, and reads back that the player
   neither walked nor turned while `/bedrock inputpermission` had taken the input away, and did both
   once it was given back.

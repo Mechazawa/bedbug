@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /**
  * Writes down every sprite the heads-up display asks to draw at its own size, which is the call the
  * crosshair, the hotbar, each heart, each piece of food and the experience bar are drawn with, every
- * rectangle filled across the whole screen, and every line of text.
+ * rectangle filled across the whole screen, every line of text and every mob drawn into the display.
  */
 @Mixin(GuiGraphicsExtractor.class)
 public abstract class GuiGraphicsExtractorMixin {
@@ -29,6 +29,11 @@ public abstract class GuiGraphicsExtractorMixin {
         if (left <= 0 && top <= 0 && right >= graphics.guiWidth() && bottom >= graphics.guiHeight()) {
             Drawn.recordScreenFill(argb);
         }
+    }
+
+    @Inject(method = "entity", at = @At("HEAD"))
+    private void mcaddon$recordEntity(CallbackInfo info) {
+        Drawn.recordEntity();
     }
 
     @Inject(method = "text(Lnet/minecraft/client/gui/Font;Ljava/lang/String;IIIZ)V", at = @At("HEAD"))

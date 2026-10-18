@@ -187,7 +187,7 @@ public final class CommandGameTests {
         helper.assertTrue(helper.getLevel().getServer().getFunctions().get(Platform.id("tp", "tp/unrun")).isPresent(),
             "tp:tp/unrun did not load.");
         helper.assertTrue(AddonEntities.report().stream()
-                .anyMatch(line -> line.startsWith("    command hud paperdoll, which Java has no form of x")),
+                .anyMatch(line -> line.startsWith("    command hud touch_controls, which Java has no form of x")),
             "the line of tp:tp/unrun that cannot run is not reported: " + AddonEntities.report());
         helper.succeed();
     }

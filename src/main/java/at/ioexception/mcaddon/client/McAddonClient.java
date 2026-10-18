@@ -68,6 +68,8 @@ public final class McAddonClient implements ClientModInitializer {
                 }
             }
         });
+        Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("paper_doll"),
+            at.ioexception.mcaddon.client.render.PaperDoll::draw);
         Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("bedrock_rules"),
             at.ioexception.mcaddon.client.render.PlayerRules::draw);
         Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("bedrock_screen"),
@@ -76,6 +78,7 @@ public final class McAddonClient implements ClientModInitializer {
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK
             .register(client -> {
                 at.ioexception.mcaddon.client.render.AddonEmitters.tick();
+                at.ioexception.mcaddon.client.render.PaperDoll.tick(client);
                 PlayerMusic.tick();
                 if (client.level != null) Animators.tickOffscreen(client.level);
             });
