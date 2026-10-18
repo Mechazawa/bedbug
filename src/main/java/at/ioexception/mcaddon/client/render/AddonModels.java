@@ -231,7 +231,7 @@ public final class AddonModels {
                     .map(rule -> new PartVisibility.Rule(rule.pattern(), rule.material().equals(material)))
                     .toList());
             passes.add(new Pass(geometry, texture, new PartVisibility(visibility), owned, shift, material,
-                tint(controller, environment, composed != null), controller.ignoresLighting(),
+                tint(controller, environment, material), controller.ignoresLighting(),
                 number(controller.lightMultiplier(), environment, 1f), controller.hurt() == null));
         }
         return passes;
@@ -255,13 +255,19 @@ public final class AddonModels {
      * What one pass multiplies its texture by: its colour, with each overlay laid over in turn.
      *
      * Java tints a whole pass with one vertex colour, so the three overlay groups are folded into
-     * that colour by their own alpha rather than drawn as passes of their own. A pass drawing two
-     * textures as one takes no colour: Bedrock's masked multitexture shader reads the overlay and
-     * never the controller's `color`.
+     * that colour by their own alpha rather than drawn as passes of their own. Bedrock's entity
+     * shaders lay the overlay over every material and read the controller's `color` only under a
+     * colour mask, so a pass drawn with any other material takes the overlays alone.
      */
-    private static int tint(RenderController controller, MolangEnvironment environment, boolean composed) {
-        int colour = controller.colour() == null || composed
-            ? OPAQUE_WHITE : controller.colour().evaluate(environment, OPAQUE_WHITE);
+    private static int tint(RenderController controller, MolangEnvironment environment,
+        MaterialDefinition material) {
+        boolean tinted = controller.colour() != null && material != null && material.readsControllerColour();
+        if (controller.colour() != null && material != null && material.readsControllerColourOtherwise()
+            && REPORTED.add(controller.name() + " " + material.name())) {
+            AddonEntities.unsupported("color of " + controller.name() + " under " + material.name()
+                + ", which tints one channel or a layered texture; drawn untinted");
+        }
+        int colour = tinted ? controller.colour().evaluate(environment, OPAQUE_WHITE) : OPAQUE_WHITE;
 
         colour = over(colour, controller.overlay(), environment);
         if (controller.hurt() != null && HURT.evaluate(environment).truthy()) {

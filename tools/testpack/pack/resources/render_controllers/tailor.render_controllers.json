@@ -14,11 +14,12 @@
     "controller.render.tp.tailor.plain": {
       "geometry": "Geometry.default",
       "materials": [{ "*": "Material.default" }],
-      "textures": ["Texture.base", "Texture.outfit"]
+      "textures": ["Texture.base", "Texture.outfit"],
+      "color": { "r": 0.5, "g": 0.5, "b": 0.5, "a": 1.0 }
     },
     "controller.render.tp.tailor.hemmed": {
       "geometry": "Geometry.default",
-      "materials": [{ "*": "Material.default" }, { "*ARK": "Material.masked" }],
+      "materials": [{ "*": "Material.tinted" }, { "*ARK": "Material.masked" }],
       "textures": ["Texture.base", "Texture.outfit"],
       "color": { "r": 0.5, "g": 0.5, "b": 0.5, "a": 1.0 }
     }

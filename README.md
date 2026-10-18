@@ -47,13 +47,15 @@ add-ons, or with another release of it, is told which in chat.
   ordinary text is drawn with and the pack's own icons appear wherever it wrote them.
 - Models, animations, animation controllers and render controllers, drawn through a full Molang
   evaluator, with each pass drawn the way its `.material` asks: alpha tested or blended, culled or
-  not, plain or glowing, tinted the colour its controller worked out for it and lit by the light its
-  controller asked for. A hurt or dying entity flashes red the way every Bedrock entity does, unless
-  its controller states an `is_hurt_color` of its own, which is drawn instead. A pass whose material
+  not, plain or glowing, and lit by the light its controller asked for. A controller's `color`
+  tints a pass only where its material is a colour mask, such as `entity_alphatest_change_color` or
+  one defining `USE_COLOR_MASK`, because Bedrock's entity shaders read it nowhere else; its
+  `overlay_color`, `is_hurt_color` and `on_fire_color` are laid over every material. A hurt or dying
+  entity flashes red the way every Bedrock entity does, unless its controller states an
+  `is_hurt_color` of its own, which is drawn instead. A pass whose material
   defines `MASKED_MULTITEXTURE`, as the game's villager outfits do, draws its second texture over its
   first with the second's clear but coloured texels showing the first through, which is how a
-  villager's profession is worn over the clothes of its biome, and takes none of its controller's
-  `color`, which Bedrock's shader for it never reads. A controller's `materials` list gives each bone
+  villager's profession is worn over the clothes of its biome. A controller's `materials` list gives each bone
   the material of the last entry naming it, with a star standing for any run of letters, so a
   villager's hat can be drawn masked while the rest of it is not. A model reaching past the box the server gave the entity is culled against
   the extent its own geometry declares, so wings and a tail stay drawn while the hitbox is off the
@@ -63,7 +65,10 @@ add-ons, or with another release of it, is told which in chat.
   back into view, and a pack describing one entity several times over for different engines is drawn
   from the newest of them its own engine version reaches. A bone an animation turns
   `relative_to` the entity is turned in the entity's frame while the bones above it still carry it,
-  so a head keeps looking at its target while the body under it leans.
+  so a head keeps looking at its target while the body under it leans, on a pack's own model and on
+  a vanilla mob a clip is played on alike. A controller enters its first state on the first frame it
+  runs, running that state's `on_entry` and playing its clips, and asks its transitions from the next
+  frame on.
 - Entities a behaviour pack declares, with their properties, events, component groups, filters,
   breeding, riding, leashing, home ranges, navigation and item pickup, and the sensors that fire
   their events: environment, entity, target-nearby, block, timer, scheduler, drying-out, damage,
@@ -73,10 +78,15 @@ add-ons, or with another release of it, is told which in chat.
   entity becomes rather than what it is, so a group arriving changes how it gets about: the
   navigator and the move control are built again, and the step it takes, the height it climbs, what
   pushes it, what burns it, what effects land on it and what it has for sale all move with it.
-  A seat's `rotate_rider_by` is asked every tick as the rider and turns the rider that far from the
-  way the mount faces, held there by `lock_rider_rotation`. Bedrock keeps no Molang temporary to one
-  expression, so neither does the server: what the seat's expression writes into `temp.` is what the
-  mount's own scripts read, which is how a pack learns a villager's level by seating it.
+  Each rider sits in a seat of its own: a seat is in use while the number of riders lies between its
+  `min_rider_count` and `max_rider_count`, and the riders take the seats in use in the order the
+  pack lists them, at each seat's own position turned with the mount. A seat's `rotate_rider_by` is
+  asked every tick as its rider and turns the rider that far from the way the mount faces, held
+  there by `lock_rider_rotation`, on every client watching as well, so a player in the seat is
+  turned on the client that steers it. Bedrock keeps no Molang temporary to one expression, so
+  neither does the server: every expression it runs, a seat's, a script's, a component's condition,
+  an experience reward and a block event alike, reads and writes one store of `temp.` values, which
+  is how a pack learns a villager's level by seating it.
 - The clips and controllers a behaviour pack declares, which animate what an entity is rather than
   where its bones are. A moment on a clip's timeline, and a controller state's entry and its exit,
   each raise one of the entity's own events, run a command as the entity, or assign a Molang

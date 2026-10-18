@@ -1560,6 +1560,90 @@ public final class BehaviourGameTests {
         });
     }
 
+    /**
+     * Every server expression shares one store of temporaries, so a condition a component states
+     * reads what the seat of `tp:perch` wrote while the perch's own scripts did not touch it.
+     */
+    @GameTest()
+    public void aComponentConditionReadsTheTemporariesTheSeatWrote(GameTestHelper helper) {
+        AddonEntity perch = spawn(helper, PERCH);
+        if (perch == null) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        Villager villager = (Villager) Platform.createMob(BuiltInRegistries.ENTITY_TYPE
+            .getOptional(Platform.id("minecraft", "villager")).orElseThrow(), level);
+        Platform.placeAt(villager, perch.getX(), perch.getY(), perch.getZ(), 0f, 0f);
+        villager.setNoAi(true);
+        villager.setVillagerData(journeyman(villager, level));
+        level.addFreshEntity(villager);
+        helper.assertTrue(villager.startRiding(perch), PERCH + " would not seat a villager.");
+
+        helper.runAfterDelay(SEATED_TICKS, () -> {
+            helper.assertTrue(perch.holds("t.perch_tier == 2"), "A condition asked of " + PERCH
+                + " does not read t.perch_tier, which its seat writes for the journeyman on it.");
+            helper.succeed();
+        });
+    }
+
+    /**
+     * Each rider sits in its own seat: a seat is in use while the number of riders lies between its
+     * counts, and the riders take the seats in use in the order the pack lists them.
+     *
+     * `tp:bench` faces west and lists a seat for a rider alone, at its middle and turning that rider
+     * a quarter, and two for a pair, half a block either side along its own X, turning a villager
+     * half a circle and a quarter back. Its own X points south while it faces west.
+     */
+    @GameTest()
+    public void eachRiderSitsInItsOwnSeat(GameTestHelper helper) {
+        AddonEntity bench = spawn(helper, BENCH);
+        if (bench == null) {
+            helper.succeed();
+            return;
+        }
+        bench.setYRot(BENCH_FACING);
+
+        ServerLevel level = helper.getLevel();
+        Villager first = seatedVillager(helper, level, bench);
+        helper.runAfterDelay(SEATED_TICKS, () -> {
+            assertSeated(helper, bench, first, 0, BENCH_FACING + 90, "alone");
+
+            Villager second = seatedVillager(helper, level, bench);
+            helper.runAfterDelay(SEATED_TICKS, () -> {
+                assertSeated(helper, bench, first, 0.5, BENCH_FACING + 180, "first of two");
+                assertSeated(helper, bench, second, -0.5, BENCH_FACING - 90, "second of two");
+                helper.succeed();
+            });
+        });
+    }
+
+    private static Villager seatedVillager(GameTestHelper helper, ServerLevel level, AddonEntity bench) {
+        Villager villager = (Villager) Platform.createMob(BuiltInRegistries.ENTITY_TYPE
+            .getOptional(Platform.id("minecraft", "villager")).orElseThrow(), level);
+        Platform.placeAt(villager, bench.getX(), bench.getY(), bench.getZ(), 0f, 0f);
+        villager.setNoAi(true);
+        level.addFreshEntity(villager);
+        helper.assertTrue(villager.startRiding(bench), BENCH + " would not seat a villager.");
+        return villager;
+    }
+
+    /** A rider `south` blocks south of the bench's middle, facing `facing`. */
+    private static void assertSeated(GameTestHelper helper, AddonEntity bench, Villager rider, double south,
+        float facing, String which) {
+        double x = rider.getX() - bench.getX();
+        double z = rider.getZ() - bench.getZ();
+        helper.assertTrue(Math.abs(x) < 0.01 && Math.abs(z - south) < 0.01, "The villager on " + BENCH + " "
+            + which + " sits " + x + ", " + z + " from its middle where its seat puts it 0, " + south + ".");
+        float off = Mth.wrapDegrees(rider.getYRot() - facing);
+        helper.assertTrue(Math.abs(off) < 0.01f, "The villager on " + BENCH + " " + which + " faces "
+            + rider.getYRot() + " where its seat turns it to " + Mth.wrapDegrees(facing) + ".");
+    }
+
+    private static final String BENCH = "tp:bench";
+    private static final float BENCH_FACING = 90f;
+
     private static final String PERCH = "tp:perch";
     private static final float PERCH_FACING = 30f;
 

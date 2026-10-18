@@ -13,10 +13,12 @@
         "default": "geometry.tp.gaze"
       },
       "animations": {
-        "lean": "animation.tp.gaze.lean"
+        "lean": "animation.tp.gaze.lean",
+        "stir": "animation.tp.gaze.stir",
+        "wake": "controller.animation.tp.gaze.wake"
       },
       "scripts": {
-        "animate": ["lean"]
+        "animate": ["lean", "wake"]
       },
       "render_controllers": ["controller.render.tp.sprite"]
     }
