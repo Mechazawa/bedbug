@@ -28,6 +28,7 @@ import {
     BlockPermutation, BlockVolume, CameraShakeType, CloneMode, HudElement, HudVisibility, system, world,
 } from "@minecraft/server";
 import { ActionFormData, CustomForm, ObservableBoolean, ObservableString } from "@minecraft/server-ui";
+import { register } from "@minecraft/server-gametest";
 
 const VILLAGER = "minecraft:villager_v2";
 
@@ -323,3 +324,24 @@ world.afterEvents.entityTamed.subscribe(event => {
 
 world.afterEvents.entityStartSneaking.subscribe(event => event.entity.addTag("tp:crouched"));
 world.afterEvents.entityStopSneaking.subscribe(event => event.entity.addTag("tp:stood_up"));
+
+// Two tests of this pack's own, which `/gametest runthis` and `runsetuntilfail` run. The first passes
+// wherever the hut is built. The second passes the first time it runs and fails every time after,
+// which is what stops a set run until it fails after its second round.
+register("tp", "hut_stands", test => {
+    test.assertBlockPresent("minecraft:stone", { x: 1, y: 0, z: 1 });
+    test.succeed();
+})
+    .structureName("tp:hut")
+    .maxTicks(40)
+    .tag("tp:commands");
+
+let roundsRun = 0;
+register("tp", "fails_the_second_time", test => {
+    roundsRun++;
+    if (roundsRun > 1) test.fail("Ran " + roundsRun + " times.");
+    else test.succeed();
+})
+    .structureName("tp:hut")
+    .maxTicks(40)
+    .tag("tp:until_fail");

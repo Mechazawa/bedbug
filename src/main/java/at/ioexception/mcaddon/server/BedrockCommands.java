@@ -10,11 +10,6 @@ import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonCameras;
 import at.ioexception.mcaddon.registry.AddonFogs;
 import at.ioexception.mcaddon.registry.AddonParticles;
-import at.ioexception.mcaddon.script.ScriptHost;
-import at.ioexception.mcaddon.util.Json;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.FloatArgumentType;
@@ -24,8 +19,6 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.context.ParsedCommandNode;
-import com.mojang.brigadier.suggestion.Suggestions;
-import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -39,9 +32,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
-import java.util.function.Predicate;
 
 /**
  * The Bedrock commands a pack expects to exist and Java does not ship, in the tree `/bedrock` reads
@@ -176,107 +167,7 @@ public final class BedrockCommands {
         registerFog(dispatcher);
         registerHud(dispatcher);
         registerInputPermission(dispatcher);
-        // The tests a behaviour pack registered through `@minecraft/server-gametest`. A test names
-        // itself `class:name`, which Brigadier's unquoted string stops at, so the name is greedy.
-        dispatcher.register(Commands.literal("gametest")
-            .requires(source -> Platform.allowedAt(source, 1))
-            .then(Commands.literal("run")
-                .then(Commands.argument("name", StringArgumentType.greedyString())
-                    .suggests(BedrockCommands::testNames)
-                    .executes(command -> runTests(command.getSource(),
-                        named(StringArgumentType.getString(command, "name"))))))
-            // Bedrock runs the set a test carries by default when the line names no tag.
-            .then(Commands.literal("runset")
-                .executes(command -> runTests(command.getSource(), tagged("suite:default")))
-                .then(Commands.argument("tag", StringArgumentType.greedyString())
-                    .executes(command -> runTests(command.getSource(),
-                        tagged(StringArgumentType.getString(command, "tag"))))))
-            .then(Commands.literal("runall").executes(command -> runTests(command.getSource(), test -> true)))
-            .then(Commands.literal("stopall").executes(command -> stopTests(command.getSource())))
-            .then(Commands.literal("clearall").executes(command -> clearTests(command.getSource()))));
-    }
-
-    /** A test the name picks out, by its full `class:name` or by its name alone. */
-    private static Predicate<JsonObject> named(String wanted) {
-        String asked = wanted.trim();
-        return test -> asked.equalsIgnoreCase(Json.text(test, "name", ""))
-            || asked.equalsIgnoreCase(Json.text(test, "testName", ""));
-    }
-
-    private static Predicate<JsonObject> tagged(String wanted) {
-        String asked = wanted.trim();
-        return test -> test.getAsJsonArray("tags").asList().stream()
-            .anyMatch(tag -> asked.equalsIgnoreCase(tag.getAsString()));
-    }
-
-    /**
-     * Builds an area for every matching test and hands each to the script that registered it.
-     *
-     * The area is prepared here rather than in the script, because where a test goes depends on who
-     * asked for it, and the verdict comes back to that same source once the test settles.
-     */
-    private static int runTests(CommandSourceStack source, Predicate<JsonObject> wanted) {
-        ScriptHost scripts = ServerHooks.scripts();
-        if (scripts == null) {
-            source.sendFailure(Component.literal("No pack scripts are running."));
-            return 0;
-        }
-
-        JsonArray tests = JsonParser.parseString(scripts.gameTests()).getAsJsonArray();
-        int started = 0;
-        for (int i = 0; i < tests.size(); i++) {
-            JsonObject test = tests.get(i).getAsJsonObject();
-            if (!wanted.test(test)) continue;
-
-            String placement = scripts.bridge().gametests.begin(source, Json.text(test, "structureName", ""),
-                test.get("padding").getAsInt());
-            scripts.startGameTest(i, placement);
-            started++;
-        }
-
-        if (started == 0) {
-            source.sendFailure(Component.literal("No loaded pack has registered such a test."));
-            return 0;
-        }
-        int running = started;
-        source.sendSuccess(() -> Component.literal("Started " + running + " test(s)."), false);
-        return started;
-    }
-
-    /** Ends every running test and leaves the areas standing, which is what a clear takes back. */
-    private static int stopTests(CommandSourceStack source) {
-        ScriptHost scripts = ServerHooks.scripts();
-        if (scripts == null) {
-            source.sendFailure(Component.literal("No pack scripts are running."));
-            return 0;
-        }
-
-        scripts.stopGameTests();
-        source.sendSuccess(() -> Component.literal("Stopped every running test."), false);
-        return 1;
-    }
-
-    private static int clearTests(CommandSourceStack source) {
-        ScriptHost scripts = ServerHooks.scripts();
-        if (scripts == null) {
-            source.sendFailure(Component.literal("No pack scripts are running."));
-            return 0;
-        }
-
-        scripts.stopGameTests();
-        int cleared = scripts.bridge().gametests.clearAll();
-        source.sendSuccess(() -> Component.literal("Cleared " + cleared + " test area(s)."), false);
-        return cleared;
-    }
-
-    private static CompletableFuture<Suggestions> testNames(CommandContext<CommandSourceStack> command,
-        SuggestionsBuilder builder) {
-        ScriptHost scripts = ServerHooks.scripts();
-        if (scripts == null) return builder.buildFuture();
-
-        JsonParser.parseString(scripts.gameTests()).getAsJsonArray()
-            .forEach(test -> builder.suggest(Json.text(test.getAsJsonObject(), "name", "")));
-        return builder.buildFuture();
+        GameTestCommand.registerCommand(dispatcher);
     }
 
     /**

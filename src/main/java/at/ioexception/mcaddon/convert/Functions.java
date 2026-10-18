@@ -118,8 +118,6 @@ public final class Functions {
      */
     private static final Set<String> BEDROCK_ONLY_KEYWORDS = Set.of(
         "changesetting allow-cheats", "changesetting false", "changesetting true",
-        "gametest create", "gametest pos", "gametest runsetuntilfail", "gametest runthese",
-        "gametest runthis",
         "hud paperdoll", "hud tooltips", "hud touch_controls",
         "mobevent minecraft:ender_dragon_event",
         "music loop", "music volume",
@@ -1351,18 +1349,13 @@ public final class Functions {
         return "mobevent " + event + (parts.length > 1 ? " " + parts[1] : "");
     }
 
-    /**
-     * The test modes the `/gametest` registered here builds.
-     *
-     * The rest describe the Bedrock test editor: laying out a new test area, reading a position
-     * inside one, running the tests around the player, and repeating a set until one fails.
-     */
+    /** Every mode of `/gametest`, which the command built here reads as the line writes it. */
     private static String gameTest(String rest, Set<String> unsupported) {
         String[] parts = SPACE.split(rest, 2);
         String mode = parts[0].toLowerCase(Locale.ROOT);
         return switch (mode) {
-            case "run", "runset", "runall", "clearall", "stopall" ->
-                "gametest " + mode + (parts.length > 1 ? " " + parts[1] : "");
+            case "run", "runset", "runsetuntilfail", "runall", "runthis", "runthese", "clearall", "stopall",
+                "pos", "create" -> "gametest " + mode + (parts.length > 1 ? " " + parts[1] : "");
             default -> dropped("gametest", mode, unsupported);
         };
     }

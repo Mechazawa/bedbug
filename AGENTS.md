@@ -656,7 +656,10 @@ These are the checks it runs, and what each one catches:
   waits for. `place featurerule` puts the test pack's ore rule into stone the test lays far from
   every other test. `save query`, `setmaxplayers`, `packstack` and `permission` are typed by the
   console after `/bedrock` and read back through what the console is told, because a line run the
-  way a pack runs one has a function's authority and each of these asks for more.
+  way a pack runs one has a function's authority and each of these asks for more. `/gametest
+  create` lays out the test pack's `tp:hut_stands`, `pos` finds its area, `runthis` runs it there,
+  and `runsetuntilfail` runs `tp:fails_the_second_time`, which the test pack's script registers to
+  pass once and fail after, until its second round.
 
   **A Bedrock line a pack runs has a function's authority, and a command asking for more refuses
   it as an unknown command.** `PackCommand.run` lowers its source to the level Java runs a function

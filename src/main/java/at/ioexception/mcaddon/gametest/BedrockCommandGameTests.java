@@ -390,6 +390,47 @@ public final class BedrockCommandGameTests {
         helper.succeed();
     }
 
+    /**
+     * `/gametest create` lays a test out under a structure block naming it, `pos` says where the
+     * source stands against that area, `runthis` runs the test the structure block names there, and
+     * `runsetuntilfail` runs the synthetic pack's set again until its test fails, which it does on
+     * its second round.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200)
+    public void gameTestRunsWhatAStructureBlockNames(GameTestHelper helper) {
+        if (AddonEntities.typeOf("tp:ember") == null) {
+            helper.succeed();
+            return;
+        }
+
+        BlockPos stand = new BlockPos(2, 4, 1);
+        String here = "execute positioned " + at(helper, stand) + " run ";
+        typed(helper, here + "gametest create tp:hut_stands 3 3 3");
+        BlockPos block = stand.offset(0, 0, 3);
+        helper.assertTrue(helper.getLevel().getBlockEntity(helper.absolutePos(block))
+                instanceof net.minecraft.world.level.block.entity.StructureBlockEntity structure
+                && structure.getStructureName().equals("tp:hut_stands")
+                && structure.getStructureSize().equals(new net.minecraft.core.Vec3i(3, 3, 3)),
+            "gametest create left no structure block naming the test over a 3 by 3 by 3 area.");
+        expect(helper, block.offset(2, 1, 2), Blocks.POLISHED_ANDESITE, "laid out by gametest create");
+        expect(helper, block.offset(1, 0, -1), Blocks.COMMAND_BLOCK, "laid out by gametest create");
+
+        List<String> where = typed(helper, here + "gametest pos");
+        helper.assertTrue(where.stream().anyMatch(line -> line.endsWith("tp:hut_stands: 0, -1, -3")),
+            "gametest pos did not place the source against the area: " + where);
+
+        List<String> ran = typed(helper, here + "gametest runthis");
+        List<String> rounds = typed(helper, "gametest runsetuntilfail tp:until_fail");
+        helper.succeedWhen(() -> {
+            helper.assertTrue(ran.contains("tp:hut_stands passed."), "runthis reached no verdict: " + ran);
+            expect(helper, block.offset(1, 1, 1), Blocks.STONE, "the hut built where the structure block points");
+            helper.assertTrue(rounds.stream().anyMatch(line -> line.startsWith("tp:fails_the_second_time failed")),
+                "runsetuntilfail never reached the round its test fails in: " + rounds);
+            helper.assertTrue(rounds.stream().filter(line -> line.startsWith("tp:fails_the_second_time ")).count() == 2,
+                "runsetuntilfail ran its set a number of times other than twice: " + rounds);
+        });
+    }
+
     /** What the console hears back from `/bedrock <line>`, typed as an operator would type it. */
     private static List<String> typed(GameTestHelper helper, String line) {
         List<String> heard = new ArrayList<>();

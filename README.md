@@ -432,7 +432,15 @@ add-ons, or with another release of it, is told which in chat.
 - The tests a behaviour pack ships through `@minecraft/server-gametest`. `/bedrock gametest run <name>`,
   `/bedrock gametest runset <tag>` and `/bedrock gametest runall` build the structure a test named out
   of the pack's own `.mcstructure`, place it beside you, hand the pack's function a `Test` bound to
-  that area and report what it decided. `/bedrock gametest clearall` takes the areas back.
+  that area and report what it decided. `/bedrock gametest clearall` takes the areas back. `run`
+  with a repeat count runs a test again until the count is reached, stopping at a failure when told
+  to, and `runsetuntilfail` runs a set again in the same areas until one of its tests fails.
+  `/bedrock gametest create <name>` lays out a test the way Bedrock's editor does: a structure block
+  naming the test over the area, a floor of polished andesite on dirt, and a command block with a
+  button that runs it. `runthis` runs the test the nearest structure block within fifteen blocks
+  names, in the area that block covers, `runthese` every one within two hundred, and `pos` says where
+  you stand against the nearest such area. A test is always built unturned, so a line asking for
+  rotation steps is refused.
 - The other modules a pack may import: `@minecraft/math`, `@minecraft/common`, and
   `@minecraft/vanilla-data`, whose tables of vanilla ids are read from this game's own registries so
   they hold what the version you play ships.

@@ -138,6 +138,9 @@ class FunctionsTest {
         "'ride @e[type=zombie] start_riding @e[type=pig] teleport_rider if_group_fits', "
             + "'ride @e[type=minecraft:zombie] start_riding @e[type=minecraft:pig] teleport_rider if_group_fits'",
         "'gametest stopall', 'gametest stopall'",
+        "'gametest runthis', 'gametest runthis'",
+        "'gametest create tp:new 4 3 4', 'gametest create tp:new 4 3 4'",
+        "'gametest runsetuntilfail tp:until_fail', 'gametest runsetuntilfail tp:until_fail'",
         "'mobevent events_enabled false', 'mobevent events_enabled false'",
         "'music stop 2', 'music stop'",
         "'structure save tp:hut 0 0 0 4 4 4 true disk', 'structure save \"tp:hut\" 0 0 0 4 4 4 true disk'",
@@ -172,7 +175,6 @@ class FunctionsTest {
      */
     @ParameterizedTest
     @CsvSource({
-        "'gametest runthis', 'command gametest runthis, which Java has no form of'",
         "'music play tp:theme 1 0 loop', 'command music loop, which Java has no form of'",
         "'place structure minecraft:trail_ruins ~ ~ ~ false false false ignore_waterlogging', "
             + "'command place ignore_waterlogging, which Java has no form of'",
