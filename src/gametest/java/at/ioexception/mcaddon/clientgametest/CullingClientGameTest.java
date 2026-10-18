@@ -17,7 +17,8 @@ import org.joml.Matrix4f;
  * is 0.6 wide, which Java widens by half a block on each side before asking the frustum. A camera
  * five blocks off looking along a line 0.95 blocks to the side of the sprite, through a view one
  * degree wide, sees part of the declared box and none of the widened entity box. `tp:wisp` declares
- * no visible box, so the same view of it draws nothing.
+ * no visible box, so the same view of it draws nothing. `tp:shade` collides in a box of nothing and
+ * draws the sprite's geometry, so it is drawn by its model or not at all.
  */
 public final class CullingClientGameTest implements FabricClientGameTest {
     private static final double SIDEWAYS = 0.95;
@@ -39,7 +40,29 @@ public final class CullingClientGameTest implements FabricClientGameTest {
                 + " past its entity box, and its renderer culled it.");
             Assert.that(!context.computeOnClient(client -> drawn(wisp)), "tp:wisp's geometry declares no visible"
                 + " box and its entity box is out of view, and its renderer drew it anyway.");
+
+            world.getServer().runCommand("summon tp:shade ~-6 ~1 ~3");
+            AddonEntity shade = Entities.waitForClient(context, "tp:shade");
+            Assert.that(context.computeOnClient(client -> drawnFacing(shade)), "tp:shade has a box of nothing and a"
+                + " geometry declaring a visible box, and a camera five blocks off looking straight at it did not"
+                + " draw it.");
         }
+    }
+
+    /**
+     * Whether the renderer draws the entity for a camera looking straight at it from five blocks off.
+     *
+     * Java draws a mob out to a distance it scales by the size of the mob's box, so a box of nothing
+     * is out of range from anywhere; Bedrock draws such an entity by its model.
+     */
+    private static boolean drawnFacing(AddonEntity entity) {
+        Vec3 camera = entity.position().add(0, UP, -BACK);
+        AddonEntityRenderer renderer = (AddonEntityRenderer) Minecraft.getInstance()
+            .getEntityRenderDispatcher().getRenderer(entity);
+        Frustum frustum = new Frustum(new Matrix4f().rotateY((float) Math.PI),
+            new Matrix4f().perspective((float) Math.toRadians(70), 1f, 0.05f, 100f));
+        frustum.prepare(camera.x, camera.y, camera.z);
+        return renderer.shouldRender(entity, frustum, camera.x, camera.y, camera.z);
     }
 
     private static boolean drawn(AddonEntity entity) {

@@ -21,12 +21,19 @@ import java.util.function.Predicate;
  *
  * The first clip is played by a Java data pack's function this test mod ships, whose line runs it
  * through `/bedrock`.
+ *
+ * Bedrock's villager hangs its head, arms and legs off `body`, where Java's draws them beside it.
+ * `animation.tp.vanilla.vanish` scales `body` to nothing, which is how a pack hides a vanilla mob it
+ * draws a model of its own over, and has to take the whole villager with it. `animation.tp.vanilla.bow`
+ * turns `body` a quarter circle forward, which has to swing the legs and the arms round the body's
+ * pivot with it rather than leave them standing where they were.
  */
 public final class JavaModelPoseClientGameTest implements FabricClientGameTest {
     private static final float TOLERANCE = 1e-4f;
     private static final float LEG_TURN = (float) Math.toRadians(45);
     private static final float HAT_LIFT = 2f;
     private static final float SWAY = (float) Math.toRadians(30);
+    private static final float QUARTER = (float) (Math.PI / 2);
 
     /** Ticks to wait for a pose, which covers the command reaching the client and the clip's length. */
     private static final int PATIENCE = 200;
@@ -42,7 +49,51 @@ public final class JavaModelPoseClientGameTest implements FabricClientGameTest {
 
             duck(context, world, villager, own);
             sway(context, world, villager, own);
+            vanish(context, world, villager);
+            bow(context, world, villager, own);
         }
+    }
+
+    private static void vanish(ClientGameTestContext context, TestSingleplayerContext world,
+        LivingEntity villager) {
+        world.getServer().runCommand("bedrock playanimation @e[type=minecraft:villager] animation.tp.vanilla.vanish"
+            + " none 0 \"q.anim_time > 1\"");
+        Map<String, PosedParts.Part> vanished = waitForPose(context, villager,
+            parts -> parts.get("body").xScale() == 0f,
+            "animation.tp.vanilla.vanish was played on a villager and its body was never scaled to nothing.");
+        for (String part : new String[] {"head", "arms", "right_leg", "left_leg"}) {
+            PosedParts.Part posed = vanished.get(part);
+            Assert.near(posed.xScale() + posed.yScale() + posed.zScale(), 0, TOLERANCE,
+                "the scales of the " + part + ", which Bedrock hangs off the body the clip shrank to nothing");
+        }
+
+        Map<String, PosedParts.Part> after = waitForPose(context, villager,
+            parts -> parts.get("body").xScale() == 1f,
+            "animation.tp.vanilla.vanish was played to stop after a second and the body stayed hidden.");
+        Assert.near(after.get("arms").xScale(), 1, TOLERANCE, "the arms' scale once the clip is over");
+    }
+
+    private static void bow(ClientGameTestContext context, TestSingleplayerContext world, LivingEntity villager,
+        Map<String, PosedParts.Part> own) {
+        world.getServer().runCommand("bedrock playanimation @e[type=minecraft:villager] animation.tp.vanilla.bow"
+            + " none 0 \"q.anim_time > 1\"");
+        Map<String, PosedParts.Part> bowed = waitForPose(context, villager,
+            parts -> Math.abs(parts.get("body").xRot() - own.get("body").xRot() - QUARTER) < TOLERANCE,
+            "animation.tp.vanilla.bow was played on a villager and its body never turned a quarter circle.");
+
+        // A quarter turn about X takes a point at height y and depth z to height -z and depth y.
+        PosedParts.Part leg = own.get("right_leg");
+        Assert.near(bowed.get("right_leg").x(), leg.x(), TOLERANCE, "the right leg's side to side place");
+        Assert.near(bowed.get("right_leg").y(), -leg.z(), TOLERANCE,
+            "the right leg's height, swung forward round the body's pivot");
+        Assert.near(bowed.get("right_leg").z(), leg.y(), TOLERANCE,
+            "the right leg's depth, swung forward round the body's pivot");
+        Assert.near(bowed.get("right_leg").xRot(), leg.xRot() + QUARTER, TOLERANCE,
+            "the right leg's pitch, turned with the body");
+        Assert.near(bowed.get("arms").xRot(), own.get("arms").xRot() + QUARTER, TOLERANCE,
+            "the arms' pitch, turned with the body on top of their own");
+        Assert.near(bowed.get("arms").y(), -own.get("arms").z(), TOLERANCE,
+            "the arms' height, swung forward round the body's pivot");
     }
 
     private static void duck(ClientGameTestContext context, TestSingleplayerContext world, LivingEntity villager,

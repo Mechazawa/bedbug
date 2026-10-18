@@ -14,6 +14,7 @@ import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.phys.AABB;
 
@@ -108,7 +109,7 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
      * Java asks the frustum about the box the server gave the entity, and a Bedrock model may reach
      * well past that box, so a geometry that declares its own extent is asked about that as well.
      * Without it a model wider or taller than its hitbox disappears while part of it is still on the
-     * screen. The distance test stays Java's, which is what bounds how far any mob is drawn.
+     * screen.
      */
     @Override
     public boolean shouldRender(AddonEntity entity, Frustum frustum, double cameraX, double cameraY,
@@ -118,8 +119,21 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
         AddonClientAssets.Binding binding = AddonClientAssets.of(identifierOf(entity));
         AABB declared = binding == null ? null : binding.models().visibleBounds(binding.definition());
         return declared != null
-            && entity.shouldRender(cameraX, cameraY, cameraZ)
+            && withinDrawDistance(entity, declared, cameraX, cameraY, cameraZ)
             && frustum.isVisible(declared.move(entity.getX(), entity.getY(), entity.getZ()));
+    }
+
+    /**
+     * Java's rule for how far a mob is drawn, measured by the larger of its box and its model.
+     *
+     * Java scales the distance by the size of the box the entity collides in, so an entity a pack
+     * gave no box at all, which Bedrock still draws, would be out of range at any distance.
+     */
+    private static boolean withinDrawDistance(AddonEntity entity, AABB declared, double cameraX,
+        double cameraY, double cameraZ) {
+        double size = Math.max(entity.getBoundingBox().getSize(), declared.getSize()) * 64.0
+            * Entity.getViewScale();
+        return entity.distanceToSqr(cameraX, cameraY, cameraZ) < size * size;
     }
 
     /** Java's own rule for when a mob is drawn red, which Bedrock flashes for the same two reasons. */

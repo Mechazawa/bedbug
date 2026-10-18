@@ -18,6 +18,24 @@
         }
       }
     },
+    "animation.tp.vanilla.vanish": {
+      "loop": true,
+      "animation_length": 2.0,
+      "bones": {
+        "body": {
+          "scale": [0, 0, 0]
+        }
+      }
+    },
+    "animation.tp.vanilla.bow": {
+      "loop": true,
+      "animation_length": 2.0,
+      "bones": {
+        "body": {
+          "rotation": [90, 0, 0]
+        }
+      }
+    },
     "animation.tp.vanilla.sway": {
       "loop": true,
       "animation_length": 4.0,

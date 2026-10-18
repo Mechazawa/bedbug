@@ -297,10 +297,21 @@ These are the checks it runs, and what each one catches:
   teleport interval in seconds, and an experience reward written as Molang rather than as a number.
 
   The sprite's own texture carries one thing a count cannot see. Its top four rows are written at an
-  alpha of three, which is how Bedrock marks a texel its alpha test draws and Java's cutout shader
-  discards, and the game test `aMarkedTexelIsConvertedOpaque` reads the converted file back to say
-  the conversion raised it. A regression there costs an entity its markings and leaves it drawn in
-  whatever is left of its texture, which no count here would report.
+  alpha of three. **What Bedrock does with such a texel depends on the material, not the texture**:
+  its entity shader (the legacy `entity.fragment`, and `AlphaTest` against `AlphaTestColorMask` in
+  the RenderDragon materials) drops alpha under half under a plain alpha test and keeps anything not
+  fully clear under a colour mask, where the alpha is how much of the texel is tinted. Java's cutout
+  keeps everything from a tenth. So the conversion writes the texture with those texels raised,
+  which the game test `aMarkedTexelIsConvertedOpaque` reads back, and a `_alpha_tested` form beside
+  it with them cleared, and `MaterialDefinition.dropsFaintTexels` picks the form per pass. The
+  sprite draws with `entity_alphatest` and `tp:shade` draws the same texture with
+  `entity_alphatest_change_color`, and `RenderControllerClientGameTest` asserts each pass binds the
+  form its material sees. A pack marking a texture with one texel at an alpha of one, which a plain
+  alpha test never draws, otherwise shows that texel as a speck floating beside the model.
+
+  `tp:shade` also collides in a box of nothing, the way a pack's stand-in for a vanilla mob often
+  does. Java scales how far it draws a mob by its box, so `AddonEntityRenderer` measures that
+  distance by the model's visible box as well, and `CullingClientGameTest` asserts the shade is drawn.
 
   `tp:vane` is the one entity whose model is built from a texture rather than from boxes. Its only
   bone carries a texture mesh over an eight by eight texture drawing an L, each texel painted a
@@ -1247,6 +1258,13 @@ again where it is finally drawn, so `ModelFeatureRendererMixin` lays the clip on
 A bone with no part is reported once per kind of entity. Nothing is stored on the server, so a
 player who starts watching later sees whatever the pack plays next, as on an add-on entity, and
 `next_state` is not acted on for either. `JavaModelPoseClientGameTest` reads the posed parts back.
+
+**Bedrock's hierarchy is not Java's.** Bedrock's model of most humanoid mobs hangs the head, the
+arms and the legs off `body`, where Java's model draws them beside it, so a pack hiding a vanilla
+villager by scaling `body` to nothing left its arms and legs standing in Java. For the mobs
+`JavaModelPoses.BODY_CARRIES_EVERYTHING` names, read from Mojang's own geometry, `JavaModelParts.carryWith`
+moves every part outside the body by what the clips did to the body, about the body's Java pivot.
+Mojang's geometry is not committed, so that list is the one place this knowledge lives.
 - **`tools/census/commands.py`** does the same for the command dialect. A `.mcfunction` is the one
   part of a pack Java refuses by halves, one bad line costing the whole file, so knowing which
   commands survive translation matters more here than anywhere else.

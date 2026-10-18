@@ -90,6 +90,7 @@ public final class AddonModels {
     private final Map<String, BakedGeometry> baked = new HashMap<>();
     private final Map<String, Optional<TexelMask>> masks = new HashMap<>();
     private final Map<String, AABB> bounds = new HashMap<>();
+    private final Map<String, Optional<String>> alphaTested = new HashMap<>();
 
     public AddonModels(BedrockAssets assets, ConvertedPack converted) {
         this.assets = assets;
@@ -165,16 +166,13 @@ public final class AddonModels {
         BakedGeometry geometry = geometryId == null ? null : bake(geometryId, definition);
         if (geometry == null) return null;
 
-        Identifier texture = null;
+        String texturePath = null;
         for (MolangExpression expression : controller.textures()) {
             MolangValue value = expression.evaluate(environment);
-            String path = value.isText() ? definition.textures().get(value.text()) : null;
-            if (path != null) {
-                texture = textureId(path);
-                break;
-            }
+            texturePath = value.isText() ? definition.textures().get(value.text()) : null;
+            if (texturePath != null) break;
         }
-        if (texture == null) return null;
+        if (texturePath == null) return null;
 
         List<PartVisibility.Rule> visibility = new ArrayList<>();
         for (Map<String, MolangExpression> rule : controller.partVisibility()) {
@@ -185,6 +183,9 @@ public final class AddonModels {
         }
         MaterialDefinition material = resolveMaterial(controller, definition, environment);
         if (material != null && material.invisible()) return null;
+
+        String alphaTested = material != null && material.dropsFaintTexels() ? alphaTested(texturePath) : null;
+        Identifier texture = alphaTested == null ? textureId(texturePath) : identifierOf(alphaTested);
 
         UvShift shift = new UvShift(
             number(controller.uvOffsetU(), environment, 0f),
@@ -368,7 +369,19 @@ public final class AddonModels {
             }
             return Platform.id("minecraft", "textures/misc/white.png");
         }
+        return identifierOf(mapped);
+    }
 
+    /**
+     * The form of a texture Bedrock's plain alpha test draws, as the conversion filed it, or null
+     * where the conversion wrote none. Asked once per texture, because a pass is resolved every frame.
+     */
+    private String alphaTested(String path) {
+        return alphaTested.computeIfAbsent(path, bedrock -> Optional.ofNullable(converted.alphaTested(bedrock)))
+            .orElse(null);
+    }
+
+    private static Identifier identifierOf(String mapped) {
         int colon = mapped.indexOf(':');
         return Platform.id(mapped.substring(0, colon), "textures/" + mapped.substring(colon + 1) + ".png");
     }

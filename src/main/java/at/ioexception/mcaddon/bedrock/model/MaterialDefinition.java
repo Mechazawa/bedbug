@@ -31,6 +31,21 @@ public record MaterialDefinition(String name, String parent, Set<String> defines
         return states.contains("Blending") || parent.contains("alphablend") || parent.contains("blend");
     }
 
+    /**
+     * Whether a texel under half opacity is dropped, which Bedrock's alpha test does wherever
+     * nothing else reads the alpha.
+     *
+     * A colour mask and a multiplicative tint read the alpha as how much of a texel to tint and
+     * drop only a fully clear one, an emissive material reads it as how brightly the texel glows,
+     * and a material without the test draws every texel whatever its alpha.
+     */
+    public boolean dropsFaintTexels() {
+        boolean tested = defines.contains("ALPHA_TEST") || parent.contains("alphatest");
+        boolean readsAlpha = defines.contains("USE_COLOR_MASK") || defines.contains("MULTIPLICATIVE_TINT")
+            || parent.contains("change_color");
+        return tested && !readsAlpha && !emissive() && !blends();
+    }
+
     /** Lit at full brightness, which is what Bedrock's emissive materials look like. */
     public boolean emissive() {
         return defines.contains("USE_EMISSIVE") || defines.contains("USE_ONLY_EMISSIVE")

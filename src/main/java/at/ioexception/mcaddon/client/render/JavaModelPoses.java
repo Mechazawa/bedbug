@@ -76,6 +76,7 @@ public final class JavaModelPoses {
         if (entries == null) return;
 
         JavaModelParts parts = JavaModelParts.of(root);
+        ModelPart body = null;
         for (Animators.Entry entry : entries.values()) {
             for (Map.Entry<String, BonePose> bone : entry.animator().player().poses().entrySet()) {
                 ModelPart part = parts.part(bone.getKey());
@@ -84,10 +85,33 @@ public final class JavaModelPoses {
                         + ", which Java's model of it has no part for");
                 } else if (!bone.getValue().isIdentity()) {
                     parts.move(part, bone.getValue());
+                    if (BODY.equalsIgnoreCase(bone.getKey())) body = part;
                 }
             }
         }
+        // Every part's own clip comes first, because what the body carries is the part as posed.
+        if (body != null && BODY_CARRIES_EVERYTHING.contains(typeOf(entity))) parts.carryWith(body);
     }
+
+    private static final String BODY = "body";
+
+    /**
+     * The mobs whose Bedrock model hangs every other bone off `body`, read from Mojang's own
+     * geometry for each of them, leaving out only the bones that place a held item.
+     *
+     * Java draws these mobs' heads and limbs beside the body rather than on it, so a pack hiding
+     * one by shrinking its body to nothing hides it whole in Bedrock and leaves the head, arms and
+     * legs standing in Java unless they are carried along.
+     */
+    private static final Set<String> BODY_CARRIES_EVERYTHING = Set.of(
+        "minecraft:armor_stand", "minecraft:axolotl", "minecraft:bee", "minecraft:bogged", "minecraft:cat",
+        "minecraft:cod", "minecraft:dolphin", "minecraft:fox", "minecraft:ghast", "minecraft:glow_squid",
+        "minecraft:happy_ghast", "minecraft:husk", "minecraft:iron_golem", "minecraft:panda",
+        "minecraft:parched", "minecraft:parrot", "minecraft:phantom", "minecraft:piglin",
+        "minecraft:piglin_brute", "minecraft:pillager", "minecraft:polar_bear", "minecraft:pufferfish",
+        "minecraft:squid", "minecraft:trader_llama", "minecraft:turtle", "minecraft:villager_v2",
+        "minecraft:wandering_trader", "minecraft:zombie", "minecraft:zombie_pigman",
+        "minecraft:zombie_villager_v2");
 
     public static void restore(ModelPart root) {
         JavaModelParts.restore(root);

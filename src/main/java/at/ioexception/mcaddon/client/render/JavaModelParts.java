@@ -2,6 +2,10 @@ package at.ioexception.mcaddon.client.render;
 
 import at.ioexception.mcaddon.bedrock.animation.BonePose;
 import net.minecraft.client.model.geom.ModelPart;
+import org.joml.Matrix3f;
+import org.joml.Matrix4f;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -69,6 +73,11 @@ final class JavaModelParts {
                 part.xScale, part.yScale, part.zScale);
         }
 
+        /** The transform the part stood at, the way `ModelPart.translateAndRotate` builds it. */
+        Matrix4f matrix() {
+            return new Matrix4f().translate(x, y, z).rotateZYX(zRot, yRot, xRot).scale(xScale, yScale, zScale);
+        }
+
         void restore() {
             part.x = x;
             part.y = y;
@@ -131,6 +140,72 @@ final class JavaModelParts {
         part.xScale *= pose.scale.x;
         part.yScale *= pose.scale.y;
         part.zScale *= pose.scale.z;
+    }
+
+    /**
+     * Moves every part Java draws beside `body` by what the clips did to the body.
+     *
+     * Bedrock's own model of some mobs hangs every other bone off the body, where Java's model
+     * draws the same pieces beside it, so a clip shrinking or turning the body moves the whole mob
+     * in Bedrock and only the torso in Java. Each part outside the body that does not lead to it is
+     * moved the way the body moved, about the body's own pivot, which is the pivot the body itself
+     * was turned about, so whatever it carries stays where it sat on it.
+     */
+    void carryWith(ModelPart body) {
+        Saved rest = saved.stream().filter(entry -> entry.part() == body).findFirst().orElse(null);
+        if (rest == null) return;
+
+        Matrix4f before = rest.matrix();
+        if (before.determinant() == 0f) return;
+
+        Matrix4f carry = Saved.of(body).matrix().mul(before.invert());
+        List<ModelPart> path = pathTo(root, body);
+        for (int index = 0; index + 1 < path.size(); index++) {
+            ModelPart onPath = path.get(index + 1);
+            for (ModelPart beside : ((PartTree) (Object) path.get(index)).mcaddon$children().values()) {
+                if (beside != onPath) carry(beside, carry);
+            }
+        }
+    }
+
+    /** The parts from `from` down to `to`, both included, or nothing where `to` is not under it. */
+    private static List<ModelPart> pathTo(ModelPart from, ModelPart to) {
+        if (from == to) return new ArrayList<>(List.of(from));
+
+        for (ModelPart child : ((PartTree) (Object) from).mcaddon$children().values()) {
+            List<ModelPart> below = pathTo(child, to);
+            if (!below.isEmpty()) {
+                below.add(0, from);
+                return below;
+            }
+        }
+        return new ArrayList<>();
+    }
+
+    /** A part shrunk to nothing has no direction left, so it keeps the turn it had. */
+    private static final float NOTHING = 1e-6f;
+
+    private void carry(ModelPart part, Matrix4f carry) {
+        Saved own = Saved.of(part);
+        saved.add(own);
+        MOVED.add(this);
+
+        Matrix4f moved = new Matrix4f(carry).mul(own.matrix());
+        Vector3f at = moved.getTranslation(new Vector3f());
+        Vector3f scale = moved.getScale(new Vector3f());
+        part.x = at.x;
+        part.y = at.y;
+        part.z = at.z;
+        part.xScale = scale.x;
+        part.yScale = scale.y;
+        part.zScale = scale.z;
+        if (scale.x < NOTHING || scale.y < NOTHING || scale.z < NOTHING) return;
+
+        Vector3f turn = moved.get3x3(new Matrix3f()).scale(1 / scale.x, 1 / scale.y, 1 / scale.z)
+            .getUnnormalizedRotation(new Quaternionf()).getEulerAnglesZYX(new Vector3f());
+        part.xRot = turn.x;
+        part.yRot = turn.y;
+        part.zRot = turn.z;
     }
 
     /**
