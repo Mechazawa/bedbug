@@ -8,6 +8,8 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.player.Player;
 
+import java.util.function.Supplier;
+
 /**
  * Looks at somebody nearby for as long as the pack's `look_time` says, inside its field of view.
  *
@@ -22,11 +24,13 @@ final class LookGoal extends LookAtPlayerGoal {
     private final int longest;
     private final float horizontalView;
     private final float verticalView;
-    private final boolean tradingOnly;
+    private final Supplier<LivingEntity> chosen;
+    private final float chance;
     private final Filter filters;
     private int remaining;
 
-    private LookGoal(AddonEntity looker, Class<? extends LivingEntity> kind, JsonObject goal, boolean tradingOnly) {
+    private LookGoal(AddonEntity looker, Class<? extends LivingEntity> kind, JsonObject goal,
+        Supplier<LivingEntity> chosen) {
         super(looker, kind, (float) Goals.number(goal, "look_distance", 8),
             (float) Goals.number(goal, "probability", 0.02));
         this.looker = looker;
@@ -34,30 +38,37 @@ final class LookGoal extends LookAtPlayerGoal {
         this.longest = Goals.ticksHigh(goal, "look_time", 4);
         this.horizontalView = (float) Goals.number(goal, "angle_of_view_horizontal", 360);
         this.verticalView = (float) Goals.number(goal, "angle_of_view_vertical", 360);
-        this.tradingOnly = tradingOnly;
+        this.chosen = chosen;
+        this.chance = (float) Goals.number(goal, "probability", 0.02);
         this.filters = Goals.filter(goal, "filters");
     }
 
     /** `minecraft:behavior.look_at_player`: the nearest player. */
     static LookGoal atPlayers(AddonEntity looker, JsonObject goal) {
-        return new LookGoal(looker, Player.class, goal, false);
+        return new LookGoal(looker, Player.class, goal, null);
     }
 
     /** `minecraft:behavior.look_at_trading_player`: the player on the other side of a trade. */
     static LookGoal atTradingPlayer(AddonEntity looker, JsonObject goal) {
-        return new LookGoal(looker, Player.class, goal, true);
+        return new LookGoal(looker, Player.class, goal, looker::getTradingPlayer);
+    }
+
+    /** `minecraft:behavior.look_at_target`: whatever the entity is already hunting. */
+    static LookGoal atTarget(AddonEntity looker, JsonObject goal) {
+        return new LookGoal(looker, LivingEntity.class, goal, looker::getTarget);
     }
 
     /** `minecraft:behavior.look_at_entity`: the nearest living thing its filters allow. */
     static LookGoal atEntities(AddonEntity looker, JsonObject goal) {
-        return new LookGoal(looker, LivingEntity.class, goal, false);
+        return new LookGoal(looker, LivingEntity.class, goal, null);
     }
 
     @Override
     public boolean canUse() {
-        if (tradingOnly) {
-            lookAt = looker.getTradingPlayer();
-            return lookAt != null;
+        if (chosen != null) {
+            lookAt = chosen.get();
+            return lookAt != null && lookAt.isAlive() && (looker.getTradingPlayer() == lookAt
+                || looker.getRandom().nextFloat() < chance);
         }
         if (!super.canUse()) return false;
         if (inView() && filters.matches(new Filter.Context(looker, lookAt, lookAt, ServerHooks.state()))) {

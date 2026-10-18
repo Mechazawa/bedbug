@@ -1,0 +1,218 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:gazed",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false,
+      "properties": {
+        "tp:seen": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:lost": {
+          "type": "bool",
+          "default": false
+        }
+      }
+    },
+    "component_groups": {
+      "tp:gaze_timed": {
+        "minecraft:looked_at": {
+          "looked_at_event": "tp:gaze_seen",
+          "search_radius": 20,
+          "set_target": "never",
+          "field_of_view": 60,
+          "scale_fov_by_distance": false,
+          "min_looked_at_duration": 1,
+          "looked_at_cooldown": {
+            "min": 2,
+            "max": 2
+          },
+          "not_looked_at_event": "tp:gaze_lost"
+        }
+      },
+      "tp:gaze_scaled": {
+        "minecraft:looked_at": {
+          "looked_at_event": "tp:gaze_seen",
+          "search_radius": 20,
+          "set_target": "never",
+          "field_of_view": 20
+        }
+      },
+      "tp:gaze_flat": {
+        "minecraft:looked_at": {
+          "looked_at_event": "tp:gaze_seen",
+          "search_radius": 20,
+          "set_target": "never",
+          "field_of_view": 20,
+          "scale_fov_by_distance": false
+        }
+      },
+      "tp:gaze_near": {
+        "minecraft:looked_at": {
+          "looked_at_event": "tp:gaze_seen",
+          "search_radius": 4,
+          "set_target": "never",
+          "field_of_view": 60,
+          "scale_fov_by_distance": false
+        }
+      },
+      "tp:gaze_targeting": {
+        "minecraft:looked_at": {
+          "looked_at_event": "tp:gaze_seen",
+          "search_radius": 20,
+          "set_target": "once_and_stop_scanning",
+          "field_of_view": 60,
+          "scale_fov_by_distance": false
+        }
+      },
+      "tp:gaze_passive": {
+        "minecraft:looked_at": {
+          "looked_at_event": "tp:gaze_seen",
+          "search_radius": 20,
+          "set_target": "never",
+          "field_of_view": 60,
+          "scale_fov_by_distance": false
+        }
+      },
+      "tp:gaze_feet": {
+        "minecraft:looked_at": {
+          "looked_at_event": "tp:gaze_seen",
+          "search_radius": 20,
+          "set_target": "never",
+          "field_of_view": 60,
+          "scale_fov_by_distance": false,
+          "look_at_locations": [
+            "feet"
+          ]
+        }
+      },
+      "tp:gaze_head": {
+        "minecraft:looked_at": {
+          "looked_at_event": "tp:gaze_seen",
+          "search_radius": 20,
+          "set_target": "never",
+          "field_of_view": 60,
+          "scale_fov_by_distance": false,
+          "look_at_locations": [
+            "head"
+          ]
+        }
+      },
+      "tp:gaze_filtered": {
+        "minecraft:looked_at": {
+          "looked_at_event": "tp:gaze_seen",
+          "search_radius": 20,
+          "set_target": "never",
+          "field_of_view": 60,
+          "scale_fov_by_distance": false,
+          "filters": {
+            "test": "is_family",
+            "subject": "other",
+            "value": "pig"
+          }
+        }
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": [
+          "tp_gazed",
+          "mob"
+        ]
+      },
+      "minecraft:collision_box": {
+        "width": 0.6,
+        "height": 1.8
+      },
+      "minecraft:health": {
+        "value": 20,
+        "max": 20
+      },
+      "minecraft:movement": {
+        "value": 0.25
+      },
+      "minecraft:physics": {},
+      "minecraft:movement.basic": {},
+      "minecraft:navigation.walk": {},
+      "minecraft:jump.static": {}
+    },
+    "events": {
+      "tp:gaze_make_timed": {
+        "add": {
+          "component_groups": [
+            "tp:gaze_timed"
+          ]
+        }
+      },
+      "tp:gaze_make_scaled": {
+        "add": {
+          "component_groups": [
+            "tp:gaze_scaled"
+          ]
+        }
+      },
+      "tp:gaze_make_flat": {
+        "add": {
+          "component_groups": [
+            "tp:gaze_flat"
+          ]
+        }
+      },
+      "tp:gaze_make_near": {
+        "add": {
+          "component_groups": [
+            "tp:gaze_near"
+          ]
+        }
+      },
+      "tp:gaze_make_targeting": {
+        "add": {
+          "component_groups": [
+            "tp:gaze_targeting"
+          ]
+        }
+      },
+      "tp:gaze_make_passive": {
+        "add": {
+          "component_groups": [
+            "tp:gaze_passive"
+          ]
+        }
+      },
+      "tp:gaze_make_feet": {
+        "add": {
+          "component_groups": [
+            "tp:gaze_feet"
+          ]
+        }
+      },
+      "tp:gaze_make_head": {
+        "add": {
+          "component_groups": [
+            "tp:gaze_head"
+          ]
+        }
+      },
+      "tp:gaze_make_filtered": {
+        "add": {
+          "component_groups": [
+            "tp:gaze_filtered"
+          ]
+        }
+      },
+      "tp:gaze_seen": {
+        "set_property": {
+          "tp:seen": true
+        }
+      },
+      "tp:gaze_lost": {
+        "set_property": {
+          "tp:lost": true
+        }
+      }
+    }
+  }
+}

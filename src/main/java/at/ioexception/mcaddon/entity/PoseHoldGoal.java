@@ -15,33 +15,31 @@ import java.util.EnumSet;
  *
  * Roaring, croaking and sniffing are the same shape in Bedrock: stop, hold a pose, wait, do it
  * again. Java owns each pose but hands it out only to the one mob it wrote the pose for, so a pack's
- * entity reaches them through the pose alone and its own model animates the rest.
+ * entity reaches them through the pose alone and its own model animates the rest. Times run on the
+ * game clock, because Java ticks a running goal only every second tick.
  */
 public final class PoseHoldGoal extends Goal {
     private final AddonEntity mob;
     private final Pose pose;
-    private final int durationLow;
-    private final int durationHigh;
-    private final int intervalLow;
-    private final int intervalHigh;
+    private final Goals.Span duration;
+    private final Goals.Span wait;
+    private final boolean waitsFirst;
     private final Filter conditions;
     private final double noticeRadius;
     private final boolean needsTarget;
     private final String onStart;
     private final String onDone;
-    private int held;
-    private int holdFor;
-    private int untilNext;
+    private long endsAt;
+    private long readyAt = -1;
     private LivingEntity answered;
 
-    private PoseHoldGoal(AddonEntity mob, JsonObject component, Pose pose, String durationKey,
-        double durationFallback, String intervalKey, double noticeRadius, boolean needsTarget) {
+    private PoseHoldGoal(AddonEntity mob, JsonObject component, Pose pose, Goals.Span duration,
+        Goals.Span wait, boolean waitsFirst, double noticeRadius, boolean needsTarget) {
         this.mob = mob;
         this.pose = pose;
-        this.durationLow = Goals.ticksLow(component, durationKey, durationFallback);
-        this.durationHigh = Goals.ticksHigh(component, durationKey, durationFallback);
-        this.intervalLow = intervalKey == null ? 0 : Goals.ticksLow(component, intervalKey, 10);
-        this.intervalHigh = intervalKey == null ? 0 : Goals.ticksHigh(component, intervalKey, 10);
+        this.duration = duration;
+        this.wait = wait;
+        this.waitsFirst = waitsFirst;
         this.conditions = Goals.filter(component, "filters");
         this.noticeRadius = noticeRadius;
         this.needsTarget = needsTarget;
@@ -52,38 +50,45 @@ public final class PoseHoldGoal extends Goal {
 
     /** `minecraft:behavior.roar`, which a Bedrock mob does once at whatever it has just noticed. */
     public static PoseHoldGoal roaring(AddonEntity mob, JsonObject component) {
-        return new PoseHoldGoal(mob, component, Pose.ROARING, "duration", 1, null, 0, true);
+        return new PoseHoldGoal(mob, component, Pose.ROARING, Goals.span(component, "duration", 1, 1),
+            new Goals.Span(0, 0), false, 0, true);
     }
 
     /** `minecraft:behavior.croak`, which runs on its own clock while the pack's filters hold. */
     public static PoseHoldGoal croaking(AddonEntity mob, JsonObject component) {
-        return new PoseHoldGoal(mob, component, Pose.CROAKING, "duration", 4.5, "interval", 0, false);
+        return new PoseHoldGoal(mob, component, Pose.CROAKING, Goals.span(component, "duration", 4.5, 4.5),
+            Goals.span(component, "interval", 10, 20), false, 0, false);
     }
 
     /** `minecraft:behavior.sniff`, which ends looking at whatever it found within its radius. */
     public static PoseHoldGoal sniffing(AddonEntity mob, JsonObject component) {
-        return new PoseHoldGoal(mob, component, Pose.SNIFFING, "duration", 1, "cooldown_range",
+        return new PoseHoldGoal(mob, component, Pose.SNIFFING, Goals.span(component, "duration", 1, 1),
+            Goals.span(component, "cooldown_range", 3, 10), false,
             Goals.number(component, "sniffing_radius", 5), false);
     }
 
     /** `minecraft:behavior.emerge`, which a pack gives to something that arrives out of the ground. */
     public static PoseHoldGoal emerging(AddonEntity mob, JsonObject component) {
-        return new PoseHoldGoal(mob, component, Pose.EMERGING, "duration", 7, null, 0, false);
+        return new PoseHoldGoal(mob, component, Pose.EMERGING, Goals.span(component, "duration", 5, 5),
+            Goals.span(component, "cooldown_time", 0.5, 0.5), false, 0, false);
     }
 
     /**
      * `minecraft:behavior.dig`, which is the same thing the other way round.
      *
-     * `idle_time` is how long the entity has to have had nothing to do before it gives up and goes
-     * back under, and the pack states it in seconds.
+     * `idle_time` is how long the entity has to have had nothing to do before it goes under, so it
+     * waits that long before its first dig as well as between digs.
      */
     public static PoseHoldGoal digging(AddonEntity mob, JsonObject component) {
-        return new PoseHoldGoal(mob, component, Pose.DIGGING, "duration", 5.5, "idle_time", 0, false);
+        return new PoseHoldGoal(mob, component, Pose.DIGGING, Goals.span(component, "duration", 0, 0),
+            Goals.span(component, "idle_time", 0, 0), true, 0, false);
     }
 
     @Override
     public boolean canUse() {
-        if (untilNext-- > 0) return false;
+        long now = mob.level().getGameTime();
+        if (readyAt < 0) readyAt = waitsFirst ? now + wait.roll(mob.getRandom()) : 0;
+        if (now < readyAt) return false;
         if (needsTarget && (mob.getTarget() == null || mob.getTarget() == answered)) return false;
         if (mob.getPose() != Pose.STANDING) return false;
 
@@ -92,13 +97,12 @@ public final class PoseHoldGoal extends Goal {
 
     @Override
     public boolean canContinueToUse() {
-        return held < holdFor;
+        return mob.level().getGameTime() < endsAt;
     }
 
     @Override
     public void start() {
-        held = 0;
-        holdFor = Goals.between(mob.getRandom(), durationLow, durationHigh);
+        endsAt = mob.level().getGameTime() + duration.roll(mob.getRandom());
         answered = mob.getTarget();
         mob.setPose(pose);
         fire(onStart);
@@ -106,7 +110,6 @@ public final class PoseHoldGoal extends Goal {
 
     @Override
     public void tick() {
-        held++;
         mob.getNavigation().stop();
         mob.setDeltaMovement(0, mob.getDeltaMovement().y, 0);
     }
@@ -114,7 +117,7 @@ public final class PoseHoldGoal extends Goal {
     @Override
     public void stop() {
         mob.setPose(Pose.STANDING);
-        untilNext = Goals.between(mob.getRandom(), intervalLow, intervalHigh);
+        readyAt = mob.level().getGameTime() + wait.roll(mob.getRandom());
         fire(onDone);
         if (noticeRadius <= 0) return;
 

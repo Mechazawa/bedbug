@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.entity;
 
+import at.ioexception.mcaddon.bedrock.behaviour.TargetSelection;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import com.google.gson.JsonObject;
@@ -32,8 +33,9 @@ public final class SneezeGoal extends Goal {
     private final String lootTable;
     private final SoundEvent prepareSound;
     private final SoundEvent sneezeSound;
-    private int prepared;
-    private int untilNext;
+    private final TargetSelection startled;
+    private long readyAt;
+    private long preparedAt;
 
     public SneezeGoal(AddonEntity mob, JsonObject component) {
         this.mob = mob;
@@ -42,6 +44,7 @@ public final class SneezeGoal extends Goal {
         this.cooldown = Goals.ticks(component, "cooldown_time", 0);
         this.dropChance = Goals.number(component, "drop_item_chance", 1);
         this.withinRadius = Goals.number(component, "within_radius", 0);
+        this.startled = TargetSelection.from(component, LivingEntity.class, withinRadius);
         this.lootTable = Goals.text(component, "loot_table");
         this.prepareSound = sound(Goals.text(component, "prepare_sound"),
             SoundEvents.PANDA_PRE_SNEEZE);
@@ -51,17 +54,17 @@ public final class SneezeGoal extends Goal {
 
     @Override
     public boolean canUse() {
-        return untilNext-- <= 0 && mob.getRandom().nextDouble() < probability;
+        return mob.level().getGameTime() >= readyAt && mob.getRandom().nextDouble() < probability;
     }
 
     @Override
     public boolean canContinueToUse() {
-        return prepared < prepareTime;
+        return mob.level().getGameTime() < preparedAt;
     }
 
     @Override
     public void start() {
-        prepared = 0;
+        preparedAt = mob.level().getGameTime() + prepareTime;
         mob.setValue("is_sneezing", true);
         mob.getNavigation().stop();
         mob.playSound(prepareSound, mob.getSoundVolume(), mob.getVoicePitch());
@@ -69,14 +72,13 @@ public final class SneezeGoal extends Goal {
 
     @Override
     public void tick() {
-        prepared++;
         mob.getNavigation().stop();
     }
 
     @Override
     public void stop() {
         mob.setValue("is_sneezing", false);
-        untilNext = cooldown;
+        readyAt = mob.level().getGameTime() + cooldown;
         mob.playSound(sneezeSound, mob.getSoundVolume(), mob.getVoicePitch());
         if (!(mob.level() instanceof ServerLevel level)) return;
 
@@ -92,7 +94,7 @@ public final class SneezeGoal extends Goal {
 
         for (LivingEntity nearby : level.getEntitiesOfClass(LivingEntity.class,
             mob.getBoundingBox().inflate(withinRadius))) {
-            if (nearby == mob || !nearby.onGround()) continue;
+            if (nearby == mob || !nearby.onGround() || !startled.accepts(mob, nearby)) continue;
 
             nearby.setDeltaMovement(nearby.getDeltaMovement().add(0, 0.42, 0));
         }
