@@ -98,6 +98,10 @@ BENIGN = (
     # game only loses its narrator without it. The library path it prints names `sponge-mixin`.
     r"Error while loading the narrator",
     r"flite",
+    # A resource reload while a sound plays: `SoundEngine.stopAll` hands each channel's stop to the
+    # sound thread and `destroy` closes the OpenAL context on the render thread without waiting, so
+    # a stop that runs late finds no context. `join --slow` reloads with the menu music playing.
+    r"Stop: Invalid operation",
 )
 
 # What has to be in the log of a run that worked.
@@ -139,6 +143,22 @@ RECEIVED = re.compile(r"Received (\d+) add-ons from the server\.")
 DOWNLOADING = re.compile(r"Downloading (\d+) add-ons")
 ACTIVATED = re.compile(r"Activated the server's add-on set of (\d+) add-ons\.")
 RESTORED = re.compile(r"Restored the installed add-on set\.")
+
+# How long `join --slow` has the second client wait before it activates the server's add-ons. A
+# login before 1.21 ends after 600 ticks, either end drops a connection that stays silent for thirty
+# seconds, and the server ends a transfer that hears nothing for sixty, so the wait outlasts all
+# three.
+SLOW_JOIN_SECONDS = 75
+LOGIN_LIMIT_SECONDS = 30
+
+# A game's own timestamp on each line it logs, and the client's line as it starts connecting.
+TIMESTAMP = re.compile(r"^\[(\d\d):(\d\d):(\d\d)\]")
+CONNECTING = re.compile(r"Connecting to 127\.0\.0\.1")
+
+# What a login cut short by a timer looks like on either side: the server's 600-tick limit, a
+# connection that went silent, and the server's own deadline for a transfer.
+TIMED_OUT = re.compile(r"Took too long to log in|Timed out|ReadTimeoutException"
+                       r"|stopped making progress")
 
 # The refusal for a server add-on whose Java shape differs from the installed copy of the same one.
 CANNOT_REPLACE = re.compile(r"The server's copy of (.+?) cannot replace yours without a restart\.")
@@ -735,7 +755,8 @@ def world(root: Path, version: str) -> str | None:
 def play(root: Path, version: str, launch: Launch, ready: re.Pattern,
          script: list[tuple[float, str]], timeout: float, hold: float,
          verbose: bool, quick_play: str | None = None, join: str | None = None,
-         while_loaded=None, serve: Path | None = None) -> tuple[list[str], Path, str]:
+         while_loaded=None, serve: Path | None = None,
+         slow_join: int = 0) -> tuple[list[str], Path, str]:
     """Starts one game, waits for it to load, and always ends it by the deadline.
 
     A server is asked to stop and killed if it will not; a client has nothing to ask, so it is held
@@ -761,6 +782,8 @@ def play(root: Path, version: str, launch: Launch, ready: re.Pattern,
         command.append(f"-PjoinServer={join}")
     if serve:
         command.append(f"-Pserved={serve}")
+    if slow_join:
+        command.append(f"-PslowJoin={slow_join}")
     process = subprocess.Popen(
         command,
         cwd=root, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -1227,7 +1250,7 @@ def stock_guest(root: Path, version: str, variant: str, server_addons: list[Path
                 verdict: Verdict) -> Path:
     """Gives the second client the add-ons a variant calls for and nothing from an earlier run.
 
-    `bare` leaves it none, which is a player who never installed the add-on. `other` gives it the
+    `bare` and `slow` leave it none, which is a player who never installed the add-on. `other` gives it the
     server's archives with a newer version in each manifest, which takes the replace path because
     the Java shape is equal, and an add-on the server does not have, which goes dormant while it is
     away. `reshaped` gives it a copy whose block has one more state, which has to be refused.
@@ -1307,14 +1330,16 @@ def check_join(root: Path, version: str, timeout: float, hold: float, verbose: b
     `plain` runs the first client, which shares its add-ons with the server. The other variants run
     the second client from `run/join-client/`, which has add-ons of its own, and also read what it
     logged about taking the server's set. `bare` has none, so the whole set is downloaded and
-    activated. `other` has the server's archives at another version, which are replaced, and one the
+    activated. `slow` is `bare` with the activation held back for longer than the login's timers
+    allow, so the client reaches the world only while whatever keeps a long login open works.
+    `other` has the server's archives at another version, which are replaced, and one the
     server does not have, which stays installed and goes dormant. `reshaped` has a copy of the
     server's add-on that cannot be replaced without a restart, so the client has to be turned away
     with the add-on's name. The harness ends the session of the first two by stopping the server,
     which is what makes the client put its own set back.
     """
     labels = {"plain": "", "bare": " without the add-on", "other": " with other add-ons",
-              "reshaped": " with a reshaped add-on"}
+              "reshaped": " with a reshaped add-on", "slow": " without the add-on, slowly"}
     verdict = Verdict(f"{version} join" + labels[variant])
     guest = variant != "plain"
     joiner = replace(GUEST if guest else CLIENT, name="join-client")
@@ -1359,7 +1384,8 @@ def check_join(root: Path, version: str, timeout: float, hold: float, verbose: b
         client["lines"], client["log"], client["outcome"] = play(
             root, version, joiner, ready, [], timeout, hold if variant == "plain" else 0.0, verbose,
             join=f"127.0.0.1:{port}",
-            while_loaded=leave if variant in ("bare", "other") else None)
+            while_loaded=leave if variant in ("bare", "other", "slow") else None,
+            slow_join=SLOW_JOIN_SECONDS if variant == "slow" else 0)
         talking.join(timeout=10)
 
     served, log, outcome = play(root, version, replace(SERVER, name="join-server"), SERVER.ready,
@@ -1425,7 +1451,9 @@ def check_join(root: Path, version: str, timeout: float, hold: float, verbose: b
 
     if guest:
         sync_lines(seen, verdict, len(addons), "the client")
-        if variant == "bare":
+        if variant == "slow":
+            slow_login(served, seen, verdict)
+        if variant in ("bare", "slow"):
             received = list((root / "versions" / version / "run" / "join-client" / ".mcaddon"
                              / "received").glob("*.mcaddon"))
             if len(received) != len(addons):
@@ -1448,6 +1476,38 @@ def check_join(root: Path, version: str, timeout: float, hold: float, verbose: b
     verdict.counts = {"source": expected, "reported by the server": byServer,
                       "reported by the client": byClient}
     return verdict
+
+
+def slow_login(served: list[str], seen: list[str], verdict: Verdict) -> None:
+    """Reads how long the slow join's login took and that no timer cut it short.
+
+    The two games share one clock, so the time from the client's `Connecting to` line to the
+    server's login line is the login, to the second. One no longer than the timers allow proves
+    nothing about what holds a long one open.
+    """
+    def seconds(lines: list[str], pattern: re.Pattern) -> int | None:
+        for line in lines:
+            stamp = TIMESTAMP.search(line)
+            if stamp and pattern.search(line):
+                hours, minutes, rest = (int(part) for part in stamp.groups())
+                return hours * 3600 + minutes * 60 + rest
+        return None
+
+    start = seconds(seen, CONNECTING)
+    end = seconds(served, LOGGED_IN)
+    if start is None or end is None:
+        verdict.fail("the login could not be timed",
+                     "no `Connecting to` line from the client or no login line from the server")
+    else:
+        took = (end - start) % 86400
+        verdict.notes.append(f"the login took {took} seconds")
+        if took <= LOGIN_LIMIT_SECONDS:
+            verdict.fail("the login was not slow",
+                         f"it took {took} seconds, inside the {LOGIN_LIMIT_SECONDS} the timers allow")
+
+    cut = [one for one in served + seen if TIMED_OUT.search(one)]
+    if cut:
+        verdict.fail("a timer cut the login short", cut[0].strip(), cut[:5])
 
 
 LOGGED_IN_NAME = re.compile(r"(\S+)\[[^\]]*\] logged in with entity id")
@@ -1682,7 +1742,7 @@ def main() -> int:
     parser.add_argument("mode", choices=("run", "client", "join", "lan", "convert", "companions", "all"),
                         help="`run` drives a dev server, `client` a dev client, `join` connects one "
                              "to the other (`--bare`, `--other` and `--reshaped` give the joining "
-                             "client add-ons of its own), `lan` hosts a world to a second client, "
+                             "client add-ons of its own, `--slow` makes it take its time), `lan` hosts a world to a second client, "
                              "`convert` compares a conversion offline, `companions` "
                              "runs a server and a client beside the mods this one is meant to work "
                              "with and reads their failures back as well as this mod's, "
@@ -1707,6 +1767,9 @@ def main() -> int:
     parser.add_argument("--reshaped", action="store_true",
                         help="join: the second client has a copy of an add-on the server's cannot "
                              "replace without a restart")
+    parser.add_argument("--slow", action="store_true",
+                        help="join: the second client has no add-ons and waits "
+                             f"{SLOW_JOIN_SECONDS} seconds before activating the server's")
     parser.add_argument("--dormant", action="store_true",
                         help="lan: the host holds an add-on it never installed, as a dormant one")
     parser.add_argument("--verbose", action="store_true", help="mirror the server output")
@@ -1733,9 +1796,9 @@ def main() -> int:
                 if arguments.mode in ("client", "all"):
                     found.append(check_client(
                         root, version, arguments.timeout, arguments.hold, arguments.verbose))
-                joins = [name for name in ("bare", "other", "reshaped") if getattr(arguments, name)]
+                joins = [name for name in ("bare", "other", "reshaped", "slow") if getattr(arguments, name)]
                 if arguments.mode == "all":
-                    joins = ["plain", "bare", "other", "reshaped"]
+                    joins = ["plain", "bare", "other", "reshaped", "slow"]
                 elif arguments.mode == "join" and not joins:
                     joins = ["plain"]
                 if arguments.mode in ("join", "all"):

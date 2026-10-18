@@ -352,6 +352,11 @@ run {
     guest.javaClass.getMethod("client").invoke(guest)
     guest.javaClass.getMethod("runDir", String::class.java).invoke(guest, "run/join-client")
     guest.javaClass.getMethod("vmArg", String::class.java).invoke(guest, "-Dmcaddon.role=guest")
+    // The second client waits this many seconds before activating a server's add-ons.
+    val slowJoin = project.findProperty("slowJoin") as String?
+    if (!slowJoin.isNullOrBlank()) {
+        guest.javaClass.getMethod("vmArg", String::class.java).invoke(guest, "-Dmcaddon.slowJoin=$slowJoin")
+    }
     // A dedicated server hands out every archive in this directory as well as its own add-ons.
     val servedDirectory = project.findProperty("served") as String?
     if (!servedDirectory.isNullOrBlank()) {
