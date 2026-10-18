@@ -18,7 +18,9 @@ import java.util.List;
  * world for a second client. Only registered in a development environment.
  *
  * Each line is a command for the integrated server, except `publish`, which opens the world to the
- * LAN and writes the port to `lan.port`. The file is deleted once it has been read.
+ * LAN and writes the port to `lan.port`, and `open <world>`, which opens a saved world while none is
+ * open, so a client that visited a server first can host afterwards. The file is deleted once it has
+ * been read.
  */
 public final class LanRequests {
     private LanRequests() {
@@ -27,7 +29,9 @@ public final class LanRequests {
     public static void tick(Minecraft client) {
         IntegratedServer server = client.getSingleplayerServer();
         Path request = client.gameDirectory.toPath().resolve("lan.request");
-        if (server == null || client.level == null || !Files.exists(request)) return;
+        if (!Files.exists(request)) return;
+        boolean idle = server == null && client.level == null && client.getConnection() == null;
+        if (!idle && (server == null || client.level == null)) return;
 
         List<String> lines;
         try {
@@ -41,6 +45,10 @@ public final class LanRequests {
         for (String line : lines) {
             String command = line.strip();
             if (command.isEmpty()) continue;
+            if (idle) {
+                if (command.startsWith("open ")) Platform.openWorld(command.substring("open ".length()));
+                continue;
+            }
             if (command.equals("publish")) {
                 publish(client, server);
             } else {

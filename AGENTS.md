@@ -1058,12 +1058,14 @@ These are the checks it runs, and what each one catches:
     `client/LanRequests`, answers a `lan.request` file in the host's run directory: each line is a
     console command for the integrated server, and `publish` opens the world to the LAN through
     `Platform.publishServer`, which also turns authentication off because a dev guest has no
-    session, then writes the port to `lan.port`. The guest is the second client. The host's log
-    must hold no `Received`, `Downloading`, `Activated` or `Restored` line. `--dormant` first has
-    the host join a dedicated server serving an add-on the host has not installed, so the host holds
-    it as a dormant archive, and then expects the guest to be offered it as an inactive entry.
-    Its first phase needs the client to log `Restored the installed add-on set.` when the serving
-    server stops; that line has not been seen there, so the mode is not part of `all`.
+    session, then writes the port to `lan.port`; `open <world>` opens a saved world while none is
+    open. The host is made creative and the world peaceful before anybody joins, because a zombie
+    kills a survival host at night and a dead player holds no chunks. The guest is the second
+    client. The host's log must hold no `Received`, `Downloading`, `Activated` or `Restored` line
+    while it hosts. `--dormant` has the host client join a dedicated server serving an add-on the
+    host has not installed, leave, and only then open its world with `open`, all in one process,
+    because a dormant add-on is one the process registered: a host started afresh holds none. The
+    guest is then offered it as an inactive entry. `all` runs both.
   - A fresh game directory has no `options.txt`, and the game then opens its accessibility
     onboarding screen instead of the quick play it was told to run, so a client in a new worktree
     sat on the title screen until the deadline. `play` writes `onboardAccessibility:false` first.

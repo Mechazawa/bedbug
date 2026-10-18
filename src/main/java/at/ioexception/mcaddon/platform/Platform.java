@@ -2498,6 +2498,16 @@ public final class Platform {
         *///?}
     }
 
+    /** Opens a saved singleplayer world by its directory name, the way the world list does. */
+    public static void openWorld(String name) {
+        net.minecraft.client.Minecraft client = net.minecraft.client.Minecraft.getInstance();
+        //? if >=1.21 {
+        client.createWorldOpenFlows().openWorld(name, () -> { });
+        //?} else {
+        /*client.createWorldOpenFlows().loadLevel(new net.minecraft.client.gui.screens.TitleScreen(), name);
+        *///?}
+    }
+
     /**
      * Queues a task for the client thread, even when called on it: `execute` runs a task called on
      * the client thread at once, inside whatever that thread is in the middle of. Renamed in 26.

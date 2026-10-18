@@ -1489,9 +1489,6 @@ def check_lan(root: Path, version: str, timeout: float, verbose: bool,
                         "--out", str(extra / "dormant-addon.mcaddon")],
                        check=True, capture_output=True)
         offered += 1
-        stocked = lan_stock_dormant(root, version, timeout, verbose, extra, verdict)
-        if not stocked:
-            return verdict
 
     shutil.rmtree(run / "join-client" / "addons", ignore_errors=True)
     (run / "join-client" / "addons").mkdir(parents=True)
@@ -1508,7 +1505,9 @@ def check_lan(root: Path, version: str, timeout: float, verbose: bool,
     deadline = time.monotonic() + timeout
 
     def host_loaded(host: subprocess.Popen, hosted: list[str]) -> None:
-        ask_host(run, "publish")
+        # Peaceful and creative before anybody joins, because a host or a guest standing in a
+        # survival world at night is killed within seconds, and a dead player holds no chunks.
+        ask_host(run, "difficulty peaceful", "gamemode creative @a", "publish")
         port = wait_for_file(run / "lan.port", min(deadline, time.monotonic() + 60))
         if port is None:
             verdict.fail("the world was never opened to the LAN",
@@ -1519,9 +1518,7 @@ def check_lan(root: Path, version: str, timeout: float, verbose: bool,
             if not wait_for_count(hosted, LOGGED_IN, 2, deadline):
                 return
             time.sleep(3)
-            # Peaceful, because a guest standing in a survival world at night is killed within seconds.
-            ask_host(run, "difficulty peaceful", "list", *[f"give @a {one}" for one in items[:1]],
-                     f"say {marker}")
+            ask_host(run, "list", *[f"give @a {one}" for one in items[:1]], f"say {marker}")
 
         def leave(process: subprocess.Popen, lines: list[str]) -> None:
             names = [match.group(1) for match in map(LOGGED_IN_NAME.search, list(hosted)) if match]
@@ -1536,10 +1533,18 @@ def check_lan(root: Path, version: str, timeout: float, verbose: bool,
             join=f"127.0.0.1:{port}", while_loaded=leave)
         talking.join(timeout=10)
 
-    hosted, log, outcome = play(root, version, replace(CLIENT, name="lan-host"), LOGGED_IN, [],
-                                timeout, 0.0, verbose, quick_play=name, while_loaded=host_loaded)
+    if dormant:
+        hosted, log, outcome = lan_host_after_visit(root, version, timeout, verbose, extra, name,
+                                                    host_loaded, verdict)
+    else:
+        hosted, log, outcome = play(root, version, replace(CLIENT, name="lan-host"), LOGGED_IN, [],
+                                    timeout, 0.0, verbose, quick_play=name, while_loaded=host_loaded)
+    # What the host logged while it hosted, which is everything after its visit when it made one.
+    restored = [index for index, one in enumerate(hosted) if RESTORED.search(one)]
+    hosting = hosted[restored[0] + 1:] if dormant and restored else hosted
     seen = guest["lines"]
-    verdict.notes.append(f"host {outcome}, {len(hosted)} lines in {log.relative_to(root)}")
+    verdict.notes.append(f"host {outcome}, {len(hosted)} lines in "
+                         + (str(log.relative_to(root)) if log else "no log"))
     verdict.notes.append(f"guest {guest['outcome']}, {len(seen)} lines in "
                          + (str(guest["log"].relative_to(root)) if guest["log"] else "no log"))
 
@@ -1550,7 +1555,7 @@ def check_lan(root: Path, version: str, timeout: float, verbose: bool,
 
     if not (run / "lan.port").is_file():
         return verdict
-    if sum(1 for one in hosted if LOGGED_IN.search(one)) < 2:
+    if sum(1 for one in hosting if LOGGED_IN.search(one)) < 2:
         verdict.fail("the guest never logged in to the host's world",
                      "the host logged one login, which is its own")
     if not any(heard.search(one) for one in seen):
@@ -1562,7 +1567,7 @@ def check_lan(root: Path, version: str, timeout: float, verbose: bool,
 
     for pattern, what in ((RECEIVED, "received"), (DOWNLOADING, "downloaded"),
                           (ACTIVATED, "activated"), (RESTORED, "restored")):
-        if any(pattern.search(one) for one in hosted):
+        if any(pattern.search(one) for one in hosting):
             verdict.fail("the host took part in the sync",
                          f"the host's log says it {what} add-ons, which only the guest may do")
 
@@ -1581,44 +1586,49 @@ def check_lan(root: Path, version: str, timeout: float, verbose: bool,
     return verdict
 
 
-def lan_stock_dormant(root: Path, version: str, timeout: float, verbose: bool, served: Path,
-                      verdict: Verdict) -> bool:
-    """Has the host client join a dedicated server that serves an add-on the host lacks, then leave.
+def lan_host_after_visit(root: Path, version: str, timeout: float, verbose: bool, served: Path,
+                         name: str, host_loaded, verdict: Verdict) -> tuple[list[str], Path | None, str]:
+    """Has the host client visit a dedicated server that serves an add-on the host lacks, leave, and
+    only then open its own world and host it, all in one process.
 
-    The client keeps what it received, so afterwards it holds that add-on without having it
-    installed, which is what a dormant add-on is.
+    A dormant add-on is one this process registered and the installed set does not carry, so the
+    visit and the hosting have to share the process: a host started afresh has nothing dormant.
     """
     port = givePort(root, version)
     takeLocalJoins(root, version)
-    seen: dict = {"lines": []}
+    run = root / "versions" / version / "run"
+    result: dict = {"lines": [], "log": None, "outcome": "never started"}
 
     def connect(server: subprocess.Popen, lines: list[str]) -> None:
         deadline = time.monotonic() + timeout
 
-        def leave(process: subprocess.Popen, client_lines: list[str]) -> None:
+        def visit_then_host(process: subprocess.Popen, client_lines: list[str]) -> None:
             wait_for(server, lines, JOINED, deadline)
             # The server is stopped only once the client has heard it from inside the world, which
-            # is after the activation's resource reload has finished. A disconnect that lands while
-            # that reload is still running leaves the client without a `Restored` line at all.
+            # is after the activation's resource reload has finished.
             time.sleep(2)
             tag = f"MCADDONSETTLED{os.getpid()}"
             type_into(server, f"say {tag}")
             wait_for(process, client_lines, re.compile(tag), min(deadline, time.monotonic() + 60))
             type_into(server, "stop")
-            wait_for(process, client_lines, RESTORED, min(deadline, time.monotonic() + 60))
+            if not wait_for(process, client_lines, RESTORED, min(deadline, time.monotonic() + 60)):
+                verdict.fail("the host did not take the dormant add-on",
+                             "its visit to the serving server never restored its own set")
+                return
+            ask_host(run, f"open {name}")
+            if not wait_for(process, client_lines, LOGGED_IN, min(deadline, time.monotonic() + 180)):
+                verdict.fail("the host never opened its world after the visit",
+                             f"`open {name}` in `lan.request` was not followed by a login")
+                return
+            host_loaded(process, client_lines)
 
-        seen["lines"], _, outcome = play(
-            root, version, replace(CLIENT, name="lan-prejoin"), ACTIVATED, [], timeout, 0.0,
-            verbose, join=f"127.0.0.1:{port}", while_loaded=leave)
-        seen["outcome"] = outcome
+        result["lines"], result["log"], result["outcome"] = play(
+            root, version, replace(CLIENT, name="lan-host"), ACTIVATED, [], timeout, 0.0, verbose,
+            join=f"127.0.0.1:{port}", while_loaded=visit_then_host)
 
-    _, _, outcome = play(root, version, replace(SERVER, name="lan-server"), SERVER.ready, [],
-                         timeout, 0.0, verbose, while_loaded=connect, serve=served)
-    if not any(RESTORED.search(one) for one in seen["lines"]):
-        verdict.fail("the host did not take the dormant add-on",
-                     f"its join of the serving server never restored its own set ({outcome})")
-        return False
-    return True
+    play(root, version, replace(SERVER, name="lan-server"), SERVER.ready, [], timeout, 0.0, verbose,
+         while_loaded=connect, serve=served)
+    return result["lines"], result["log"], result["outcome"]
 
 
 def check_conversion(root: Path, source: Path, version: str) -> Verdict:
@@ -1731,9 +1741,12 @@ def main() -> int:
                 if arguments.mode in ("join", "all"):
                     found += [check_join(root, version, arguments.timeout, arguments.hold,
                                          arguments.verbose, variant=variant) for variant in joins]
-                if arguments.mode in ("lan", "all"):
+                if arguments.mode == "lan":
                     found.append(check_lan(root, version, arguments.timeout, arguments.verbose,
                                            dormant=arguments.dormant))
+                if arguments.mode == "all":
+                    found += [check_lan(root, version, arguments.timeout, arguments.verbose, dormant=dormant)
+                              for dormant in (False, True)]
             return found
 
         with ThreadPoolExecutor(max_workers=len(versions)) as running_versions:
