@@ -149,7 +149,12 @@ add-ons, or with another release of it, is told which in chat.
   curves, and a shake that moves the camera or turns it. An ease to one of the three cameras that
   follow the player is refused the way Bedrock refuses it, and `minecraft:fixed_boom`,
   `minecraft:follow_orbit` and `minecraft:control_scheme_camera` are named as cameras Java has no
-  counterpart for.
+  counterpart for. A behaviour pack's own `cameras/presets/` are presets too: each inherits from
+  `minecraft:free` or from another of the pack's, takes the position, the rotation and the listener
+  it states over the ones it inherits, and is set by `/camera set` and by a script's
+  `Camera.setCamera` and `Camera.setDefaultCamera`, with whatever the command or the script states
+  over the preset's own. A preset with `"listener": "player"` hears from the player's head while the
+  camera is away from it.
 - `/bedrock fog`, which layers a pack's own `fogs/` settings over the one the game would draw, with a stack
   per player that `pop` and `remove` take apart the way Bedrock's do. Like the two camera commands it
   is decided on the server and sent to each player alone, so setting one player's view in a
@@ -811,21 +816,18 @@ the Bedrock client holds with no published list saying what any of them is. What
 front of a Java player is what `@minecraft/server-ui` describes and what an NPC dialogue scene
 states, and both of those are drawn.
 
-**A camera that is somewhere the player is not.** `cameras` holds the presets `/camera` picks
-between, and a preset a pack writes inherits from `minecraft:free` or from another of its own, so
-every one of them is a camera standing at a position and a rotation while the player stays where they
-are. The server has no way to say that: `ServerPlayer.setCamera` calls `teleportTo` with the camera
-entity's own position before it sends `ClientboundSetCameraPacket`, which is why
-`Camera.attachToEntity` works here and a preset does not. A client can say it, because
-`net.minecraft.client.Camera` keeps its `position`, `xRot`, `yRot` and `detached` as fields a mixin
-on `setup` may overwrite, and that is how the four built-in presets are drawn: a payload of this
-mod's own and a client that acts on it. What is not built is reading a pack's own presets out of
-`cameras`, so a name only such a file declares is refused as no preset at all. Of the
-fourteen things a preset states beside its identifier and what it inherits from, `pos_x`, `pos_y`,
-`pos_z`, `rot_x` and `rot_y` are the only ones naming anything Java holds at all. `player_effects`,
-`listener`, `extend_player_rendering`, `rotation_speed`, `snap_to_target`, `continue_targeting`,
-`tracking_radius` and the two rotation limits each describe the Bedrock client's own renderer, its
-audio or the input it takes away while a camera is up, and Java has none of the three.
+**What a camera preset says about Bedrock's own client.** A pack's `cameras/presets/` are read, and
+of what a preset states beside its identifier and its parent, `pos_x`, `pos_y`, `pos_z`, `rot_x`,
+`rot_y` and `listener` are drawn. The rest is named by `/mcaddon entities` as the pack loads.
+`player_effects` and `extend_player_rendering` describe the Bedrock client's renderer: Java draws the
+player's effects whatever the camera and draws every entity the loaded chunks hold. `rotation_speed`,
+`snap_to_target`, `continue_targeting`, `tracking_radius` and the two rotation limits shape how a
+free camera follows the entity `/camera target_entity` names, which this mod does not do. `radius`,
+`view_offset`, `entity_offset`, `starting_rot_x`, `starting_rot_y`, `aim_assist`,
+`align_target_and_camera_forward` and `control_scheme` belong to `minecraft:follow_orbit` and
+`minecraft:fixed_boom`, which Java has no camera for, and a preset built on one of those is refused
+by name. Bedrock keeps a player's `pos` and `rot` for a preset until `default` or a rejoin clears
+them; here a `/camera set` with neither places the camera where the preset says.
 
 **The index beside a pack's textures.** `textures/texture_list.json` is a flat list of texture paths
 written without their extensions, which the Bedrock client keeps so it can resolve a texture by name

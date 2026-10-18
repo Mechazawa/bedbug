@@ -1,7 +1,7 @@
 package at.ioexception.mcaddon.convert;
 
 import at.ioexception.mcaddon.bedrock.behaviour.DataValues;
-import at.ioexception.mcaddon.bedrock.camera.CameraView;
+import at.ioexception.mcaddon.bedrock.camera.CameraPreset;
 import at.ioexception.mcaddon.bedrock.hud.HudElement;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.pack.BedrockPack;
@@ -1389,7 +1389,9 @@ public final class Functions {
      * `/camera`, of whose fifteen forms the four presets and their placement are drawn here.
      *
      * The line reaches the command this mod registers as the pack wrote it, so the only thing to
-     * decide is whether that command has a branch for the form. The three presets left name a
+     * decide is whether that command has a branch for the form. A preset in a pack's own namespace
+     * is one of the pack's `cameras/presets`, which the command looks up as it runs, because the
+     * functions are translated before the presets are read. The three built-in presets left name a
      * camera Bedrock draws and Java has none of, and the rest fade the screen, move the field of
      * view, follow a spline or hang the camera off another entity, none of which a Java client is
      * told to do by any packet.
@@ -1403,9 +1405,12 @@ public final class Functions {
         if (!form.equals("set")) return dropped("camera", form, unsupported);
 
         String preset = parts.length > 2 ? SPACE.split(parts[2], 2)[0].toLowerCase(Locale.ROOT) : "";
-        if (!preset.startsWith("minecraft:")) preset = "minecraft:" + preset;
-        return CameraView.Preset.tryFrom(preset) == null
-            ? dropped("camera", preset, unsupported) : "camera " + rest;
+        if (preset.contains(":") && !preset.startsWith("minecraft:")) return "camera " + rest;
+
+        CameraPreset builtIn = CameraPreset.builtIn(preset);
+        return builtIn == null || builtIn.camera() == null
+            ? dropped("camera", preset.contains(":") ? preset : "minecraft:" + preset, unsupported)
+            : "camera " + rest;
     }
 
     /**

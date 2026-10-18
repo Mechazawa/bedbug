@@ -230,6 +230,29 @@ public final class AddonGameTests {
         helper.succeed();
     }
 
+    /**
+     * A pack's `cameras/presets` are read, and each field of theirs that Java has nothing to draw
+     * with is named: `tp:overlook` asks for the player's effects and a longer rendering reach, and
+     * `tp:orbit` for the radius and the two offsets of the orbit it is built on.
+     */
+    @GameTest()
+    public void aCameraPresetsDroppedFieldsAreNamed(GameTestHelper helper) {
+        if (at.ioexception.mcaddon.resource.AddonPacks.all().stream().noneMatch(one -> one.namespace().equals("tp"))) {
+            helper.succeed();
+            return;
+        }
+
+        java.util.List<String> report = AddonEntities.report();
+        helper.assertTrue(report.stream().noneMatch(line -> line.startsWith("    behaviour pack cameras x")),
+            "the pack's cameras directory is named as one nothing reads: " + report);
+        for (String field : java.util.List.of("player_effects", "extend_player_rendering", "radius", "view_offset",
+            "entity_offset")) {
+            helper.assertTrue(report.stream().anyMatch(line -> line.startsWith("    camera preset " + field + " x")),
+                "the camera preset field " + field + " is not named among what the packs asked for: " + report);
+        }
+        helper.succeed();
+    }
+
     private static <T> void decodes(GameTestHelper helper, String what,
         com.mojang.serialization.Codec<T> codec,
         com.mojang.serialization.DynamicOps<com.google.gson.JsonElement> ops,

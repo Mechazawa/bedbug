@@ -6,10 +6,6 @@ import com.google.gson.JsonObject;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
 
 /**
  * The view `/camera` set for one player.
@@ -19,11 +15,15 @@ import java.util.Set;
  * names a place of its own, and `pos` and `rot` override whichever parts of the placement they give.
  * `facing` is a point to turn the camera towards instead of a rotation, which only the client can
  * turn into one, because only the client knows where its camera stands when no `pos` was given.
+ * A pack's own preset arrives as the free camera it is built on, with its placement already filled in.
+ *
+ * `listensFromPlayer` puts what the player hears back at the player's own head while the camera is
+ * away from it.
  *
  * A view with no preset is a cleared one, which gives the player back the camera they had.
  */
 public record CameraView(Preset preset, Vec3 position, Float xRot, Float yRot, Vec3 facing, float seconds,
-    Easing easing) {
+    Easing easing, boolean listensFromPlayer) {
 
     public enum Preset {
         FIRST_PERSON("minecraft:first_person"),
@@ -31,41 +31,18 @@ public record CameraView(Preset preset, Vec3 position, Float xRot, Float yRot, V
         THIRD_PERSON_FRONT("minecraft:third_person_front"),
         FREE("minecraft:free");
 
-        /** Bedrock's built-in presets with no Java camera behind them: an orbit, a boom and a scheme's own. */
-        private static final Set<String> UNDRAWN = Set.of(
-            "minecraft:fixed_boom", "minecraft:follow_orbit", "minecraft:control_scheme_camera");
-
         private final String bedrockName;
 
         Preset(String bedrockName) {
             this.bedrockName = bedrockName;
         }
 
-        /** Null for a preset this mod does not draw. The namespace may be left off, and usually is. */
-        public static Preset tryFrom(String written) {
-            String full = namespaced(written);
+        /** Null for a name that is not one of these four, written with its namespace. */
+        public static Preset tryFrom(String full) {
             for (Preset preset : values()) {
                 if (preset.bedrockName.equals(full)) return preset;
             }
             return null;
-        }
-
-        /**
-         * Why a name `tryFrom` answered nothing for was refused, for whoever typed it.
-         *
-         * A preset Bedrock has and this mod does not draw is a different answer from a name that is
-         * no preset at all, because the first is a pack asking for something Java cannot show.
-         */
-        public static String refusal(String written) {
-            String full = namespaced(written);
-            return UNDRAWN.contains(full)
-                ? full + " is a Bedrock camera that Java has no counterpart for, so it is not drawn."
-                : "There is no camera preset named " + written + ".";
-        }
-
-        private static String namespaced(String written) {
-            String name = written.toLowerCase(Locale.ROOT);
-            return name.startsWith("minecraft:") ? name : "minecraft:" + name;
         }
 
         public String bedrockName() {
@@ -83,13 +60,7 @@ public record CameraView(Preset preset, Vec3 position, Float xRot, Float yRot, V
         }
     }
 
-    public static final CameraView CLEARED = new CameraView(null, null, null, null, null, 0f, null);
-
-    public static List<String> presetNames() {
-        List<String> names = new ArrayList<>();
-        for (Preset preset : Preset.values()) names.add(preset.bedrockName());
-        return names;
-    }
+    public static final CameraView CLEARED = new CameraView(null, null, null, null, null, 0f, null, false);
 
     public boolean cleared() {
         return preset == null;
@@ -109,12 +80,12 @@ public record CameraView(Preset preset, Vec3 position, Float xRot, Float yRot, V
         double across = Math.sqrt(towards.x * towards.x + towards.z * towards.z);
         float yaw = Mth.wrapDegrees((float) Math.toDegrees(Math.atan2(towards.z, towards.x)) - 90f);
         float pitch = (float) -Math.toDegrees(Math.atan2(towards.y, across));
-        return new CameraView(preset, position, pitch, yaw, null, seconds, easing);
+        return new CameraView(preset, position, pitch, yaw, null, seconds, easing, listensFromPlayer);
     }
 
     public String encode() {
         JsonObject json = new JsonObject();
-        if (preset != null) json.addProperty("preset", preset.name());
+        if (preset != null) json.addProperty("preset", preset.bedrockName());
         if (position != null) {
             json.addProperty("x", position.x);
             json.addProperty("y", position.y);
@@ -131,6 +102,7 @@ public record CameraView(Preset preset, Vec3 position, Float xRot, Float yRot, V
             json.addProperty("easing", easing.bedrockName());
             json.addProperty("seconds", seconds);
         }
+        if (listensFromPlayer) json.addProperty("listener", "player");
         return json.toString();
     }
 
@@ -146,7 +118,8 @@ public record CameraView(Preset preset, Vec3 position, Float xRot, Float yRot, V
         float seconds = json.has("seconds") ? json.get("seconds").getAsFloat() : 0f;
 
         return new CameraView(preset, point(json, "x", "y", "z"), angle(json, "xRot"), angle(json, "yRot"),
-            point(json, "facingX", "facingY", "facingZ"), seconds, easing);
+            point(json, "facingX", "facingY", "facingZ"), seconds, easing,
+            Json.text(json, "listener", "").equals("player"));
     }
 
     private static Vec3 point(JsonObject json, String x, String y, String z) {

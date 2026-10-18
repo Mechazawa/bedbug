@@ -54,6 +54,7 @@
     "MouseHandlerMixin",
     "LivingEntityRendererMixin",
     "ModelFeatureRendererMixin",
-    "ModelPartMixin"
+    "ModelPartMixin",
+    "SoundEngineMixin"
   ]
 }
