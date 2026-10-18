@@ -649,6 +649,19 @@ These are the checks it runs, and what each one catches:
   player's camera and stop it, which only a client can show, so `CameraShakeClientGameTest` reads
   the shake back off the client. The script also refuses to let anything tagged `tp:untameable` be
   tamed, tags whatever a player tamed, and tags a player crouching and standing up again.
+
+  `cameras/presets/` holds three presets. `tp:overlook` is a free camera at 0.5 120 0.5 turned to a
+  pitch of 20 and a yaw of 45 that hears from the player, and also asks for `player_effects` and
+  `extend_player_rendering`; `tp:overlook_east` inherits from it and states only its x and its yaw,
+  so a chain walked wrongly leaves the camera at another height, pitch or listener; and `tp:orbit`
+  inherits from `minecraft:follow_orbit` with a radius and two offsets, which is refused by name.
+  `CameraPresetClientGameTest` reads each back off the client's camera and its sound engine's
+  listener, through `/camera` and through four script events (`tp:camera`, `tp:camera_default`,
+  `tp:camera_orbit` and `tp:camera_clear`) calling `Camera.setCamera`, `Camera.setDefaultCamera`
+  and `Camera.clear`, and `AddonGameTests.aCameraPresetsDroppedFieldsAreNamed` asks for the five
+  dropped fields among what `/mcaddon entities` names. A function translates a preset in a pack's
+  own namespace unread, because the functions are converted before the presets are read; the
+  command looks the name up as it runs.
 - **`tools/testpack/build_modules.py`** builds a second add-on, whose script imports every
   `@minecraft/*` module the mod provides and calls one thing from each. Its sources are a manifest
   and one script under `tools/testpack/modules/`.
@@ -1615,7 +1628,8 @@ src/main/java/at/ioexception/mcaddon/
   convert/                   Runtime conversion: Targa, Ogg repair, sounds, text, models, functions
   resource/                  The converted packs and how the game is told about them
   registry/                  Sounds, entities, items, blocks, spawns, worldgen and the creative tab
-  bedrock/camera/            What `/camera` and `/camerashake` set, and the easing curves they name
+  bedrock/camera/            What `/camera` and `/camerashake` set, the presets a pack adds, and the
+                             easing curves they name
   bedrock/fog/               A pack's `fogs/` settings, as far as Java's one fog can carry them
   bedrock/hud/               The pieces of the heads-up display `/hud` names
   bedrock/input/             The kinds of player input `/inputpermission` names

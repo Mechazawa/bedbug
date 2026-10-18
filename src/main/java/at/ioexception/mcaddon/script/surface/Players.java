@@ -1,13 +1,18 @@
 package at.ioexception.mcaddon.script.surface;
 
+import at.ioexception.mcaddon.bedrock.camera.CameraView;
+import at.ioexception.mcaddon.bedrock.camera.Easing;
 import at.ioexception.mcaddon.bedrock.hud.HudElement;
 import at.ioexception.mcaddon.bedrock.input.InputPermission;
 import at.ioexception.mcaddon.client.render.BedrockParticles;
+import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonCameras;
 import at.ioexception.mcaddon.registry.AddonParticles;
 import at.ioexception.mcaddon.script.ScriptCoverage;
 import at.ioexception.mcaddon.server.PlayerHuds;
 import at.ioexception.mcaddon.server.PlayerInputs;
+import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -28,6 +33,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.scores.Objective;
 import org.graalvm.polyglot.HostAccess;
 
@@ -330,6 +336,44 @@ public final class Players extends Surface {
     }
 
     /**
+     * `Camera.setCamera` and `Camera.setDefaultCamera`, which are `/camera set` for one player.
+     *
+     * The options are the ones the script stated: a `location`, a `rotation`, a `facingLocation`, the
+     * id of a `facingEntity`, and an `easeType` in the spelling `/camera` takes with its `easeTime`.
+     * The answer is why the preset was refused, or null once the view is on its way.
+     */
+    @HostAccess.Export
+    public String setCamera(String id, String preset, String optionsJson) {
+        ServerPlayer player = player(id);
+        if (player == null) return null;
+
+        JsonObject options = JsonParser.parseString(optionsJson).getAsJsonObject();
+        String easeType = Json.text(options, "easeType", null);
+        Easing easing = easeType == null ? null : Easing.tryFrom(easeType);
+        if (easeType != null && easing == null) return "There is no ease named " + easeType + ".";
+        String refused = AddonCameras.refusal(preset, easing);
+        if (refused != null) return refused;
+
+        net.minecraft.world.entity.Entity faced = options.has("facingEntity")
+            ? entity(options.get("facingEntity").getAsString()) : null;
+        JsonObject rotation = options.getAsJsonObject("rotation");
+        Channels.sendCameraView(player, AddonCameras.presetOf(preset).view(
+            vector(options.getAsJsonObject("location")),
+            rotation == null ? null : (float) Json.number(rotation, "x", 0),
+            rotation == null ? null : (float) Json.number(rotation, "y", 0),
+            faced != null ? faced.getBoundingBox().getCenter() : vector(options.getAsJsonObject("facingLocation")),
+            easing == null ? 0f : (float) Json.number(options, "easeTime", 1), easing).encode());
+        return null;
+    }
+
+    /** `Camera.clear`, which gives the player back the camera they had before any preset. */
+    @HostAccess.Export
+    public void clearCamera(String id) {
+        ServerPlayer player = player(id);
+        if (player != null) Channels.sendCameraView(player, CameraView.CLEARED.encode());
+    }
+
+    /**
      * `Camera.addShake`, which is `/camerashake add` for one player, and `Camera.stopShaking`, which
      * is a shake of no length.
      */
@@ -338,7 +382,7 @@ public final class Players extends Surface {
         ServerPlayer player = player(id);
         if (player == null) return;
 
-        at.ioexception.mcaddon.network.Channels.sendCameraShake(player,
+        Channels.sendCameraShake(player,
             new at.ioexception.mcaddon.bedrock.camera.CameraShake((float) intensity, (float) seconds,
                 rotational).encode());
     }
@@ -493,6 +537,11 @@ public final class Players extends Surface {
 
     private ServerPlayer player(String id) {
         return entity(id) instanceof ServerPlayer player ? player : null;
+    }
+
+    private static Vec3 vector(JsonObject point) {
+        return point == null ? null
+            : new Vec3(Json.number(point, "x", 0), Json.number(point, "y", 0), Json.number(point, "z", 0));
     }
 
     /**

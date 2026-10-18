@@ -177,6 +177,15 @@ function resetTheHud(player) {
     if (player.onScreenDisplay.getHiddenHudElements().length === 0) player.addTag("tp:hud_all_drawn");
 }
 
+// `tp:orbit` is built on a Bedrock camera Java has no counterpart for, so setting it throws.
+function setTheOrbit(player) {
+    try {
+        player.camera.setCamera("tp:orbit");
+    } catch (error) {
+        if (error.message.includes("minecraft:follow_orbit")) player.addTag("tp:camera_refused");
+    }
+}
+
 // Each kind of input taken away from a player or given back, named on that player by its number.
 world.afterEvents.playerInputPermissionCategoryChange.subscribe(({ player, category, enabled }) =>
     player.addTag("tp:input_" + category + "_" + enabled));
@@ -207,6 +216,12 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
             player.camera.addShake({ intensity: 2, duration: 30, type: CameraShakeType.Rotational });
             break;
         case "tp:still": player.camera.stopShaking(); break;
+        case "tp:camera":
+            player.camera.setCamera("tp:overlook_east", { rotation: { x: 10, y: 180 } });
+            break;
+        case "tp:camera_default": player.camera.setDefaultCamera("tp:overlook"); break;
+        case "tp:camera_orbit": setTheOrbit(player); break;
+        case "tp:camera_clear": player.camera.clear(); break;
         case "tp:hud_hide": hideTheHotbar(player); break;
         case "tp:hud_reset": resetTheHud(player); break;
         default: break;

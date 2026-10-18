@@ -3,8 +3,10 @@ package at.ioexception.mcaddon.client.render;
 import at.ioexception.mcaddon.bedrock.camera.CameraPlacement;
 import at.ioexception.mcaddon.bedrock.camera.CameraShake;
 import at.ioexception.mcaddon.bedrock.camera.CameraView;
+import net.minecraft.client.Camera;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -25,6 +27,7 @@ public final class PlayerCamera {
     private static CameraPlacement easeFrom;
     private static CameraPlacement last;
     private static CameraType chosen;
+    private static Camera ears;
 
     private record Running(CameraShake shake, long start) {
     }
@@ -134,6 +137,20 @@ public final class PlayerCamera {
             return target;
         }
         return easeFrom.blend(target, view.easing().at(progress));
+    }
+
+    /**
+     * The camera the sound engine hears from: the one it was handed, or one at the player's eyes
+     * while the view asks to hear from the player.
+     */
+    public static Camera listener(Camera camera) {
+        LocalPlayer player = Minecraft.getInstance().player;
+        if (!view.listensFromPlayer() || player == null) return camera;
+
+        if (ears == null) ears = new Camera();
+        ((Adjustable) ears).mcaddon$placeAt(
+            new CameraPlacement(player.getEyePosition(), player.getXRot(), player.getYRot(), false));
+        return ears;
     }
 
     private static CameraType cameraTypeOf(CameraView.Preset preset) {
