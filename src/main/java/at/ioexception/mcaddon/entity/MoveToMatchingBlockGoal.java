@@ -223,6 +223,12 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
         walk(getMoveToTarget());
     }
 
+    /** The selector ticks a running goal every second tick unless it asks for each one. */
+    @Override
+    public boolean requiresUpdateEveryTick() {
+        return true;
+    }
+
     /**
      * Java's own tick paths to within a block of the spot and measures from the middle of that
      * block, so an entity stops a block short and Bedrock's default radius of half a block is never

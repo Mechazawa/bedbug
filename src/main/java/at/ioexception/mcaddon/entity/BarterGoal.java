@@ -103,6 +103,12 @@ public final class BarterGoal extends Goal {
         fire(onStop);
     }
 
+    /** The selector ticks a running goal every second tick unless it asks for each one. */
+    @Override
+    public boolean requiresUpdateEveryTick() {
+        return true;
+    }
+
     @Override
     public void tick() {
         if (admires) {

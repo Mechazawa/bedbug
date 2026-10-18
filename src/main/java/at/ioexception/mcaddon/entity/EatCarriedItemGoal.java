@@ -18,7 +18,7 @@ import java.util.EnumSet;
 public final class EatCarriedItemGoal extends Goal {
     private final Mob mob;
     private final int delay;
-    private int held;
+    private int eatAt;
 
     public EatCarriedItemGoal(Mob mob, JsonObject component) {
         this.mob = mob;
@@ -33,18 +33,17 @@ public final class EatCarriedItemGoal extends Goal {
 
     @Override
     public boolean canContinueToUse() {
-        return held < delay && !mob.getMainHandItem().isEmpty();
+        return !mob.getMainHandItem().isEmpty();
     }
 
     @Override
     public void start() {
-        held = 0;
+        eatAt = mob.tickCount + delay;
     }
 
     @Override
     public void tick() {
-        held++;
-        if (held < delay) return;
+        if (mob.tickCount < eatAt) return;
 
         ItemStack food = mob.getMainHandItem();
         mob.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);

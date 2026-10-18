@@ -48,6 +48,12 @@ public final class SwellGoal extends Goal {
         watched = mob.getTarget();
     }
 
+    /** The selector ticks a running goal every second tick unless it asks for each one. */
+    @Override
+    public boolean requiresUpdateEveryTick() {
+        return true;
+    }
+
     @Override
     public void tick() {
         watched = mob.getTarget();

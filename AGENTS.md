@@ -1946,6 +1946,8 @@ only once that command is done. A new path that runs a pack's commands takes the
 namespace and a `CommandReport`, never a dispatcher directly, and a new Bedrock command goes into
 `BedrockCommands`, never into Java's tree.
 
+**A goal's waits are not counted in `tick()` calls.** The selector runs `canUse`, `canContinueToUse` and a running goal's `tick` only every second tick, unless the goal's `requiresUpdateEveryTick` is true. A wait a pack states in seconds is counted against `tickCount` or the game clock, or the goal asks for every tick when it also steers each one. `aGrazerEatsWhenItsTimeUntilEatIsUp` reads the first.
+
 **A gap and an answer are counted apart.** A command the game read and then declined, a selector that
 matched nothing, a structure holding a chest this cannot fill: those are listed after the verdict
 line rather than among the gaps, because counting them would make a pack asking an ordinary question

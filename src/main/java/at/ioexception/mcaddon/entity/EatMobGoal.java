@@ -62,6 +62,12 @@ public final class EatMobGoal extends Goal {
         mob.setValue("is_eating_mob", false);
     }
 
+    /** The selector ticks a running goal every second tick unless it asks for each one. */
+    @Override
+    public boolean requiresUpdateEveryTick() {
+        return true;
+    }
+
     @Override
     public void tick() {
         if (meal == null) return;
