@@ -30,8 +30,6 @@ import java.util.Optional;
  * after a detection and whether the last scan found anyone.
  */
 final class LookedAt {
-    private static final String COMPONENT = "minecraft:looked_at";
-
     private final AddonEntity mob;
     private long since = -1;
     private long coolUntil;
@@ -41,8 +39,8 @@ final class LookedAt {
         this.mob = mob;
     }
 
-    void tick() {
-        JsonObject body = mob.liveComponent(COMPONENT);
+    public void tick() {
+        JsonObject body = mob.liveComponent("minecraft:looked_at");
         if (body == null || !(mob.level() instanceof ServerLevel level)) return;
 
         long now = level.getGameTime();
@@ -80,10 +78,11 @@ final class LookedAt {
             .sorted(Comparator.comparingDouble(mob::distanceToSqr));
         if (kind == Player.class) candidates = candidates.limit(1);
 
-        return candidates.filter(candidate -> sees(candidate, body)).map(LivingEntity.class::cast);
+        List<Vec3> spots = locations(body);
+        return candidates.filter(candidate -> sees(candidate, body, spots)).map(LivingEntity.class::cast);
     }
 
-    private boolean sees(LivingEntity candidate, JsonObject body) {
+    private boolean sees(LivingEntity candidate, JsonObject body, List<Vec3> spots) {
         Vec3 eye = candidate.getEyePosition();
         Vec3 view = candidate.getViewVector(1f);
         double half = Math.toRadians(Goals.number(body, "field_of_view", 26) / 2);
@@ -94,7 +93,7 @@ final class LookedAt {
             default -> ClipContext.Block.COLLIDER;
         };
 
-        return locations(body).stream().anyMatch(spot -> {
+        return spots.stream().anyMatch(spot -> {
             Vec3 line = spot.subtract(eye);
             double distance = line.length();
             double allowed = scaled ? Math.atan(Math.tan(half) / Math.max(1, distance)) : half;
