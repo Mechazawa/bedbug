@@ -7,7 +7,6 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;
 import net.minecraft.world.level.pathfinder.Path;
-import net.minecraft.world.phys.Vec3;
 
 /**
  * Closes on the target and hits it, at the reach and the pace the pack's melee behaviour states.
@@ -111,7 +110,7 @@ public final class MeleeGoal extends MeleeAttackGoal {
     /*@Override
     protected void checkAndPerformAttack(LivingEntity target, double distanceSqr) {
     *///?}
-        if (attacker.tickCount < readyAt || !inReach(target) || !inView(target)
+        if (attacker.tickCount < readyAt || !inReach(target) || !Goals.sees(attacker, target, halfFieldOfView)
             || !attacker.getSensing().hasLineOfSight(target)) {
             return;
         }
@@ -158,16 +157,4 @@ public final class MeleeGoal extends MeleeAttackGoal {
         return attacker.distanceToSqr(target) <= reach * reach + target.getBbWidth();
     }
 
-    /** Whether the target stands inside `melee_fov`, measured across the ground from where the head faces. */
-    private boolean inView(LivingEntity target) {
-        if (halfFieldOfView >= 180) return true;
-
-        Vec3 towards = new Vec3(target.getX() - attacker.getX(), 0, target.getZ() - attacker.getZ());
-        if (towards.lengthSqr() < 1.0E-6) return true;
-
-        double facing = Math.toRadians(attacker.getYHeadRot());
-        Vec3 ahead = new Vec3(-Math.sin(facing), 0, Math.cos(facing));
-        double cosine = ahead.dot(towards.normalize());
-        return Math.toDegrees(Math.acos(Math.max(-1, Math.min(1, cosine)))) <= halfFieldOfView;
-    }
 }

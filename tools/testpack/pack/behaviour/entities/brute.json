@@ -533,6 +533,51 @@
           "hit_delay_pct": 0.5
         }
       },
+      "tp:brute_touchy": {
+        "minecraft:behavior.target_when_pushed": {
+          "priority": 0,
+          "percent_chance": 100,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              }
+            }
+          ]
+        }
+      },
+      "tp:brute_prickly": {
+        "minecraft:area_attack": {
+          "damage_range": 0.5,
+          "damage_per_tick": 1,
+          "use_self_as_damage_source": false,
+          "entity_filter": {
+            "test": "is_family",
+            "subject": "other",
+            "value": "pig"
+          }
+        }
+      },
+      "tp:brute_gunning": {
+        "minecraft:behavior.fire_at_target": {
+          "priority": 0,
+          "projectile_def": "minecraft:arrow",
+          "attack_range": {
+            "min": 0,
+            "max": 8
+          },
+          "pre_shoot_delay": 0.1,
+          "post_shoot_delay": 0.1,
+          "attack_cooldown": 0.5,
+          "owner_anchor": 0,
+          "owner_offset": [0, 2, 0],
+          "target_anchor": 0,
+          "target_offset": [0, 6, 0],
+          "ranged_fov": 60
+        }
+      },
       "tp:brute_poisoner": {
         "minecraft:shooter": {
           "def": "minecraft:arrow",
@@ -1373,6 +1418,27 @@
         "add": {
           "component_groups": [
             "tp:brute_winding"
+          ]
+        }
+      },
+      "tp:brute_bristle_at_pushes": {
+        "add": {
+          "component_groups": [
+            "tp:brute_touchy"
+          ]
+        }
+      },
+      "tp:brute_prickle": {
+        "add": {
+          "component_groups": [
+            "tp:brute_prickly"
+          ]
+        }
+      },
+      "tp:brute_gun": {
+        "add": {
+          "component_groups": [
+            "tp:brute_gunning"
           ]
         }
       },

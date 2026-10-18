@@ -2518,7 +2518,10 @@ public class AddonEntity extends PathfinderMob
                 net.minecraft.world.entity.LivingEntity.class, getBoundingBox().inflate(range),
                 nearby -> nearby != this
                     && filter.matches(new Filter.Context(this, nearby, nearby, ServerHooks.state())));
-        struck.forEach(nearby -> Platform.hurt(nearby, level, damageSources().mobAttack(this), damage));
+        net.minecraft.world.damagesource.DamageSource blow = damageSources().mobAttack(this);
+        net.minecraft.world.damagesource.DamageSource dealt = Goals.flag(attack, "use_self_as_damage_source", true)
+            ? blow : new net.minecraft.world.damagesource.DamageSource(blow.typeHolder());
+        struck.forEach(nearby -> Platform.hurt(nearby, level, dealt, damage));
         if (!struck.isEmpty()) areaAttackReadyAt = tickCount + Goals.ticks(attack, "damage_cooldown", 0);
     }
 
@@ -3189,9 +3192,11 @@ public class AddonEntity extends PathfinderMob
                  "minecraft:behavior.nearest_prioritized_attackable_target" ->
                 targets.add(priority, new HuntGoal(this, goal, TargetSelection.from(goal, Player.class,
                     Goals.number(goal, "within_radius", 0))));
-            case "minecraft:behavior.hurt_by_target", "minecraft:behavior.target_when_pushed" ->
+            case "minecraft:behavior.hurt_by_target" ->
                 targets.add(priority, new RetaliateGoal(this, goal,
                     TargetSelection.from(goal, net.minecraft.world.entity.LivingEntity.class, 0)));
+            case "minecraft:behavior.target_when_pushed" -> targets.add(priority, new PushedTargetGoal(this, goal,
+                TargetSelection.from(goal, net.minecraft.world.entity.LivingEntity.class, 0)));
 
             case "minecraft:behavior.ranged_attack" -> goals.add(priority, new RangedGoal(this, goal, speed));
             case "minecraft:behavior.ocelotattack" -> goals.add(priority, new OcelotGoal(this, goal));
@@ -5806,6 +5811,8 @@ public class AddonEntity extends PathfinderMob
      */
     @Override
     public void push(net.minecraft.world.entity.Entity other) {
+        pushedBy = other;
+        pushedAt = tickCount;
         com.google.gson.JsonObject preset = definition == null ? null : pushPreset(other);
         if (preset == null) {
             super.push(other);
@@ -5834,6 +5841,14 @@ public class AddonEntity extends PathfinderMob
         if (!isVehicle() && isPushable()) push(-xa * self, 0, -za * self);
         if (!other.isVehicle() && other.isPushable()) other.push(xa * back, 0, za * back);
     }
+
+    /** What pushed into this entity on this tick or the one before, or null. */
+    net.minecraft.world.entity.Entity pushedBy() {
+        return tickCount - pushedAt <= 1 ? pushedBy : null;
+    }
+
+    private net.minecraft.world.entity.Entity pushedBy;
+    private int pushedAt = -2;
 
     /** `ball`: sent along the way the other entity was going, faster the faster it went. */
     private void kickedBy(net.minecraft.world.entity.Entity other, com.google.gson.JsonObject preset) {

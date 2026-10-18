@@ -1541,6 +1541,83 @@ public final class GoalGameTests {
 
     private static final long WIND_UP = 20;
 
+    /** `minecraft:behavior.target_when_pushed` turns on the pig pushing into it, at a chance of one. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aPushTurnsTheEntityOnItsPusher(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_bristle_at_pushes");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob pig = pig(helper, STAND, BLOWS_TO_KILL);
+        pig.setNoAi(false);
+        pig.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(0);
+        helper.succeedWhen(() -> helper.assertTrue(brute.getTarget() == pig,
+            BRUTE + " turns on what pushes it and the pig pushing it is not its target."));
+    }
+
+    /**
+     * An area attack under `use_self_as_damage_source` set false hurts without naming the attacker,
+     * so the pig it hurts has nobody to turn on.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void anAreaAttackCanHurtWithoutNamingItself(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_prickle");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob pig = pig(helper, STAND, BLOWS_TO_KILL);
+        helper.succeedWhen(() -> {
+            helper.assertTrue(pig.getHealth() < BLOWS_TO_KILL, BRUTE + " never pricked the pig beside it.");
+            helper.assertTrue(pig.getLastHurtByMob() == null,
+                BRUTE + " hurts without naming itself and the pig was hurt by " + pig.getLastHurtByMob() + ".");
+        });
+    }
+
+    /**
+     * A shot fired at a target leaves from `owner_anchor` moved by `owner_offset`, flies at
+     * `target_anchor` moved by `target_offset`, and is fired only at a target inside `ranged_fov`.
+     *
+     * The gunning brute shoots from two blocks over its feet at a point six blocks over the pig's
+     * feet, so its arrow climbs, and it never shoots at a pig behind it.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aShotLeavesAndAimsWhereItsAnchorsSay(GameTestHelper helper) {
+        AddonEntity facing = heldInPlace(helper, "tp:brute_gun");
+        AddonEntity turned = heldInPlace(helper, "tp:brute_gun", new BlockPos(5, 0, 4));
+        if (facing == null || turned == null) {
+            helper.succeed();
+            return;
+        }
+
+        facing.setTarget(pig(helper, new BlockPos(1, 0, 4), BLOWS_TO_KILL));
+        turned.setTarget(pig(helper, new BlockPos(5, 0, 1), BLOWS_TO_KILL));
+        List<net.minecraft.world.entity.projectile.Projectile> fired = new ArrayList<>();
+        AtomicBoolean firedBehind = new AtomicBoolean();
+        helper.onEachTick(() -> helper.getLevel().getEntitiesOfClass(
+                net.minecraft.world.entity.projectile.Projectile.class, facing.getBoundingBox().inflate(VOLLEY_SEARCH))
+            .forEach(shot -> {
+                if (shot.getOwner() == facing && !fired.contains(shot)) fired.add(shot);
+                if (shot.getOwner() == turned) firedBehind.set(true);
+            }));
+        helper.succeedWhen(() -> {
+            helper.assertFalse(fired.isEmpty(), BRUTE + " never fired at the pig in front of it.");
+            net.minecraft.world.entity.projectile.Projectile first = fired.get(0);
+            helper.assertTrue(Math.abs(first.yo - facing.getY() - SHOT_HEIGHT) < SHOT_MARGIN,
+                BRUTE + " fires from two blocks over its feet and fired from " + (first.yo - facing.getY()) + ".");
+            helper.assertTrue(first.getDeltaMovement().y > 0,
+                BRUTE + " aims six blocks over the pig's feet and its arrow flies at "
+                    + first.getDeltaMovement() + ".");
+            helper.assertFalse(firedBehind.get(), BRUTE + " fires only inside its view and fired at a pig behind it.");
+        });
+    }
+
+    private static final double SHOT_HEIGHT = 2;
+    private static final double SHOT_MARGIN = 0.5;
+
     /** The game time of each leap, which is the tick the entity starts rising fast. */
     private static List<Long> leapsOf(GameTestHelper helper, AddonEntity brute) {
         List<Long> leaps = new ArrayList<>();

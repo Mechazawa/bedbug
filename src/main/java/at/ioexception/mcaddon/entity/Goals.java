@@ -112,6 +112,22 @@ final class Goals {
         return number(ends, named, number(ends, "range_" + named, fallback));
     }
 
+    /**
+     * Whether the target stands within half a field of view of where the head faces, measured across
+     * the ground, which is how Bedrock's `melee_fov` and `ranged_fov` are read.
+     */
+    static boolean sees(net.minecraft.world.entity.Mob mob, net.minecraft.world.entity.Entity target,
+        double halfFieldOfView) {
+        net.minecraft.world.phys.Vec3 towards =
+            new net.minecraft.world.phys.Vec3(target.getX() - mob.getX(), 0, target.getZ() - mob.getZ());
+        if (halfFieldOfView >= 180 || towards.lengthSqr() < 1.0E-6) return true;
+
+        double facing = Math.toRadians(mob.getYHeadRot());
+        net.minecraft.world.phys.Vec3 ahead = new net.minecraft.world.phys.Vec3(-Math.sin(facing), 0, Math.cos(facing));
+        double cosine = ahead.dot(towards.normalize());
+        return Math.toDegrees(Math.acos(Math.max(-1, Math.min(1, cosine)))) <= halfFieldOfView;
+    }
+
     /** The event a trigger names, whether the pack wrote the object around it or only the name. */
     static String event(JsonObject component, String key) {
         JsonElement value = component == null ? null : component.get(key);

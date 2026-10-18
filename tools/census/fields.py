@@ -248,6 +248,15 @@ REASONS = {
         "feed_text": "Java shows no prompt of its own for using a mob.",
         "ride_text": "Java shows no prompt of its own for using a mob.",
     },
+    "minecraft:behavior.dragondeath": {
+        "priority": "The long death runs in LivingEntity.tickDeath, once the entity is dead and no goal "
+                    "runs, so there is no goal for a priority to order.",
+    },
+    "minecraft:area_attack": {
+        "death_message_override": "Java words a death by the msgId of the damage type that dealt it, a "
+                                  "registered type shared by every blow of that kind rather than "
+                                  "something one blow carries.",
+    },
 }
 
 # The shapes a field name reaches the JSON through. Each captures the field it asks for.
