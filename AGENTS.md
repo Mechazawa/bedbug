@@ -1841,6 +1841,10 @@ Traps met building it:
   which `ServedArchives` reads in a development run only.
 - **The client game test harness does not tick the client between tests**, so a leave owed by one
   test runs as the next one connects, while that test's server configures it.
+- **`Outgoing` tells its link how a transfer ended only once its lock is let go.** Ending a
+  connection from the network thread waits on the server thread (`executeBlocking`), and the server
+  thread takes that lock every tick in `expire`, so a refusal told under it froze the server until
+  the watchdog ended it. `AddonSyncRefusalClientGameTest` met it on 26.1.2; `OutgoingTest` holds it.
 - **A configuration that changes nothing must not reload.** A join whose set equals the active one
   answers at once.
 - **The server's minute without a message counts only while archives are on their way.** A client

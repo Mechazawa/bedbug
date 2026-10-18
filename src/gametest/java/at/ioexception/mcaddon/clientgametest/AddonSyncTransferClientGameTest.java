@@ -39,7 +39,8 @@ public final class AddonSyncTransferClientGameTest implements FabricClientGameTe
         try (TestDedicatedServerContext server = Worlds.server(context, properties)) {
             try (var connection = server.connect()) {
                 Worlds.waitForChunks(connection);
-                Assert.that(context.computeOnClient(client -> Served.offered(client, "sv") && !Served.offered(client, "sw")),
+                Assert.that(context.computeOnClient(client -> Served.offered(client, "sv")
+                        && !Served.offered(client, "sw")),
                     "The first visit does not offer the sv add-on alone.");
 
                 Served.handOut(server, Served.OTHER);
@@ -58,7 +59,8 @@ public final class AddonSyncTransferClientGameTest implements FabricClientGameTe
                     () -> "The transfer did not put the installed set back once and then activate the second "
                         + "server's set. It activated: " + ACTIVATED);
                 Assert.that(context.computeOnClient(client -> Worlds.overlay(client) == null
-                        && Served.offered(client, "sw") && Served.offered(client, "tp") && !Served.offered(client, "sv")),
+                        && Served.offered(client, "sw") && Served.offered(client, "tp")
+                        && !Served.offered(client, "sv")),
                     "After the transfer the client does not play with the second server's set of tp and sw.");
 
                 server.runCommand("give @a sw:pellet 1");

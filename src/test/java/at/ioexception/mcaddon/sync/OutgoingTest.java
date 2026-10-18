@@ -47,6 +47,37 @@ class OutgoingTest {
         assertTrue(refused.isEmpty());
     }
 
+    /**
+     * Ending a connection waits on the server thread, which takes the transfer's lock every tick, so
+     * a link told under that lock deadlocks the server.
+     */
+    @Test
+    void tellsTheLinkHowItEndedWithoutHoldingTheLock() {
+        List<Boolean> held = new ArrayList<>();
+        Outgoing[] transfers = new Outgoing[2];
+        for (int i = 0; i < transfers.length; i++) {
+            int index = i;
+            transfers[i] = new Outgoing(new AddonManifest("1", List.of()), new Outgoing.Link() {
+                @Override
+                public void send(Transfer.Piece piece) {
+                }
+
+                @Override
+                public void refuse(String reason) {
+                    held.add(Thread.holdsLock(transfers[index]));
+                }
+
+                @Override
+                public void done() {
+                    held.add(Thread.holdsLock(transfers[index]));
+                }
+            });
+        }
+        transfers[0].ready(new Transfer.Ready(false, "Refused."));
+        transfers[1].expire(System.currentTimeMillis() + 11 * MINUTE);
+        assertEquals(List.of(false, false), held);
+    }
+
     @Test
     void dropsAClientPastTenMinutesWhateverItIsDoing() {
         outgoing.request(List.of());

@@ -56,53 +56,76 @@ public final class Outgoing {
     private int inFlight;
     private boolean requested;
     private boolean finished;
+    /** What the link is told once the lock is let go, set by the change that ended the transfer. */
+    private Runnable verdict;
 
     public Outgoing(AddonManifest manifest, Link link) {
         this.manifest = manifest;
         this.link = link;
     }
 
-    public synchronized void request(List<Transfer.Wanted> wanted) {
-        heard = System.currentTimeMillis();
-        requested = true;
-        for (Transfer.Wanted one : wanted) {
-            if (manifest.entries().stream().noneMatch(entry -> entry.sha256().equals(one.sha256()))
-                || ServedArchives.file(one.sha256()) == null || !served.add(one.sha256())) {
-                finish(false, "The client asked for an add-on this server does not hand out.");
-                return;
+    public void request(List<Transfer.Wanted> wanted) {
+        locked(() -> {
+            heard = System.currentTimeMillis();
+            requested = true;
+            for (Transfer.Wanted one : wanted) {
+                if (manifest.entries().stream().noneMatch(entry -> entry.sha256().equals(one.sha256()))
+                    || ServedArchives.file(one.sha256()) == null || !served.add(one.sha256())) {
+                    finish(false, "The client asked for an add-on this server does not hand out.");
+                    return;
+                }
+                queue.add(one);
             }
-            queue.add(one);
-        }
-        pump();
+            pump();
+        });
     }
 
-    public synchronized void acknowledged() {
-        heard = System.currentTimeMillis();
-        inFlight = Math.max(0, inFlight - 1);
-        pump();
+    public void acknowledged() {
+        locked(() -> {
+            heard = System.currentTimeMillis();
+            inFlight = Math.max(0, inFlight - 1);
+            pump();
+        });
     }
 
-    public synchronized void ready(Transfer.Ready ready) {
-        finish(ready.ok(), ready.reason());
+    public void ready(Transfer.Ready ready) {
+        locked(() -> finish(ready.ok(), ready.reason()));
     }
 
     /** Disconnects a client that stopped making progress, and answers whether this transfer is over. */
-    public synchronized boolean expire(long now) {
-        boolean sending = !requested || inFlight > 0 || !queue.isEmpty() || current != null && current.offset() < size;
-        if (!finished && (sending && now - heard > QUIET_MILLIS || now - started > WHOLE_MILLIS)) {
-            finish(false, "The add-on transfer from this server stopped making progress.");
+    public boolean expire(long now) {
+        locked(() -> {
+            boolean sending = !requested || inFlight > 0 || !queue.isEmpty()
+                || current != null && current.offset() < size;
+            if (sending && now - heard > QUIET_MILLIS || now - started > WHOLE_MILLIS) {
+                finish(false, "The add-on transfer from this server stopped making progress.");
+            }
+        });
+        synchronized (this) {
+            return finished;
         }
-        return finished;
+    }
+
+    /**
+     * Makes a change under the lock and tells the link how the transfer ended only once the lock is
+     * let go. Ending a connection waits on the server thread, and the server thread takes this lock
+     * every tick in `expire`, so a link told under the lock never returns.
+     */
+    private void locked(Runnable change) {
+        Runnable told;
+        synchronized (this) {
+            change.run();
+            told = verdict;
+            verdict = null;
+        }
+        if (told != null) told.run();
     }
 
     private void finish(boolean ok, String reason) {
         if (finished) return;
         finished = true;
-        if (ok) {
-            link.done();
-        } else {
-            link.refuse(reason == null || reason.isBlank() ? "The server's add-ons could not be loaded." : reason);
-        }
+        String message = reason == null || reason.isBlank() ? "The server's add-ons could not be loaded." : reason;
+        verdict = ok ? link::done : () -> link.refuse(message);
     }
 
     private void pump() {
@@ -130,9 +153,7 @@ public final class Outgoing {
             in.readFully(data);
         } catch (IOException failure) {
             McAddon.LOGGER.error("Could not read {} to send it.", file, failure);
-            synchronized (this) {
-                finish(false, "The server could not read one of its own add-ons.");
-            }
+            locked(() -> finish(false, "The server could not read one of its own add-ons."));
             return;
         }
         link.send(new Transfer.Piece(piece.sha256(), piece.offset(), data));
