@@ -107,23 +107,25 @@ public final class Rails {
      *
      * Bedrock calls a powered rail activated and an unpowered one deactivated, and only the moment
      * of the change is an event: standing still on a live rail raises nothing. A rail with no power
-     * of its own, an ordinary one, counts as deactivated.
+     * of its own, an ordinary one, counts as deactivated, and so does no rail at all when
+     * `check_block_types` is set.
      */
     private void sense(BlockState rail) {
-        if (rail == null) {
+        if (rail == null && !Json.bool(sensor, "check_block_types", false)) {
             powered = null;
             return;
         }
 
-        boolean live = rail.hasProperty(BlockStateProperties.POWERED)
+        boolean live = rail != null && rail.hasProperty(BlockStateProperties.POWERED)
             && rail.getValue(BlockStateProperties.POWERED);
         if (powered != null && powered == live) return;
 
         powered = live;
-        String event = Goals.event(sensor, live ? "on_activate" : "on_deactivate");
+        String event = live ? Goals.event(sensor, "on_activate") : Goals.event(sensor, "on_deactivate");
         if (event != null) EntityEvents.trigger(mob, event, null, ServerHooks.state());
-        if (Json.bool(sensor, live ? "eject_on_activate" : "eject_on_deactivate", live)) {
-            mob.getPassengers().forEach(Entity::stopRiding);
-        }
+
+        boolean ejects = live ? Json.bool(sensor, "eject_on_activate", true)
+            : Json.bool(sensor, "eject_on_deactivate", false);
+        if (ejects) mob.getPassengers().forEach(Entity::stopRiding);
     }
 }

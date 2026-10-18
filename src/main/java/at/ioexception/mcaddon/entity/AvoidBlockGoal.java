@@ -36,7 +36,7 @@ public final class AvoidBlockGoal extends Goal {
 
     private BlockPos found;
     private Vec3 towards;
-    private int untilNextLook;
+    private int nextLookAt;
     private int nextSoundAt;
 
     public AvoidBlockGoal(AddonEntity mob, JsonObject component) {
@@ -64,9 +64,9 @@ public final class AvoidBlockGoal extends Goal {
 
     @Override
     public boolean canUse() {
-        if (avoided.isEmpty() || untilNextLook-- > 0) return false;
+        if (avoided.isEmpty() || mob.tickCount < nextLookAt) return false;
 
-        untilNextLook = interval;
+        nextLookAt = mob.tickCount + interval;
         found = nearest();
         if (found == null) return false;
 

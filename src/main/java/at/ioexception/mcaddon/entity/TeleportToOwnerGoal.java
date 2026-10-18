@@ -26,7 +26,7 @@ public final class TeleportToOwnerGoal extends Goal {
     private final AddonEntity mob;
     private final int cooldown;
     private final Filter conditions;
-    private int untilNext;
+    private int readyAt;
 
     public TeleportToOwnerGoal(AddonEntity mob, JsonObject component) {
         this.mob = mob;
@@ -37,7 +37,7 @@ public final class TeleportToOwnerGoal extends Goal {
 
     @Override
     public boolean canUse() {
-        if (untilNext-- > 0) return false;
+        if (mob.tickCount < readyAt) return false;
 
         LivingEntity owner = mob.getOwner();
         if (owner == null || owner.level() != mob.level()) return false;
@@ -48,7 +48,7 @@ public final class TeleportToOwnerGoal extends Goal {
 
     @Override
     public void start() {
-        untilNext = cooldown;
+        readyAt = mob.tickCount + cooldown;
 
         LivingEntity owner = mob.getOwner();
         if (owner == null) return;

@@ -467,6 +467,19 @@ These are the checks it runs, and what each one catches:
   way (`submerged`, `gentle`, `switching`, `launching`), read back in `GoalGameTests.aBlast*`. The brute's `tp:brute_roaring` group roars,
   pushing pigs tagged `tp_pushable` and hurting those tagged `tp_hurtable`.
 
+  `tp:idler` is a plain mob for the resting and idling goals, and `IdleGoalGameTests` reads each
+  group back through a pose or a property: timer flags, sitting, lying down, looking around and
+  sitting, napping with its detection box and exceptions, croaking, sniffing, emerging, digging,
+  holding ground, looking at the target, playing dead and sneezing. Java ticks a running goal only
+  every second tick, so a goal that counts its own `tick` calls runs its waits at double length;
+  these goals count on the game clock, and a test that reads a duration off them catches the other
+  kind. `tp:cart`, `tp:cart_keeping` and `tp:cart_checking` carry `minecraft:rail_sensor` and
+  `SensorGameTests` runs them over a rail powered by a block of redstone beside it, because a powered
+  rail set powered by hand is recomputed unpowered. `tp:gazed` carries `minecraft:looked_at` in one
+  group per field and `LookedAtGameTests` aims a player or a pig at it; a mock player made with
+  `makeMockPlayer` is not in the level's entity list, and a creative one is never a valid target, so
+  those tests use `makeMockServerPlayerInLevel` and a pig as the looker whose target is asserted.
+
   The ember's sensing group carries a `minecraft:damage_sensor` with one trigger per cause, each
   setting the enum property `tp:felt` to the cause it heard: `fall`, `entity_attack`, `projectile`,
   `drowning`, `suffocation` and `contact`, every one but the attack refusing the blow.
@@ -484,7 +497,15 @@ These are the checks it runs, and what each one catches:
   `tp:brute_celebrating_survival` celebrate with no raid, and `GoalSoundClientGameTest` hears the
   admiring, cheering and nesting groups' own sound moments. `tp:brute_dressing` puts on a helmet where
   `tp:brute_unarmoured` cannot, and `tp:brute_hunting_alone` celebrates a kill only for the brute
-  that made it. Java's own egg search can be
+  that made it. `tp:brute_sharing` shares with whoever its `entity_types` names, written the way
+  older entity files write a filter: an `AND` group over subjects and operators given by number,
+  beside a second entry no mob in the test answers, so a list read as all of its entries or a filter
+  left wrapped in its entry hands the apple to the nearer cow. `tp:brute_caravanning` forms a
+  caravan of at most two behind a leashed pig its `entity_types` admit, so of three brutes beside
+  one, two fall in. `tp:brute_seeking_closely` walks to gold with the default `goal_radius` of half
+  a block, which Java's own block walk never reaches because its path ends a block short and it
+  measures from the middle of the block, so `MoveToMatchingBlockGoal` paths onto the spot and
+  measures from the feet. Java's own egg search can be
   replaced by a speed mod with one over a fixed twenty-four blocks, so `StompEggGoal` searches in its
   own `canUse`. `GoalGameTests` builds the
   village each one needs out of a bell or a bed in the empty structure, which Java registers as a
@@ -1934,6 +1955,8 @@ authority of a function, because the server's context runs a line queued during 
 only once that command is done. A new path that runs a pack's commands takes the issuing add-on's
 namespace and a `CommandReport`, never a dispatcher directly, and a new Bedrock command goes into
 `BedrockCommands`, never into Java's tree.
+
+**A goal's waits are not counted in `tick()` calls.** The selector runs `canUse`, `canContinueToUse` and a running goal's `tick` only every second tick, unless the goal's `requiresUpdateEveryTick` is true. A wait a pack states in seconds is counted against `tickCount` or the game clock, or the goal asks for every tick when it also steers each one. `aGrazerEatsWhenItsTimeUntilEatIsUp` reads the first.
 
 **A gap and an answer are counted apart.** A command the game read and then declined, a selector that
 matched nothing, a structure holding a chest this cannot fill: those are listed after the verdict

@@ -2359,15 +2359,6 @@ public final class Platform {
         *///?}
     }
 
-    /** Where a mob was told it belongs, or null when it was told nothing. 26 renamed both calls. */
-    public static net.minecraft.core.BlockPos home(net.minecraft.world.entity.Mob mob) {
-        //? if >=26 {
-        return mob.hasHome() ? mob.getHomePosition() : null;
-        //?} else {
-        /*return mob.hasRestriction() ? mob.getRestrictCenter() : null;
-        *///?}
-    }
-
     /** Whether an effect is one an entity would want. What the instance carries became a holder in 1.21. */
     public static boolean beneficial(net.minecraft.world.effect.MobEffectInstance active) {
         //? if >=1.21 {

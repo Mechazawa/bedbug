@@ -29,7 +29,7 @@ public final class TradeGoal extends Goal {
     private final int cooldown;
     private final Filter conditions;
     private int interested;
-    private int untilNext;
+    private int readyAt;
     private Player customer;
     private ItemStack shown = ItemStack.EMPTY;
 
@@ -63,7 +63,7 @@ public final class TradeGoal extends Goal {
                     new Filter.Context(mob, customer, customer, ServerHooks.state()));
         }
 
-        if (untilNext-- > 0 || mob.getTradingPlayer() != null) return false;
+        if (mob.tickCount < readyAt || mob.getTradingPlayer() != null) return false;
 
         customer = mob.level().getEntitiesOfClass(Player.class,
                 mob.getBoundingBox().inflate(withinRadius)).stream()
@@ -92,6 +92,12 @@ public final class TradeGoal extends Goal {
         forSale().ifPresent(offer -> mob.setItemSlot(EquipmentSlot.MAINHAND, offer));
     }
 
+    /** The selector ticks a running goal every second tick unless it asks for each one. */
+    @Override
+    public boolean requiresUpdateEveryTick() {
+        return true;
+    }
+
     @Override
     public void tick() {
         if (customer == null) return;
@@ -105,7 +111,7 @@ public final class TradeGoal extends Goal {
     public void stop() {
         if (whileTrading) return;
 
-        untilNext = cooldown;
+        readyAt = mob.tickCount + cooldown;
         mob.setItemSlot(EquipmentSlot.MAINHAND, shown);
         shown = ItemStack.EMPTY;
     }

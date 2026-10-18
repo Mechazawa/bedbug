@@ -26,6 +26,9 @@ public final class PlayDeadGoal extends Goal {
     private final int duration;
     private final double belowHealth;
     private final double startChance;
+    private final boolean randomByDamage;
+    private final double damageLow;
+    private final double damageHigh;
     private final Filter conditions;
     private final boolean regenerates;
     private final Set<DamageCause> causes;
@@ -37,6 +40,9 @@ public final class PlayDeadGoal extends Goal {
         this.duration = Goals.ticks(component, "duration", 1);
         this.belowHealth = Goals.number(component, "force_below_health", 0);
         this.startChance = Goals.number(component, "random_start_chance", 1);
+        this.randomByDamage = component.has("random_damage_range");
+        this.damageLow = Goals.low(component, "random_damage_range", 0);
+        this.damageHigh = Goals.high(component, "random_damage_range", 0);
         this.conditions = Goals.filter(component, "filters");
         this.regenerates = Goals.flag(component, "apply_regeneration", false);
         this.causes = DamageCause.allNamed(Json.list(component, "damage_sources"));
@@ -46,18 +52,33 @@ public final class PlayDeadGoal extends Goal {
     @Override
     public boolean canUse() {
         float health = mob.getHealth();
-        boolean hurt = healthLastTick >= 0 && health < healthLastTick;
+        float damage = healthLastTick - health;
+        boolean hurt = healthLastTick >= 0 && damage > 0;
         healthLastTick = health;
 
         if (!hurt || health <= 0) return false;
-        if (belowHealth > 0 && health > belowHealth) return false;
         var last = mob.getLastDamageSource();
         if (!causes.isEmpty() && (last == null || causes.stream().noneMatch(cause -> cause.matches(last)))) {
             return false;
         }
-        if (mob.getRandom().nextDouble() > startChance) return false;
+        if (!startsOn(health, damage)) return false;
 
         return conditions.matches(new Filter.Context(mob, mob, mob.getTarget(), ServerHooks.state()));
+    }
+
+    /**
+     * Whether a hit of this size leaves the entity playing dead.
+     *
+     * Health at or under `force_below_health` and damage over the top of `random_damage_range` both
+     * always do. Damage inside the range does on a chance of `random_start_chance`, and damage under
+     * it never does. A pack stating no range rolls the chance for every hit.
+     */
+    private boolean startsOn(float health, float damage) {
+        if (belowHealth > 0 && health <= belowHealth) return true;
+        if (randomByDamage && damage > damageHigh) return true;
+        if (randomByDamage && damage < damageLow) return false;
+
+        return mob.getRandom().nextDouble() < startChance;
     }
 
     @Override
@@ -75,6 +96,12 @@ public final class PlayDeadGoal extends Goal {
         if (regenerates) {
             Platform.addEffect(mob, Identifier.tryParse("minecraft:regeneration"), duration, 0, false, true);
         }
+    }
+
+    /** The selector ticks a running goal every second tick unless it asks for each one. */
+    @Override
+    public boolean requiresUpdateEveryTick() {
+        return true;
     }
 
     @Override

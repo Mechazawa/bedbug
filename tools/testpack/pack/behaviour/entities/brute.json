@@ -1181,6 +1181,78 @@
             }
           ]
         }
+      },
+      "tp:brute_seeking_closely": {
+        "minecraft:behavior.move_to_block": {
+          "priority": 0,
+          "search_range": 8,
+          "search_height": 2,
+          "tick_interval": 1,
+          "target_blocks": [
+            "minecraft:gold_block"
+          ],
+          "on_reach": {
+            "event": "tp:brute_reached",
+            "target": "self"
+          }
+        }
+      },
+      "tp:brute_caravanning": {
+        "minecraft:behavior.follow_caravan": {
+          "priority": 1,
+          "entity_count": 2,
+          "entity_types": [
+            {
+              "filters": {
+                "any_of": [
+                  {
+                    "test": "is_family",
+                    "subject": "other",
+                    "value": "pig"
+                  },
+                  {
+                    "test": "is_family",
+                    "subject": "other",
+                    "value": "tp_brute"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "tp:brute_sharing": {
+        "minecraft:behavior.share_items": {
+          "priority": 1,
+          "max_dist": 8,
+          "entity_types": [
+            {
+              "filters": {
+                "AND": [
+                  {
+                    "test": "is_family",
+                    "subject": 1,
+                    "operator": 1,
+                    "value": "cow"
+                  },
+                  {
+                    "test": "is_family",
+                    "subject": 1,
+                    "operator": 0,
+                    "value": "pig"
+                  }
+                ]
+              }
+            },
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "chicken"
+              }
+            }
+          ]
+        }
       }
     },
     "components": {
@@ -1911,6 +1983,27 @@
         "add": {
           "component_groups": [
             "tp:brute_playing"
+          ]
+        }
+      },
+      "tp:brute_seek_closely": {
+        "add": {
+          "component_groups": [
+            "tp:brute_seeking_closely"
+          ]
+        }
+      },
+      "tp:brute_caravan": {
+        "add": {
+          "component_groups": [
+            "tp:brute_caravanning"
+          ]
+        }
+      },
+      "tp:brute_share": {
+        "add": {
+          "component_groups": [
+            "tp:brute_sharing"
           ]
         }
       },

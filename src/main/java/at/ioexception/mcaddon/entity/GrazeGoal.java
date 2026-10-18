@@ -30,7 +30,8 @@ public final class GrazeGoal extends Goal {
     private final Map<Block, Block> pairs;
     private final String eatEvent;
     private BlockPos eating;
-    private int left;
+    private int eatAt;
+    private boolean eaten;
 
     public GrazeGoal(AddonEntity mob, JsonObject component) {
         this.mob = mob;
@@ -52,21 +53,22 @@ public final class GrazeGoal extends Goal {
 
     @Override
     public boolean canContinueToUse() {
-        return left > 0;
+        return !eaten;
     }
 
     @Override
     public void start() {
-        left = eatTicks;
+        eatAt = mob.tickCount + eatTicks;
+        eaten = false;
         mob.getNavigation().stop();
     }
 
     @Override
     public void tick() {
-        if (--left > 0) return;
+        if (mob.tickCount < eatAt) return;
 
-        Block eaten = mob.level().getBlockState(eating).getBlock();
-        Block replacement = pairs.get(eaten);
+        eaten = true;
+        Block replacement = pairs.get(mob.level().getBlockState(eating).getBlock());
         if (replacement == null) return;
 
         mob.level().levelEvent(2001, eating, Block.getId(mob.level().getBlockState(eating)));

@@ -6,8 +6,10 @@ import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.level.block.Block;
 
+import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
@@ -81,6 +83,19 @@ final class Goals {
         return (int) (high(component, key, seconds) * TICKS_PER_SECOND);
     }
 
+    /** A range of waits or durations in ticks, which a pack states in seconds. */
+    record Span(int low, int high) {
+        int roll(net.minecraft.util.RandomSource random) {
+            return between(random, low, high);
+        }
+    }
+
+    /** The range a pack wrote under `key`, or the seconds given here for each end where it wrote none. */
+    static Span span(JsonObject component, String key, double lowSeconds, double highSeconds) {
+        return new Span((int) (low(component, key, lowSeconds) * TICKS_PER_SECOND),
+            (int) (high(component, key, highSeconds) * TICKS_PER_SECOND));
+    }
+
     /** Somewhere inside a range a pack gave both ends of, which may be the same number twice. */
     static int between(net.minecraft.util.RandomSource random, int low, int high) {
         return low + random.nextInt(Math.max(1, high - low + 1));
@@ -126,6 +141,20 @@ final class Goals {
         net.minecraft.world.phys.Vec3 ahead = new net.minecraft.world.phys.Vec3(-Math.sin(facing), 0, Math.cos(facing));
         double cosine = ahead.dot(towards.normalize());
         return Math.toDegrees(Math.acos(Math.max(-1, Math.min(1, cosine)))) <= halfFieldOfView;
+    }
+
+    /** The controls a goal holds, which a pack names in `control_flags` and which default to none. */
+    static EnumSet<Goal.Flag> controls(JsonObject component) {
+        EnumSet<Goal.Flag> held = EnumSet.noneOf(Goal.Flag.class);
+        for (JsonElement name : Json.list(component, "control_flags")) {
+            switch (name.getAsString()) {
+                case "move" -> held.add(Goal.Flag.MOVE);
+                case "look" -> held.add(Goal.Flag.LOOK);
+                case "jump" -> held.add(Goal.Flag.JUMP);
+                default -> { }
+            }
+        }
+        return held;
     }
 
     /** The event a trigger names, whether the pack wrote the object around it or only the name. */
