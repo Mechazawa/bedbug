@@ -1624,15 +1624,12 @@ public class AddonEntity extends PathfinderMob
      * All three are the same statement, so whichever the pack wrote is taken.
      */
     public net.minecraft.world.entity.EntityType<?> offspringType() {
-        com.google.gson.JsonObject component = definition.components().get("minecraft:offspring");
+        com.google.gson.JsonObject component = liveComponent("minecraft:offspring");
         String named = component == null ? null
             : at.ioexception.mcaddon.util.Json.text(component, "identifier", null);
 
         if (named == null) named = firstNamed(component, "offspring_pairs", "baby");
-        if (named == null) {
-            named = firstNamed(definition.components().get("minecraft:breedable"),
-                "breeds_with", "baby_type");
-        }
+        if (named == null) named = firstNamed(liveComponent("minecraft:breedable"), "breeds_with", "baby_type");
         return named == null ? getType() : AddonEntities.typeOf(named.split("<")[0]);
     }
 

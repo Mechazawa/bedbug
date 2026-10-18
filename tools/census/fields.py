@@ -108,8 +108,9 @@ REASONS = {
              "Java's villager brain, which a pack's entity has none of; the restriction radius is read.",
     },
     "minecraft:offspring": {
-        "*": "Inheritance between two parents. Java's own animals breed by class, so a child has no "
-             "attributes, colours or variants to blend and nothing to mutate them with.",
+        "blend_attributes": "Mojang's documentation names no attribute and no rule this blends by; the "
+                            "attributes `parent_centric_attribute_blending` lists are blended, by Java's "
+                            "own horse breeding.",
     },
     "minecraft:preferred_path": {
         "*": "Per-block path costs. Java's navigator prices a route by path type rather than by block, "

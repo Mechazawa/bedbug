@@ -18,6 +18,14 @@
         "tp:escaped": {
           "type": "bool",
           "default": false
+        },
+        "tp:hue": {
+          "type": "int",
+          "range": [
+            0,
+            9
+          ],
+          "default": 0
         }
       }
     },
@@ -100,6 +108,87 @@
           "target_distance": 3,
           "target_teleport_chance": 1,
           "teleports_on_projectile_hit": true
+        }
+      },
+      "tp:brute_breeding": {
+        "minecraft:breedable": {
+          "breed_items": [
+            "minecraft:wheat"
+          ],
+          "breeds_with": {
+            "mate_type": "tp:brute",
+            "baby_type": "tp:brute"
+          }
+        },
+        "minecraft:behavior.breed": {
+          "priority": 0
+        },
+        "minecraft:health": {
+          "value": {
+            "range_min": 10,
+            "range_max": 30
+          }
+        },
+        "minecraft:offspring": {
+          "combine_parent_colors": true,
+          "property_inheritance": {
+            "tp:hue": {}
+          },
+          "parent_centric_attribute_blending": [
+            "minecraft:health"
+          ]
+        }
+      },
+      "tp:brute_mutating": {
+        "minecraft:breedable": {
+          "breed_items": [
+            "minecraft:wheat"
+          ],
+          "breeds_with": {
+            "mate_type": "tp:brute",
+            "baby_type": "tp:brute"
+          }
+        },
+        "minecraft:behavior.breed": {
+          "priority": 0
+        },
+        "minecraft:offspring": {
+          "mutation_factor": {
+            "variant": 1,
+            "extra_variant": 1,
+            "color": 1
+          },
+          "mutation_strategy": "random",
+          "random_variant_mutation_interval": [
+            7,
+            7
+          ],
+          "random_extra_variant_mutation_interval": [
+            2,
+            2
+          ]
+        }
+      },
+      "tp:brute_denying": {
+        "minecraft:breedable": {
+          "breed_items": [
+            "minecraft:wheat"
+          ],
+          "breeds_with": {
+            "mate_type": "tp:brute",
+            "baby_type": "tp:brute"
+          }
+        },
+        "minecraft:behavior.breed": {
+          "priority": 0
+        },
+        "minecraft:offspring": {
+          "inherit_tamed": false,
+          "deny_parents_variant": {
+            "chance": 1,
+            "min_variant": 5,
+            "max_variant": 5
+          }
         }
       }
     },
@@ -198,6 +287,27 @@
         "add": {
           "component_groups": [
             "tp:brute_blinking"
+          ]
+        }
+      },
+      "tp:brute_breed": {
+        "add": {
+          "component_groups": [
+            "tp:brute_breeding"
+          ]
+        }
+      },
+      "tp:brute_breed_mutating": {
+        "add": {
+          "component_groups": [
+            "tp:brute_mutating"
+          ]
+        }
+      },
+      "tp:brute_breed_denying": {
+        "add": {
+          "component_groups": [
+            "tp:brute_denying"
           ]
         }
       }

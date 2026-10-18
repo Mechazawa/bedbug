@@ -90,6 +90,11 @@ public final class BreedGoal extends Goal {
             young.inherit(mob, mate);
         }
         level.addFreshEntity(child);
+        // After the child's own spawn event, whose groups would otherwise overwrite what it inherits.
+        Offspring offspring = Offspring.tryFrom(mob.liveComponent("minecraft:offspring"));
+        if (offspring != null && child instanceof AddonEntity young) {
+            offspring.passOn(young, mob, mate, mob.getRandom());
+        }
         for (int i = 0; i < 7; i++) {
             level.sendParticles(ParticleTypes.HEART, mob.getRandomX(1), mob.getRandomY() + 0.5,
                 mob.getRandomZ(1), 1, 0, 0, 0, 0);

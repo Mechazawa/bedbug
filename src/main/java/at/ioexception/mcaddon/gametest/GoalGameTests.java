@@ -289,6 +289,136 @@ public final class GoalGameTests {
         helper.succeed();
     }
 
+    /**
+     * A bred child takes what `minecraft:offspring` says it takes from its parents: their owner, their
+     * variant, a property `property_inheritance` names, and the dye their two colours make together.
+     *
+     * Both parents carry the same variant and the same property, so either parent passing them on
+     * gives the same answer; a red and a white parent make a pink child under
+     * `combine_parent_colors`. Both parents are at the top of the ten to thirty health the breeding
+     * group states, so a blended child lands within three of thirty, where its own kind starts at
+     * twenty.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = BREED_TICKS)
+    public void aBredChildTakesWhatItsParentsPassOn(GameTestHelper helper) {
+        java.util.function.Supplier<AddonEntity> born = breed(helper, "tp:brute_breed");
+        if (born == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.succeedWhen(() -> {
+            AddonEntity child = born.get();
+            helper.assertTrue(child != null, BRUTE + " was fed in pairs and no child was born.");
+            helper.assertTrue(child.ownerUuid() != null, BRUTE + " was born to tamed parents and belongs to nobody.");
+            helper.assertTrue(number(child.value("variant")) == PARENT_VARIANT,
+                BRUTE + " was born to parents of variant three and is variant " + child.value("variant") + ".");
+            helper.assertTrue(number(child.value("tp:hue")) == PARENT_HUE,
+                BRUTE + " inherits tp:hue from parents holding five and holds " + child.value("tp:hue") + ".");
+            helper.assertTrue(number(child.value("color")) == PINK,
+                BRUTE + " was born to a red and a white parent and is colour " + child.value("color") + ".");
+            helper.assertTrue(child.getMaxHealth() >= BLENDED_HEALTH_FLOOR,
+                BRUTE + " blends its health from two parents at thirty and was born with "
+                    + child.getMaxHealth() + ".");
+        });
+    }
+
+    /**
+     * A child whose `mutation_factor` is certain takes neither parent's variant, mark variant nor
+     * colour, and `mutation_strategy` set to random rolls its variants inside the intervals stated.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = BREED_TICKS)
+    public void aBredChildMutatesTheWayItsPackStates(GameTestHelper helper) {
+        java.util.function.Supplier<AddonEntity> born = breed(helper, "tp:brute_breed_mutating");
+        if (born == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.succeedWhen(() -> {
+            AddonEntity child = born.get();
+            helper.assertTrue(child != null, BRUTE + " was fed in pairs and no child was born.");
+            helper.assertTrue(number(child.value("variant")) == MUTATED_VARIANT,
+                BRUTE + " always mutates into variant seven and is variant " + child.value("variant") + ".");
+            helper.assertTrue(number(child.value("mark_variant")) == MUTATED_MARK,
+                BRUTE + " always mutates into mark variant two and is " + child.value("mark_variant") + ".");
+            helper.assertTrue(child.value("color") == null,
+                BRUTE + " always keeps the colour it was born with and took " + child.value("color") + ".");
+        });
+    }
+
+    /**
+     * Parents sharing a variant have it denied to their child at the chance `deny_parents_variant`
+     * states, which then rolls inside the range it names; a child of `inherit_tamed` false belongs
+     * to nobody whoever owns its parents.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = BREED_TICKS)
+    public void aBredChildIsDeniedItsParentsSharedVariant(GameTestHelper helper) {
+        java.util.function.Supplier<AddonEntity> born = breed(helper, "tp:brute_breed_denying");
+        if (born == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.succeedWhen(() -> {
+            AddonEntity child = born.get();
+            helper.assertTrue(child != null, BRUTE + " was fed in pairs and no child was born.");
+            helper.assertTrue(number(child.value("variant")) == DENIED_VARIANT,
+                BRUTE + " is always denied its parents' variant for five and is " + child.value("variant") + ".");
+            helper.assertTrue(child.ownerUuid() == null,
+                BRUTE + " inherits no taming and belongs to its parents' owner.");
+        });
+    }
+
+    /**
+     * Two tamed brutes with the group on, the same variant, mark variant and tp:hue, a red and a white
+     * coat, both fed: what is born of them, once it is.
+     */
+    private static java.util.function.Supplier<AddonEntity> breed(GameTestHelper helper, String event) {
+        AddonEntity first = withGroup(helper, event, MIDDLE);
+        AddonEntity second = withGroup(helper, event, MIDDLE.east(1));
+        if (first == null || second == null) return null;
+
+        net.minecraft.world.entity.player.Player owner = Platform.mockPlayer(helper);
+        owner.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND,
+            new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.WHEAT, 2));
+        for (AddonEntity parent : List.of(first, second)) {
+            parent.setOwner(owner);
+            parent.setValue("variant", PARENT_VARIANT);
+            parent.setValue("mark_variant", PARENT_MARK);
+            parent.setValue("tp:hue", PARENT_HUE);
+            parent.getAttribute(Attributes.MAX_HEALTH).setBaseValue(PARENT_HEALTH);
+            parent.mobInteract(owner, net.minecraft.world.InteractionHand.MAIN_HAND);
+        }
+        first.setValue("color", RED);
+        second.setValue("color", WHITE);
+        return () -> helper.getLevel().getEntitiesOfClass(AddonEntity.class,
+                first.getBoundingBox().inflate(BREED_SEARCH), found -> found != first && found != second)
+            .stream().findFirst().orElse(null);
+    }
+
+    private static final int BREED_TICKS = 200;
+    private static final double BREED_SEARCH = 4;
+    private static final double PARENT_VARIANT = 3;
+    private static final double PARENT_MARK = 1;
+    private static final double MUTATED_VARIANT = 7;
+    private static final double MUTATED_MARK = 2;
+    private static final double DENIED_VARIANT = 5;
+    private static final double PARENT_HUE = 5;
+    private static final double PARENT_HEALTH = 30;
+
+    /** Java's horse breeding spreads a child of two equal parents by at most three tenths of the range. */
+    private static final float BLENDED_HEALTH_FLOOR = 27;
+
+    /** Bedrock's colour numbers, which count the sixteen dyes in Java's order. */
+    private static final double WHITE = 0;
+    private static final double PINK = 6;
+    private static final double RED = 14;
+
+    private static double number(Object value) {
+        return value instanceof Number number ? number.doubleValue() : Double.NaN;
+    }
+
     /** A brute with its group on and its goals running. */
     private static AddonEntity withGroup(GameTestHelper helper, String event) {
         return withGroup(helper, event, STAND);

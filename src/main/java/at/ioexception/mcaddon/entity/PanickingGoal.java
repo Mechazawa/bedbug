@@ -52,8 +52,7 @@ public final class PanickingGoal extends PanicGoal {
         this.forced = Goals.flag(component, "force", false);
         this.prefersWater = Goals.flag(component, "prefer_water", false);
         this.sound = Goals.text(component, "panic_sound");
-        JsonObject interval = component.has("sound_interval") && component.get("sound_interval").isJsonObject()
-            ? component.getAsJsonObject("sound_interval") : null;
+        JsonObject interval = Goals.object(component, "sound_interval");
         this.soundLow = Goals.ticks(interval, "range_min", 0);
         this.soundHigh = Math.max(soundLow, Goals.ticks(interval, "range_max", 0));
     }
