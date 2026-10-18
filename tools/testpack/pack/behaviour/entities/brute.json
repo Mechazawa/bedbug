@@ -7,6 +7,14 @@
       "is_summonable": true,
       "is_experimental": false,
       "properties": {
+        "tp:reached": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:stayed": {
+          "type": "bool",
+          "default": false
+        },
         "tp:struck": {
           "type": "bool",
           "default": false
@@ -596,6 +604,53 @@
       "tp:brute_leading": {
         "minecraft:is_illager_captain": {}
       },
+      "tp:brute_seeking": {
+        "minecraft:behavior.move_to_block": {
+          "priority": 0,
+          "search_range": 8,
+          "search_height": 2,
+          "tick_interval": 1,
+          "goal_radius": 1,
+          "target_blocks": [
+            "minecraft:gold_block"
+          ],
+          "on_reach": {
+            "event": "tp:brute_reached",
+            "target": "self"
+          },
+          "stay_duration": 20,
+          "on_stay_completed": {
+            "event": "tp:brute_stayed",
+            "target": "self"
+          }
+        }
+      },
+      "tp:brute_beside": {
+        "minecraft:behavior.move_to_block": {
+          "priority": 0,
+          "search_range": 8,
+          "search_height": 2,
+          "tick_interval": 1,
+          "goal_radius": 1,
+          "target_blocks": [
+            "minecraft:gold_block"
+          ],
+          "target_offset": [3, 0, 0]
+        }
+      },
+      "tp:brute_reluctant": {
+        "minecraft:behavior.move_to_block": {
+          "priority": 0,
+          "search_range": 8,
+          "search_height": 2,
+          "tick_interval": 1,
+          "goal_radius": 1,
+          "target_blocks": [
+            "minecraft:gold_block"
+          ],
+          "start_chance": 0
+        }
+      },
       "tp:brute_springing": {
         "minecraft:behavior.leap_at_target": {
           "priority": 0,
@@ -1059,6 +1114,37 @@
           "component_groups": [
             "tp:brute_leading"
           ]
+        }
+      },
+      "tp:brute_seek": {
+        "add": {
+          "component_groups": [
+            "tp:brute_seeking"
+          ]
+        }
+      },
+      "tp:brute_seek_beside": {
+        "add": {
+          "component_groups": [
+            "tp:brute_beside"
+          ]
+        }
+      },
+      "tp:brute_seek_reluctantly": {
+        "add": {
+          "component_groups": [
+            "tp:brute_reluctant"
+          ]
+        }
+      },
+      "tp:brute_reached": {
+        "set_property": {
+          "tp:reached": true
+        }
+      },
+      "tp:brute_stayed": {
+        "set_property": {
+          "tp:stayed": true
         }
       },
       "tp:brute_crowd": {

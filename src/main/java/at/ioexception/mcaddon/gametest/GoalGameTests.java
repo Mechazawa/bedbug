@@ -1045,6 +1045,71 @@ public final class GoalGameTests {
         });
     }
 
+    /**
+     * `minecraft:behavior.move_to_block` looks every `tick_interval`, raises `on_reach` on arriving and
+     * `on_stay_completed` once it has stood there `stay_duration` ticks.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aWalkToABlockRaisesItsEventsOnArrivingAndStaying(GameTestHelper helper) {
+        helper.setBlock(new BlockPos(5, -1, 4), Blocks.GOLD_BLOCK);
+        AddonEntity brute = withGroup(helper, "tp:brute_seek", new BlockPos(1, 0, 4));
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        long[] reachedAt = {-1};
+        long[] stayedAt = {-1};
+        helper.onEachTick(() -> {
+            if (reachedAt[0] < 0 && Boolean.TRUE.equals(brute.value("tp:reached"))) reachedAt[0] = helper.getTick();
+            if (stayedAt[0] < 0 && Boolean.TRUE.equals(brute.value("tp:stayed"))) stayedAt[0] = helper.getTick();
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(reachedAt[0] >= 0, BRUTE + " walks to the gold and never raised its arrival.");
+            helper.assertTrue(stayedAt[0] >= 0, BRUTE + " stays at the gold a second and never raised its stay.");
+            helper.assertTrue(stayedAt[0] - reachedAt[0] >= STAY_TICKS,
+                BRUTE + " stays twenty ticks and raised its stay " + (stayedAt[0] - reachedAt[0]) + " after arriving.");
+        });
+    }
+
+    private static final int STAY_TICKS = 20;
+
+    /** `minecraft:behavior.move_to_block` walks to the block moved by `target_offset`, three blocks east. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aWalkToABlockEndsAtItsTargetOffset(GameTestHelper helper) {
+        helper.setBlock(new BlockPos(3, -1, 4), Blocks.GOLD_BLOCK);
+        AddonEntity brute = withGroup(helper, "tp:brute_seek_beside", new BlockPos(1, 0, 4));
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        double gold = helper.absolutePos(new BlockPos(3, 0, 4)).getX() + 0.5;
+        helper.succeedWhen(() -> helper.assertTrue(brute.getX() - gold > OFFSET_REACHED,
+            BRUTE + " walks to three blocks east of the gold and stands " + (brute.getX() - gold) + " east of it."));
+    }
+
+    /** Within the block and a half its `goal_radius` allows of the spot three blocks east of the gold. */
+    private static final double OFFSET_REACHED = 1.5;
+
+    /** `minecraft:behavior.move_to_block` with a `start_chance` of nought never sets off. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aWalkToABlockWithNoChanceNeverStarts(GameTestHelper helper) {
+        helper.setBlock(new BlockPos(4, -1, 4), Blocks.GOLD_BLOCK);
+        AddonEntity brute = withGroup(helper, "tp:brute_seek_reluctantly", new BlockPos(1, 0, 4));
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        double from = brute.getX();
+        helper.runAfterDelay(GOAL_TICKS - 20, () -> {
+            helper.assertTrue(Math.abs(brute.getX() - from) < STILL * 10,
+                BRUTE + " has no chance to set off and walked " + (brute.getX() - from) + ".");
+            helper.succeed();
+        });
+    }
+
     /** Inside the six blocks the raider keeps, and outside the three it kept whatever the pack said. */
     private static final double KEPT_FROM_CAPTAIN = 5;
 
