@@ -32,46 +32,46 @@ import java.util.stream.Collectors;
  * the two apart: a snow golem too warm for its biome burns with `on_fire` in Java.
  */
 public enum DamageCause {
-    NONE(false, null, "generic", "outside_border"),
-    OVERRIDE(false, NONE),
-    CONTACT(false, null, "cactus", "sweet_berry_bush"),
-    ENTITY_ATTACK(true, null, "mob_attack", "player_attack", "mob_attack_no_aggro", "sting", "spear"),
-    PROJECTILE(true, null, "mob_projectile", "arrow", "trident", "spit", "wind_charge", "fireball",
-        "unattributed_fireball", "wither_skull", "thrown"),
-    SUFFOCATION(false, null, "in_wall", "cramming", "dry_out"),
-    FALL(false, null, "fall", "ender_pearl"),
-    FIRE(false, null, "in_fire"),
-    FIRE_TICK(false, null, "on_fire"),
-    LAVA(false, null, "lava"),
-    DROWNING(false, null, "drown"),
+    NONE("generic", "outside_border"),
+    OVERRIDE(List.of(), false, NONE),
+    CONTACT("cactus", "sweet_berry_bush"),
+    ENTITY_ATTACK(List.of("mob_attack", "player_attack", "mob_attack_no_aggro", "sting", "spear"), true, null),
+    PROJECTILE(List.of("mob_projectile", "arrow", "trident", "spit", "wind_charge", "fireball",
+        "unattributed_fireball", "wither_skull", "thrown"), true, null),
+    SUFFOCATION("in_wall", "cramming", "dry_out"),
+    FALL("fall", "ender_pearl"),
+    FIRE("in_fire"),
+    FIRE_TICK("on_fire"),
+    LAVA("lava"),
+    DROWNING("drown"),
     /** Java writes `explosion` for both explosion causes and fills in what exploded only for one. */
-    BLOCK_EXPLOSION(false, null, "explosion", "bad_respawn_point"),
-    ENTITY_EXPLOSION(true, null, "explosion", "player_explosion"),
-    VOID(false, null, "out_of_world"),
-    SELF_DESTRUCT(false, NONE, "generic_kill"),
-    MAGIC(false, null, "magic", "indirect_magic", "dragon_breath"),
-    WITHER(false, null, "wither"),
-    STARVE(false, null, "starve"),
-    ANVIL(true, null, "falling_anvil"),
-    THORNS(true, null, "thorns"),
-    FALLING_BLOCK(true, null, "falling_block"),
-    PISTON(false, NONE),
-    FLY_INTO_WALL(false, null, "fly_into_wall"),
-    MAGMA(false, null, "hot_floor", "sulfur_cube_hot"),
-    FIREWORKS(true, null, "fireworks"),
-    LIGHTNING(false, null, "lightning_bolt"),
-    CHARGING(true, ENTITY_ATTACK),
-    TEMPERATURE(false, FIRE_TICK),
-    FREEZING(false, null, "freeze"),
-    STALACTITE(true, null, "falling_stalactite"),
-    STALAGMITE(false, null, "stalagmite"),
-    RAM_ATTACK(true, ENTITY_ATTACK),
-    SONIC_BOOM(true, null, "sonic_boom"),
-    CAMPFIRE(false, FIRE, "campfire"),
-    SOUL_CAMPFIRE(false, CAMPFIRE),
-    MACE_SMASH(true, ENTITY_ATTACK, "mace_smash"),
+    BLOCK_EXPLOSION("explosion", "bad_respawn_point"),
+    ENTITY_EXPLOSION(List.of("explosion", "player_explosion"), true, null),
+    VOID("out_of_world"),
+    SELF_DESTRUCT(List.of("generic_kill"), false, NONE),
+    MAGIC("magic", "indirect_magic", "dragon_breath"),
+    WITHER("wither"),
+    STARVE("starve"),
+    ANVIL(List.of("falling_anvil"), true, null),
+    THORNS(List.of("thorns"), true, null),
+    FALLING_BLOCK(List.of("falling_block"), true, null),
+    PISTON(List.of(), false, NONE),
+    FLY_INTO_WALL("fly_into_wall"),
+    MAGMA("hot_floor", "sulfur_cube_hot"),
+    FIREWORKS(List.of("fireworks"), true, null),
+    LIGHTNING("lightning_bolt"),
+    CHARGING(List.of(), true, ENTITY_ATTACK),
+    TEMPERATURE(List.of(), false, FIRE_TICK),
+    FREEZING("freeze"),
+    STALACTITE(List.of("falling_stalactite"), true, null),
+    STALAGMITE("stalagmite"),
+    RAM_ATTACK(List.of(), true, ENTITY_ATTACK),
+    SONIC_BOOM(List.of("sonic_boom"), true, null),
+    CAMPFIRE(List.of("campfire"), false, FIRE),
+    SOUL_CAMPFIRE(List.of(), false, CAMPFIRE),
+    MACE_SMASH(List.of("mace_smash"), true, ENTITY_ATTACK),
     /** A damage sensor's word for every cause at once. */
-    ALL(false, NONE);
+    ALL(List.of(), false, NONE);
 
     /** The damage types this version of Java declares, by path. */
     private static final Set<String> DECLARED = Arrays.stream(DamageTypes.class.getFields())
@@ -93,10 +93,14 @@ public enum DamageCause {
     private final DamageCause standIn;
     private final List<String> types;
 
-    DamageCause(boolean attributed, DamageCause standIn, String... types) {
+    DamageCause(String... types) {
+        this(List.of(types), false, null);
+    }
+
+    DamageCause(List<String> types, boolean attributed, DamageCause standIn) {
+        this.types = types;
         this.attributed = attributed;
         this.standIn = standIn;
-        this.types = List.of(types);
     }
 
     /**
