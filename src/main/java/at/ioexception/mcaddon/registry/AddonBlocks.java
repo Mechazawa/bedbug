@@ -101,8 +101,36 @@ public final class AddonBlocks {
         return identifier;
     }
 
-    /** A block and the named shapes of the pack it came from, which two packs may spell alike. */
-    private record Declared(BlockDefinition definition, PackShapes shapes) {
+    /**
+     * A block, the named shapes of the pack it came from, which two packs may spell alike, and how
+     * the resource packs say it looks and sounds.
+     */
+    private record Declared(BedrockPack pack, BlockDefinition definition, PackShapes shapes,
+        ClientBlockDefinition appearance) {
+        AddonRegistry.Shape shape() {
+            java.util.SortedMap<String, String> named = new java.util.TreeMap<>();
+            shapes.byIdentifier().forEach((identifier, shape) -> named.put(identifier, shape.toAabbs().toString()));
+            return new AddonRegistry.Shape("block", definition.identifier(), pack.displayName(),
+                definition + " " + appearance + " " + named);
+        }
+    }
+
+    /** The shape each block these packs declare is built with. */
+    static List<AddonRegistry.Shape> shapes(PackSet packs) {
+        return declared(packs).stream().map(Declared::shape).toList();
+    }
+
+    /** Every block definition in these packs, the first of two with one identifier deciding it. */
+    private static List<Declared> declared(PackSet packs) {
+        Map<String, ClientBlockDefinition> appearance = new LinkedHashMap<>();
+        packs.withRole(PackRole.RESOURCE).forEach(pack -> appearance.putAll(ClientBlockDefinition.readAll(pack)));
+        Map<String, Declared> declared = new LinkedHashMap<>();
+        for (BedrockPack pack : packs.withRole(PackRole.BEHAVIOUR)) {
+            PackShapes shapes = PackShapes.read(pack);
+            BlockDefinition.readAll(pack).forEach(block -> declared.putIfAbsent(block.identifier(),
+                new Declared(pack, block, shapes, ClientBlockDefinition.of(appearance, block.identifier()))));
+        }
+        return List.copyOf(declared.values());
     }
 
     /**
@@ -113,31 +141,17 @@ public final class AddonBlocks {
      * earlier keeps the definition it was built from.
      */
     public static List<Block> register(PackSet packs) {
-        List<Declared> definitions = new ArrayList<>();
-        Map<String, ClientBlockDefinition> appearance = new LinkedHashMap<>();
-        for (BedrockPack pack : packs.packs()) {
-            if (pack.role() == PackRole.BEHAVIOUR) {
-                PackShapes shapes = PackShapes.read(pack);
-                BlockDefinition.readAll(pack).stream()
-                    .map(block -> new Declared(block, shapes))
-                    .forEach(definitions::add);
-            }
-            if (pack.role() == PackRole.RESOURCE) appearance.putAll(ClientBlockDefinition.readAll(pack));
-        }
-
-        List<Block> declared = definitions.stream()
-            .map(one -> register(one.definition(),
-                ClientBlockDefinition.of(appearance, one.definition().identifier()), one.shapes()))
+        List<Block> declared = declared(packs).stream()
+            .map(AddonBlocks::register)
             .filter(java.util.Objects::nonNull)
-            .distinct()
             .toList();
         if (!declared.isEmpty()) McAddon.LOGGER.info("Registered {} blocks from add-ons.", declared.size());
         return declared;
     }
 
     /** The block a definition stands for, or null where its identifier is unusable or not a pack's. */
-    private static Block register(BlockDefinition definition, ClientBlockDefinition appearance,
-        PackShapes shapes) {
+    private static Block register(Declared declared) {
+        BlockDefinition definition = declared.definition();
         Block existing = BY_IDENTIFIER.get(definition.identifier());
         if (existing != null) return existing;
         Identifier id = identifier(definition.identifier());
@@ -162,15 +176,16 @@ public final class AddonBlocks {
         }
 
         Map<String, Property<?>> states = AddonBlock.propertiesOf(definition);
-        BlockComponents components = BlockComponents.of(definition, states, shapes);
-        BlockBehaviour.Properties properties = components.settings(definition, appearance);
-        List<Property<?>> declared = new ArrayList<>(states.values());
+        BlockComponents components = BlockComponents.of(definition, states, declared.shapes());
+        BlockBehaviour.Properties settings = components.settings(definition, declared.appearance());
+        List<Property<?>> properties = new ArrayList<>(states.values());
 
         Block block = AddonBlock.carrying(components, () -> BlockComponents.waterlogged(definition)
-            ? AddonWaterloggedBlock.build(properties, id, declared)
-            : Platform.buildStatefulBlock(properties, id, declared));
+            ? AddonWaterloggedBlock.build(settings, id, properties)
+            : Platform.buildStatefulBlock(settings, id, properties));
         Registry.register(BuiltInRegistries.BLOCK, id, block);
         BY_IDENTIFIER.put(definition.identifier(), block);
+        AddonRegistry.built(declared.shape());
         components.registerFlammability(block);
 
         if (!BuiltInRegistries.ITEM.containsKey(id)) {

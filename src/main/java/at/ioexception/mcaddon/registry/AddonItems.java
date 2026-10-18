@@ -12,6 +12,7 @@ import at.ioexception.mcaddon.item.AddonShooterItem;
 import at.ioexception.mcaddon.item.AddonThrowableItem;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.PackRole;
+import at.ioexception.mcaddon.pack.PackSet;
 import at.ioexception.mcaddon.resource.AddonSet;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.util.Json;
@@ -202,18 +203,11 @@ public final class AddonItems {
      * declare. Returns the items the set declares, registered now or earlier.
      */
     public static List<Item> register(AddonSet set, java.util.Collection<EntityType<?>> types) {
-        List<ItemDefinition> definitions = new ArrayList<>();
-        for (BedrockPack pack : set.packs().packs()) {
-            if (pack.role() == PackRole.BEHAVIOUR) definitions.addAll(ItemDefinition.readAll(pack));
-        }
-
         List<Item> declared = new ArrayList<>();
-        Set<String> seen = new HashSet<>();
-        for (ItemDefinition definition : definitions) {
-            if (!seen.add(definition.identifier())) continue;
-            Item item = register(set, definition);
+        for (Declared one : declared(set.packs())) {
+            Item item = register(set, one);
             if (item == null) continue;
-            bind(definition, item);
+            bind(one.definition(), item);
             declared.add(item);
         }
         declared.addAll(registerSpawnEggs(set, types));
@@ -226,7 +220,8 @@ public final class AddonItems {
      * The item a definition stands for: the one built for it earlier, or one built now. Null where
      * the identifier is unusable or another item holds it.
      */
-    private static Item register(AddonSet set, ItemDefinition definition) {
+    private static Item register(AddonSet set, Declared declared) {
+        ItemDefinition definition = declared.definition();
         Item existing = BY_IDENTIFIER.get(definition.identifier());
         if (existing != null && BUILT.contains(existing)) return existing;
         Identifier id = identifier(definition.identifier());
@@ -248,10 +243,35 @@ public final class AddonItems {
         Item item = build(set, definition, properties(definition, id), id);
         Registry.register(BuiltInRegistries.ITEM, id, item);
         BUILT.add(item);
+        AddonRegistry.built(declared.shape());
         BY_IDENTIFIER.put(definition.identifier(), item);
         fuel(definition, item);
         compostable(definition, item);
         return item;
+    }
+
+    /** The shape each item these packs declare is built with. */
+    static List<AddonRegistry.Shape> shapes(PackSet packs) {
+        return declared(packs).stream().map(Declared::shape).toList();
+    }
+
+    /** Every item definition in these packs, the first of two with one identifier deciding it. */
+    private static List<Declared> declared(PackSet packs) {
+        Map<String, Declared> declared = new LinkedHashMap<>();
+        packs.withRole(PackRole.BEHAVIOUR).forEach(pack -> ItemDefinition.readAll(pack)
+            .forEach(item -> declared.putIfAbsent(item.identifier(), new Declared(pack, item))));
+        return List.copyOf(declared.values());
+    }
+
+    /**
+     * One item a pack declares. Nearly every component it carries goes into the properties or the
+     * class it is built with, so all of them are its shape.
+     */
+    private record Declared(BedrockPack pack, ItemDefinition definition) {
+        AddonRegistry.Shape shape() {
+            return new AddonRegistry.Shape("item", definition.identifier(), pack.displayName(),
+                definition.components().toString());
+        }
     }
 
     /**
