@@ -5,7 +5,6 @@ import at.ioexception.mcaddon.bedrock.behaviour.DialogueScene;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.PackRole;
-import at.ioexception.mcaddon.pack.PackSet;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.state.AddonState;
 import at.ioexception.mcaddon.util.Json;
@@ -74,12 +73,12 @@ public final class Dialogues {
     }
 
     /** Every scene the behaviour packs ship, read once as the game starts. */
-    public static void read(PackSet packs) {
+    public static void read(at.ioexception.mcaddon.resource.AddonSet set) {
         SCENES.clear();
         WRITTEN_BY.clear();
-        for (BedrockPack pack : packs.packs()) {
+        for (BedrockPack pack : set.packs().packs()) {
             if (pack.role() != PackRole.BEHAVIOUR) continue;
-            String namespace = at.ioexception.mcaddon.resource.AddonPacks.namespaceOf(pack);
+            String namespace = set.namespaceOf(pack);
             DialogueScene.readAll(pack).forEach(scene -> {
                 SCENES.put(scene.tag(), scene);
                 if (namespace != null) WRITTEN_BY.put(scene.tag(), namespace);

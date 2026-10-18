@@ -7,7 +7,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Stream;
 
 /** Finds the packs in `<instance>/addons/` and reads their manifests. */
@@ -34,15 +36,15 @@ public final class PackDiscovery {
         // A listing that failed says nothing about what is installed, so nothing is dropped on it.
         if (entries == null) return PackOrder.sort(packs, problems);
 
-        List<Path> unpacked = new ArrayList<>();
+        Set<String> unpacked = new HashSet<>(ReceivedArchives.inCache().held());
         for (Path entry : entries) {
             try {
                 if (Files.isDirectory(entry)) {
-                    collect(entry, entry.getFileName().toString(), packs, problems);
+                    collect(entry, entry.getFileName().toString(), null, packs, problems);
                 } else if (Archives.isArchive(entry)) {
-                    Path copy = Archives.extract(entry, McAddonPaths.cache());
-                    unpacked.add(copy);
-                    collect(copy, entry.getFileName().toString(), packs, problems);
+                    String sha256 = Archives.sha256(entry);
+                    unpacked.add(sha256);
+                    packs.addAll(readArchive(entry, sha256, entry.getFileName().toString(), problems));
                 }
             } catch (IOException error) {
                 problems.add(entry.getFileName() + ": " + error.getMessage());
@@ -64,8 +66,20 @@ public final class PackDiscovery {
         }
     }
 
-    private static void collect(Path root, String origin, List<BedrockPack> packs, List<String> problems)
+    /**
+     * The packs inside one archive, unpacked into the cache under its digest.
+     *
+     * @param origin the name the archive is reported under
+     */
+    public static List<BedrockPack> readArchive(Path archive, String sha256, String origin, List<String> problems)
         throws IOException {
+        List<BedrockPack> packs = new ArrayList<>();
+        collect(Archives.extract(archive, sha256, McAddonPaths.cache()), origin, sha256, packs, problems);
+        return packs;
+    }
+
+    private static void collect(Path root, String origin, String archive, List<BedrockPack> packs,
+        List<String> problems) throws IOException {
         List<Path> manifests;
         try (Stream<Path> walk = Files.walk(root, MANIFEST_SEARCH_DEPTH)) {
             manifests = walk.filter(path -> path.getFileName().toString().equals("manifest.json"))
@@ -82,7 +96,7 @@ public final class PackDiscovery {
             PackManifest manifest = readManifest(manifestFile, origin, problems);
             if (manifest == null) continue;
 
-            BedrockPack pack = new BedrockPack(manifestFile.getParent(), manifest, origin);
+            BedrockPack pack = new BedrockPack(manifestFile.getParent(), manifest, origin, archive);
             if (pack.role() == PackRole.OTHER) {
                 problems.add(origin + ": " + pack.displayName() + " is neither a resource nor a behaviour pack");
                 continue;

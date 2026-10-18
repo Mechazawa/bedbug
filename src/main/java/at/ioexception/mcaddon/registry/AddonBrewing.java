@@ -41,7 +41,22 @@ public final class AddonBrewing {
     private AddonBrewing() {
     }
 
-    public static void register(PackSet packs) {
+    public static void register() {
+        int installed = brewingOf(ActiveAddons.installed().packs()).size();
+        if (installed > 0) McAddon.LOGGER.info("Registered {} brewing recipes from add-ons.", installed);
+        //? if >=1.21 {
+        // The game builds its brewing once per server and once per client, so the recipes are
+        // added as it does, from the add-ons active at that moment: a client builds its own as it
+        // joins a server.
+        net.fabricmc.fabric.api.registry.FabricPotionBrewingBuilder.BUILD.register(builder ->
+            brewingOf(ActiveAddons.active().packs()).forEach(recipe -> add(recipe, builder)));
+        //?} else {
+        /*// The list is static and built once, so only the installed add-ons ever reach it.
+        brewingOf(ActiveAddons.installed().packs()).forEach(AddonBrewing::add);
+        *///?}
+    }
+
+    private static List<RecipeDefinition> brewingOf(PackSet packs) {
         List<RecipeDefinition> brewing = new ArrayList<>();
         for (BedrockPack pack : packs.packs()) {
             if (pack.role() != PackRole.BEHAVIOUR) continue;
@@ -49,10 +64,7 @@ public final class AddonBrewing {
                 .filter(recipe -> recipe.kind().brews() && recipe.brewing() != null)
                 .forEach(brewing::add);
         }
-        if (brewing.isEmpty()) return;
-
-        McAddon.LOGGER.info("Registered {} brewing recipes from add-ons.", brewing.size());
-        install(brewing);
+        return brewing;
     }
 
     /** The potion an id names, with Bedrock's one-word night vision spelled Java's way. */
@@ -87,15 +99,6 @@ public final class AddonBrewing {
     }
 
     //? if >=1.21 {
-    /**
-     * The game builds its brewing once per server and once per client, so the recipes are added as
-     * it does rather than written anywhere.
-     */
-    private static void install(List<RecipeDefinition> brewing) {
-        net.fabricmc.fabric.api.registry.FabricPotionBrewingBuilder.BUILD.register(
-            builder -> brewing.forEach(recipe -> add(recipe, builder)));
-    }
-
     private static void add(RecipeDefinition recipe,
         net.minecraft.world.item.alchemy.PotionBrewing.Builder builder) {
         RecipeDefinition.Brewing parts = recipe.brewing();
@@ -126,13 +129,8 @@ public final class AddonBrewing {
         if (!VANILLA_CONTAINERS.contains(container)) builder.addContainer(container);
     }
     //?} else {
-    /*// The list is static and built once, so the recipes go straight into it. There is no way to
-    // say a bottle of a pack's own is a container to brew in, so a container recipe naming anything
-    // but the three the game already brews in is named instead.
-    private static void install(List<RecipeDefinition> brewing) {
-        brewing.forEach(AddonBrewing::add);
-    }
-
+    /*// There is no way to say a bottle of a pack's own is a container to brew in, so a container
+    // recipe naming anything but the three the game already brews in is named instead.
     private static void add(RecipeDefinition recipe) {
         RecipeDefinition.Brewing parts = recipe.brewing();
         Item reagent = item(parts.reagent());

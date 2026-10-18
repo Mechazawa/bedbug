@@ -1,0 +1,23 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "Served Add-On",
+    "description": "An add-on a test server hands to a client that never installed it.",
+    "uuid": "8f0d6a51-2c3e-4b7a-9e14-5d2b6c8a7f30",
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 20, 0]
+  },
+  "modules": [
+    {
+      "type": "data",
+      "uuid": "1c7e9b42-5a08-4d63-b2f1-9e4a6d0c3b85",
+      "version": [1, 0, 0]
+    }
+  ],
+  "dependencies": [
+    {
+      "uuid": "e3a2b7c4-9d51-4f08-a6e2-7c1b5d9f2a64",
+      "version": [1, 0, 0]
+    }
+  ]
+}

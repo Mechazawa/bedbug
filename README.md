@@ -19,9 +19,33 @@ Put the jar in `mods/`, then put your packs in `addons/`:
 `.mcaddon`, `.mcpack` and already unpacked pack directories all work. Converted output is cached in
 `.mcaddon/` next to `addons/`; deleting that directory only costs one slower start.
 
-On a server, install the mod on the server and on every client, and give both the same packs. The
-server decides what happens; the client draws it. A player joining without one of the server's
-add-ons, or with another release of it, is told which in chat.
+## Playing on a server
+
+Install the mod on the server and on every client, and put the packs in the server's `addons/`
+only. The server decides what happens; the client draws it.
+
+A client joining a server running this mod is handed the server's add-ons as it joins, with no
+restart. It downloads the ones it lacks into `.mcaddon/received/`, registers what they add, and
+plays with exactly the server's add-ons for that visit: an add-on the client installed and the
+server has not got stays loaded and does nothing until the client leaves, and one the server has
+in another release is replaced by the server's. Leaving puts the client's own add-ons back. A
+downloaded add-on is kept for the next visit, so joining again downloads nothing, and one no server
+asked for in a month is dropped. The same holds for a guest joining a world opened to LAN: the host
+hands out its add-ons, and the host itself never downloads or changes anything.
+
+What a client refuses, each with a message naming why:
+
+- a server running another release of this mod;
+- an add-on larger than 256 MB, more than 1 GB in all, more than 64 add-ons, or more than the disk
+  has room for;
+- an archive that arrives with other bytes than the server promised, or that unpacks into more
+  than 50000 files or 1 GB;
+- a release of an add-on the client already loaded whose items, blocks or entities are built
+  differently, such as a block with another set of states or an item with other components. The
+  message names the add-on: remove or replace it in `addons/` and start the game again.
+
+A client without this mod cannot join a server that has add-ons, and is told which mod to install.
+Against a server without this mod a client plays with its own add-ons.
 
 ## What works
 

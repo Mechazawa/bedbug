@@ -260,7 +260,7 @@ These are the checks it runs, and what each one catches:
     A defect that only shows on a cached conversion has to be asserted by `runGameTest`, whose
     `.mcaddon/` survives between runs.
 
-  **Multiplayer is asserted against a dedicated server.** The three `Server*ClientGameTest`s call
+  **Multiplayer is asserted against a dedicated server.** The `Server*ClientGameTest`s call
   `worldBuilder().createServer()` and `connect()`, so the client reaches the server over a real TCP
   connection on which every message is encoded, which a single player world's in-memory connection
   never does. `ServerRegistryClientGameTest` compares every add-on entity type, item, block, sound
@@ -905,6 +905,10 @@ These are the checks it runs, and what each one catches:
   python3 tools/verify/verify.py run --version 26.2      # a server, one version
   python3 tools/verify/verify.py client --version 1.21.1 # a client, one version
   python3 tools/verify/verify.py join --version 26.2     # a client connected to a server
+  python3 tools/verify/verify.py join --bare --version 26.2      # a second client with no add-ons takes the server's
+  python3 tools/verify/verify.py join --other --reshaped --version 26.2   # other versions, and a refused one
+  python3 tools/verify/verify.py lan --version 26.2      # a world opened to LAN, a second client joins it
+  python3 tools/verify/verify.py lan --dormant --version 26.2   # the host also holds a dormant add-on
   python3 tools/verify/verify.py convert --source <extracted pack directory>   # no game
   python3 tools/verify/verify.py companions --version 26.2  # a server and a client beside other mods
   ```
@@ -940,11 +944,14 @@ These are the checks it runs, and what each one catches:
     `KnownPack`, so a `jukebox_song`, a `test_instance` and a `test_environment` shipped there all
     leave the world stable.
   - **A converted add-on pack** is safe too, because `Platform.directoryPack` gives it a name of its
-    own: `KnownPack("mcaddon", <the manifest header uuid>, <the pack version> + "+" +
-    McAddon.VERSION)`. The uuid is what two installations of one add-on share; the version separates
-    two releases, and carries the mod's version because the bytes in a converted pack are a function
-    of the converter as much as of the pack. Built with that `KnownPack` taken out again, one
-    converted `jukebox_song` is enough to make the world experimental.
+    own: `KnownPack("mcaddon", <the manifest header uuid>, <the pack version> + "+" + <the first
+    eight hex digits of the archive's sha256> + "+" + McAddon.VERSION)`, the digest left out for a
+    pack read from a directory. The uuid is what two installations of one add-on share; the version
+    separates two releases, the digest two copies of one release with other bytes (the game refuses
+    a join outright when two offered packs share one `KnownPack`), and the mod's version is there
+    because the bytes in a converted pack are a function of the converter as much as of the pack.
+    Built with that `KnownPack` taken out again, one converted `jukebox_song` is enough to make the
+    world experimental.
   - **A data pack in the world's own `datapacks/`** is not. One `test_instance` plus one
     `test_environment` written there marks a world exactly as one `jukebox_song` from an unnamed pack
     does, which is what `tools/scene/scene.py` would hit if a scene ever wrote one.
@@ -1070,6 +1077,41 @@ These are the checks it runs, and what each one catches:
   `-PquickPlay=<world>` the single player half uses. The server is given `online-mode=false` and
   `enforce-secure-profile=false`, because a dev client has a made-up name and no session and is
   refused before any of this mod's code is reached otherwise.
+
+  **The second client and the sync modes.** `./gradlew :<version>:runJoinClient` is a second dev
+  client with run directory `versions/<version>/run/join-client/`, its own `addons/` and
+  `.mcaddon/`, and the JVM property `-Dmcaddon.role=guest`, which is what `running` and `kill` tell
+  it from the first client by. `-PjoinServer` and `-PquickPlay` reach both clients. `-Pserved=<dir>`
+  gives a dedicated server the `mcaddon.served` property, so it also hands out every archive in
+  that directory. The harness only waits on, and ends, clients that belong to its own checkout, so
+  other worktrees' game tests do not block it; servers are counted across all checkouts because
+  they share the ports.
+
+  - `join` is the original check, the first client sharing the server's add-ons.
+  - `join --bare` empties the second client's directory and expects `Downloading N add-ons`,
+    `Received N add-ons from the server.` and `Activated the server's add-on set of N add-ons.`,
+    the item and chat round trip, N archives under `join-client/.mcaddon/received`, and, after the
+    harness stops the server under the client, `Restored the installed add-on set.`.
+  - `join --other` gives the second client the server's archives with the manifest version raised
+    (a same-shape copy that gets replaced) plus the `sv` add-on the server lacks (which stays
+    installed and goes dormant). `join --reshaped` gives it a copy whose `tp:lamp` has one more
+    `tp:level` value, and expects `The server's copy of <add-on> cannot replace yours without a
+    restart.` and no world.
+  - `lan` runs the first client with a saved world as host. A development-only handler,
+    `client/LanRequests`, answers a `lan.request` file in the host's run directory: each line is a
+    console command for the integrated server, and `publish` opens the world to the LAN through
+    `Platform.publishServer`, which also turns authentication off because a dev guest has no
+    session, then writes the port to `lan.port`; `open <world>` opens a saved world while none is
+    open. The host is made creative and the world peaceful before anybody joins, because a zombie
+    kills a survival host at night and a dead player holds no chunks. The guest is the second
+    client. The host's log must hold no `Received`, `Downloading`, `Activated` or `Restored` line
+    while it hosts. `--dormant` has the host client join a dedicated server serving an add-on the
+    host has not installed, leave, and only then open its world with `open`, all in one process,
+    because a dormant add-on is one the process registered: a host started afresh holds none. The
+    guest is then offered it as an inactive entry. `all` runs both.
+  - A fresh game directory has no `options.txt`, and the game then opens its accessibility
+    onboarding screen instead of the quick play it was told to run, so a client in a new worktree
+    sat on the title screen until the deadline. `play` writes `onboardAccessibility:false` first.
 
   A green `convert` proves the output under `versions/<version>/run/.mcaddon/converted/` holds one
   texture per texture the pack ships, one sound event per definition, and an `_n` and `_s` sidecar
@@ -1715,6 +1757,73 @@ Mojang's geometry is not committed, so that list is the one place this knowledge
   1632 items and 1166 blocks resolved as written, and with the mapping 1869 items and 1408 blocks
   resolve, the 110 and 303 left being Bedrock's own and none unanswered.
 
+## Add-ons handed over at join
+
+A client joining a server that runs this mod plays with exactly the server's add-ons for that
+visit. README's "Playing on a server" says what a player sees; this is how it is built.
+
+**The built-in registries only grow.** Nothing an add-on registered is ever removed and no raw id
+moves. `registry.RegistryEdits.adding` opens the five registries an add-on writes into (sound event,
+particle type, entity type, block, item) after the freeze and freezes them again as
+`MappedRegistry.freeze` would: the intrusive holder map comes back and goes, and from 26 the
+component lookup is rebuilt and every holder's tags are bound. A registry that did not grow is
+closed without either, because the client game tests' server reads those from other threads at the
+same moment. `registry.AddonRegistry.ensureRegistered` runs the writers inside it, and startup goes
+through it too.
+
+**What answers is the active set.** `registry.ActiveAddons` holds the installed set and the active
+one, each a `resource.AddonSet` (the packs, their conversions and their function names). The active
+set is what the pack repository is offered, what the creative tabs list, and what music, fogs,
+camera presets, dialogue scenes and, from 1.21, brewing are read from. An add-on registered and not
+active is dormant: its entries stay registered with their last definitions and nothing offers it.
+Spawn rules, feature rules and the nether and end biome lists are registered once for the installed
+set, because they apply as a world loads and a world loads only with the installed set active.
+
+**A same-id copy is checked before anything is registered.** `AddonRegistry.conflict` compares the
+shape every registered object was built from (an entity type's population and size, a block's whole
+definition, an item's whole component map) against another set's, and names the add-on whose copy
+would have to be built again. A block is never rebound, which is why its whole definition is its
+shape.
+
+**The transfer.** `sync.AddonManifest` names each archive by the sha256 of its bytes;
+`sync.ServedArchives` copies them into `.mcaddon/served/` the first time a client needs one, forgets
+the manifest as a server starts, and lists every archive registered in the process that the server
+did not install as not active, which is what a LAN host visited servers for. `sync.Outgoing` and
+`sync.Incoming` are the two ends of one transfer whatever carries it: from 1.21
+`server.AddonSyncTask`, a configuration task added before Fabric's registry sync, with
+`network.SyncChannels`; on 1.20.1 `server.AddonSyncLogin`, login queries with a heartbeat every five
+seconds and `ServerLoginTimerMixin` holding the login timer, with `network.LoginChannels`. The
+client side is `client.AddonSession`. Archives arrive in `.mcaddon/received/` (`pack.ReceivedArchives`),
+unpack into `.mcaddon/extracted/<sha256>/` and convert into a directory ending in the first eight
+digits of the digest.
+
+**The log lines `verify.py` reads stay as they are:** `Received N add-ons from the server.`,
+`Activated the server's add-on set of N add-ons.`, `Restored the installed add-on set.` and the
+refusal `The server's copy of <add-on> cannot replace yours without a restart.`
+
+Traps met building it:
+
+- **A task queued for the client thread from a disconnect can be thrown away.** The client drops
+  its pending tasks as it disconnects, and Fabric raises the disconnect event on the network thread
+  just before, so a leave handed over with `execute` or `schedule` sometimes never ran. The leave is
+  a flag the client's own tick takes instead, and an enter takes any leave still owed first.
+- **Every client game test joining a dedicated server is handed the served add-on.** The server and
+  the client share one process, so the add-on is registered from the first such test on, and a test
+  cannot ask whether it was registered before the join; it asks whether the server installed it.
+  The client game test task builds it from `tools/testpack/served` into
+  `run/clientGameTest/addons-served/` and names that directory in the `mcaddon.served` property,
+  which `ServedArchives` reads in a development run only.
+- **The client game test harness does not tick the client between tests**, so a leave owed by one
+  test runs as the next one connects, while that test's server configures it.
+- **A configuration that changes nothing must not reload.** A join whose set equals the active one
+  answers at once.
+
+Tests: `RegistryGameTests` (adding after the freeze, on all four versions), `ActiveAddonsGameTests`
+(an empty set and back), `ShapeGameTests` (copies that do and do not conflict),
+`ServedArchivesGameTests` (a registered archive handed out dormant), `AddonSyncClientGameTest` (a
+join, a leave and a second join against a dedicated server), and the unit tests `AddonManifestTest`,
+`ReceivedArchivesTest`, `ArchivesTest` and `FunctionNamesTest`.
+
 ## Conventions
 
 **No add-on content is committed.** No textures, sounds, models or text from any pack. Real packs
@@ -1836,7 +1945,10 @@ src/main/java/at/ioexception/mcaddon/
   pack/                      Discovery, manifests, dependency order
   convert/                   Runtime conversion: Targa, Ogg repair, sounds, text, models, functions
   resource/                  The converted packs and how the game is told about them
-  registry/                  Sounds, entities, items, blocks, spawns, worldgen and the creative tab
+  registry/                  Sounds, entities, items, blocks, spawns, worldgen and the creative tab,
+                             what is registered and what is active
+  sync/                      The add-on hand-over at join: the manifest, what a server serves and
+                             both ends of a transfer
   bedrock/camera/            What `/camera` and `/camerashake` set, the presets a pack adds, and the
                              easing curves they name
   bedrock/fog/               A pack's `fogs/` settings, as far as Java's one fog can carry them

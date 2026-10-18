@@ -15,6 +15,7 @@ import java.util.zip.ZipOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -33,23 +34,75 @@ class ArchivesTest {
     @ValueSource(strings = {"../../evil.txt", "../evil.txt", "sub/../../../evil.txt"})
     void refusesAnEntryThatWouldWriteOutsideTheTarget(String entry) throws IOException {
         Path cache = directory.resolve("cache");
-        Path extracted = Archives.extract(archive("pack.mcaddon", entry), cache);
+        Path archive = archive("pack.mcaddon", entry);
+        Path extracted = Archives.extract(archive, Archives.sha256(archive), cache);
 
         assertTrue(Files.isRegularFile(extracted.resolve("manifest.json")));
         assertTrue(noEvidenceOf("evil.txt"), "evil.txt was written under " + directory);
     }
 
     @Test
-    void unpacksTheSameArchiveOnlyOnce() throws IOException {
+    void unpacksTheSameBytesOnlyOnceUnderAnyName() throws IOException {
         Path archive = archive("pack.mcaddon");
         Path cache = directory.resolve("cache");
 
-        Path first = Archives.extract(archive, cache);
+        Path first = Archives.extract(archive, Archives.sha256(archive), cache);
         Files.writeString(first.resolve("touched.txt"), "still here");
-        Path second = Archives.extract(archive, cache);
+        Path renamed = Files.copy(archive, directory.resolve("renamed.mcaddon"));
+        Path second = Archives.extract(renamed, Archives.sha256(renamed), cache);
 
         assertEquals(first, second);
         assertTrue(Files.isRegularFile(second.resolve("touched.txt")));
+    }
+
+    @Test
+    void refusesAnArchiveUnpackingIntoTooManyFiles() throws IOException {
+        Path archive = directory.resolve("many.mcaddon");
+        try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(archive))) {
+            for (int index = 0; index <= Archives.MAX_ENTRIES; index++) write(zip, "file" + index, "");
+        }
+        Path cache = directory.resolve("cache");
+
+        IOException refused = assertThrows(IOException.class,
+            () -> Archives.extract(archive, Archives.sha256(archive), cache));
+        assertTrue(refused.getMessage().contains("files"), refused.getMessage());
+        assertFalse(Files.exists(cache.resolve("extracted").resolve(Archives.sha256(archive))));
+    }
+
+    @Test
+    void refusesAnArchiveUnpackingIntoTooManyBytes() throws IOException {
+        Path archive = directory.resolve("bomb.mcaddon");
+        byte[] zeros = new byte[1 << 20];
+        try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(archive))) {
+            zip.putNextEntry(new ZipEntry("zeros"));
+            for (long written = 0; written <= Archives.MAX_UNPACKED; written += zeros.length) zip.write(zeros);
+            zip.closeEntry();
+        }
+        Path cache = directory.resolve("cache");
+
+        IOException refused = assertThrows(IOException.class,
+            () -> Archives.extract(archive, Archives.sha256(archive), cache));
+        assertTrue(refused.getMessage().contains("bytes"), refused.getMessage());
+    }
+
+    /** A pack directory a server serves is named by the digest of its zip, which must not wander. */
+    @Test
+    void zipsADirectoryToTheSameBytesEveryTime() throws IOException {
+        Path pack = directory.resolve("pack");
+        Files.createDirectories(pack.resolve("textures"));
+        Files.writeString(pack.resolve("manifest.json"), "{}");
+        Files.writeString(pack.resolve("textures/a.png"), "a");
+        Path first = directory.resolve("first.zip");
+        Archives.zip(pack, first);
+        Files.setLastModifiedTime(pack.resolve("manifest.json"), java.nio.file.attribute.FileTime.fromMillis(0));
+        Path second = directory.resolve("second.zip");
+        Archives.zip(pack, second);
+
+        assertEquals(Archives.sha256(first), Archives.sha256(second));
+        Files.writeString(pack.resolve("textures/a.png"), "b");
+        Path third = directory.resolve("third.zip");
+        Archives.zip(pack, third);
+        assertFalse(Archives.sha256(first).equals(Archives.sha256(third)));
     }
 
     @ParameterizedTest

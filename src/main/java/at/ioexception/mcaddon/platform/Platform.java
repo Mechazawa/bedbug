@@ -585,16 +585,19 @@ public final class Platform {
         *///?}
     }
 
-    /** Puts items into a tab the game already has, under the name Fabric gives that event in 26. */
+    /**
+     * Puts items into a tab the game already has each time it is built, under the name Fabric gives
+     * that event in 26.
+     */
     public static void addToCreativeTab(
         net.minecraft.resources.ResourceKey<net.minecraft.world.item.CreativeModeTab> tab,
-        java.util.List<net.minecraft.world.item.Item> items) {
+        java.util.function.Supplier<java.util.List<net.minecraft.world.item.Item>> items) {
         //? if >=26 {
         net.fabricmc.fabric.api.creativetab.v1.CreativeModeTabEvents.modifyOutputEvent(tab)
-            .register(output -> items.forEach(output::accept));
+            .register(output -> items.get().forEach(output::accept));
         //?} else {
         /*net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents.modifyEntriesEvent(tab)
-            .register(entries -> items.forEach(entries::accept));
+            .register(entries -> items.get().forEach(entries::accept));
         *///?}
     }
 
@@ -2526,6 +2529,68 @@ public final class Platform {
         if (client.gui.hud.isHidden() != hidden) client.gui.hud.toggle();
         //?} else {
         /*client.options.hideGui = hidden;
+        *///?}
+    }
+
+    /**
+     * Opens a singleplayer world to the LAN on a port, without asking its guests to authenticate:
+     * a development guest has no account, and 1.21.1 and 26 make the integrated server demand one.
+     * The scope argument arrived in 26.2.
+     */
+    public static boolean publishServer(net.minecraft.client.server.IntegratedServer server, int port) {
+        server.setUsesAuthentication(false);
+        //? if >=26.2 {
+        return server.publishServer(net.minecraft.server.MinecraftServer.MultiplayerScope.LAN,
+            net.minecraft.world.level.GameType.SURVIVAL, false, port);
+        //?} else {
+        /*return server.publishServer(net.minecraft.world.level.GameType.SURVIVAL, false, port);
+        *///?}
+    }
+
+    /** Opens a saved singleplayer world by its directory name, the way the world list does. */
+    public static void openWorld(String name) {
+        net.minecraft.client.Minecraft client = net.minecraft.client.Minecraft.getInstance();
+        //? if >=1.21 {
+        client.createWorldOpenFlows().openWorld(name, () -> { });
+        //?} else {
+        /*client.createWorldOpenFlows().loadLevel(client.screen, name);
+        *///?}
+    }
+
+    /**
+     * Queues a task for the client thread, even when called on it: `execute` runs a task called on
+     * the client thread at once, inside whatever that thread is in the middle of. Renamed in 26.
+     */
+    public static void schedule(Runnable task) {
+        //? if >=26 {
+        net.minecraft.client.Minecraft.getInstance().schedule(task);
+        //?} else {
+        /*net.minecraft.client.Minecraft.getInstance().tell(task);
+        *///?}
+    }
+
+    /**
+     * Gives an item registered after startup what the game gives every item as it starts.
+     *
+     * Before 26 the item renderer maps every item to its inventory model once, when it is built,
+     * and a reload only rebuilds what that map points at; and a spawn egg is coloured by a provider
+     * registered once, for the eggs there were. From 26 an item's model is looked up by its id and
+     * its colours are tints in that model, so nothing is missing.
+     */
+    public static void prepareLateItem(Item item) {
+        //? if >=1.21 && <26 {
+        /*net.minecraft.client.Minecraft.getInstance().getItemRenderer().getItemModelShaper().register(item,
+            net.minecraft.client.resources.model.ModelResourceLocation.inventory(BuiltInRegistries.ITEM.getKey(item)));
+        *///?} else if <1.21 {
+        /*net.minecraft.client.Minecraft.getInstance().getItemRenderer().getItemModelShaper().register(item,
+            new net.minecraft.client.resources.model.ModelResourceLocation(BuiltInRegistries.ITEM.getKey(item),
+                "inventory"));
+        *///?}
+        //? if <1.21.2 {
+        /*if (item instanceof net.minecraft.world.item.SpawnEggItem egg) {
+            net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry.ITEM.register(
+                (stack, layer) -> egg.getColor(layer), egg);
+        }
         *///?}
     }
 

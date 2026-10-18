@@ -187,8 +187,36 @@ project.tasks.named("runGameTest") {
  * a model and a key press. Only the 26.x targets have the API, and both of them run the tests, because
  * a spelling that differs between the two is exactly what a test on one version alone would miss.
  */
+/**
+ * The add-on the client game tests' server hands out without having loaded it, built from
+ * `tools/testpack/served`. The server and the client share one process and one `addons/`, so this is
+ * how a client joining it can lack an add-on the server has.
+ */
+val installServedPack = project.tasks.register("installServedPack") {
+    group = "verification"
+    description = "Build the add-on the client game tests' server hands out into run/clientGameTest/addons-served."
+
+    val generator = rootProject.layout.projectDirectory.file("tools/testpack/build_served.py").asFile
+    val served = project.layout.buildDirectory.dir("run/clientGameTest/addons-served")
+    inputs.dir(rootProject.layout.projectDirectory.dir("tools/testpack"))
+    outputs.dir(served)
+
+    doLast {
+        val target = served.get().asFile
+        target.mkdirs()
+        val archive = File(target, "served-addon.mcaddon")
+        val process = ProcessBuilder("python3", generator.absolutePath, "--out", archive.absolutePath)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().readText()
+        if (process.waitFor() != 0) throw GradleException("The served pack would not build: $output")
+    }
+}
+
 project.tasks.matching { it.name == "runClientGameTest" }.configureEach {
-    dependsOn(installClientTestPack)
+    dependsOn(installClientTestPack, installServedPack)
+    (this as JavaExec).systemProperty("mcaddon.served",
+        project.layout.buildDirectory.dir("run/clientGameTest/addons-served").get().asFile.absolutePath)
     val saves = project.layout.buildDirectory.dir("run/clientGameTest/saves")
     doFirst { project.delete(saves) }
 
@@ -309,10 +337,33 @@ val clientArgs = buildList {
     }
 }
 
-if (clientArgs.isNotEmpty()) {
+/**
+ * `runJoinClient` is a second client with a run directory and an add-on set of its own, which is
+ * what a player joining somebody else's game is. `verify.py join` and `verify.py lan` start it
+ * beside the dedicated server or the first client, and the property tells the two clients apart in
+ * the process table.
+ */
+run {
     val loom = project.extensions.getByName("loom")
     val runs = loom.javaClass.getMethod("getRuns").invoke(loom)
-    val client = runs.javaClass.getMethod("getByName", String::class.java).invoke(runs, "client")
-    client.javaClass.getMethod("programArgs", Array<String>::class.java)
-        .invoke(client, clientArgs.toTypedArray())
+    val create = runs.javaClass.getMethod("create", String::class.java)
+    val getByName = runs.javaClass.getMethod("getByName", String::class.java)
+    val guest = create.invoke(runs, "joinClient")
+    guest.javaClass.getMethod("client").invoke(guest)
+    guest.javaClass.getMethod("runDir", String::class.java).invoke(guest, "run/join-client")
+    guest.javaClass.getMethod("vmArg", String::class.java).invoke(guest, "-Dmcaddon.role=guest")
+    // A dedicated server hands out every archive in this directory as well as its own add-ons.
+    val servedDirectory = project.findProperty("served") as String?
+    if (!servedDirectory.isNullOrBlank()) {
+        val server = getByName.invoke(runs, "server")
+        server.javaClass.getMethod("vmArg", String::class.java)
+            .invoke(server, "-Dmcaddon.served=$servedDirectory")
+    }
+    if (clientArgs.isNotEmpty()) {
+        for (name in listOf("client", "joinClient")) {
+            val config = getByName.invoke(runs, name)
+            config.javaClass.getMethod("programArgs", Array<String>::class.java)
+                .invoke(config, clientArgs.toTypedArray())
+        }
+    }
 }
