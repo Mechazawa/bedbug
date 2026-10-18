@@ -1,0 +1,25 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:gaze",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": ["tp_gaze", "mob"]
+      },
+      "minecraft:collision_box": {
+        "width": 0.5,
+        "height": 0.75
+      },
+      "minecraft:health": {
+        "value": 4,
+        "max": 4
+      },
+      "minecraft:physics": {}
+    }
+  }
+}

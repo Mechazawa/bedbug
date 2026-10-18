@@ -41,12 +41,14 @@ public final class BedrockModelRenderer {
         int colour
     ) {
         for (BakedBone bone : geometry.roots()) {
-            renderBone(bone, animator, hidden, drawn, shift, poseStack, buffer, light, overlay, colour);
+            renderBone(bone, new Quaternionf(), animator, hidden, drawn, shift, poseStack, buffer, light, overlay,
+                colour);
         }
     }
 
     private static void renderBone(
         BakedBone bone,
+        Quaternionf parentTurn,
         EntityAnimator animator,
         Predicate<String> hidden,
         Predicate<String> drawn,
@@ -60,7 +62,7 @@ public final class BedrockModelRenderer {
         if (hidden.test(bone.name())) return;
 
         poseStack.pushPose();
-        poseBone(bone, animator, poseStack);
+        Quaternionf turn = poseBone(bone, parentTurn, animator, poseStack);
 
         PoseStack.Pose last = poseStack.last();
         if (drawn.test(bone.name())) {
@@ -68,13 +70,22 @@ public final class BedrockModelRenderer {
         }
 
         for (BakedBone child : bone.children()) {
-            renderBone(child, animator, hidden, drawn, shift, poseStack, buffer, light, overlay, colour);
+            renderBone(child, turn, animator, hidden, drawn, shift, poseStack, buffer, light, overlay, colour);
         }
         poseStack.popPose();
     }
 
-    /** Moves the stack from the bone's parent onto the bone itself, posed for this frame. */
-    private static void poseBone(BakedBone bone, EntityAnimator animator, PoseStack poseStack) {
+    /**
+     * Moves the stack from the bone's parent onto the bone itself, posed for this frame.
+     *
+     * `parentTurn` is every rotation the bones above this one put on the model, and the answer is
+     * the same for this bone. An animation stating `relative_to: {rotation: entity}` gives the bone's
+     * rotation in the entity's frame, so the bones above it still carry its pivot along while their
+     * turn is taken back off before its own goes on. That is what lets a head keep looking at a
+     * target while the body it sits on leans and sways.
+     */
+    private static Quaternionf poseBone(BakedBone bone, Quaternionf parentTurn, EntityAnimator animator,
+        PoseStack poseStack) {
         BonePose pose = animator == null ? null : animator.poseOf(bone.name());
 
         poseStack.translate(bone.pivot().x * PIXEL, bone.pivot().y * PIXEL, bone.pivot().z * PIXEL);
@@ -92,12 +103,14 @@ public final class BedrockModelRenderer {
             yRot += (float) Math.toRadians(-pose.rotation.y);
             zRot += (float) Math.toRadians(pose.rotation.z);
         }
-        if (xRot != 0 || yRot != 0 || zRot != 0) {
-            poseStack.mulPose(new Quaternionf().rotationZYX(zRot, yRot, xRot));
-        }
+        Quaternionf own = new Quaternionf().rotationZYX(zRot, yRot, xRot);
+        boolean fromEntity = pose != null && pose.rotationRelativeToEntity;
+        if (fromEntity) poseStack.mulPose(new Quaternionf(parentTurn).conjugate());
+        if (xRot != 0 || yRot != 0 || zRot != 0) poseStack.mulPose(own);
         if (pose != null && !pose.scale.equals(1, 1, 1)) {
             poseStack.scale(pose.scale.x, pose.scale.y, pose.scale.z);
         }
+        return fromEntity ? own : new Quaternionf(parentTurn).mul(own);
     }
 
     /**
@@ -111,7 +124,7 @@ public final class BedrockModelRenderer {
     public static Matrix4f anchorOf(BakedGeometry geometry, EntityAnimator animator, String bone) {
         PoseStack poseStack = new PoseStack();
         for (BakedBone root : geometry.roots()) {
-            Matrix4f found = searchBone(root, animator, bone, poseStack);
+            Matrix4f found = searchBone(root, new Quaternionf(), animator, bone, poseStack);
             if (found != null) return found;
         }
         return null;
@@ -126,16 +139,16 @@ public final class BedrockModelRenderer {
     public static Vector3f locatorOf(BakedGeometry geometry, EntityAnimator animator, String locator) {
         PoseStack poseStack = new PoseStack();
         for (BakedBone root : geometry.roots()) {
-            Vector3f found = searchLocator(root, animator, locator, poseStack);
+            Vector3f found = searchLocator(root, new Quaternionf(), animator, locator, poseStack);
             if (found != null) return found;
         }
         return null;
     }
 
-    private static Vector3f searchLocator(BakedBone bone, EntityAnimator animator, String locator,
-        PoseStack poseStack) {
+    private static Vector3f searchLocator(BakedBone bone, Quaternionf parentTurn, EntityAnimator animator,
+        String locator, PoseStack poseStack) {
         poseStack.pushPose();
-        poseBone(bone, animator, poseStack);
+        Quaternionf turn = poseBone(bone, parentTurn, animator, poseStack);
 
         Vector3f offset = bone.locators().get(locator);
         if (offset == null && bone.name().equalsIgnoreCase(locator)) offset = new Vector3f();
@@ -143,7 +156,7 @@ public final class BedrockModelRenderer {
             .transformPosition(offset.x * PIXEL, offset.y * PIXEL, offset.z * PIXEL, new Vector3f());
         for (BakedBone child : bone.children()) {
             if (found != null) break;
-            found = searchLocator(child, animator, locator, poseStack);
+            found = searchLocator(child, turn, animator, locator, poseStack);
         }
         poseStack.popPose();
         return found;
@@ -162,15 +175,15 @@ public final class BedrockModelRenderer {
         return new Matrix4f(anchor).translate(-pivot.x * PIXEL, -pivot.y * PIXEL, -pivot.z * PIXEL);
     }
 
-    private static Matrix4f searchBone(BakedBone bone, EntityAnimator animator, String name,
-        PoseStack poseStack) {
+    private static Matrix4f searchBone(BakedBone bone, Quaternionf parentTurn, EntityAnimator animator,
+        String name, PoseStack poseStack) {
         poseStack.pushPose();
-        poseBone(bone, animator, poseStack);
+        Quaternionf turn = poseBone(bone, parentTurn, animator, poseStack);
 
         Matrix4f found = bone.name().equalsIgnoreCase(name) ? new Matrix4f(poseStack.last().pose()) : null;
         for (BakedBone child : bone.children()) {
             if (found != null) break;
-            found = searchBone(child, animator, name, poseStack);
+            found = searchBone(child, turn, animator, name, poseStack);
         }
         poseStack.popPose();
         return found;

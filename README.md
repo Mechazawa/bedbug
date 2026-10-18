@@ -61,12 +61,15 @@ add-ons, or with another release of it, is told which in chat.
   than left, so a walk releases into an idle instead of snapping. An entity whose pack asked for it
   keeps running while nobody is looking at it, so a trail or an aura is still going when it comes
   back into view, and a pack describing one entity several times over for different engines is drawn
-  from the newest of them its own engine version reaches.
+  from the newest of them its own engine version reaches. A bone an animation turns
+  `relative_to` the entity is turned in the entity's frame while the bones above it still carry it,
+  so a head keeps looking at its target while the body under it leans.
 - Entities a behaviour pack declares, with their properties, events, component groups, filters,
   breeding, riding, leashing, home ranges, navigation and item pickup, and the sensors that fire
   their events: environment, entity, target-nearby, block, timer, scheduler, drying-out, damage,
   interact, spawn-entity and hurt-on-condition. Their properties reach every client, so a model
-  looks the same in multiplayer as it does alone. A component group is where Bedrock states what an
+  looks the same in multiplayer as it does alone, and a property a script overrides for one player
+  with `Player.setPropertyOverrideForEntity` reaches that player's client alone. A component group is where Bedrock states what an
   entity becomes rather than what it is, so a group arriving changes how it gets about: the
   navigator and the move control are built again, and the step it takes, the height it climbs, what
   pushes it, what burns it, what effects land on it and what it has for sale all move with it.
@@ -226,6 +229,9 @@ add-ons, or with another release of it, is told which in chat.
   stock, and every table any of an entity's declarations names is read while its pack is still open.
   A trade stays open while a script moves the trader within its own level, as a pack holding a
   talking villager in place every tick does; only a move to another dimension ends it.
+  A trader whose pack states no `minecraft:behavior.trade_with_player` stands still while a player
+  has its shop open, as one stating it does. Bedrock documents nothing about such a trader, and a
+  shop that walks away and closes under the player is the more surprising answer.
   `query.trade_tier` answers the tier a trader has reached, counted from nought the way Bedrock
   counts it, for a pack's own trader and for Java's villager alike, whose novice is 0 and whose
   master is 4.
