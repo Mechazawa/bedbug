@@ -968,10 +968,12 @@ These are the checks it runs, and what each one catches:
   python3 tools/verify/verify.py join --version 26.2     # a client connected to a server
   python3 tools/verify/verify.py join --bare --version 26.2      # a second client with no add-ons takes the server's
   python3 tools/verify/verify.py join --other --reshaped --version 26.2   # other versions, and a refused one
+  python3 tools/verify/verify.py join --slow --version 1.20.1    # a login longer than every timer on it
   python3 tools/verify/verify.py lan --version 26.2      # a world opened to LAN, a second client joins it
   python3 tools/verify/verify.py lan --dormant --version 26.2   # the host also holds a dormant add-on
   python3 tools/verify/verify.py convert --source <extracted pack directory>   # no game
   python3 tools/verify/verify.py companions --version 26.2  # a server and a client beside other mods
+  python3 tools/verify/verify.py companions --bare --version 26.2  # the same, as a client taking the server's add-ons
   ```
 
   A green `run` proves the mod started, every mixin applied, the packs converted and registered, the
@@ -1158,6 +1160,19 @@ These are the checks it runs, and what each one catches:
     installed and goes dormant). `join --reshaped` gives it a copy whose `tp:lamp` has one more
     `tp:level` value, and expects `The server's copy of <add-on> cannot replace yours without a
     restart.` and no world.
+  - `join --slow` is `--bare` with the `-PslowJoin=<seconds>` property, which the join client
+    reads as `mcaddon.slowJoin` in a development run and waits for between holding every archive
+    and activating them. It waits 75 seconds, past the 600-tick login timer and the 30 second read
+    timeout before 1.21 and past the server's minute without a message, so the client reaches the
+    world only while the login heartbeat, `ServerLoginTimerMixin` and `Outgoing`'s waiting on an
+    activating client all work. It reads the login's length off the two logs' timestamps, from the
+    client's `Connecting to` to the server's login line, and fails on `Took too long to log in`,
+    `Timed out`, `ReadTimeoutException` and `stopped making progress`. Measured on 1.20.1 with each
+    part taken out, it fails each time. With no heartbeat the server ends the login with `Timed out`
+    30 seconds after the last piece. With no mixin it ends it with `Took too long to log in` 31
+    seconds after the client connected. With the minute counted from the last acknowledgement
+    whatever the client was doing, it ends it with `stopped making progress` 60 seconds after the
+    download. With all three in place the login took 80 seconds.
   - `lan` runs the first client with a saved world as host. A development-only handler,
     `client/LanRequests`, answers a `lan.request` file in the host's run directory: each line is a
     console command for the integrated server, and `publish` opens the world to the LAN through
@@ -1169,7 +1184,10 @@ These are the checks it runs, and what each one catches:
     while it hosts. `--dormant` has the host client join a dedicated server serving an add-on the
     host has not installed, leave, and only then open its world with `open`, all in one process,
     because a dormant add-on is one the process registered: a host started afresh holds none. The
-    guest is then offered it as an inactive entry. `all` runs both.
+    guest is then offered it as an inactive entry. `all` runs both. Before 26 `LanRequests` waits
+    for the resource reload's overlay to go before it acts: the leave's reload is still showing it
+    when the harness asks for `open`, and a world opened under it waits for it inside
+    `Minecraft.doWorldLoad`, which it never leaves.
   - A fresh game directory has no `options.txt`, and the game then opens its accessibility
     onboarding screen instead of the quick play it was told to run, so a client in a new worktree
     sat on the title screen until the deadline. `play` writes `onboardAccessibility:false` first.
@@ -1198,6 +1216,12 @@ These are the checks it runs, and what each one catches:
     is absent, which is what a mod's optional integration with a mod nobody installed looks like.
   - Fabric resolved the set at all. `Mod resolution failed` means the run proved nothing about
     anybody.
+
+  `companions --bare` runs `join --bare` instead of the server and the client, and reads the same
+  three things out of the join server's and the second client's logs. That client registers the
+  server's blocks, items and entity types after the freeze while every companion is loaded, so a
+  companion holding an array sized at startup from the block state list fails it on the first frame
+  after the join.
 
   The mods themselves are `companionMods()` in `build.remap.gradle.kts` and `build.named.gradle.kts`,
   each pinned by exact version in `versions/<version>/gradle.properties` and installed only for a dev
@@ -1849,6 +1873,9 @@ camera presets, dialogue scenes and, from 1.21, brewing are read from. An add-on
 active is dormant: its entries stay registered with their last definitions and nothing offers it.
 Spawn rules, feature rules and the nether and end biome lists are registered once for the installed
 set, because they apply as a world loads and a world loads only with the installed set active.
+Before 26 the model bakery asks for a model for every registered item and block, so
+`ModelBakeryMixin` and `BlockStateModelLoaderMixin` leave out what `ActiveAddons.isDormant` names;
+the miss would otherwise be logged as `Unable to load model` on every reload after a visit.
 
 **A same-id copy is checked before anything is registered.** `AddonRegistry.conflict` compares the
 shape every registered object was built from (an entity type's population and size, a block's whole
@@ -1875,8 +1902,9 @@ refusal `The server's copy of <add-on> cannot replace yours without a restart.`
 Traps met building it:
 
 - **A task queued for the client thread from a disconnect can be thrown away.** The client drops
-  its pending tasks as it disconnects, and Fabric raises the disconnect event on the network thread
-  just before, so a leave handed over with `execute` or `schedule` sometimes never ran. The leave is
+  its pending tasks as a play connection ends (`Minecraft.disconnect` calls `dropAllTasks` before
+  anything else), and Fabric raises the disconnect event before that, so a leave handed over with
+  `execute` or `schedule` never ran. The leave is
   a flag the client's own tick takes instead, and an enter takes any leave still owed first.
 - **Every client game test joining a dedicated server is handed the served add-on.** The server and
   the client share one process, so the add-on is registered from the first such test on, and a test
@@ -1886,14 +1914,41 @@ Traps met building it:
   which `ServedArchives` reads in a development run only.
 - **The client game test harness does not tick the client between tests**, so a leave owed by one
   test runs as the next one connects, while that test's server configures it.
+- **`Outgoing` tells its link how a transfer ended only once its lock is let go.** Ending a
+  connection from the network thread waits on the server thread (`executeBlocking`), and the server
+  thread takes that lock every tick in `expire`, so a refusal told under it froze the server until
+  the watchdog ended it. `AddonSyncRefusalClientGameTest` met it on 26.1.2; `OutgoingTest` holds it.
 - **A configuration that changes nothing must not reload.** A join whose set equals the active one
   answers at once.
+- **The server's minute without a message counts only while archives are on their way.** A client
+  holding every archive it asked for converts, activates and reloads, which sends nothing for as
+  long as a large set takes. `Outgoing` waits on it then, the ten minute limit still holds, and a
+  client that stops answering is dropped by the connection's read timeout, which the login's
+  heartbeat and the configuration phase's keep-alive hold off for one that answers.
 
 Tests: `RegistryGameTests` (adding after the freeze, on all four versions), `ActiveAddonsGameTests`
 (an empty set and back), `ShapeGameTests` (copies that do and do not conflict),
 `ServedArchivesGameTests` (a registered archive handed out dormant), `AddonSyncClientGameTest` (a
 join, a leave and a second join against a dedicated server), and the unit tests `AddonManifestTest`,
-`ReceivedArchivesTest`, `ArchivesTest` and `FunctionNamesTest`.
+`ReceivedArchivesTest`, `ArchivesTest` and `FunctionNamesTest`. Three more client game tests point
+the server at another set through `clientgametest/Served`, which sets `mcaddon.served` to one of
+the directories `installServedPack` writes beside `addons-served` and has the server prepare its
+manifest again: `addons-reshaped` holds a later release of `sv` whose crate has a fourth state, and
+`addons-other` the same content as the add-on `sw`.
+
+- `AddonSyncRefusalClientGameTest` joins once to register `sv`, then joins a server handing out the
+  reshaped copy and expects the disconnect screen naming the add-on, no world, and the installed set
+  active. It fails without `AddonRegistry.conflict` in `AddonSession.activate`.
+- `AddonSyncReloadClientGameTest` closes the connection from the server while the join's reload is
+  on the screen, then again with the client in the world, and expects the installed set back both
+  times. The second close fails when the leave is queued with `Platform.schedule` from the
+  disconnect event: the client drops its queued tasks as a play connection ends
+  (`Minecraft.disconnect` calls `dropAllTasks` first), so the leave never runs.
+- `AddonSyncTransferClientGameTest` has the server hand out `sw` instead of `sv` and `/transfer`
+  the client back to itself, which to the client is a second server with another set. It records
+  every activation through `ActiveAddons.onActivate` and expects the installed set once and then the
+  second set. It fails when the play phase's disconnect does not end the visit. A server needs
+  `accepts-transfers=true` (that spelling) in its properties to take a transfer.
 
 ## Conventions
 
