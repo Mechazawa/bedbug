@@ -853,8 +853,8 @@ def kill(process: subprocess.Popen, started_before: set[int], launch: Launch,
     """Ends this run's process group, then the game the Gradle daemon forked on its behalf.
 
     The Gradle daemon outlives a build and owns the forked game, so the group alone does not reach
-    it. Only games that appeared after this run began are killed, which leaves one somebody else is
-    running alone.
+    it. Only games of this checkout that appeared after this run began are killed, which leaves one
+    somebody else is running alone.
     """
     for stage in (signal.SIGTERM, signal.SIGKILL):
         if process.poll() is not None:
@@ -865,7 +865,12 @@ def kill(process: subprocess.Popen, started_before: set[int], launch: Launch,
             break
         time.sleep(2)
 
+    ours = f"{ROOT}/.gradle/"
     for pid in running(launch, version) - started_before:
+        # A server another checkout started during this run, a game test server included, is no
+        # business of this run's, though `running` counts it so that the port is waited for.
+        if ours not in commandOf(pid):
+            continue
         try:
             os.kill(pid, signal.SIGKILL)
         except (ProcessLookupError, PermissionError):
