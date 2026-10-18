@@ -276,6 +276,29 @@ public final class Platform {
         *///?}
     }
 
+    /**
+     * Whether a summon refuses this type while the difficulty is peaceful, as Bedrock's does.
+     *
+     * 26 asks the type itself; before that the types Java removes on peaceful are its monsters.
+     */
+    public static boolean refusedInPeaceful(EntityType<?> type, ServerLevel level) {
+        if (level.getDifficulty() != net.minecraft.world.Difficulty.PEACEFUL) return false;
+        //? if >=26 {
+        return !type.isAllowedInPeaceful();
+        //?} else {
+        /*return type.getCategory() == net.minecraft.world.entity.MobCategory.MONSTER;
+        *///?}
+    }
+
+    /** Puts a rider on a vehicle whether or not the rider could climb on by itself. */
+    public static boolean mount(Entity rider, Entity vehicle) {
+        //? if >=26 {
+        return rider.startRiding(vehicle, true, true);
+        //?} else {
+        /*return rider.startRiding(vehicle, true);
+        *///?}
+    }
+
     public static Entity createMob(EntityType<?> type, ServerLevel level) {
         //? if >=1.21.2 {
         return type.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND);

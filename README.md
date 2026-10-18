@@ -250,6 +250,14 @@ add-ons, or with another release of it, is told which in chat.
   `music`, `playanimation`, `scriptevent`, `structure`, `toggledownfall`, Bedrock's `particle` and
   `transfer` and the commands a pack's script declares, are reached through it and nowhere else. It asks for the level Java runs
   a function at, and every command the line names asks for its own on top of that.
+- `/bedrock ride` and `/bedrock summon` in Bedrock's own forms. `ride` seats a group only when the
+  whole of it fits (`if_group_fits`) or one rider at a time until the vehicle is full, brings the
+  vehicle to its one rider (`teleport_ride`), empties a vehicle (`evict_riders`), and summons a rider
+  for every vehicle with room or a vehicle for every rider under the three ride rules. Whether a
+  vehicle has room is the vehicle's own answer, which for a pack's entity is its
+  `minecraft:rideable`, and a player is never a vehicle, as in Java's `/ride`. `summon` makes the
+  entity the way Java's own summon does and then turns it to a rotation, a point or an entity,
+  names it and raises the spawn event the line picks, and it refuses a hostile mob on peaceful.
 - Clips on a mob Java draws with a model of its own, such as `playanimation` on a vanilla villager.
   Each Bedrock bone is found among the Java model's parts, and on a mob whose Bedrock geometry hangs
   the head, arms and legs under `body`, those parts move, turn and scale with the body, so a pack

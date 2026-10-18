@@ -68,12 +68,12 @@ public final class Functions {
     private static final Set<String> REGISTERED_HERE = Set.of(
         "playanimation", "event", "scriptevent", "music", "toggledownfall", "structure", "mobevent",
         "particle", "gametest", "dialogue", "transfer", "camera", "camerashake", "fog",
-        "clearspawnpoint", "hud", "inputpermission");
+        "clearspawnpoint", "hud", "inputpermission", "ride", "summon");
 
     /**
      * The registered commands whose Bedrock line the command built here reads as it stands.
      *
-     * The other nine are rewritten, because a Bedrock form the command built here cannot read is a
+     * The others are rewritten, because a Bedrock form the command built here cannot read is a
      * line the tree rejects.
      */
     static final Set<String> REGISTERED_WHOLE_LINE = Set.of("playanimation", "event",
@@ -126,9 +126,6 @@ public final class Functions {
         "music loop", "music volume",
         "place apply_waterlogging", "place featurerule", "place ignore_waterlogging",
         "replaceitem keep", "replaceitem slot.equippable",
-        "ride evict_riders", "ride if_group_fits", "ride no_ride_change", "ride reassign_rides",
-        "ride skip_riders", "ride summon_ride", "ride summon_rider", "ride teleport_ride",
-        "ride until_full",
         "camera attach_to_entity", "camera color", "camera detach_from_entity",
         "camera entity_offset", "camera fade", "camera fov_clear", "camera fov_set",
         "camera minecraft:control_scheme_camera", "camera minecraft:fixed_boom",
@@ -137,7 +134,6 @@ public final class Functions {
         "save query",
         "schedule on_area_loaded",
         "structure block_by_block", "structure layer_by_layer", "structure memory", "structure xz",
-        "summon facing",
         "tickingarea all-dimensions", "tickingarea circle", "tickingarea preload");
 
     /**
@@ -486,29 +482,19 @@ public final class Functions {
     }
 
     /**
-     * `summon <type> [position]`, which is as much of Bedrock's own form as Java's takes.
+     * `summon <type> ...`, with the type named the way Java names it.
      *
-     * Bedrock turns the entity, names it, fires an event on it and aims it at something as it
-     * summons it. Java reads the block of data an entity is built from instead, which a line of a
-     * function has no room to assemble, so a summon writing any of the four loses its line.
+     * Everything after the type is Bedrock's own form, which the command built here reads: the
+     * rotation, the point to face, the spawn event and the name tag.
      */
     private static String summon(String rest, Set<String> unsupported) {
-        String[] arguments = SPACE.split(rest);
+        String[] arguments = SPACE.split(rest, 2);
         String type = BedrockEntityNames.java(arguments[0]);
         if (type == null) {
             unsupported.add("command summon, which names an entity Java does not have");
             return null;
         }
-        if (arguments.length == 1) return "summon " + type;
-        if (arguments.length >= 5 && arguments[4].equalsIgnoreCase("facing")) {
-            return dropped("summon", arguments[4], unsupported);
-        }
-        if (arguments.length != 4) {
-            unsupported.add("command summon with a rotation, an event or a name, which Java reads "
-                + "as the entity's own data instead");
-            return null;
-        }
-        return "summon " + type + " " + String.join(" ", Arrays.copyOfRange(arguments, 1, 4));
+        return "summon " + type + (arguments.length > 1 ? " " + arguments[1] : "");
     }
 
     /**
@@ -1121,59 +1107,29 @@ public final class Functions {
     }
 
     /**
-     * Bedrock rides through five modes and Java has the two that move a rider on and off.
-     *
-     * The three left over summon the other half of the pair as they mount it, and empty a vehicle
-     * of riders Java's selectors have no way to name. Bedrock names as many riders as its selector
-     * matches where Java's command takes one, so the riders are stepped through one at a time.
+     * `ride <targets> <mode> ...`, which the command built here reads in Bedrock's own form, with the
+     * type a summoning mode makes named the way Java names it.
      */
     private static String ride(String rest, Set<String> unsupported) {
-        String[] parts = SPACE.split(rest, 3);
+        String[] parts = SPACE.split(rest, 4);
         if (parts.length < 2) {
             unsupported.add("command ride with no mode");
             return null;
         }
 
-        return switch (parts[1].toLowerCase(Locale.ROOT)) {
-            case "stop_riding" -> "execute as " + parts[0] + " run ride @s dismount";
-            case "start_riding" -> startRiding(parts, unsupported);
-            default -> dropped("ride", parts[1], unsupported);
-        };
-    }
-
-    /**
-     * `ride <riders> start_riding <ride> [teleportRules] [howToFill]`.
-     *
-     * Java moves the rider to what it mounts, which is what `teleport_rider` asks for. Moving the
-     * ride instead, and either of the two ways of filling a vehicle that has room for several, are
-     * decisions Java's own command does not offer.
-     */
-    private static String startRiding(String[] parts, Set<String> unsupported) {
+        String mode = parts[1].toLowerCase(Locale.ROOT);
+        if (!mode.equals("summon_ride") && !mode.equals("summon_rider")) return "ride " + rest;
         if (parts.length < 3) {
-            unsupported.add("command ride start_riding with nothing to ride");
+            unsupported.add("command ride " + mode + " with nothing to summon");
             return null;
         }
 
-        String[] following = SPACE.split(parts[2]);
-        for (String rule : Arrays.copyOfRange(following, 1, following.length)) {
-            if (rule.equalsIgnoreCase("teleport_rider")) continue;
-            return dropped("ride", rule, unsupported);
+        String type = BedrockEntityNames.java(parts[2]);
+        if (type == null) {
+            unsupported.add("command ride, which names an entity Java does not have");
+            return null;
         }
-        return "execute as " + parts[0] + " at @s run ride @s mount " + nearest(following[0]);
-    }
-
-    /**
-     * A selector Java will take where it wants one entity, which is the nearest one that matches.
-     *
-     * `@s`, `@p` and `@r` already stand for one entity and Java rejects a count on them. The other
-     * two match as many as they find, which is what Bedrock hands a rider and Java will not.
-     */
-    private static String nearest(String selector) {
-        if (!selector.startsWith("@e") && !selector.startsWith("@a")) return selector;
-        if (selector.contains("c=")) return selector;
-
-        return selector.endsWith("]")
-            ? selector.substring(0, selector.length() - 1) + ",c=1]" : selector + "[c=1]";
+        return "ride " + parts[0] + " " + mode + " " + type + (parts.length > 3 ? " " + parts[3] : "");
     }
 
     /** Bedrock holds and resumes the world write; Java turns the same write off and on. */

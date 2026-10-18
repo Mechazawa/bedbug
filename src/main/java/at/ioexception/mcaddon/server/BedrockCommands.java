@@ -186,6 +186,8 @@ public final class BedrockCommands {
                     .then(Commands.argument("event", StringArgumentType.greedyString())
                         .executes(BedrockCommands::entityEvent)))));
 
+        Summons.registerCommand(dispatcher);
+        Rides.registerCommand(dispatcher);
         registerCamera(dispatcher);
         registerCameraShake(dispatcher);
         registerFog(dispatcher);
@@ -766,7 +768,7 @@ public final class BedrockCommands {
     }
 
     /** The parsed nodes are the words that were typed, and every part of `/camera` is optional. */
-    private static boolean given(CommandContext<CommandSourceStack> command, String name) {
+    static boolean given(CommandContext<CommandSourceStack> command, String name) {
         for (ParsedCommandNode<CommandSourceStack> node : command.getNodes()) {
             if (node.getNode().getName().equals(name)) return true;
         }

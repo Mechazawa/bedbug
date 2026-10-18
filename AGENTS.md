@@ -109,7 +109,11 @@ These are the checks it runs, and what each one catches:
   `SharedConstants.tryDetectVersion()` and `Bootstrap.bootStrap()` in a `@BeforeAll`, which is
   enough without launching the game.
 - **`./gradlew :26.2:runGameTest`** runs the Mojang game tests in
-  `src/main/java/at/ioexception/mcaddon/gametest/`, headless, against a real world. `check` depends
+  `src/main/java/at/ioexception/mcaddon/gametest/`, headless, against a real world. The run takes
+  one class or one test at a time through Fabric's selector property, which the forked game reads
+  from the environment: `JAVA_TOOL_OPTIONS='-Dfabric-api.gametest.filter=mcaddon:bedrock_command_game_tests_*'`
+  in front of `./gradlew :26.2:runGameTest`. A test's id is `mcaddon:` and its class and method
+  names in snake case, joined by an underscore. `check` depends
   on it, so a failing one fails `./gradlew build`, and it is gated to the checked-out version like
   everything else. What it covers is the half a unit test cannot reach: that `/bedrock playanimation`
   and `/bedrock event entity` still parse and run, that Java's own tree reads none of Bedrock's
@@ -634,6 +638,13 @@ These are the checks it runs, and what each one catches:
   playanimation` lines `CameraClientGameTest` and `JavaModelPoseClientGameTest` measure, and
   `ParticleClientGameTest` has the player type `/bedrock particle` and has Java's own `/particle`
   make the one particle Java makes of any type.
+
+  `BedrockCommandGameTests` runs the Bedrock forms of commands whose Java namesake has no word for
+  them, each through `/bedrock` and read back off the world, with vanilla entities so that every one
+  asserts with no pack installed. `/ride` seats a group only when the whole of it fits a boat, fills
+  the boat to its two seats, empties it, brings it to its rider and summons a rider and a ride under
+  each of the three ride rules; `/summon` turns what it makes to a rotation, a point and an entity,
+  takes a name written before the position, and raises a spawn event the ember answers.
 
   `HudClientGameTest` hides and resets pieces of the heads-up display on a dedicated server, one
   piece at a time, all of them, and through the script's `tp:hud_hide` and `tp:hud_reset` probes.

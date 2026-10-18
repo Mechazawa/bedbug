@@ -98,9 +98,13 @@ class FunctionsTest {
             + "'item replace entity @s weapon.mainhand with minecraft:stone'",
         "'replaceitem block ~ ~ ~ slot.container 3 stone 2', "
             + "'item replace block ~ ~ ~ container.3 with minecraft:stone 2'",
-        "'ride @s start_riding @e[type=pig]', "
-            + "'execute as @s at @s run ride @s mount @e[type=minecraft:pig,limit=1]'",
-        "'ride @s stop_riding', 'execute as @s run ride @s dismount'",
+        "'ride @s start_riding @e[type=pig]', 'ride @s start_riding @e[type=minecraft:pig]'",
+        "'ride @s stop_riding', 'ride @s stop_riding'",
+        "'ride @e[type=pig] summon_rider zombie minecraft:as_baby_jockey', "
+            + "'ride @e[type=minecraft:pig] summon_rider minecraft:zombie minecraft:as_baby_jockey'",
+        "'ride @s summon_ride zombie_pigman skip_riders', 'ride @s summon_ride minecraft:zombified_piglin skip_riders'",
+        "'summon pig ~ ~ ~ facing ~ ~1 ~', 'summon minecraft:pig ~ ~ ~ facing ~ ~1 ~'",
+        "'summon pig ~ ~ ~ 90 0 minecraft:entity_born Bob', 'summon minecraft:pig ~ ~ ~ 90 0 minecraft:entity_born Bob'",
         "'save hold', 'save-off'",
         "'tickingarea add 0 0 0 32 0 32 named', 'forceload add 0 0 32 32'",
         "'tickingarea remove_all', 'forceload remove all'",
@@ -116,8 +120,8 @@ class FunctionsTest {
         "'replaceitem entity @s slot.chest 0 chest', 'item replace entity @s horse.chest with minecraft:chest'",
         "'loot replace entity @s slot.armor.head 0 loot tp:hat', "
             + "'loot replace entity @s armor.head loot tp:hat'",
-        "'ride @e[type=zombie] start_riding @e[type=pig] teleport_rider', "
-            + "'execute as @e[type=minecraft:zombie] at @s run ride @s mount @e[type=minecraft:pig,limit=1]'",
+        "'ride @e[type=zombie] start_riding @e[type=pig] teleport_rider if_group_fits', "
+            + "'ride @e[type=minecraft:zombie] start_riding @e[type=minecraft:pig] teleport_rider if_group_fits'",
         "'gametest stopall', 'gametest stopall'",
         "'mobevent events_enabled false', 'mobevent events_enabled false'",
         "'music stop 2', 'music stop'",
@@ -152,12 +156,8 @@ class FunctionsTest {
     @CsvSource({
         "'gametest runthis', 'command gametest runthis, which Java has no form of'",
         "'music play tp:theme 1 0 loop', 'command music loop, which Java has no form of'",
-        "'ride @e[type=pig] evict_riders', 'command ride evict_riders, which Java has no form of'",
-        "'ride @s start_riding @e[type=pig] until_full', "
-            + "'command ride until_full, which Java has no form of'",
         "'save query', 'command save query, which Java has no form of'",
         "'structure load tp:hut 0 64 0 0_degrees xz', 'command structure xz, which Java has no form of'",
-        "'summon pig ~ ~ ~ facing ~ ~1 ~', 'command summon facing, which Java has no form of'",
         "'tickingarea preload 0 0 0', 'command tickingarea preload, which Java has no form of'",
         "'mobevent minecraft:ender_dragon_event true', "
             + "'command mobevent minecraft:ender_dragon_event, which Java has no form of'",
