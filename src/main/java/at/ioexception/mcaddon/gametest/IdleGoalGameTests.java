@@ -167,6 +167,50 @@ public final class IdleGoalGameTests {
         });
     }
 
+    /** Croaking lasts `duration`, starts again `interval` after it ends and holds the croaking pose. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200)
+    public void aCroakingMobCroaksForItsDurationAndWaitsItsInterval(GameTestHelper helper) {
+        cycle(helper, "tp:idler_make_croaking", Pose.CROAKING, 0, 20, 60);
+    }
+
+    /** Sniffing lasts `duration` and waits `cooldown_range` between sniffs. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200)
+    public void aSniffingMobSniffsForItsDurationAndWaitsItsCooldown(GameTestHelper helper) {
+        cycle(helper, "tp:idler_make_sniffing", Pose.SNIFFING, 0, 30, 40);
+    }
+
+    /** Emerging lasts `duration` and waits `cooldown_time` before it can start again. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200)
+    public void anEmergingMobEmergesForItsDurationAndWaitsItsCooldown(GameTestHelper helper) {
+        cycle(helper, "tp:idler_make_emerging", Pose.EMERGING, 0, 40, 20);
+    }
+
+    /** Digging waits `idle_time` before its first dig, digs for `duration` and waits `idle_time` again. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200)
+    public void aDiggingMobWaitsItsIdleTimeAndDigsForItsDuration(GameTestHelper helper) {
+        cycle(helper, "tp:idler_make_digging", Pose.DIGGING, 20, 40, 20);
+    }
+
+    /** Switches a group on and checks when the pose begins, how long it lasts and how long until it begins again. */
+    private static void cycle(GameTestHelper helper, String event, Pose pose, int first, int length, int gap) {
+        AddonEntity idler = idler(helper, event);
+        if (idler == null) {
+            helper.succeed();
+            return;
+        }
+
+        long[] marks = timeline(helper, idler, held -> held == pose, 3);
+        helper.succeedWhen(() -> {
+            helper.assertTrue(marks[2] >= 0, IDLER + " held " + pose + " only once.");
+            helper.assertTrue(Math.abs(marks[0] - first) <= SLACK,
+                IDLER + " first held " + pose + " at tick " + marks[0] + " and should at " + first + ".");
+            helper.assertTrue(Math.abs(marks[1] - marks[0] - length) <= SLACK,
+                IDLER + " held " + pose + " for " + (marks[1] - marks[0]) + " ticks and should for " + length + ".");
+            helper.assertTrue(Math.abs(marks[2] - marks[1] - gap) <= SLACK,
+                IDLER + " waited " + (marks[2] - marks[1]) + " ticks between holds and should wait " + gap + ".");
+        });
+    }
+
     /** What the pig standing beside a napper is, which only its detection box and its exceptions decide. */
     private static Mob pigAt(GameTestHelper helper, BlockPos where) {
         Entity created = Platform.createMob(
