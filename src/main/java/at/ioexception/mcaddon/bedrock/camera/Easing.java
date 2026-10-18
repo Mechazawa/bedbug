@@ -40,9 +40,13 @@ public record Easing(Curve curve, Direction direction) {
     private static final float BOUNCE_STEEPNESS = 7.5625f;
     private static final float BOUNCE_WIDTH = 2.75f;
 
-    /** Null for a name Bedrock has not got, which the command reports rather than guesses at. */
+    /**
+     * Null for a name Bedrock has not got, which the command reports rather than guesses at.
+     *
+     * A command writes `in_out_cubic` and a script's `EasingType` writes `InOutCubic`, and both are read.
+     */
     public static Easing tryFrom(String written) {
-        String name = written.toLowerCase(Locale.ROOT);
+        String name = written.replaceAll("([a-z])([A-Z])", "$1_$2").toLowerCase(Locale.ROOT);
         if (name.equals("linear")) return LINEAR;
         if (name.equals("spring")) return new Easing(Curve.SPRING, Direction.IN);
 

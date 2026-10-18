@@ -2,7 +2,6 @@ package at.ioexception.mcaddon.convert;
 
 import at.ioexception.mcaddon.bedrock.behaviour.DamageCause;
 import at.ioexception.mcaddon.bedrock.behaviour.DataValues;
-import at.ioexception.mcaddon.bedrock.camera.CameraPreset;
 import at.ioexception.mcaddon.bedrock.hud.HudElement;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.pack.BedrockPack;
@@ -110,6 +109,11 @@ public final class Functions {
     private static final Set<String> TAIL_REACHES_JAVA =
         Set.of("clone", "effect", "execute", "locate", "loot", "schedule", "time", "title", "titleraw");
 
+    /** The forms of `/camera` whose branch `BedrockCommands` registers. */
+    private static final Set<String> DRAWN_CAMERA_FORMS = Set.of(
+        "set", "clear", "fade", "fov_set", "fov_clear", "attach_to_entity", "detach_from_entity",
+        "target_entity", "remove_target", "play_spline");
+
     /**
      * Forms of a command this mod does translate that Java has no way to say.
      *
@@ -119,17 +123,12 @@ public final class Functions {
      *
      * `changesetting allow-cheats` is the reason given at `changeSetting`. The three `hud` pieces are
      * drawn by nothing on a Java client, as `HudElement` says. A `permission` visitor may only look,
-     * and Java has no level below a member. The `camera` forms are the ones `camera` names: they ask
-     * for a camera this mod does not draw.
+     * and Java has no level below a member.
      */
     private static final Set<String> BEDROCK_ONLY_KEYWORDS = Set.of(
         "changesetting allow-cheats", "changesetting false", "changesetting true",
         "hud paperdoll", "hud tooltips", "hud touch_controls",
-        "permission visitor",
-        "camera attach_to_entity", "camera detach_from_entity", "camera entity_offset",
-        "camera minecraft:control_scheme_camera", "camera minecraft:fixed_boom",
-        "camera minecraft:follow_orbit", "camera play_spline", "camera remove_target",
-        "camera target_center_offset", "camera target_entity", "camera view_offset");
+        "permission visitor");
 
     /**
      * Commands Java says the same thing with under another name, and nothing else.
@@ -1279,35 +1278,18 @@ public final class Functions {
     }
 
     /**
-     * `/camera`, of whose fifteen forms the four presets, their placement, the fade and the field of
-     * view are drawn here.
+     * `/camera`, every form of which the command this mod registers draws.
      *
-     * The line reaches the command this mod registers as the pack wrote it, so the only thing to
-     * decide is whether that command has a branch for the form. A preset in a pack's own namespace
-     * is one of the pack's `cameras/presets`, which the command looks up as it runs, because the
-     * functions are translated before the presets are read. The three built-in presets left are
-     * cameras Bedrock draws behind or round an entity, and the other forms follow a spline, hang the
-     * camera off an entity, turn it towards one or offset it from one. A Java client draws from an
-     * entity's eyes or from its own third person view at a fixed distance, so each of these is a
-     * camera this mod would have to draw itself, and it draws none of them.
+     * The line reaches that command as the pack wrote it, so the only thing to decide is whether it
+     * has a branch for the form. A preset or a spline in a pack's own namespace is looked up as the
+     * command runs, because the functions are translated before the cameras are read.
      */
     private static String camera(String rest, Set<String> unsupported) {
         String[] parts = SPACE.split(rest, 3);
         if (parts.length < 2) return "camera " + rest;
 
         String form = parts[1].toLowerCase(Locale.ROOT);
-        if (form.equals("clear") || form.equals("fade") || form.equals("fov_set") || form.equals("fov_clear")) {
-            return "camera " + rest;
-        }
-        if (!form.equals("set")) return dropped("camera", form, unsupported);
-
-        String preset = parts.length > 2 ? SPACE.split(parts[2], 2)[0].toLowerCase(Locale.ROOT) : "";
-        if (preset.contains(":") && !preset.startsWith("minecraft:")) return "camera " + rest;
-
-        CameraPreset builtIn = CameraPreset.builtIn(preset);
-        return builtIn == null || builtIn.camera() == null
-            ? dropped("camera", preset.contains(":") ? preset : "minecraft:" + preset, unsupported)
-            : "camera " + rest;
+        return DRAWN_CAMERA_FORMS.contains(form) ? "camera " + rest : dropped("camera", form, unsupported);
     }
 
     /**

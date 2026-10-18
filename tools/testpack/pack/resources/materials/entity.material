@@ -3,6 +3,9 @@
     "version": "1.0.0",
     "tp_tailored:entity": {
       "+defines": ["MASKED_MULTITEXTURE", "ALPHA_TEST"]
+    },
+    "tp_unlaid:entity_alphatest": {
+      "-defines": ["USE_OVERLAY"]
     }
   }
 }

@@ -1817,6 +1817,37 @@ public final class BehaviourGameTests {
     }
 
     /**
+     * A sensor asking `has_damage` for `fatal` answers for the blow that would kill.
+     *
+     * The ember's mortal group refuses only such a blow and marks it, which is how a pack keeps its
+     * entity alive to play a death of its own. A scratch leaves the mark off and lands.
+     */
+    @GameTest()
+    public void aDamageSensorKnowsAFatalBlow(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_mortal_on", null, ServerHooks.state());
+        float whole = ember.getHealth();
+        Platform.hurt(ember, helper.getLevel(), helper.getLevel().damageSources().generic(), SCRATCH);
+        helper.assertTrue(!Boolean.TRUE.equals(ember.value("tp:spared")),
+            ENTITY + " took " + SCRATCH + " of " + whole + " health and its sensor called it fatal.");
+        helper.assertTrue(ember.getHealth() == whole - SCRATCH,
+            ENTITY + " refused a blow its sensor refuses only when fatal.");
+
+        ember.invulnerableTime = 0;
+        Platform.hurt(ember, helper.getLevel(), helper.getLevel().damageSources().generic(), whole);
+        helper.assertTrue(Boolean.TRUE.equals(ember.value("tp:spared")),
+            ENTITY + " was dealt a fatal blow and its sensor never called it fatal.");
+        helper.assertTrue(ember.isAlive() && ember.getHealth() == whole - SCRATCH,
+            ENTITY + " carries a sensor refusing fatal damage and lost health to it.");
+        helper.succeed();
+    }
+
+    /**
      * A group carrying `minecraft:explode` names the fuse and goes off where the entity fell.
      *
      * Being primed is the state Bedrock describes with this, so the component arrives with the group

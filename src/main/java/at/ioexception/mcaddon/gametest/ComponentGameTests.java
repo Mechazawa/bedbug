@@ -7,6 +7,7 @@ import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.navigation.WaterBoundPathNavigation;
 import net.minecraft.world.InteractionHand;
@@ -25,6 +26,7 @@ import net.minecraft.world.level.material.PushReaction;
  */
 public final class ComponentGameTests {
     private static final String EMBER = "tp:ember";
+    private static final String BRUTE = "tp:brute";
     private static final String WISP = "tp:wisp";
 
     /** Where an entity is stood, clear of the structure's edges. */
@@ -700,6 +702,8 @@ public final class ComponentGameTests {
         player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.WHEAT));
         EntityEvents.trigger(ember, "tp:ember_hunger", null, ServerHooks.state());
         ember.setNoAi(false);
+        // Its random stroll runs at a lower priority and would carry it into reach during the first stretch.
+        ember.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(0);
 
         Platform.placeAt(player, ember.getX() + FAR_ACROSS, ember.getY(), ember.getZ(), 0f, 0f);
         boolean[] early = {false};
@@ -810,32 +814,33 @@ public final class ComponentGameTests {
     /**
      * An entity turns no further in a tick than its movement component's `max_turn`.
      *
-     * The ember's `minecraft:movement.basic` states no turn rate, which is Bedrock's thirty degrees a
-     * tick; Java's own move control swings a mob ninety degrees in one.
+     * The brute's `minecraft:movement.basic` states no turn rate, which is Bedrock's thirty degrees a
+     * tick; Java's own move control swings a mob ninety degrees in one. The brute has no goal at the
+     * top level, so nothing but the test steers its move control.
      */
     @GameTest()
     public void anEntityTurnsNoFasterThanItsMaxTurn(GameTestHelper helper) {
-        AddonEntity ember = BehaviourGameTests.spawn(helper, EMBER, MIDDLE);
-        if (ember == null) {
+        AddonEntity brute = BehaviourGameTests.spawn(helper, BRUTE, MIDDLE);
+        if (brute == null) {
             helper.succeed();
             return;
         }
 
-        ember.setNoAi(false);
-        live(ember, SETTLE_TICKS);
-        ember.setYRot(0f);
-        ember.getMoveControl().setWantedPosition(ember.getX() - TURN_TOWARD, ember.getY(), ember.getZ(), 1.0);
-        live(ember, 1);
-        float turned = Math.abs(net.minecraft.util.Mth.wrapDegrees(ember.getYRot()));
+        brute.setNoAi(false);
+        live(brute, SETTLE_TICKS);
+        brute.setYRot(0f);
+        brute.getMoveControl().setWantedPosition(brute.getX() - TURN_TOWARD, brute.getY(), brute.getZ(), 1.0);
+        live(brute, 1);
+        float turned = Math.abs(net.minecraft.util.Mth.wrapDegrees(brute.getYRot()));
         helper.assertTrue(turned > 0 && turned <= MAX_TURN + 0.5f,
-            EMBER + " turns thirty degrees a tick and turned " + turned + ".");
+            BRUTE + " turns thirty degrees a tick and turned " + turned + ".");
         helper.succeed();
     }
 
     /** Bedrock's default turn rate, in degrees a tick. */
     private static final float MAX_TURN = 30f;
 
-    /** How far to the side the ember is sent, a quarter turn from where it faces. */
+    /** How far to the side the brute is sent, a quarter turn from where it faces. */
     private static final double TURN_TOWARD = 5;
 
     /**

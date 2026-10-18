@@ -49,6 +49,10 @@ public final class ScriptHost {
         "@minecraft/vanilla-data", "minecraft_vanilla_data.js",
         "@minecraft/server-gametest", "minecraft_server_gametest.js");
 
+    public static boolean provides(String moduleName) {
+        return MODULES.containsKey(moduleName);
+    }
+
     private final MinecraftServer server;
     private final Context context;
     private final ScriptBridge bridge;

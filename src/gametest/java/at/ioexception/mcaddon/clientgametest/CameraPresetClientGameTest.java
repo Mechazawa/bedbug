@@ -12,7 +12,7 @@ import net.minecraft.world.phys.Vec3;
  *
  * The test pack's `tp:overlook` is a free camera at 0.5 120 0.5 turned to a pitch of 20 and a yaw of
  * 45, hearing from the player; `tp:overlook_east` inherits all of that and states only its own x and
- * yaw. `tp:orbit` is built on `minecraft:follow_orbit`, which Java has no camera for.
+ * yaw. The presets built on the orbit cameras are `OrbitCameraClientGameTest`'s.
  *
  * Each preset is read back off the camera the client draws from and the place its sound engine
  * hears from: an inherited field that went missing leaves the camera somewhere else, and a listener
@@ -49,7 +49,6 @@ public final class CameraPresetClientGameTest implements FabricClientGameTest {
                     + " client hears from " + hearing(Minecraft.getInstance()) + ".");
 
             script(context, world);
-            refused(context, world);
         }
     }
 
@@ -66,18 +65,6 @@ public final class CameraPresetClientGameTest implements FabricClientGameTest {
             client -> Worlds.camera(client).position().distanceTo(client.player.getEyePosition()) < 0.01, PATIENCE,
             () -> "Camera.clear gave the camera back to the player, and it stands at "
                 + Worlds.camera(Minecraft.getInstance()).position() + ".");
-    }
-
-    /** A preset built on a camera Java cannot draw is refused by name, by the command and the script alike. */
-    private static void refused(ClientGameTestContext context, TestSingleplayerContext world) {
-        String said = Worlds.said(world.getServer(), "bedrock camera @a set tp:orbit");
-        Assert.that(said.contains("tp:orbit is built on minecraft:follow_orbit"),
-            "tp:orbit inherits from minecraft:follow_orbit, and /camera said: " + said);
-
-        world.getServer().runCommand("bedrock execute as @a run scriptevent tp:camera_orbit");
-        Worlds.waitForServer(context, world.getServer(), server -> server.getPlayerList().getPlayers().stream()
-                .anyMatch(player -> player.entityTags().contains("tp:camera_refused")), PATIENCE,
-            "Camera.setCamera(\"tp:orbit\") never threw an error naming minecraft:follow_orbit.");
     }
 
     private static void placed(ClientGameTestContext context, Vec3 place, float pitch, float yaw, String what) {

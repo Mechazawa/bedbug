@@ -4,6 +4,7 @@ import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -53,8 +54,12 @@ public record PackManifest(
     public record PackDependency(UUID uuid, SemVer version) {
     }
 
-    /** One pack requiring a script API, such as `@minecraft/server` 2.6.0. */
-    public record ModuleDependency(String moduleName, SemVer version) {
+    /**
+     * One pack requiring a script API, such as `@minecraft/server` 2.6.0.
+     *
+     * An optional one is a script API the pack runs without, so a game that lacks it is no problem.
+     */
+    public record ModuleDependency(String moduleName, SemVer version, boolean optional) {
     }
 
     /** Who wrote the pack, under what licence, and where it lives. */
@@ -107,13 +112,58 @@ public record PackManifest(
      * One slider, toggle or dropdown a pack offers, at the value it ships with.
      *
      * Bedrock shows these on a screen beside the pack and lets a player move them. Java has no such
-     * screen, so every one of them stays where its author put it, which is what `default` holds.
+     * screen, so every one of them stays where its author put it, which is what `default` holds,
+     * brought inside what the control could have been set to: a slider's default lies within `min`
+     * and `max` and on a multiple of `step` from `min`, and a dropdown's default is one of its
+     * options, the first when the pack names another. `text`, the label beside a control, has
+     * nowhere to be shown.
      *
      * Each answer checks the kind it is being asked for, because the three Molang queries are three
      * names for one index: a slider read as a toggle answers no, and a toggle read as a slider
      * answers zero rather than being parsed as a number it never was.
      */
     public record Setting(String type, String name, JsonElement value) {
+        static Setting tryFrom(JsonObject setting) {
+            String name = Json.text(setting, "name", null);
+            if (name == null) return null;
+
+            String type = Json.text(setting, "type", "");
+            JsonElement value = setting.get("default");
+            if (value == null || !value.isJsonPrimitive()) return new Setting(type, name, value);
+
+            JsonElement normalised = switch (type) {
+                case "slider" -> value.getAsJsonPrimitive().isNumber() ? slider(setting, value.getAsDouble()) : value;
+                case "dropdown" -> dropdown(setting, value);
+                default -> value;
+            };
+            return new Setting(type, name, normalised);
+        }
+
+        private static JsonElement slider(JsonObject setting, double shipped) {
+            double low = Json.number(setting, "min", Double.NEGATIVE_INFINITY);
+            double high = Json.number(setting, "max", Double.POSITIVE_INFINITY);
+            double step = Json.number(setting, "step", 0);
+
+            double value = Math.max(low, Math.min(high, shipped));
+            if (step > 0 && Double.isFinite(low)) {
+                double snapped = low + Math.round((value - low) / step) * step;
+                value = snapped > high ? snapped - step : snapped;
+            }
+            return new JsonPrimitive(value);
+        }
+
+        private static JsonElement dropdown(JsonObject setting, JsonElement shipped) {
+            List<String> options = Json.list(setting, "options").stream()
+                .filter(JsonElement::isJsonObject)
+                .map(JsonElement::getAsJsonObject)
+                .map(option -> Json.text(option, "name", null))
+                .filter(name -> name != null)
+                .toList();
+
+            return options.isEmpty() || options.contains(shipped.getAsString())
+                ? shipped : new JsonPrimitive(options.get(0));
+        }
+
         public double number() {
             return "slider".equals(type) && value != null && value.isJsonPrimitive()
                 ? value.getAsDouble() : 0.0;
@@ -183,14 +233,6 @@ public record PackManifest(
     private static final Set<String> MODULE_DROPPED = Set.of("description", "uuid", "version");
 
     /**
-     * `optional` says a pack runs without the script API it names.
-     *
-     * A module is linked before any of the script runs, so a specifier `ScriptHost.MODULES` does
-     * not map ends that pack's whole script whatever the flag says.
-     */
-    private static final Set<String> DEPENDENCY_DROPPED = Set.of("optional");
-
-    /**
      * `product_type` marks a pack as an add-on, which on Bedrock decides whether a world keeps its
      * achievements and whether the resource pack half is downloaded with it. Java locks no
      * advancement behind a pack and installs both halves together. `generated_with` names the tool
@@ -201,15 +243,12 @@ public record PackManifest(
     /**
      * The setting fields that describe the screen rather than the value.
      *
-     * `text` is the label beside a control, and `min`, `max` and `step` bound where a player may
-     * drag a slider. With no screen to show any of them, nothing moves a setting off the value its
-     * author shipped, so the range it could have moved through decides nothing. `options` lists
-     * what a dropdown could have been set to, and the same holds.
+     * `text` is the label beside a control and an option's `text` is the label beside a choice;
+     * with no screen to show either, they name nothing a script or a query can ask for.
      */
-    private static final Set<String> SETTING_DROPPED = Set.of("max", "min", "options", "step", "text");
+    private static final Set<String> SETTING_DROPPED = Set.of("text");
 
-    /** A dropdown option's own fields, dropped with the list holding them. */
-    private static final Set<String> SETTING_OPTIONS_DROPPED = Set.of("name", "text");
+    private static final Set<String> SETTING_OPTIONS_DROPPED = Set.of("text");
 
     /**
      * The subpack spelling Mojang's newest schema has dropped and its documentation still carries.
@@ -246,7 +285,8 @@ public record PackManifest(
             SemVer version = SemVer.tryFrom(dependency.get("version"));
             String moduleName = Json.text(dependency, "module_name", null);
             if (moduleName != null) {
-                moduleDependencies.add(new ModuleDependency(moduleName, version));
+                moduleDependencies.add(new ModuleDependency(
+                    moduleName, version, Json.bool(dependency, "optional", false)));
                 continue;
             }
             UUID required = uuid(dependency.get("uuid"));
@@ -268,10 +308,8 @@ public record PackManifest(
         List<Setting> settings = new ArrayList<>();
         for (JsonElement element : Json.list(json, "settings")) {
             if (!element.isJsonObject()) continue;
-            JsonObject setting = element.getAsJsonObject();
-            String settingName = Json.text(setting, "name", null);
-            if (settingName == null) continue;
-            settings.add(new Setting(Json.text(setting, "type", ""), settingName, setting.get("default")));
+            Setting setting = Setting.tryFrom(element.getAsJsonObject());
+            if (setting != null) settings.add(setting);
         }
 
         SemVer version = SemVer.tryFrom(header.get("version"));
@@ -368,9 +406,6 @@ public record PackManifest(
         dropped(json.getAsJsonObject("metadata"), "metadata.", METADATA_DROPPED, found);
         for (JsonElement module : Json.list(json, "modules")) {
             dropped(object(module), "module.", MODULE_DROPPED, found);
-        }
-        for (JsonElement dependency : Json.list(json, "dependencies")) {
-            dropped(object(dependency), "dependency.", DEPENDENCY_DROPPED, found);
         }
         for (JsonElement element : Json.list(json, "settings")) {
             JsonObject control = object(element);
