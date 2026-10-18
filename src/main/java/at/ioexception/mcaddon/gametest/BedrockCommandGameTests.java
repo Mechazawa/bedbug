@@ -9,6 +9,9 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.Items;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -118,6 +121,45 @@ public final class BedrockCommandGameTests {
                 "the spawn event the line named never ran on the ember."));
             return;
         }
+        helper.succeed();
+    }
+
+    /**
+     * `/replaceitem` fills a horse's two equippable slots, the saddle and then the armour, and `keep`
+     * leaves an occupied slot as it was while it fills an empty one. 1.20.1 has no test of a slot,
+     * so the line keeping one is reported there instead.
+     */
+    @GameTest()
+    public void replaceitemFillsEquippableSlotsAndKeepsAnOccupiedOne(GameTestHelper helper) {
+        //? if >=26 {
+        net.minecraft.world.entity.animal.equine.AbstractHorse horse =
+            (net.minecraft.world.entity.animal.equine.AbstractHorse) place(helper, "minecraft:horse", STAND);
+        //?} else {
+        /*net.minecraft.world.entity.animal.horse.AbstractHorse horse =
+            (net.minecraft.world.entity.animal.horse.AbstractHorse) place(helper, "minecraft:horse", STAND);
+        *///?}
+        horse.setTamed(true);
+        String uuid = horse.getStringUUID();
+
+        BedrockLines.run(helper, "replaceitem entity " + uuid + " slot.equippable 0 saddle");
+        helper.assertTrue(horse.isSaddled(), "slot.equippable 0 did not saddle the horse.");
+        BedrockLines.run(helper, "replaceitem entity " + uuid + " slot.equippable 1 iron_horse_armor");
+        helper.assertTrue(Platform.horseArmourOf(horse).is(Items.IRON_HORSE_ARMOR),
+            "slot.equippable 1 did not put armour on the horse: " + Platform.horseArmourOf(horse));
+
+        if (!Platform.testsSlots()) {
+            helper.succeed();
+            return;
+        }
+        BedrockLines.run(helper, "replaceitem entity " + uuid + " slot.equippable 1 keep golden_horse_armor");
+        helper.assertTrue(Platform.horseArmourOf(horse).is(Items.IRON_HORSE_ARMOR),
+            "keep replaced the armour the horse already wore.");
+
+        LivingEntity stand = (LivingEntity) place(helper, "minecraft:armor_stand", STAND.offset(3, 0, 3));
+        BedrockLines.run(helper, "replaceitem entity " + stand.getStringUUID()
+            + " slot.armor.head 0 keep diamond_helmet");
+        helper.assertTrue(stand.getItemBySlot(EquipmentSlot.HEAD).is(Items.DIAMOND_HELMET),
+            "keep did not fill an empty slot.");
         helper.succeed();
     }
 

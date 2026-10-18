@@ -258,6 +258,10 @@ add-ons, or with another release of it, is told which in chat.
   `minecraft:rideable`, and a player is never a vehicle, as in Java's `/ride`. `summon` makes the
   entity the way Java's own summon does and then turns it to a rotation, a point or an entity,
   names it and raises the spawn event the line picks, and it refuses a hostile mob on peaceful.
+- `replaceitem` and `loot replace` into `slot.equippable`, whose first slot is the saddle and whose
+  second is the horse's armour or the llama's carpet, as on every vanilla entity carrying a
+  `minecraft:equippable`. `replaceitem ... keep` fills a slot only while it is empty, through Java's
+  own `execute unless items`, which 1.20.1 does not have, so there the line is reported instead.
 - Clips on a mob Java draws with a model of its own, such as `playanimation` on a vanilla villager.
   Each Bedrock bone is found among the Java model's parts, and on a mob whose Bedrock geometry hangs
   the head, arms and legs under `body`, those parts move, turn and scale with the body, so a pack

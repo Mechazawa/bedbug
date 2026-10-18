@@ -1430,6 +1430,39 @@ public final class Platform {
     }
 
     /**
+     * The Java slot a horse's armour and a llama's carpet sit in. Before 1.20.5 that is the horse's
+     * own slot rather than one every entity has.
+     */
+    public static String horseArmourSlot() {
+        //? if >=1.21 {
+        return "armor.body";
+        //?} else {
+        /*return "horse.armor";
+        *///?}
+    }
+
+    /** What a horse wears as armour, which sat in its chest slot before 1.20.5. */
+    public static net.minecraft.world.item.ItemStack horseArmourOf(LivingEntity horse) {
+        //? if >=1.21 {
+        return horse.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.BODY);
+        //?} else {
+        /*return horse.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.CHEST);
+        *///?}
+    }
+
+    /**
+     * `execute if items`, which asks whether a slot holds an item, or false on 1.20.1, which predates
+     * the clause.
+     */
+    public static boolean testsSlots() {
+        //? if >=1.21 {
+        return true;
+        //?} else {
+        /*return false;
+        *///?}
+    }
+
+    /**
      * The rule that decides whether pillager patrols appear, by the name this version calls it.
      *
      * Bedrock has no game rule for either of these: it switches them through `mobevent`, which is

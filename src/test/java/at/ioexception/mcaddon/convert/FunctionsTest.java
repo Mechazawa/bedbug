@@ -105,6 +105,15 @@ class FunctionsTest {
         "'ride @s summon_ride zombie_pigman skip_riders', 'ride @s summon_ride minecraft:zombified_piglin skip_riders'",
         "'summon pig ~ ~ ~ facing ~ ~1 ~', 'summon minecraft:pig ~ ~ ~ facing ~ ~1 ~'",
         "'summon pig ~ ~ ~ 90 0 minecraft:entity_born Bob', 'summon minecraft:pig ~ ~ ~ 90 0 minecraft:entity_born Bob'",
+        "'replaceitem entity @s slot.armor.head 0 keep diamond_helmet', "
+            + "'execute as @s unless items entity @s armor.head * run item replace entity @s armor.head "
+            + "with minecraft:diamond_helmet'",
+        "'replaceitem block 1 2 3 slot.container 4 keep stone 2', "
+            + "'execute unless items block 1 2 3 container.4 * run item replace block 1 2 3 container.4 "
+            + "with minecraft:stone 2'",
+        "'replaceitem entity @s slot.equippable 1 iron_horse_armor', "
+            + "'item replace entity @s armor.body with minecraft:iron_horse_armor'",
+        "'loot replace entity @s slot.equippable 1 loot tp:hat', 'loot replace entity @s armor.body loot tp:hat'",
         "'save hold', 'save-off'",
         "'tickingarea add 0 0 0 32 0 32 named', 'forceload add 0 0 32 32'",
         "'tickingarea remove_all', 'forceload remove all'",

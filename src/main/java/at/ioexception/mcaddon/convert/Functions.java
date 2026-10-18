@@ -121,11 +121,9 @@ public final class Functions {
         "gametest create", "gametest pos", "gametest runsetuntilfail", "gametest runthese",
         "gametest runthis",
         "hud paperdoll", "hud tooltips", "hud touch_controls",
-        "loot slot.equippable",
         "mobevent minecraft:ender_dragon_event",
         "music loop", "music volume",
         "place apply_waterlogging", "place featurerule", "place ignore_waterlogging",
-        "replaceitem keep", "replaceitem slot.equippable",
         "camera attach_to_entity", "camera color", "camera detach_from_entity",
         "camera entity_offset", "camera fade", "camera fov_clear", "camera fov_set",
         "camera minecraft:control_scheme_camera", "camera minecraft:fixed_boom",
@@ -232,8 +230,8 @@ public final class Functions {
      *
      * `slot.armor` counts the four armour places by index, and `slot.saddle` and `slot.armor.body`
      * are spelled differently from one version to the next, so those three are looked up instead.
-     * `slot.equippable` has no Java slot: it holds whatever a Bedrock entity's own equippable
-     * component puts there, which Java spreads over the armour and the saddle.
+     * `slot.equippable` counts the slots of an entity's `minecraft:equippable`, which every vanilla
+     * entity carrying one numbers alike: the saddle first, then the armour or the carpet.
      */
     private static final Map<String, String> EQUIPMENT_SLOTS = Map.ofEntries(
         Map.entry("slot.weapon.mainhand", "weapon.mainhand"),
@@ -1041,8 +1039,9 @@ public final class Functions {
      * `replaceitem`, which Java replaced with `item replace`.
      *
      * Bedrock names the slot and its index apart and Java writes them as one, and the numbered
-     * slots are the only ones the index means anything for. `keep`, which Bedrock uses to fill an
-     * empty slot only, has no Java form and costs the line.
+     * slots are the only ones the index means anything for. `keep` fills a slot only while it is
+     * empty, which Java says by testing the slot with `execute unless items` first; 1.20.1 has no such
+     * test and loses the line.
      */
     private static String replaceItem(String rest, Set<String> unsupported) {
         String[] parts = SPACE.split(rest);
@@ -1056,11 +1055,12 @@ public final class Functions {
         if (slot == null) return dropped("replaceitem", parts[named], unsupported);
 
         int item = named + 2;
-        if (parts[item].equalsIgnoreCase("keep")) {
-            unsupported.add("command replaceitem keep, which fills an empty slot only");
+        boolean keep = parts[item].equalsIgnoreCase("keep");
+        if (keep && !Platform.testsSlots()) {
+            unsupported.add("command replaceitem keep, which this version of Java has no test of a slot for");
             return null;
         }
-        if (parts[item].equalsIgnoreCase("destroy")) item++;
+        if (keep || parts[item].equalsIgnoreCase("destroy")) item++;
         if (item >= parts.length) {
             unsupported.add("command replaceitem with no item in it");
             return null;
@@ -1075,7 +1075,12 @@ public final class Functions {
 
         String where = String.join(" ", Arrays.copyOfRange(parts, 0, named));
         String what = java + (item + 1 < parts.length ? " " + parts[item + 1] : "");
-        return "item replace " + where + " " + slot + " with " + what;
+        if (!keep) return "item replace " + where + " " + slot + " with " + what;
+
+        // Each entity is asked about its own slot, which `as` and `@s` do one entity at a time.
+        String each = named == 2 ? "entity @s" : where;
+        return "execute " + (named == 2 ? "as " + parts[1] + " " : "") + "unless items " + each + " " + slot
+            + " * run item replace " + each + " " + slot + " with " + what;
     }
 
     /**
@@ -1092,6 +1097,11 @@ public final class Functions {
             case "slot.armor" -> armourSlot(index);
             case "slot.saddle" -> Platform.saddleSlot();
             case "slot.armor.body" -> Platform.bodyArmourSlot();
+            case "slot.equippable" -> switch (index) {
+                case "0" -> Platform.saddleSlot();
+                case "1" -> Platform.horseArmourSlot();
+                default -> null;
+            };
             default -> null;
         };
     }

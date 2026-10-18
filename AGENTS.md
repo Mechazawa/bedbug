@@ -644,7 +644,9 @@ These are the checks it runs, and what each one catches:
   asserts with no pack installed. `/ride` seats a group only when the whole of it fits a boat, fills
   the boat to its two seats, empties it, brings it to its rider and summons a rider and a ride under
   each of the three ride rules; `/summon` turns what it makes to a rotation, a point and an entity,
-  takes a name written before the position, and raises a spawn event the ember answers.
+  takes a name written before the position, and raises a spawn event the ember answers;
+  `/replaceitem` saddles a horse and arms it through `slot.equippable`, and `keep` leaves its armour
+  alone and fills an armour stand's empty head.
 
   `HudClientGameTest` hides and resets pieces of the heads-up display on a dedicated server, one
   piece at a time, all of them, and through the script's `tp:hud_hide` and `tp:hud_reset` probes.
