@@ -136,6 +136,14 @@ These are the checks it runs, and what each one catches:
   tick costs the tick rather than the server, and that a converted dimension and its dimension type
   decode through this version's own codecs, whose field lists differ on each of the four.
 
+  **Hunting a flaky game test.** The whole suite takes about forty seconds, so repeat it. A single
+  test runs with `JAVA_TOOL_OPTIONS=-Dfabric-api.gametest.filter='mcaddon:*<snake_case_name>*'` (the
+  id is the class and method in snake case, and the wildcard needs the `mcaddon:` prefix).
+  Adding `-Dfabric-api.gametest.verify=true` runs 400 copies of each match, 100 in each of four
+  rotations, at once. A test that reads absolute offsets fails in the three turned copies by
+  construction, so read only the unturned ones. Fabric's `@GameTest` allows 20 ticks unless `maxTicks`
+  says more.
+
   The run directory is `versions/<minecraft>/build/run/gameTest/`. No pack content is committed, so
   the two tests that need one succeed when none is loaded; dropping a `.mcaddon` into that
   directory's `addons/` gives them something to assert against.
@@ -202,6 +210,11 @@ These are the checks it runs, and what each one catches:
   both parked in Fabric's `ThreadingImpl.enterPhase`, and the test thread inside
   `TestSingleplayerContextImpl.close`: the three wait on each other while a test world closes, and
   no code of this mod is on any of the three stacks.
+  The render thread has left Fabric's phaser to run the deferred disconnect, and `IntegratedServer.halt`
+  waits for the server thread to run a task, while the server thread waits at the phaser for the render
+  thread to arrive: a race inside the API (version 6.0.2 on 26.2), seen with a server still busy
+  generating chunks. Nothing in this repository's tests or mod touches those phases, and no report of it
+  was found in a search of the public trackers.
 
   Only the 26.x targets ship that API, so the tests are a source set of their own (`gametest`, with
   its own `fabric.mod.json` listing them) that the two older targets never compile, and `check`
