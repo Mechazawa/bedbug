@@ -3651,7 +3651,6 @@ public class AddonEntity extends PathfinderMob
             countKin();
             beAngry();
             noticeKinAnger();
-            reflectProjectiles();
             drawFromHopper();
             coolDownAnger();
             rollGenes();
@@ -3721,25 +3720,34 @@ public class AddonEntity extends PathfinderMob
     /**
      * Sends back the projectiles `minecraft:reflect_projectiles` names.
      *
-     * Bedrock turns the shot by the angle the pack gives and scales what is left of its speed. A
+     * Bedrock turns the shot about the vertical by `azimuth_angle` and up by `elevation_angle`, and
+     * scales its speed by `reflection_scale`, each a Molang expression asked afresh for every shot, so
+     * the breeze's `180.0 + Math.random(-20.0, 20.0)` sends each one back on a course of its own. A
      * projectile this entity fired itself is left alone, or a reflector would return its own shots.
      */
     private void reflectProjectiles() {
-        if (!declares("minecraft:reflect_projectiles")) return;
+        com.google.gson.JsonObject reflect = liveComponent("minecraft:reflect_projectiles");
+        if (reflect == null) return;
 
         java.util.Set<String> wanted = new java.util.LinkedHashSet<>();
         for (com.google.gson.JsonElement named : at.ioexception.mcaddon.util.Json.list(
-            componentBody("minecraft:reflect_projectiles"), "reflected_projectiles")) {
+            reflect, "reflected_projectiles")) {
             if (named.isJsonPrimitive()) wanted.add(named.getAsString());
         }
 
-        double scale = number(definition, "minecraft:reflect_projectiles", "reflection_scale", 1);
+        String azimuth = at.ioexception.mcaddon.util.Json.text(reflect, "azimuth_angle", "0");
+        String elevation = at.ioexception.mcaddon.util.Json.text(reflect, "elevation_angle", "0");
+        String scale = at.ioexception.mcaddon.util.Json.text(reflect, "reflection_scale", "1");
         for (net.minecraft.world.entity.projectile.Projectile shot : level().getEntitiesOfClass(
             net.minecraft.world.entity.projectile.Projectile.class, getBoundingBox().inflate(2))) {
             if (shot.getOwner() == this || !named(shot, wanted)) continue;
 
-            shot.setDeltaMovement(shot.getDeltaMovement().scale(-scale));
+            shot.setDeltaMovement(shot.getDeltaMovement()
+                .xRot((float) -Math.toRadians(answer(elevation).asFloat()))
+                .yRot((float) Math.toRadians(answer(azimuth).asFloat()))
+                .scale(answer(scale).asFloat()));
             shot.setOwner(this);
+            makeNoise(at.ioexception.mcaddon.util.Json.text(reflect, "reflection_sound", "reflect"));
         }
     }
 
@@ -4047,6 +4055,7 @@ public class AddonEntity extends PathfinderMob
         beat();
         hover();
         noticeTheBlockItIsIn();
+        reflectProjectiles();
         celebrateTheKill();
         publishBeingInLove();
         if (rails != null) rails.tick();

@@ -1649,6 +1649,36 @@ public final class GoalGameTests {
     private static final double SHOT_HEIGHT = 2;
     private static final double SHOT_MARGIN = 0.5;
 
+    /**
+     * A reflected projectile is turned by the Molang of `azimuth_angle` and slowed by that of
+     * `reflection_scale`: the mirrored brute turns a snowball a quarter and halves its speed.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aReflectedShotTurnsByItsAzimuth(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_mirror");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        Entity snowball = Platform.createMob(
+            BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("minecraft", "snowball")).orElseThrow(), level);
+        BlockPos from = helper.absolutePos(STAND.east(4));
+        Platform.placeAt(snowball, from.getX() + 0.5, from.getY() + PIG_MIDDLE, from.getZ() + 0.5, 0f, 0f);
+        snowball.setNoGravity(true);
+        snowball.setDeltaMovement(-THROWN, 0, 0);
+        level.addFreshEntity(snowball);
+        helper.succeedWhen(() -> {
+            Vec3 moving = snowball.getDeltaMovement();
+            helper.assertTrue(Math.abs(moving.x) < TURNED_SLACK && Math.abs(moving.z) > THROWN / 2 - TURNED_SLACK,
+                BRUTE + " turns a snowball a quarter at half speed and it moves at " + moving + ".");
+        });
+    }
+
+    private static final double THROWN = 0.5;
+    private static final double TURNED_SLACK = 0.05;
+
     /** The game time of each leap, which is the tick the entity starts rising fast. */
     private static List<Long> leapsOf(GameTestHelper helper, AddonEntity brute) {
         List<Long> leaps = new ArrayList<>();

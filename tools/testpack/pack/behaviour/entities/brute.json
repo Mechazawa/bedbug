@@ -600,6 +600,15 @@
           "attack_radius": 8
         }
       },
+      "tp:brute_mirrored": {
+        "minecraft:reflect_projectiles": {
+          "azimuth_angle": "45.0 + 45.0",
+          "reflection_scale": "0.5",
+          "reflected_projectiles": [
+            "snowball"
+          ]
+        }
+      },
       "tp:brute_poisoner": {
         "minecraft:shooter": {
           "def": "minecraft:arrow",
@@ -1468,6 +1477,13 @@
         "add": {
           "component_groups": [
             "tp:brute_choosy"
+          ]
+        }
+      },
+      "tp:brute_mirror": {
+        "add": {
+          "component_groups": [
+            "tp:brute_mirrored"
           ]
         }
       },
