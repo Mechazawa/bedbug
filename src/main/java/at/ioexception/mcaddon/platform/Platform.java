@@ -2504,7 +2504,7 @@ public final class Platform {
         //? if >=1.21 {
         client.createWorldOpenFlows().openWorld(name, () -> { });
         //?} else {
-        /*client.createWorldOpenFlows().loadLevel(new net.minecraft.client.gui.screens.TitleScreen(), name);
+        /*client.createWorldOpenFlows().loadLevel(client.screen, name);
         *///?}
     }
 
