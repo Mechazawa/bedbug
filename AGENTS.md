@@ -452,7 +452,7 @@ These are the checks it runs, and what each one catches:
   fires through pigs: plain it stops at the first, `tp:dart_piercing` hits every one and
   `tp:dart_bouncing` bounces off an invulnerable one. `tp:brute_stalking` carries an ocelot attack and
   `tp:brute_pouncing` a pounce whose stuck block is gravel, because a snow layer does not survive on
-  the empty structure's barrier floor. Four more brute groups each blow up one
+  the empty structure's barrier floor. `tp:brute_hopping` jumps around its target the way a breeze does. Four more brute groups each blow up one
   way (`submerged`, `gentle`, `switching`, `lofting`), read back in `GoalGameTests.aBlast*`. The brute's `tp:brute_roaring` group roars,
   pushing pigs tagged `tp_pushable` and hurting those tagged `tp_hurtable`.
 

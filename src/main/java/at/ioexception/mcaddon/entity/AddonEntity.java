@@ -3258,9 +3258,9 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.eat_carried_item" ->
                 goals.add(priority, new EatCarriedItemGoal(this, goal));
             case "minecraft:behavior.move_around_target" ->
-                goals.add(priority, CircleTargetGoal.walking(this, goal));
+                goals.add(priority, new CircleTargetGoal(this, goal));
             case "minecraft:behavior.jump_around_target" ->
-                goals.add(priority, CircleTargetGoal.jumping(this, goal));
+                goals.add(priority, new JumpAroundGoal(this, goal));
 
             // What the entity does because it belongs to somebody. Each of these reads back the
             // owner that taming stored, so an untamed entity carrying one simply never starts it.

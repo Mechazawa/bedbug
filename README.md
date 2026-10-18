@@ -173,7 +173,9 @@ Against a server without this mod a client plays with its own add-ons.
   names under `aux_val`. An ocelot attack sneaks, sprints and walks at its
   three speeds by its three ranges and strikes within its reach every `cooldown_time`; a pounce stalks
   at `stalk_speed`, stays interested for `interest_time`, leaps by `leap_dist` and `leap_height`,
-  strikes within `strike_dist` and is held stuck for `stuck_time` on what `stuck_blocks` names. A panic starts at
+  strikes within `strike_dist` and is held stuck for `stuck_time` on what `stuck_blocks` names. A jump around the
+  target crouches, then leaps on an arc it can clear to a point behind the target, resting between
+  jumps for less when it was hurt lately. A panic starts at
   the causes `damage_sources` lists, can leave every mob's blow out, heads for water under
   `prefer_water` and needs no hurt under `force`; fleeing a block raises `on_escape` once clear; and
   the panic and the flight make the sound the pack names for them. A teleporter closes on a far

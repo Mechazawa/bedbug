@@ -9,35 +9,22 @@ import net.minecraft.world.phys.Vec3;
 import java.util.EnumSet;
 
 /**
- * Keeps its distance and walks around whatever it is hunting.
+ * Keeps its distance and walks around whatever it is hunting, `minecraft:behavior.move_around_target`.
  *
- * `minecraft:behavior.move_around_target` circles at the range the pack named and
- * `minecraft:behavior.jump_around_target` does the same while hopping. Both keep a mob out of reach
- * between its own attacks, which is the part Java has no goal for.
+ * It circles at the range the pack named, which keeps a mob out of reach between its own attacks,
+ * the part Java has no goal for.
  */
 public final class CircleTargetGoal extends Goal {
     private final PathfinderMob mob;
     private final double speed;
     private final double distance;
-    private final boolean jumps;
     private double angle;
 
-    private CircleTargetGoal(PathfinderMob mob, JsonObject component, boolean jumps) {
+    public CircleTargetGoal(PathfinderMob mob, JsonObject component) {
         this.mob = mob;
         this.speed = number(component, "speed_multiplier", 1);
         this.distance = number(component, "distance_from_target", 4);
-        this.jumps = jumps;
         setFlags(EnumSet.of(Goal.Flag.MOVE));
-    }
-
-    /** `minecraft:behavior.move_around_target`, which walks the circle. */
-    public static CircleTargetGoal walking(PathfinderMob mob, JsonObject component) {
-        return new CircleTargetGoal(mob, component, false);
-    }
-
-    /** `minecraft:behavior.jump_around_target`, which hops it. */
-    public static CircleTargetGoal jumping(PathfinderMob mob, JsonObject component) {
-        return new CircleTargetGoal(mob, component, true);
     }
 
     @Override
@@ -70,10 +57,6 @@ public final class CircleTargetGoal extends Goal {
         Vec3 around = target.position().add(Math.cos(angle) * distance, 0, Math.sin(angle) * distance);
         mob.getNavigation().moveTo(around.x, around.y, around.z, speed);
         mob.getLookControl().setLookAt(target, 30f, 30f);
-
-        if (jumps && mob.onGround()) {
-            mob.setDeltaMovement(mob.getDeltaMovement().add(0, 0.42, 0));
-        }
     }
 
     private static double number(JsonObject component, String key, double fallback) {

@@ -942,6 +942,128 @@ public final class GoalGameTests {
         });
     }
 
+    /**
+     * A jump around the target crouches `prepare_jump_duration` seconds, lands
+     * `landing_distance_from_target` straight behind the target under a spread of nothing, on the
+     * surface `snap_to_surface_block_range` finds, and rests `jump_cooldown_duration` before the next.
+     *
+     * The hopping brute crouches half a second, lands two to two and a half blocks past the pig on a
+     * block standing there, and rests a second.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = POUNCE_TICKS)
+    public void aJumpAroundTheTargetLandsBehindIt(GameTestHelper helper) {
+        helper.setBlock(new BlockPos(6, 0, 1), Blocks.STONE);
+        helper.setBlock(new BlockPos(7, 0, 1), Blocks.STONE);
+        AddonEntity brute = withGroup(helper, "tp:brute_hop");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob pig = pig(helper, new BlockPos(4, 0, 1), BLOWS_TO_KILL);
+        brute.setTarget(pig);
+        long from = helper.getLevel().getGameTime();
+        List<Long> leaps = leapsOf(helper, brute);
+        List<Long> landed = new ArrayList<>();
+        List<Vec3> landedAt = new ArrayList<>();
+        helper.onEachTick(() -> {
+            if (leaps.size() > landed.size() && brute.onGround()
+                && helper.getLevel().getGameTime() > leaps.get(leaps.size() - 1) + 1) {
+                landed.add(helper.getLevel().getGameTime());
+                landedAt.add(helper.relativeVec(brute.position()));
+            }
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(leaps.size() >= 2, BRUTE + " jumped " + leaps.size() + " times, landing at "
+                + landedAt + " and standing at " + helper.relativeVec(brute.position()) + ".");
+            helper.assertTrue(leaps.get(0) - from >= HOP_PREPARE,
+                BRUTE + " crouches half a second and jumped after " + (leaps.get(0) - from) + " ticks.");
+            Vec3 first = landedAt.get(0);
+            helper.assertTrue(first.x >= HOP_LANDS_FROM && first.x <= HOP_LANDS_TO && Math.abs(first.z - 1.5) < 0.6,
+                BRUTE + " lands two to two and a half blocks behind the pig and landed at " + first + ".");
+            helper.assertTrue(Math.abs(first.y - 1) < 0.01,
+                BRUTE + " lands on the block standing there and landed at a height of " + first.y + ".");
+            helper.assertTrue(leaps.get(1) - landed.get(0) >= HOP_REST + HOP_PREPARE - 1,
+                BRUTE + " rests a second and crouches half a second between jumps and jumped again after "
+                    + (leaps.get(1) - landed.get(0)) + " ticks.");
+        });
+    }
+
+    /**
+     * A jump around the target rests only `jump_cooldown_when_hurt_duration` after it was hurt within
+     * `last_hurt_duration`.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = POUNCE_TICKS)
+    public void aJumpAroundTheTargetRestsLessWhenHurt(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_hop");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob pig = pig(helper, new BlockPos(4, 0, 1), BLOWS_TO_KILL);
+        brute.setTarget(pig);
+        List<Long> leaps = leapsOf(helper, brute);
+        List<Long> landed = new ArrayList<>();
+        helper.onEachTick(() -> {
+            if (leaps.size() > landed.size() && brute.onGround()
+                && helper.getLevel().getGameTime() > leaps.get(leaps.size() - 1) + 1) {
+                landed.add(helper.getLevel().getGameTime());
+                brute.invulnerableTime = 0;
+                Platform.hurt(brute, helper.getLevel(), brute.damageSources().mobAttack(pig), 0.5f);
+                brute.setTarget(pig);
+            }
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(leaps.size() >= 2, BRUTE + " jumped " + leaps.size() + " times.");
+            helper.assertTrue(leaps.get(1) - landed.get(0) < HOP_REST,
+                BRUTE + " rests a tenth of a second once hurt and jumped again after "
+                    + (leaps.get(1) - landed.get(0)) + " ticks.");
+        });
+    }
+
+    /**
+     * A jump around the target leaves alone a target past `valid_distance_to_target`, stays put
+     * without `required_vertical_space` over its head, and under `check_collision` will not jump
+     * through a wall it can see over by `line_of_sight_obstruction_height_ignore`.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aJumpAroundTheTargetStaysPutWhenItCannotJump(GameTestHelper helper) {
+        helper.setBlock(new BlockPos(1, 2, 3), Blocks.STONE);
+        helper.setBlock(new BlockPos(2, 0, 6), Blocks.STONE);
+        helper.setBlock(new BlockPos(2, 1, 6), Blocks.STONE);
+        AddonEntity far = withGroup(helper, "tp:brute_hop", new BlockPos(0, 0, 0));
+        AddonEntity roofed = withGroup(helper, "tp:brute_hop", new BlockPos(1, 0, 3));
+        AddonEntity walled = withGroup(helper, "tp:brute_hop", new BlockPos(1, 0, 6));
+        if (far == null || roofed == null || walled == null) {
+            helper.succeed();
+            return;
+        }
+
+        far.setTarget(pig(helper, new BlockPos(6, 0, 3), BLOWS_TO_KILL));
+        roofed.setTarget(pig(helper, new BlockPos(4, 0, 3), BLOWS_TO_KILL));
+        walled.setTarget(pig(helper, new BlockPos(4, 0, 6), BLOWS_TO_KILL));
+        AtomicBoolean jumped = new AtomicBoolean();
+        long from = helper.getLevel().getGameTime();
+        helper.onEachTick(() -> {
+            // A brute spawns a little over the floor and needs a few ticks to settle on it.
+            if (helper.getLevel().getGameTime() - from > SETTLE
+                && List.of(far, roofed, walled).stream().anyMatch(brute -> !brute.onGround())) {
+                jumped.set(true);
+            }
+        });
+        helper.runAfterDelay(QUIET_VOLLEY, () -> {
+            helper.assertFalse(jumped.get(), BRUTE + " jumped at a pig it should have left alone.");
+            helper.succeed();
+        });
+    }
+
+    private static final long HOP_PREPARE = 10;
+    private static final long HOP_REST = 20;
+    /** Two to two and a half blocks past the pig at four and a half, with a little room for the landing. */
+    private static final double HOP_LANDS_FROM = 6.2;
+    private static final double HOP_LANDS_TO = 7.3;
+
     /** The game time of each leap, which is the tick the entity starts rising fast. */
     private static List<Long> leapsOf(GameTestHelper helper, AddonEntity brute) {
         List<Long> leaps = new ArrayList<>();
