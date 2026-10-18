@@ -1,0 +1,70 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:cart_checking",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false,
+      "properties": {
+        "tp:activated": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:deactivated": {
+          "type": "bool",
+          "default": false
+        }
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": [
+          "tp_cart",
+          "mob"
+        ]
+      },
+      "minecraft:collision_box": {
+        "width": 0.6,
+        "height": 0.6
+      },
+      "minecraft:health": {
+        "value": 20,
+        "max": 20
+      },
+      "minecraft:physics": {},
+      "minecraft:rail_sensor": {
+        "on_deactivate": {
+          "event": "tp:cart_deactivated",
+          "target": "self"
+        },
+        "check_block_types": true
+      },
+      "minecraft:rideable": {
+        "seat_count": 1,
+        "family_types": [
+          "pig"
+        ],
+        "seats": {
+          "position": [
+            0,
+            0.2,
+            0
+          ]
+        }
+      }
+    },
+    "events": {
+      "tp:cart_activated": {
+        "set_property": {
+          "tp:activated": true
+        }
+      },
+      "tp:cart_deactivated": {
+        "set_property": {
+          "tp:deactivated": true
+        }
+      }
+    }
+  }
+}
