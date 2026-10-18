@@ -101,7 +101,9 @@ from the main checkout with reflinks where the filesystem has them, which takes 
 full copy of the main checkout, and it deletes what such a copy gets wrong: `.gradle/loom-cache/projects`
 and `versions/*/build/loom-cache` hold absolute paths to the checkout that made them, and
 `versions/*/build/{run,reports}` and `versions/*/run/{saves,world,.mcaddon,logs,crash-reports}` are
-worlds and caches of that checkout. Loom writes the first two again on the next build. Build outputs
+worlds and caches of that checkout. Loom writes the first two again on the next build. The worlds and
+caches are removed only on the first run in a worktree, which `.gradle/seeded-worktree` records by the
+worktree's path, so running it again keeps the worlds the worktree made itself. Build outputs
 are not copied, since the Gradle build cache restores them and execution history is keyed by absolute
 path. Run it while the main checkout is not building.
 
