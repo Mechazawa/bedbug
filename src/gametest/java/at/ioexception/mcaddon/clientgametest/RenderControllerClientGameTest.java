@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.clientgametest;
 
 import at.ioexception.mcaddon.client.render.AddonClientAssets;
+import at.ioexception.mcaddon.client.render.AddonModels;
 import at.ioexception.mcaddon.client.render.PackTextures;
 import at.ioexception.mcaddon.client.render.ScriptClock;
 import at.ioexception.mcaddon.client.render.Submitted;
@@ -61,6 +62,9 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
     /** Green laid over white at half, which eight bits of alpha carry as 128 parts in 255. */
     private static final int HURT_GREEN = 0xFF7FFF7F;
 
+    /** The alpha the sprite texture's top band is painted at. */
+    private static final int MARKED_ALPHA = 3;
+
     /** Every channel at half, which eight bits carry as 128 parts in 255. */
     private static final int GREY = 0xFF808080;
 
@@ -86,6 +90,7 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
             hurtRed(context, world);
             hurtColour(context, world);
             faintTexels(context, world);
+            colourMask(context, world);
             maskedTextures(context, world);
             boneMaterials(context, world);
         }
@@ -238,7 +243,7 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
      * `tp:sprite` is described twice, and the definition for the newer engine is the one drawn.
      *
      * The older one names a geometry the pack has not got and no cap, so drawing it would leave one
-     * pass of nothing; the newer one draws the young body and a cap over it.
+     * pass of nothing; the newer one draws the young body and a cap over it, tinted by a layer.
      */
     private static void newestDefinition(ClientGameTestContext context, TestSingleplayerContext world) {
         world.getServer().runCommand("summon tp:sprite ~3 ~ ~3 {NoAI:1b}");
@@ -248,8 +253,9 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
         Assert.that(engine.startsWith("1.16"), "tp:sprite is described for 1.8.0 and for 1.16.0 in a pack"
             + " written for 1.20.0, and the definition kept was the one for " + engine + ".");
 
-        Submitted frame = Frames.waitFor(context, sprite, drawn -> drawn.geometry().size() == 2,
-            "tp:sprite's 1.16.0 definition draws its body and its cap, and two passes were never submitted.");
+        Submitted frame = Frames.waitFor(context, sprite, drawn -> drawn.geometry().size() == 3,
+            "tp:sprite's 1.16.0 definition draws its body, its cap and the cap's tint layer, and three passes"
+                + " were never submitted.");
         Assert.that(frame.box() != null, "tp:sprite's two passes carried no vertices.");
     }
 
@@ -299,6 +305,50 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
             PackTextures.alphaAt(ScriptClock.of(shade).passes().get(0).texture(), 0, 0));
         Assert.that(tinted == 0xFF, "tp:shade draws with entity_alphatest_change_color, which keeps a texel at an"
             + " alpha of three, and its pass bound a texture holding that texel at " + tinted + ".");
+    }
+
+    /**
+     * A colour mask tints each texel by its own alpha, and a material removing `USE_OVERLAY` takes no
+     * overlay.
+     *
+     * Bedrock's colour mask draws a texel as `mix(rgb, rgb * color, alpha)`, so the sprite texture's
+     * band written at an alpha of three takes three parts in 255 of the shade's colour where its body
+     * takes all of it. One vertex colour cannot say that, so the pass is drawn untinted and the tint
+     * is laid over it in a blended pass binding the texture as painted, whose alpha is the weight.
+     * The shade's second controller draws `tp_unlaid`, `entity_alphatest` with `USE_OVERLAY` removed,
+     * under the same blue overlay, which that pass has to leave out along with the red of a hit.
+     */
+    private static void colourMask(ClientGameTestContext context, TestSingleplayerContext world) {
+        AddonEntity shade = Entities.waitForClient(context, "tp:shade");
+        List<AddonModels.Pass> passes = context.computeOnClient(client -> ScriptClock.of(shade).passes());
+        Assert.that(passes.size() == 3, "tp:shade draws a colour masked pass, the layer tinting it and an unlaid"
+            + " pass, and resolved " + passes.size() + " passes.");
+        int painted = context.computeOnClient(client -> PackTextures.alphaAt(passes.get(1).texture(), 0, 0));
+        Assert.that(painted == MARKED_ALPHA, "the tint layer weighs each texel by the alpha the pack painted, three"
+            + " in the sprite's top band, and its texture holds " + painted + " there.");
+
+        Submitted frame = Frames.waitFor(context, shade, drawn -> drawn.geometry().size() == 3,
+            last -> "tp:shade's three passes were never submitted; " + last.geometry().size() + " were.");
+        Submitted.Geometry base = frame.geometry().get(0);
+        Submitted.Geometry layer = frame.geometry().get(1);
+        Submitted.Geometry unlaid = frame.geometry().get(2);
+        Assert.that(colours(base, MARKED), "tp:shade's colour masked pass is drawn untinted under its blue"
+            + " overlay, and was drawn in " + Integer.toHexString(base.vertices().get(0).colour()) + ".");
+        Assert.that(layer.renderType() == Platform.renderType(passes.get(1).texture(), true, false, false),
+            "tp:shade's tint layer is blended over the pass, and was drawn with " + layer.renderType() + ".");
+        Assert.that(colours(layer, DYED_AND_MARKED), "tp:shade's tint layer carries its colour under the"
+            + " overlay, and was drawn in " + Integer.toHexString(layer.vertices().get(0).colour()) + ".");
+        Assert.that(colours(unlaid, WHITE), "tp_unlaid removes USE_OVERLAY, and tp:shade's pass under it took"
+            + " its overlay_color: " + Integer.toHexString(unlaid.vertices().get(0).colour()) + ".");
+
+        world.getServer().runCommand("damage @e[type=tp:shade,limit=1] 1");
+        Submitted hurt = Frames.waitFor(context, shade, drawn -> drawn.geometry().size() == 3
+                && everyVertex(drawn.geometry().get(0), vertex -> vertex.overlay() == HURT_RED),
+            "tp:shade was hurt and its colour masked pass never flashed red.");
+        Assert.that(everyVertex(hurt.geometry().get(1), vertex -> vertex.overlay() == HURT_RED),
+            "tp:shade was hurt and its tint layer did not flash red with the pass under it.");
+        Assert.that(everyVertex(hurt.geometry().get(2), vertex -> vertex.overlay() == NO_OVERLAY),
+            "tp_unlaid removes USE_OVERLAY, and tp:shade's pass under it flashed red when hurt.");
     }
 
     /**

@@ -48,7 +48,7 @@ class PackManifestTest {
             List.of(new PackManifest.PackDependency(UUID.fromString(OTHER), new SemVer(2, 0, 0))),
             manifest.packDependencies());
         assertEquals(
-            List.of(new PackManifest.ModuleDependency("@minecraft/server", new SemVer(2, 6, 0))),
+            List.of(new PackManifest.ModuleDependency("@minecraft/server", new SemVer(2, 6, 0), false)),
             manifest.moduleDependencies());
     }
 
@@ -223,6 +223,50 @@ class PackManifestTest {
         assertEquals(0.0, settings.get("tp:glow").number());
         assertFalse(settings.get("tp:heat").enabled());
         assertFalse(settings.get("tp:heat").selected("5"));
+    }
+
+    @Test
+    void bringsASlidersDefaultInsideItsRangeAndOntoItsStep() throws IOException {
+        PackManifest manifest = manifest("""
+            {
+              "header": {"uuid": "%s", "version": [1, 0, 0]},
+              "settings": [
+                {"type": "slider", "name": "tp:high", "text": "", "min": 1, "max": 8, "step": 1, "default": 40},
+                {"type": "slider", "name": "tp:low", "text": "", "min": 1, "max": 8, "step": 1, "default": -3},
+                {"type": "slider", "name": "tp:off_step", "text": "", "min": 0, "max": 10, "step": 4,
+                 "default": 5},
+                {"type": "slider", "name": "tp:top", "text": "", "min": 0, "max": 10, "step": 4,
+                 "default": 10}
+              ]
+            }
+            """.formatted(SELF));
+
+        Map<String, Double> numbers = manifest.settings().stream()
+            .collect(Collectors.toMap(PackManifest.Setting::name, PackManifest.Setting::number));
+
+        assertEquals(8.0, numbers.get("tp:high"));
+        assertEquals(1.0, numbers.get("tp:low"));
+        assertEquals(4.0, numbers.get("tp:off_step"));
+        assertEquals(8.0, numbers.get("tp:top"));
+    }
+
+    @Test
+    void fallsBackToTheFirstOptionWhenADropdownsDefaultIsNotOneOfThem() throws IOException {
+        PackManifest manifest = manifest("""
+            {
+              "header": {"uuid": "%s", "version": [1, 0, 0]},
+              "settings": [
+                {"type": "dropdown", "name": "tp:mood", "text": "", "default": "furious",
+                 "options": [{"name": "calm", "text": "Calm"}, {"name": "restless", "text": "Restless"}]}
+              ]
+            }
+            """.formatted(SELF));
+
+        PackManifest.Setting mood = manifest.settings().get(0);
+
+        assertTrue(mood.selected("calm"));
+        assertFalse(mood.selected("furious"));
+        assertEquals("calm", mood.plain());
     }
 
     @Test

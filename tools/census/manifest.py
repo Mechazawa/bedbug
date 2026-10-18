@@ -68,6 +68,7 @@ LEVELS = {
     "subpack": "subpack",
     "metadata": "metadata",
     "setting": "setting",
+    "option": "setting.options",
 }
 
 # `Json.text(header, "name", ...)` and `header.get("name")` are the two shapes every read in the

@@ -30,6 +30,11 @@ public final class LanRequests {
         IntegratedServer server = client.getSingleplayerServer();
         Path request = client.gameDirectory.toPath().resolve("lan.request");
         if (!Files.exists(request)) return;
+        //? if <26 {
+        /*// A world opened under a resource reload's overlay never finishes loading before 26: the
+        // loading loop waits for the overlay to go, and it never goes while that loop runs.
+        if (client.getOverlay() != null) return;
+        *///?}
         boolean idle = server == null && client.level == null && client.getConnection() == null;
         if (!idle && (server == null || client.level == null)) return;
 

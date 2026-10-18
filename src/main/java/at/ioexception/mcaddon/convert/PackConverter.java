@@ -316,6 +316,12 @@ public final class PackConverter {
                         ImageIO.write(tested.halved(), "PNG", halved.toFile());
                         if (flipbook != null) flipbook.write(halved);
                     }
+                    TintWeights weights = TintWeights.tryFrom(decoded);
+                    if (weights != null) {
+                        Path weighed = target.resolve(inside + TintWeights.SUFFIX + ".png");
+                        ImageIO.write(weights.image(), "PNG", weighed.toFile());
+                        if (flipbook != null) flipbook.write(weighed);
+                    }
                     written++;
                 } catch (IOException | RuntimeException error) {
                     paths.remove(withoutExtension(relative));

@@ -136,6 +136,14 @@ These are the checks it runs, and what each one catches:
   tick costs the tick rather than the server, and that a converted dimension and its dimension type
   decode through this version's own codecs, whose field lists differ on each of the four.
 
+  **Hunting a flaky game test.** The whole suite takes about forty seconds, so repeat it. A single
+  test runs with `JAVA_TOOL_OPTIONS=-Dfabric-api.gametest.filter='mcaddon:*<snake_case_name>*'` (the
+  id is the class and method in snake case, and the wildcard needs the `mcaddon:` prefix).
+  Adding `-Dfabric-api.gametest.verify=true` runs 400 copies of each match, 100 in each of four
+  rotations, at once. A test that reads absolute offsets fails in the three turned copies by
+  construction, so read only the unturned ones. Fabric's `@GameTest` allows 20 ticks unless `maxTicks`
+  says more.
+
   The run directory is `versions/<minecraft>/build/run/gameTest/`. No pack content is committed, so
   the two tests that need one succeed when none is loaded; dropping a `.mcaddon` into that
   directory's `addons/` gives them something to assert against.
@@ -186,7 +194,7 @@ These are the checks it runs, and what each one catches:
 
   `RenderControllerClientGameTest`, `AnimationClientGameTest`, `AttachableClientGameTest`,
   `TextureMeshClientGameTest`, `RelativeRotationClientGameTest`, `CullingClientGameTest`, `ParticleClientGameTest`, `FogClientGameTest`,
-  `CameraClientGameTest` and `ItemAndBlockClientGameTest` are the drawing side's tests; each class's docblock names the pack
+  `CameraClientGameTest`, the five camera tests named with the test pack below and `ItemAndBlockClientGameTest` are the drawing side's tests; each class's docblock names the pack
   content it reads and what it asserts. Two things about the machine the tests run on: a window
   hidden by the compositor can stall the render thread inside `glfwSwapBuffers` until the server's
   watchdog ends the run, which reads as a hang in whatever test was running, and a dedicated server
@@ -195,6 +203,18 @@ These are the checks it runs, and what each one catches:
   installed `runClientGameTest` first waits for one of four slots of its `minecraft-client` pool
   across every checkout on the machine (`-PclientSlots=<n>` changes the count, and
   `cpu-lock --status` shows who holds them and who waits).
+
+  A client that stops logging with a window the desktop calls not responding and almost no CPU is
+  worth a `jstack <pid>` before it is killed. One such stop on 26.1.2 had the render thread parked
+  in `IntegratedServer.halt` under Fabric's `deferDisconnect`, the server thread and the test thread
+  both parked in Fabric's `ThreadingImpl.enterPhase`, and the test thread inside
+  `TestSingleplayerContextImpl.close`: the three wait on each other while a test world closes, and
+  no code of this mod is on any of the three stacks.
+  The render thread has left Fabric's phaser to run the deferred disconnect, and `IntegratedServer.halt`
+  waits for the server thread to run a task, while the server thread waits at the phaser for the render
+  thread to arrive: a race inside the API (version 6.0.2 on 26.2), seen with a server still busy
+  generating chunks. Nothing in this repository's tests or mod touches those phases, and no report of it
+  was found in a search of the public trackers.
 
   Only the 26.x targets ship that API, so the tests are a source set of their own (`gametest`, with
   its own `fabric.mod.json` listing them) that the two older targets never compile, and `check`
@@ -339,6 +359,17 @@ These are the checks it runs, and what each one catches:
   form its material sees. A pack marking a texture with one texel at an alpha of one, which a plain
   alpha test never draws, otherwise shows that texel as a speck floating beside the model.
 
+  The shade's first controller also states a `color` halving red and a blue `overlay_color`. A colour
+  mask draws a texel as `mix(rgb, rgb * color, alpha)`, so the marked band takes three parts in 255
+  of that colour where the body takes all of it. The conversion writes the texture as painted
+  beside it, `_tint_weights`, for any texture holding a partly clear texel, and `AddonModels` draws
+  such a pass untinted and then again, blended, from that form in the controller's colour.
+  `RenderControllerClientGameTest.colourMask` reads both passes back. The shade's second controller
+  draws `tp_unlaid`, the pack's own `entity_alphatest` with `USE_OVERLAY` removed, under the same
+  overlay, and the same test asserts that pass takes neither the blue nor the red of a hit. The
+  sprite's cap is a colour mask over the same texture, so the sprite draws three passes and the
+  cap's colour is read off the third.
+
   `tp:shade` also collides in a box of nothing, the way a pack's stand-in for a vanilla mob often
   does. Java scales how far it draws a mob by its box, so `AddonEntityRenderer` measures that
   distance by the model's visible box as well, and `CullingClientGameTest` asserts the shade is drawn.
@@ -379,7 +410,10 @@ These are the checks it runs, and what each one catches:
   what may go in it, an idle sound interval, a dye, a dweller's radius, a leashable refusing to be
   stolen, a ground control, a sittable and a hopper drawing from whatever stands over the entity;
   the primed group holds an explosion, and the warded group
-  a damage sensor refusing the blow and raising an event about it. The box is the one that proves a
+  a damage sensor refusing the blow and raising an event about it. The mortal group's sensor
+  refuses only a blow `has_damage` calls `fatal`, which the sensor answers from the damage on its
+  way in against the health left, and `aDamageSensorKnowsAFatalBlow` deals a scratch and then a
+  killing blow. The box is the one that proves a
   group moves the width and the height apart from each other, which no scale can do, and the laden
   group's components are otherwise unrelated so that each assertion names one of them alone.
 
@@ -886,18 +920,41 @@ These are the checks it runs, and what each one catches:
   a wisp settled a second after arriving is not, and tags that player when an override of a property
   the wisp never declared is refused; `tp:override_clear` clears the override again.
 
-  `cameras/presets/` holds three presets. `tp:overlook` is a free camera at 0.5 120 0.5 turned to a
+  `cameras/presets/` holds the presets. `tp:overlook` is a free camera at 0.5 120 0.5 turned to a
   pitch of 20 and a yaw of 45 that hears from the player, and also asks for `player_effects` and
   `extend_player_rendering`; `tp:overlook_east` inherits from it and states only its x and its yaw,
-  so a chain walked wrongly leaves the camera at another height, pitch or listener; and `tp:orbit`
-  inherits from `minecraft:follow_orbit` with a radius and two offsets, which is refused by name.
-  `CameraPresetClientGameTest` reads each back off the client's camera and its sound engine's
-  listener, through `/camera` and through four script events (`tp:camera`, `tp:camera_default`,
-  `tp:camera_orbit` and `tp:camera_clear`) calling `Camera.setCamera`, `Camera.setDefaultCamera`
-  and `Camera.clear`, and `AddonGameTests.aCameraPresetsDroppedFieldsAreNamed` asks for the five
-  dropped fields among what `/mcaddon entities` names. A function translates a preset in a pack's
-  own namespace unread, because the functions are converted before the presets are read; the
-  command looks the name up as it runs.
+  so a chain walked wrongly leaves the camera at another height, pitch or listener.
+  `CameraPresetClientGameTest` reads those back off the client's camera and its sound engine's
+  listener, through `/camera` and through three script events (`tp:camera`, `tp:camera_default` and
+  `tp:camera_clear`) calling `Camera.setCamera`, `Camera.setDefaultCamera` and `Camera.clear`, and
+  `AddonGameTests.aCameraPresetsDroppedFieldsAreNamed` asks for the two dropped fields among what
+  `/mcaddon entities` names and for none of the read ones. A function translates a preset or a
+  spline in a pack's own namespace unread, because the functions are converted before the cameras
+  are read; the command looks the name up as it runs.
+
+  The rest of the presets and `camera/splines/sweep.json` are there for the cameras that move on
+  their own, and five client game tests read each one back off the client's camera, all of them on
+  `Stage` with the player at 0.5 120 0.5 looking south:
+
+  - `OrbitCameraClientGameTest`: `minecraft:follow_orbit`, `rot` turning the player, `view_offset`
+    and `entity_offset`, `minecraft:control_scheme_camera`, and `tp:orbit` (a radius of six and both
+    offsets), set by `/camera` and by `tp:camera_orbit`'s `Camera.setCamera` with a view offset of its
+    own. An orbit circles the middle of the box, so the expected place is worked out from the
+    client's own player.
+  - `BoomCameraClientGameTest`: `tp:boom` (a radius of four and a starting turn of 45 and 30), a
+    fixed boom that keeps the player's turn as it was set, `rot` over the preset's turn,
+    `tp:boom_aligned` turning the player to the camera's yaw, and `tp:camera_boom`'s two offsets.
+  - `AttachedCameraClientGameTest`: `attach_to_entity` on an armour stand, an orbit circling it,
+    `detach_from_entity`, `tp:camera_attach`'s `Camera.attachToEntity` at the stand's feet, and a
+    player refused.
+  - `TargetCameraClientGameTest`: `target_entity` with and without `target_center_offset`,
+    `remove_target`, a first person camera refused, `tp:watch` held to ten degrees round and ten
+    above the horizon, `tp:lookout` following nothing past five blocks, `tp:slow` seen partway round
+    at thirty degrees a second, `tp:snap` on the target at once, and `tp:camera_target`'s
+    `targetEntity`.
+  - `SplineCameraClientGameTest`: `play_spline tp:sweep` seen on its first leg and held at its end,
+    `tp:camera_spline`'s Catmull-Rom curve through four points, and a missing spline and a third
+    person camera refused.
 - **`tools/testpack/build_modules.py`** builds a second add-on, whose script imports every
   `@minecraft/*` module the mod provides and calls one thing from each. Its sources are a manifest
   and one script under `tools/testpack/modules/`.
@@ -952,10 +1009,12 @@ These are the checks it runs, and what each one catches:
   python3 tools/verify/verify.py join --version 26.2     # a client connected to a server
   python3 tools/verify/verify.py join --bare --version 26.2      # a second client with no add-ons takes the server's
   python3 tools/verify/verify.py join --other --reshaped --version 26.2   # other versions, and a refused one
+  python3 tools/verify/verify.py join --slow --version 1.20.1    # a login longer than every timer on it
   python3 tools/verify/verify.py lan --version 26.2      # a world opened to LAN, a second client joins it
   python3 tools/verify/verify.py lan --dormant --version 26.2   # the host also holds a dormant add-on
   python3 tools/verify/verify.py convert --source <extracted pack directory>   # no game
   python3 tools/verify/verify.py companions --version 26.2  # a server and a client beside other mods
+  python3 tools/verify/verify.py companions --bare --version 26.2  # the same, as a client taking the server's add-ons
   ```
 
   A green `run` proves the mod started, every mixin applied, the packs converted and registered, the
@@ -1142,6 +1201,19 @@ These are the checks it runs, and what each one catches:
     installed and goes dormant). `join --reshaped` gives it a copy whose `tp:lamp` has one more
     `tp:level` value, and expects `The server's copy of <add-on> cannot replace yours without a
     restart.` and no world.
+  - `join --slow` is `--bare` with the `-PslowJoin=<seconds>` property, which the join client
+    reads as `mcaddon.slowJoin` in a development run and waits for between holding every archive
+    and activating them. It waits 75 seconds, past the 600-tick login timer and the 30 second read
+    timeout before 1.21 and past the server's minute without a message, so the client reaches the
+    world only while the login heartbeat, `ServerLoginTimerMixin` and `Outgoing`'s waiting on an
+    activating client all work. It reads the login's length off the two logs' timestamps, from the
+    client's `Connecting to` to the server's login line, and fails on `Took too long to log in`,
+    `Timed out`, `ReadTimeoutException` and `stopped making progress`. Measured on 1.20.1 with each
+    part taken out, it fails each time. With no heartbeat the server ends the login with `Timed out`
+    30 seconds after the last piece. With no mixin it ends it with `Took too long to log in` 31
+    seconds after the client connected. With the minute counted from the last acknowledgement
+    whatever the client was doing, it ends it with `stopped making progress` 60 seconds after the
+    download. With all three in place the login took 80 seconds.
   - `lan` runs the first client with a saved world as host. A development-only handler,
     `client/LanRequests`, answers a `lan.request` file in the host's run directory: each line is a
     console command for the integrated server, and `publish` opens the world to the LAN through
@@ -1153,7 +1225,10 @@ These are the checks it runs, and what each one catches:
     while it hosts. `--dormant` has the host client join a dedicated server serving an add-on the
     host has not installed, leave, and only then open its world with `open`, all in one process,
     because a dormant add-on is one the process registered: a host started afresh holds none. The
-    guest is then offered it as an inactive entry. `all` runs both.
+    guest is then offered it as an inactive entry. `all` runs both. Before 26 `LanRequests` waits
+    for the resource reload's overlay to go before it acts: the leave's reload is still showing it
+    when the harness asks for `open`, and a world opened under it waits for it inside
+    `Minecraft.doWorldLoad`, which it never leaves.
   - A fresh game directory has no `options.txt`, and the game then opens its accessibility
     onboarding screen instead of the quick play it was told to run, so a client in a new worktree
     sat on the title screen until the deadline. `play` writes `onboardAccessibility:false` first.
@@ -1182,6 +1257,12 @@ These are the checks it runs, and what each one catches:
     is absent, which is what a mod's optional integration with a mod nobody installed looks like.
   - Fabric resolved the set at all. `Mod resolution failed` means the run proved nothing about
     anybody.
+
+  `companions --bare` runs `join --bare` instead of the server and the client, and reads the same
+  three things out of the join server's and the second client's logs. That client registers the
+  server's blocks, items and entity types after the freeze while every companion is loaded, so a
+  companion holding an array sized at startup from the block state list fails it on the first frame
+  after the join.
 
   The mods themselves are `companionMods()` in `build.remap.gradle.kts` and `build.named.gradle.kts`,
   each pinned by exact version in `versions/<version>/gradle.properties` and installed only for a dev
@@ -1537,7 +1618,10 @@ veka0/mcbe-shader-codebase) multiply a texture by `ChangeColor` only where the m
 with `CHANGE_COLOR` on, which is what `USE_COLOR_MASK` in a `.material` selects: the texel is mixed
 toward itself times the colour by its own alpha, and its alpha is multiplied by the colour's.
 `OverlayColor`, which `overlay_color`, `is_hurt_color` and `on_fire_color` feed, is laid over in
-every one of them. Every vanilla render controller stating a `color` names a material that reads
+every one of them; the legacy `entity.fragment` laid it only under `USE_OVERLAY`, and Microsoft's
+material documentation still lists that define, so `MaterialDefinition.laysOverlay` leaves the
+overlay off a material removing it, as `entity_beam_additive`, `entity_dissolve_layer1` and
+`item_in_hand_multicolor_tint` do. Every vanilla render controller stating a `color` names a material that reads
 it: `player_spectator`, `warden_bioluminescent_layer` and `horse_leather_armor`.
 `MaterialDefinition.readsControllerColour` names the game's own materials defining
 `USE_COLOR_MASK`, read off the game's `entity.material`; `MULTI_COLOR_TINT` (the red channel alone)
@@ -1686,12 +1770,13 @@ Mojang's geometry is not committed, so that list is the one place this knowledge
   ```
 
   The published side is Mojang's own pack pair, widened by the material in the same checkout naming a
-  kind that pair happens not to ship. The mod's side is the `READ` and `DEFINED` declarations in
-  `pack/PackFiles.java`, and the difference between them is what `PackFiles.report` names against the
-  pack that shipped it.
+  kind that pair happens not to ship. The mod's side is the `READ` set and the `UNREAD` map in
+  `pack/PackFiles.java`. `UNREAD` gives each kind no reader opens the reason Java has no place for
+  it, and `PackFiles.report` names the kind and that reason against the pack that shipped it, so a
+  kind cannot be declared unread without a reason.
 
-  **The silent column is the one that has to stay at zero.** A kind in `DEFINED` and not in `READ` is
-  reported to the author; a kind in neither is a directory the mod passes over without a word. The
+  **The silent column is the one that has to stay at zero.** A kind in `UNREAD` is reported to the
+  author; a kind in neither is a directory the mod passes over without a word. The
   run also names any path declared as read whose own literal appears in no other source file, which
   is a coverage claim with no reader behind it.
 - **`tools/census/manifest.py`** measures the one file every pack has and no other census looks
@@ -1721,6 +1806,12 @@ Mojang's geometry is not committed, so that list is the one place this knowledge
   ever asks for is a field parsed and then ignored, which is as silent as one never parsed; string
   literals are blanked before that search so a field name spelt in the reader cannot stand in for
   its value being used.
+
+  A slider's `min`, `max` and `step` and a dropdown's `options` are read by `PackManifest.Setting.tryFrom`,
+  which brings the shipped default inside them; `PackOrder.sort` names a non-`optional` script API
+  dependency `ScriptHost.provides` lacks. The test pack's `tp:ember_overdriven` and `tp:ember_drift`
+  settings ship defaults outside their controls so `aPacksOwnSettingsReadBackAtTheirDeclaredValues`
+  can read the correction back.
 
   The count behind each dropped field has two halves. **Vanilla** is Mojang's own pack pair, which
   writes a thin manifest and says little. **Installed** is every manifest in the add-ons under
@@ -1823,6 +1914,9 @@ camera presets, dialogue scenes and, from 1.21, brewing are read from. An add-on
 active is dormant: its entries stay registered with their last definitions and nothing offers it.
 Spawn rules, feature rules and the nether and end biome lists are registered once for the installed
 set, because they apply as a world loads and a world loads only with the installed set active.
+Before 26 the model bakery asks for a model for every registered item and block, so
+`ModelBakeryMixin` and `BlockStateModelLoaderMixin` leave out what `ActiveAddons.isDormant` names;
+the miss would otherwise be logged as `Unable to load model` on every reload after a visit.
 
 **A same-id copy is checked before anything is registered.** `AddonRegistry.conflict` compares the
 shape every registered object was built from (an entity type's population and size, a block's whole
@@ -1849,8 +1943,9 @@ refusal `The server's copy of <add-on> cannot replace yours without a restart.`
 Traps met building it:
 
 - **A task queued for the client thread from a disconnect can be thrown away.** The client drops
-  its pending tasks as it disconnects, and Fabric raises the disconnect event on the network thread
-  just before, so a leave handed over with `execute` or `schedule` sometimes never ran. The leave is
+  its pending tasks as a play connection ends (`Minecraft.disconnect` calls `dropAllTasks` before
+  anything else), and Fabric raises the disconnect event before that, so a leave handed over with
+  `execute` or `schedule` never ran. The leave is
   a flag the client's own tick takes instead, and an enter takes any leave still owed first.
 - **Every client game test joining a dedicated server is handed the served add-on.** The server and
   the client share one process, so the add-on is registered from the first such test on, and a test
@@ -1860,14 +1955,41 @@ Traps met building it:
   which `ServedArchives` reads in a development run only.
 - **The client game test harness does not tick the client between tests**, so a leave owed by one
   test runs as the next one connects, while that test's server configures it.
+- **`Outgoing` tells its link how a transfer ended only once its lock is let go.** Ending a
+  connection from the network thread waits on the server thread (`executeBlocking`), and the server
+  thread takes that lock every tick in `expire`, so a refusal told under it froze the server until
+  the watchdog ended it. `AddonSyncRefusalClientGameTest` met it on 26.1.2; `OutgoingTest` holds it.
 - **A configuration that changes nothing must not reload.** A join whose set equals the active one
   answers at once.
+- **The server's minute without a message counts only while archives are on their way.** A client
+  holding every archive it asked for converts, activates and reloads, which sends nothing for as
+  long as a large set takes. `Outgoing` waits on it then, the ten minute limit still holds, and a
+  client that stops answering is dropped by the connection's read timeout, which the login's
+  heartbeat and the configuration phase's keep-alive hold off for one that answers.
 
 Tests: `RegistryGameTests` (adding after the freeze, on all four versions), `ActiveAddonsGameTests`
 (an empty set and back), `ShapeGameTests` (copies that do and do not conflict),
 `ServedArchivesGameTests` (a registered archive handed out dormant), `AddonSyncClientGameTest` (a
 join, a leave and a second join against a dedicated server), and the unit tests `AddonManifestTest`,
-`ReceivedArchivesTest`, `ArchivesTest` and `FunctionNamesTest`.
+`ReceivedArchivesTest`, `ArchivesTest` and `FunctionNamesTest`. Three more client game tests point
+the server at another set through `clientgametest/Served`, which sets `mcaddon.served` to one of
+the directories `installServedPack` writes beside `addons-served` and has the server prepare its
+manifest again: `addons-reshaped` holds a later release of `sv` whose crate has a fourth state, and
+`addons-other` the same content as the add-on `sw`.
+
+- `AddonSyncRefusalClientGameTest` joins once to register `sv`, then joins a server handing out the
+  reshaped copy and expects the disconnect screen naming the add-on, no world, and the installed set
+  active. It fails without `AddonRegistry.conflict` in `AddonSession.activate`.
+- `AddonSyncReloadClientGameTest` closes the connection from the server while the join's reload is
+  on the screen, then again with the client in the world, and expects the installed set back both
+  times. The second close fails when the leave is queued with `Platform.schedule` from the
+  disconnect event: the client drops its queued tasks as a play connection ends
+  (`Minecraft.disconnect` calls `dropAllTasks` first), so the leave never runs.
+- `AddonSyncTransferClientGameTest` has the server hand out `sw` instead of `sv` and `/transfer`
+  the client back to itself, which to the client is a second server with another set. It records
+  every activation through `ActiveAddons.onActivate` and expects the installed set once and then the
+  second set. It fails when the play phase's disconnect does not end the visit. A server needs
+  `accepts-transfers=true` (that spelling) in its properties to take a transfer.
 
 ## Conventions
 
@@ -1996,7 +2118,7 @@ src/main/java/at/ioexception/mcaddon/
                              what is registered and what is active
   sync/                      The add-on hand-over at join: the manifest, what a server serves and
                              both ends of a transfer
-  bedrock/camera/            What `/camera` and `/camerashake` set, the presets a pack adds, and the
+  bedrock/camera/            What `/camera` and `/camerashake` set, the presets and splines a pack adds, and the
                              easing curves they name
   bedrock/fog/               A pack's `fogs/` settings, as far as Java's one fog can carry them
   bedrock/hud/               The pieces of the heads-up display `/hud` names

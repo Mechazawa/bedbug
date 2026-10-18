@@ -4,7 +4,8 @@
     "description": {
       "identifier": "tp:shade",
       "materials": {
-        "default": "entity_alphatest_change_color"
+        "default": "entity_alphatest_change_color",
+        "unlaid": "tp_unlaid"
       },
       "textures": {
         "default": "textures/entity/sprite"
@@ -12,7 +13,7 @@
       "geometry": {
         "default": "geometry.tp.sprite"
       },
-      "render_controllers": ["controller.render.tp.visor"]
+      "render_controllers": ["controller.render.tp.shade", "controller.render.tp.shade.unlaid"]
     }
   }
 }

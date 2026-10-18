@@ -99,9 +99,9 @@ class FunctionsTest {
             + "'item replace entity @s weapon.mainhand with minecraft:stone'",
         "'replaceitem block ~ ~ ~ slot.container 3 stone 2', "
             + "'item replace block ~ ~ ~ container.3 with minecraft:stone 2'",
-        "'ride @s start_riding @e[type=pig]', 'ride @s start_riding @e[type=minecraft:pig]'",
+        "'ride @s start_riding @e[type=minecraft:pig]', 'ride @s start_riding @e[type=minecraft:pig]'",
         "'ride @s stop_riding', 'ride @s stop_riding'",
-        "'ride @e[type=pig] summon_rider zombie minecraft:as_baby_jockey', "
+        "'ride @e[type=minecraft:pig] summon_rider zombie minecraft:as_baby_jockey', "
             + "'ride @e[type=minecraft:pig] summon_rider minecraft:zombie minecraft:as_baby_jockey'",
         "'ride @s summon_ride zombie_pigman skip_riders', 'ride @s summon_ride minecraft:zombified_piglin skip_riders'",
         "'summon pig ~ ~ ~ facing ~ ~1 ~', 'summon minecraft:pig ~ ~ ~ facing ~ ~1 ~'",
@@ -138,7 +138,7 @@ class FunctionsTest {
         "'replaceitem entity @s slot.chest 0 chest', 'item replace entity @s horse.chest with minecraft:chest'",
         "'loot replace entity @s slot.armor.head 0 loot tp:hat', "
             + "'loot replace entity @s armor.head loot tp:hat'",
-        "'ride @e[type=zombie] start_riding @e[type=pig] teleport_rider if_group_fits', "
+        "'ride @e[type=zombie] start_riding @e[type=minecraft:pig] teleport_rider if_group_fits', "
             + "'ride @e[type=minecraft:zombie] start_riding @e[type=minecraft:pig] teleport_rider if_group_fits'",
         "'gametest stopall', 'gametest stopall'",
         "'gametest runthis', 'gametest runthis'",
@@ -181,7 +181,6 @@ class FunctionsTest {
      */
     @ParameterizedTest
     @CsvSource({
-        "'camera @s set minecraft:follow_orbit', 'command camera minecraft:follow_orbit, which Java has no form of'",
         "'permission set @p visitor', 'command permission visitor, which Java has no form of'",
     })
     void dropsAFormOfATranslatedCommandJavaCannotSay(String source, String reported) throws IOException {
@@ -290,7 +289,7 @@ class FunctionsTest {
     @Test
     void rewritesTheExecuteBedrockHadBeforeTheModernOne() throws IOException {
         assertEquals("execute as @e[type=minecraft:pig] at @s positioned ~ ~ ~ run say oink",
-            only("execute @e[type=pig] ~ ~ ~ say oink"));
+            only("execute @e[type=minecraft:pig] ~ ~ ~ say oink"));
     }
 
     @Test
@@ -454,6 +453,10 @@ class FunctionsTest {
     @CsvSource({
         "'camera @a set minecraft:free ease 2 in_out_quad pos 1 2 3 rot 30 90'",
         "'camera @a clear'",
+        "'camera @s set minecraft:follow_orbit view_offset 1 2 entity_offset 0 1 0'",
+        "'camera @s attach_to_entity @e[type=minecraft:pig]'",
+        "'camera @s target_entity @e[type=minecraft:pig] target_center_offset 0 1 0'",
+        "'camera @s play_spline tp:sweep'",
         "'camerashake add @a 0.5 3 rotational'",
         "'camerashake stop @a'",
         "'fog @a push minecraft:fog_crimson_forest my_fog'",

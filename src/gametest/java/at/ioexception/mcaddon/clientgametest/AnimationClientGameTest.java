@@ -40,7 +40,8 @@ import java.util.function.Predicate;
  * bone and the drawn body are both a function of the sprite's age. `chime`'s timeline sets
  * `v.chimed` at two and a half seconds, the `ring` controller leaves its first state once that
  * variable holds, writing the moment from `on_exit` and counting from `on_entry`, and the cap's render
- * controller halves its green from then on.
+ * controller halves its green from then on. The cap is a colour mask over a partly clear texture, so
+ * that green is read off the tint layer drawn over it, the sprite's third pass.
  *
  * `tp:gaze`'s `wake` controller starts in a state whose `on_entry` counts `v.woke`, whose one clip
  * counts `v.stirred` off its timeline at nought seconds, and which leaves on `1` for a state counting
@@ -192,7 +193,7 @@ public final class AnimationClientGameTest implements FabricClientGameTest {
             for (int tick = 1; tick <= TICKS; tick++) {
                 clock.tick();
                 taken.add(new Rung(clock.variable("chimed"), clock.variable("rung"),
-                    clock.variable("quiet_until"), clock.passes().get(1).colour()));
+                    clock.variable("quiet_until"), clock.passes().get(2).colour()));
             }
             return taken;
         });
@@ -218,12 +219,12 @@ public final class AnimationClientGameTest implements FabricClientGameTest {
 
         Submitted early = context.computeOnClient(client -> Submitted.entity(sprite));
         int earlyAge = context.computeOnClient(client -> sprite.tickCount);
-        Assert.that(earlyAge < CHIMED && early.geometry().get(1).vertices().get(0).colour() == WHITE,
+        Assert.that(earlyAge < CHIMED && early.geometry().get(2).vertices().get(0).colour() == WHITE,
             "the drawn cap of a tp:sprite " + earlyAge + " ticks old, before its chime, was "
-                + Integer.toHexString(early.geometry().get(1).vertices().get(0).colour()) + " and not white.");
-        Frames.waitFor(context, sprite, frame -> frame.geometry().get(1).vertices().get(0).colour() == RUNG,
+                + Integer.toHexString(early.geometry().get(2).vertices().get(0).colour()) + " and not white.");
+        Frames.waitFor(context, sprite, frame -> frame.geometry().get(2).vertices().get(0).colour() == RUNG,
             drawn -> "tp:sprite's drawn cap is " + Integer.toHexString(RUNG) + " once its chime set v.chimed, and"
-                + " it was drawn in " + Integer.toHexString(drawn.geometry().get(1).vertices().get(0).colour()) + ".");
+                + " it was drawn in " + Integer.toHexString(drawn.geometry().get(2).vertices().get(0).colour()) + ".");
         // The frames drawn during the tick before the chime may already be most of the way to it.
         int rungAge = context.computeOnClient(client -> sprite.tickCount);
         Assert.that(rungAge >= CHIMED - 1, "tp:sprite's drawn cap had its green halved " + rungAge

@@ -232,9 +232,10 @@ public final class AddonGameTests {
     }
 
     /**
-     * A pack's `cameras/presets` are read, and each field of theirs that Java has nothing to draw
-     * with is named: `tp:overlook` asks for the player's effects and a longer rendering reach, and
-     * `tp:orbit` for the radius and the two offsets of the orbit it is built on.
+     * A pack's `cameras/presets` and `camera/splines` are read, and each preset field that Java has
+     * nothing to draw with is named: `tp:overlook` asks for the player's effects and a longer
+     * rendering reach. The orbit fields `tp:orbit` and `tp:boom` state and the target fields of
+     * `tp:watch`, `tp:slow` and `tp:lookout` are drawn, so none of those is named.
      */
     @GameTest()
     public void aCameraPresetsDroppedFieldsAreNamed(GameTestHelper helper) {
@@ -244,12 +245,19 @@ public final class AddonGameTests {
         }
 
         java.util.List<String> report = AddonEntities.report();
-        helper.assertTrue(report.stream().noneMatch(line -> line.startsWith("    behaviour pack cameras x")),
-            "the pack's cameras directory is named as one nothing reads: " + report);
-        for (String field : java.util.List.of("player_effects", "extend_player_rendering", "radius", "view_offset",
-            "entity_offset")) {
+        for (String directory : java.util.List.of("cameras", "camera")) {
+            helper.assertTrue(report.stream()
+                    .noneMatch(line -> line.startsWith("    behaviour pack " + directory + ",")),
+                "the pack's " + directory + " directory is named as one nothing reads: " + report);
+        }
+        for (String field : java.util.List.of("player_effects", "extend_player_rendering")) {
             helper.assertTrue(report.stream().anyMatch(line -> line.startsWith("    camera preset " + field + " x")),
                 "the camera preset field " + field + " is not named among what the packs asked for: " + report);
+        }
+        for (String field : java.util.List.of("radius", "view_offset", "entity_offset", "starting_rot_x",
+            "rotation_speed", "horizontal_rotation_limit", "tracking_radius", "align_target_and_camera_forward")) {
+            helper.assertTrue(report.stream().noneMatch(line -> line.startsWith("    camera preset " + field + " x")),
+                "the camera preset field " + field + " is read and is named as one that is not: " + report);
         }
         helper.succeed();
     }

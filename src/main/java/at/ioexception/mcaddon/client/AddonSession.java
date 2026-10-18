@@ -14,6 +14,7 @@ import at.ioexception.mcaddon.resource.AddonSet;
 import at.ioexception.mcaddon.sync.AddonManifest;
 import at.ioexception.mcaddon.sync.Incoming;
 import at.ioexception.mcaddon.sync.Transfer;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 
 import java.io.IOException;
@@ -23,6 +24,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -35,6 +37,13 @@ import java.util.stream.Collectors;
  * installed add-on the server lacks goes dormant for the visit and comes back when it ends.
  */
 public final class AddonSession {
+    /**
+     * Seconds a development run waits between holding every archive and activating them, set by the
+     * `mcaddon.slowJoin` property, which is how a join longer than the login's timers is tested.
+     */
+    private static final long SLOW_JOIN_SECONDS = FabricLoader.getInstance().isDevelopmentEnvironment()
+        ? Long.getLong("mcaddon.slowJoin", 0L) : 0L;
+
     private static CompletableFuture<Void> settled = CompletableFuture.completedFuture(null);
 
     /** The connection a transfer is under way on, and the transfer, or null between them. */
@@ -208,6 +217,11 @@ public final class AddonSession {
 
     private static void enter(AddonManifest manifest, Visit visit) {
         leaveIfEnded();
+        if (SLOW_JOIN_SECONDS > 0) {
+            McAddon.LOGGER.info("Waiting {} seconds before activating the server's add-ons.", SLOW_JOIN_SECONDS);
+            settled = settled.thenCompose(ignored -> CompletableFuture.runAsync(() -> { },
+                CompletableFuture.delayedExecutor(SLOW_JOIN_SECONDS, TimeUnit.SECONDS, Minecraft.getInstance())));
+        }
         settled = settled.thenCompose(ignored -> activate(manifest, visit)).exceptionally(failure -> {
             visit.ready(false, "The server's add-ons could not be loaded: " + failure.getMessage());
             return failed(failure);
