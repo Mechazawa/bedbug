@@ -91,7 +91,7 @@ public final class HangWatchdog implements ClientModInitializer {
         Runtime.getRuntime().halt(EXIT_CODE);
     }
 
-    /** The innermost test class on any thread's stack, which is the one the test thread is running. */
+    /** The test class on the test thread's stack, found by its package and its name. */
     private static Optional<String> runningTest(ThreadInfo[] threads) {
         return Arrays.stream(threads)
             .flatMap(thread -> Arrays.stream(thread.getStackTrace()))
