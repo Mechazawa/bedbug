@@ -907,6 +907,7 @@ These are the checks it runs, and what each one catches:
   python3 tools/verify/verify.py join --version 26.2     # a client connected to a server
   python3 tools/verify/verify.py join --bare --version 26.2      # a second client with no add-ons takes the server's
   python3 tools/verify/verify.py join --other --reshaped --version 26.2   # other versions, and a refused one
+  python3 tools/verify/verify.py join --slow --version 1.20.1    # a login longer than every timer on it
   python3 tools/verify/verify.py lan --version 26.2      # a world opened to LAN, a second client joins it
   python3 tools/verify/verify.py lan --dormant --version 26.2   # the host also holds a dormant add-on
   python3 tools/verify/verify.py convert --source <extracted pack directory>   # no game
@@ -1097,6 +1098,19 @@ These are the checks it runs, and what each one catches:
     installed and goes dormant). `join --reshaped` gives it a copy whose `tp:lamp` has one more
     `tp:level` value, and expects `The server's copy of <add-on> cannot replace yours without a
     restart.` and no world.
+  - `join --slow` is `--bare` with the `-PslowJoin=<seconds>` property, which the join client
+    reads as `mcaddon.slowJoin` in a development run and waits for between holding every archive
+    and activating them. It waits 75 seconds, past the 600-tick login timer and the 30 second read
+    timeout before 1.21 and past the server's minute without a message, so the client reaches the
+    world only while the login heartbeat, `ServerLoginTimerMixin` and `Outgoing`'s waiting on an
+    activating client all work. It reads the login's length off the two logs' timestamps, from the
+    client's `Connecting to` to the server's login line, and fails on `Took too long to log in`,
+    `Timed out`, `ReadTimeoutException` and `stopped making progress`. Measured on 1.20.1 with each
+    part taken out, it fails each time. With no heartbeat the server ends the login with `Timed out`
+    30 seconds after the last piece. With no mixin it ends it with `Took too long to log in` 31
+    seconds after the client connected. With the minute counted from the last acknowledgement
+    whatever the client was doing, it ends it with `stopped making progress` 60 seconds after the
+    download. With all three in place the login took 80 seconds.
   - `lan` runs the first client with a saved world as host. A development-only handler,
     `client/LanRequests`, answers a `lan.request` file in the host's run directory: each line is a
     console command for the integrated server, and `publish` opens the world to the LAN through
@@ -1817,6 +1831,11 @@ Traps met building it:
   test runs as the next one connects, while that test's server configures it.
 - **A configuration that changes nothing must not reload.** A join whose set equals the active one
   answers at once.
+- **The server's minute without a message counts only while archives are on their way.** A client
+  holding every archive it asked for converts, activates and reloads, which sends nothing for as
+  long as a large set takes. `Outgoing` waits on it then, the ten minute limit still holds, and a
+  client that stops answering is dropped by the connection's read timeout, which the login's
+  heartbeat and the configuration phase's keep-alive hold off for one that answers.
 
 Tests: `RegistryGameTests` (adding after the freeze, on all four versions), `ActiveAddonsGameTests`
 (an empty set and back), `ShapeGameTests` (copies that do and do not conflict),
