@@ -500,6 +500,29 @@ public final class GoalGameTests {
     }
 
     /**
+     * `minecraft:behavior.drink_potion` drinks the first of its `potions` whose filters hold, named
+     * by Bedrock's number: the thirsty group drinks potion nineteen, water breathing, under water and
+     * potion twelve, fire resistance, while burning, so a burning brute on land gains fire resistance.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void anEntityDrinksThePotionItsConditionsName(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_thirst");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        brute.setRemainingFireTicks(BURNING);
+        helper.succeedWhen(() -> {
+            List<String> effects = brute.getActiveEffects().stream().map(Platform::effectId).toList();
+            helper.assertTrue(effects.contains("minecraft:fire_resistance"),
+                BRUTE + " drinks fire resistance while burning and holds " + effects + ".");
+            helper.assertFalse(effects.contains("minecraft:water_breathing"),
+                BRUTE + " drinks water breathing under water alone and drank it on land.");
+        });
+    }
+
+    /**
      * `minecraft:addrider` seats every rider its `riders` list names, each raising its own spawn
      * event, and a group bringing the component in is enough for that.
      */

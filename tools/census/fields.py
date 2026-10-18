@@ -211,7 +211,11 @@ REASONS = {
     },
     "minecraft:behavior.drink_milk": {"filters": "Drinking clears what is harmful whenever there is any."},
     "minecraft:behavior.drink_potion": {
-        "*": "Drinking clears what is harmful rather than applying a potion Java would have to hold.",
+        "speed_modifier": "The potion's effects arrive the moment it is chosen, so there is no time spent "
+                          "drinking for the entity to be slowed through.",
+
+        "priority": "Drinking runs beside the entity's goals on the sensor pass rather than as one of "
+                    "them, so it has no place among them to take.",
     },
     "minecraft:behavior.trade_interest": {
         "*": "Java's merchant screen opens on a click rather than after a mob has shown interest.",

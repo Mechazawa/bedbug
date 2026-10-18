@@ -1766,20 +1766,36 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
-     * Drinking away what is hurting it, which both drinking behaviours amount to.
+     * Drinking milk, which clears what is harming the entity, and drinking a potion, which
+     * `minecraft:behavior.drink_potion` picks.
      *
-     * Bedrock's milk clears every effect and its potion drinking picks one to apply; what a pack
-     * uses either for is an entity that does not stay poisoned, so the harmful ones are cleared.
+     * Each of its `potions` names a Bedrock potion by number, the conditions it is drunk under and a
+     * chance a tick; the first whose conditions hold and whose chance comes up is drunk, and the
+     * entity takes that potion's effects, the way Java's witch takes its own.
      */
     private void drink() {
-        boolean drinks = declaresNow("minecraft:behavior.drink_milk")
-            || declaresNow("minecraft:behavior.drink_potion");
-        if (!drinks || getActiveEffects().isEmpty()) return;
+        if (declaresNow("minecraft:behavior.drink_milk") && !getActiveEffects().isEmpty()) {
+            getActiveEffects().stream()
+                .filter(effect -> !Platform.beneficial(effect))
+                .toList()
+                .forEach(effect -> removeEffect(effect.getEffect()));
+        }
 
-        getActiveEffects().stream()
-            .filter(effect -> !Platform.beneficial(effect))
-            .toList()
-            .forEach(effect -> removeEffect(effect.getEffect()));
+        com.google.gson.JsonObject drinking = liveComponent("minecraft:behavior.drink_potion");
+        if (drinking == null) return;
+
+        Filter.Context context = new Filter.Context(this, this, getTarget(), ServerHooks.state());
+        at.ioexception.mcaddon.util.Json.list(drinking, "potions").stream()
+            .filter(com.google.gson.JsonElement::isJsonObject)
+            .map(com.google.gson.JsonElement::getAsJsonObject)
+            .filter(potion -> Goals.filter(potion, "filters").matches(context))
+            .filter(potion -> random.nextDouble() < at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits
+                .chanceOverTicks(Goals.number(potion, "chance", 1), Sensors.INTERVAL_TICKS))
+            .findFirst()
+            .flatMap(potion -> at.ioexception.mcaddon.bedrock.behaviour.BedrockPotions.numbered(
+                (int) Goals.number(potion, "id", -1)))
+            .ifPresent(potion -> potion.getEffects()
+                .forEach(effect -> addEffect(new net.minecraft.world.effect.MobEffectInstance(effect))));
     }
 
     /**

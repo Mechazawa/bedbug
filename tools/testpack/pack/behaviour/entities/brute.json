@@ -360,6 +360,31 @@
           "causes_fire": true,
           "fire_affected_by_griefing": true
         }
+      },
+      "tp:brute_thirsty": {
+        "minecraft:behavior.drink_potion": {
+          "priority": 0,
+          "potions": [
+            {
+              "id": 19,
+              "chance": 1,
+              "filters": {
+                "test": "is_underwater",
+                "subject": "self",
+                "value": true
+              }
+            },
+            {
+              "id": 12,
+              "chance": 1,
+              "filters": {
+                "test": "on_fire",
+                "subject": "self",
+                "value": true
+              }
+            }
+          ]
+        }
       }
     },
     "components": {
@@ -563,6 +588,13 @@
         "add": {
           "component_groups": [
             "tp:brute_smouldering"
+          ]
+        }
+      },
+      "tp:brute_thirst": {
+        "add": {
+          "component_groups": [
+            "tp:brute_thirsty"
           ]
         }
       }
