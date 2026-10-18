@@ -72,6 +72,9 @@ public final class McAddonClient implements ClientModInitializer {
             at.ioexception.mcaddon.client.render.PlayerRules::draw);
         Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("bedrock_screen"),
             at.ioexception.mcaddon.client.render.PlayerFade::draw);
+        // A chunk the server sends again is read into the chunk the client already holds.
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents.CHUNK_LOAD
+            .register((level, chunk) -> at.ioexception.mcaddon.block.BorderColumns.forget(chunk));
 
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK
             .register(client -> {

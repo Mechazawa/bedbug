@@ -174,7 +174,7 @@ class RecipeDefinitionTest {
             {"minecraft:recipe_shapeless": {
               "description": {"identifier": "probe:fence"},
               "tags": ["crafting_table"],
-              "ingredients": [{"item": "minecraft:border_block"}],
+              "ingredients": [{"item": "minecraft:allow"}],
               "result": {"item": "minecraft:stick", "count": 1}}}
             """)).size());
     }

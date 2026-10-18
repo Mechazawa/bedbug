@@ -27,15 +27,16 @@ import java.util.Map;
  * off leaves a bed or a respawn anchor used where it cannot hold a spawn standing, where Java would
  * blow it up.
  *
- * Four are a client's, sent to every player: coordinates and the day count drawn at the top left of
- * the screen, a toast for each recipe unlocked, and the lines naming what an item may break or be
- * placed on.
+ * Five are a client's, sent to every player: coordinates and the day count drawn at the top left of
+ * the screen, a toast for each recipe unlocked, the lines naming what an item may break or be placed
+ * on, and the dust a border block sends up and down its column.
  */
 public final class BedrockRules {
     public static final String KIND = "rules";
 
     public static final String RECIPES_UNLOCK = "recipesUnlock";
     public static final String RESPAWN_BLOCKS_EXPLODE = "respawnBlocksExplode";
+    public static final String SHOW_BORDER_EFFECT = "showBorderEffect";
     public static final String SHOW_COORDINATES = "showCoordinates";
     public static final String SHOW_DAYS_PLAYED = "showDaysPlayed";
     public static final String SHOW_RECIPE_MESSAGES = "showRecipeMessages";
@@ -48,7 +49,7 @@ public final class BedrockRules {
      * pack asks, which keeps a Java world looking the way it does without one.
      */
     private static final Map<String, Boolean> DEFAULTS = Map.of(
-        RECIPES_UNLOCK, true, RESPAWN_BLOCKS_EXPLODE, true, SHOW_COORDINATES, false,
+        RECIPES_UNLOCK, true, RESPAWN_BLOCKS_EXPLODE, true, SHOW_BORDER_EFFECT, true, SHOW_COORDINATES, false,
         SHOW_DAYS_PLAYED, false, SHOW_RECIPE_MESSAGES, true, SHOW_TAGS, true);
 
     private static final Map<String, Boolean> SET = new LinkedHashMap<>();
@@ -134,7 +135,8 @@ public final class BedrockRules {
 
     private static String clientRules() {
         JsonObject rules = new JsonObject();
-        for (String rule : new String[] {SHOW_COORDINATES, SHOW_DAYS_PLAYED, SHOW_RECIPE_MESSAGES, SHOW_TAGS}) {
+        for (String rule : new String[] {
+            SHOW_BORDER_EFFECT, SHOW_COORDINATES, SHOW_DAYS_PLAYED, SHOW_RECIPE_MESSAGES, SHOW_TAGS}) {
             rules.addProperty(rule, on(rule));
         }
         return rules.toString();

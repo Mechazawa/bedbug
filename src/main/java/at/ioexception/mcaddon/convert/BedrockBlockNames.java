@@ -138,12 +138,18 @@ public final class BedrockBlockNames {
         "turtle_scute", List.of("turtle_scute", "scute"));
 
     /**
+     * Bedrock blocks Java has none of that this mod builds itself, under its own namespace, each
+     * with the item that places it.
+     */
+    static final Map<String, String> BUILT_HERE = Map.of("border_block", "mcaddon:border_block");
+
+    /**
      * Blocks Bedrock has and Java has no counterpart for: the education edition's chemistry and
      * its hardened glass, the building permission blocks, Bedrock's own technical blocks and the
      * experiments Java has not shipped. An item frame is an entity in Java rather than a block.
      */
     private static final List<Pattern> BEDROCK_ONLY = Stream.of(
-        "allow", "deny", "border_block", "camera", "unknown", "info_update2?", "reserved6",
+        "allow", "deny", "camera", "unknown", "info_update2?", "reserved6",
         "client_request_placeholder_block", "netherreactor", "glowingobsidian", "frame", "glow_frame",
         "element_\\d+", "element_constructor", "chemistry_table", "chemical_heat", "compound_creator",
         "lab_table", "material_reducer", "colored_torch_\\w+", "underwater_torch", "underwater_tnt",
@@ -155,6 +161,10 @@ public final class BedrockBlockNames {
 
     private static final Pattern LIGHT_LEVEL = Pattern.compile("light_block_(\\d+)");
     private static final Pattern DOUBLE_SLAB = Pattern.compile("(\\w*?)_?double_(\\w*slab\\d?)");
+
+    /** The way back from {@link #BUILT_HERE}, by the whole id this mod registers each under. */
+    static final Map<String, String> BUILT_BACK = BUILT_HERE.entrySet().stream()
+        .collect(Collectors.toMap(Map.Entry::getValue, entry -> "minecraft:" + entry.getKey()));
 
     /** The way back from {@link #RENAMED}, for every block whose Java name is not Bedrock's. */
     private static final Map<String, String> BEDROCK = RENAMED.entrySet().stream()
@@ -220,7 +230,7 @@ public final class BedrockBlockNames {
     /** The Bedrock id a pack knows this block by, worked out from the state Java holds it in. */
     public static String bedrock(BlockState state) {
         Identifier key = BuiltInRegistries.BLOCK.getKey(state.getBlock());
-        if (!key.getNamespace().equals("minecraft")) return key.toString();
+        if (!key.getNamespace().equals("minecraft")) return BUILT_BACK.getOrDefault(key.toString(), key.toString());
 
         String name = NEWEST.getOrDefault(key.getPath(), key.getPath());
         String stated = statedBedrock(name, state);
@@ -373,6 +383,7 @@ public final class BedrockBlockNames {
             String name = bare(bedrock);
             if (name == null) return new Named(packOwn(bedrock), Map.of());
             if (DataValues.split(stripDouble(name))) return member(name, DataValues.item(stripDouble(name), data));
+            if (BUILT_HERE.containsKey(name)) return new Named(BUILT_HERE.get(name), Map.of());
 
             String java = javaName(name);
             return java == null ? null : parsed(java, Map.of());
@@ -442,6 +453,10 @@ public final class BedrockBlockNames {
             return new StateRule(List.of(properties), UnaryOperator.identity());
         }
 
+        static StateRule wallSide(String property) {
+            return new StateRule(List.of(property), given -> given.equals("short") ? "low" : given);
+        }
+
         static StateRule counted(String property, String... words) {
             return new StateRule(List.of(property), given -> {
                 int index = given.matches("-?\\d+") ? Integer.parseInt(given) : -1;
@@ -482,6 +497,12 @@ public final class BedrockBlockNames {
         // wall carry across; `top` and `unknown` name the other block and are reported instead.
         Map.entry("torch_facing_direction", StateRule.named("facing")),
         // Stairs carry it as `half`, slabs as `type`, and Java spells both ends the same way.
+        // A wall's post and its four sides, where Bedrock's `short` side is Java's `low`.
+        Map.entry("wall_post_bit", StateRule.named("up")),
+        Map.entry("wall_connection_type_east", StateRule.wallSide("east")),
+        Map.entry("wall_connection_type_north", StateRule.wallSide("north")),
+        Map.entry("wall_connection_type_south", StateRule.wallSide("south")),
+        Map.entry("wall_connection_type_west", StateRule.wallSide("west")),
         Map.entry("upside_down", new StateRule(List.of("half", "type"),
             given -> "1".equals(given) || "true".equals(given) ? "top" : "bottom")));
 

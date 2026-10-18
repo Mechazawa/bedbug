@@ -405,15 +405,21 @@ Against a server without this mod a client plays with its own add-ons.
   plays, and queued behind a track that plays once. A queue behind a looping track is refused, as
   in Bedrock. A track is a pack's own sound or one of the game's under its full name, or a Bedrock
   name such as `record.cat` or `cat`.
-- Six of Bedrock's game rules Java keeps no rule for, set through `/bedrock gamerule` and a
+- Seven of Bedrock's game rules Java keeps no rule for, set through `/bedrock gamerule` and a
   script's `world.gameRules`, kept beside the world and acted on by this mod. `recipesunlock` off
   stops recipes unlocking as a player collects what they take, which Java does through an
   advancement per recipe, so `/recipe` is then the way a player gets one. `respawnblocksexplode` off
   leaves a bed or a charged respawn anchor standing where Java would blow it up.
   `showcoordinates` and `showdaysplayed` write the player's position and the world's day count at
   the top left of the screen, `showrecipemessages` off shows no toast for a recipe unlocked, and
-  `showtags` off leaves out the lines naming what an item may break or be placed on. A world starts
-  showing no coordinates and no day count, as one a player makes in Bedrock does.
+  `showtags` off leaves out the lines naming what an item may break or be placed on, and
+  `showbordereffect` off stops the red dust a border block sends up and down its column. A world
+  starts showing no coordinates and no day count, as one a player makes in Bedrock does.
+- Bedrock's border block, `minecraft:border_block`, which Java has none of. The mod builds it as
+  `mcaddon:border_block`, and a pack's commands, structures, scripts, recipes and loot reach it by
+  its Bedrock id. It is a wall nothing breaks or moves. No player or mob walks into the column it
+  stands in, at any height above or below it; an entity that moves without colliding, such as the
+  ender dragon, crosses it. It is listed in the operator utilities tab where the game shows that tab.
 - Clips on a mob Java draws with a model of its own, such as `playanimation` on a vanilla villager.
   Each Bedrock bone is found among the Java model's parts, and on a mob whose Bedrock geometry hangs
   the head, arms and legs under `body`, those parts move, turn and scale with the body, so a pack
@@ -612,7 +618,7 @@ of them compare what they read against the names this mod acts on:
 | Item components | 90% |
 | Command names | 84% |
 | Command keywords | 75% |
-| Game rules | 81% |
+| Game rules | 100% |
 | Particle components | 100% |
 | Particle component fields | 100% |
 | Particle curves and Molang variables | 100% |
@@ -907,9 +913,8 @@ move that never happened. Of Bedrock's thirty-seven game rules, the
 twenty-five every supported version of Java has are set under the name that version knows them by,
 which 26 changed, and four more reach a rule only the newer versions hold. `functioncommandlimit`
 caps the commands one function runs, which Java caps with the rule it caps a chain of command blocks
-with, so it sets that rule. Six more Java keeps no rule for are held beside the world and acted on
-by this mod, as described with the commands above. `showbordereffect` is reported: it switches the
-particle wall of Bedrock's border block, which Java has none of.
+with, so it sets that rule. Seven more Java keeps no rule for are held beside the world and acted
+on by this mod, as described with the commands above.
 
 **The player a test drives itself.** `Test.spawnSimulatedPlayer` and every member of the
 `SimulatedPlayer` it answers with describe a player the game walks, attacks and builds with. Java's

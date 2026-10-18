@@ -12,7 +12,7 @@ import org.joml.Quaternionf;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-/** The pack particles the client made since the last time this was cleared, as each was born. */
+/** The particles the client made since the last time this was cleared, as each was born. */
 public final class Born {
     /**
      * One particle as it was added: which effect it belongs to, where it started, its velocity in
@@ -31,27 +31,42 @@ public final class Born {
         }
     }
 
+    /** One of the game's own particles: where it was added, and the particle to ask about since. */
+    public record Plain(Vec3 at, net.minecraft.client.particle.Particle particle) {
+        /** The particle's velocity now, in blocks a tick. */
+        public Vec3 velocity() {
+            ParticleMotionAccessor motion = (ParticleMotionAccessor) particle;
+            return new Vec3(motion.mcaddon$xd(), motion.mcaddon$yd(), motion.mcaddon$zd());
+        }
+    }
+
     /** One quad as the particle hands it to the frame: its turn, its size, its patch and its colour. */
     public record Quad(Quaternionf rotation, float size, float u0, float u1, float v0, float v1, int colour) {
     }
 
     private static final List<Particle> PARTICLES = new CopyOnWriteArrayList<>();
+    private static final List<Plain> PLAIN = new CopyOnWriteArrayList<>();
 
     private Born() {
     }
 
     public static void record(net.minecraft.client.particle.Particle particle) {
-        if (!(particle instanceof AddonParticle addon)) return;
-
-        ParticleMotionAccessor motion = (ParticleMotionAccessor) particle;
-        PARTICLES.add(new Particle(((AddonParticleAccessor) addon).mcaddon$definition().identifier(),
-            particle.getBoundingBox().getBottomCenter(),
-            new Vec3(motion.mcaddon$xd(), motion.mcaddon$yd(), motion.mcaddon$zd()),
-            particle.getLifetime(), addon));
+        Plain plain = new Plain(particle.getBoundingBox().getBottomCenter(), particle);
+        if (particle instanceof AddonParticle addon) {
+            PARTICLES.add(new Particle(((AddonParticleAccessor) addon).mcaddon$definition().identifier(),
+                plain.at(), plain.velocity(), particle.getLifetime(), addon));
+        } else {
+            PLAIN.add(plain);
+        }
     }
 
     public static void clear() {
         PARTICLES.clear();
+        PLAIN.clear();
+    }
+
+    public static List<Plain> plain() {
+        return List.copyOf(PLAIN);
     }
 
     public static List<Particle> of(String effect) {

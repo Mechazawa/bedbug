@@ -102,6 +102,8 @@ public final class BedrockItemNames {
         if (name == null) return BedrockBlockNames.packOwn(bedrock);
 
         name = name.toLowerCase(Locale.ROOT);
+        String built = BedrockBlockNames.BUILT_HERE.get(name);
+        if (built != null) return built;
         if (DataValues.split(name)) {
             String member = DataValues.item(name, data);
             return member == null ? null : shipped(DataValues.vanilla(member));
@@ -123,10 +125,11 @@ public final class BedrockItemNames {
 
     /**
      * The Bedrock id for a Java item. Every colour of banner and of bed is Bedrock's one `banner`
-     * and one `bed`, told apart by a data value. An id outside `minecraft` comes back untouched.
+     * and one `bed`, told apart by a data value. An id outside `minecraft` comes back untouched,
+     * unless it is one of Bedrock's blocks this mod builds.
      */
     public static String bedrock(String java) {
-        if (!java.startsWith("minecraft:")) return java;
+        if (!java.startsWith("minecraft:")) return BedrockBlockNames.BUILT_BACK.getOrDefault(java, java);
 
         String name = BedrockBlockNames.newest(java.substring("minecraft:".length()));
         if (name.endsWith("_banner") && !name.endsWith("_banner_pattern")) return "minecraft:banner";

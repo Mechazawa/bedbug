@@ -66,7 +66,7 @@ class BedrockItemNamesTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"minecraft:border_block", "minecraft:white_cushion", "minecraft:no_such_item"})
+    @ValueSource(strings = {"minecraft:allow", "minecraft:white_cushion", "minecraft:no_such_item"})
     void answersNothingForAnItemJavaLacks(String bedrock) {
         assertNull(BedrockItemNames.java(bedrock));
     }

@@ -52,7 +52,9 @@
     "PlayerMovementExhaustionMixin",
     "LungeExhaustionMixin",
     "MountPermissionMixin",
-    "DismountPermissionMixin"
+    "DismountPermissionMixin",
+    "BorderCollisionMixin",
+    "BorderChunkMixin"
   ],
   "injectors": {
     "defaultRequire": 1
