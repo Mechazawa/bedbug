@@ -1072,9 +1072,9 @@ public class AddonEntity extends PathfinderMob
      * steps when the pack says nothing.
      */
     private void refreshStep() {
-        String height = getControllingPassenger() instanceof Player ? "controlled_value" : "base_value";
-        Platform.setStepHeight(this, (float) liveNumber("minecraft:variable_max_auto_step", height,
-            liveNumber("minecraft:variable_max_auto_step", "base_value", 0.6)));
+        double base = liveNumber("minecraft:variable_max_auto_step", "base_value", 0.6);
+        Platform.setStepHeight(this, (float) (getControllingPassenger() instanceof Player
+            ? liveNumber("minecraft:variable_max_auto_step", "controlled_value", base) : base));
     }
 
     /** `on_rider_enter_event` runs on this entity, with the rider as the other, as somebody gets on. */
