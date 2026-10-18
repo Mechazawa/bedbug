@@ -1,8 +1,8 @@
 package at.ioexception.mcaddon.server;
 
+import at.ioexception.mcaddon.registry.ActiveAddons;
 import at.ioexception.mcaddon.convert.Functions;
 import at.ioexception.mcaddon.platform.Platform;
-import at.ioexception.mcaddon.resource.AddonPacks;
 import com.mojang.brigadier.ParseResults;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.exceptions.DynamicCommandExceptionType;
@@ -64,7 +64,8 @@ public final class PackCommand {
         synchronized (TRANSLATED) {
             return TRANSLATED.computeIfAbsent(namespace + " " + stripped, key -> {
                 Set<String> unsupported = new LinkedHashSet<>();
-                String java = Functions.line(stripped, AddonPacks.functions().issuedBy(namespace), unsupported);
+                String java = Functions.line(stripped, ActiveAddons.active().functions().issuedBy(namespace),
+                    unsupported);
                 return new PackCommand(java, List.copyOf(unsupported));
             });
         }

@@ -28,7 +28,11 @@
       "at.ioexception.mcaddon.gametest.CommandGameTests",
       "at.ioexception.mcaddon.gametest.BedrockCommandGameTests",
       "at.ioexception.mcaddon.gametest.NamesGameTests",
-      "at.ioexception.mcaddon.gametest.ScriptGameTests"
+      "at.ioexception.mcaddon.gametest.ScriptGameTests",
+      "at.ioexception.mcaddon.gametest.RegistryGameTests",
+      "at.ioexception.mcaddon.gametest.ActiveAddonsGameTests",
+      "at.ioexception.mcaddon.gametest.ShapeGameTests",
+      "at.ioexception.mcaddon.gametest.ServedArchivesGameTests"
     ]
   },
   "mixins": [

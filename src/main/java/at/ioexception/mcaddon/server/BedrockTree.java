@@ -16,6 +16,7 @@ import net.minecraft.server.commands.ExecuteCommand;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.CompletableFuture;
 
@@ -41,6 +42,12 @@ public final class BedrockTree {
      * Java's own in `gamerule`. This tree's command of each name carries Java's forms as well.
      */
     private static final List<String> SHARED = List.of("place", "schedule", "gamerule");
+
+    /**
+     * Forms Java and this tree both have words of: Java's own shorter lines are merged into this
+     * tree's node, which holds only the words Bedrock adds after them.
+     */
+    private static final Set<String> MERGED_FORMS = Set.of("structure");
 
     private final CommandDispatcher<CommandSourceStack> bedrock = new CommandDispatcher<>();
     private boolean holdsJava;
@@ -70,13 +77,16 @@ public final class BedrockTree {
 
     /**
      * Hangs the forms Java's command of this name has under this tree's command of the same name,
-     * leaving out a form this tree builds a whole Bedrock version of, such as `place jigsaw`.
+     * leaving out a form this tree builds a whole Bedrock version of, such as `place jigsaw`, and
+     * merging one this tree only extends, which is `place structure`.
      */
     private void alongsideJava(String name, CommandDispatcher<CommandSourceStack> java) {
         CommandNode<CommandSourceStack> ours = bedrock.getRoot().getChild(name);
         CommandNode<CommandSourceStack> javas = java.getRoot().getChild(name);
         if (ours == null || javas == null) return;
-        javas.getChildren().stream().filter(form -> ours.getChild(form.getName()) == null).forEach(ours::addChild);
+        javas.getChildren().stream()
+            .filter(form -> ours.getChild(form.getName()) == null || MERGED_FORMS.contains(form.getName()))
+            .forEach(ours::addChild);
     }
 
     /** The tree a translated line is read against on this server. */

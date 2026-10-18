@@ -89,10 +89,10 @@ public final class PackConverter {
      * version, because the output is a function of the code that wrote it as well. A pack edited in
      * place gives a different answer and is converted again.
      */
-    private static String stampOf(Bundle bundle, FunctionNames functions) {
+    private static String stampOf(Bundle bundle, String namespace, FunctionNames functions) {
         StringBuilder stamp = new StringBuilder(at.ioexception.mcaddon.McAddon.VERSION);
         stamp.append(' ').append(CODE_BUILT);
-        stamp.append(' ').append(functions.stamp());
+        stamp.append(' ').append(functions.stampFor(namespace, bundle.behaviours()));
         stamp.append(' ').append(bundle.resources().contentStamp());
         for (BedrockPack behaviour : bundle.behaviours()) {
             stamp.append(' ').append(behaviour.contentStamp());
@@ -135,8 +135,11 @@ public final class PackConverter {
             dimensions.addAll(
                 at.ioexception.mcaddon.bedrock.behaviour.DimensionDefinition.readAll(behaviour));
         }
-        Path root = cache.resolve("converted").resolve("%s-%s-%d".formatted(
-            pack.manifest().uuid(), pack.manifest().version(), Platform.resourcePackFormat()));
+        // Two copies of one add-on with other bytes convert side by side, so neither one's output is
+        // written over the other's while it is offered.
+        Path root = cache.resolve("converted").resolve("%s-%s-%d%s".formatted(
+            pack.manifest().uuid(), pack.manifest().version(), Platform.resourcePackFormat(),
+            pack.archive() == null ? "" : "-" + pack.archive().substring(0, 8)));
 
         Textures textures = new Textures(namespace);
         Map<String, String> icons = new TreeMap<>();
@@ -154,7 +157,7 @@ public final class PackConverter {
         });
 
         try {
-            String stamp = stampOf(bundle, functions);
+            String stamp = stampOf(bundle, namespace, functions);
             boolean fresh = !stamp.equals(readMarker(root));
             if (fresh) {
                 deleteRecursively(root);

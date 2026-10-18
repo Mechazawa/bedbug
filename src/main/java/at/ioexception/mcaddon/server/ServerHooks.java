@@ -5,7 +5,6 @@ import at.ioexception.mcaddon.bedrock.behaviour.DamageCause;
 import at.ioexception.mcaddon.bedrock.behaviour.PlayerDefinition;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.network.Channels;
-import at.ioexception.mcaddon.network.PackList;
 import at.ioexception.mcaddon.script.CustomCommands;
 import at.ioexception.mcaddon.script.ScriptHost;
 import at.ioexception.mcaddon.state.AddonState;
@@ -130,7 +129,6 @@ public final class ServerHooks {
             }
         });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-            Channels.sendPacks(handler.player, PackList.of(McAddon.packs()).encode());
             startState(handler.player);
             Music.joined(handler.player);
             BedrockRules.joined(handler.player);

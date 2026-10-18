@@ -19,11 +19,11 @@ import java.util.UUID;
  * other: in the reference add-on the behaviour pack names the resource pack's uuid and the resource
  * pack names the behaviour pack's, which no single topological sort can satisfy.
  */
-final class PackOrder {
+public final class PackOrder {
     private PackOrder() {
     }
 
-    static PackSet sort(List<BedrockPack> packs, List<String> problems) {
+    public static PackSet sort(List<BedrockPack> packs, List<String> problems) {
         Set<UUID> known = new HashSet<>();
         for (BedrockPack pack : packs) known.add(pack.manifest().uuid());
 

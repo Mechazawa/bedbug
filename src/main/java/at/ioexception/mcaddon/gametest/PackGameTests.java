@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.gametest;
 
+import at.ioexception.mcaddon.registry.ActiveAddons;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.fog.FogDefinition;
 import at.ioexception.mcaddon.convert.ConvertedPack;
@@ -11,7 +12,6 @@ import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.registry.AddonFogs;
 import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.registry.AddonParticles;
-import at.ioexception.mcaddon.resource.AddonPacks;
 import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
@@ -447,7 +447,7 @@ public final class PackGameTests {
      */
     @GameTest()
     public void aBlockModelKeepsItsMaterialInstancesAndItsItemDisplay(GameTestHelper helper) {
-        ConvertedPack pack = AddonPacks.all().stream()
+        ConvertedPack pack = ActiveAddons.active().converted().stream()
             .filter(one -> Files.isRegularFile(lampModel(one)))
             .findFirst().orElse(null);
         if (pack == null) {
@@ -595,7 +595,8 @@ public final class PackGameTests {
      */
     @GameTest()
     public void aMarkedTexelIsConvertedOpaque(GameTestHelper helper) {
-        if (AddonPacks.all().stream().noneMatch(one -> one.texturePaths().containsKey(MARKED_TEXTURE))) {
+        if (ActiveAddons.active().converted().stream()
+            .noneMatch(one -> one.texturePaths().containsKey(MARKED_TEXTURE))) {
             helper.succeed();
             return;
         }
@@ -695,7 +696,7 @@ public final class PackGameTests {
      */
     @GameTest()
     public void aPackSkyReachesTheWorld(GameTestHelper helper) {
-        for (ConvertedPack pack : AddonPacks.all()) {
+        for (ConvertedPack pack : ActiveAddons.active().converted()) {
             long written = timelinesWritten(pack);
             if (written == 0) continue;
 
@@ -722,7 +723,7 @@ public final class PackGameTests {
 
     /** The image a pack's texture was written as, or null where nothing wrote one. */
     private static BufferedImage convertedTexture(String texture) {
-        ConvertedPack pack = AddonPacks.all().stream()
+        ConvertedPack pack = ActiveAddons.active().converted().stream()
             .filter(one -> one.texturePaths().containsKey(texture))
             .findFirst().orElse(null);
         if (pack == null) return null;

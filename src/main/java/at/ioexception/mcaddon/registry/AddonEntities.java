@@ -12,6 +12,7 @@ import at.ioexception.mcaddon.entity.AddonEntity;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.PackRole;
 import at.ioexception.mcaddon.pack.PackSet;
+import at.ioexception.mcaddon.resource.AddonSet;
 import at.ioexception.mcaddon.platform.Platform;
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricDefaultAttributeRegistry;
 import net.minecraft.core.Registry;
@@ -202,71 +203,122 @@ public final class AddonEntities {
     /** Every component name the installed packs use anywhere, gathered as they register. */
     private static final Set<String> DECLARED = new HashSet<>();
 
-    public static void register(PackSet packs) {
+    /** The entities of the game's own a pack has redescribed, each reported once. */
+    private static final Set<String> OVERRIDES = new HashSet<>();
+
+    /**
+     * Registers an entity type per definition these add-ons carry that is not registered yet, and
+     * binds every one of them to its definition here. Returns the types the set declares.
+     */
+    public static List<EntityType<?>> register(AddonSet set) {
         Map<String, EntitySounds> sounds = new LinkedHashMap<>();
-        for (BedrockPack pack : packs.packs()) {
+        for (BedrockPack pack : set.packs().packs()) {
             if (pack.role() == PackRole.RESOURCE) sounds.putAll(EntitySounds.readAll(pack));
         }
 
+        Map<BedrockPack, at.ioexception.mcaddon.bedrock.BedrockAssets> clips = new java.util.HashMap<>();
+        List<EntityType<?>> types = new ArrayList<>();
+        for (Declared declared : declared(set.packs())) {
+            EntityType<AddonEntity> type = declared.register();
+            if (type == null) continue;
+
+            ServerEntityDefinition definition = declared.definition();
+            bind(type, definition, set.namespaceOf(declared.pack()), EntitySounds.of(sounds, definition.identifier()),
+                definition.script().isEmpty() ? null : clips.computeIfAbsent(declared.pack(),
+                    at.ioexception.mcaddon.bedrock.BedrockAssets::readBehaviour),
+                readTrades(declared.pack(), definition));
+            types.add(type);
+            DECLARED.addAll(definition.components().keySet());
+            definition.componentGroups().values().forEach(group -> DECLARED.addAll(group.keySet()));
+        }
+        if (!types.isEmpty()) McAddon.LOGGER.info("Registered {} entity types from add-ons.", types.size());
+        return types;
+    }
+
+    /** The shape each entity type these packs declare is built with. */
+    static List<AddonRegistry.Shape> shapes(PackSet packs) {
+        return declared(packs).stream().map(Declared::shape).toList();
+    }
+
+    /** Every entity definition in these packs, the first of two with one identifier deciding it. */
+    private static List<Declared> declared(PackSet packs) {
         Map<String, MobCategory> populations = new LinkedHashMap<>();
         for (BedrockPack pack : packs.packs()) {
             if (pack.role() == PackRole.BEHAVIOUR) populations.putAll(SpawnRuleDefinition.populations(pack));
         }
-
-        for (BedrockPack pack : packs.packs()) {
-            if (pack.role() != PackRole.BEHAVIOUR) continue;
-
-            at.ioexception.mcaddon.bedrock.BedrockAssets clips =
-                at.ioexception.mcaddon.bedrock.BedrockAssets.readBehaviour(pack);
-            for (ServerEntityDefinition definition : ServerEntityDefinition.readAll(pack)) {
-                register(pack, definition, sounds, clips,
-                    populations.getOrDefault(definition.identifier(), MobCategory.CREATURE));
-                DECLARED.addAll(definition.components().keySet());
-                definition.componentGroups().values()
-                    .forEach(group -> DECLARED.addAll(group.keySet()));
-            }
+        Map<String, Declared> declared = new LinkedHashMap<>();
+        for (BedrockPack pack : packs.withRole(PackRole.BEHAVIOUR)) {
+            ServerEntityDefinition.readAll(pack).forEach(definition -> declared.putIfAbsent(definition.identifier(),
+                new Declared(pack, definition,
+                    populations.getOrDefault(definition.identifier(), MobCategory.CREATURE))));
         }
-        if (!DEFINITIONS.isEmpty()) {
-            McAddon.LOGGER.info("Registered {} entity types from add-ons.", DEFINITIONS.size());
+        return List.copyOf(declared.values());
+    }
+
+    /**
+     * One entity a pack declares, in the population its pack's spawn rule names, which decides the
+     * cap the entity counts against however it came into the world.
+     */
+    private record Declared(BedrockPack pack, ServerEntityDefinition definition, MobCategory population) {
+        float width() {
+            return definition.width() * definition.scale();
+        }
+
+        float height() {
+            return definition.height() * definition.scale();
+        }
+
+        AddonRegistry.Shape shape() {
+            return new AddonRegistry.Shape("entity", definition.identifier(), pack.displayName(),
+                population + " " + width() + " " + height());
+        }
+
+        /**
+         * The type this definition stands for: the one registered for it earlier, or one registered
+         * now. Null where the identifier is unusable or names an entity the game already has.
+         */
+        @SuppressWarnings("unchecked")
+        EntityType<AddonEntity> register() {
+            Identifier id = identifier(definition.identifier());
+            if (id == null) {
+                McAddon.LOGGER.warn("{} declares {}, which is not a usable identifier.",
+                    pack.displayName(), definition.identifier());
+                return null;
+            }
+            EntityType<?> existing = BY_IDENTIFIER.get(definition.identifier());
+            if (existing != null) return (EntityType<AddonEntity>) existing;
+            if (BuiltInRegistries.ENTITY_TYPE.containsKey(id)) {
+                reportOverride(definition);
+                return null;
+            }
+
+            EntityType<AddonEntity> type = Platform.buildEntityType(
+                EntityType.Builder.of(AddonEntity::new, population).sized(width(), height()), id);
+            count(definition);
+            Registry.register(BuiltInRegistries.ENTITY_TYPE, id, type);
+            AddonRegistry.built(shape());
+            return type;
         }
     }
 
     /**
-     * Registers one entity type, in the population its pack's spawn rule names, which decides the
-     * cap the entity counts against however it came into the world.
+     * Binds a registered type to what a pack says about it, replacing what an earlier set said. A
+     * null part is one this pack does not state, so the type is left without it.
      */
-    private static void register(BedrockPack pack, ServerEntityDefinition definition,
-        Map<String, EntitySounds> sounds, at.ioexception.mcaddon.bedrock.BedrockAssets clips,
-        MobCategory population) {
-        Identifier id = identifier(definition.identifier());
-        if (id == null) {
-            McAddon.LOGGER.warn("{} declares {}, which is not a usable identifier.",
-                pack.displayName(), definition.identifier());
-            return;
-        }
-        if (BuiltInRegistries.ENTITY_TYPE.containsKey(id)) {
-            reportOverride(definition);
-            return;
-        }
-
-        EntityType<AddonEntity> type = Platform.buildEntityType(
-            EntityType.Builder.of(AddonEntity::new, population)
-                .sized(definition.width() * definition.scale(), definition.height() * definition.scale()),
-            id);
-
-        count(definition);
+    private static void bind(EntityType<AddonEntity> type, ServerEntityDefinition definition, String namespace,
+        EntitySounds noises, at.ioexception.mcaddon.bedrock.BedrockAssets clips, Map<String, TradeTable> trades) {
         DEFINITIONS.put(type, definition);
-        if (!definition.script().isEmpty()) CLIPS.put(type, clips);
         BY_IDENTIFIER.put(definition.identifier(), type);
-        String namespace = at.ioexception.mcaddon.resource.AddonPacks.namespaceOf(pack);
+        CLIPS.remove(type);
+        NAMESPACES.remove(type);
+        SOUNDS.remove(type);
+        TRADES.remove(type);
+        if (clips != null) CLIPS.put(type, clips);
         if (namespace != null) NAMESPACES.put(type, namespace);
-        EntitySounds noises = EntitySounds.of(sounds, definition.identifier());
         if (noises != null) SOUNDS.put(type, noises);
-        Map<String, TradeTable> trades = readTrades(pack, definition);
         if (!trades.isEmpty()) TRADES.put(type, trades);
-        Registry.register(BuiltInRegistries.ENTITY_TYPE, id, type);
         FabricDefaultAttributeRegistry.register(type, AddonEntity.attributes(definition));
-        registerBucket(definition, type, id);
+        registerBucket(definition, type, identifier(definition.identifier()));
     }
 
     /**
@@ -300,10 +352,10 @@ public final class AddonEntities {
      */
     private static void reportOverride(ServerEntityDefinition definition) {
         PlayerDefinition player = PlayerDefinition.tryFrom(definition);
-        if (player != null) {
-            player.install();
-            player.unread().forEach(AddonEntities::unsupported);
-        }
+        if (player != null) player.install();
+        // A set activated again binds the player again and has nothing new to report.
+        if (!OVERRIDES.add(definition.identifier())) return;
+        if (player != null) player.unread().forEach(AddonEntities::unsupported);
         Set<String> taken = player == null ? Set.of() : player.taken();
 
         java.util.stream.Stream.concat(

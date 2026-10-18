@@ -26,6 +26,7 @@
       "at.ioexception.mcaddon.clientgametest.PackDimensionClientGameTest",
       "at.ioexception.mcaddon.clientgametest.PackCommandClientGameTest",
       "at.ioexception.mcaddon.clientgametest.ServerRegistryClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.AddonSyncClientGameTest",
       "at.ioexception.mcaddon.clientgametest.ServerEntityClientGameTest",
       "at.ioexception.mcaddon.clientgametest.ServerPlayerClientGameTest",
       "at.ioexception.mcaddon.clientgametest.HudClientGameTest",
@@ -44,8 +45,7 @@
       "at.ioexception.mcaddon.clientgametest.FogClientGameTest",
       "at.ioexception.mcaddon.clientgametest.CameraClientGameTest",
       "at.ioexception.mcaddon.clientgametest.CameraPresetClientGameTest",
-      "at.ioexception.mcaddon.clientgametest.ItemAndBlockClientGameTest",
-      "at.ioexception.mcaddon.clientgametest.SeatClientGameTest"
+      "at.ioexception.mcaddon.clientgametest.ItemAndBlockClientGameTest"
     ]
   },
   "mixins": [

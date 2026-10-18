@@ -21,6 +21,10 @@ stonecutter {
         // Fabric API followed the game's own renames a version later than the game did.
         replace("clientboundPlay()", "playS2C()")
         replace("serverboundPlay()", "playC2S()")
+        replace("clientboundConfiguration()", "configurationS2C()")
+        replace("serverboundConfiguration()", "configurationC2S()")
+        replace("ServerConfigurationNetworking.createClientboundPacket(", "ServerConfigurationNetworking.createS2CPacket(")
+        replace("context.packetListener()", "context.networkHandler()")
         replace("FabricPotionBrewingBuilder", "FabricBrewingRecipeRegistryBuilder")
         // Fabric's game tests carried Mojang's annotation until 26, and Mojang's structure
         // attribute has no default, so the empty one Fabric ships has to be named.

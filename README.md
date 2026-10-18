@@ -19,9 +19,33 @@ Put the jar in `mods/`, then put your packs in `addons/`:
 `.mcaddon`, `.mcpack` and already unpacked pack directories all work. Converted output is cached in
 `.mcaddon/` next to `addons/`; deleting that directory only costs one slower start.
 
-On a server, install the mod on the server and on every client, and give both the same packs. The
-server decides what happens; the client draws it. A player joining without one of the server's
-add-ons, or with another release of it, is told which in chat.
+## Playing on a server
+
+Install the mod on the server and on every client, and put the packs in the server's `addons/`
+only. The server decides what happens; the client draws it.
+
+A client joining a server running this mod is handed the server's add-ons as it joins, with no
+restart. It downloads the ones it lacks into `.mcaddon/received/`, registers what they add, and
+plays with exactly the server's add-ons for that visit: an add-on the client installed and the
+server has not got stays loaded and does nothing until the client leaves, and one the server has
+in another release is replaced by the server's. Leaving puts the client's own add-ons back. A
+downloaded add-on is kept for the next visit, so joining again downloads nothing, and one no server
+asked for in a month is dropped. The same holds for a guest joining a world opened to LAN: the host
+hands out its add-ons, and the host itself never downloads or changes anything.
+
+What a client refuses, each with a message naming why:
+
+- a server running another release of this mod;
+- an add-on larger than 256 MB, more than 1 GB in all, more than 64 add-ons, or more than the disk
+  has room for;
+- an archive that arrives with other bytes than the server promised, or that unpacks into more
+  than 50000 files or 1 GB;
+- a release of an add-on the client already loaded whose items, blocks or entities are built
+  differently, such as a block with another set of states or an item with other components. The
+  message names the add-on: remove or replace it in `addons/` and start the game again.
+
+A client without this mod cannot join a server that has add-ons, and is told which mod to install.
+Against a server without this mod a client plays with its own add-ons.
 
 ## What works
 
@@ -347,10 +371,17 @@ add-ons, or with another release of it, is told which in chat.
   script's `Dimension.placeFeatureRule`, which does the same. The rule's biome filter decides only
   where the world generates it.
 - `/bedrock place jigsaw` with the three words Bedrock writes after the position: whether the
-  jigsaw blocks stay, whether the entities come along, which Java's jigsaws always do, and whether a
-  block placed into water is waterlogged. 1.20.1 waterlogs every block a jigsaw places, so
-  `ignore_waterlogging` is reported there. `place structure` with any of Bedrock's settings is
-  reported, because Java builds a structure the way its own definition says.
+  jigsaw blocks stay, whether the entities come along, and whether a block placed into water is
+  waterlogged. A word the line leaves out takes Bedrock's value (blocks gone, entities left out,
+  waterlogged). 1.20.1 waterlogs every block a jigsaw places, so `ignore_waterlogging` is reported
+  there.
+- `/bedrock place structure` with the four words Bedrock writes after the position:
+  `ignoreStartHeight`, `keepJigsaws`, `includeEntities` and the liquid setting. They apply to a jigsaw
+  structure, which is the only kind Bedrock names there. The placement starts at the structure's own
+  start height unless `ignoreStartHeight` puts it at the height of the position, and the other three
+  words work as they do for `place jigsaw`. The column is the position's own, where Java's short form
+  snaps to the chunk. Any other structure refuses the words with a message when the command runs,
+  and Java's own `place structure <structure> [pos]` places it as before.
 - The commands that run the server rather than the world. `save query` writes out what `save hold`
   held back and lists every file of the world with its length; `setmaxplayers` sets the limit a
   login is checked against for this session only; `packstack server` lists Java's data packs in the
@@ -835,8 +866,8 @@ the camera forms that follow a spline, hang the camera off an entity, turn it to
 it from one, which would each be a camera this mod draws itself; the paper doll, the input hints
 and the touch controls `hud` names, which a Java client draws none of; a `permission` visitor, a
 level below Java's member; `changesetting allow-cheats`, because a Java server always lets an
-operator run commands; a jigsaw placed without its entities; and `place structure` with any of
-Bedrock's settings. The line does not run and the form is named, rather than being handed to a
+operator run commands; and the liquid setting `ignore_waterlogging` on 1.20.1, which waterlogs
+every block a jigsaw or structure places. The line does not run and the form is named, rather than being handed to a
 parser that would refuse it over the wrong word.
 
 Everything else is translated or registered. `effect`, `xp`, `playsound`, `stopsound`,

@@ -427,6 +427,111 @@ public final class BedrockCommandGameTests {
         helper.succeed();
     }
 
+    /**
+     * `place structure` reads the words Bedrock adds after the position, run against the mod's own
+     * jigsaw structure (a start height of 150, one piece: a jigsaw block beside a fence and an armor
+     * stand). `ignoreStartHeight` puts the start at the position's height where the structure's own
+     * rule puts it at 150, and the words after it are asked for one at a time below.
+     */
+    @GameTest()
+    public void aStructureStartsAtTheGivenHeightOnlyWhenToldToIgnoreItsOwn(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos given = helper.absolutePos(new BlockPos(2, 3, 2));
+        BlockPos ruled = helper.absolutePos(new BlockPos(5, 3, 5));
+        List<String> heard = typed(helper, structureLine(given, "true true"));
+        heard.addAll(typed(helper, structureLine(ruled, "false true")));
+
+        // Java lowers a jigsaw's start piece by its ground level delta, one block, below the start.
+        helper.assertTrue(heightOf(level, given, Blocks.JIGSAW) == given.getY() - 1,
+            "ignoreStartHeight true did not start at the position's height: " + heard);
+        helper.assertTrue(heightOf(level, ruled, Blocks.JIGSAW) == 149,
+            "ignoreStartHeight false did not follow the structure's start height of 150: " + heard);
+        helper.succeed();
+    }
+
+    @GameTest()
+    public void aStructureKeepsItsJigsawsOnlyWhenToldTo(GameTestHelper helper) {
+        BlockPos kept = helper.absolutePos(new BlockPos(2, 3, 2));
+        BlockPos dropped = helper.absolutePos(new BlockPos(5, 3, 5));
+        List<String> heard = typed(helper, structureLine(kept, "true true"));
+        heard.addAll(typed(helper, structureLine(dropped, "true false")));
+
+        helper.assertTrue(heightOf(helper.getLevel(), kept, Blocks.JIGSAW) == kept.getY() - 1,
+            "keepJigsaws true left no jigsaw block: " + heard);
+        helper.assertTrue(heightOf(helper.getLevel(), dropped, Blocks.JIGSAW) == Integer.MIN_VALUE,
+            "a jigsaw block stayed with keepJigsaws false: " + heard);
+        fenceBeside(helper, dropped.below());
+        helper.succeed();
+    }
+
+    /**
+     * A word the line leaves out takes Bedrock's value, so a line ending at `ignoreStartHeight` and one
+     * ending at `keepJigsaws` bring no entity, where `true` brings the armor stand.
+     */
+    @GameTest()
+    public void aStructureBringsItsEntitiesOnlyWhenToldTo(GameTestHelper helper) {
+        BlockPos with = helper.absolutePos(new BlockPos(2, 3, 2));
+        BlockPos without = helper.absolutePos(new BlockPos(5, 3, 5));
+        BlockPos bare = helper.absolutePos(new BlockPos(2, 3, 5));
+        List<String> heard = typed(helper, structureLine(with, "true false true"));
+        heard.addAll(typed(helper, structureLine(without, "true false false")));
+        heard.addAll(typed(helper, structureLine(bare, "true")));
+
+        helper.assertTrue(standsAround(helper, with) == 1, "includeEntities true brought "
+            + standsAround(helper, with) + " armor stands: " + heard);
+        helper.assertTrue(standsAround(helper, without) == 0, "includeEntities false brought an armor stand: " + heard);
+        helper.assertTrue(standsAround(helper, bare) == 0, "a line with no includeEntities brought an armor stand: "
+            + heard);
+        helper.succeed();
+    }
+
+    @GameTest()
+    public void aStructureWaterlogsAsTheLineSays(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        for (BlockPos water : BlockPos.betweenClosed(helper.absolutePos(new BlockPos(1, 1, 1)),
+            helper.absolutePos(new BlockPos(6, 3, 6)))) {
+            level.setBlock(water, Blocks.WATER.defaultBlockState(), 2);
+        }
+
+        if (Platform.placesJigsawsDry()) {
+            BlockPos dry = helper.absolutePos(new BlockPos(2, 3, 2));
+            List<String> heard = typed(helper, structureLine(dry, "true true true ignore_waterlogging"));
+            helper.assertFalse(fenceBeside(helper, dry.below()).getValue(BlockStateProperties.WATERLOGGED),
+                "ignore_waterlogging waterlogged the fence: " + heard);
+        }
+
+        BlockPos wet = helper.absolutePos(new BlockPos(5, 3, 5));
+        List<String> heard = typed(helper, structureLine(wet, "true true true apply_waterlogging"));
+        helper.assertTrue(fenceBeside(helper, wet.below()).getValue(BlockStateProperties.WATERLOGGED),
+            "apply_waterlogging left the fence dry: " + heard);
+        helper.succeed();
+    }
+
+    @GameTest()
+    public void aStructureThatIsNotAJigsawTakesNoPlacementWords(GameTestHelper helper) {
+        List<String> heard = typed(helper, "place structure minecraft:igloo "
+            + at(helper, new BlockPos(2, 3, 2)) + " true");
+        helper.assertTrue(heard.stream().anyMatch(line -> line.contains("is not a jigsaw structure")),
+            "an igloo took the jigsaw words: " + heard);
+        helper.succeed();
+    }
+
+    private static String structureLine(BlockPos at, String words) {
+        return "place structure mcaddon:gametest/post " + at.getX() + " " + at.getY() + " " + at.getZ() + " " + words;
+    }
+
+    private static int standsAround(GameTestHelper helper, BlockPos at) {
+        return helper.getLevel().getEntitiesOfClass(net.minecraft.world.entity.decoration.ArmorStand.class,
+            new net.minecraft.world.phys.AABB(at).inflate(1)).size();
+    }
+
+    private static int heightOf(ServerLevel level, BlockPos column, Block block) {
+        for (int y = 300; y >= -60; y--) {
+            if (level.getBlockState(column.atY(y)).is(block)) return y;
+        }
+        return Integer.MIN_VALUE;
+    }
+
     private static net.minecraft.world.level.block.state.BlockState fenceBeside(GameTestHelper helper, BlockPos at) {
         return net.minecraft.core.Direction.Plane.HORIZONTAL.stream()
             .map(side -> helper.getLevel().getBlockState(at.relative(side)))
