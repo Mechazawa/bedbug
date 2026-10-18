@@ -151,13 +151,24 @@ add-ons, or with another release of it, is told which in chat.
   for the rule, under a cap on what a block withstands. A child bred under `minecraft:offspring`
   takes a tamed parent's owner, a parent's variant, mark variant, colour and listed properties
   unless a mutation keeps its own, the dye two colours make, and attributes blended the way Java
-  breeds a horse. A mount under `minecraft:tamemount` is broken in by riding, its temper rising with
+  breeds a horse, and a bred child arrives with `minecraft:entity_born` rather than
+  `minecraft:entity_spawned`. A mount under `minecraft:tamemount` is broken in by riding, its temper rising with
   its food and each buck, and any rideable entity is mounted by using it, pulls in what touches it
   under `pull_in_entities` and raises its rider events. A school flocks by its separation, cohesion,
   variant matching, flock limit and loners; an entity walks out under the sky or in under a roof,
   looks as far for water as it says, drinks the potion its conditions pick by Bedrock's number,
   holds no more of an item than its shareables allow, leaps at its `yd`, and steps higher while a
-  player steers it.
+  player steers it. A stomper looks for turtle eggs as often as its `interval` says. A villager
+  explores past the edge of its village by `explore_dist`, a fox strolls to the nearest village, a
+  child plays with the friend its `friend_types` name, and `minecraft:behavior.hide` runs to the bed
+  or other place `poi_type` names when a bell rings or a raid is on. Java's village is the beds, job
+  sites and bells within reach, since Java keeps no village of its own.
+- Damage causes in Bedrock's own words. A damage sensor, the `has_damage` filter, a panic, playing
+  dead, damage absorption, `minecraft:hurt_on_condition`, a block event's damage, the `damage`
+  command and a script's `applyDamage` and `entityHurt` all name a cause the way Bedrock does
+  (`entity_attack`, `fire_tick`, `suffocation`), and each is matched against the Java damage types
+  that are the same harm on the version that runs. A cause Java has no type for, such as
+  `temperature`, is dealt as the nearest one Java has and hears that one too.
 - An entity in a bucket. `minecraft:bucketable` lets a player scoop the entity up with a water
   bucket and let it out again in the same component groups it was scooped up in. The component
   names no item, and Java holds a fish in an item per kind of fish, so each such entity is carried
@@ -599,8 +610,10 @@ Java builds that screen for its own horses, minecarts and hoppers by class; `suf
 documented as seconds with a default of -20, which no count of seconds can be, so Java's own
 drowning rhythm applies; `has_gravity` is left alone, because Mojang's fish declare it off and still
 fall when they leap out of water; a dweller holds to where it stood without joining a Java village;
-a tempt sound's gap is documented in ticks and written by Mojang in two units at once; and how fast
-an entity resends itself over the network is Java's own business.
+a tempt sound's gap is documented in ticks and written by Mojang in two units at once; a turtle egg
+stomper searches the twenty-four blocks Java's goal fixes, whatever its `search_range` says; and how
+fast an entity resends itself over the network is Java's own business. `has_damage` asking whether
+a blow is `fatal` is reported, because the sensor that asks it is not told how hard the blow is.
 
 **A camera and a touch button.** `minecraft:camera` times the black bars, the shutter and the
 photograph sliding away, which is a full-screen animation the Bedrock client plays while a player
@@ -669,13 +682,6 @@ without saying which side is asking, so neither can be answered for them.
 `minecraft:precipitation_interactions` asking for `snowlogging` puts snow inside the block's own
 space, and Java keeps a snow layer as a block of its own standing on top, with no second occupant
 for the space below it. Each is reported and the rest of its component still decides.
-
-**The cause a block event names for its damage.** Bedrock picks from its own list of damage causes
-and Java builds a damage source out of what dealt the blow, so a block that hurts whoever set it off
-hurts them for the right amount by a source that names no cause. Every other response a block event
-can give runs: a command, a block state, dying, a sound, a particle, an effect added or taken away,
-a teleport, a swing, a loot table, a spent or swapped held item, and a block replaced here or one
-step away.
 
 **A bone bound to an entity Java draws with a model of its own.** A `binding` names a bone of
 whoever carries the model, which works for a pack's own entity and has nowhere to land on a player
