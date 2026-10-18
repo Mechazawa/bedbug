@@ -42,10 +42,45 @@ public record MaterialDefinition(String name, String parent, Set<String> defines
     public boolean dropsFaintTexels() {
         boolean tested = defines.contains("ALPHA_TEST") || parent.contains("alphatest")
             || GAME_MASKED.contains(parent) && !removedDefines.contains("ALPHA_TEST");
-        boolean readsAlpha = defines.contains("USE_COLOR_MASK") || defines.contains("MULTIPLICATIVE_TINT")
-            || parent.contains("change_color");
+        boolean readsAlpha = readsControllerColour() || defines.contains("MULTIPLICATIVE_TINT")
+            || defines.contains("MULTI_COLOR_TINT") || parent.contains("change_color");
         return tested && !readsAlpha && !emissive() && !blends();
     }
+
+    /**
+     * Whether the pass is tinted by its render controller's `color`.
+     *
+     * Bedrock's entity shaders read that colour as `ChangeColor`, and only under `USE_COLOR_MASK`
+     * over the whole texture: each texel is mixed toward itself times the colour by its own alpha,
+     * and its alpha is multiplied by the colour's. Every other material leaves the colour unread,
+     * `entity_alphatest` and `entity_alphablend` among them. The overlay groups are a different
+     * uniform, which every entity material reads.
+     */
+    public boolean readsControllerColour() {
+        return defines.contains("USE_COLOR_MASK")
+            || GAME_COLOUR_MASKED.contains(parent) && !removedDefines.contains("USE_COLOR_MASK");
+    }
+
+    /**
+     * Whether the material reads the controller's `color` in a way one colour over the pass cannot
+     * carry: `MULTI_COLOR_TINT` tints by the texture's red channel alone, and `COLOR_SECOND_TEXTURE`
+     * tints a third texture layered over the first.
+     */
+    public boolean readsControllerColourOtherwise() {
+        return defines.contains("MULTI_COLOR_TINT") || defines.contains("COLOR_SECOND_TEXTURE")
+            || GAME_COLOUR_LAYERED.contains(parent);
+    }
+
+    /** The game's own entity materials that define `USE_COLOR_MASK`, from its `entity.material`. */
+    private static final Set<String> GAME_COLOUR_MASKED = Set.of(
+        "entity_change_color", "entity_change_color_glint", "entity_alphatest_change_color",
+        "entity_alphatest_change_color_glint", "entity_multitexture_multiplicative_blend", "guardian_ghost",
+        "player_spectator", "warden_bioluminescent_layer", "breeze_eyes", "creaking_eyes", "armor_leather",
+        "armor_leather_enchanted", "cat", "sheep", "wolf", "wolf_armor", "tropicalfish");
+
+    /** The game's own entity materials that define `MULTI_COLOR_TINT` or `COLOR_SECOND_TEXTURE`. */
+    private static final Set<String> GAME_COLOUR_LAYERED = Set.of("entity_alphatest_multicolor_tint",
+        "entity_multitexture_color_mask", "entity_multitexture_alpha_test_color_mask", "horse_leather_armor");
 
     /**
      * Whether the pass draws its second texture over its first, with the second's clear but coloured

@@ -14,7 +14,7 @@
       "geometry": "geometry.cap",
       "materials": [
         {
-          "*": "material.default"
+          "*": "material.cap"
         }
       ],
       "textures": ["texture.default"],

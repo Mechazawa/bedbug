@@ -5,16 +5,32 @@
       "animation_length": 2.0,
       "bones": {
         "head": {
-          "scale": [0, 0, 0]
+          "scale": [
+            0,
+            0,
+            0
+          ]
         },
         "leg0": {
-          "rotation": [45, 0, 0]
+          "rotation": [
+            45,
+            0,
+            0
+          ]
         },
         "helmet": {
-          "position": [0, 2, 0]
+          "position": [
+            0,
+            2,
+            0
+          ]
         },
         "held_item": {
-          "scale": [0, 0, 0]
+          "scale": [
+            0,
+            0,
+            0
+          ]
         }
       }
     },
@@ -23,7 +39,11 @@
       "animation_length": 2.0,
       "bones": {
         "body": {
-          "scale": [0, 0, 0]
+          "scale": [
+            0,
+            0,
+            0
+          ]
         }
       }
     },
@@ -32,7 +52,11 @@
       "animation_length": 2.0,
       "bones": {
         "body": {
-          "rotation": [90, 0, 0]
+          "rotation": [
+            90,
+            0,
+            0
+          ]
         }
       }
     },
@@ -41,7 +65,34 @@
       "animation_length": 4.0,
       "bones": {
         "leg1": {
-          "rotation": [0, 0, 30]
+          "rotation": [
+            0,
+            0,
+            30
+          ]
+        }
+      }
+    },
+    "animation.tp.vanilla.stoop": {
+      "loop": true,
+      "animation_length": 2.0,
+      "bones": {
+        "body": {
+          "rotation": [
+            90,
+            0,
+            0
+          ]
+        },
+        "head": {
+          "relative_to": {
+            "rotation": "entity"
+          },
+          "rotation": [
+            10,
+            0,
+            0
+          ]
         }
       }
     }
