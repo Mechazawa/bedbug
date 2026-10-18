@@ -760,7 +760,16 @@ These are the checks it runs, and what each one catches:
   `mcaddon:gametest/fence`, into water with its jigsaw kept and its fence dry, and again with both
   words the other way. That pool and its template ship in `src/main/resources/data/mcaddon/`, the
   template under both `structure/` and `structures/` because 1.20.1 reads the plural; the template
-  is a 248 byte NBT file written by hand, a jigsaw named `mcaddon:start` beside an oak fence. `save query`, `setmaxplayers`, `packstack` and `permission` are typed by the
+  is a 248 byte NBT file written by hand, a jigsaw named `mcaddon:start` beside an oak fence.
+  `place structure` is tested against `mcaddon:gametest/post`, a jigsaw structure (start height 150)
+  over a pool of one piece, a template like the fence plus an armor stand. One test per word
+  (`ignoreStartHeight`, `keepJigsaws`, `includeEntities`, the liquid setting) reads the blocks and the
+  armor stand back, and one asks that an igloo refuses the words. `Platform.placeStructure` runs the
+  structure's own pool through `JigsawPlacement.addPieces` with the fields it reads through
+  `JigsawStructureAccessor`, because `Structure.generate` takes no override. `includeEntities` false
+  discards the entities that were not in the area before the pieces were placed, since a piece always
+  spawns its template's entities. `BedrockTree.MERGED_FORMS` merges Java's short `place structure`
+  lines into the node `Structures` registers. `save query`, `setmaxplayers`, `packstack` and `permission` are typed by the
   console after `/bedrock` and read back through what the console is told, because a line run the
   way a pack runs one has a function's authority and each of these asks for more. `/gametest
   create` lays out the test pack's `tp:hut_stands`, `pos` finds its area, `runthis` runs it there,
