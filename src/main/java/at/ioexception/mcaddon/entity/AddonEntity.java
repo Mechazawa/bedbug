@@ -5072,22 +5072,53 @@ public class AddonEntity extends PathfinderMob
      *
      * Bedrock describes the fuse as well as the power, and a fuse only matters while the entity is
      * still alive to count it; what a pack uses this for is the blast, which is what happens here.
+     * Public so a test can set the blast off at a moment of its own choosing.
      */
-    void detonate() {
+    public void detonate() {
         if (level() instanceof net.minecraft.server.level.ServerLevel level) {
             explode(level);
             discard();
         }
     }
 
+    /**
+     * The blast itself. It breaks blocks whatever the mob griefing rule says unless
+     * `destroy_affected_by_griefing` asks for the rule, which is Java's mob blast, and lights fires
+     * the same way under `fire_affected_by_griefing`; `max_resistance` caps how much any block
+     * withstands.
+     */
     private void explode(net.minecraft.server.level.ServerLevel level) {
-        if (!declaresNow("minecraft:explode")) return;
+        com.google.gson.JsonObject explode = liveComponent("minecraft:explode");
+        if (explode == null) return;
 
-        boolean breaks = liveNumber("minecraft:explode", "breaks_blocks", 1) != 0;
-        boolean burns = liveNumber("minecraft:explode", "causes_fire", 0) != 0;
-        level.explode(this, getX(), getY(), getZ(),
-            (float) liveNumber("minecraft:explode", "power", 3), burns,
-            breaks ? Level.ExplosionInteraction.MOB : Level.ExplosionInteraction.NONE);
+        Level.ExplosionInteraction breaking = Goals.number(explode, "breaks_blocks", 1) == 0
+            ? Level.ExplosionInteraction.NONE
+            : Goals.flag(explode, "destroy_affected_by_griefing", false)
+                ? Level.ExplosionInteraction.MOB : Level.ExplosionInteraction.BLOCK;
+        boolean burns = Goals.number(explode, "causes_fire", 0) != 0
+            && (!Goals.flag(explode, "fire_affected_by_griefing", false) || Platform.mobGriefing(level));
+        net.minecraft.world.level.ExplosionDamageCalculator capped = explode.has("max_resistance")
+            ? new ResistanceCap((float) Goals.number(explode, "max_resistance", Float.MAX_VALUE)) : null;
+        level.explode(this, null, capped, getX(), getY(), getZ(),
+            (float) Goals.number(explode, "power", 3), burns, breaking);
+    }
+
+    /** What a block withstands of a blast, never more than the cap the blast states. */
+    private static final class ResistanceCap extends net.minecraft.world.level.ExplosionDamageCalculator {
+        private final float cap;
+
+        ResistanceCap(float cap) {
+            this.cap = cap;
+        }
+
+        @Override
+        public java.util.Optional<Float> getBlockExplosionResistance(
+            net.minecraft.world.level.Explosion explosion, net.minecraft.world.level.BlockGetter level,
+            net.minecraft.core.BlockPos position, net.minecraft.world.level.block.state.BlockState block,
+            net.minecraft.world.level.material.FluidState fluid) {
+            return super.getBlockExplosionResistance(explosion, level, position, block, fluid)
+                .map(resistance -> Math.min(resistance, cap));
+        }
     }
 
     /**

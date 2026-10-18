@@ -442,6 +442,48 @@ public final class GoalGameTests {
     }
 
     /**
+     * A blast breaks blocks whatever the mob griefing rule says, unless its
+     * `destroy_affected_by_griefing` asks for the rule, and `max_resistance` caps what a block
+     * withstands, so a blast of one breaks obsidian under a cap of nothing.
+     *
+     * The rule is off only while the first two go off, which all happens inside one call on the
+     * server's thread, so no other test runs under it.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aBlastBreaksBlocksAsItsPackStates(GameTestHelper helper) {
+        AddonEntity heedless = BehaviourGameTests.spawn(helper, BRUTE, STAND);
+        AddonEntity mindful = BehaviourGameTests.spawn(helper, BRUTE, STAND.east(5));
+        AddonEntity piercing = BehaviourGameTests.spawn(helper, BRUTE, STAND.south(5));
+        if (heedless == null || mindful == null || piercing == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(heedless, "tp:brute_make_volatile", null, ServerHooks.state());
+        EntityEvents.trigger(mindful, "tp:brute_make_mindful", null, ServerHooks.state());
+        EntityEvents.trigger(piercing, "tp:brute_make_piercing", null, ServerHooks.state());
+        helper.setBlock(STAND.south(1), net.minecraft.world.level.block.Blocks.DIRT);
+        helper.setBlock(STAND.east(5).south(1), net.minecraft.world.level.block.Blocks.DIRT);
+        helper.setBlock(STAND.south(4), net.minecraft.world.level.block.Blocks.OBSIDIAN);
+
+        net.minecraft.server.MinecraftServer server = helper.getLevel().getServer();
+        String griefing = Platform.gameRule(server, "mobGriefing");
+        Platform.setGameRule(server, "mobGriefing", "false");
+        heedless.detonate();
+        mindful.detonate();
+        Platform.setGameRule(server, "mobGriefing", griefing);
+        piercing.detonate();
+
+        helper.assertTrue(helper.getBlockState(STAND.south(1)).isAir(),
+            BRUTE + " breaks blocks whatever the griefing rule says and left the dirt beside it.");
+        helper.assertFalse(helper.getBlockState(STAND.east(5).south(1)).isAir(),
+            BRUTE + " heeds the griefing rule and broke the dirt with the rule off.");
+        helper.assertTrue(helper.getBlockState(STAND.south(4)).isAir(),
+            BRUTE + " caps what a block withstands at nothing and left the obsidian beside it.");
+        helper.succeed();
+    }
+
+    /**
      * `minecraft:addrider` seats every rider its `riders` list names, each raising its own spawn
      * event, and a group bringing the component in is enough for that.
      */

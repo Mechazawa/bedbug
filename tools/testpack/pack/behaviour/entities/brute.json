@@ -336,6 +336,23 @@
             }
           ]
         }
+      },
+      "tp:brute_volatile": {
+        "minecraft:explode": {
+          "power": 1
+        }
+      },
+      "tp:brute_mindful": {
+        "minecraft:explode": {
+          "power": 1,
+          "destroy_affected_by_griefing": true
+        }
+      },
+      "tp:brute_piercing": {
+        "minecraft:explode": {
+          "power": 1,
+          "max_resistance": 0
+        }
       }
     },
     "components": {
@@ -512,6 +529,27 @@
       "tp:brute_alighted": {
         "set_property": {
           "tp:alighted": true
+        }
+      },
+      "tp:brute_make_volatile": {
+        "add": {
+          "component_groups": [
+            "tp:brute_volatile"
+          ]
+        }
+      },
+      "tp:brute_make_mindful": {
+        "add": {
+          "component_groups": [
+            "tp:brute_mindful"
+          ]
+        }
+      },
+      "tp:brute_make_piercing": {
+        "add": {
+          "component_groups": [
+            "tp:brute_piercing"
+          ]
         }
       }
     }
