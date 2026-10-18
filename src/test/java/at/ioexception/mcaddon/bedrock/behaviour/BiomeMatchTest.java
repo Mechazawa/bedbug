@@ -55,6 +55,30 @@ class BiomeMatchTest {
         assertTrue(parse("{\"test\": \"has_biome_tag\", \"value\": \"mooshroom_island\"}")
             .matches("mushroom_fields"));
         assertTrue(parse("{\"test\": \"has_biome_tag\", \"value\": \"roofed\"}").matches("dark_forest"));
+        assertTrue(parse("{\"test\": \"has_biome_tag\", \"value\": \"mega\"}").matches("old_growth_spruce_taiga"));
+        assertFalse(parse("{\"test\": \"has_biome_tag\", \"value\": \"mega\"}").matches("old_growth_birch_forest"));
+    }
+
+    @Test
+    void aForestThatIsNotMutatedIsTheSetBedrocksOwnBiomesCarry() {
+        BiomeMatch woods = parse("""
+            [{"test": "has_biome_tag", "operator": "==", "value": "forest"},
+             {"test": "has_biome_tag", "operator": "!=", "value": "mutated"}]""");
+
+        List.of("forest", "birch_forest", "dark_forest", "taiga", "snowy_taiga", "old_growth_pine_taiga",
+            "windswept_forest").forEach(biome -> assertTrue(woods.matches(biome), biome));
+        List.of("flower_forest", "old_growth_birch_forest", "old_growth_spruce_taiga", "windswept_hills",
+            "plains").forEach(biome -> assertFalse(woods.matches(biome), biome));
+    }
+
+    @Test
+    void mutatedLeavesOutTheBiomesBedrockKeepsUnmutated() {
+        BiomeMatch mutated = parse("{\"test\": \"has_biome_tag\", \"value\": \"mutated\"}");
+
+        List.of("windswept_hills", "windswept_forest", "sparse_jungle", "bamboo_jungle", "old_growth_pine_taiga")
+            .forEach(biome -> assertFalse(mutated.matches(biome), biome));
+        List.of("windswept_gravelly_hills", "windswept_savanna", "sunflower_plains", "eroded_badlands")
+            .forEach(biome -> assertTrue(mutated.matches(biome), biome));
     }
 
     @Test

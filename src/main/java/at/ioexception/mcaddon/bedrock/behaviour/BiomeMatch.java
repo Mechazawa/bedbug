@@ -62,8 +62,11 @@ public sealed interface BiomeMatch {
     /**
      * What a Bedrock biome tag means among Java's biome ids.
      *
-     * A biome matches a tag when its id contains one of the strings listed against it. Several tags
-     * are spelled differently in the two editions, and a few name a group of biomes rather than one.
+     * A biome matches a tag when its id contains one of the strings listed against it and none of the
+     * strings `EXCEPT` lists against it. Several tags are spelled differently in the two editions, and
+     * a few name a group of biomes rather than one. Bedrock's own biome files decide each list: every
+     * taiga carries `forest`, the flower forest does not, and of the windswept biomes only the
+     * gravelly hills and the savanna are `mutated`.
      */
     Map<String, List<String>> JAVA_BIOMES = Map.ofEntries(
         Map.entry("badlands", List.of("badlands")),
@@ -82,7 +85,7 @@ public sealed interface BiomeMatch {
         Map.entry("edge", List.of("sparse_jungle")),
         Map.entry("extreme_hills", List.of("windswept_hills", "windswept_gravelly_hills")),
         Map.entry("flower_forest", List.of("flower_forest")),
-        Map.entry("forest", List.of("forest")),
+        Map.entry("forest", List.of("forest", "taiga")),
         Map.entry("frozen", List.of("frozen", "snowy", "ice_spikes")),
         Map.entry("frozen_peaks", List.of("frozen_peaks")),
         Map.entry("grove", List.of("grove")),
@@ -95,12 +98,12 @@ public sealed interface BiomeMatch {
         Map.entry("lush_caves", List.of("lush_caves")),
         Map.entry("mangrove_swamp", List.of("mangrove_swamp")),
         Map.entry("meadow", List.of("meadow")),
-        Map.entry("mega", List.of("old_growth")),
+        Map.entry("mega", List.of("old_growth_pine_taiga", "old_growth_spruce_taiga")),
         Map.entry("mesa", List.of("badlands")),
         Map.entry("mooshroom_island", List.of("mushroom_fields")),
         Map.entry("mountain", List.of("peaks", "slopes", "meadow", "grove", "windswept_hills")),
-        Map.entry("mutated", List.of("eroded", "windswept", "ice_spikes", "flower_forest",
-            "old_growth", "sunflower", "sparse_jungle", "bamboo_jungle")),
+        Map.entry("mutated", List.of("eroded", "windswept_gravelly_hills", "windswept_savanna", "ice_spikes",
+            "flower_forest", "old_growth_birch_forest", "old_growth_spruce_taiga", "sunflower")),
         Map.entry("netherwart_forest", List.of("crimson_forest")),
         Map.entry("ocean", List.of("ocean")),
         Map.entry("plains", List.of("plains")),
@@ -116,6 +119,9 @@ public sealed interface BiomeMatch {
         Map.entry("swamp", List.of("swamp")),
         Map.entry("taiga", List.of("taiga")),
         Map.entry("warped_forest", List.of("warped_forest")));
+
+    /** Java biomes whose id carries a tag's string and which Bedrock leaves that tag off. */
+    Map<String, List<String>> EXCEPT = Map.of("forest", List.of("flower_forest"));
 
     record All(List<BiomeMatch> parts) implements BiomeMatch {
         @Override
@@ -167,7 +173,9 @@ public sealed interface BiomeMatch {
             if (excluded != null) return negated == excluded.stream().anyMatch(biome::contains);
 
             List<String> java = JAVA_BIOMES.get(name);
-            return negated != (java != null && java.stream().anyMatch(biome::contains));
+            boolean carries = java != null && java.stream().anyMatch(biome::contains)
+                && EXCEPT.getOrDefault(name, List.of()).stream().noneMatch(biome::contains);
+            return negated != carries;
         }
 
         @Override

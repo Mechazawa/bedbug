@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.server;
 
+import at.ioexception.mcaddon.bedrock.behaviour.DamageCause;
 import at.ioexception.mcaddon.bedrock.behaviour.Filter;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
 import at.ioexception.mcaddon.entity.AddonEntity;
@@ -16,8 +17,6 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.damagesource.DamageSource;
-import net.minecraft.world.damagesource.DamageSources;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
@@ -275,27 +274,11 @@ public final class Sensors {
                 continue;
             }
 
-            Platform.hurt(entity, level, cause(level, Json.text(condition, "cause", null)),
+            DamageCause cause = DamageCause.named(Json.text(condition, "cause", "none"));
+            Platform.hurt(entity, level,
+                (cause == null ? DamageCause.NONE : cause).source(level.registryAccess(), null),
                 (float) number(condition, "damage_per_tick", 1));
         }
-    }
-
-    /** The damage kind a pack names, so its own resistances and death messages read correctly. */
-    private static DamageSource cause(ServerLevel level, String cause) {
-        DamageSources sources = level.damageSources();
-        return switch (cause == null ? "none" : cause) {
-            case "lava" -> sources.lava();
-            case "fire", "fire_tick" -> sources.inFire();
-            case "drowning" -> sources.drown();
-            case "fall" -> sources.fall();
-            case "freezing" -> sources.freeze();
-            case "magic" -> sources.magic();
-            case "wither" -> sources.wither();
-            case "starve" -> sources.starve();
-            case "contact" -> sources.cactus();
-            case "suffocation" -> sources.inWall();
-            default -> sources.generic();
-        };
     }
 
     /**
