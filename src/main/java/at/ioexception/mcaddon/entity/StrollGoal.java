@@ -38,10 +38,13 @@ final class StrollGoal extends RandomStrollGoal {
     private final int shortestWander;
     private final int longestWander;
     private final boolean reselects;
+    /** Whether a spot in the top layer of the water is taken one block lower. */
+    private final boolean belowTheSurface;
     private int wandered;
     private int wanderFor;
 
-    private StrollGoal(PathfinderMob mob, JsonObject goal, int interval, Medium medium, int shortest, int longest) {
+    private StrollGoal(PathfinderMob mob, JsonObject goal, int interval, Medium medium, int shortest, int longest,
+        boolean belowTheSurface) {
         super(mob, Goals.number(goal, "speed_multiplier", 1), interval);
         this.across = Math.max(1, (int) Goals.number(goal, "xz_dist", 10));
         this.upDown = Math.max(1, (int) Goals.number(goal, "y_dist", 7));
@@ -52,16 +55,18 @@ final class StrollGoal extends RandomStrollGoal {
         this.shortestWander = shortest;
         this.longestWander = longest;
         this.reselects = Goals.flag(goal, "random_reselect", false);
+        this.belowTheSurface = belowTheSurface;
     }
 
     /** `minecraft:behavior.random_stroll`: somewhere on dry land where there is any. */
     static StrollGoal walking(PathfinderMob mob, JsonObject goal) {
-        return new StrollGoal(mob, goal, oneIn(goal), Medium.LAND, Integer.MAX_VALUE, Integer.MAX_VALUE);
+        return new StrollGoal(mob, goal, oneIn(goal), Medium.LAND, Integer.MAX_VALUE, Integer.MAX_VALUE, false);
     }
 
-    /** `minecraft:behavior.random_swim`: somewhere in the water. */
+    /** `minecraft:behavior.random_swim`: somewhere in the water, under its surface unless `avoid_surface` says no. */
     static StrollGoal swimming(PathfinderMob mob, JsonObject goal) {
-        return new StrollGoal(mob, goal, oneIn(goal), Medium.WATER, Integer.MAX_VALUE, Integer.MAX_VALUE);
+        return new StrollGoal(mob, goal, oneIn(goal), Medium.WATER, Integer.MAX_VALUE, Integer.MAX_VALUE,
+            Goals.flag(goal, "avoid_surface", true));
     }
 
     /**
@@ -72,7 +77,7 @@ final class StrollGoal extends RandomStrollGoal {
         double chance = Goals.number(goal, "interval", 0.00833);
         int interval = chance <= 0 ? Integer.MAX_VALUE : (int) Math.max(1, Math.round(1 / chance));
         int longest = Goals.ticks(goal, "wander_time", 5);
-        return new StrollGoal(mob, goal, interval, Medium.WATER, longest, longest);
+        return new StrollGoal(mob, goal, interval, Medium.WATER, longest, longest, false);
     }
 
     /**
@@ -80,7 +85,7 @@ final class StrollGoal extends RandomStrollGoal {
      * Java's own flying stroll looks. A hover keeps the spot within `hover_height` of the ground under it.
      */
     static StrollGoal flying(PathfinderMob mob, JsonObject goal) {
-        return new StrollGoal(mob, goal, oneIn(goal), Medium.AIR, Integer.MAX_VALUE, Integer.MAX_VALUE);
+        return new StrollGoal(mob, goal, oneIn(goal), Medium.AIR, Integer.MAX_VALUE, Integer.MAX_VALUE, false);
     }
 
     /**
@@ -90,8 +95,8 @@ final class StrollGoal extends RandomStrollGoal {
     static StrollGoal floating(PathfinderMob mob, JsonObject goal) {
         int longest = Goals.ticksHigh(goal, "float_duration", 0);
         return longest <= 0
-            ? new StrollGoal(mob, goal, 1, Medium.AIR, Integer.MAX_VALUE, Integer.MAX_VALUE)
-            : new StrollGoal(mob, goal, 1, Medium.AIR, Goals.ticksLow(goal, "float_duration", 0), longest);
+            ? new StrollGoal(mob, goal, 1, Medium.AIR, Integer.MAX_VALUE, Integer.MAX_VALUE, false)
+            : new StrollGoal(mob, goal, 1, Medium.AIR, Goals.ticksLow(goal, "float_duration", 0), longest, false);
     }
 
     private static int oneIn(JsonObject goal) {
@@ -101,7 +106,11 @@ final class StrollGoal extends RandomStrollGoal {
     @Override
     protected Vec3 getPosition() {
         Vec3 picked = switch (medium) {
-            case WATER -> BehaviorUtils.getRandomSwimmablePos(mob, across, upDown);
+            case WATER -> {
+                Vec3 swim = BehaviorUtils.getRandomSwimmablePos(mob, across, upDown);
+                yield swim != null && belowTheSurface && atTheSurface(BlockPos.containing(swim))
+                    ? swim.add(0, -1, 0) : swim;
+            }
             case AIR -> {
                 Vec3 ahead = mob.getViewVector(0);
                 Vec3 hover = HoverRandomPos.getPos(mob, across, upDown, ahead.x, ahead.z, (float) (Math.PI / 2), 3, 1);
@@ -114,6 +123,14 @@ final class StrollGoal extends RandomStrollGoal {
             }
         };
         return picked == null ? null : overTheGround(picked.add(0, offset, 0));
+    }
+
+    private boolean atTheSurface(BlockPos spot) {
+        return water(spot) && !water(spot.above()) && water(spot.below());
+    }
+
+    private boolean water(BlockPos at) {
+        return mob.level().getFluidState(at).is(net.minecraft.tags.FluidTags.WATER);
     }
 
     /** The spot moved up or down into `hover_height` over the first solid block beneath it. */

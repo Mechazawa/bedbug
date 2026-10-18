@@ -577,6 +577,15 @@
           "stop_distance": 5
         }
       },
+      "tp:brute_deep_swimming": {
+        "minecraft:navigation.swim": {},
+        "minecraft:behavior.random_swim": {
+          "priority": 0,
+          "interval": 0,
+          "xz_dist": 4,
+          "y_dist": 2
+        }
+      },
       "tp:brute_springing": {
         "minecraft:behavior.leap_at_target": {
           "priority": 0,
@@ -1018,6 +1027,13 @@
         "add": {
           "component_groups": [
             "tp:brute_tagging"
+          ]
+        }
+      },
+      "tp:brute_swim_deep": {
+        "add": {
+          "component_groups": [
+            "tp:brute_deep_swimming"
           ]
         }
       },

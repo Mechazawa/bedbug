@@ -907,6 +907,33 @@ public final class GoalGameTests {
     }
 
     /**
+     * `minecraft:behavior.random_swim` keeps below the surface unless `avoid_surface` says otherwise, so
+     * none of the spots it heads for is in the top layer of the pool.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aSwimKeepsBelowTheSurface(GameTestHelper helper) {
+        AddonEntity brute = inAPool(helper, "tp:brute_swim_deep");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        int surface = helper.absolutePos(new BlockPos(0, POOL_DEPTH - 1, 0)).getY();
+        java.util.Set<BlockPos> headings = new java.util.HashSet<>();
+        helper.onEachTick(() -> {
+            BlockPos heading = brute.getNavigation().getTargetPos();
+            if (heading != null) headings.add(heading);
+        });
+        helper.runAfterDelay(WANDER_TICKS, () -> {
+            helper.assertTrue(!headings.isEmpty(), BRUTE + " swims at every chance and never set off.");
+            helper.assertTrue(headings.stream().noneMatch(heading -> heading.getY() == surface),
+                BRUTE + " keeps below the surface and headed for " + headings + " with the surface at "
+                    + surface + ".");
+            helper.succeed();
+        });
+    }
+
+    /**
      * `minecraft:behavior.swim_wander` gives up a wander after `wander_time` and, its `interval` being a
      * chance of a half each time, soon sets off on another. A quarter of a second a wander leaves time for
      * several in the five seconds the test watches.
@@ -1008,6 +1035,9 @@ public final class GoalGameTests {
 
     /** Asks that every spot the brute headed for while the test ran was high over the floor. */
     private static void aimsHigh(GameTestHelper helper, AddonEntity brute, String why) {
+        // Java's fallback for a flight looks a few blocks under the mob, which under the test floor is open air.
+        BlockPos.betweenClosed(new BlockPos(-4, -4, -4), new BlockPos(6, -2, 6))
+            .forEach(at -> helper.setBlock(at, Blocks.STONE));
         int ground = helper.absolutePos(BlockPos.ZERO).getY();
         int[] lowest = {Integer.MAX_VALUE};
         helper.onEachTick(() -> {
