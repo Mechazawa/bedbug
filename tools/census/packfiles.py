@@ -12,8 +12,9 @@ beside a pack's audio.
 
 The published side is Mojang's own pack pair in `bedrock-samples`, widened by the material in the
 same checkout that names a kind Mojang's pair happens not to ship. The mod's side is the `READ` and
-`DEFINED` declarations in `pack/PackFiles.java`, so a reader added there counts the moment it is
-added and the same declaration is what `/mcaddon entities` reports against a loaded pack.
+`UNREAD` declarations in `pack/PackFiles.java`, so a reader added there counts the moment it is
+added. `UNREAD` holds each kind with the reason Java cannot take it, and that pair is what
+`/mcaddon entities` reports against a loaded pack.
 
     bash tools/census/fetch.sh
     python3 tools/census/packfiles.py
@@ -21,10 +22,11 @@ added and the same declaration is what `/mcaddon entities` reports against a loa
 """
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
-from components import literal_set, print_names, text
+from components import balanced, literal_set, print_names, text
 from data import lenient
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -45,6 +47,7 @@ WIDENED = {
         "animations": "metadata/doc_modules/animations.json",
         "animation_controllers": "metadata/doc_modules/animations.json",
         "blocks": "metadata/vanilladata_modules/mojang-blocks.json",
+        "camera": None,
         "cameras": "metadata/vanilladata_modules/mojang-camera-presets.json",
         "dialogue": "metadata/json_schemas/client_server/entity",
         "dimensions": "metadata/vanilladata_modules/mojang-dimensions.json",
@@ -166,6 +169,13 @@ def declared(role, kind):
     return literal_set(PACK_FILES, marker)
 
 
+def unread(role):
+    """The kinds an `X_UNREAD` map gives a reason for, written as `Map.entry("<kind>", ...)`."""
+    body = text(PACK_FILES)
+    at = body.index(f"{role.upper()}_UNREAD = Map.")
+    return set(re.findall(r'Map\.entry\(\s*"([^"]+)"', balanced(body, body.index("(", at))))
+
+
 def unbacked(names):
     """A declared path whose own name appears as a literal nowhere else in the source.
 
@@ -184,8 +194,8 @@ class Role:
         self.title = title
         self.role = role
         self.published = available
-        self.defined = declared(role, "DEFINED")
         self.read = declared(role, "READ")
+        self.defined = self.read | unread(role)
 
     @property
     def covered(self):

@@ -111,7 +111,7 @@ public final class ServerHooks {
         // Both sides are asked whatever the other answers: a pack's script watches for the attempt
         // and not only for the damage that lands.
         ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> {
-            boolean lands = damageSensor(entity, source);
+            boolean lands = damageSensor(entity, source, amount);
             if (at.ioexception.mcaddon.registry.AddonItems.absorbed(entity, source, amount)) {
                 return false;
             }
@@ -140,6 +140,7 @@ public final class ServerHooks {
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             ServerPlayer left = handler.player;
             server.execute(() -> {
+                PlayerCameras.forget(left);
                 PlayerFogs.forget(left);
                 PlayerHuds.forget(left);
                 PlayerInputs.forget(left);
@@ -241,7 +242,7 @@ public final class ServerHooks {
      * harm without making it immune to everything.
      */
     private static boolean damageSensor(net.minecraft.world.entity.LivingEntity entity,
-        net.minecraft.world.damagesource.DamageSource source) {
+        net.minecraft.world.damagesource.DamageSource source, float amount) {
         if (state == null || !(entity instanceof at.ioexception.mcaddon.entity.AddonEntity addon)) return true;
         if (addon.definition() == null) return true;
 
@@ -263,7 +264,7 @@ public final class ServerHooks {
                 at.ioexception.mcaddon.bedrock.behaviour.Filter.parse(
                     onDamage == null ? null : onDamage.get("filters"));
             if (!filter.matches(new at.ioexception.mcaddon.bedrock.behaviour.Filter.Context(
-                entity, source.getEntity() == null ? entity : source.getEntity(), null, state, source))) {
+                entity, source.getEntity() == null ? entity : source.getEntity(), null, state, source, amount))) {
                 continue;
             }
 

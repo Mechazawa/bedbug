@@ -73,10 +73,14 @@ Against a server without this mod a client plays with its own add-ons.
   evaluator, with each pass drawn the way its `.material` asks: alpha tested or blended, culled or
   not, plain or glowing, and lit by the light its controller asked for. A controller's `color`
   tints a pass only where its material is a colour mask, such as `entity_alphatest_change_color` or
-  one defining `USE_COLOR_MASK`, because Bedrock's entity shaders read it nowhere else; its
-  `overlay_color`, `is_hurt_color` and `on_fire_color` are laid over every material. A hurt or dying
+  one defining `USE_COLOR_MASK`, because Bedrock's entity shaders read it nowhere else. Such a mask
+  tints each texel by its own alpha, so over a texture holding partly clear texels the pass is drawn
+  untinted and the tint is laid over it in a second, blended pass that weighs each texel by the alpha
+  the pack painted; a blended colour mask over such a texture is tinted whole and reported. Its
+  `overlay_color`, `is_hurt_color` and `on_fire_color` are laid over every material that keeps
+  `USE_OVERLAY`, which the game's beams and a pack's own material can remove. A hurt or dying
   entity flashes red the way every Bedrock entity does, unless its controller states an
-  `is_hurt_color` of its own, which is drawn instead. A pass whose material
+  `is_hurt_color` of its own, which is drawn instead, or its material removes `USE_OVERLAY`. A pass whose material
   defines `MASKED_MULTITEXTURE`, as the game's villager outfits do, draws its second texture over its
   first with the second's clear but coloured texels showing the first through, which is how a
   villager's profession is worn over the clothes of its biome. A controller's `materials` list gives each bone
@@ -221,22 +225,28 @@ Against a server without this mod a client plays with its own add-ons.
   An item the pack lets into the off hand goes there and one it does not is refused, an item that
   clips liquids aims at water and lava, and one carrying a durability sensor shows the particle and
   plays the sound its threshold names as it wears down.
-- `/bedrock camera` and `/bedrock camerashake`, which set one player's own view: the four presets, a position and a
-  rotation of the pack's choosing or a point or an entity to face, all thirty-one of Bedrock's easing
-  curves, and a shake that moves the camera or turns it. An ease to one of the three cameras that
-  follow the player is refused the way Bedrock refuses it, and `minecraft:fixed_boom`,
-  `minecraft:follow_orbit` and `minecraft:control_scheme_camera` are named as cameras Java has no
-  counterpart for. A behaviour pack's own `cameras/presets/` are presets too: each inherits from
-  `minecraft:free` or from another of the pack's, takes the position, the rotation and the listener
-  it states over the ones it inherits, and is set by `/camera set` and by a script's
-  `Camera.setCamera` and `Camera.setDefaultCamera`, with whatever the command or the script states
-  over the preset's own. A preset with `"listener": "player"` hears from the player's head while the
-  camera is away from it. `/bedrock camera ... fade` covers the screen in black or the colour it
-  names, coming in, holding and going out over Bedrock's own one second, half a second and one
-  second unless it names others, and a fade asked for while one runs is combined with it the way
-  Bedrock combines them. `fov_set` and `fov_clear` move the field of view to a value or back to the
-  player's own, over the seconds and the ease they name; what sprinting or being under water does to
-  the view still happens on top.
+- `/bedrock camera` and `/bedrock camerashake`, which set one player's own view: all seven of
+  Bedrock's presets, a position and a rotation of the pack's choosing or a point or an entity to face,
+  all thirty-one of Bedrock's easing curves, and a shake that moves the camera or turns it. An ease to
+  one of the three gameplay cameras is refused the way Bedrock refuses it. `minecraft:follow_orbit`
+  circles the player at a radius and turns as the player turns, with `rot` turning the player;
+  `minecraft:fixed_boom` follows the player at one angle and does not turn with them; and both take
+  `view_offset` and `entity_offset`. `minecraft:control_scheme_camera` is drawn as the orbit, because
+  Mojang publishes nothing about how it differs. `attach_to_entity` and `detach_from_entity` hang the
+  camera off another entity, which an orbit camera then circles and any other camera looks out of.
+  `target_entity` with its `target_center_offset` turns a free camera after an entity until
+  `remove_target`, and `play_spline` carries a free camera along a curve a behaviour pack describes in
+  `camera/splines/`. A behaviour pack's own `cameras/presets/` are presets too: each inherits from one
+  of Bedrock's or from another of the pack's, takes what it states over what it inherits, and is set by
+  `/camera set` and by a script's `Camera.setCamera` and `Camera.setDefaultCamera`, with whatever the
+  command or the script states over the preset's own. A preset with `"listener": "player"` hears from
+  the player's head while the camera is away from it. A script also has `Camera.attachToEntity` and
+  `Camera.playAnimation`.
+  `/bedrock camera ... fade` covers the screen in black or the colour it names, coming in, holding
+  and going out over Bedrock's own one second, half a second and one second unless it names others,
+  and a fade asked for while one runs is combined with it the way Bedrock combines them. `fov_set`
+  and `fov_clear` move the field of view to a value or back to the player's own, over the seconds and
+  the ease they name; what sprinting or being under water does to the view still happens on top.
 - `/bedrock fog`, which layers a pack's own `fogs/` settings over the one the game would draw, with a stack
   per player that `pop` and `remove` take apart the way Bedrock's do. Like the two camera commands it
   is decided on the server and sent to each player alone, so setting one player's view in a
@@ -568,7 +578,8 @@ Against a server without this mod a client plays with its own add-ons.
   `/mcaddon packs` says which form was loaded.
 - The settings a pack offers. Bedrock puts a pack's sliders, toggles and dropdowns on a screen
   beside it, and the pack's own Molang and its script read back whatever a player left them at. Java
-  has no such screen, so each one holds the `default` its author declared:
+  has no such screen, so each one holds the `default` its author declared, kept inside the slider's
+  range and step or the dropdown's options:
   `query.get_pack_setting`, `query.is_pack_setting_enabled` and `query.is_pack_setting_selected` are
   answered with it, and so is `World.getPackSettings`. `/mcaddon packs` also says who wrote a pack,
   under what licence and where it lives, which is what its manifest's `metadata` states.
@@ -645,16 +656,17 @@ or to the installation, and `addons/` is one directory per instance with no worl
 to. `pack_optimization_version` is in Mojang's schema and in Mojang's own field table with no
 description in either, so nothing is stated for a reader to act on. A module's `uuid` and `version`
 identify one half of a pack to Bedrock's content updater, and what names one installation of an
-add-on to another here is the header uuid and the header version. `optional` on a script API
-dependency says a pack runs without that module, which it cannot: a module is linked before any of
-the script runs, so a specifier this mod does not provide ends the whole script whatever the flag
-says. `product_type` decides on Bedrock whether a world keeps its achievements and whether the
+add-on to another here is the header uuid and the header version. A script API dependency this mod
+does not provide is a problem `/mcaddon packs` names, unless the dependency is `optional`. The flag
+does not rescue a script that imports the module, because a module is linked before any of the
+script runs. `product_type` decides on Bedrock whether a world keeps its achievements and whether the
 resource pack half is downloaded, and Java locks no advancement behind a pack and installs both
 halves together. The `editorExtension` capability asks for the Bedrock Editor, which Java has not
 got, and `experimental_custom_ui` asks for an HTML interface Bedrock itself dropped in 1.18.10.28.
-A setting's `text`, `min`, `max`, `step` and `options` describe the screen a player would move it
-on: with no such screen nothing moves a setting off its default, so the range it could have moved
-through decides nothing. The `pbr`, `raytraced` and `script_eval` capabilities are answered rather
+A setting's `text` and an option's `text` are labels on a screen Java does not have. A slider's
+`min`, `max` and `step` and a dropdown's `options` are read: they bring the default inside what the
+control could have been set to, so a slider shipped above its maximum answers with the maximum and
+a dropdown shipped at an option it does not list answers with its first. The `pbr`, `raytraced` and `script_eval` capabilities are answered rather
 than named: the first two ask for physically based rendering, which the texture set conversion
 writes as labPBR sidecars, and the third asks for `eval`, which the script host evaluates with no
 permission of its own to grant.
@@ -715,8 +727,9 @@ drowning rhythm applies; `has_gravity` is left alone, because Mojang's fish decl
 fall when they leap out of water; a dweller holds to where it stood without joining a Java village;
 a tempt sound's gap is documented in ticks and written by Mojang in two units at once; a turtle egg
 stomper searches the twenty-four blocks Java's goal fixes, whatever its `search_range` says; and how
-fast an entity resends itself over the network is Java's own business. `has_damage` asking whether
-a blow is `fatal` is reported, because the sensor that asks it is not told how hard the blow is.
+fast an entity resends itself over the network is Java's own business. Outside a damage sensor,
+`has_damage` asking whether a blow is `fatal` is reported, because only the sensor is told how hard
+the blow is; inside one it answers whether the damage, before armour, is at least the health left.
 
 **A camera and a touch button.** `minecraft:camera` times the black bars, the shutter and the
 photograph sliding away, which is a full-screen animation the Bedrock client plays while a player
@@ -974,17 +987,29 @@ front of a Java player is what `@minecraft/server-ui` describes and what an NPC 
 states, and both of those are drawn.
 
 **What a camera preset says about Bedrock's own client.** A pack's `cameras/presets/` are read, and
-of what a preset states beside its identifier and its parent, `pos_x`, `pos_y`, `pos_z`, `rot_x`,
-`rot_y` and `listener` are drawn. The rest is named by `/mcaddon entities` as the pack loads.
-`player_effects` and `extend_player_rendering` describe the Bedrock client's renderer: Java draws the
-player's effects whatever the camera and draws every entity the loaded chunks hold. `rotation_speed`,
-`snap_to_target`, `continue_targeting`, `tracking_radius` and the two rotation limits shape how a
-free camera follows the entity `/camera target_entity` names, which this mod does not do. `radius`,
-`view_offset`, `entity_offset`, `starting_rot_x`, `starting_rot_y`, `aim_assist`,
-`align_target_and_camera_forward` and `control_scheme` belong to `minecraft:follow_orbit` and
-`minecraft:fixed_boom`, which Java has no camera for, and a preset built on one of those is refused
-by name. Bedrock keeps a player's `pos` and `rot` for a preset until `default` or a rejoin clears
-them; here a `/camera set` with neither places the camera where the preset says.
+of what a preset states beside its identifier and its parent, the placement (`pos_x`, `pos_y`,
+`pos_z`, `rot_x`, `rot_y`), the `listener`, an orbit camera's `radius`, `view_offset`,
+`entity_offset`, `starting_rot_x`, `starting_rot_y` and `align_target_and_camera_forward`, and the
+fields that shape how a free camera follows its target (`rotation_speed`, `snap_to_target`, the
+two rotation limits, `continue_targeting` and `tracking_radius`) are drawn. The rest is named by
+`/mcaddon entities` as the pack loads. `player_effects` and `extend_player_rendering` describe the
+Bedrock client's renderer: Java draws the player's effects whatever the camera and draws every entity
+the loaded chunks hold. `aim_assist` and `control_scheme` belong to two systems this mod has not got,
+aim assist and `/controlscheme`. Mojang describes `align_target_and_camera_forward` nowhere, so it is
+read by its name: a fixed boom stating it turns the player to face the way the camera looks when it
+is set. Bedrock keeps a player's `pos` and `rot` for a preset until `default` or a rejoin clears them;
+here a `/camera set` with neither places the camera where the preset says.
+
+**What a camera does that Mojang does not write down.** An orbit camera circles the middle of the
+entity's box, the point Mojang's documentation says an entity offset of nothing stands at, and moves
+that point along the world's own axes; Java's camera has no roll, so a spline's rotation about the
+camera's forward axis is named rather than drawn. A spline file is read in the field names of
+Bedrock's own spline definition (`name`, `spline_type`, `total_time`, `control_points`,
+`progress_key_frames`, `rotation_key_frames`), at the top of the file or inside the one object it
+holds. A Catmull-Rom spline passes through every point it is given, the first and the last included,
+which is what Mojang's flyover tutorial draws, and the curve is spread evenly over its points rather
+than over its length. Neither orbit camera is pulled in when a wall stands between it and the entity
+it follows.
 
 **The index beside a pack's textures.** `textures/texture_list.json` is a flat list of texture paths
 written without their extensions, which the Bedrock client keeps so it can resolve a texture by name
@@ -993,6 +1018,8 @@ pack lists 20 of the 8039 images it ships, every one of them a file that is ther
 by `terrain_texture.json` or `item_texture.json`. The conversion walks `textures/` itself, so what it
 writes covers whatever the index names and reading the index would change nothing. It is counted and
 named all the same, because a file this mod never opens is a fact the pack's author is owed.
+`/mcaddon entities` names each of the four kinds nothing reads, `ui`, this index, `color_grading` and
+`water`, together with the reason Java has no place for it.
 
 **A dimension with a generator nobody wrote down.** Bedrock builds a dimension a pack declares as
 empty space and accepts `void` and no other generator, so a file naming another one is counted and

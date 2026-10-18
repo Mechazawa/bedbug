@@ -438,7 +438,8 @@ def converted_counts(directories: list[Path]) -> dict:
             events += len(json.loads(manifest.read_text()))
 
     return {
-        "textures": len(images) - ending("_n") - ending("_s") - ending("_emissive"),
+        "textures": len(images) - ending("_n") - ending("_s") - ending("_emissive")
+        - ending("_alpha_tested") - ending("_tint_weights"),
         "sound events": events,
         "normal sidecars": ending("_n"),
         "specular sidecars": ending("_s"),

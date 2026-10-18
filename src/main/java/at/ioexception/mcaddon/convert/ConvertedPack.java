@@ -44,6 +44,16 @@ public record ConvertedPack(BedrockPack pack, List<BedrockPack> behaviours, Path
         return tested != null && written(tested) != null ? tested : null;
     }
 
+    /**
+     * The resource id of the form of a texture a colour mask weighs its tint by, or null where the
+     * conversion wrote none because every texel is clear or opaque.
+     */
+    public String tintWeights(String bedrockPath) {
+        String mapped = texturePaths.get(bedrockPath);
+        String weights = mapped == null ? null : mapped + TintWeights.SUFFIX;
+        return weights != null && written(weights) != null ? weights : null;
+    }
+
     /** The file a texture's resource id names inside this pack, or null where none was written. */
     private Path written(String id) {
         int colon = id.indexOf(':');
