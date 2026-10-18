@@ -1332,31 +1332,67 @@ public class AddonEntity extends PathfinderMob
      * `random_teleport_cube` is the whole width of the box on each axis, so a jump reaches half of
      * it from where the entity stands. A jump out of the light is priced apart from one out of the
      * dark, which is what makes an enderman's daylight blink more likely than its night one.
+     *
+     * A try with a target further off than `target_distance` blocks is spent on closing that
+     * distance instead, at `target_teleport_chance`, which is how an enderman crosses a field to
+     * whoever looked at it. Java writes the same jump into its enderman, sixteen blocks at a time.
      */
     private void teleportAbout() {
-        if (!declares("minecraft:teleport") || level().isClientSide()) return;
-
-        com.google.gson.JsonObject body = componentBody("minecraft:teleport");
-        if (!Goals.flag(body, "random_teleports", true) || tickCount < teleportReadyAt) return;
+        com.google.gson.JsonObject body = liveComponent("minecraft:teleport");
+        if (body == null || level().isClientSide() || tickCount < teleportReadyAt) return;
 
         teleportReadyAt = tickCount + Goals.between(random,
             Math.max(1, Goals.ticks(body, "min_random_teleport_time", 0)),
             Math.max(1, Goals.ticks(body, "max_random_teleport_time", 20)));
 
-        boolean lit = level().getMaxLocalRawBrightness(blockPosition()) > 7;
-        if (random.nextDouble() > Goals.number(body,
-            lit ? "light_teleport_chance" : "dark_teleport_chance", 0.01)) {
+        net.minecraft.world.entity.LivingEntity target = getTarget();
+        double reach = Goals.number(body, "target_distance", 16);
+        if (target != null && target.isAlive() && distanceTo(target) > reach) {
+            if (random.nextDouble() < Goals.number(body, "target_teleport_chance", 1)) {
+                net.minecraft.world.phys.Vec3 towards =
+                    target.position().subtract(position()).normalize().scale(reach);
+                Platform.placeAt(this, getX() + towards.x, getY() + towards.y, getZ() + towards.z,
+                    getYRot(), getXRot());
+            }
             return;
         }
 
+        if (!Goals.flag(body, "random_teleports", true)) return;
+        boolean lit = level().getMaxLocalRawBrightness(blockPosition()) > 7;
+        double chance = lit ? Goals.number(body, "light_teleport_chance", 0.01)
+            : Goals.number(body, "dark_teleport_chance", 0.01);
+        if (random.nextDouble() <= chance) blink(body);
+    }
+
+    /** One jump to somewhere in `random_teleport_cube`, which is in blocks and centred on the entity. */
+    private void blink(com.google.gson.JsonObject teleport) {
         net.minecraft.world.phys.Vec3 cube =
             at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.blocks(
-                body.get("random_teleport_cube"),
+                teleport.get("random_teleport_cube"),
                 new net.minecraft.world.phys.Vec3(32, 16, 32));
         double x = getX() + (random.nextDouble() - 0.5) * cube.x;
         double y = getY() + (random.nextDouble() - 0.5) * cube.y;
         double z = getZ() + (random.nextDouble() - 0.5) * cube.z;
         Platform.placeAt(this, x, y, z, getYRot(), getXRot());
+    }
+
+    /**
+     * Blinks out of the way of a projectile about to land, which costs the projectile its blow.
+     *
+     * `teleports_on_projectile_hit` asks for it and `projectile_filter` says which projectiles are
+     * worth it, with the projectile as `other`. Java's enderman does the same for every projectile.
+     */
+    private boolean dodged(net.minecraft.world.damagesource.DamageSource source) {
+        com.google.gson.JsonObject teleport = definition == null ? null : liveComponent("minecraft:teleport");
+        if (teleport == null || !Goals.flag(teleport, "teleports_on_projectile_hit", false)) return false;
+        if (!source.is(net.minecraft.tags.DamageTypeTags.IS_PROJECTILE)) return false;
+        if (!Goals.filter(teleport, "projectile_filter").matches(new Filter.Context(this,
+            source.getDirectEntity(), source.getDirectEntity(), ServerHooks.state()))) {
+            return false;
+        }
+
+        blink(teleport);
+        return true;
     }
 
     private int teleportReadyAt;
@@ -5322,7 +5358,8 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
-     * The cold hurting five times over, which `minecraft:freezing_vulnerable` asks for.
+     * The cold hurting five times over, which `minecraft:freezing_vulnerable` asks for, and a
+     * projectile the entity blinks away from not landing at all.
      *
      * Java multiplies a freezing blow by five for the mobs its `freeze_hurts_extra_types` tag names,
      * the blaze, the magma cube and the strider, which are the three Mojang writes the component on.
@@ -5331,11 +5368,12 @@ public class AddonEntity extends PathfinderMob
     @Override
     public boolean hurtServer(net.minecraft.server.level.ServerLevel level,
         net.minecraft.world.damagesource.DamageSource source, float amount) {
-        return super.hurtServer(level, source, coldScaled(source, amount));
+        return !dodged(source) && super.hurtServer(level, source, coldScaled(source, amount));
     }
     //?} else {
     /*@Override
     public boolean hurt(net.minecraft.world.damagesource.DamageSource source, float amount) {
+        if (!level().isClientSide() && dodged(source)) return false;
         return super.hurt(source, coldScaled(source, amount));
     }
     *///?}

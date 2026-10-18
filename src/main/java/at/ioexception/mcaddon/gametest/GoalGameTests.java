@@ -227,17 +227,18 @@ public final class GoalGameTests {
     /**
      * An entity fleeing a block raises `on_escape` once the block is out of the box it searches.
      *
-     * The shy group flees gold within three blocks, and the gold stands beside the brute.
+     * The shy group flees gold within three blocks, and the gold stands beside the brute in the
+     * middle of the floor, which leaves room to run whichever way it picks.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = ESCAPE_TICKS)
     public void anEntityFleeingABlockRaisesItsEscapeOnceClear(GameTestHelper helper) {
-        AddonEntity brute = withGroup(helper, "tp:brute_shy_away");
+        AddonEntity brute = withGroup(helper, "tp:brute_shy_away", MIDDLE);
         if (brute == null) {
             helper.succeed();
             return;
         }
 
-        helper.setBlock(STAND.east(1), net.minecraft.world.level.block.Blocks.GOLD_BLOCK);
+        helper.setBlock(MIDDLE.east(1), net.minecraft.world.level.block.Blocks.GOLD_BLOCK);
         helper.succeedWhen(() -> helper.assertTrue(Boolean.TRUE.equals(brute.value("tp:escaped")),
             BRUTE + " fled the gold beside it and never raised the event on_escape names."));
     }
@@ -245,9 +246,56 @@ public final class GoalGameTests {
     /** Room for a few runs away, in case the first one stops short of the edge of the search. */
     private static final int ESCAPE_TICKS = 240;
 
+    private static final BlockPos MIDDLE = new BlockPos(4, 0, 4);
+
+    /**
+     * A teleporting entity with a target further off than `target_distance` jumps that far towards
+     * it, and a group bringing the component in is enough for that.
+     *
+     * The blinking group jumps three blocks; the brute's feet are held, so only a jump closes on the
+     * pig six blocks off.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aTeleportClosesOnAFarTarget(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_blink");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob pig = pig(helper, STAND.east(6), BLOWS_TO_KILL);
+        brute.setTarget(pig);
+        helper.succeedWhen(() -> helper.assertTrue(brute.distanceTo(pig) < 4,
+            BRUTE + " teleports towards a far target and is still " + brute.distanceTo(pig) + " blocks off."));
+    }
+
+    /**
+     * An entity with `teleports_on_projectile_hit` blinks away from a projectile, which then does it
+     * no harm.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aTeleportDodgesAProjectile(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_blink");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        float health = brute.getHealth();
+        Platform.hurt(brute, helper.getLevel(), brute.damageSources().thrown(null, null), 1f);
+        helper.assertTrue(brute.getHealth() == health,
+            BRUTE + " blinks away from projectiles and a thrown one took it from " + health + " to "
+                + brute.getHealth() + ".");
+        helper.succeed();
+    }
+
     /** A brute with its group on and its goals running. */
     private static AddonEntity withGroup(GameTestHelper helper, String event) {
-        AddonEntity brute = BehaviourGameTests.spawn(helper, BRUTE, STAND);
+        return withGroup(helper, event, STAND);
+    }
+
+    private static AddonEntity withGroup(GameTestHelper helper, String event, BlockPos where) {
+        AddonEntity brute = BehaviourGameTests.spawn(helper, BRUTE, where);
         if (brute == null) return null;
 
         EntityEvents.trigger(brute, event, null, ServerHooks.state());

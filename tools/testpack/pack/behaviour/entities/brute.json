@@ -86,6 +86,21 @@
             }
           ]
         }
+      },
+      "tp:brute_blinking": {
+        "minecraft:teleport": {
+          "random_teleports": false,
+          "min_random_teleport_time": 0.5,
+          "max_random_teleport_time": 0.5,
+          "random_teleport_cube": [
+            6,
+            0,
+            6
+          ],
+          "target_distance": 3,
+          "target_teleport_chance": 1,
+          "teleports_on_projectile_hit": true
+        }
       }
     },
     "components": {
@@ -177,6 +192,13 @@
       "tp:brute_escaped": {
         "set_property": {
           "tp:escaped": true
+        }
+      },
+      "tp:brute_blink": {
+        "add": {
+          "component_groups": [
+            "tp:brute_blinking"
+          ]
         }
       }
     }

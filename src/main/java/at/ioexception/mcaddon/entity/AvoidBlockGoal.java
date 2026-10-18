@@ -76,7 +76,12 @@ public final class AvoidBlockGoal extends Goal {
 
     @Override
     public boolean canContinueToUse() {
-        return !mob.getNavigation().isDone();
+        if (!mob.getNavigation().isDone()) return true;
+        if (!withinSearch(found)) return false;
+
+        // Arrived and the block is still in sight: run on, since the flight ends only in escaping.
+        towards = DefaultRandomPos.getPosAway(mob, range + 1, height + 1, Vec3.atCenterOf(found));
+        return towards != null && mob.getNavigation().moveTo(towards.x, towards.y, towards.z, walkSpeed);
     }
 
     @Override
