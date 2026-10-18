@@ -7,17 +7,11 @@ import at.ioexception.mcaddon.bedrock.hud.HudElement;
 import at.ioexception.mcaddon.bedrock.input.InputPermission;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.platform.Platform;
-import at.ioexception.mcaddon.structure.McStructure;
 import at.ioexception.mcaddon.registry.AddonCameras;
 import at.ioexception.mcaddon.registry.AddonFogs;
 import at.ioexception.mcaddon.registry.AddonParticles;
-import at.ioexception.mcaddon.script.ScriptHost;
-import at.ioexception.mcaddon.util.Json;
-import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -25,29 +19,20 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.context.ParsedCommandNode;
-import com.mojang.brigadier.suggestion.Suggestions;
-import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.commands.arguments.IdentifierArgument;
-import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.commands.arguments.coordinates.Vec3Argument;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Vec3i;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
-import java.util.function.Predicate;
 
 /**
  * The Bedrock commands a pack expects to exist and Java does not ship, in the tree `/bedrock` reads
@@ -64,6 +49,13 @@ import java.util.function.Predicate;
 public final class BedrockCommands {
     /** Bedrock's two shakes: one moves the camera about, the other turns it. Positional is default. */
     private static final List<String> SHAKE_KINDS = List.of("positional", "rotational");
+
+    /** Bedrock limits each of a fade's three times to ten seconds. */
+    private static final float LONGEST_FADE = 10f;
+
+    /** The field of view a player may set in either edition's own options. */
+    private static final float MIN_FOV = 30f;
+    private static final float MAX_FOV = 110f;
 
     private BedrockCommands() {
     }
@@ -98,20 +90,7 @@ public final class BedrockCommands {
                                     StringArgumentType.getString(command, "stop_expression"),
                                     FloatArgumentType.getFloat(command, "blend_out_time")))))))));
 
-        // Bedrock plays a track for everyone; Java's own music is a sound in its own category, which
-        // is what `volume` and `fade` in Bedrock's form control and what a pack ships as a sound.
-        dispatcher.register(Commands.literal("music")
-            .requires(source -> Platform.allowedAt(source, 1))
-            .then(Commands.literal("stop").executes(command -> stopMusic(command.getSource())))
-            .then(Commands.literal("play")
-                .then(Commands.argument("track", StringArgumentType.string())
-                    .executes(command -> playMusic(command, 1f))
-                    .then(Commands.argument("volume", FloatArgumentType.floatArg(0))
-                        .executes(command -> playMusic(command,
-                            FloatArgumentType.getFloat(command, "volume"))))))
-            .then(Commands.literal("queue")
-                .then(Commands.argument("track", StringArgumentType.string())
-                    .executes(command -> playMusic(command, 1f)))));
+        Music.registerCommand(dispatcher);
 
         // Bedrock toggles between clear and raining, which is the pair Java's own command names.
         dispatcher.register(Commands.literal("toggledownfall")
@@ -139,31 +118,15 @@ public final class BedrockCommands {
                 .executes(command ->
                     clearSpawnPoint(EntityArgument.getPlayers(command, "player")))));
 
-        // Bedrock saves a region under a name and places it again; Java has the same two operations
-        // behind a structure block and `/place template`, and no command that names them.
-        dispatcher.register(Commands.literal("structure")
-            .requires(source -> Platform.allowedAt(source, 1))
-            .then(Commands.literal("save")
-                .then(Commands.argument("name", StringArgumentType.string())
-                    .then(Commands.argument("from", BlockPosArgument.blockPos())
-                        .then(Commands.argument("to", BlockPosArgument.blockPos())
-                            .executes(BedrockCommands::saveStructure)))))
-            .then(Commands.literal("load")
-                .then(Commands.argument("name", StringArgumentType.string())
-                    .then(Commands.argument("to", BlockPosArgument.blockPos())
-                        .executes(BedrockCommands::loadStructure))))
-            .then(Commands.literal("delete")
-                .then(Commands.argument("name", StringArgumentType.string())
-                    .executes(BedrockCommands::deleteStructure))));
+        StructureCommand.registerCommand(dispatcher);
+        TickingAreas.registerCommand(dispatcher);
+        AreaSchedules.registerCommand(dispatcher);
+        FeatureRules.registerCommand(dispatcher);
+        Jigsaws.registerCommand(dispatcher);
+        ServerAdmin.registerCommand(dispatcher);
+        BedrockRules.registerCommand(dispatcher);
 
-        // A mob event switches a kind of spawning on or off, which Java states as a game rule. Each
-        // event is a literal because its Bedrock name carries a colon, which an unquoted string
-        // argument stops at, and because only these three reach a rule at all.
-        dispatcher.register(Commands.literal("mobevent")
-            .requires(source -> Platform.allowedAt(source, 1))
-            .then(mobEvent("minecraft:pillager_patrols_event"))
-            .then(mobEvent("minecraft:wandering_trader_event"))
-            .then(mobEvent("events_enabled")));
+        MobEvents.registerCommand(dispatcher);
 
         // A pack's effects are emitters rather than single particles, which Java's own `/particle`
         // knows nothing of, so this answers for those and hands any other particle to Java's.
@@ -186,112 +149,14 @@ public final class BedrockCommands {
                     .then(Commands.argument("event", StringArgumentType.greedyString())
                         .executes(BedrockCommands::entityEvent)))));
 
+        Summons.registerCommand(dispatcher);
+        Rides.registerCommand(dispatcher);
         registerCamera(dispatcher);
         registerCameraShake(dispatcher);
         registerFog(dispatcher);
         registerHud(dispatcher);
         registerInputPermission(dispatcher);
-        // The tests a behaviour pack registered through `@minecraft/server-gametest`. A test names
-        // itself `class:name`, which Brigadier's unquoted string stops at, so the name is greedy.
-        dispatcher.register(Commands.literal("gametest")
-            .requires(source -> Platform.allowedAt(source, 1))
-            .then(Commands.literal("run")
-                .then(Commands.argument("name", StringArgumentType.greedyString())
-                    .suggests(BedrockCommands::testNames)
-                    .executes(command -> runTests(command.getSource(),
-                        named(StringArgumentType.getString(command, "name"))))))
-            // Bedrock runs the set a test carries by default when the line names no tag.
-            .then(Commands.literal("runset")
-                .executes(command -> runTests(command.getSource(), tagged("suite:default")))
-                .then(Commands.argument("tag", StringArgumentType.greedyString())
-                    .executes(command -> runTests(command.getSource(),
-                        tagged(StringArgumentType.getString(command, "tag"))))))
-            .then(Commands.literal("runall").executes(command -> runTests(command.getSource(), test -> true)))
-            .then(Commands.literal("stopall").executes(command -> stopTests(command.getSource())))
-            .then(Commands.literal("clearall").executes(command -> clearTests(command.getSource()))));
-    }
-
-    /** A test the name picks out, by its full `class:name` or by its name alone. */
-    private static Predicate<JsonObject> named(String wanted) {
-        String asked = wanted.trim();
-        return test -> asked.equalsIgnoreCase(Json.text(test, "name", ""))
-            || asked.equalsIgnoreCase(Json.text(test, "testName", ""));
-    }
-
-    private static Predicate<JsonObject> tagged(String wanted) {
-        String asked = wanted.trim();
-        return test -> test.getAsJsonArray("tags").asList().stream()
-            .anyMatch(tag -> asked.equalsIgnoreCase(tag.getAsString()));
-    }
-
-    /**
-     * Builds an area for every matching test and hands each to the script that registered it.
-     *
-     * The area is prepared here rather than in the script, because where a test goes depends on who
-     * asked for it, and the verdict comes back to that same source once the test settles.
-     */
-    private static int runTests(CommandSourceStack source, Predicate<JsonObject> wanted) {
-        ScriptHost scripts = ServerHooks.scripts();
-        if (scripts == null) {
-            source.sendFailure(Component.literal("No pack scripts are running."));
-            return 0;
-        }
-
-        JsonArray tests = JsonParser.parseString(scripts.gameTests()).getAsJsonArray();
-        int started = 0;
-        for (int i = 0; i < tests.size(); i++) {
-            JsonObject test = tests.get(i).getAsJsonObject();
-            if (!wanted.test(test)) continue;
-
-            String placement = scripts.bridge().gametests.begin(source, Json.text(test, "structureName", ""),
-                test.get("padding").getAsInt());
-            scripts.startGameTest(i, placement);
-            started++;
-        }
-
-        if (started == 0) {
-            source.sendFailure(Component.literal("No loaded pack has registered such a test."));
-            return 0;
-        }
-        int running = started;
-        source.sendSuccess(() -> Component.literal("Started " + running + " test(s)."), false);
-        return started;
-    }
-
-    /** Ends every running test and leaves the areas standing, which is what a clear takes back. */
-    private static int stopTests(CommandSourceStack source) {
-        ScriptHost scripts = ServerHooks.scripts();
-        if (scripts == null) {
-            source.sendFailure(Component.literal("No pack scripts are running."));
-            return 0;
-        }
-
-        scripts.stopGameTests();
-        source.sendSuccess(() -> Component.literal("Stopped every running test."), false);
-        return 1;
-    }
-
-    private static int clearTests(CommandSourceStack source) {
-        ScriptHost scripts = ServerHooks.scripts();
-        if (scripts == null) {
-            source.sendFailure(Component.literal("No pack scripts are running."));
-            return 0;
-        }
-
-        scripts.stopGameTests();
-        int cleared = scripts.bridge().gametests.clearAll();
-        source.sendSuccess(() -> Component.literal("Cleared " + cleared + " test area(s)."), false);
-        return cleared;
-    }
-
-    private static CompletableFuture<Suggestions> testNames(CommandContext<CommandSourceStack> command,
-        SuggestionsBuilder builder) {
-        ScriptHost scripts = ServerHooks.scripts();
-        if (scripts == null) return builder.buildFuture();
-
-        JsonParser.parseString(scripts.gameTests()).getAsJsonArray()
-            .forEach(test -> builder.suggest(Json.text(test.getAsJsonObject(), "name", "")));
-        return builder.buildFuture();
+        GameTestCommand.registerCommand(dispatcher);
     }
 
     /**
@@ -412,6 +277,19 @@ public final class BedrockCommands {
             .requires(source -> Platform.allowedAt(source, 1))
             .then(Commands.argument("targets", EntityArgument.players())
                 .then(Commands.literal("clear").executes(BedrockCommands::clearCamera))
+                .then(Commands.literal("fade")
+                    .executes(BedrockCommands::fade)
+                    .then(Commands.literal("time")
+                        .then(Commands.argument("fadeInSeconds", FloatArgumentType.floatArg(0, LONGEST_FADE))
+                            .then(Commands.argument("holdSeconds", FloatArgumentType.floatArg(0, LONGEST_FADE))
+                                .then(Commands.argument("fadeOutSeconds",
+                                        FloatArgumentType.floatArg(0, LONGEST_FADE))
+                                    .executes(BedrockCommands::fade)
+                                    .then(fadeColour())))))
+                    .then(fadeColour()))
+                .then(Commands.literal("fov_set")
+                    .then(fovEase(Commands.argument("fov_value", FloatArgumentType.floatArg(MIN_FOV, MAX_FOV)))))
+                .then(fovEase(Commands.literal("fov_clear")))
                 .then(Commands.literal("set")
                     // A preset carries a namespace, which Brigadier's own word argument stops at.
                     .then(Commands.argument("preset", IdentifierArgument.id())
@@ -433,6 +311,71 @@ public final class BedrockCommands {
                                     .then(cameraFacing())
                                     .then(Commands.literal("default")
                                         .executes(BedrockCommands::camera)))))))));
+    }
+
+    /** A colour for the fade, in whole numbers of red, green and blue each up to 255. */
+    private static LiteralArgumentBuilder<CommandSourceStack> fadeColour() {
+        return Commands.literal("color")
+            .then(Commands.argument("red", IntegerArgumentType.integer(0, 255))
+                .then(Commands.argument("green", IntegerArgumentType.integer(0, 255))
+                    .then(Commands.argument("blue", IntegerArgumentType.integer(0, 255))
+                        .executes(BedrockCommands::fade))));
+    }
+
+    /** What may follow a field of view or `fov_clear`: the seconds it eases over, then the ease. */
+    private static <T extends com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, T>> T fovEase(
+        T node) {
+        return node.executes(BedrockCommands::fov)
+            .then(Commands.argument("fovEaseTime", FloatArgumentType.floatArg(0))
+                .executes(BedrockCommands::fov)
+                .then(Commands.argument("fovEaseType", StringArgumentType.word())
+                    .suggests((command, builder) -> SharedSuggestionProvider.suggest(Easing.names(), builder))
+                    .executes(BedrockCommands::fov)));
+    }
+
+    /**
+     * A full-screen fade: in, held and out again over Bedrock's own one second, half a second and
+     * one second unless the line names others, in black unless it names a colour.
+     */
+    private static int fade(CommandContext<CommandSourceStack> command)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        JsonObject fade = new JsonObject();
+        fade.addProperty("in", seconds(command, "fadeInSeconds", 1f));
+        fade.addProperty("hold", seconds(command, "holdSeconds", 0.5f));
+        fade.addProperty("out", seconds(command, "fadeOutSeconds", 1f));
+        fade.addProperty("colour", given(command, "red") ? IntegerArgumentType.getInteger(command, "red") << 16
+            | IntegerArgumentType.getInteger(command, "green") << 8 | IntegerArgumentType.getInteger(command, "blue")
+            : 0);
+        return instruct(command, CameraView.FADE, fade);
+    }
+
+    /** A field of view for `fov_set`, or the player's own for `fov_clear`, eased over the seconds given. */
+    private static int fov(CommandContext<CommandSourceStack> command)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        JsonObject fov = new JsonObject();
+        if (given(command, "fov_value")) fov.addProperty("fov", FloatArgumentType.getFloat(command, "fov_value"));
+        fov.addProperty("seconds", seconds(command, "fovEaseTime", 0f));
+        if (given(command, "fovEaseType")) {
+            String name = StringArgumentType.getString(command, "fovEaseType");
+            if (Easing.tryFrom(name) == null) {
+                command.getSource().sendFailure(Component.literal("There is no ease named " + name + "."));
+                return 0;
+            }
+            fov.addProperty("easing", name);
+        }
+        return instruct(command, CameraView.FOV, fov);
+    }
+
+    private static float seconds(CommandContext<CommandSourceStack> command, String name, float otherwise) {
+        return given(command, name) ? FloatArgumentType.getFloat(command, name) : otherwise;
+    }
+
+    private static int instruct(CommandContext<CommandSourceStack> command, String kind, JsonObject body)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        Collection<ServerPlayer> targets = EntityArgument.getPlayers(command, "targets");
+        String encoded = body.toString();
+        targets.forEach(player -> Channels.sendInstruction(player, kind, encoded));
+        return targets.size();
     }
 
     /** `pos` may be followed by `rot` or by `facing`, which are the pairings Bedrock allows. */
@@ -494,16 +437,6 @@ public final class BedrockCommands {
         return 1;
     }
 
-    /** A track is a sound in the music category, which is the slider a player turns down. */
-    private static int playMusic(CommandContext<CommandSourceStack> command, float volume) {
-        String track = StringArgumentType.getString(command, "track");
-        return run(command.getSource(), "playsound " + track + " music @a ~ ~ ~ " + volume);
-    }
-
-    private static int stopMusic(CommandSourceStack source) {
-        return run(source, "stopsound @a music");
-    }
-
     private static int toggleDownfall(CommandSourceStack source) {
         return run(source, source.getLevel().isRaining() ? "weather clear" : "weather rain");
     }
@@ -537,75 +470,6 @@ public final class BedrockCommands {
         command.getSource().sendSuccess(
             () -> Component.literal("Sent " + moved + " player(s) to " + host + ":" + port), true);
         return (int) moved;
-    }
-
-    /** The region between the two corners, kept under the name the pack gave it. */
-    private static int saveStructure(CommandContext<CommandSourceStack> command)
-        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
-        Identifier id = Identifier.tryParse(McStructure.javaName(StringArgumentType.getString(command, "name")));
-        if (id == null) {
-            command.getSource().sendFailure(Component.literal("That is not a usable structure name."));
-            return 0;
-        }
-
-        BlockPos from = BlockPosArgument.getLoadedBlockPos(command, "from");
-        BlockPos to = BlockPosArgument.getLoadedBlockPos(command, "to");
-        BlockPos corner = new BlockPos(Math.min(from.getX(), to.getX()), Math.min(from.getY(), to.getY()),
-            Math.min(from.getZ(), to.getZ()));
-        Vec3i size = new Vec3i(Math.abs(from.getX() - to.getX()) + 1,
-            Math.abs(from.getY() - to.getY()) + 1, Math.abs(from.getZ() - to.getZ()) + 1);
-
-        StructureTemplateManager manager = command.getSource().getServer().getStructureManager();
-        Platform.fillFromWorld(manager.getOrCreate(id), command.getSource().getLevel(), corner, size);
-        return manager.save(id) ? 1 : 0;
-    }
-
-    private static int loadStructure(CommandContext<CommandSourceStack> command)
-        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
-        BlockPos at = BlockPosArgument.getLoadedBlockPos(command, "to");
-        return run(command.getSource(), "place template "
-            + McStructure.javaName(StringArgumentType.getString(command, "name")) + " " + at.getX() + " " + at.getY()
-            + " " + at.getZ());
-    }
-
-    /** Forgets a structure saved under that name, which is what Bedrock's own delete does. */
-    private static int deleteStructure(CommandContext<CommandSourceStack> command) {
-        Identifier id = Identifier.tryParse(McStructure.javaName(StringArgumentType.getString(command, "name")));
-        if (id == null) {
-            command.getSource().sendFailure(Component.literal("That is not a usable structure name."));
-            return 0;
-        }
-        command.getSource().getServer().getStructureManager().remove(id);
-        return 1;
-    }
-
-    /**
-     * One mob event, which Bedrock reads without a value and writes with one.
-     *
-     * Bedrock names the event and Java names the rule, and `events_enabled` names every event at
-     * once, so it reads and writes both.
-     */
-    private static LiteralArgumentBuilder<CommandSourceStack> mobEvent(String event) {
-        List<String> rules = switch (event) {
-            case "minecraft:pillager_patrols_event" -> List.of(Platform.patrolSpawningRule());
-            case "minecraft:wandering_trader_event" -> List.of(Platform.traderSpawningRule());
-            default -> List.of(Platform.patrolSpawningRule(), Platform.traderSpawningRule());
-        };
-
-        return Commands.literal(event)
-            .executes(command -> mobEvent(command.getSource(), rules, null))
-            .then(Commands.argument("enabled", BoolArgumentType.bool())
-                .executes(command -> mobEvent(command.getSource(), rules,
-                    BoolArgumentType.getBool(command, "enabled"))));
-    }
-
-    /** Reads the rules behind an event, or writes them all when the caller gave a value. */
-    private static int mobEvent(CommandSourceStack source, List<String> rules, Boolean enabled) {
-        // A read is asked for its answer, so it keeps the output a write has no use for.
-        rules.forEach(rule -> source.getServer().getCommands().performPrefixedCommand(
-            enabled == null ? source : source.withSuppressedOutput(),
-            "gamerule " + rule + (enabled == null ? "" : " " + enabled)));
-        return rules.size();
     }
 
     /** A pack's own effect starts an emitter; anything else is Java's own particle command. */
@@ -766,7 +630,7 @@ public final class BedrockCommands {
     }
 
     /** The parsed nodes are the words that were typed, and every part of `/camera` is optional. */
-    private static boolean given(CommandContext<CommandSourceStack> command, String name) {
+    static boolean given(CommandContext<CommandSourceStack> command, String name) {
         for (ParsedCommandNode<CommandSourceStack> node : command.getNodes()) {
             if (node.getNode().getName().equals(name)) return true;
         }

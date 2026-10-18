@@ -130,6 +130,8 @@ public final class ServerHooks {
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             Channels.sendPacks(handler.player, PackList.of(McAddon.packs()).encode());
             startState(handler.player);
+            Music.joined(handler.player);
+            BedrockRules.joined(handler.player);
             playerJoined(handler.player);
         });
         // A connection is dropped on the thread reading it, and a script and the fog stacks belong
@@ -282,6 +284,10 @@ public final class ServerHooks {
 
     private static void start(MinecraftServer server) {
         state = AddonState.load(server.getWorldPath(LevelResource.ROOT).resolve("data/mcaddon-state.json"));
+        TickingAreas.load(state);
+        AreaSchedules.load(state);
+        MobEvents.load(state, server);
+        BedrockRules.load(state);
         scripts = ScriptHost.start(server, McAddon.packs().packs(), state);
         if (scripts != null) {
             CustomCommands.install(server, scripts);
@@ -299,6 +305,8 @@ public final class ServerHooks {
             scripts = null;
         }
         WorldEvents.forget();
+        at.ioexception.mcaddon.structure.StructurePlacement.forget();
+        Music.forget();
         if (state != null) state.save();
     }
 
@@ -306,6 +314,8 @@ public final class ServerHooks {
     private static void tick(MinecraftServer server) {
         if (scripts != null) scripts.tick(server.getTickCount());
         WorldEvents.endTick(server);
+        at.ioexception.mcaddon.structure.StructurePlacement.tick();
+        AreaSchedules.tick(server);
         SelectorTags.finishAll();
         if (state != null && server.getTickCount() % 1200 == 0) state.save();
     }

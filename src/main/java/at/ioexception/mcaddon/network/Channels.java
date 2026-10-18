@@ -38,6 +38,7 @@ public final class Channels {
     private static final Identifier HUD = McAddon.id("hud");
     private static final Identifier INPUT = McAddon.id("input_permissions");
     private static final Identifier SEAT_TURN = McAddon.id("seat_turn");
+    private static final Identifier INSTRUCTION = McAddon.id("instruction");
 
     /**
      * The longest form description, form answer or pack list in characters.
@@ -51,6 +52,26 @@ public final class Channels {
 
     private Channels() {
     }
+
+    //? if >=1.21 {
+    /**
+     * One instruction a client acts on alone, named by its kind and written out as text: the music
+     * playing, the screen's fade, the field of view and the world settings a client draws.
+     */
+    private record Instruction(String kind, String body) implements CustomPacketPayload {
+        private static final CustomPacketPayload.Type<Instruction> TYPE = new CustomPacketPayload.Type<>(INSTRUCTION);
+
+        private static final StreamCodec<FriendlyByteBuf, Instruction> CODEC = StreamCodec.composite(
+            ByteBufCodecs.STRING_UTF8, Instruction::kind,
+            ByteBufCodecs.STRING_UTF8, Instruction::body,
+            Instruction::new);
+
+        @Override
+        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+    //?}
 
     //? if >=1.21 {
     private record Properties(int entityId, String values) implements CustomPacketPayload {
@@ -380,6 +401,34 @@ public final class Channels {
         *///?}
     }
 
+    public static void sendInstruction(ServerPlayer player, String kind, String body) {
+        //? if >=1.21 {
+        ServerPlayNetworking.send(player, new Instruction(kind, body));
+        //?} else {
+        /*FriendlyByteBuf buffer = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buffer.writeUtf(kind);
+        buffer.writeUtf(body);
+        ServerPlayNetworking.send(player, INSTRUCTION, buffer);
+        *///?}
+    }
+
+    /** Hands every instruction to the handler on the client's own thread, by its kind and its body. */
+    public static void receiveInstructions(BiConsumer<String, String> handler) {
+        //? if >=1.21 {
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+            Instruction.TYPE,
+            (payload, context) -> context.client().execute(() -> handler.accept(payload.kind(), payload.body())));
+        //?} else {
+        /*net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+            INSTRUCTION,
+            (client, network, buffer, sender) -> {
+                String kind = buffer.readUtf();
+                String body = buffer.readUtf();
+                client.execute(() -> handler.accept(kind, body));
+            });
+        *///?}
+    }
+
     public static void sendCameraShake(ServerPlayer player, String shake) {
         //? if >=1.21 {
         ServerPlayNetworking.send(player, new Shake(shake));
@@ -497,6 +546,7 @@ public final class Channels {
         PayloadTypeRegistry.clientboundPlay().register(Hud.TYPE, Hud.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Input.TYPE, Input.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(SeatTurn.TYPE, SeatTurn.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(Instruction.TYPE, Instruction.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(FormResponse.TYPE, FormResponse.CODEC);
         //?}
     }

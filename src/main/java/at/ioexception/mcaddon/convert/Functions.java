@@ -6,7 +6,6 @@ import at.ioexception.mcaddon.bedrock.hud.HudElement;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.platform.Platform;
-import at.ioexception.mcaddon.structure.McStructure;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -68,35 +67,35 @@ public final class Functions {
     private static final Set<String> REGISTERED_HERE = Set.of(
         "playanimation", "event", "scriptevent", "music", "toggledownfall", "structure", "mobevent",
         "particle", "gametest", "dialogue", "transfer", "camera", "camerashake", "fog",
-        "clearspawnpoint", "hud", "inputpermission");
+        "clearspawnpoint", "hud", "inputpermission", "ride", "summon", "tickingarea", "packstack",
+        "setmaxplayers", "permission", "ops");
 
     /**
      * The registered commands whose Bedrock line the command built here reads as it stands.
      *
-     * The other nine are rewritten, because a Bedrock form the command built here cannot read is a
+     * The others are rewritten, because a Bedrock form the command built here cannot read is a
      * line the tree rejects.
      */
     static final Set<String> REGISTERED_WHOLE_LINE = Set.of("playanimation", "event",
-        "toggledownfall", "transfer", "camerashake", "fog", "clearspawnpoint", "inputpermission");
+        "toggledownfall", "transfer", "camerashake", "fog", "clearspawnpoint", "inputpermission",
+        "tickingarea", "packstack", "setmaxplayers", "music");
 
     /**
      * Commands Bedrock has and Java has no counterpart for.
      *
-     * Most name a renderer feature Java has none of, or a server Java does not speak to. `schedule`
-     * is here because the two editions mean different things by the word: Bedrock delays until an
-     * area loads, Java delays a function by a time. `transfer` and `save query` report progress
-     * Java's own commands do not carry.
-     *
-     * `serveridentity` saves, deletes and reports the key a Bedrock dedicated server identifies
-     * itself to its services with, and a Java server holds no such key. `setmaxplayers` sets the
-     * limit for one session where Java keeps it as `max-players` in `server.properties`: a final
-     * `PlayerList.maxPlayers` before 26, and from 26 `DedicatedServer.setMaxPlayers`, which writes
-     * the file again, so a limit Bedrock drops at the end of the session would outlive it here.
+     * `aimassist` and `controlscheme` change how a Bedrock client turns input into aim and movement,
+     * which a Java client has no setting for. `editor-allowlist` and `project` belong to Bedrock's
+     * editor and `sendshowstoreoffer` to its marketplace, and Java has neither. `connect` and
+     * `wsserver` open a WebSocket to a tool such as Code Builder, a protocol Java has no part of.
+     * `reloadconfig` and `reloadpacketlimitconfig` read again files only a Bedrock dedicated server
+     * has: the permissions, the script variables and secrets, and the packet limits. `script` drives
+     * the debugger, profiler and watchdog of Bedrock's own script engine through the protocol
+     * Bedrock's tools speak. `serveridentity` saves, deletes and reports the key a Bedrock dedicated
+     * server identifies itself to its services with, and a Java server holds no such key.
      */
     private static final Set<String> BEDROCK_ONLY = Set.of(
-        "aimassist", "connect", "controlscheme", "editor-allowlist",
-        "packstack", "permission", "ops", "project", "reloadconfig", "reloadpacketlimitconfig",
-        "script", "sendshowstoreoffer", "serveridentity", "setmaxplayers", "wsserver");
+        "aimassist", "connect", "controlscheme", "editor-allowlist", "project", "reloadconfig",
+        "reloadpacketlimitconfig", "script", "sendshowstoreoffer", "serveridentity", "wsserver");
 
     /**
      * Commands whose rewrite changes the front of a line and leaves the rest as the pack wrote it.
@@ -115,30 +114,20 @@ public final class Functions {
      * Each is written `<command> <keyword>`, which is how the published command metadata names one.
      * A line carrying one does not run and the form is reported, rather than reaching a parser that
      * would reject it with a message about the wrong word.
+     *
+     * `changesetting allow-cheats` is the reason given at `changeSetting`. The three `hud` pieces are
+     * drawn by nothing on a Java client, as `HudElement` says. A `permission` visitor may only look,
+     * and Java has no level below a member. The `camera` forms are the ones `camera` names: they ask
+     * for a camera this mod does not draw.
      */
     private static final Set<String> BEDROCK_ONLY_KEYWORDS = Set.of(
         "changesetting allow-cheats", "changesetting false", "changesetting true",
-        "gametest create", "gametest pos", "gametest runsetuntilfail", "gametest runthese",
-        "gametest runthis",
         "hud paperdoll", "hud tooltips", "hud touch_controls",
-        "loot slot.equippable",
-        "mobevent minecraft:ender_dragon_event",
-        "music loop", "music volume",
-        "place apply_waterlogging", "place featurerule", "place ignore_waterlogging",
-        "replaceitem keep", "replaceitem slot.equippable",
-        "ride evict_riders", "ride if_group_fits", "ride no_ride_change", "ride reassign_rides",
-        "ride skip_riders", "ride summon_ride", "ride summon_rider", "ride teleport_ride",
-        "ride until_full",
-        "camera attach_to_entity", "camera color", "camera detach_from_entity",
-        "camera entity_offset", "camera fade", "camera fov_clear", "camera fov_set",
+        "permission visitor",
+        "camera attach_to_entity", "camera detach_from_entity", "camera entity_offset",
         "camera minecraft:control_scheme_camera", "camera minecraft:fixed_boom",
         "camera minecraft:follow_orbit", "camera play_spline", "camera remove_target",
-        "camera target_center_offset", "camera target_entity", "camera view_offset",
-        "save query",
-        "schedule on_area_loaded",
-        "structure block_by_block", "structure layer_by_layer", "structure memory", "structure xz",
-        "summon facing",
-        "tickingarea all-dimensions", "tickingarea circle", "tickingarea preload");
+        "camera target_center_offset", "camera target_entity", "camera view_offset");
 
     /**
      * Commands Java says the same thing with under another name, and nothing else.
@@ -195,22 +184,23 @@ public final class Functions {
         Map.of("functionCommandLimit", "maxCommandChainLength");
 
     /**
-     * Bedrock rules Java keeps no rule of any name for, each reported when a function sets it.
-     *
-     * Five switch a piece of Bedrock's screen. Java's heads-up display has no day count and no
-     * coordinates outside the debug screen, its world border draws whatever a rule says, its toast
-     * for an unlocked recipe and the tooltip lines naming what an item may be placed on and break
-     * answer to no rule either. `recipesUnlock` holds back the recipes a player is given as they
-     * collect ingredients, which Java grants through one advancement per recipe rather than through
-     * a rule, and `respawnBlocksExplode` stops a bed or a respawn anchor exploding in a dimension
-     * that cannot hold a spawn, which `BedBlock` and `RespawnAnchorBlock` do unconditionally.
+     * Bedrock rules Java keeps no rule of any name for, which `server.BedrockRules` keeps beside the
+     * world and acts on itself, read by the `gamerule` the Bedrock tree holds beside Java's.
      */
-    private static final Set<String> RULES_BEDROCK_ONLY = Set.of(
-        "recipesUnlock", "respawnBlocksExplode", "showBorderEffect", "showCoordinates",
-        "showDaysPlayed", "showRecipeMessages", "showTags");
+    private static final Set<String> RULES_HELD_HERE = Set.of(
+        "recipesUnlock", "respawnBlocksExplode", "showCoordinates", "showDaysPlayed", "showRecipeMessages",
+        "showTags");
+
+    /**
+     * Bedrock rules Java has nothing to answer with, each reported when a function sets it.
+     *
+     * `showBorderEffect` switches the particle wall Bedrock's border block draws, and Java has no
+     * border block for it to switch.
+     */
+    private static final Set<String> RULES_BEDROCK_ONLY = Set.of("showBorderEffect");
 
     private static final Map<String, String> GAME_RULES = lowerCased(RULES_JAVA_SHARES,
-        RULES_NEWER_JAVA_HAS, RULES_JAVA_FOLDS);
+        RULES_NEWER_JAVA_HAS, RULES_HELD_HERE, RULES_JAVA_FOLDS);
 
     /**
      * The rule a Bedrock name reaches, under the name `Platform` looks one up by.
@@ -236,8 +226,8 @@ public final class Functions {
      *
      * `slot.armor` counts the four armour places by index, and `slot.saddle` and `slot.armor.body`
      * are spelled differently from one version to the next, so those three are looked up instead.
-     * `slot.equippable` has no Java slot: it holds whatever a Bedrock entity's own equippable
-     * component puts there, which Java spreads over the armour and the saddle.
+     * `slot.equippable` counts the slots of an entity's `minecraft:equippable`, which every vanilla
+     * entity carrying one numbers alike: the saddle first, then the armour or the carpet.
      */
     private static final Map<String, String> EQUIPMENT_SLOTS = Map.ofEntries(
         Map.entry("slot.weapon.mainhand", "weapon.mainhand"),
@@ -259,25 +249,6 @@ public final class Functions {
     /** The Java slots numbered one per place, which take the Bedrock slot index after a dot. */
     private static final Set<String> NUMBERED_SLOTS =
         Set.of("container", "hotbar", "inventory", "enderchest");
-
-    /** The Java rotation a Bedrock structure rotation names. */
-    private static final Map<String, String> STRUCTURE_ROTATIONS = Map.of(
-        "0_degrees", "none",
-        "90_degrees", "clockwise_90",
-        "180_degrees", "180",
-        "270_degrees", "counterclockwise_90");
-
-    /**
-     * The Java mirror a Bedrock structure mirror names.
-     *
-     * Java names the pair of faces a mirror swaps where Bedrock names the axis it runs along, so
-     * mirroring x swaps east for west and mirroring z swaps north for south. Bedrock's `xz` mirrors
-     * both at once, which Java has no single mirror for.
-     */
-    private static final Map<String, String> STRUCTURE_MIRRORS = Map.of(
-        "none", "none",
-        "x", "front_back",
-        "z", "left_right");
 
     private static final Pattern SELECTOR = Pattern.compile("@[aeprsn]\\[");
     private static final Pattern SPACE = Pattern.compile("\\s+");
@@ -465,10 +436,9 @@ public final class Functions {
             case "replaceitem" -> replaceItem(rest, unsupported);
             case "ride" -> ride(rest, unsupported);
             case "save" -> save(rest, unsupported);
-            case "tickingarea" -> tickingArea(rest, unsupported);
+            case "permission", "ops" -> permission(name, rest, unsupported);
             case "time" -> time(rest);
             case "changesetting" -> changeSetting(rest, unsupported);
-            case "music" -> music(rest, unsupported);
             case "structure" -> structure(rest, unsupported);
             case "mobevent" -> mobEvent(rest, unsupported);
             case "gametest" -> gameTest(rest, unsupported);
@@ -486,29 +456,19 @@ public final class Functions {
     }
 
     /**
-     * `summon <type> [position]`, which is as much of Bedrock's own form as Java's takes.
+     * `summon <type> ...`, with the type named the way Java names it.
      *
-     * Bedrock turns the entity, names it, fires an event on it and aims it at something as it
-     * summons it. Java reads the block of data an entity is built from instead, which a line of a
-     * function has no room to assemble, so a summon writing any of the four loses its line.
+     * Everything after the type is Bedrock's own form, which the command built here reads: the
+     * rotation, the point to face, the spawn event and the name tag.
      */
     private static String summon(String rest, Set<String> unsupported) {
-        String[] arguments = SPACE.split(rest);
+        String[] arguments = SPACE.split(rest, 2);
         String type = BedrockEntityNames.java(arguments[0]);
         if (type == null) {
             unsupported.add("command summon, which names an entity Java does not have");
             return null;
         }
-        if (arguments.length == 1) return "summon " + type;
-        if (arguments.length >= 5 && arguments[4].equalsIgnoreCase("facing")) {
-            return dropped("summon", arguments[4], unsupported);
-        }
-        if (arguments.length != 4) {
-            unsupported.add("command summon with a rotation, an event or a name, which Java reads "
-                + "as the entity's own data instead");
-            return null;
-        }
-        return "summon " + type + " " + String.join(" ", Arrays.copyOfRange(arguments, 1, 4));
+        return "summon " + type + (arguments.length > 1 ? " " + arguments[1] : "");
     }
 
     /**
@@ -791,22 +751,34 @@ public final class Functions {
     }
 
     /**
-     * `place`, of whose four kinds Java has three.
+     * `place`, whose feature and structure forms Java's own command reads, and whose feature rule and
+     * jigsaw the commands built here place.
      *
-     * A feature rule is Bedrock's own table of where a feature may appear, which Java reads from
-     * worldgen rather than from a command. What Bedrock writes after the position says how a
-     * structure or a jigsaw is built, and Java's own command decides each of those for itself.
+     * What Bedrock writes after a structure's position says how it is built, and Java builds a
+     * structure with the settings its own definition states: a jigsaw structure's waterlogging is the
+     * `liquid_settings` of its file, and `Structure.generate` takes no other. So a structure line
+     * carrying any of them loses its line. A jigsaw is placed from a pool, which states none of them,
+     * so every word of Bedrock's form reaches it except leaving its entities out, which Java's jigsaw
+     * pieces never do.
      */
     private static String place(String rest, Set<String> unsupported) {
         String[] parts = SPACE.split(rest);
         String kind = parts[0].toLowerCase(Locale.ROOT);
         int most = switch (kind) {
-            case "feature", "structure" -> 5;
-            case "jigsaw" -> 7;
+            case "feature", "structure", "featurerule" -> 5;
+            case "jigsaw" -> 10;
             default -> 0;
         };
 
         if (most == 0) return dropped("place", kind, unsupported);
+        if (kind.equals("jigsaw") && parts.length > 8 && parts[8].equalsIgnoreCase("false")) {
+            unsupported.add("command place jigsaw leaving out its entities");
+            return null;
+        }
+        if (kind.equals("jigsaw") && parts.length > 9 && parts[9].equalsIgnoreCase("ignore_waterlogging")
+            && !Platform.placesJigsawsDry()) {
+            return dropped("place", parts[9], unsupported);
+        }
         if (parts.length <= most) return "place " + rest;
 
         unsupported.add("command place " + kind + " with a placement Java builds for itself");
@@ -963,6 +935,9 @@ public final class Functions {
     private static String gameRule(String rest, Set<String> unsupported) {
         String[] parts = SPACE.split(rest, 2);
         String bedrock = GAME_RULES.get(parts[0].toLowerCase(Locale.ROOT));
+        if (bedrock != null && RULES_HELD_HERE.contains(bedrock)) {
+            return "gamerule " + bedrock + (parts.length > 1 ? " " + parts[1].toLowerCase(Locale.ROOT) : "");
+        }
         String java = bedrock == null ? null : Platform.gameRuleName(bedrock);
         if (java == null) {
             boolean named = RULES_BEDROCK_ONLY.stream().anyMatch(parts[0]::equalsIgnoreCase);
@@ -1055,8 +1030,9 @@ public final class Functions {
      * `replaceitem`, which Java replaced with `item replace`.
      *
      * Bedrock names the slot and its index apart and Java writes them as one, and the numbered
-     * slots are the only ones the index means anything for. `keep`, which Bedrock uses to fill an
-     * empty slot only, has no Java form and costs the line.
+     * slots are the only ones the index means anything for. `keep` fills a slot only while it is
+     * empty, which Java says by testing the slot with `execute unless items` first; 1.20.1 has no such
+     * test and loses the line.
      */
     private static String replaceItem(String rest, Set<String> unsupported) {
         String[] parts = SPACE.split(rest);
@@ -1070,11 +1046,12 @@ public final class Functions {
         if (slot == null) return dropped("replaceitem", parts[named], unsupported);
 
         int item = named + 2;
-        if (parts[item].equalsIgnoreCase("keep")) {
-            unsupported.add("command replaceitem keep, which fills an empty slot only");
+        boolean keep = parts[item].equalsIgnoreCase("keep");
+        if (keep && !Platform.testsSlots()) {
+            unsupported.add("command replaceitem keep, which this version of Java has no test of a slot for");
             return null;
         }
-        if (parts[item].equalsIgnoreCase("destroy")) item++;
+        if (keep || parts[item].equalsIgnoreCase("destroy")) item++;
         if (item >= parts.length) {
             unsupported.add("command replaceitem with no item in it");
             return null;
@@ -1089,7 +1066,12 @@ public final class Functions {
 
         String where = String.join(" ", Arrays.copyOfRange(parts, 0, named));
         String what = java + (item + 1 < parts.length ? " " + parts[item + 1] : "");
-        return "item replace " + where + " " + slot + " with " + what;
+        if (!keep) return "item replace " + where + " " + slot + " with " + what;
+
+        // Each entity is asked about its own slot, which `as` and `@s` do one entity at a time.
+        String each = named == 2 ? "entity @s" : where;
+        return "execute " + (named == 2 ? "as " + parts[1] + " " : "") + "unless items " + each + " " + slot
+            + " * run item replace " + each + " " + slot + " with " + what;
     }
 
     /**
@@ -1106,6 +1088,11 @@ public final class Functions {
             case "slot.armor" -> armourSlot(index);
             case "slot.saddle" -> Platform.saddleSlot();
             case "slot.armor.body" -> Platform.bodyArmourSlot();
+            case "slot.equippable" -> switch (index) {
+                case "0" -> Platform.saddleSlot();
+                case "1" -> Platform.horseArmourSlot();
+                default -> null;
+            };
             default -> null;
         };
     }
@@ -1121,98 +1108,55 @@ public final class Functions {
     }
 
     /**
-     * Bedrock rides through five modes and Java has the two that move a rider on and off.
-     *
-     * The three left over summon the other half of the pair as they mount it, and empty a vehicle
-     * of riders Java's selectors have no way to name. Bedrock names as many riders as its selector
-     * matches where Java's command takes one, so the riders are stepped through one at a time.
+     * `ride <targets> <mode> ...`, which the command built here reads in Bedrock's own form, with the
+     * type a summoning mode makes named the way Java names it.
      */
     private static String ride(String rest, Set<String> unsupported) {
-        String[] parts = SPACE.split(rest, 3);
+        String[] parts = SPACE.split(rest, 4);
         if (parts.length < 2) {
             unsupported.add("command ride with no mode");
             return null;
         }
 
-        return switch (parts[1].toLowerCase(Locale.ROOT)) {
-            case "stop_riding" -> "execute as " + parts[0] + " run ride @s dismount";
-            case "start_riding" -> startRiding(parts, unsupported);
-            default -> dropped("ride", parts[1], unsupported);
-        };
-    }
-
-    /**
-     * `ride <riders> start_riding <ride> [teleportRules] [howToFill]`.
-     *
-     * Java moves the rider to what it mounts, which is what `teleport_rider` asks for. Moving the
-     * ride instead, and either of the two ways of filling a vehicle that has room for several, are
-     * decisions Java's own command does not offer.
-     */
-    private static String startRiding(String[] parts, Set<String> unsupported) {
+        String mode = parts[1].toLowerCase(Locale.ROOT);
+        if (!mode.equals("summon_ride") && !mode.equals("summon_rider")) return "ride " + rest;
         if (parts.length < 3) {
-            unsupported.add("command ride start_riding with nothing to ride");
+            unsupported.add("command ride " + mode + " with nothing to summon");
             return null;
         }
 
-        String[] following = SPACE.split(parts[2]);
-        for (String rule : Arrays.copyOfRange(following, 1, following.length)) {
-            if (rule.equalsIgnoreCase("teleport_rider")) continue;
-            return dropped("ride", rule, unsupported);
+        String type = BedrockEntityNames.java(parts[2]);
+        if (type == null) {
+            unsupported.add("command ride, which names an entity Java does not have");
+            return null;
         }
-        return "execute as " + parts[0] + " at @s run ride @s mount " + nearest(following[0]);
+        return "ride " + parts[0] + " " + mode + " " + type + (parts.length > 3 ? " " + parts[3] : "");
     }
 
     /**
-     * A selector Java will take where it wants one entity, which is the nearest one that matches.
-     *
-     * `@s`, `@p` and `@r` already stand for one entity and Java rejects a count on them. The other
-     * two match as many as they find, which is what Bedrock hands a rider and Java will not.
+     * Bedrock holds and resumes the world write, which Java turns off and on, and asks whether what
+     * was held is ready to copy, which the command built here answers.
      */
-    private static String nearest(String selector) {
-        if (!selector.startsWith("@e") && !selector.startsWith("@a")) return selector;
-        if (selector.contains("c=")) return selector;
-
-        return selector.endsWith("]")
-            ? selector.substring(0, selector.length() - 1) + ",c=1]" : selector + "[c=1]";
-    }
-
-    /** Bedrock holds and resumes the world write; Java turns the same write off and on. */
     private static String save(String rest, Set<String> unsupported) {
         return switch (rest.toLowerCase(Locale.ROOT)) {
             case "hold" -> "save-off";
             case "resume" -> "save-on";
+            case "query" -> "save query";
             default -> dropped("save", rest, unsupported);
         };
     }
 
     /**
-     * A Bedrock ticking area is Java's forceload, which works in whole chunks.
-     *
-     * Java's takes the two corners as columns, so the heights are left out. A circular area and one
-     * picked out by the name it was added under have no Java form, and neither does a preload: Java
-     * loads a forced chunk as soon as it is named, with nothing to ask again later.
+     * `permission list|reload` and `permission set <player> <level>`, which Bedrock also spells
+     * `ops`, read by the command built here. Of Bedrock's three levels, a visitor may only look round,
+     * which no Java operator level or game mode says.
      */
-    private static String tickingArea(String rest, Set<String> unsupported) {
-        String[] parts = SPACE.split(rest);
-        String mode = parts[0].toLowerCase(Locale.ROOT);
-
-        if (mode.equals("remove_all")) return "forceload remove all";
-        if (mode.equals("list")) {
-            if (parts.length == 1) return "forceload query";
-            return dropped("tickingarea", parts[1], unsupported);
+    private static String permission(String name, String rest, Set<String> unsupported) {
+        List<String> words = words(rest);
+        if (words.size() > 2 && words.get(2).equalsIgnoreCase("visitor")) {
+            return dropped("permission", "visitor", unsupported);
         }
-        if (mode.equals("remove") && parts.length >= 4) {
-            return "forceload remove " + parts[1] + " " + parts[3];
-        }
-        if (mode.equals("add")) {
-            if (parts.length > 1 && parts[1].equalsIgnoreCase("circle")) {
-                return dropped("tickingarea", parts[1], unsupported);
-            }
-            if (parts.length >= 7) {
-                return "forceload add " + parts[1] + " " + parts[3] + " " + parts[4] + " " + parts[6];
-            }
-        }
-        return dropped("tickingarea", mode, unsupported);
+        return name + (rest.isEmpty() ? "" : " " + rest);
     }
 
     /**
@@ -1253,8 +1197,9 @@ public final class Functions {
     /**
      * `changesetting <setting> <value>`, of whose two settings Java has a command for one.
      *
-     * Whether cheats are allowed is a property of the world a Java server reads at startup, with no
-     * command to move it while the server runs.
+     * Bedrock's `allow-cheats` decides whether an operator may run commands at all. A Java server
+     * always lets an operator run them and has no switch to stop it, and its one switch for cheats,
+     * the one a world opened to the network uses, lets every player run commands instead.
      */
     private static String changeSetting(String rest, Set<String> unsupported) {
         String[] parts = SPACE.split(rest, 2);
@@ -1265,100 +1210,32 @@ public final class Functions {
     }
 
     /**
-     * `music play|queue <track> [volume] [fade] [repeat]`, `music stop [fade]` and `music volume`.
-     *
-     * A track is played as a sound in the music category, which fades in and out on its own and
-     * plays through once. A repeating track and a mixer level have no command behind them.
+     * `structure save|load|delete <name> ...`, which the command built here reads in Bedrock's own
+     * form, with the name quoted because it carries a namespace as often as not.
      */
-    private static String music(String rest, Set<String> unsupported) {
-        String[] parts = SPACE.split(rest);
-        String action = parts[0].toLowerCase(Locale.ROOT);
-        if (action.equals("stop")) return "music stop";
-        if (parts.length < 2 || !action.equals("play") && !action.equals("queue")) {
-            return dropped("music", action, unsupported);
+    private static String structure(String rest, Set<String> unsupported) {
+        String[] parts = SPACE.split(rest, 3);
+        String mode = parts[0].toLowerCase(Locale.ROOT);
+        if (!mode.equals("save") && !mode.equals("load") && !mode.equals("delete")) {
+            return dropped("structure", mode, unsupported);
         }
-
-        String repeat = parts.length > 4 ? parts[4].toLowerCase(Locale.ROOT) : "play_once";
-        if (!repeat.equals("play_once")) return dropped("music", repeat, unsupported);
-        return "music " + action + " " + new JsonPrimitive(parts[1])
+        if (parts.length < 2) {
+            unsupported.add("command structure " + mode + " with no name");
+            return null;
+        }
+        return "structure " + mode + " " + new JsonPrimitive(parts[1].replace(String.valueOf(QUOTE), ""))
             + (parts.length > 2 ? " " + parts[2] : "");
     }
 
-    /** Bedrock saves a region under a name, places it again and forgets it. */
-    private static String structure(String rest, Set<String> unsupported) {
-        String[] parts = SPACE.split(rest);
-        return switch (parts[0].toLowerCase(Locale.ROOT)) {
-            case "save" -> saveStructure(parts, unsupported);
-            case "load" -> loadStructure(parts, unsupported);
-            case "delete" -> {
-                if (parts.length < 2) {
-                    unsupported.add("command structure delete with no name");
-                    yield null;
-                }
-                yield "structure delete " + new JsonPrimitive(parts[1]);
-            }
-            default -> dropped("structure", parts[0], unsupported);
-        };
-    }
-
     /**
-     * `structure save <name> <from> <to> [includeEntities] [saveMode] [includeBlocks]`.
-     *
-     * A Java template holds the blocks and the entities of the region either way and is written as
-     * a file, which is what `disk` asks for. `memory` asks for one the world never keeps.
-     */
-    private static String saveStructure(String[] parts, Set<String> unsupported) {
-        if (parts.length < 8) {
-            unsupported.add("command structure save with no region to save");
-            return null;
-        }
-        for (String option : Arrays.copyOfRange(parts, 8, parts.length)) {
-            String word = option.toLowerCase(Locale.ROOT);
-            if (word.equals("disk") || word.equals("true") || word.equals("false")) continue;
-            return dropped("structure", word, unsupported);
-        }
-        return "structure save " + new JsonPrimitive(parts[1]) + " "
-            + String.join(" ", Arrays.copyOfRange(parts, 2, 8));
-    }
-
-    /**
-     * `structure load <name> <to> [rotation] [mirror] ...`, which Java places as a template.
-     *
-     * Java's own `place template` turns and mirrors a template as it places it, and takes the name
-     * as a resource location, so the line goes to it rather than to the command registered here.
-     * Everything Bedrock writes after the mirror describes a placement Java builds in its own code:
-     * an animation it plays none of, and the entity, block and waterlogging choices it makes itself.
-     */
-    private static String loadStructure(String[] parts, Set<String> unsupported) {
-        if (parts.length < 5) {
-            unsupported.add("command structure load with nowhere to put it");
-            return null;
-        }
-        StringBuilder placement = new StringBuilder("place template "
-            + McStructure.javaName(parts[1].replace("\"", "")) + " "
-            + String.join(" ", Arrays.copyOfRange(parts, 2, 5)));
-
-        for (int at = 5; at < parts.length; at++) {
-            String word = parts[at].toLowerCase(Locale.ROOT);
-            String java = switch (at) {
-                case 5 -> STRUCTURE_ROTATIONS.get(word);
-                case 6 -> STRUCTURE_MIRRORS.get(word);
-                default -> null;
-            };
-            if (java == null) return dropped("structure", word, unsupported);
-            placement.append(' ').append(java);
-        }
-        return placement.toString();
-    }
-
-    /**
-     * `schedule delay`, which is the form both editions mean the same thing by.
+     * `schedule delay`, which is the form both editions mean the same thing by, and
+     * `schedule on_area_loaded`, which the command built here answers.
      *
      * Bedrock writes `schedule delay add <function> <time> <replace|append>` and Java writes
      * `schedule function <function> <time> [append|replace]`, with the same two words for the last
      * argument, so the whole of the delay half crosses by swapping one keyword. `schedule clear` is
-     * spelled alike in both and `schedule delay clear` is the same thing said the longer way.
-     * `on_area_loaded` waits for chunks to be loaded, which Java keeps no queue for.
+     * spelled alike in both and `schedule delay clear` is the same thing said the longer way. A
+     * waiting form keeps its words and has its function named the way `function` names one.
      */
     private static String schedule(String rest, FunctionNames functions, Set<String> unsupported) {
         String[] parts = SPACE.split(rest, 2);
@@ -1366,6 +1243,7 @@ public final class Functions {
         String tail = parts.length > 1 ? parts[1] : "";
 
         if (mode.equals("clear")) return scheduled("schedule clear", tail, functions, unsupported);
+        if (mode.equals("on_area_loaded")) return areaLoaded(tail, functions, unsupported);
         if (!mode.equals("delay")) return dropped("schedule", mode, unsupported);
 
         String[] action = SPACE.split(tail, 2);
@@ -1378,6 +1256,26 @@ public final class Functions {
         };
     }
 
+    /**
+     * `schedule on_area_loaded add|clear ...`, whose function is its last word, except where a clear
+     * by ticking area leaves it out.
+     */
+    private static String areaLoaded(String rest, FunctionNames functions, Set<String> unsupported) {
+        List<String> words = new ArrayList<>(words(rest));
+        boolean named = words.size() >= 2 && words.get(0).equalsIgnoreCase("clear")
+            && words.get(1).equalsIgnoreCase("tickingarea");
+        if (words.size() < 2 || named && words.size() < 3) {
+            unsupported.add("command schedule on_area_loaded with nothing to wait for");
+            return null;
+        }
+        if (!named || words.size() > 3) {
+            String called = function(words.get(words.size() - 1), functions, unsupported);
+            if (called == null) return null;
+            words.set(words.size() - 1, called.substring("function ".length()));
+        }
+        return "schedule on_area_loaded " + String.join(" ", words);
+    }
+
     /** A schedule whose function is named the way `function` names one. */
     private static String scheduled(String form, String rest, FunctionNames functions,
         Set<String> unsupported) {
@@ -1386,22 +1284,26 @@ public final class Functions {
     }
 
     /**
-     * `/camera`, of whose fifteen forms the four presets and their placement are drawn here.
+     * `/camera`, of whose fifteen forms the four presets, their placement, the fade and the field of
+     * view are drawn here.
      *
      * The line reaches the command this mod registers as the pack wrote it, so the only thing to
      * decide is whether that command has a branch for the form. A preset in a pack's own namespace
      * is one of the pack's `cameras/presets`, which the command looks up as it runs, because the
-     * functions are translated before the presets are read. The three built-in presets left name a
-     * camera Bedrock draws and Java has none of, and the rest fade the screen, move the field of
-     * view, follow a spline or hang the camera off another entity, none of which a Java client is
-     * told to do by any packet.
+     * functions are translated before the presets are read. The three built-in presets left are
+     * cameras Bedrock draws behind or round an entity, and the other forms follow a spline, hang the
+     * camera off an entity, turn it towards one or offset it from one. A Java client draws from an
+     * entity's eyes or from its own third person view at a fixed distance, so each of these is a
+     * camera this mod would have to draw itself, and it draws none of them.
      */
     private static String camera(String rest, Set<String> unsupported) {
         String[] parts = SPACE.split(rest, 3);
         if (parts.length < 2) return "camera " + rest;
 
         String form = parts[1].toLowerCase(Locale.ROOT);
-        if (form.equals("clear")) return "camera " + rest;
+        if (form.equals("clear") || form.equals("fade") || form.equals("fov_set") || form.equals("fov_clear")) {
+            return "camera " + rest;
+        }
         if (!form.equals("set")) return dropped("camera", form, unsupported);
 
         String preset = parts.length > 2 ? SPACE.split(parts[2], 2)[0].toLowerCase(Locale.ROOT) : "";
@@ -1424,34 +1326,24 @@ public final class Functions {
             ? dropped("hud", element.bedrockName(), unsupported) : "hud " + rest;
     }
 
-    /**
-     * `mobevent <event> [enabled]`, of whose four events three reach a Java game rule.
-     *
-     * `events_enabled` names every event at once. The ender dragon's is whether the fight may be
-     * started again, which Java decides from the state of the end itself.
-     */
+    /** `mobevent <event> [enabled]`, whose four events the command built here holds. */
     private static String mobEvent(String rest, Set<String> unsupported) {
         String[] parts = SPACE.split(rest, 2);
         String event = parts[0].toLowerCase(Locale.ROOT);
-        if (!event.equals("minecraft:pillager_patrols_event")
-            && !event.equals("minecraft:wandering_trader_event") && !event.equals("events_enabled")) {
+        if (!event.equals("minecraft:pillager_patrols_event") && !event.equals("minecraft:wandering_trader_event")
+            && !event.equals("minecraft:ender_dragon_event") && !event.equals("events_enabled")) {
             return dropped("mobevent", event, unsupported);
         }
         return "mobevent " + event + (parts.length > 1 ? " " + parts[1] : "");
     }
 
-    /**
-     * The test modes the `/gametest` registered here builds.
-     *
-     * The rest describe the Bedrock test editor: laying out a new test area, reading a position
-     * inside one, running the tests around the player, and repeating a set until one fails.
-     */
+    /** Every mode of `/gametest`, which the command built here reads as the line writes it. */
     private static String gameTest(String rest, Set<String> unsupported) {
         String[] parts = SPACE.split(rest, 2);
         String mode = parts[0].toLowerCase(Locale.ROOT);
         return switch (mode) {
-            case "run", "runset", "runall", "clearall", "stopall" ->
-                "gametest " + mode + (parts.length > 1 ? " " + parts[1] : "");
+            case "run", "runset", "runsetuntilfail", "runall", "runthis", "runthese", "clearall", "stopall",
+                "pos", "create" -> "gametest " + mode + (parts.length > 1 ? " " + parts[1] : "");
             default -> dropped("gametest", mode, unsupported);
         };
     }
@@ -1613,10 +1505,10 @@ public final class Functions {
         };
     }
 
-    private static Map<String, String> lowerCased(Set<String> shared, Set<String> newer,
+    private static Map<String, String> lowerCased(Set<String> shared, Set<String> newer, Set<String> held,
         Map<String, String> folds) {
         Map<String, String> byLowerCase = new LinkedHashMap<>();
-        Stream.concat(shared.stream(), newer.stream())
+        Stream.of(shared, newer, held).flatMap(Set::stream)
             .forEach(name -> byLowerCase.put(name.toLowerCase(Locale.ROOT), name));
         folds.forEach((bedrock, java) -> byLowerCase.put(bedrock.toLowerCase(Locale.ROOT), java));
         return Map.copyOf(byLowerCase);
