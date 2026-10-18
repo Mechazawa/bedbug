@@ -3152,8 +3152,7 @@ public class AddonEntity extends PathfinderMob
             // speed Java's goal takes for the same animal: four tenths for the wolf, the cat and the spider.
             case "minecraft:behavior.leap_at_target" ->
                 goals.add(priority, new LeapAtTargetGoal(this, (float) Goals.number(goal, "yd", 0)));
-            case "minecraft:behavior.stalk_and_pounce_on_target" ->
-                goals.add(priority, new LeapAtTargetGoal(this, 0.4f));
+            case "minecraft:behavior.stalk_and_pounce_on_target" -> goals.add(priority, new PounceGoal(this, goal));
             case "minecraft:behavior.play" -> goals.add(priority, new PlayGoal(this, goal));
             case "minecraft:behavior.stroll_towards_village" ->
                 goals.add(priority, new StrollTowardsVillageGoal(this, goal));
@@ -3207,8 +3206,7 @@ public class AddonEntity extends PathfinderMob
                     TargetSelection.from(goal, net.minecraft.world.entity.LivingEntity.class, 0)));
 
             case "minecraft:behavior.ranged_attack" -> goals.add(priority, new RangedGoal(this, goal, speed));
-            case "minecraft:behavior.ocelotattack" -> goals.add(priority,
-                new net.minecraft.world.entity.ai.goal.OcelotAttackGoal(this));
+            case "minecraft:behavior.ocelotattack" -> goals.add(priority, new OcelotGoal(this, goal));
 
             case "minecraft:behavior.follow_parent" -> goals.add(priority,
                 FollowKinGoal.parent(this, goal));

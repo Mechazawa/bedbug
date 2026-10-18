@@ -170,7 +170,10 @@ Against a server without this mod a client plays with its own add-ons.
   inside the range's low end and closes in until it has seen its target for `target_in_sight_time`;
   one with a `charge_shoot_trigger` charges while it sees its target, counts as charged for
   `query.is_charged`, and fires a burst of `burst_shots`. Arrows carry the potion `minecraft:shooter`
-  names under `aux_val`. A panic starts at
+  names under `aux_val`. An ocelot attack sneaks, sprints and walks at its
+  three speeds by its three ranges and strikes within its reach every `cooldown_time`; a pounce stalks
+  at `stalk_speed`, stays interested for `interest_time`, leaps by `leap_dist` and `leap_height`,
+  strikes within `strike_dist` and is held stuck for `stuck_time` on what `stuck_blocks` names. A panic starts at
   the causes `damage_sources` lists, can leave every mob's blow out, heads for water under
   `prefer_water` and needs no hurt under `force`; fleeing a block raises `on_escape` once clear; and
   the panic and the flight make the sound the pack names for them. A teleporter closes on a far

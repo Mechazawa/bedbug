@@ -796,6 +796,175 @@ public final class GoalGameTests {
         });
     }
 
+    /**
+     * An ocelot attack strikes within `reach_multiplier` times its width, every `cooldown_time`
+     * seconds, walking at `walk_speed_multiplier` while in reach.
+     *
+     * The stalking brute reaches 3.6 blocks and waits a second and a half; Java's ocelot reaches 1.2.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void anOcelotAttackStrikesAtItsReachAndCooldown(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_stalk");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob pig = pig(helper, STAND.east(3), BLOWS_TO_KILL);
+        brute.setTarget(pig);
+        List<Long> blows = new ArrayList<>();
+        float[] health = {pig.getHealth()};
+        double[] speed = {0};
+        helper.onEachTick(() -> {
+            if (pig.getHealth() < health[0]) blows.add(helper.getLevel().getGameTime());
+            health[0] = pig.getHealth();
+            speed[0] = brute.getMoveControl().getSpeedModifier();
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(blows.size() >= 2,
+                BRUTE + " struck the pig three blocks off " + blows.size() + " times.");
+            long gap = blows.get(1) - blows.get(0);
+            helper.assertTrue(Math.abs(gap - BOXING_COOLDOWN) <= 1,
+                BRUTE + " waits a second and a half between blows and struck again after " + gap + " ticks.");
+            helper.assertTrue(speed[0] == STALK_WALK, BRUTE + " walks at half speed in reach and moves at " + speed[0]);
+        });
+    }
+
+    private static final double STALK_WALK = 0.5;
+    private static final double STALK_SPRINT = 1.7;
+    private static final double STALK_SNEAK = 0.3;
+
+    /**
+     * An ocelot attack sprints at `sprint_speed_multiplier` inside `max_sprint_range`, sneaks at
+     * `sneak_speed_multiplier` inside `max_sneak_range`, and leaves a target past `max_distance` alone.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void anOcelotAttackSprintsAndSneaksByDistance(GameTestHelper helper) {
+        AddonEntity sprinting = heldInPlace(helper, "tp:brute_stalk");
+        AddonEntity sneaking = heldInPlace(helper, "tp:brute_stalk", new BlockPos(1, 0, 4));
+        AddonEntity idle = heldInPlace(helper, "tp:brute_stalk", new BlockPos(1, 0, 7));
+        if (sprinting == null || sneaking == null || idle == null) {
+            helper.succeed();
+            return;
+        }
+
+        sprinting.setTarget(pig(helper, STAND.east(4), BLOWS_TO_KILL));
+        sneaking.setTarget(pig(helper, new BlockPos(7, 0, 4), BLOWS_TO_KILL));
+        idle.setTarget(pig(helper, new BlockPos(7, 0, 3), BLOWS_TO_KILL));
+        helper.runAfterDelay(SETTLE, () -> {
+            helper.assertTrue(sprinting.getMoveControl().getSpeedModifier() == STALK_SPRINT,
+                BRUTE + " sprints four blocks off and moves at " + sprinting.getMoveControl().getSpeedModifier());
+            helper.assertTrue(sneaking.getMoveControl().getSpeedModifier() == STALK_SNEAK,
+                BRUTE + " sneaks six blocks off and moves at " + sneaking.getMoveControl().getSpeedModifier());
+            helper.assertFalse(idle.getNavigation().isInProgress(),
+                BRUTE + " leaves alone a target past six and a half blocks and went after one at seven.");
+            helper.succeed();
+        });
+    }
+
+    private static final int SETTLE = 20;
+
+    /**
+     * A pounce waits `interest_time` seconds within `pounce_max_dist`, then leaps `leap_height` up
+     * and strikes a target within `strike_dist` of where it lands.
+     *
+     * The pouncing brute waits two seconds and leaps at half a block a tick; Java's leap goes off
+     * at once at four tenths.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = POUNCE_TICKS)
+    public void aPounceWaitsThenLeapsAndStrikes(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_pounce");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob pig = pig(helper, STAND.east(3), BLOWS_TO_KILL);
+        brute.setTarget(pig);
+        long from = helper.getLevel().getGameTime();
+        List<Long> leaps = leapsOf(helper, brute);
+        double[] rise = {0};
+        helper.onEachTick(() -> rise[0] = Math.max(rise[0], brute.getDeltaMovement().y));
+        helper.succeedWhen(() -> {
+            helper.assertTrue(pig.getHealth() < BLOWS_TO_KILL, BRUTE + " never struck the pig it pounced on.");
+            helper.assertFalse(leaps.isEmpty(), BRUTE + " struck the pig without leaping.");
+            helper.assertTrue(leaps.get(0) - from >= POUNCE_INTEREST,
+                BRUTE + " stays interested two seconds and leapt after " + (leaps.get(0) - from) + " ticks.");
+            helper.assertTrue(Math.abs(rise[0] - POUNCE_RISE) < RISE_MARGIN,
+                BRUTE + " leaps at half a block a tick and rose at " + rise[0] + ".");
+        });
+    }
+
+    /**
+     * A pounce landing on what `stuck_blocks` names, gravel here, strikes nothing and leaves the entity stuck for
+     * `stuck_time` seconds before it can stay interested again.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = POUNCE_TICKS)
+    public void aPounceIntoGravelLeavesItStuck(GameTestHelper helper) {
+        BlockPos.betweenClosed(new BlockPos(0, 0, 0), new BlockPos(7, 0, 3))
+            .forEach(at -> helper.setBlock(at, Blocks.GRAVEL));
+        AddonEntity brute = withGroup(helper, "tp:brute_pounce", STAND.above());
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob pig = pig(helper, STAND.east(3).above(), BLOWS_TO_KILL);
+        brute.setTarget(pig);
+        List<Long> leaps = leapsOf(helper, brute);
+        helper.succeedWhen(() -> {
+            helper.assertTrue(leaps.size() >= 2, BRUTE + " leapt " + leaps.size() + " times.");
+            helper.assertTrue(pig.getHealth() == BLOWS_TO_KILL, BRUTE + " landed on gravel and struck the pig anyway.");
+            helper.assertTrue(leaps.get(1) - leaps.get(0) >= POUNCE_INTEREST + STUCK,
+                BRUTE + " stays stuck a second and a half and leapt again after " + (leaps.get(1) - leaps.get(0))
+                    + " ticks.");
+        });
+    }
+
+    /** A pounce stalks at `stalk_speed` from beyond its pounce range, and not from past `max_stalk_dist`. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aPounceStalksAtItsSpeedWithinItsRange(GameTestHelper helper) {
+        AddonEntity stalking = heldInPlace(helper, "tp:brute_pounce");
+        AddonEntity idle = heldInPlace(helper, "tp:brute_pounce", new BlockPos(0, 0, 4));
+        if (stalking == null || idle == null) {
+            helper.succeed();
+            return;
+        }
+
+        stalking.setTarget(pig(helper, STAND.east(6), BLOWS_TO_KILL));
+        idle.setTarget(pig(helper, new BlockPos(7, 0, 6), BLOWS_TO_KILL));
+        helper.runAfterDelay(SETTLE, () -> {
+            helper.assertTrue(stalking.getMoveControl().getSpeedModifier() == STALK_SNEAK,
+                BRUTE + " stalks at three tenths and moves at " + stalking.getMoveControl().getSpeedModifier());
+            helper.assertFalse(idle.getNavigation().isInProgress(),
+                BRUTE + " stalks from seven blocks and went after a pig further off.");
+            helper.succeed();
+        });
+    }
+
+    /** The game time of each leap, which is the tick the entity starts rising fast. */
+    private static List<Long> leapsOf(GameTestHelper helper, AddonEntity brute) {
+        List<Long> leaps = new ArrayList<>();
+        double[] was = {0};
+        helper.onEachTick(() -> {
+            double rising = brute.getDeltaMovement().y;
+            if (rising > LEAPING && was[0] <= LEAPING) leaps.add(helper.getLevel().getGameTime());
+            was[0] = rising;
+        });
+        return leaps;
+    }
+
+    private static final int POUNCE_TICKS = 240;
+    private static final long POUNCE_INTEREST = 40;
+    private static final long STUCK = 30;
+    /**
+     * The fastest the pouncing brute rises: its leap of half a block a tick over the fall it had on
+     * the ground, less one tick of gravity and drag. Java's leap of four tenths rises at 0.24.
+     */
+    private static final double POUNCE_RISE = 0.33;
+    private static final double RISE_MARGIN = 0.03;
+    private static final double LEAPING = 0.2;
+
     private static final float ROAR_DAMAGE = 3;
     private static final double ROAR_THROW = 0.5;
     private static final long ROAR_TAIL = 10;

@@ -385,6 +385,37 @@
           "sound_effect": "wind_charge.burst"
         }
       },
+      "tp:brute_stalking": {
+        "minecraft:behavior.ocelotattack": {
+          "priority": 0,
+          "cooldown_time": 1.5,
+          "reach_multiplier": 6,
+          "walk_speed_multiplier": 0.5,
+          "sprint_speed_multiplier": 1.7,
+          "sneak_speed_multiplier": 0.3,
+          "max_sprint_range": 5,
+          "max_sneak_range": 9,
+          "max_distance": 6.5
+        }
+      },
+      "tp:brute_pouncing": {
+        "minecraft:behavior.stalk_and_pounce_on_target": {
+          "priority": 0,
+          "stalk_speed": 0.3,
+          "max_stalk_dist": 7,
+          "pounce_max_dist": 4,
+          "interest_time": 2,
+          "leap_dist": 0.6,
+          "leap_height": 0.5,
+          "strike_dist": 3,
+          "stuck_time": 1.5,
+          "stuck_blocks": {
+            "test": "is_block",
+            "subject": "self",
+            "value": "minecraft:gravel"
+          }
+        }
+      },
       "tp:brute_poisoner": {
         "minecraft:shooter": {
           "def": "minecraft:arrow",
@@ -907,6 +938,20 @@
         "add": {
           "component_groups": [
             "tp:brute_lofting"
+          ]
+        }
+      },
+      "tp:brute_stalk": {
+        "add": {
+          "component_groups": [
+            "tp:brute_stalking"
+          ]
+        }
+      },
+      "tp:brute_pounce": {
+        "add": {
+          "component_groups": [
+            "tp:brute_pouncing"
           ]
         }
       },
