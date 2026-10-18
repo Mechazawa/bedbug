@@ -77,6 +77,7 @@ public final class ServerHooks {
         });
         EntityTrackingEvents.START_TRACKING.register((entity, player) -> {
             if (state != null) EntityPropertySync.sendTo(player, entity, state);
+            if (entity instanceof at.ioexception.mcaddon.entity.AddonEntity mount) mount.sendSeatTurns(player);
         });
         ServerEntityEvents.ENTITY_UNLOAD.register((entity, level) -> entityRemoved(entity));
         net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents.AFTER.register(

@@ -12,6 +12,12 @@
           "rotation": [0, 30, 0]
         }
       }
+    },
+    "animation.tp.gaze.stir": {
+      "animation_length": 1.0,
+      "timeline": {
+        "0.0": "v.stirred = v.stirred + 1;"
+      }
     }
   }
 }

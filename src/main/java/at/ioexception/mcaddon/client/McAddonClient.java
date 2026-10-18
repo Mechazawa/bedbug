@@ -44,6 +44,12 @@ public final class McAddonClient implements ClientModInitializer {
         Channels.receiveHud(PlayerHud::accept);
         Channels.receiveInputPermissions(PlayerInput::accept);
         Channels.receiveAnimation(Animators::play);
+        Channels.receiveSeatTurn((mountId, riderId, turn) -> {
+            net.minecraft.client.multiplayer.ClientLevel level = net.minecraft.client.Minecraft.getInstance().level;
+            if (level != null && level.getEntity(mountId) instanceof at.ioexception.mcaddon.entity.AddonEntity mount) {
+                mount.acceptSeatTurn(riderId, turn);
+            }
+        });
         Channels.receiveParticle((effect, x, y, z) ->
             at.ioexception.mcaddon.client.render.AddonEmitters.start(effect, null,
                 new net.minecraft.world.phys.Vec3(x, y, z)));

@@ -5,6 +5,7 @@
       "identifier": "tp:tailor",
       "materials": {
         "default": "entity_alphatest",
+        "tinted": "entity_alphatest_change_color",
         "tailored": "tp_tailored",
         "masked": "villager_v2_masked"
       },
