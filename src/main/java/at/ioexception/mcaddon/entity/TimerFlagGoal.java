@@ -2,77 +2,78 @@ package at.ioexception.mcaddon.entity;
 
 import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.ServerHooks;
-import at.ioexception.mcaddon.util.Json;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.world.entity.ai.goal.Goal;
 
-import java.util.EnumSet;
-
 /**
- * Holds the entity still for a while and then fires the pack's own event.
+ * Raises a flag for a while and tells the pack when it goes up and when it comes down.
  *
  * Bedrock's three timer flags are the same goal three times over, so a pack can run three of them
- * at different priorities. Each names a duration, a cooldown and the event to raise at the end,
- * which is how a pack times an animation without a script.
+ * at different priorities. Each waits out `cooldown_range` before its first run as well as between
+ * runs, which is how a pack times an animation without a script. The goal holds only the controls
+ * `control_flags` names, so one naming none runs beside every other goal.
  */
 public final class TimerFlagGoal extends Goal {
     private final AddonEntity mob;
-    private final int duration;
+    private final int durationLow;
+    private final int durationHigh;
     private final int cooldownLow;
     private final int cooldownHigh;
+    private final String startEvent;
     private final String endEvent;
 
     /** Which of Bedrock's three flags this one raises, which a pack's controller reads back. */
     private final String flag;
-    private int held;
-    private int untilNext;
+    private long readyAt = -1;
+    private long endsAt;
 
     public TimerFlagGoal(AddonEntity mob, JsonObject component, String flag) {
         this.mob = mob;
         this.flag = flag;
-        this.duration = (int) (number(component, "duration", 0.5) * 20);
-        JsonObject onEnd = component.getAsJsonObject("on_end");
-        this.endEvent = onEnd == null ? null : Json.text(onEnd, "event", null);
-
-        JsonElement cooldown = component.get("cooldown_range");
-        boolean pair = cooldown != null && cooldown.isJsonArray() && cooldown.getAsJsonArray().size() >= 2;
-        this.cooldownLow = (int) ((pair ? cooldown.getAsJsonArray().get(0).getAsDouble() : 10) * 20);
-        this.cooldownHigh = (int) ((pair ? cooldown.getAsJsonArray().get(1).getAsDouble() : 10) * 20);
-        setFlags(EnumSet.of(Goal.Flag.MOVE));
+        this.durationLow = Goals.ticksLow(component, "duration_range", 0);
+        this.durationHigh = Goals.ticksHigh(component, "duration_range", 0);
+        this.cooldownLow = Goals.ticksLow(component, "cooldown_range", 0);
+        this.cooldownHigh = Goals.ticksHigh(component, "cooldown_range", 0);
+        this.startEvent = Goals.event(component, "on_start");
+        this.endEvent = Goals.event(component, "on_end");
+        setFlags(Goals.controls(component));
     }
 
     @Override
     public boolean canUse() {
-        return untilNext-- <= 0;
+        if (readyAt < 0) readyAt = coolDown();
+        return mob.level().getGameTime() >= readyAt;
     }
 
     @Override
     public boolean canContinueToUse() {
-        return held < duration;
+        return mob.level().getGameTime() < endsAt;
     }
 
     @Override
     public void start() {
-        held = 0;
+        endsAt = mob.level().getGameTime() + Goals.between(mob.getRandom(), durationLow, durationHigh);
         mob.setValue(flag, true);
+        raise(startEvent);
     }
 
     @Override
     public void tick() {
-        held++;
-        mob.getNavigation().stop();
+        if (getFlags().contains(Flag.MOVE)) mob.getNavigation().stop();
     }
 
     @Override
     public void stop() {
         mob.setValue(flag, false);
-        untilNext = cooldownLow + mob.getRandom().nextInt(Math.max(1, cooldownHigh - cooldownLow + 1));
-        if (endEvent != null) EntityEvents.trigger(mob, endEvent, null, ServerHooks.state());
+        readyAt = coolDown();
+        raise(endEvent);
     }
 
-    private static double number(JsonObject component, String key, double fallback) {
-        return component == null || !component.has(key) || !component.get(key).isJsonPrimitive()
-            ? fallback : component.get(key).getAsDouble();
+    private long coolDown() {
+        return mob.level().getGameTime() + Goals.between(mob.getRandom(), cooldownLow, cooldownHigh);
+    }
+
+    private void raise(String event) {
+        if (event != null) EntityEvents.trigger(mob, event, null, ServerHooks.state());
     }
 }
