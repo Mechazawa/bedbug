@@ -422,6 +422,14 @@ These are the checks it runs, and what each one catches:
   `tp:spark` reflects when struck after a tenth of a second, and its brittle and dull groups are
   removed and stopped when struck instead.
 
+  The ember's sensing group carries a `minecraft:damage_sensor` with one trigger per cause, each
+  setting the enum property `tp:felt` to the cause it heard: `fall`, `entity_attack`, `projectile`,
+  `drowning`, `suffocation` and `contact`, every one but the attack refusing the blow.
+  `BehaviourGameTests.aDamageSensorHearsEachCauseByBedrocksName` hurts the ember with the Java
+  source for each and with `magic`, which no trigger names and which lands. The brute's `tp:arrived`
+  property is set by its `minecraft:entity_spawned` and `minecraft:entity_born` events, which is how
+  `GoalGameTests.aBredChildIsBornRatherThanSpawned` tells a bred child from a placed one.
+
   Two more entities are there for what a mob walking about never reaches. One is a projectile with
   hit boxes wider than the box it collides in, which turns `isolated_physics` off the way Mojang's
   own arrows do, so it is moved the way any entity is and a row of cobwebs holds it back; the other
@@ -1739,6 +1747,14 @@ the surface reports (`typeId`, `EntityTypes`, event payloads, families) and `Add
 is what it accepts (spawns, queries, filters), with `BedrockEntityNames` holding the vanilla ids
 the two editions spell differently in both directions. Compare two names through `identifierOf`,
 never the raw registry key, or `minecraft:villager` and `minecraft:villager_v2` read as two types.
+
+**So does a damage cause.** `bedrock.behaviour.DamageCause` holds Bedrock's causes against the
+Java damage types that are the same harm, in both directions, for the types the running version's
+`DamageTypes` declares. A cause Java has no type for is dealt as its stand-in and hears what the
+stand-in hears. Every place a pack names a cause asks it, and nothing compares a cause against
+`DamageSource.getMsgId()`, which is a death message key several types share: `campfire` and
+`in_fire` are both `inFire`. The field census reads `name(plain, "text"` as a field read, so a
+constant's Java types are listed before its flags.
 
 **So does an item and a block, everywhere a pack names one.** `AddonItems.named` and
 `AddonBlocks.named` (or `AddonBlocks.stateOf`, where Bedrock's states pick the block) are what a
