@@ -134,7 +134,8 @@ final class ScrollingColumn {
 
     /** Drawn before the column's widgets: everything after it is cut to the window. */
     Renderable clip() {
-        return (graphics, mouseX, mouseY, partialTick) -> graphics.enableScissor(left, top, barLeft() + BAR_WIDTH, bottom);
+        return (graphics, mouseX, mouseY, partialTick) ->
+            graphics.enableScissor(left, top, barLeft() + BAR_WIDTH, bottom);
     }
 
     /** Drawn after the column's widgets: ends the cut and draws the scroll bar when there is one. */

@@ -115,8 +115,9 @@ public final class AddonFormScreen extends Screen {
 
     /**
      * Draws a description the server sent for the form already showing, keeping the screen, what has
-     * the focus and how far it is scrolled. A text field the player is typing in keeps what they typed, because an update
-     * started before the last keystroke reached the server would otherwise take it away again.
+     * the focus and how far it is scrolled. A text field the player is typing in keeps what they
+     * typed, because an update started before the last keystroke reached the server would otherwise
+     * take it away again.
      */
     private void update(JsonObject next) {
         if (next.equals(description)) return;
