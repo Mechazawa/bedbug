@@ -27,6 +27,15 @@
       "minecraft:navigation.walk": {},
       "minecraft:jump.static": {},
       "minecraft:is_illager_captain": {},
+      "minecraft:behavior.pickup_items": {
+        "priority": 2,
+        "goal_radius": 2,
+        "max_dist": 4
+      },
+      "minecraft:dweller": {
+        "dwelling_type": "village",
+        "dweller_role": "inhabitant"
+      },
       "minecraft:shooter": {
         "def": "tp:spark"
       },

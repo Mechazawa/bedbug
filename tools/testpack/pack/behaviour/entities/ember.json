@@ -133,6 +133,13 @@
         "priority": 6,
         "max_dist": 4.0
       },
+      "minecraft:shareables": {
+        "items": [
+          {
+            "item": "minecraft:gold_ingot"
+          }
+        ]
+      },
       "minecraft:rideable": {
         "seat_count": 1,
         "seats": [

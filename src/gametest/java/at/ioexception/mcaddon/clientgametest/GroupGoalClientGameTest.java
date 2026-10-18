@@ -13,9 +13,8 @@ import net.minecraft.server.level.ServerPlayer;
  *
  * `tp:ember`'s `tp:ember_wary` group flees players within ten blocks. With the group off the ember
  * stays beside a player; with it on the ember says it is avoiding a mob and opens the distance; with
- * it off again it stops. The world is in survival on normal, because Java's avoid goal picks what to
- * flee the way it picks what to attack, which leaves out a creative player and every player in
- * peaceful.
+ * it off again it stops. The player is in creative on peaceful, which Java's own avoid goal would
+ * ignore and the pack's filter does not.
  */
 public final class GroupGoalClientGameTest implements FabricClientGameTest {
     private static final int SETTLE_TICKS = 60;
@@ -23,9 +22,9 @@ public final class GroupGoalClientGameTest implements FabricClientGameTest {
     @Override
     public void runTest(ClientGameTestContext context) {
         try (TestSingleplayerContext world = context.worldBuilder()
-            .adjustSettings(ui -> ui.setGameMode(WorldCreationUiState.SelectedGameMode.SURVIVAL)).create()) {
+            .adjustSettings(ui -> ui.setGameMode(WorldCreationUiState.SelectedGameMode.CREATIVE)).create()) {
             Worlds.waitForChunks(world);
-            world.getServer().runCommand("difficulty normal");
+            world.getServer().runCommand("difficulty peaceful");
             world.getServer().runCommand("execute as @p at @s run summon tp:ember ~3 ~ ~");
             Worlds.waitForServer(context, world.getServer(), server -> ember(server) != null, 100,
                 "tp:ember was summoned and never reached the world.");

@@ -43,6 +43,12 @@ public final class BehaviourGameTests {
     /** The entity the synthetic pack declares young without giving it anything to grow into. */
     private static final String YOUNG_ENTITY = "tp:sprite";
 
+    /** Long enough for a goal that wanted the item to have walked a block and taken it. */
+    private static final int PICKUP_PATIENCE = 60;
+
+    /** The entity the synthetic pack declares a `minecraft:dweller` on at the top level. */
+    private static final String DWELLER = "tp:warden";
+
     /** The collision box `tp:sprite` declares beside `minecraft:is_baby`, with no scale. */
     private static final float YOUNG_WIDTH = 0.6f;
     private static final float YOUNG_HEIGHT = 0.8f;
@@ -388,6 +394,66 @@ public final class BehaviourGameTests {
         helper.assertTrue(spawned instanceof AddonEntity young && young.isBaby(),
             YOUNG_ENTITY + " declares minecraft:is_baby and reads as grown.");
         helper.succeed();
+    }
+
+    /**
+     * An entity that picks things up takes only what its pack lets it.
+     *
+     * `tp:warden` carries `minecraft:behavior.pickup_items` with neither a `minecraft:shareables`
+     * list nor `can_pickup_any_item`, which in Bedrock means it wants nothing lying about. Taking
+     * everything instead swallows whatever a pack drops beside it.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = PICKUP_PATIENCE + 20)
+    public void anEntityWithNoShareablesPicksNothingUp(GameTestHelper helper) {
+        EntityType<?> type = AddonEntities.typeOf(DWELLER);
+        if (type == null) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        Entity warden = Platform.createMob(type, level);
+        BlockPos at = helper.absolutePos(STAND);
+        Platform.placeAt(warden, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        level.addFreshEntity(warden);
+
+        net.minecraft.world.entity.item.ItemEntity dropped = new net.minecraft.world.entity.item.ItemEntity(
+            level, at.getX() + 1.5, at.getY(), at.getZ() + 0.5,
+            new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STICK));
+        level.addFreshEntity(dropped);
+
+        helper.runAfterDelay(PICKUP_PATIENCE, () -> {
+            helper.assertTrue(dropped.isAlive(), DWELLER + " declares no shareables and picked up a stick.");
+            helper.succeed();
+        });
+    }
+
+    /**
+     * A dweller is held near where it was placed, not near where it was built.
+     *
+     * `tp:warden` declares `minecraft:dweller` on itself, so its home is set as it arrives. The entity
+     * exists before it is put anywhere, and a home taken then walks it to the world's origin.
+     */
+    @GameTest()
+    public void aDwellerIsHeldWhereItWasPlaced(GameTestHelper helper) {
+        EntityType<?> type = AddonEntities.typeOf(DWELLER);
+        if (type == null) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        Entity spawned = Platform.createMob(type, level);
+        BlockPos at = helper.absolutePos(STAND);
+        Platform.placeAt(spawned, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        level.addFreshEntity(spawned);
+
+        helper.runAfterDelay(2, () -> {
+            BlockPos home = Platform.homeOf((net.minecraft.world.entity.Mob) spawned);
+            helper.assertTrue(at.equals(home), DWELLER + " was placed at " + at.toShortString()
+                + " and is held near " + (home == null ? "nowhere" : home.toShortString()) + ".");
+            helper.succeed();
+        });
     }
 
     /**

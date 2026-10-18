@@ -738,6 +738,16 @@ public class AddonEntity extends PathfinderMob
     /** How far below empty Java lets a mob's air fall before drowning hurts it. */
     private static final int DROWNED_AT = -20;
 
+    /** Whether the entity stands in a level, which it does not while it is being built. */
+    private boolean placed;
+
+    @Override
+    public void setLevelCallback(net.minecraft.world.level.entity.EntityInLevelCallback callback) {
+        super.setLevelCallback(callback);
+        placed = callback != net.minecraft.world.level.entity.EntityInLevelCallback.NULL;
+        if (placed && definition != null && !isClientSide()) refreshHome();
+    }
+
     /**
      * Where the entity is held, which `minecraft:home` and `minecraft:dweller` both state as a radius.
      *
@@ -748,6 +758,9 @@ public class AddonEntity extends PathfinderMob
      * the same as moving house.
      */
     private void refreshHome() {
+        // The entity is built before it is put anywhere, and a centre taken then is the world's origin.
+        if (!placed) return;
+
         String component = declaresNow("minecraft:home") ? "minecraft:home"
             : declaresNow("minecraft:dweller") ? "minecraft:dweller" : null;
         // `restriction_type` is `none` unless the pack says otherwise, which keeps a home without
@@ -1265,14 +1278,15 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
-     * Whether the pack's `shareables` list allows this item, which allows everything when absent.
+     * Whether the pack's `shareables` list allows this item.
      *
-     * `all_items` is the pack saying the list is a preference rather than a gate, so an entity
-     * declaring it takes whatever it finds.
+     * An entity with no list wants nothing: `can_pickup_any_item` on the pickup behaviour is how a
+     * pack says otherwise. `all_items` is the pack saying the list is a preference rather than a
+     * gate, so an entity declaring it takes whatever it finds.
      */
     public boolean shareable(net.minecraft.world.item.ItemStack stack) {
         com.google.gson.JsonObject body = liveComponent("minecraft:shareables");
-        if (body == null || !body.has("items")) return true;
+        if (body == null) return false;
         if (ServerEntityDefinition.flag(body, "all_items", false)) return true;
         return named(body, "items", stack);
     }
