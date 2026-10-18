@@ -50,8 +50,8 @@
       "at.ioexception.mcaddon.clientgametest.SplineCameraClientGameTest",
       "at.ioexception.mcaddon.clientgametest.CameraClientGameTest",
       "at.ioexception.mcaddon.clientgametest.CameraPresetClientGameTest",
-      "at.ioexception.mcaddon.clientgametest.ItemAndBlockClientGameTest",
-      "at.ioexception.mcaddon.clientgametest.PacketLimitClientGameTest"
+      "at.ioexception.mcaddon.clientgametest.ControlSchemeClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.ItemAndBlockClientGameTest"
     ]
   },
   "mixins": [
