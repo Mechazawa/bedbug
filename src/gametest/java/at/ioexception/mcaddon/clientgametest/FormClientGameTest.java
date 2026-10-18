@@ -14,10 +14,20 @@ import java.util.List;
  * The test add-on's handbook is a 2.x `CustomForm` whose pages are turned by buttons setting
  * observables. Turning a page has to leave the same screen open and redraw it with the other page,
  * and the promise the pack waits on has to settle only when a handler closes the form.
+ *
+ * The test add-on's ledger is a form taller than a small window. Its last buttons start out of
+ * sight; the wheel has to scroll them into view where a click with the pointer lands on them, and a
+ * redraw the pack sends while the form shows has to leave it scrolled where it was.
  */
 public final class FormClientGameTest implements FabricClientGameTest {
     private static final String FIRST_PAGE = "The first page tells of embers.";
     private static final String SECOND_PAGE = "The second page tells of sprites.";
+    private static final String TALLY = "Tally";
+    private static final String SIGN = "Sign the ledger";
+
+    /** Small enough at any scale the game picks that forty lines of text do not fit. */
+    private static final int SMALL_WIDTH = 640;
+    private static final int SMALL_HEIGHT = 360;
 
     @Override
     public void runTest(ClientGameTestContext context) {
@@ -39,7 +49,7 @@ public final class FormClientGameTest implements FabricClientGameTest {
                 "the same screen after a page turn", secondShown);
             expect(secondShown.contains("Handbook, page 2 of 2"), "the second page's heading", secondShown);
             expect(!secondShown.contains(FIRST_PAGE), "no text from the first page", secondShown);
-            expect(world.getServer().computeOnServer(server -> tagged(server).isEmpty()),
+            expect(world.getServer().computeOnServer(server -> tagged(server, "tp:handbook_").isEmpty()),
                 "the form's promise still waiting while it shows", secondShown);
 
             context.clickScreenButton("Put the book away");
@@ -52,23 +62,91 @@ public final class FormClientGameTest implements FabricClientGameTest {
             context.clickScreenButton("Close");
             context.waitForScreen(null);
             waitForTag(context, world, "tp:handbook_ClientClosed");
+
+            readTheLedger(context, world);
         }
+    }
+
+    private static void readTheLedger(ClientGameTestContext context, TestSingleplayerContext world) {
+        int[] window = context.computeOnClient(client -> new int[] {
+            client.getWindow().getWidth(), client.getWindow().getHeight()});
+        context.getInput().resizeWindow(SMALL_WIDTH, SMALL_HEIGHT);
+        try {
+            world.getServer().runCommand("bedrock execute as @a run scriptevent tp:ledger");
+            context.waitForScreen(AddonFormScreen.class);
+            expect(!inView(context, SIGN), "the ledger's last button out of sight before scrolling", shown(context));
+
+            context.getInput().setCursorPos(SMALL_WIDTH / 2.0, SMALL_HEIGHT / 2.0);
+            int before;
+            do {
+                before = top(context, SIGN);
+                context.getInput().scroll(-1);
+                context.waitTick();
+            } while (top(context, SIGN) != before);
+            expect(inView(context, SIGN), "the wheel to bring the ledger's last button into view", shown(context));
+
+            int scrolledTo = top(context, SIGN);
+            clickWithPointer(context, TALLY);
+            context.waitFor(client -> shown(Platform.currentScreen()).contains("Tallied 1 times"));
+            expect(top(context, SIGN) == scrolledTo, "the ledger scrolled where it was after the pack redrew"
+                + " it, with its last button at " + scrolledTo + " and not " + top(context, SIGN), shown(context));
+
+            clickWithPointer(context, SIGN);
+            context.waitForScreen(null);
+            waitForTag(context, world, "tp:ledger_signed");
+        } finally {
+            context.getInput().resizeWindow(window[0], window[1]);
+        }
+    }
+
+    private static AbstractWidget widget(Screen screen, String label) {
+        return screen.children().stream()
+            .filter(AbstractWidget.class::isInstance)
+            .map(AbstractWidget.class::cast)
+            .filter(widget -> widget.getMessage().getString().equals(label))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("No widget labelled " + label + " in " + shown(screen)));
+    }
+
+    private static int top(ClientGameTestContext context, String label) {
+        return context.computeOnClient(client -> widget(Platform.currentScreen(), label).getY());
+    }
+
+    private static boolean inView(ClientGameTestContext context, String label) {
+        return context.computeOnClient(client -> {
+            Screen screen = Platform.currentScreen();
+            AbstractWidget widget = widget(screen, label);
+            return widget.getY() >= 0 && widget.getY() + widget.getHeight() <= screen.height;
+        });
+    }
+
+    /** A click placed where the widget is drawn, which reaches a widget only while it is shown. */
+    private static void clickWithPointer(ClientGameTestContext context, String label) {
+        double[] centre = context.computeOnClient(client -> {
+            AbstractWidget widget = widget(Platform.currentScreen(), label);
+            int scale = client.getWindow().getGuiScale();
+            return new double[] {(widget.getX() + widget.getWidth() / 2.0) * scale,
+                (widget.getY() + widget.getHeight() / 2.0) * scale};
+        });
+        context.getInput().setCursorPos(centre[0], centre[1]);
+        context.getInput().pressMouse(0);
+        context.waitTick();
     }
 
     /** Asked from the test thread a tick at a time, because a server-side wait is not on every version. */
     private static void waitForTag(ClientGameTestContext context, TestSingleplayerContext world, String tag) {
         for (int tick = 0; tick < ClientGameTestContext.DEFAULT_TIMEOUT; tick++) {
-            if (world.getServer().computeOnServer(server -> tagged(server).contains(tag))) return;
+            if (world.getServer().computeOnServer(server -> tagged(server, "tp:").contains(tag))) return;
             context.waitTick();
         }
         throw new AssertionError("The form's promise never settled with " + tag);
     }
 
-    /** The handbook tags a player carries, which the script writes once the form's promise settles. */
-    private static List<String> tagged(net.minecraft.server.MinecraftServer server) {
+    /** The tags a player carries that the script writes once a form's promise settles. */
+    private static List<String> tagged(net.minecraft.server.MinecraftServer server, String prefix) {
         return server.getPlayerList().getPlayers().stream()
             .flatMap(player -> player.entityTags().stream())
-            .filter(tag -> tag.startsWith("tp:handbook_"))
+            .filter(tag -> tag.startsWith(prefix))
             .toList();
     }
 

@@ -347,7 +347,8 @@ add-ons, or with another release of it, is told which in chat.
 - Behaviour pack scripts against `@minecraft/server`, sandboxed: a script sees its own pack's files
   and nothing else on disk. Commands a script registers on startup become commands `/bedrock` runs,
   `@minecraft/server-ui` forms become real screens (a 2.x `CustomForm` stays open while its buttons
-  run their handlers and redraws as its observables change), and the world, system, entity, dimension, block,
+  run their handlers and redraws as its observables change, and a form taller than the window
+  scrolls under its heading), and the world, system, entity, dimension, block,
   scoreboard, game rule and structure surfaces are answered by the game. The game's own mobs, items
   and blocks reach a script under Bedrock's ids, so a Java villager's `typeId` is
   `minecraft:villager_v2`, a powered rail's is `minecraft:golden_rail` and a lit furnace's is
