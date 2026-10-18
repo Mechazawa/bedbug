@@ -181,6 +181,19 @@
           }
         }
       },
+      "tp:ember_hatchling": {
+        "minecraft:ageable": {
+          "duration": 1,
+          "drop_items": ["turtle_shell_piece"]
+        }
+      },
+      "tp:ember_picky": {
+        "minecraft:ageable": {
+          "duration": 1200,
+          "feed_items": [{ "item": "wheat", "growth": 1 }],
+          "interact_filters": { "test": "has_tag", "subject": "other", "value": "tp_feeder" }
+        }
+      },
       "tp:ember_small": {
         "minecraft:scale": {
           "value": 0.5
@@ -578,6 +591,16 @@
       "tp:ember_grow_young": {
         "add": {
           "component_groups": ["tp:ember_young"]
+        }
+      },
+      "tp:ember_hatch": {
+        "add": {
+          "component_groups": ["tp:ember_hatchling"]
+        }
+      },
+      "tp:ember_make_picky": {
+        "add": {
+          "component_groups": ["tp:ember_picky"]
         }
       },
       "tp:ember_wary_on": {

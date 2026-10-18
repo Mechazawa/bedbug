@@ -119,7 +119,12 @@ final class Goals {
             JsonArray pair = value.getAsJsonArray();
             return pair.size() > index ? pair.get(index).getAsDouble() : fallback;
         }
-        return value.isJsonObject() ? number(value.getAsJsonObject(), named, fallback) : fallback;
+        if (!value.isJsonObject()) return fallback;
+
+        // Bedrock spells the two ends `min` and `max` in some components and `range_min` and
+        // `range_max` in others.
+        JsonObject ends = value.getAsJsonObject();
+        return number(ends, named, number(ends, "range_" + named, fallback));
     }
 
     /** The controls a goal holds, which a pack names in `control_flags` and which default to none. */
