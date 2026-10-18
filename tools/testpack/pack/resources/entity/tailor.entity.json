@@ -1,0 +1,25 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "tp:tailor",
+      "materials": {
+        "default": "entity_alphatest",
+        "tailored": "tp_tailored",
+        "masked": "villager_v2_masked"
+      },
+      "textures": {
+        "base": "textures/entity/tailor_base",
+        "outfit": "textures/entity/tailor_outfit"
+      },
+      "geometry": {
+        "default": "geometry.tp.sprite"
+      },
+      "render_controllers": [
+        "controller.render.tp.tailor",
+        "controller.render.tp.tailor.vanilla",
+        "controller.render.tp.tailor.plain"
+      ]
+    }
+  }
+}

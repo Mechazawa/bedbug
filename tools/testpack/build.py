@@ -237,6 +237,25 @@ def prism_skin(body: tuple[int, int, int, int]):
     return paint
 
 
+# The tailor's base is one colour all over, and its outfit is four bands of sixteen columns each.
+TAILOR_BASE = (40, 70, 200, 255)
+TAILOR_OUTFIT = (200, 40, 40, 255)
+
+
+def tailor_base(x: int, y: int) -> tuple[int, int, int, int]:
+    return TAILOR_BASE
+
+
+def tailor_outfit(x: int, y: int) -> tuple[int, int, int, int]:
+    """The outfit a masked multitexture material draws over the base.
+
+    Bedrock keeps the base wherever the outfit holds a colour that is not fully opaque, so the four
+    bands are drawn as the outfit's red, the base under a clear white, nothing under a clear black,
+    and the base under a faint green.
+    """
+    return (TAILOR_OUTFIT, (255, 255, 255, 0), TRANSPARENT, (60, 200, 60, 64))[x // 16]
+
+
 def prism_mer(x: int, y: int) -> tuple[int, int, int, int]:
     """Metalness, emissive and roughness: only the mark's patch of the sheet glows."""
     if 32 <= x < 40 and y < 8:
@@ -308,6 +327,8 @@ TEXTURES = (
     ("textures/entity/prism_dyed.png", 64, prism_skin((200, 70, 120, 255))),
     ("textures/entity/prism_mer.png", 64, prism_mer),
     ("textures/entity/vane.png", 8, vane),
+    ("textures/entity/tailor_base.png", 64, tailor_base),
+    ("textures/entity/tailor_outfit.png", 64, tailor_outfit),
     ("textures/particle/particles.png", 128, particle_atlas),
 )
 

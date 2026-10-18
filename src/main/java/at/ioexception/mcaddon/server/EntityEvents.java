@@ -59,7 +59,7 @@ public final class EntityEvents {
      * something the behaviour pack decided without the two halves naming each other. The host holds
      * it until the next tick, because a listener that triggers another event is ordinary.
      */
-    private static void raiseDataDriven(Entity entity, String name) {
+    public static void raiseDataDriven(Entity entity, String name) {
         if (ServerHooks.scripts() == null) return;
 
         Map<String, Object> fields = new LinkedHashMap<>();

@@ -79,6 +79,22 @@ class MaterialDefinitionTest {
         assertFalse(material("entity", "", "Blending", "").needsStencil());
     }
 
+    @ParameterizedTest
+    @CsvSource({
+        "entity, 'MASKED_MULTITEXTURE ALPHA_TEST', '', true, true",
+        "villager_v2_masked, '', '', true, true",
+        "entity_multitexture_masked, '', 'ALPHA_TEST', true, false",
+        "villager_v2_masked, '', 'MASKED_MULTITEXTURE', false, true",
+        "entity_alphatest, '', '', false, true",
+    })
+    void masksTheSecondTextureOnItsDefineOrOnTheGamesMaskedMaterials(String parent, String defines,
+        String removedDefines, boolean masks, boolean tests) {
+        MaterialDefinition material = new MaterialDefinition("test", parent, words(defines), Set.of(), Set.of(),
+            words(removedDefines));
+        assertEquals(masks, material.masksSecondTexture());
+        assertEquals(tests, material.dropsFaintTexels());
+    }
+
     /** A child inherits its parent's defines and states, and its own removals win over both. */
     @Test
     void foldsAParentIntoTheChild() throws IOException {
