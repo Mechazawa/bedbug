@@ -379,6 +379,139 @@ public final class GoalGameTests {
     }
 
     /**
+     * `minecraft:behavior.eat_block` eats the block its pairs name under the entity, as often as its
+     * `success_chance` says, leaves the replacement and raises `on_eat`.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aGrazerEatsTheBlockItsPairsName(GameTestHelper helper) {
+        helper.setBlock(STAND.below(), Blocks.HAY_BLOCK);
+        AddonEntity brute = withGroup(helper, "tp:brute_graze");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.succeedWhen(() -> {
+            helper.assertBlockPresent(Blocks.DIRT, STAND.below());
+            helper.assertTrue(Boolean.TRUE.equals(brute.value("tp:grazed")),
+                BRUTE + " ate the hay and never raised on_eat.");
+        });
+    }
+
+    /**
+     * `minecraft:behavior.snacking` eats only the `items` it names, stops at once on a stop chance of
+     * one, and waits out its cooldown before it snacks again.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = SNACK_TICKS)
+    public void aSnackerEatsOnlyItsItemsAndThenWaits(GameTestHelper helper) {
+        AddonEntity snacker = withGroup(helper, "tp:brute_snack");
+        AddonEntity choosy = withGroup(helper, "tp:brute_snack", FAR_CORNER);
+        if (snacker == null) {
+            helper.succeed();
+            return;
+        }
+
+        snacker.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND,
+            new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.SWEET_BERRIES));
+        choosy.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND,
+            new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.BREAD));
+        helper.runAfterDelay(SNACKED_BY, () -> {
+            helper.assertTrue(snacker.getMainHandItem().isEmpty(),
+                BRUTE + " stops snacking on a stop chance of one and still holds its berries.");
+            snacker.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND,
+                new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.SWEET_BERRIES));
+        });
+        helper.runAfterDelay(SNACK_TICKS - 10, () -> {
+            helper.assertFalse(snacker.getMainHandItem().isEmpty(),
+                BRUTE + " snacked again inside a cooldown of a thousand seconds.");
+            helper.assertFalse(choosy.getMainHandItem().isEmpty(),
+                BRUTE + " snacked on bread, which its items do not name.");
+            helper.succeed();
+        });
+    }
+
+    /** Long past Java's three seconds of holding food before eating it. */
+    private static final int SNACK_TICKS = 140;
+    private static final int SNACKED_BY = 20;
+
+    /**
+     * `minecraft:behavior.lay_egg` lays only where the material above the block is one its
+     * `target_materials_above_block` names, so the nearer sand under a snow layer is passed over.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aLayerLaysOnlyUnderTheMaterialItNames(GameTestHelper helper) {
+        helper.setBlock(STAND.east(2).below(), Blocks.SAND);
+        helper.setBlock(STAND.east(2), Blocks.SNOW);
+        helper.setBlock(STAND.south(4).below(), Blocks.SAND);
+        AddonEntity brute = withGroup(helper, "tp:brute_nest");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.succeedWhen(() -> {
+            helper.assertBlockPresent(Blocks.TURTLE_EGG, STAND.south(4));
+            helper.assertBlockNotPresent(Blocks.TURTLE_EGG, STAND.east(2));
+        });
+    }
+
+    /**
+     * `minecraft:behavior.take_flower` takes a golem's flower only while its `filters` hold, and
+     * raises `on_take_flower` when it does.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = FLOWER_TICKS)
+    public void aFlowerTakerTakesOnlyWhileItsFiltersHold(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_take_flowers");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Entity golem = Platform.createMob(
+            BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("minecraft", "iron_golem")).orElseThrow(),
+            helper.getLevel());
+        BlockPos at = helper.absolutePos(STAND.east(4));
+        Platform.placeAt(golem, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        ((Mob) golem).setNoAi(true);
+        helper.getLevel().addFreshEntity(golem);
+        Platform.offerFlower(golem, true);
+
+        AtomicBoolean befriended = new AtomicBoolean();
+        helper.runAfterDelay(FLOWER_REFUSED_FOR, () -> {
+            helper.assertTrue(Platform.offersFlower(golem),
+                BRUTE + " took the flower while its filters said no.");
+            brute.addTag("tp_flower_friend");
+            befriended.set(true);
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(befriended.get(), BRUTE + " is not allowed the flower yet.");
+            helper.assertTrue(!Platform.offersFlower(golem),
+                BRUTE + " never took the flower once its filters allowed it.");
+            helper.assertTrue(Boolean.TRUE.equals(brute.value("tp:took_flower")),
+                BRUTE + " took the flower and never raised on_take_flower.");
+        });
+    }
+
+    private static final int FLOWER_REFUSED_FOR = 60;
+    private static final int FLOWER_TICKS = 200;
+
+    /** A stomper whose `search_range` is two blocks does not set off for an egg four blocks off. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = STOMP_TICKS)
+    public void aStomperLooksForEggsNoFurtherThanItsRange(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_stomp_near");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.setBlock(EGG, Blocks.TURTLE_EGG);
+        double start = brute.getX();
+        helper.onEachTick(() -> helper.assertTrue(brute.getX() - start < 1,
+            BRUTE + " walked towards an egg twice as far off as its search_range."));
+        helper.runAfterDelay(STOMP_TICKS - 10, helper::succeed);
+    }
+
+    /**
      * `minecraft:behavior.explore_outskirts` walks out past the edge of the village on the side the
      * entity stands, `explore_dist` beyond it.
      *

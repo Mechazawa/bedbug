@@ -454,11 +454,18 @@ These are the checks it runs, and what each one catches:
   The brute carries five more groups for goals that move it somewhere of its own choosing:
   `tp:brute_stomping` looks for turtle eggs every tick, `tp:brute_exploring` walks five blocks past
   the edge of a village, `tp:brute_village_bound` walks to the nearest village, `tp:brute_hiding`
-  runs to a bed when a bell rings and `tp:brute_playing` plays with a pig. `GoalGameTests` builds the
+  runs to a bed when a bell rings and `tp:brute_playing` plays with a pig. `tp:brute_stomping_near`
+  searches two blocks for eggs, `tp:brute_grazing` eats hay into dirt, `tp:brute_snacking` eats only
+  sweet berries and then waits, `tp:brute_nesting` lays on sand with nothing above it and
+  `tp:brute_flower_taking` takes a golem's flower once it is tagged. Java's own egg search can be
+  replaced by a speed mod with one over a fixed twenty-four blocks, so `StompEggGoal` searches in its
+  own `canUse`. `GoalGameTests` builds the
   village each one needs out of a bell or a bed in the empty structure, which Java registers as a
   point of interest the moment the block is set. The brute's `tp:arrived` property is set by its
   `minecraft:entity_spawned` and `minecraft:entity_born` events, which is how
   `GoalGameTests.aBredChildIsBornRatherThanSpawned` tells a bred child from a placed one.
+  The ember's `tp:ember_hatchling` grows up in a second and drops a turtle shell piece, and
+  `tp:ember_picky` takes wheat worth its whole wait only from a player tagged `tp_feeder`.
 
   Two more entities are there for what a mob walking about never reaches. One is a projectile with
   hit boxes wider than the box it collides in, which turns `isolated_physics` off the way Mojang's

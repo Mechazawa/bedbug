@@ -3,17 +3,24 @@ package at.ioexception.mcaddon.entity;
 import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.ServerHooks;
+import at.ioexception.mcaddon.util.Json;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.Comparator;
 import java.util.EnumSet;
+import java.util.List;
+import java.util.Locale;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * Walks to somewhere suitable, settles there a while and leaves an egg behind.
@@ -30,6 +37,7 @@ public final class LayEggGoal extends Goal {
     private final int laySeconds;
     private final double goalRadius;
     private final Set<Block> ground;
+    private final List<Predicate<BlockState>> roomAbove;
     private final Block egg;
     private final String layEvent;
     private BlockPos nest;
@@ -43,6 +51,7 @@ public final class LayEggGoal extends Goal {
         this.laySeconds = Goals.ticks(component, "lay_seconds", 10);
         this.goalRadius = Goals.number(component, "goal_radius", 0.5);
         this.ground = Goals.blocks(component, "target_blocks");
+        this.roomAbove = roomAbove(component);
         this.egg = named(Goals.text(component, "egg_type"));
         this.layEvent = Goals.event(component, "on_lay");
         setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.JUMP));
@@ -107,7 +116,30 @@ public final class LayEggGoal extends Goal {
     private boolean nestable(BlockPos at) {
         return (ground.isEmpty() || ground.contains(mob.level().getBlockState(at).getBlock()))
             && !mob.level().getBlockState(at).isAir()
-            && mob.level().getBlockState(at.above()).canBeReplaced();
+            && roomAbove.stream().anyMatch(material -> material.test(mob.level().getBlockState(at.above())));
+    }
+
+    /**
+     * What `target_materials_above_block` lets stand over the nest. Bedrock names three materials,
+     * and each is one kind of block state here: nothing at all, or a block of the one fluid.
+     */
+    private static List<Predicate<BlockState>> roomAbove(JsonObject component) {
+        List<String> named = component.has("target_materials_above_block")
+            ? Json.list(component, "target_materials_above_block").stream()
+                .filter(JsonElement::isJsonPrimitive)
+                .map(material -> material.getAsString().toLowerCase(Locale.ROOT))
+                .toList()
+            : List.of("air");
+        return named.stream().map(LayEggGoal::material).toList();
+    }
+
+    private static Predicate<BlockState> material(String named) {
+        return switch (named) {
+            case "water" -> state -> state.getFluidState().is(FluidTags.WATER) && state.getFluidState().isSource();
+            case "lava" -> state -> state.getFluidState().is(FluidTags.LAVA) && state.getFluidState().isSource();
+            case "air" -> BlockState::isAir;
+            default -> state -> false;
+        };
     }
 
     /** The block a pack lays, which is a turtle egg wherever the pack named nothing else. */

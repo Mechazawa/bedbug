@@ -20,7 +20,6 @@ import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.BreakDoorGoal;
 import net.minecraft.world.entity.ai.goal.BreathAirGoal;
-import net.minecraft.world.entity.ai.goal.EatBlockGoal;
 import net.minecraft.world.entity.ai.goal.FleeSunGoal;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.ai.goal.FollowMobGoal;
@@ -1982,27 +1981,6 @@ public class AddonEntity extends PathfinderMob
                 .forEach(effect -> addEffect(new net.minecraft.world.effect.MobEffectInstance(effect))));
     }
 
-    /**
-     * Taking the flower a golem is holding out, which is what `behavior.take_flower` waits for.
-     *
-     * Java's golem offers one and its own villager accepts; a pack's entity has to be walked over
-     * and made to take it, which is the whole of what the behaviour describes.
-     */
-    private void takeOfferedFlower() {
-        if (!declaresNow("minecraft:behavior.take_flower")) return;
-
-        net.minecraft.world.entity.Entity golem = Platform.offeredFlower(this, 8);
-        if (golem == null) return;
-
-        if (distanceTo(golem) > 2) {
-            getNavigation().moveTo(golem, 0.6);
-            return;
-        }
-        Platform.takeFlower(golem);
-        setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND,
-            new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.POPPY));
-    }
-
     /** Ticks of celebrating still owed, and whether the raid underfoot was already won last tick. */
     private int celebrateFor;
     private boolean sawRaidWon;
@@ -3125,7 +3103,7 @@ public class AddonEntity extends PathfinderMob
                 goals.add(priority, new BreathAirGoal(this));
 
             case "minecraft:behavior.eat_block" ->
-                goals.add(priority, new EatBlockGoal(this));
+                goals.add(priority, new GrazeGoal(this, goal));
             // Bedrock's find_cover and flee_sun both end with the mob standing out of the light.
             case "minecraft:behavior.flee_sun", "minecraft:behavior.find_cover" ->
                 goals.add(priority, new FleeSunGoal(this, 1.0));
@@ -3310,6 +3288,8 @@ public class AddonEntity extends PathfinderMob
                 new PlayDeadGoal(this, goal));
             case "minecraft:behavior.scared" -> goals.add(priority,
                 new ScaredGoal(this, goal));
+            case "minecraft:behavior.take_flower" -> goals.add(priority,
+                new TakeFlowerGoal(this, goal));
             case "minecraft:behavior.celebrate" -> goals.add(priority,
                 new CelebrateGoal(this, goal));
             case "minecraft:behavior.sneeze" -> goals.add(priority,
@@ -3382,11 +3362,10 @@ public class AddonEntity extends PathfinderMob
             // the same walk towards a willing partner that every other pack animal does.
             case "minecraft:behavior.make_love", "minecraft:behavior.receive_love" ->
                 goals.add(priority, new BreedGoal(this, goal));
-            // Napping is lying down, and snacking is eating what is already in hand.
             case "minecraft:behavior.nap" -> goals.add(priority,
                 RestGoal.lyingDown(this, goal));
             case "minecraft:behavior.snacking" -> goals.add(priority,
-                new EatCarriedItemGoal(this, goal));
+                new SnackGoal(this, goal));
 
             case "minecraft:behavior.admire_item" -> goals.add(priority,
                 BarterGoal.admiring(this, goal));
@@ -3628,7 +3607,6 @@ public class AddonEntity extends PathfinderMob
             rest();
             drink();
             leashChanged(isLeashed());
-            takeOfferedFlower();
             celebrate();
             rise();
             manageAsTrader();
@@ -4754,6 +4732,11 @@ public class AddonEntity extends PathfinderMob
     private void growUp() {
         if (age == null || !age.advance(1)) return;
 
+        age.drops().stream()
+            .map(AddonItems::named)
+            .filter(java.util.Objects::nonNull)
+            .forEach(item -> level().addFreshEntity(new net.minecraft.world.entity.item.ItemEntity(
+                level(), getX(), getY(), getZ(), new ItemStack(item))));
         setValue("is_baby", false);
         fire(age.grownEvent());
     }
@@ -5012,7 +4995,9 @@ public class AddonEntity extends PathfinderMob
     /** One of `minecraft:ageable`'s own feed items, which brings growing up forward. */
     private boolean grownByHand(Player player, InteractionHand hand) {
         ItemStack held = player.getItemInHand(hand);
-        if (age == null || !age.fed(held)) return false;
+        if (age == null || !age.fed(held, new Filter.Context(this, player, player, ServerHooks.state()))) {
+            return false;
+        }
 
         if (!player.getAbilities().instabuild) held.shrink(1);
         for (int i = 0; i < 5; i++) {
@@ -5559,6 +5544,11 @@ public class AddonEntity extends PathfinderMob
      * temporaries every other expression on the server reads and writes.
      */
     public boolean holds(String condition) {
+        return answer(condition).truthy();
+    }
+
+    /** What a Molang expression a component states comes to for the entity now, the same way. */
+    public at.ioexception.mcaddon.bedrock.molang.MolangValue answer(String expression) {
         if (questions == null) {
             questions = new at.ioexception.mcaddon.bedrock.animation.AnimationPlayer(null, this);
             questions.environment().setQueries(new at.ioexception.mcaddon.bedrock.entity.EntityQueries(
@@ -5571,8 +5561,8 @@ public class AddonEntity extends PathfinderMob
         }
         questions.environment().setLifeTime(
             tickCount / (float) at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.TICKS_PER_SECOND);
-        return at.ioexception.mcaddon.bedrock.molang.MolangParser.parse(condition)
-            .evaluate(questions.environment()).truthy();
+        return at.ioexception.mcaddon.bedrock.molang.MolangParser.parse(expression)
+            .evaluate(questions.environment());
     }
 
     private at.ioexception.mcaddon.bedrock.animation.AnimationPlayer questions;
