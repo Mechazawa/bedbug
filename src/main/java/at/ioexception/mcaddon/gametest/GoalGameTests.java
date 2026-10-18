@@ -1851,6 +1851,33 @@ public final class GoalGameTests {
         return value instanceof Number number ? number.doubleValue() : Double.NaN;
     }
 
+    /**
+     * An `entity_types` list admits whoever any one of its entries admits, and an entry written the
+     * older way, an `AND` group over numbered subjects and operators, is read as written: the sharing
+     * brute passes the cow beside it and hands its apple to the pig further off.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void anEntityTypesListPicksWhoAnItemIsSharedWith(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_share");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        brute.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND,
+            new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.APPLE));
+        standing(helper, "cow", STAND.south(2));
+        Mob pig = standing(helper, "pig", STAND.east(5));
+        helper.succeedWhen(() -> {
+            helper.assertTrue(brute.getMainHandItem().isEmpty(), BRUTE + " still holds its apple.");
+            helper.assertTrue(brute.distanceTo(pig) <= SHARED_NEAR,
+                BRUTE + " handed its apple over " + brute.distanceTo(pig) + " blocks from the pig.");
+        });
+    }
+
+    /** The share goal's default `goal_radius` of two, and a block of slack for where the walk ends. */
+    private static final double SHARED_NEAR = 3;
+
     /** A brute with its group on and its goals running. */
     private static AddonEntity withGroup(GameTestHelper helper, String event) {
         return withGroup(helper, event, STAND);
@@ -1881,20 +1908,26 @@ public final class GoalGameTests {
 
     /** A pig that stays where it is put, blows included, with the health the test asks for. */
     private static Mob pig(GameTestHelper helper, BlockPos where, float health) {
-        ServerLevel level = helper.getLevel();
-        Entity created = Platform.createMob(
-            BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("minecraft", "pig")).orElseThrow(), level);
-        helper.assertTrue(created instanceof Mob, "A pig could not be made.");
-
-        Mob pig = (Mob) created;
-        BlockPos at = helper.absolutePos(where);
-        Platform.placeAt(pig, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
-        pig.setNoAi(true);
+        Mob pig = standing(helper, "pig", where);
         pig.getAttribute(Attributes.MAX_HEALTH).setBaseValue(health);
         pig.setHealth(health);
         // A blow would otherwise knock it out of the reach a test is measuring something else at.
         pig.getAttribute(Attributes.KNOCKBACK_RESISTANCE).setBaseValue(1);
-        level.addFreshEntity(pig);
         return pig;
+    }
+
+    /** One of the game's own mobs, with no goals of its own, where the test puts it. */
+    private static Mob standing(GameTestHelper helper, String kind, BlockPos where) {
+        ServerLevel level = helper.getLevel();
+        Entity created = Platform.createMob(
+            BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("minecraft", kind)).orElseThrow(), level);
+        helper.assertTrue(created instanceof Mob, "A " + kind + " could not be made.");
+
+        Mob mob = (Mob) created;
+        BlockPos at = helper.absolutePos(where);
+        Platform.placeAt(mob, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        mob.setNoAi(true);
+        level.addFreshEntity(mob);
+        return mob;
     }
 }

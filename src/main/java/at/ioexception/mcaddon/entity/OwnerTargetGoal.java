@@ -42,7 +42,7 @@ public final class OwnerTargetGoal extends Goal {
         this.withinRadius = defending ? Goals.number(component, "within_radius", 0) : 0;
         this.mustSee = defending && Goals.flag(component, "must_see", false);
         this.startEvent = defending ? Goals.event(component, "on_defend_start") : null;
-        this.allowed = Goals.filter(component, "entity_types");
+        this.allowed = Filter.entityTypes(component);
         setFlags(EnumSet.of(Goal.Flag.TARGET));
     }
 

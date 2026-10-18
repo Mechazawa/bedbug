@@ -880,6 +880,39 @@
             }
           ]
         }
+      },
+      "tp:brute_sharing": {
+        "minecraft:behavior.share_items": {
+          "priority": 1,
+          "max_dist": 8,
+          "entity_types": [
+            {
+              "filters": {
+                "AND": [
+                  {
+                    "test": "is_family",
+                    "subject": 1,
+                    "operator": 1,
+                    "value": "cow"
+                  },
+                  {
+                    "test": "is_family",
+                    "subject": 1,
+                    "operator": 0,
+                    "value": "pig"
+                  }
+                ]
+              }
+            },
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "chicken"
+              }
+            }
+          ]
+        }
       }
     },
     "components": {
@@ -1444,6 +1477,13 @@
         "add": {
           "component_groups": [
             "tp:brute_playing"
+          ]
+        }
+      },
+      "tp:brute_share": {
+        "add": {
+          "component_groups": [
+            "tp:brute_sharing"
           ]
         }
       },
