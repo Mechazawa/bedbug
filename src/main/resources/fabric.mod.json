@@ -26,7 +26,8 @@
       "at.ioexception.mcaddon.gametest.PlayerGameTests",
       "at.ioexception.mcaddon.gametest.CommandGameTests",
       "at.ioexception.mcaddon.gametest.NamesGameTests",
-      "at.ioexception.mcaddon.gametest.ScriptGameTests"
+      "at.ioexception.mcaddon.gametest.ScriptGameTests",
+      "at.ioexception.mcaddon.gametest.RegistryGameTests"
     ]
   },
   "mixins": [
