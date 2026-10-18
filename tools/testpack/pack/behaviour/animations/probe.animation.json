@@ -7,6 +7,13 @@
       "timeline": {
         "0.25": "@s tp:ember_glow"
       }
+    },
+    "animation.tp.perch.journeyman": {
+      "loop": true,
+      "animation_length": 0.05,
+      "timeline": {
+        "0.0": "/tag @s add tp_perch_journeyman"
+      }
     }
   }
 }

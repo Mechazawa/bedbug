@@ -8,9 +8,11 @@ import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -19,6 +21,9 @@ import net.minecraft.world.entity.ai.control.FlyingMoveControl;
 import net.minecraft.world.entity.ai.navigation.FlyingPathNavigation;
 import net.minecraft.world.entity.ai.navigation.WallClimberNavigation;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.npc.villager.Villager;
+import net.minecraft.world.entity.npc.villager.VillagerData;
+import net.minecraft.world.entity.npc.villager.VillagerProfession;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.item.Item;
@@ -1509,6 +1514,65 @@ public final class BehaviourGameTests {
         helper.assertTrue(ember.getControllingPassenger() == rider,
             ENTITY + " gained minecraft:input_ground_controlled from a group and steers itself.");
         helper.succeed();
+    }
+
+    /**
+     * A seat's `rotate_rider_by` is asked every tick as the rider, turns the rider by what it
+     * answers, and leaves its temporaries where the mount's own scripts read them.
+     *
+     * `tp:perch` seats a villager the way a pack learns a Java villager's level: the seat writes the
+     * rider's `query.trade_tier` and where the rider sits into temporaries, the perch's animate list
+     * copies the tier into a variable when that place is its own, and the first state of its
+     * controller plays a clip tagging the perch for a journeyman before a transition on `1` leaves
+     * it. A journeyman is Java's level three and Bedrock's tier two. The seat turns a villager a
+     * quarter turn back from the way the perch faces and locks it there.
+     */
+    @GameTest()
+    public void aSeatAsksItsRiderWhatItTradesAndTurnsIt(GameTestHelper helper) {
+        AddonEntity perch = spawn(helper, PERCH);
+        if (perch == null) {
+            helper.succeed();
+            return;
+        }
+        perch.setYRot(PERCH_FACING);
+
+        ServerLevel level = helper.getLevel();
+        Villager villager = (Villager) Platform.createMob(BuiltInRegistries.ENTITY_TYPE
+            .getOptional(Platform.id("minecraft", "villager")).orElseThrow(), level);
+        Platform.placeAt(villager, perch.getX(), perch.getY(), perch.getZ(), 0f, 0f);
+        villager.setNoAi(true);
+        villager.setVillagerData(journeyman(villager, level));
+        level.addFreshEntity(villager);
+        helper.assertTrue(villager.startRiding(perch), PERCH + " would not seat a villager.");
+
+        helper.runAfterDelay(SEATED_TICKS, () -> {
+            helper.assertTrue(Platform.tagsOf(perch).contains("tp_perch_settled"),
+                PERCH + "'s controller never left its first state: " + Platform.tagsOf(perch));
+            helper.assertTrue(Platform.tagsOf(perch).contains("tp_perch_journeyman"),
+                PERCH + " never learnt from its seat that a journeyman sat on it: " + Platform.tagsOf(perch));
+            float off = Mth.wrapDegrees(villager.getYRot() - (PERCH_FACING + SEAT_TURN));
+            helper.assertTrue(Math.abs(off) < 0.01f, "The villager on " + PERCH + " faces " + villager.getYRot()
+                + " where its seat turns it to " + (PERCH_FACING + SEAT_TURN) + ".");
+            helper.succeed();
+        });
+    }
+
+    private static final String PERCH = "tp:perch";
+    private static final float PERCH_FACING = 30f;
+
+    /** What `tp:perch`'s seat answers for a rider of the villager family. */
+    private static final float SEAT_TURN = -90f;
+
+    /** Enough for the perch to have run its first state and left it. */
+    private static final int SEATED_TICKS = 5;
+
+    private static VillagerData journeyman(Villager villager, ServerLevel level) {
+        //? if >=1.21.5 {
+        return villager.getVillagerData().withProfession(level.registryAccess(), VillagerProfession.FARMER)
+            .withLevel(3);
+        //?} else {
+        /*return villager.getVillagerData().setProfession(VillagerProfession.FARMER).setLevel(3);
+        *///?}
     }
 
     /**

@@ -18,7 +18,8 @@
       "render_controllers": [
         "controller.render.tp.tailor",
         "controller.render.tp.tailor.vanilla",
-        "controller.render.tp.tailor.plain"
+        "controller.render.tp.tailor.plain",
+        "controller.render.tp.tailor.hemmed"
       ]
     }
   }

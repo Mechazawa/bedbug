@@ -26,6 +26,27 @@
           ]
         }
       }
+    },
+    "controller.animation.tp.perch.settle": {
+      "initial_state": "seated",
+      "states": {
+        "seated": {
+          "on_entry": [
+            "variable.settled_tier = variable.rider_tier ?? -1;"
+          ],
+          "animations": [
+            { "journeyman": "variable.settled_tier == 2" }
+          ],
+          "transitions": [
+            { "settled": "1" }
+          ]
+        },
+        "settled": {
+          "on_entry": [
+            "/tag @s add tp_perch_settled"
+          ]
+        }
+      }
     }
   }
 }

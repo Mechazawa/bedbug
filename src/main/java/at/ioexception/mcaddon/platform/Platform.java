@@ -1694,6 +1694,15 @@ public final class Platform {
         *///?}
     }
 
+    /** A villager's level, from one for a novice to five for a master. */
+    public static int villagerLevel(VillagerData data) {
+        //? if >=1.21.5 {
+        return data.level();
+        //?} else {
+        /*return data.getLevel();
+        *///?}
+    }
+
     /** The biome a villager comes from, by the name its type is registered under. */
     public static String villagerType(VillagerData data) {
         //? if >=1.21.5 {

@@ -461,7 +461,24 @@ These are the checks it runs, and what each one catches:
   `villager_v2_masked`, and through `entity_alphatest`, which binds the first texture alone. Its base
   is blue all over and its outfit is four bands of an opaque red, a clear white, a clear black and a
   faint green, so `RenderControllerClientGameTest` reads red, blue, nothing and blue off the image
-  each masked pass binds, and blue four times off the plain one.
+  each masked pass binds, and blue four times off the plain one. A fourth controller gives the body
+  `entity_alphatest` and every bone matching `*ARK` the game's `villager_v2_masked`, under a grey
+  `color`: the test reads two passes off it, the plain one drawing the body alone in grey and the
+  masked one drawing the spark alone and untinted, because Bedrock's masked multitexture shader reads
+  no controller colour. A pattern starting with its star and written in other capitals than the bone
+  is what Mojang's own `*leg` and a pack's careless casing look like.
+
+  `tp:perch` is a seat for a villager, written the way a pack learns a Java villager's level. Its
+  seat's `rotate_rider_by` writes the rider's `query.trade_tier` and where it sits into temporaries
+  and answers a quarter turn for the villager family, with `lock_rider_rotation` at nought; its
+  animate list copies the tier into a variable when the place written is its own; and the first state
+  of its controller plays a clip tagging the perch `tp_perch_journeyman` for tier two, then leaves on
+  `1` for a state tagging it `tp_perch_settled`.
+  `BehaviourGameTests.aSeatAsksItsRiderWhatItTradesAndTurnsIt` seats a journeyman farmer on it and
+  reads both tags and the villager's facing back. That one test fails when any of these goes: the seat
+  asked as the rider every tick before the mount's scripts, the temporaries every server expression
+  shares, a Java villager's tier and families, a family list letting the villager on, or the first
+  state's clips playing on the tick the controller starts.
 
   The recipes cover the seven kinds and the fields that decide what each becomes: a furnace recipe
   naming four cookers and an unlock item, a shapeless one tagged for the stonecutter and unlocked by
