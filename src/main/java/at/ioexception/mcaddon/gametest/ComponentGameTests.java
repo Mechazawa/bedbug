@@ -7,6 +7,7 @@ import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.navigation.WaterBoundPathNavigation;
 import net.minecraft.world.InteractionHand;
@@ -700,6 +701,8 @@ public final class ComponentGameTests {
         player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.WHEAT));
         EntityEvents.trigger(ember, "tp:ember_hunger", null, ServerHooks.state());
         ember.setNoAi(false);
+        // Its random stroll runs at a lower priority and would carry it into reach during the first stretch.
+        ember.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(0);
 
         Platform.placeAt(player, ember.getX() + FAR_ACROSS, ember.getY(), ember.getZ(), 0f, 0f);
         boolean[] early = {false};

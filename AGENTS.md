@@ -122,6 +122,14 @@ These are the checks it runs, and what each one catches:
   tick costs the tick rather than the server, and that a converted dimension and its dimension type
   decode through this version's own codecs, whose field lists differ on each of the four.
 
+  **Hunting a flaky game test.** The whole suite takes about forty seconds, so repeat it. A single
+  test runs with `JAVA_TOOL_OPTIONS=-Dfabric-api.gametest.filter='mcaddon:*<snake_case_name>*'` (the
+  id is the class and method in snake case, and the wildcard needs the `mcaddon:` prefix).
+  Adding `-Dfabric-api.gametest.verify=true` runs 400 copies of each match, 100 in each of four
+  rotations, at once. A test that reads absolute offsets fails in the three turned copies by
+  construction, so read only the unturned ones. Fabric's `@GameTest` allows 20 ticks unless `maxTicks`
+  says more.
+
   The run directory is `versions/<minecraft>/build/run/gameTest/`. No pack content is committed, so
   the two tests that need one succeed when none is loaded; dropping a `.mcaddon` into that
   directory's `addons/` gives them something to assert against.
