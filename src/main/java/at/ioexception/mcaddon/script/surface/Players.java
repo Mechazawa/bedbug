@@ -1,13 +1,16 @@
 package at.ioexception.mcaddon.script.surface;
 
+import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
 import at.ioexception.mcaddon.bedrock.hud.HudElement;
 import at.ioexception.mcaddon.bedrock.input.InputPermission;
 import at.ioexception.mcaddon.client.render.BedrockParticles;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.registry.AddonParticles;
 import at.ioexception.mcaddon.script.ScriptCoverage;
 import at.ioexception.mcaddon.server.PlayerHuds;
 import at.ioexception.mcaddon.server.PlayerInputs;
+import at.ioexception.mcaddon.server.PropertyOverrides;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -28,6 +31,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.scores.Objective;
 import org.graalvm.polyglot.HostAccess;
 
@@ -487,6 +491,48 @@ public final class Players extends Surface {
         //?} else {
         /*return null;
         *///?}
+    }
+
+    // Property overrides
+
+    /**
+     * `Player.setPropertyOverrideForEntity`, or `removePropertyOverrideForEntity` when the value is
+     * null. Answers why it was refused, which the script side raises as Bedrock does, or null.
+     */
+    @HostAccess.Export
+    public String overrideProperty(String id, String entityId, String name, String valueJson) {
+        ServerPlayer player = player(id);
+        Entity entity = entity(entityId);
+        if (player == null || entity == null) return "The entity is not valid.";
+
+        ServerEntityDefinition definition = AddonEntities.definitionOf(entity.getType());
+        ServerEntityDefinition.Property property = definition == null ? null : definition.properties().get(name);
+        if (property == null) return "No property " + name + " on " + AddonEntities.identifierOf(entity.getType());
+        if (!property.clientSync()) return name + " is not client_sync, so no client draws from it.";
+        if (valueJson == null) {
+            PropertyOverrides.remove(player, entity, name);
+            return null;
+        }
+
+        JsonElement parsed = JsonParser.parseString(valueJson);
+        Object value = !parsed.isJsonPrimitive() ? null
+            : parsed.getAsJsonPrimitive().isBoolean() ? (Object) parsed.getAsBoolean()
+            : parsed.getAsJsonPrimitive().isNumber() ? (Object) parsed.getAsDouble()
+            : parsed.getAsString();
+        String refusal = property.refusal(value);
+        if (refusal == null) PropertyOverrides.set(player, entity, name, value);
+        return refusal;
+    }
+
+    /** `Player.clearPropertyOverridesForEntity`, false where the entity is not valid. */
+    @HostAccess.Export
+    public boolean clearPropertyOverrides(String id, String entityId) {
+        ServerPlayer player = player(id);
+        Entity entity = entity(entityId);
+        if (player == null || entity == null) return false;
+
+        PropertyOverrides.clear(player, entity);
+        return true;
     }
 
     // Helpers, not exported

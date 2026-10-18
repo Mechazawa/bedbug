@@ -167,7 +167,7 @@ These are the checks it runs, and what each one catches:
     client may have no audio device and the engine drops a sound before any listener hears it then.
 
   `RenderControllerClientGameTest`, `AnimationClientGameTest`, `AttachableClientGameTest`,
-  `TextureMeshClientGameTest`, `CullingClientGameTest`, `ParticleClientGameTest`, `FogClientGameTest`,
+  `TextureMeshClientGameTest`, `RelativeRotationClientGameTest`, `CullingClientGameTest`, `ParticleClientGameTest`, `FogClientGameTest`,
   `CameraClientGameTest` and `ItemAndBlockClientGameTest` are the drawing side's tests; each class's docblock names the pack
   content it reads and what it asserts. Two things about the machine the tests run on: a window
   hidden by the compositor can stall the render thread inside `glfwSwapBuffers` until the server's
@@ -245,9 +245,9 @@ These are the checks it runs, and what each one catches:
   `ServerEntityClientGameTest` follows a wisp's type, a `client_sync` property, a component group's
   box and drawn size, a wisp settled before the client could see it, and `/bedrock playanimation` on a wisp
   and a villager; `ServerPlayerClientGameTest` adds a second player, `Bystander`, and asserts a form,
-  `/camera`, `/camerashake` and `/fog` reach the player they name and nobody else, that a form's
-  answer counts only from its own player, and that the test pack's eight hundred button catalogue
-  arrives whole.
+  `/camera`, `/camerashake`, `/fog` and a property a script overrides for one player reach the
+  player they name and nobody else, that a form's answer counts only from its own player, and that
+  the test pack's eight hundred button catalogue arrives whole.
 
   What the dedicated server runs on: Fabric starts it with `net.minecraft.server.Main` inside the
   client's own process and in the same run directory, so it has the same mods, reads the same
@@ -433,6 +433,17 @@ These are the checks it runs, and what each one catches:
   is set, so the whole chain from a timeline to a render controller reads off one colour. Neither
   of the sprite's controllers states an `is_hurt_color`, so a hurt sprite is drawn with the red
   every Bedrock entity flashes.
+
+  `tp:gaze` is the one entity whose animation turns a bone `relative_to` the entity. Its body leans
+  45 degrees forward and its head, a child of the body, is turned 30 degrees about the vertical in
+  the entity's frame. `RelativeRotationClientGameTest` reads the head's corners back: carried to
+  where the leaning body puts its pivot, standing level and turned 30 degrees. A head turned in its
+  parent's frame leans with the body and fails it.
+
+  `tp:pedlar` is a trader with a trade table, a look at the trading player and a stroll it starts at
+  every chance, and no `minecraft:behavior.trade_with_player`.
+  `BehaviourGameTests.aTraderWithNoTradingGoalStandsStillWhileTrading` gives it a customer and
+  asks that it stands still, then takes the customer away and asks that it walks.
 
   `tp:fade` is the particle painted by curves: one of each of the four kinds, read off
   `variable.particle_age`, sets its alpha, its red, its green and its size, and the bezier chain
@@ -649,6 +660,9 @@ These are the checks it runs, and what each one catches:
   player's camera and stop it, which only a client can show, so `CameraShakeClientGameTest` reads
   the shake back off the client. The script also refuses to let anything tagged `tp:untameable` be
   tamed, tags whatever a player tamed, and tags a player crouching and standing up again.
+  `tp:override` overrides the nearest wisp's `tp:settled` to false for the player who sent it, which
+  a wisp settled a second after arriving is not, and tags that player when an override of a property
+  the wisp never declared is refused; `tp:override_clear` clears the override again.
 - **`tools/testpack/build_modules.py`** builds a second add-on, whose script imports every
   `@minecraft/*` module the mod provides and calls one thing from each. Its sources are a manifest
   and one script under `tools/testpack/modules/`.
