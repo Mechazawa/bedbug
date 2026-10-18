@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 
 /**
@@ -309,14 +310,11 @@ public record ItemDefinition(String identifier, String iconKey, String displayNa
     }
 
     /** The causes `minecraft:damage_absorption` takes for whoever wears this. */
-    public List<String> absorbedCauses() {
+    public Set<DamageCause> absorbedCauses() {
         JsonObject absorption = components.get("minecraft:damage_absorption");
-        if (absorption == null) return List.of();
+        if (absorption == null) return Set.of();
 
-        return Json.list(absorption, "absorbable_causes").stream()
-            .filter(JsonElement::isJsonPrimitive)
-            .map(JsonElement::getAsString)
-            .toList();
+        return DamageCause.allNamed(Json.list(absorption, "absorbable_causes"));
     }
 
     /** The items `minecraft:repairable` accepts for repairing this one. */

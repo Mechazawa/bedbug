@@ -38,6 +38,15 @@
         "tp:alighted": {
           "type": "bool",
           "default": false
+        },
+        "tp:arrived": {
+          "type": "enum",
+          "values": [
+            "unknown",
+            "spawned",
+            "born"
+          ],
+          "default": "unknown"
         }
       }
     },
@@ -845,6 +854,16 @@
           "component_groups": [
             "tp:brute_digging"
           ]
+        }
+      },
+      "minecraft:entity_spawned": {
+        "set_property": {
+          "tp:arrived": "spawned"
+        }
+      },
+      "minecraft:entity_born": {
+        "set_property": {
+          "tp:arrived": "born"
         }
       }
     }

@@ -52,7 +52,8 @@ public final class AddonItems {
     private static final List<Item> DYEABLE = new ArrayList<>();
     private static final Set<Item> KEPT = new HashSet<>();
     private static final Map<Item, String> PROJECTILES = new LinkedHashMap<>();
-    private static final Map<Item, Set<String>> ABSORBED = new LinkedHashMap<>();
+    private static final Map<Item, Set<at.ioexception.mcaddon.bedrock.behaviour.DamageCause>> ABSORBED =
+        new LinkedHashMap<>();
     private static final Map<Item, Set<String>> COMPONENTS = new LinkedHashMap<>();
     private static final Map<Item, KineticTimings> KINETIC = new LinkedHashMap<>();
     private static final Map<Item, Float> COOLDOWNS = new LinkedHashMap<>();
@@ -265,14 +266,14 @@ public final class AddonItems {
      * an item the pack gave none of has nothing to spend and is reported as a gap instead.
      */
     private static void absorption(ItemDefinition definition, Item item) {
-        List<String> causes = definition.absorbedCauses();
+        var causes = definition.absorbedCauses();
         if (causes.isEmpty()) return;
 
         if (definition.durability() <= 0) {
             AddonEntities.unsupported("minecraft:damage_absorption without durability");
             return;
         }
-        ABSORBED.put(item, Set.copyOf(causes));
+        ABSORBED.put(item, causes);
     }
 
     /**
@@ -286,12 +287,11 @@ public final class AddonItems {
         net.minecraft.world.damagesource.DamageSource source, float amount) {
         if (ABSORBED.isEmpty()) return false;
 
-        String cause = at.ioexception.mcaddon.server.DamageSources.causeOf(source);
         for (EquipmentSlot slot : ARMOUR) {
             net.minecraft.world.item.ItemStack worn = hurt.getItemBySlot(slot);
-            Set<String> causes = ABSORBED.get(worn.getItem());
+            var causes = ABSORBED.get(worn.getItem());
             if (causes == null || !worn.isDamageableItem()) continue;
-            if (!causes.contains(cause) && !causes.contains("all")) continue;
+            if (causes.stream().noneMatch(cause -> cause.matches(source))) continue;
 
             int spent = worn.getDamageValue() + Math.max(1, (int) Math.ceil(amount));
             if (spent >= worn.getMaxDamage()) {

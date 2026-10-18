@@ -13,6 +13,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -30,7 +31,9 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * What a pack's behaviours do that only a running world can show.
@@ -1715,6 +1718,49 @@ public final class BehaviourGameTests {
             ENTITY + " was hurt carrying a minecraft:damage_sensor and never ran its event.");
         helper.assertTrue(ember.getHealth() == whole,
             ENTITY + " carries a sensor refusing the damage and lost health anyway.");
+        helper.succeed();
+    }
+
+    /**
+     * Each trigger of a `minecraft:damage_sensor` hears the cause it names in Bedrock's words.
+     *
+     * Java hurts with damage types whose names are not Bedrock's: a mob's blow is `mob_attack`, a
+     * block closing over the head is `in_wall` and a cactus is `cactus`. The sensor names them
+     * `entity_attack`, `suffocation` and `contact`, so each trigger here marks the cause it heard and
+     * a blow no trigger names marks nothing and lands.
+     */
+    @GameTest()
+    public void aDamageSensorHearsEachCauseByBedrocksName(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        AddonEntity other = spawn(helper, ENTITY);
+        if (ember == null || other == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_sense_on", null, ServerHooks.state());
+        var sources = helper.getLevel().damageSources();
+        Map<String, DamageSource> blows = new LinkedHashMap<>();
+        blows.put("fall", sources.fall());
+        blows.put("attack", sources.mobAttack(other));
+        blows.put("projectile", sources.thrown(other, other));
+        blows.put("drowning", sources.drown());
+        blows.put("suffocation", sources.inWall());
+        blows.put("contact", sources.cactus());
+        blows.put("nothing", sources.magic());
+
+        blows.forEach((felt, blow) -> {
+            ember.setValue("tp:felt", "nothing");
+            ember.invulnerableTime = 0;
+            float before = ember.getHealth();
+            Platform.hurt(ember, helper.getLevel(), blow, SCRATCH);
+            helper.assertTrue(felt.equals(ember.value("tp:felt")), ENTITY + " was hurt by "
+                + blow.getMsgId() + " and its sensor heard " + ember.value("tp:felt") + ", not " + felt);
+            boolean refused = !felt.equals("attack") && !felt.equals("nothing");
+            helper.assertTrue(refused == (ember.getHealth() == before), ENTITY + " was hurt by "
+                + blow.getMsgId() + (refused ? ", which its sensor refuses, and lost health."
+                    : " and kept its health."));
+        });
         helper.succeed();
     }
 

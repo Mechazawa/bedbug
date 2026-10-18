@@ -1,16 +1,15 @@
 package at.ioexception.mcaddon.entity;
 
-import at.ioexception.mcaddon.server.DamageSources;
+import at.ioexception.mcaddon.bedrock.behaviour.DamageCause;
 import at.ioexception.mcaddon.util.Json;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.PanicGoal;
 
+import java.util.EnumSet;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Runs about after being hurt by one of the causes `minecraft:behavior.panic` lists.
@@ -22,15 +21,18 @@ import java.util.stream.Collectors;
  */
 public final class PanickingGoal extends PanicGoal {
     /** Bedrock's own list, which a pack naming no causes panics at. */
-    private static final Set<String> DEFAULT_CAUSES = Set.of("campfire", "fire", "fire_tick", "freezing",
-        "lava", "lightning", "magma", "soul_campfire", "temperature", "entity_attack", "entity_explosion",
-        "fireworks", "magic", "projectile", "ram_attack", "sonic_boom", "wither", "mace_smash");
+    private static final Set<DamageCause> DEFAULT_CAUSES = EnumSet.of(DamageCause.CAMPFIRE,
+        DamageCause.FIRE, DamageCause.FIRE_TICK, DamageCause.FREEZING, DamageCause.LAVA,
+        DamageCause.LIGHTNING, DamageCause.MAGMA, DamageCause.SOUL_CAMPFIRE, DamageCause.TEMPERATURE,
+        DamageCause.ENTITY_ATTACK, DamageCause.ENTITY_EXPLOSION, DamageCause.FIREWORKS, DamageCause.MAGIC,
+        DamageCause.PROJECTILE, DamageCause.RAM_ATTACK, DamageCause.SONIC_BOOM, DamageCause.WITHER,
+        DamageCause.MACE_SMASH);
 
     /** How far round the entity Java's own goal looks for water, in blocks. */
     private static final int WATER_SEARCH = 5;
 
     private final AddonEntity panicking;
-    private final Set<String> causes;
+    private final Set<DamageCause> causes;
     private final boolean ignoresMobs;
     private final boolean forced;
     private final boolean prefersWater;
@@ -43,10 +45,7 @@ public final class PanickingGoal extends PanicGoal {
         super(panicking, Goals.number(component, "speed_multiplier", 1));
         this.panicking = panicking;
         this.causes = component.has("damage_sources")
-            ? Json.list(component, "damage_sources").stream()
-                .filter(JsonElement::isJsonPrimitive)
-                .map(JsonElement::getAsString)
-                .collect(Collectors.toUnmodifiableSet())
+            ? DamageCause.allNamed(Json.list(component, "damage_sources"))
             : DEFAULT_CAUSES;
         this.ignoresMobs = Goals.flag(component, "ignore_mob_damage", false);
         this.forced = Goals.flag(component, "force", false);
@@ -64,7 +63,7 @@ public final class PanickingGoal extends PanicGoal {
         DamageSource hurt = panicking.getLastDamageSource();
         if (hurt == null) return false;
         if (ignoresMobs && hurt.getEntity() instanceof Mob) return false;
-        return causes.contains(DamageSources.componentCauseOf(hurt));
+        return causes.stream().anyMatch(cause -> cause.matches(hurt));
     }
 
     @Override

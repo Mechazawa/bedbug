@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.server;
 
 import at.ioexception.mcaddon.bedrock.behaviour.BlockDefinition;
+import at.ioexception.mcaddon.bedrock.behaviour.DamageCause;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
@@ -31,6 +32,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -234,7 +236,7 @@ public final class BlockEvents {
     private static void damage(Damage response, ServerLevel level, BlockPos position, Entity actor) {
         if (actor == null || response.amount() <= 0) return;
 
-        Platform.hurt(actor, level, level.damageSources().generic(), (float) response.amount());
+        Platform.hurt(actor, level, response.cause().source(level.registryAccess(), null), (float) response.amount());
     }
 
     /** `add_mob_effect` and `remove_mob_effect` both act on whoever set the event off. */
@@ -455,7 +457,8 @@ public final class BlockEvents {
             case "play_effect" -> named(body, "effect") == null ? null
                 : new PlayEffect(named(body, "effect"),
                     Math.max(1, (int) number(body, "particle_count")));
-            case "damage" -> new Damage(number(body, "amount"));
+            case "damage" -> new Damage(number(body, "amount"), Objects.requireNonNullElse(
+                DamageCause.named(Json.text(body, "type", "none")), DamageCause.NONE));
             case "add_mob_effect" -> named(body, "effect") == null ? null
                 : new ChangeEffect(named(body, "effect"), true,
                     number(body, "duration"), (int) number(body, "amplifier"));
@@ -549,7 +552,7 @@ public final class BlockEvents {
         implements Response {
     }
 
-    private record Damage(double amount) implements Response {
+    private record Damage(double amount, DamageCause cause) implements Response {
     }
 
     private record ChangeEffect(net.minecraft.resources.Identifier effect, boolean adding,
