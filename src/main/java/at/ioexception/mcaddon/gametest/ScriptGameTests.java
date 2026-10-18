@@ -11,6 +11,10 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.TamableAnimal;
+import net.minecraft.world.entity.npc.villager.Villager;
+import net.minecraft.world.entity.npc.villager.VillagerData;
+import net.minecraft.world.entity.npc.villager.VillagerProfession;
+import net.minecraft.world.entity.npc.villager.VillagerType;
 import net.minecraft.world.level.block.Blocks;
 
 import java.util.function.Consumer;
@@ -192,6 +196,49 @@ public final class ScriptGameTests {
         helper.getLevel().getServer().getPlayerList().remove(player);
         expectTag(helper, player, "tp:counted_3");
         helper.succeed();
+    }
+
+    /**
+     * A villager taking a job raises the `minecraft:become_*` event Bedrock's villager raises, and
+     * answers a script with the numbers Bedrock's `villager_v2` states its job and its biome by.
+     *
+     * The villager becomes a snowy farmer, which Bedrock numbers 1 and 4, and its face is one of six
+     * whatever it is. The pack's script tags it with the event and with what each component read
+     * when the event reached it.
+     */
+    @GameTest()
+    public void aVillagerTakingAJobTellsTheScriptWhatItBecame(GameTestHelper helper) {
+        if (ServerHooks.scripts() == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityType<?> type = BuiltInRegistries.ENTITY_TYPE
+            .getOptional(Platform.id("minecraft", "villager")).orElseThrow();
+        Villager villager = (Villager) Platform.createMob(type, helper.getLevel());
+        BlockPos at = helper.absolutePos(STAND);
+        Platform.placeAt(villager, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        villager.setNoAi(true);
+        helper.getLevel().addFreshEntity(villager);
+
+        helper.runAfterDelay(1, () -> villager.setVillagerData(snowyFarmer(villager, helper.getLevel())));
+        helper.runAfterDelay(1 + DELIVERED, () -> {
+            expectTag(helper, villager, "tp:become_farmer");
+            expectTag(helper, villager, "tp:variant_1");
+            expectTag(helper, villager, "tp:mark_variant_4");
+            helper.assertTrue(Platform.tagsOf(villager).stream().anyMatch(tag -> tag.matches("tp:skin_id_[0-5]")),
+                "The pack's script read no skin between 0 and 5 off the villager: " + Platform.tagsOf(villager));
+            helper.succeed();
+        });
+    }
+
+    private static VillagerData snowyFarmer(Villager villager, ServerLevel level) {
+        //? if >=1.21.5 {
+        return villager.getVillagerData().withProfession(level.registryAccess(), VillagerProfession.FARMER)
+            .withType(level.registryAccess(), VillagerType.SNOW);
+        //?} else {
+        /*return villager.getVillagerData().setProfession(VillagerProfession.FARMER).setType(VillagerType.SNOW);
+        *///?}
     }
 
     private static TamableAnimal wolf(GameTestHelper helper) {

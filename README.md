@@ -49,7 +49,10 @@ add-ons, or with another release of it, is told which in chat.
   evaluator, with each pass drawn the way its `.material` asks: alpha tested or blended, culled or
   not, plain or glowing, tinted the colour its controller worked out for it and lit by the light its
   controller asked for. A hurt or dying entity flashes red the way every Bedrock entity does, unless
-  its controller states an `is_hurt_color` of its own, which is drawn instead. A model reaching past the box the server gave the entity is culled against
+  its controller states an `is_hurt_color` of its own, which is drawn instead. A pass whose material
+  defines `MASKED_MULTITEXTURE`, as the game's villager outfits do, draws its second texture over its
+  first with the second's clear but coloured texels showing the first through, which is how a
+  villager's profession is worn over the clothes of its biome. A model reaching past the box the server gave the entity is culled against
   the extent its own geometry declares, so wings and a tail stay drawn while the hitbox is off the
   side of the screen. A controller state a pack gave a blend transition is crossed out of rather
   than left, so a walk releases into an idle instead of snapping. An entity whose pack asked for it
@@ -362,7 +365,12 @@ add-ons, or with another release of it, is told which in chat.
   and blocks reach a script under Bedrock's ids, so a Java villager's `typeId` is
   `minecraft:villager_v2`, a powered rail's is `minecraft:golden_rail` and a lit furnace's is
   `minecraft:lit_furnace`, and every query, spawn, permutation, item stack and filter accepts that
-  spelling as well as Java's. A player's fog stack is the one `/fog` keeps, a camera shake is the
+  spelling as well as Java's. A Java villager also states itself the way Bedrock's does: its
+  profession as `minecraft:variant`, the biome it comes from as `minecraft:mark_variant` and a face
+  as `minecraft:skin_id`, each numbered as Bedrock numbers them, and a villager taking a job raises
+  the `minecraft:become_*` event Bedrock's villager raises, so a pack that dresses its own model of
+  a villager for its job hears of it. Bedrock rolls the face once and keeps it; Java has nowhere to
+  keep it, so it is worked out from the villager's UUID. A player's fog stack is the one `/fog` keeps, a camera shake is the
   one `/camerashake` sends, and a dimension clones a region through Java's own `/clone`, with a
   filter picking the blocks one at a time.
 - The options a listener subscribes with narrow what it hears, as Bedrock's do: the entities, entity

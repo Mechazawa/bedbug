@@ -455,6 +455,14 @@ These are the checks it runs, and what each one catches:
   finished. It enables attachables, hides armour and hides what it holds while its mark variant is
   one, so the visor is drawn in its hand and never on its head.
 
+  `tp:tailor` draws the same two textures in three passes, the way a villager wears its profession
+  over the clothes of its biome: through `tp_tailored`, the one material in the pack's own
+  `materials/entity.material`, which defines `MASKED_MULTITEXTURE`, through the game's
+  `villager_v2_masked`, and through `entity_alphatest`, which binds the first texture alone. Its base
+  is blue all over and its outfit is four bands of an opaque red, a clear white, a clear black and a
+  faint green, so `RenderControllerClientGameTest` reads red, blue, nothing and blue off the image
+  each masked pass binds, and blue four times off the plain one.
+
   The recipes cover the seven kinds and the fields that decide what each becomes: a furnace recipe
   naming four cookers and an unlock item, a shapeless one tagged for the stonecutter and unlocked by
   a context, a shaped one keyed on an item tag and carrying a `group`, a `priority` and an unlock
@@ -591,6 +599,11 @@ These are the checks it runs, and what each one catches:
   position every tick for two seconds afterwards, which is how a pack holds one still while it
   speaks; from 26 on Java's villager ends its trade on any teleport and Bedrock's does not, so
   `TradeClientGameTest` keeps the screen open through those two seconds and then buys from it.
+  A villager taking a job is tagged with the `minecraft:become_*` event that reached the script and
+  with the `minecraft:variant`, `minecraft:mark_variant` and `minecraft:skin_id` the script read off
+  it then, which is what a pack dressing its own model of a villager does with that event.
+  `ScriptGameTests.aVillagerTakingAJobTellsTheScriptWhatItBecame` makes a villager a snowy farmer and
+  reads back `become_farmer`, a variant of 1 and a mark variant of 4.
 
   Every command line in the pack that runs while the game is going is written so Java's parser
   refuses it as it stands. On `/bedrock scriptevent tp:commands` the script runs, as whatever sent it, a
