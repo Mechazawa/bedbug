@@ -116,6 +116,12 @@ final class Goals {
         return value.isJsonObject() ? Json.text(value.getAsJsonObject(), "event", null) : null;
     }
 
+    /** The object a component holds under one key, or null where it holds none or something else. */
+    static JsonObject object(JsonObject component, String key) {
+        JsonElement value = component == null ? null : component.get(key);
+        return value != null && value.isJsonObject() ? value.getAsJsonObject() : null;
+    }
+
     static Filter filter(JsonObject component, String key) {
         return Filter.parse(component == null ? null : component.get(key));
     }
