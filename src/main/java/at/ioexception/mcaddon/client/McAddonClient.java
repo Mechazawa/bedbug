@@ -55,10 +55,27 @@ public final class McAddonClient implements ClientModInitializer {
             at.ioexception.mcaddon.client.render.AddonEmitters.start(effect, null,
                 new net.minecraft.world.phys.Vec3(x, y, z)));
         Channels.receiveForm(AddonFormScreen::receive);
+        Channels.receiveInstructions((kind, body) -> {
+            switch (kind) {
+                case at.ioexception.mcaddon.server.Music.KIND -> PlayerMusic.accept(body);
+                case CameraView.FADE -> at.ioexception.mcaddon.client.render.PlayerFade.accept(body);
+                case CameraView.FOV -> at.ioexception.mcaddon.client.render.PlayerFov.accept(body,
+                    net.minecraft.client.Minecraft.getInstance().options.fov().get());
+                case at.ioexception.mcaddon.server.BedrockRules.KIND ->
+                    at.ioexception.mcaddon.client.render.PlayerRules.accept(body);
+                default -> {
+                }
+            }
+        });
+        Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("bedrock_rules"),
+            at.ioexception.mcaddon.client.render.PlayerRules::draw);
+        Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("bedrock_screen"),
+            at.ioexception.mcaddon.client.render.PlayerFade::draw);
 
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK
             .register(client -> {
                 at.ioexception.mcaddon.client.render.AddonEmitters.tick();
+                PlayerMusic.tick();
                 if (client.level != null) Animators.tickOffscreen(client.level);
             });
         if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
@@ -82,6 +99,10 @@ public final class McAddonClient implements ClientModInitializer {
             PlayerFog.clear();
             PlayerHud.clear();
             PlayerInput.clear();
+            PlayerMusic.clear();
+            at.ioexception.mcaddon.client.render.PlayerFade.clear();
+            at.ioexception.mcaddon.client.render.PlayerFov.clear();
+            at.ioexception.mcaddon.client.render.PlayerRules.clear();
             at.ioexception.mcaddon.client.render.AddonEmitters.clear();
         }));
     }

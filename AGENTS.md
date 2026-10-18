@@ -109,7 +109,11 @@ These are the checks it runs, and what each one catches:
   `SharedConstants.tryDetectVersion()` and `Bootstrap.bootStrap()` in a `@BeforeAll`, which is
   enough without launching the game.
 - **`./gradlew :26.2:runGameTest`** runs the Mojang game tests in
-  `src/main/java/at/ioexception/mcaddon/gametest/`, headless, against a real world. `check` depends
+  `src/main/java/at/ioexception/mcaddon/gametest/`, headless, against a real world. The run takes
+  one class or one test at a time through Fabric's selector property, which the forked game reads
+  from the environment: `JAVA_TOOL_OPTIONS='-Dfabric-api.gametest.filter=mcaddon:bedrock_command_game_tests_*'`
+  in front of `./gradlew :26.2:runGameTest`. A test's id is `mcaddon:` and its class and method
+  names in snake case, joined by an underscore. `check` depends
   on it, so a failing one fails `./gradlew build`, and it is gated to the checked-out version like
   everything else. What it covers is the half a unit test cannot reach: that `/bedrock playanimation`
   and `/bedrock event entity` still parse and run, that Java's own tree reads none of Bedrock's
@@ -705,6 +709,63 @@ These are the checks it runs, and what each one catches:
   playanimation` lines `CameraClientGameTest` and `JavaModelPoseClientGameTest` measure, and
   `ParticleClientGameTest` has the player type `/bedrock particle` and has Java's own `/particle`
   make the one particle Java makes of any type.
+
+  `BedrockCommandGameTests` runs the Bedrock forms of commands whose Java namesake has no word for
+  them, each through `/bedrock` and read back off the world, with vanilla entities so that every one
+  asserts with no pack installed. `/ride` seats a group only when the whole of it fits a boat, fills
+  the boat to its two seats, empties it, brings it to its rider and summons a rider and a ride under
+  each of the three ride rules; `/summon` turns what it makes to a rotation, a point and an entity,
+  takes a name written before the position, and raises a spawn event the ember answers;
+  `/replaceitem` saddles a horse and arms it through `slot.equippable`, and `keep` leaves its armour
+  alone and fills an armour stand's empty head; `/structure` saves a region of six different blocks
+  to memory and to disk, deletes the disk copy, and loads the region mirrored both ways, turned a
+  quarter, without its blocks, at no integrity, into water with and without waterlogging, and a
+  layer at a time, each checked block by block where Bedrock puts it; `/tickingarea` forces a
+  rectangle's and a circle's chunks, marks and unmarks one to preload and releases a rectangle
+  removed by a position inside it; and `/schedule on_area_loaded` holds the test pack's
+  `tp/loaded`, which counts its runs on a scoreboard, until a ticking area loads the far chunk it
+  waits for. `place featurerule` puts the test pack's ore rule into stone the test lays far from
+  every other test, and `place jigsaw` places the mod's own one piece pool,
+  `mcaddon:gametest/fence`, into water with its jigsaw kept and its fence dry, and again with both
+  words the other way. That pool and its template ship in `src/main/resources/data/mcaddon/`, the
+  template under both `structure/` and `structures/` because 1.20.1 reads the plural; the template
+  is a 248 byte NBT file written by hand, a jigsaw named `mcaddon:start` beside an oak fence. `save query`, `setmaxplayers`, `packstack` and `permission` are typed by the
+  console after `/bedrock` and read back through what the console is told, because a line run the
+  way a pack runs one has a function's authority and each of these asks for more. `/gametest
+  create` lays out the test pack's `tp:hut_stands`, `pos` finds its area, `runthis` runs it there,
+  and `runsetuntilfail` runs `tp:fails_the_second_time`, which the test pack's script registers to
+  pass once and fail after, until its second round. `/mobevent` holds back the dragon the End's
+  fight makes where it finds none, through the event and through `events_enabled`; the test asks
+  the fight to look for its dragon itself, through reflection on its private `findOrCreateDragon`,
+  because a fight only looks once a player has stood in the End long enough for its arena to load,
+  and reads the dragon back from the fight's own record, because a dragon made that moment is not
+  yet among the entities its level hands out.
+
+  **A Bedrock line a pack runs has a function's authority, and a command asking for more refuses
+  it as an unknown command.** `PackCommand.run` lowers its source to the level Java runs a function
+  at, and the Bedrock tree asks each command for its Bedrock level plus one, so `place featurerule`,
+  Bedrock's words after a jigsaw's position, `save`, `setmaxplayers` and `permission` parse only for
+  an operator typing `/bedrock`. Java's own `place` forms keep the level Java asks for them. A test of one of
+  those types it through Java's own tree instead of through `BedrockLines`.
+
+  `MusicClientGameTest` plays the test pack's chime through `/bedrock music` and reads back the
+  track the client plays: music heard everywhere, looping when asked, turned down by `music volume`,
+  queued behind a track that plays once and not behind one that loops, and gone after `music
+  stop`. A server tells a client what only it acts on through `Channels.sendInstruction`, one payload
+  carrying a kind and a body, which `McAddonClient` hands to the class the kind names.
+
+  `CameraFadeClientGameTest` reads a fade back as the last rectangle the heads-up display filled
+  across the whole screen, which the test source set's `GuiGraphicsExtractorMixin` writes into
+  `Drawn` beside every line of text drawn, and a field of view off the camera a frame was drawn with.
+
+  `BedrockRulesClientGameTest` reads `showcoordinates` and `showdaysplayed` back as the lines the
+  heads-up display drew, `showtags` as the lines a pickaxe's `can_break` writes into its tooltip and
+  `showrecipemessages` as the recipe toast the client is or is not showing; `BedrockCommandGameTests`
+  covers the server's two, `recipesunlock` through an advancement's reward and `respawnblocksexplode`
+  through a bed used in the nether and a charged anchor used in the overworld.
+
+  One client game test at a time: the entry point list in `src/gametest/resources/fabric.mod.json`
+  is the whole selection, so cutting it down to one class runs that class alone. Put it back after.
 
   `HudClientGameTest` hides and resets pieces of the heads-up display on a dedicated server, one
   piece at a time, all of them, and through the script's `tp:hud_hide` and `tp:hud_reset` probes.

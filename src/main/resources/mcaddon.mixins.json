@@ -7,6 +7,12 @@
     "PackRepositoryMixin",
     "LivingEntityMixin",
     "JumpingAccessor",
+    "PassengerInvoker",
+    "PlayerListLimitMixin",
+    "DragonFightMixin",
+    "RecipeRewardMixin",
+    "RespawnBlockMixin",
+    "RespawnAnchorMixin",
     "BiomeSeedAccessor",
     "ItemEntityMixin",
     "ProjectileMixin",
@@ -59,6 +65,10 @@
     "LivingEntityRendererMixin",
     "ModelFeatureRendererMixin",
     "ModelPartMixin",
-    "SoundEngineMixin"
+    "SoundEngineMixin",
+    "MusicManagerMixin",
+    "FovMixin",
+    "RecipeToastMixin",
+    "AdventureTooltipMixin"
   ]
 }
