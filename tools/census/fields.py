@@ -229,6 +229,10 @@ REASONS = {
     },
     "minecraft:shareables": {"all_items_max_amount": "A Java mob holds one stack in its hand."},
     "minecraft:is_dyeable": {"interact_text": "Java shows no prompt of its own for using a mob."},
+    "minecraft:tamemount": {
+        "feed_text": "Java shows no prompt of its own for using a mob.",
+        "ride_text": "Java shows no prompt of its own for using a mob.",
+    },
 }
 
 # The shapes a field name reaches the JSON through. Each captures the field it asks for.

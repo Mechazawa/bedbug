@@ -371,6 +371,121 @@ public final class GoalGameTests {
     }
 
     /**
+     * `minecraft:addrider` seats every rider its `riders` list names, each raising its own spawn
+     * event, and a group bringing the component in is enough for that.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void anEntitySeatsEveryRiderItsPackLists(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_carry");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.succeedWhen(() -> {
+            helper.assertTrue(brute.getPassengers().size() == 2,
+                BRUTE + " lists two riders and carries " + brute.getPassengers().size() + ".");
+            helper.assertTrue(brute.getPassengers().stream().anyMatch(rider -> rider instanceof AddonEntity seated
+                    && Boolean.TRUE.equals(seated.value("tp:struck"))),
+                BRUTE + " seated a brute whose spawn event never ran.");
+        });
+    }
+
+    /**
+     * A blow carries the ailment `minecraft:attack` names, for its duration in seconds and at its
+     * amplifier.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aBlowCarriesTheAilmentItsAttackNames(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_envenom");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob pig = pig(helper, STAND.east(1), BLOWS_TO_KILL);
+        brute.setTarget(pig);
+        helper.succeedWhen(() -> {
+            net.minecraft.world.effect.MobEffectInstance poison = pig.getActiveEffects().stream()
+                .filter(active -> Platform.effectId(active).equals("minecraft:poison"))
+                .findFirst().orElse(null);
+            helper.assertTrue(poison != null, BRUTE + " poisons what it hits and the pig is not poisoned.");
+            helper.assertTrue(poison.getAmplifier() == 1,
+                BRUTE + " poisons at amplifier one and the pig's poison is at " + poison.getAmplifier() + ".");
+            helper.assertTrue(poison.getDuration() > POISON_TICKS - GOAL_TICKS && poison.getDuration() <= POISON_TICKS,
+                BRUTE + " poisons for three seconds and the pig's poison has " + poison.getDuration() + " ticks left.");
+        });
+    }
+
+    /** The three seconds the venomous group poisons for, in Java's ticks. */
+    private static final int POISON_TICKS = 3 * 20;
+
+    /**
+     * A `minecraft:tameable` stating no `probability` tames at the first of its items, which is
+     * Bedrock's default; eight brutes each fed once all belong to the feeder afterwards.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void anEntityIsTamedAtTheFirstItemByDefault(GameTestHelper helper) {
+        net.minecraft.world.entity.player.Player feeder = Platform.mockPlayer(helper);
+        feeder.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND,
+            new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.APPLE, TAMED_TOGETHER));
+        for (int i = 0; i < TAMED_TOGETHER; i++) {
+            AddonEntity brute = BehaviourGameTests.spawn(helper, BRUTE, new BlockPos(i % 4 * 2, 0, i / 4 * 2));
+            if (brute == null) {
+                helper.succeed();
+                return;
+            }
+
+            EntityEvents.trigger(brute, "tp:brute_make_tameable", null, ServerHooks.state());
+            brute.mobInteract(feeder, net.minecraft.world.InteractionHand.MAIN_HAND);
+            helper.assertTrue(feeder.getUUID().equals(brute.ownerUuid()),
+                BRUTE + " number " + (i + 1) + " was fed its taming item once and belongs to nobody.");
+            helper.assertTrue(Boolean.TRUE.equals(brute.value("tp:tamed")),
+                BRUTE + " was tamed and never raised the event tame_event names.");
+        }
+        helper.succeed();
+    }
+
+    private static final int TAMED_TOGETHER = 8;
+
+    /**
+     * A mount under `minecraft:tamemount` is broken in by riding: an item it rejects keeps the player
+     * off, its food raises its temper without taming it, and with its temper full the first buck
+     * leaves it belonging to the rider.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = BREAK_IN_TICKS)
+    public void aMountIsBrokenInByRidingOnceItsTemperIsFull(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_make_wild", MIDDLE);
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        net.minecraft.server.level.ServerPlayer rider = helper.makeMockServerPlayerInLevel();
+        net.minecraft.world.InteractionHand hand = net.minecraft.world.InteractionHand.MAIN_HAND;
+        rider.setItemInHand(hand, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.SADDLE));
+        brute.mobInteract(rider, hand);
+        helper.assertFalse(rider.isPassenger(), BRUTE + " rejects a saddle and took its holder on board.");
+
+        rider.setItemInHand(hand, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.APPLE));
+        brute.mobInteract(rider, hand);
+        helper.assertTrue(brute.ownerUuid() == null, BRUTE + " is broken in by riding and was tamed by an apple.");
+
+        rider.setItemInHand(hand, net.minecraft.world.item.ItemStack.EMPTY);
+        brute.mobInteract(rider, hand);
+        helper.assertTrue(rider.getVehicle() == brute, BRUTE + " is rideable and an empty hand did not get on.");
+        helper.succeedWhen(() -> {
+            helper.assertTrue(rider.getUUID().equals(brute.ownerUuid()),
+                BRUTE + " was ridden with its temper full and still belongs to nobody.");
+            helper.assertTrue(Boolean.TRUE.equals(brute.value("tp:tamed")),
+                BRUTE + " was broken in and never raised the event tame_event names.");
+        });
+    }
+
+    /** Past the longest wait before a first buck. */
+    private static final int BREAK_IN_TICKS = 100;
+
+    /**
      * Two tamed brutes with the group on, the same variant, mark variant and tp:hue, a red and a white
      * coat, both fed: what is born of them, once it is.
      */

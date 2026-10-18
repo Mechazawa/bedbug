@@ -26,6 +26,10 @@
             9
           ],
           "default": 0
+        },
+        "tp:tamed": {
+          "type": "bool",
+          "default": false
         }
       }
     },
@@ -190,6 +194,98 @@
             "max_variant": 5
           }
         }
+      },
+      "tp:brute_carrying": {
+        "minecraft:rideable": {
+          "seat_count": 2,
+          "seats": [
+            {
+              "position": [
+                0,
+                1.0,
+                0
+              ]
+            },
+            {
+              "position": [
+                0,
+                1.0,
+                -0.4
+              ]
+            }
+          ]
+        },
+        "minecraft:addrider": {
+          "riders": [
+            {
+              "entity_type": "minecraft:pig"
+            },
+            {
+              "entity_type": "tp:brute",
+              "spawn_event": "tp:brute_struck"
+            }
+          ]
+        }
+      },
+      "tp:brute_venomous": {
+        "minecraft:attack": {
+          "damage": 1,
+          "effect_name": "poison",
+          "effect_duration": 3,
+          "effect_amplifier": 1
+        },
+        "minecraft:behavior.melee_box_attack": {
+          "priority": 0
+        }
+      },
+      "tp:brute_tameable": {
+        "minecraft:tameable": {
+          "tame_items": [
+            "minecraft:apple"
+          ],
+          "tame_event": {
+            "event": "tp:brute_tamed",
+            "target": "self"
+          }
+        }
+      },
+      "tp:brute_wild": {
+        "minecraft:rideable": {
+          "seat_count": 1,
+          "family_types": [
+            "player"
+          ],
+          "seats": {
+            "position": [
+              0,
+              1.0,
+              0
+            ]
+          }
+        },
+        "minecraft:tamemount": {
+          "min_temper": 0,
+          "max_temper": 100,
+          "feed_items": [
+            {
+              "item": "minecraft:apple",
+              "temper_mod": 100
+            }
+          ],
+          "auto_reject_items": [
+            {
+              "item": "minecraft:saddle"
+            }
+          ],
+          "tame_event": {
+            "event": "tp:brute_tamed",
+            "target": "self"
+          }
+        },
+        "minecraft:behavior.run_around_like_crazy": {
+          "priority": 0,
+          "speed_multiplier": 1.2
+        }
       }
     },
     "components": {
@@ -309,6 +405,39 @@
           "component_groups": [
             "tp:brute_denying"
           ]
+        }
+      },
+      "tp:brute_carry": {
+        "add": {
+          "component_groups": [
+            "tp:brute_carrying"
+          ]
+        }
+      },
+      "tp:brute_envenom": {
+        "add": {
+          "component_groups": [
+            "tp:brute_venomous"
+          ]
+        }
+      },
+      "tp:brute_make_tameable": {
+        "add": {
+          "component_groups": [
+            "tp:brute_tameable"
+          ]
+        }
+      },
+      "tp:brute_make_wild": {
+        "add": {
+          "component_groups": [
+            "tp:brute_wild"
+          ]
+        }
+      },
+      "tp:brute_tamed": {
+        "set_property": {
+          "tp:tamed": true
         }
       }
     }

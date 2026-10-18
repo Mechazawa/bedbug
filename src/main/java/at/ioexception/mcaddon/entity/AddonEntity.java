@@ -1399,9 +1399,10 @@ public class AddonEntity extends PathfinderMob
 
     /** The first seat a `minecraft:rideable` component names, or null when it names none. */
     private net.minecraft.world.phys.Vec3 seat() {
-        com.google.gson.JsonObject body = liveComponent("minecraft:rideable");
-        com.google.gson.JsonArray seats = body == null ? null : body.getAsJsonArray("seats");
-        if (seats == null || seats.isEmpty() || !seats.get(0).isJsonObject()) return null;
+        // Mojang writes a single seat as the object itself rather than as a list of one.
+        java.util.List<com.google.gson.JsonElement> seats =
+            at.ioexception.mcaddon.util.Json.list(liveComponent("minecraft:rideable"), "seats");
+        if (seats.isEmpty() || !seats.get(0).isJsonObject()) return null;
 
         return at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.blocks(
             seats.get(0).getAsJsonObject().get("position"), null);
@@ -2446,12 +2447,29 @@ public class AddonEntity extends PathfinderMob
         boolean hit = super.doHurtTarget(target);
     *///?}
         if (hit) knockBack(target);
+        if (hit && target instanceof net.minecraft.world.entity.LivingEntity struck) afflict(struck);
         blockedBy(target);
         if (hit && target instanceof net.minecraft.world.entity.LivingEntity struck
             && Goals.flag(liveComponent("minecraft:angry"), "broadcast_anger_on_attack", false)) {
             broadcastAnger(struck);
         }
         return hit;
+    }
+
+    /**
+     * Gives what the entity hit the ailment `minecraft:attack` names, for `effect_duration` seconds
+     * or for good when the pack writes `infinite`, at `effect_amplifier`.
+     */
+    private void afflict(net.minecraft.world.entity.LivingEntity struck) {
+        com.google.gson.JsonObject attack = liveComponent("minecraft:attack");
+        net.minecraft.resources.Identifier effect = EntityEvents.effect(Goals.text(attack, "effect_name"));
+        if (effect == null) return;
+
+        int ticks = "infinite".equals(Goals.text(attack, "effect_duration"))
+            ? net.minecraft.world.effect.MobEffectInstance.INFINITE_DURATION
+            : Goals.ticks(attack, "effect_duration", 0);
+        if (ticks == 0) return;
+        Platform.addEffect(struck, effect, ticks, (int) Goals.number(attack, "effect_amplifier", 0), true);
     }
 
     /**
@@ -4430,28 +4448,37 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
-     * Puts the rider `minecraft:addrider` names on the entity's back, once it is in the world.
+     * Puts the riders `minecraft:addrider` names on the entity's back, once it is in the world.
      *
-     * The rider has to be spawned rather than declared, and an entity that is still being built has
-     * nowhere to put one, so this waits for the entity's first tick in a level.
+     * Each rider has to be spawned rather than declared, and an entity that is still being built has
+     * nowhere to put one, so this waits for the entity's first tick in a level with the component
+     * live. Mojang lists the riders under `riders`, as many as the entity has seats for; an older
+     * pack names one rider in `entity_type` beside its `spawn_event`. A rider no seat is left for is
+     * not spawned at all.
      */
     private void addRider() {
-        if (!declares("minecraft:addrider") || carriesRider) return;
+        com.google.gson.JsonObject component = liveComponent("minecraft:addrider");
+        if (component == null || carriesRider) return;
         if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
 
         carriesRider = true;
-        String named = liveText("minecraft:addrider", "entity_type");
-        net.minecraft.world.entity.EntityType<?> type = named == null
-            ? null : AddonEntities.typeOf(named);
+        java.util.List<com.google.gson.JsonElement> riders = component.has("riders")
+            ? at.ioexception.mcaddon.util.Json.list(component, "riders") : java.util.List.of(component);
+        riders.stream()
+            .filter(com.google.gson.JsonElement::isJsonObject)
+            .map(com.google.gson.JsonElement::getAsJsonObject)
+            .forEach(rider -> carry(level, Goals.text(rider, "entity_type"), Goals.text(rider, "spawn_event")));
+    }
+
+    private void carry(net.minecraft.server.level.ServerLevel level, String named, String spawnEvent) {
+        net.minecraft.world.entity.EntityType<?> type = named == null ? null : AddonEntities.typeOf(named);
         net.minecraft.world.entity.Entity rider = type == null ? null : Platform.createMob(type, level);
-        if (rider == null) return;
+        if (rider == null || !canAddPassenger(rider)) return;
 
         Platform.placeAt(rider, getX(), getY(), getZ(), getYRot(), 0f);
         level.addFreshEntity(rider);
         rider.startRiding(this);
-
-        String event = liveText("minecraft:addrider", "spawn_event");
-        if (event != null) EntityEvents.trigger(rider, event, this, ServerHooks.state());
+        if (spawnEvent != null) EntityEvents.trigger(rider, spawnEvent, this, ServerHooks.state());
     }
 
     private boolean carriesRider;
@@ -4500,55 +4527,120 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
-     * Taming by hand, which both of Bedrock's components describe as feeding an entity the right food.
+     * Taming or winning the trust of the entity by hand, which is feeding it the right food.
      *
-     * `minecraft:tameable` gives the chance outright; `minecraft:tamemount` counts temper towards a
-     * ceiling. Either way what a player sees is a few tries and then an entity that belongs to them,
-     * so the chance stands in for the count.
+     * `minecraft:tameable` and `minecraft:trusting` each take one of their items and succeed at their
+     * `probability`, which is certain unless a pack says otherwise. `minecraft:tamemount` is broken
+     * in by riding instead, so its food only raises the entity's temper, and an item it rejects
+     * angers it rather than doing anything else.
      */
     private boolean tamedBy(Player player, InteractionHand hand) {
         ItemStack held = player.getItemInHand(hand);
         if (held.isEmpty()) return false;
 
         String id = AddonItems.identifierOf(held.getItem());
-        for (String component
-            : new String[] {"minecraft:tameable", "minecraft:tamemount", "minecraft:trusting"}) {
-            if (!declaresNow(component) || !foodOf(component, id)) continue;
-
+        com.google.gson.JsonObject tameable = liveComponent("minecraft:tameable");
+        if (foodOf(tameable, "tame_items", id)) {
             if (!player.getAbilities().instabuild) held.shrink(1);
-            if (random.nextDouble() > liveNumber(component, "probability", 0.33)) return true;
-
-            boolean trusting = component.endsWith("trusting");
-            if (!trusting && at.ioexception.mcaddon.server.WorldEvents.tamingRefused(this, player)) {
-                return true;
+            if (random.nextDouble() < Goals.number(tameable, "probability", 1)) {
+                tame(player, Goals.event(tameable, "tame_event"));
             }
-            ServerHooks.state().setProperty(getUUID(), "is_tamed", true);
-            setOwner(player);
-            fire(namedEvent(component, trusting ? "trust_event" : "tame_event"));
-            if (!trusting) at.ioexception.mcaddon.server.WorldEvents.tamed(this, player);
             return true;
         }
+
+        com.google.gson.JsonObject trusting = liveComponent("minecraft:trusting");
+        if (foodOf(trusting, "trust_items", id)) {
+            if (!player.getAbilities().instabuild) held.shrink(1);
+            if (random.nextDouble() < Goals.number(trusting, "probability", 1)) {
+                ServerHooks.state().setProperty(getUUID(), "is_tamed", true);
+                setOwner(player);
+                fire(Goals.event(trusting, "trust_event"));
+            }
+            return true;
+        }
+        return tempered(player, held, id);
+    }
+
+    /**
+     * Food and the items a mount will not have near it, which `minecraft:tamemount` lists for an
+     * entity nobody has broken in yet.
+     *
+     * Each of `feed_items` raises the temper by its `temper_mod`, as Java's horse food does; holding
+     * one of `auto_reject_items` makes the entity mad, which a pack hears as its `mad` sound.
+     */
+    private boolean tempered(Player player, ItemStack held, String id) {
+        com.google.gson.JsonObject mount = liveComponent("minecraft:tamemount");
+        if (mount == null || ownerUuid() != null) return false;
+
+        if (foodOf(mount, "auto_reject_items", id)) {
+            makeNoise("mad");
+            return true;
+        }
+        com.google.gson.JsonObject food = at.ioexception.mcaddon.util.Json.list(mount, "feed_items").stream()
+            .filter(com.google.gson.JsonElement::isJsonObject)
+            .map(com.google.gson.JsonElement::getAsJsonObject)
+            .filter(entry -> names(Goals.text(entry, "item"), id))
+            .findFirst()
+            .orElse(null);
+        if (food == null) return false;
+
+        if (!player.getAbilities().instabuild) held.shrink(1);
+        setTemper(temper() + (int) Goals.number(food, "temper_mod", 0));
+        return true;
+    }
+
+    /**
+     * One try at breaking the entity in, made each time it bucks its rider: the entity belongs to the
+     * rider once a roll below `max_temper` lands under its temper, and otherwise its temper rises by
+     * `attempt_temper_mod`. Java's horse makes the same roll with the same numbers.
+     */
+    public boolean brokenInBy(Player rider) {
+        com.google.gson.JsonObject mount = liveComponent("minecraft:tamemount");
+        if (mount == null || ownerUuid() != null) return false;
+
+        int ceiling = (int) Goals.number(mount, "max_temper", 100);
+        if (ceiling > 0 && random.nextInt(ceiling) < temper()) {
+            tame(rider, Goals.event(mount, "tame_event"));
+            return true;
+        }
+        setTemper(temper() + (int) Goals.number(mount, "attempt_temper_mod", 5));
         return false;
     }
 
-    /** Whether the item offered is one of the foods a taming or trusting component named. */
-    private boolean foodOf(String component, String offered) {
-        com.google.gson.JsonObject body = liveComponent(component);
-        if (body == null) return false;
+    /**
+     * How close the entity is to accepting a rider, which starts somewhere between `min_temper` and
+     * `max_temper` and is kept in the add-on state beside the owner it leads to.
+     */
+    private int temper() {
+        Object kept = ServerHooks.state().property(getUUID(), "temper");
+        if (kept instanceof Number number) return number.intValue();
 
-        for (String key : new String[] {"tame_items", "feed_items", "trust_items", "items"}) {
-            for (com.google.gson.JsonElement element
-                : at.ioexception.mcaddon.util.Json.list(body, key)) {
-                if (element.isJsonPrimitive() && names(element.getAsString(), offered)) return true;
-                if (!element.isJsonObject()) continue;
+        com.google.gson.JsonObject mount = liveComponent("minecraft:tamemount");
+        int low = (int) Goals.number(mount, "min_temper", 0);
+        int starting = Goals.between(random, low, Math.max(low, (int) Goals.number(mount, "max_temper", 100)));
+        setTemper(starting);
+        return starting;
+    }
 
-                if (names(at.ioexception.mcaddon.util.Json.text(
-                    element.getAsJsonObject(), "item", null), offered)) {
-                    return true;
-                }
-            }
-        }
-        return false;
+    private void setTemper(int temper) {
+        ServerHooks.state().setProperty(getUUID(), "temper", (double) temper);
+    }
+
+    /** Belongs to the player from now on, unless a script refuses it, and says so to the pack. */
+    private void tame(Player player, String event) {
+        if (at.ioexception.mcaddon.server.WorldEvents.tamingRefused(this, player)) return;
+
+        ServerHooks.state().setProperty(getUUID(), "is_tamed", true);
+        setOwner(player);
+        fire(event);
+        at.ioexception.mcaddon.server.WorldEvents.tamed(this, player);
+    }
+
+    /** Whether the item offered is one a component lists under the key, by name or as an entry. */
+    private static boolean foodOf(com.google.gson.JsonObject component, String key, String offered) {
+        return at.ioexception.mcaddon.util.Json.list(component, key).stream()
+            .anyMatch(element -> element.isJsonPrimitive() ? names(element.getAsString(), offered)
+                : element.isJsonObject() && names(Goals.text(element.getAsJsonObject(), "item"), offered));
     }
 
     /** The event named under one of a component's own `*_event` objects, or null when it names none. */
@@ -5642,6 +5734,7 @@ public class AddonEntity extends PathfinderMob
         if (!isClientSide() && givenTo(player, hand)) return InteractionResult.SUCCESS;
         if (!isClientSide() && satDown(player)) return InteractionResult.SUCCESS;
         if (!isClientSide() && interact(player)) return InteractionResult.SUCCESS;
+        if (!isClientSide() && trades() == null && mountedBy(player)) return InteractionResult.SUCCESS;
 
         if (trades() == null) return super.mobInteract(player, hand);
         // A trader answers the click on the client as well, as Java's villager does, so the client
@@ -5654,6 +5747,16 @@ public class AddonEntity extends PathfinderMob
         setTradingPlayer(player);
         openTradingScreen(player, getDisplayName(), 1);
         return InteractionResult.SUCCESS;
+    }
+
+    /**
+     * Getting on, which is what using a rideable entity comes to once nothing the player holds was
+     * for it. Bedrock offers the seat on the entity's interact button; one the player may not take,
+     * by `family_types`, a full set of seats or `minecraft:behavior.player_ride_tamed`, is not offered.
+     */
+    private boolean mountedBy(Player player) {
+        return declaresNow("minecraft:rideable") && !player.isPassenger() && canAddPassenger(player)
+            && player.startRiding(this);
     }
 
     // `minecraft:bucketable`: Java's own bucket carries the entity away and lets it go again.
