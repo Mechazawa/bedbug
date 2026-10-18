@@ -1312,7 +1312,8 @@ public class AddonEntity extends PathfinderMob
         if (ServerEntityDefinition.flag(liveComponent("minecraft:shareables"), "singular_pickup", false)) {
             taken.setCount(1);
         }
-        if (!stow(taken)) return false;
+        taken.setCount(Math.min(taken.getCount(), roomFor(taken)));
+        if (taken.isEmpty() || !stow(taken)) return false;
 
         dropped.getItem().shrink(taken.getCount());
         if (dropped.getItem().isEmpty()) dropped.discard();
@@ -1350,9 +1351,35 @@ public class AddonEntity extends PathfinderMob
      */
     public boolean shareable(net.minecraft.world.item.ItemStack stack) {
         com.google.gson.JsonObject body = liveComponent("minecraft:shareables");
-        if (body == null) return false;
+        if (body == null || roomFor(stack) <= 0) return false;
         if (ServerEntityDefinition.flag(body, "all_items", false)) return true;
         return named(body, "items", stack);
+    }
+
+    /**
+     * How many more of the item the entity will hold: the `max_amount` of the first entry naming
+     * it, or `all_items_max_amount` for anything else, less what it holds already. A cap of -1, which
+     * Bedrock writes for none, leaves no limit.
+     */
+    private int roomFor(net.minecraft.world.item.ItemStack stack) {
+        com.google.gson.JsonObject body = liveComponent("minecraft:shareables");
+        String id = AddonItems.identifierOf(stack.getItem());
+        int cap = at.ioexception.mcaddon.util.Json.list(body, "items").stream()
+            .filter(com.google.gson.JsonElement::isJsonObject)
+            .map(com.google.gson.JsonElement::getAsJsonObject)
+            .filter(entry -> names(Goals.text(entry, "item"), id))
+            .findFirst()
+            .map(entry -> (int) Goals.number(entry, "max_amount", -1))
+            .orElse((int) Goals.number(body, "all_items_max_amount", -1));
+        if (cap < 0) return Integer.MAX_VALUE;
+
+        int held = (carried == null ? 0 : carried.countItem(stack.getItem()))
+            + java.util.Arrays.stream(net.minecraft.world.entity.EquipmentSlot.values())
+                .map(this::getItemBySlot)
+                .filter(worn -> worn.is(stack.getItem()))
+                .mapToInt(ItemStack::getCount)
+                .sum();
+        return Math.max(0, cap - held);
     }
 
     /** Whether an item list a component carries names this stack, in either spelling of an entry. */

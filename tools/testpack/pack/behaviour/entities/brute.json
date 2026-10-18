@@ -405,6 +405,21 @@
           "search_range": 4,
           "search_height": 2
         }
+      },
+      "tp:brute_frugal": {
+        "minecraft:inventory": {
+          "inventory_size": 4
+        },
+        "minecraft:shareables": {
+          "all_items": true,
+          "all_items_max_amount": 2,
+          "items": [
+            {
+              "item": "minecraft:apple",
+              "max_amount": 1
+            }
+          ]
+        }
       }
     },
     "components": {
@@ -629,6 +644,13 @@
         "add": {
           "component_groups": [
             "tp:brute_homely"
+          ]
+        }
+      },
+      "tp:brute_make_frugal": {
+        "add": {
+          "component_groups": [
+            "tp:brute_frugal"
           ]
         }
       }

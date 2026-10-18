@@ -61,6 +61,10 @@ TEMPT_SOUND = ("Mojang's documentation counts the gap between tempt sounds in ti
 BOBBING = ("The shape of the rise and fall on the surface. The lift above gives a floating entity Java's own "
            "bob, and nothing in Java lets an entity choose another.")
 
+SLEEPING_BOX = ("From 1.21 Java's `LivingEntity.getDimensions` is final and answers a fixed box of a fifth of a "
+                "block for the sleeping pose, which is the pose a sleeping entity takes here, so a box of a "
+                "pack's own has nowhere to go.")
+
 # A field a reader may skip, and why. Keyed by component, then by field; the key "*" covers every
 # field of that component that no reader names.
 REASONS = {
@@ -176,21 +180,16 @@ REASONS = {
     },
 
     # Goals. Java's goal of the same name takes fewer parameters than Bedrock states.
-    "minecraft:behavior.explore_outskirts": {"*": "Java's stroll goal picks its own distance and wait."},
-    "minecraft:behavior.stroll_towards_village": {"*": "Java's stroll goal has no village to aim at."},
     "minecraft:behavior.mount_pathing": {
         "*": "A mob riding another steers it in Java: the rider plans with the mount's navigator and the "
              "mount's own movement goals are switched off while it is ridden, so the chase and the "
              "distance kept belong to the rider's attack goal.",
     },
     "minecraft:behavior.share_items": {"*": "Java's stroll goal has no arrival radius of its own."},
-    "minecraft:behavior.play": {"*": "Java writes playing into its own villager, with no friends to name."},
-    "minecraft:behavior.hide": {
-        "*": "Java writes hiding into its own villager, with no point of interest to run to.",
-    },
     "minecraft:behavior.sleep": {
-        "*": "Sleeping is a pose here rather than a bed, so there is no collider to resize and no offset "
-             "to lie at.",
+        "sleep_collider_width": SLEEPING_BOX,
+        "sleep_collider_height": SLEEPING_BOX,
+        "sleep_y_offset": SLEEPING_BOX,
     },
     "minecraft:behavior.float": {
         "*": "Java's float goal swims a mob up with no chance of its own and no passengers to drop.",
@@ -229,7 +228,6 @@ REASONS = {
     "minecraft:rideable": {
         "interact_text": "Java shows no prompt of its own for using a mob.",
     },
-    "minecraft:shareables": {"all_items_max_amount": "A Java mob holds one stack in its hand."},
     "minecraft:is_dyeable": {"interact_text": "Java shows no prompt of its own for using a mob."},
     "minecraft:tamemount": {
         "feed_text": "Java shows no prompt of its own for using a mob.",

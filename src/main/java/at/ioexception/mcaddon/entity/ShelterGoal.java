@@ -69,7 +69,7 @@ final class ShelterGoal extends Goal {
         for (int i = 0; i < tries; i++) {
             Vec3 spot = LandRandomPos.getPos(mob, across, upDown);
             if (spot == null) spot = DefaultRandomPos.getPos(mob, across, upDown);
-            if (spot != null && underSky(mob.level(), BlockPos.containing(spot)) == outdoors) {
+            if (spot != null && underSky(mob.level(), BlockPos.containing(spot)) == outdoors && reachable(spot)) {
                 heading = spot;
                 return true;
             }
@@ -98,6 +98,12 @@ final class ShelterGoal extends Goal {
 
     private boolean there() {
         return heading != null && mob.position().distanceToSqr(heading) <= arrived * arrived;
+    }
+
+    /** A spot on a roof or behind a wall is under the sky or out of it all the same, and no use. */
+    private boolean reachable(Vec3 spot) {
+        net.minecraft.world.level.pathfinder.Path path = mob.getNavigation().createPath(BlockPos.containing(spot), 0);
+        return path != null && path.canReach();
     }
 
     /** Lit by the whole of the sky, which is what Java's own question about the open sky asks. */

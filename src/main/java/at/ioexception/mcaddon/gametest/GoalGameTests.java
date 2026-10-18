@@ -575,6 +575,46 @@ public final class GoalGameTests {
     }
 
     /**
+     * An entity holds no more of an item than its shareables entry's `max_amount`, nor more of an
+     * item no entry names than `all_items_max_amount`; what it will not hold stays on the ground.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void anEntityHoldsNoMoreThanItsShareablesAllow(GameTestHelper helper) {
+        AddonEntity brute = BehaviourGameTests.spawn(helper, BRUTE, STAND);
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(brute, "tp:brute_make_frugal", null, ServerHooks.state());
+        net.minecraft.world.entity.item.ItemEntity stones = dropped(helper, net.minecraft.world.item.Items.STONE, 5);
+        net.minecraft.world.entity.item.ItemEntity apples = dropped(helper, net.minecraft.world.item.Items.APPLE, 3);
+        brute.pickUp(stones);
+        brute.pickUp(apples);
+        brute.pickUp(stones);
+
+        helper.assertTrue(brute.inventory().countItem(net.minecraft.world.item.Items.STONE) == 2,
+            BRUTE + " holds two of anything unlisted and holds "
+                + brute.inventory().countItem(net.minecraft.world.item.Items.STONE) + " stone.");
+        helper.assertTrue(brute.inventory().countItem(net.minecraft.world.item.Items.APPLE) == 1,
+            BRUTE + " holds one apple and holds "
+                + brute.inventory().countItem(net.minecraft.world.item.Items.APPLE) + ".");
+        helper.assertTrue(stones.getItem().getCount() == 3, BRUTE + " left " + stones.getItem().getCount()
+            + " of the five stones on the ground.");
+        helper.succeed();
+    }
+
+    private static net.minecraft.world.entity.item.ItemEntity dropped(GameTestHelper helper,
+        net.minecraft.world.item.Item item, int count) {
+        BlockPos at = helper.absolutePos(STAND.east(1));
+        net.minecraft.world.entity.item.ItemEntity lying = new net.minecraft.world.entity.item.ItemEntity(
+            helper.getLevel(), at.getX() + 0.5, at.getY(), at.getZ() + 0.5,
+            new net.minecraft.world.item.ItemStack(item, count));
+        helper.getLevel().addFreshEntity(lying);
+        return lying;
+    }
+
+    /**
      * `minecraft:addrider` seats every rider its `riders` list names, each raising its own spawn
      * event, and a group bringing the component in is enough for that.
      */
