@@ -52,7 +52,8 @@ public final class AddonItems {
     private static final List<Item> DYEABLE = new ArrayList<>();
     private static final Set<Item> KEPT = new HashSet<>();
     private static final Map<Item, String> PROJECTILES = new LinkedHashMap<>();
-    private static final Map<Item, Set<at.ioexception.mcaddon.bedrock.behaviour.DamageCause>> ABSORBED = new LinkedHashMap<>();
+    private static final Map<Item, Set<at.ioexception.mcaddon.bedrock.behaviour.DamageCause>> ABSORBED =
+        new LinkedHashMap<>();
     private static final Map<Item, Set<String>> COMPONENTS = new LinkedHashMap<>();
     private static final Map<Item, KineticTimings> KINETIC = new LinkedHashMap<>();
     private static final Map<Item, Float> COOLDOWNS = new LinkedHashMap<>();
