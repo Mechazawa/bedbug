@@ -440,7 +440,15 @@ These are the checks it runs, and what each one catches:
   in by riding, listed riders, a poisoning attack, the rideable fields, an explosion heeding or
   ignoring the griefing rule and a resistance cap, a potion drunk by its conditions, the shelter
   walks, water looked for, a goal radius, a leap, an area attack's cooldown, a step taken while
-  steered, and four flocking groups. Each event that adds a group is named after it. A few traps met
+  steered, and four flocking groups. Three more flocking groups hold a brute off a wall, between two
+  heights and under the surface of a pool, the last two floating with gravity off; a water drag group
+  is launched down a channel beside a plain brute; two swimming groups and four flying ones are read
+  back through the spot the navigation heads for, the flying ones with a fly navigation of their own;
+  a follow group walks towards a pig ten blocks off, a raider group towards a brute whose group makes
+  it the captain, and three walk groups to a gold block set into the floor, raising `tp:reached` and
+  `tp:stayed`. A walk's `goal_radius` is one block there, because Java's path ends a block short of
+  its target and Bedrock's half block is never reached from there. Each event that adds a group is
+  named after it. A few traps met
   writing them: the empty structure's floor is not a block Java's random walks may end on, so a test
   needing one lays stone first; light under a new roof takes a few ticks to settle, so a test asking
   `canSeeSky` builds first and waits; the older versions place test structures close enough that a
@@ -465,11 +473,23 @@ These are the checks it runs, and what each one catches:
   The brute carries five more groups for goals that move it somewhere of its own choosing:
   `tp:brute_stomping` looks for turtle eggs every tick, `tp:brute_exploring` walks five blocks past
   the edge of a village, `tp:brute_village_bound` walks to the nearest village, `tp:brute_hiding`
-  runs to a bed when a bell rings and `tp:brute_playing` plays with a pig. `GoalGameTests` builds the
+  runs to a bed when a bell rings and `tp:brute_playing` plays with a pig. `tp:brute_stomping_near`
+  searches two blocks for eggs, `tp:brute_grazing` eats hay into dirt, `tp:brute_snacking` eats only
+  sweet berries and then waits, `tp:brute_nesting` lays on sand with nothing above it and
+  `tp:brute_flower_taking` takes a golem's flower once it is tagged. `tp:brute_admiring` admires
+  for a second and neither admires nor barters for five after being hurt, `tp:brute_cheering` and
+  `tp:brute_celebrating_survival` celebrate with no raid, and `GoalSoundClientGameTest` hears the
+  admiring, cheering and nesting groups' own sound moments. `tp:brute_dressing` puts on a helmet where
+  `tp:brute_unarmoured` cannot, and `tp:brute_hunting_alone` celebrates a kill only for the brute
+  that made it. Java's own egg search can be
+  replaced by a speed mod with one over a fixed twenty-four blocks, so `StompEggGoal` searches in its
+  own `canUse`. `GoalGameTests` builds the
   village each one needs out of a bell or a bed in the empty structure, which Java registers as a
   point of interest the moment the block is set. The brute's `tp:arrived` property is set by its
   `minecraft:entity_spawned` and `minecraft:entity_born` events, which is how
   `GoalGameTests.aBredChildIsBornRatherThanSpawned` tells a bred child from a placed one.
+  The ember's `tp:ember_hatchling` grows up in a second and drops a turtle shell piece, and
+  `tp:ember_picky` takes wheat worth its whole wait only from a player tagged `tp_feeder`.
 
   Two more entities are there for what a mob walking about never reaches. One is a projectile with
   hit boxes wider than the box it collides in, which turns `isolated_physics` off the way Mojang's

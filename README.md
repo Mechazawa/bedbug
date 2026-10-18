@@ -193,10 +193,32 @@ Against a server without this mod a client plays with its own add-ons.
   `minecraft:entity_spawned`. A mount under `minecraft:tamemount` is broken in by riding, its temper rising with
   its food and each buck, and any rideable entity is mounted by using it, pulls in what touches it
   under `pull_in_entities` and raises its rider events. A school flocks by its separation, cohesion,
-  variant matching, flock limit and loners; an entity walks out under the sky or in under a roof,
+  variant matching, flock limit and loners, keeps off the blocks beside it, between its heights over
+  the ground and, in water, under the surface. A fish swims off at an `interval` of nought and keeps
+  under the surface unless `avoid_surface` says no, a
+  `swim_wander` takes its `interval` as a chance and gives up after its `wander_time`, a flight or a
+  hover aims `y_offset` above the spot it picked and within its `hover_height`, and a float lasts its
+  `float_duration` and picks a new spot on the way under `random_reselect`. A follower looks for a mob
+  as far as `search_range` and stops `stop_distance` short, a raider keeps `follow_distance` from its
+  captain, and a walk to a block looks every `tick_interval` at its `start_chance`, ends at its
+  `target_offset` and raises `on_reach` and `on_stay_completed`. Water slows an entity by its
+  `drag_factor`, and honey lowers its step to `jump_prevented_value`. An entity walks out under the
+  sky or in under a roof,
   looks as far for water as it says, drinks the potion its conditions pick by Bedrock's number,
   holds no more of an item than its shareables allow, leaps at its `yd`, and steps higher while a
-  player steers it. A stomper looks for turtle eggs as often as its `interval` says. A villager
+  player steers it. A stomper looks for turtle eggs as often as its `interval` says and no further
+  than its `search_range`. A grazer eats the blocks its pairs name at its own Molang chance, a
+  snacker eats only its `items` and waits out its cooldown, an egg layer lays only under the
+  materials it names, and a flower taker takes a golem's flower only while its filters hold. A
+  young entity drops its `drop_items` as it grows up and is fed only by whoever its
+  `interact_filters` allow, and a feed item's `growth` is a share of the whole wait. A won raid
+  raises `minecraft:start_celebrating` on the add-on entities standing in it, and a celebration runs
+  while its group is on: a raider jumps and makes its `celebration_sound`, a villager sends up
+  fireworks, and either raises its end event after its `duration`. An entity hurt recently neither
+  admires nor barters until its `cooldown_after_being_attacked` is over, and an admirer and an egg
+  layer make their pack's own sound. An entity whose `minecraft:equip_item` says `can_wear_armor` false
+  leaves armour lying, and a hunt is celebrated by the entity credited with the kill and, with
+  `broadcast` on, by the hunters within its `radius`. A villager
   explores past the edge of its village by `explore_dist`, a fox strolls to the nearest village, a
   child plays with the friend its `friend_types` name, and `minecraft:behavior.hide` runs to the bed
   or other place `poi_type` names when a bell rings or a raid is on. Java's village is the beds, job
@@ -727,8 +749,7 @@ Java builds that screen for its own horses, minecarts and hoppers by class; `suf
 documented as seconds with a default of -20, which no count of seconds can be, so Java's own
 drowning rhythm applies; `has_gravity` is left alone, because Mojang's fish declare it off and still
 fall when they leap out of water; a dweller holds to where it stood without joining a Java village;
-a tempt sound's gap is documented in ticks and written by Mojang in two units at once; a turtle egg
-stomper searches the twenty-four blocks Java's goal fixes, whatever its `search_range` says; and how
+a tempt sound's gap is documented in ticks and written by Mojang in two units at once; and how
 fast an entity resends itself over the network is Java's own business. `has_damage` asking whether
 a blow is `fatal` is reported, because the sensor that asks it is not told how hard the blow is.
 

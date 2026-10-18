@@ -2311,6 +2311,15 @@ public final class Platform {
         *///?}
     }
 
+    /** Whether a place lies where the mob is kept, which is anywhere for a mob kept nowhere. */
+    public static boolean withinHome(net.minecraft.world.entity.PathfinderMob mob, net.minecraft.core.BlockPos at) {
+        //? if >=26 {
+        return mob.isWithinHome(at);
+        //?} else {
+        /*return mob.isWithinRestriction(at);
+        *///?}
+    }
+
     /** Lets the mob wander again, which is what taking the component away amounts to. */
     public static void clearHome(net.minecraft.world.entity.Mob mob) {
         //? if >=26 {
@@ -2369,38 +2378,35 @@ public final class Platform {
     }
 
     /**
-     * An iron golem near this point that is holding a flower out, or null when none is.
+     * An iron golem inside the area that is holding a flower out, or null when none is.
      *
      * A golem offering one is what `minecraft:behavior.take_flower` waits for. The class moved into
      * its own package in 26, and the offer itself is a countdown the golem exposes either way.
      */
     public static net.minecraft.world.entity.Entity offeredFlower(
-        net.minecraft.world.entity.Entity near, double range) {
-        //? if >=26 {
-        for (net.minecraft.world.entity.animal.golem.IronGolem golem : near.level().getEntitiesOfClass(
-            net.minecraft.world.entity.animal.golem.IronGolem.class,
-            near.getBoundingBox().inflate(range))) {
-            if (golem.getOfferFlowerTick() > 0) return golem;
-        }
-        //?} else {
-        /*for (net.minecraft.world.entity.animal.IronGolem golem : near.level().getEntitiesOfClass(
-            net.minecraft.world.entity.animal.IronGolem.class,
-            near.getBoundingBox().inflate(range))) {
-            if (golem.getOfferFlowerTick() > 0) return golem;
-        }
-        *///?}
-        return null;
+        net.minecraft.world.entity.Entity near, net.minecraft.world.phys.AABB area) {
+        return near.level().getEntities(near, area, Platform::offersFlower).stream().findFirst().orElse(null);
     }
 
-    /** Takes the flower back off the golem, which is what ends the offer. */
-    public static void takeFlower(net.minecraft.world.entity.Entity golem) {
+    public static boolean offersFlower(net.minecraft.world.entity.Entity golem) {
+        //? if >=26 {
+        return golem instanceof net.minecraft.world.entity.animal.golem.IronGolem holding
+            && holding.getOfferFlowerTick() > 0;
+        //?} else {
+        /*return golem instanceof net.minecraft.world.entity.animal.IronGolem holding
+            && holding.getOfferFlowerTick() > 0;
+        *///?}
+    }
+
+    /** Holds a flower out from a golem, or takes it back off the golem, which ends the offer. */
+    public static void offerFlower(net.minecraft.world.entity.Entity golem, boolean offering) {
         //? if >=26 {
         if (golem instanceof net.minecraft.world.entity.animal.golem.IronGolem holding) {
-            holding.offerFlower(false);
+            holding.offerFlower(offering);
         }
         //?} else {
         /*if (golem instanceof net.minecraft.world.entity.animal.IronGolem holding) {
-            holding.offerFlower(false);
+            holding.offerFlower(offering);
         }
         *///?}
     }

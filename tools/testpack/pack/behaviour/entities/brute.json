@@ -7,7 +7,27 @@
       "is_summonable": true,
       "is_experimental": false,
       "properties": {
+        "tp:reached": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:stayed": {
+          "type": "bool",
+          "default": false
+        },
         "tp:struck": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:grazed": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:celebrated": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:took_flower": {
           "type": "bool",
           "default": false
         },
@@ -647,6 +667,155 @@
           "cohesion_weight": 2
         }
       },
+      "tp:brute_walled": {
+        "minecraft:flocking": {
+          "goal_weight": 2,
+          "block_distance": 2,
+          "block_weight": 1
+        }
+      },
+      "tp:brute_banded": {
+        "minecraft:flocking": {
+          "goal_weight": 2,
+          "min_height": 2,
+          "max_height": 3
+        }
+      },
+      "tp:brute_breaching": {
+        "minecraft:flocking": {
+          "goal_weight": 2,
+          "in_water": true,
+          "breach_influence": 7
+        }
+      },
+      "tp:brute_slick": {
+        "minecraft:water_movement": {
+          "drag_factor": 0.95
+        }
+      },
+      "tp:brute_restless": {
+        "minecraft:navigation.swim": {},
+        "minecraft:behavior.random_swim": {
+          "priority": 0,
+          "interval": 0,
+          "xz_dist": 4,
+          "y_dist": 1
+        }
+      },
+      "tp:brute_drifting": {
+        "minecraft:navigation.swim": {},
+        "minecraft:behavior.swim_wander": {
+          "priority": 0,
+          "interval": 0.5,
+          "wander_time": 0.25
+        }
+      },
+      "tp:brute_lofty": {
+        "minecraft:navigation.fly": {},
+        "minecraft:behavior.random_fly": {
+          "priority": 0,
+          "xz_dist": 2,
+          "y_dist": 1,
+          "y_offset": 4
+        }
+      },
+      "tp:brute_hovering": {
+        "minecraft:navigation.fly": {},
+        "minecraft:behavior.random_hover": {
+          "priority": 0,
+          "interval": 1,
+          "xz_dist": 2,
+          "y_dist": 1,
+          "hover_height": [5, 6]
+        }
+      },
+      "tp:brute_floating": {
+        "minecraft:navigation.fly": {},
+        "minecraft:behavior.float_wander": {
+          "priority": 0,
+          "float_duration": [0.25, 0.25]
+        }
+      },
+      "tp:brute_fickle": {
+        "minecraft:navigation.fly": {},
+        "minecraft:behavior.float_wander": {
+          "priority": 0,
+          "random_reselect": true
+        }
+      },
+      "tp:brute_tagging": {
+        "minecraft:behavior.follow_mob": {
+          "priority": 0,
+          "search_range": 12,
+          "stop_distance": 5
+        }
+      },
+      "tp:brute_deep_swimming": {
+        "minecraft:navigation.swim": {},
+        "minecraft:behavior.random_swim": {
+          "priority": 0,
+          "interval": 0,
+          "xz_dist": 4,
+          "y_dist": 2
+        }
+      },
+      "tp:brute_captained": {
+        "minecraft:behavior.follow_target_captain": {
+          "priority": 0,
+          "follow_distance": 6,
+          "within_radius": 16
+        }
+      },
+      "tp:brute_leading": {
+        "minecraft:is_illager_captain": {}
+      },
+      "tp:brute_seeking": {
+        "minecraft:behavior.move_to_block": {
+          "priority": 0,
+          "search_range": 8,
+          "search_height": 2,
+          "tick_interval": 1,
+          "goal_radius": 1,
+          "target_blocks": [
+            "minecraft:gold_block"
+          ],
+          "on_reach": {
+            "event": "tp:brute_reached",
+            "target": "self"
+          },
+          "stay_duration": 20,
+          "on_stay_completed": {
+            "event": "tp:brute_stayed",
+            "target": "self"
+          }
+        }
+      },
+      "tp:brute_beside": {
+        "minecraft:behavior.move_to_block": {
+          "priority": 0,
+          "search_range": 8,
+          "search_height": 2,
+          "tick_interval": 1,
+          "goal_radius": 1,
+          "target_blocks": [
+            "minecraft:gold_block"
+          ],
+          "target_offset": [3, 0, 0]
+        }
+      },
+      "tp:brute_reluctant": {
+        "minecraft:behavior.move_to_block": {
+          "priority": 0,
+          "search_range": 8,
+          "search_height": 2,
+          "tick_interval": 1,
+          "goal_radius": 1,
+          "target_blocks": [
+            "minecraft:gold_block"
+          ],
+          "start_chance": 0
+        }
+      },
       "tp:brute_springing": {
         "minecraft:behavior.leap_at_target": {
           "priority": 0,
@@ -663,7 +832,8 @@
       "tp:brute_steady": {
         "minecraft:variable_max_auto_step": {
           "base_value": 0.6,
-          "controlled_value": 1.5
+          "controlled_value": 1.5,
+          "jump_prevented_value": 0.25
         },
         "minecraft:rideable": {
           "seat_count": 1,
@@ -704,6 +874,104 @@
           "priority": 1,
           "speed_multiplier": 1,
           "search_height": 1,
+          "search_range": 8,
+          "interval": 1
+        }
+      },
+      "tp:brute_grazing": {
+        "minecraft:behavior.eat_block": {
+          "priority": 1,
+          "success_chance": "query.is_baby ? 0 : 1",
+          "time_until_eat": 0.5,
+          "eat_and_replace_block_pairs": [
+            { "eat_block": "hay_block", "replace_block": "dirt" }
+          ],
+          "on_eat": { "event": "tp:brute_grazed", "target": "self" }
+        }
+      },
+      "tp:brute_snacking": {
+        "minecraft:behavior.snacking": {
+          "priority": 1,
+          "snacking_cooldown": 1000,
+          "snacking_cooldown_min": 1000,
+          "snacking_stop_chance": 1,
+          "items": [{ "name": "minecraft:sweet_berries" }]
+        }
+      },
+      "tp:brute_nesting": {
+        "minecraft:behavior.lay_egg": {
+          "priority": 1,
+          "search_range": 5,
+          "search_height": 1,
+          "lay_seconds": 0.5,
+          "target_blocks": ["sand"],
+          "target_materials_above_block": ["Air"],
+          "lay_egg_sound": "lay"
+        }
+      },
+      "tp:brute_flower_taking": {
+        "minecraft:behavior.take_flower": {
+          "priority": 1,
+          "min_wait_time": 0,
+          "max_wait_time": 0,
+          "speed_multiplier": 1,
+          "filters": { "test": "has_tag", "value": "tp_flower_friend" },
+          "on_take_flower": { "event": "tp:brute_took_flower", "target": "self" }
+        }
+      },
+      "tp:brute_admiring": {
+        "minecraft:admire_item": {
+          "duration": 1,
+          "cooldown_after_being_attacked": 5
+        },
+        "minecraft:barter": {
+          "barter_table": "loot_tables/blocks/totem.json",
+          "cooldown_after_being_attacked": 5
+        },
+        "minecraft:behavior.admire_item": {
+          "priority": 1,
+          "admire_item_sound": "admire",
+          "sound_interval": { "range_min": 0.2, "range_max": 0.3 }
+        },
+        "minecraft:behavior.barter": {
+          "priority": 2
+        }
+      },
+      "tp:brute_celebrating_survival": {
+        "minecraft:behavior.celebrate_survive": {
+          "priority": 1,
+          "duration": 1,
+          "fireworks_interval": { "min": 0.1, "max": 0.2 },
+          "on_celebration_end_event": { "event": "tp:brute_celebrated", "target": "self" }
+        }
+      },
+      "tp:brute_cheering": {
+        "minecraft:behavior.celebrate": {
+          "priority": 1,
+          "duration": 5,
+          "celebration_sound": "cheer",
+          "sound_interval": { "min": 0.2, "max": 0.3 }
+        }
+      },
+      "tp:brute_dressing": {
+        "minecraft:behavior.equip_item": { "priority": 1 },
+        "minecraft:equip_item": {}
+      },
+      "tp:brute_unarmoured": {
+        "minecraft:behavior.equip_item": { "priority": 1 },
+        "minecraft:equip_item": { "can_wear_armor": false }
+      },
+      "tp:brute_hunting_alone": {
+        "minecraft:celebrate_hunt": {
+          "broadcast": false,
+          "duration": 4
+        }
+      },
+      "tp:brute_stomping_near": {
+        "minecraft:behavior.stomp_turtle_egg": {
+          "priority": 1,
+          "search_height": 1,
+          "search_range": 2,
           "interval": 1
         }
       },
@@ -1095,6 +1363,135 @@
           ]
         }
       },
+      "tp:brute_wall": {
+        "add": {
+          "component_groups": [
+            "tp:brute_walled"
+          ]
+        }
+      },
+      "tp:brute_band": {
+        "add": {
+          "component_groups": [
+            "tp:brute_banded"
+          ]
+        }
+      },
+      "tp:brute_breach": {
+        "add": {
+          "component_groups": [
+            "tp:brute_breaching"
+          ]
+        }
+      },
+      "tp:brute_slip": {
+        "add": {
+          "component_groups": [
+            "tp:brute_slick"
+          ]
+        }
+      },
+      "tp:brute_fidget": {
+        "add": {
+          "component_groups": [
+            "tp:brute_restless"
+          ]
+        }
+      },
+      "tp:brute_drift": {
+        "add": {
+          "component_groups": [
+            "tp:brute_drifting"
+          ]
+        }
+      },
+      "tp:brute_loft": {
+        "add": {
+          "component_groups": [
+            "tp:brute_lofty"
+          ]
+        }
+      },
+      "tp:brute_hover": {
+        "add": {
+          "component_groups": [
+            "tp:brute_hovering"
+          ]
+        }
+      },
+      "tp:brute_float": {
+        "add": {
+          "component_groups": [
+            "tp:brute_floating"
+          ]
+        }
+      },
+      "tp:brute_waver": {
+        "add": {
+          "component_groups": [
+            "tp:brute_fickle"
+          ]
+        }
+      },
+      "tp:brute_tag_along": {
+        "add": {
+          "component_groups": [
+            "tp:brute_tagging"
+          ]
+        }
+      },
+      "tp:brute_swim_deep": {
+        "add": {
+          "component_groups": [
+            "tp:brute_deep_swimming"
+          ]
+        }
+      },
+      "tp:brute_fall_in": {
+        "add": {
+          "component_groups": [
+            "tp:brute_captained"
+          ]
+        }
+      },
+      "tp:brute_lead": {
+        "add": {
+          "component_groups": [
+            "tp:brute_leading"
+          ]
+        }
+      },
+      "tp:brute_seek": {
+        "add": {
+          "component_groups": [
+            "tp:brute_seeking"
+          ]
+        }
+      },
+      "tp:brute_seek_beside": {
+        "add": {
+          "component_groups": [
+            "tp:brute_beside"
+          ]
+        }
+      },
+      "tp:brute_seek_reluctantly": {
+        "add": {
+          "component_groups": [
+            "tp:brute_reluctant"
+          ]
+        }
+      },
+      "tp:brute_reached": {
+        "set_property": {
+          "tp:reached": true
+        }
+      },
+      "tp:brute_stayed": {
+        "set_property": {
+          "tp:stayed": true
+        }
+      },
       "tp:brute_crowd": {
         "add": {
           "component_groups": [
@@ -1162,6 +1559,98 @@
         "add": {
           "component_groups": [
             "tp:brute_stomping"
+          ]
+        }
+      },
+      "tp:brute_graze": {
+        "add": {
+          "component_groups": [
+            "tp:brute_grazing"
+          ]
+        }
+      },
+      "tp:brute_snack": {
+        "add": {
+          "component_groups": [
+            "tp:brute_snacking"
+          ]
+        }
+      },
+      "tp:brute_nest": {
+        "add": {
+          "component_groups": [
+            "tp:brute_nesting"
+          ]
+        }
+      },
+      "tp:brute_take_flowers": {
+        "add": {
+          "component_groups": [
+            "tp:brute_flower_taking"
+          ]
+        }
+      },
+      "tp:brute_grazed": {
+        "set_property": {
+          "tp:grazed": true
+        }
+      },
+      "tp:brute_took_flower": {
+        "set_property": {
+          "tp:took_flower": true
+        }
+      },
+      "tp:brute_admire": {
+        "add": {
+          "component_groups": [
+            "tp:brute_admiring"
+          ]
+        }
+      },
+      "tp:brute_survive": {
+        "add": {
+          "component_groups": [
+            "tp:brute_celebrating_survival"
+          ]
+        }
+      },
+      "tp:brute_cheer": {
+        "add": {
+          "component_groups": [
+            "tp:brute_cheering"
+          ]
+        }
+      },
+      "tp:brute_celebrated": {
+        "set_property": {
+          "tp:celebrated": true
+        }
+      },
+      "tp:brute_dress": {
+        "add": {
+          "component_groups": [
+            "tp:brute_dressing"
+          ]
+        }
+      },
+      "tp:brute_go_unarmoured": {
+        "add": {
+          "component_groups": [
+            "tp:brute_unarmoured"
+          ]
+        }
+      },
+      "tp:brute_hunt_alone": {
+        "add": {
+          "component_groups": [
+            "tp:brute_hunting_alone"
+          ]
+        }
+      },
+      "tp:brute_stomp_near": {
+        "add": {
+          "component_groups": [
+            "tp:brute_stomping_near"
           ]
         }
       },
