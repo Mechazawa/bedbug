@@ -2484,6 +2484,21 @@ public final class Platform {
     }
 
     /**
+     * Opens a singleplayer world to the LAN on a port, without asking its guests to authenticate:
+     * a development guest has no account, and 1.21.1 and 26 make the integrated server demand one.
+     * The scope argument arrived in 26.2.
+     */
+    public static boolean publishServer(net.minecraft.client.server.IntegratedServer server, int port) {
+        server.setUsesAuthentication(false);
+        //? if >=26.2 {
+        return server.publishServer(net.minecraft.server.MinecraftServer.MultiplayerScope.LAN,
+            net.minecraft.world.level.GameType.SURVIVAL, false, port);
+        //?} else {
+        /*return server.publishServer(net.minecraft.world.level.GameType.SURVIVAL, false, port);
+        *///?}
+    }
+
+    /**
      * Queues a task for the client thread, even when called on it: `execute` runs a task called on
      * the client thread at once, inside whatever that thread is in the middle of. Renamed in 26.
      */

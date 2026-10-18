@@ -7,8 +7,10 @@ JavaScript hitting a missing API, a mixin that did not apply, the script engine 
 second thread, a converted function Java refused, a crash report being written. `client` opens a
 saved world in a dev client, which is the half that draws. `join` puts the two together: a dedicated
 server with the packs installed, and a client that connects to it over 127.0.0.1, which is the only
-way to reach what a server sends a client and what a pack's registry entries cost to send. `convert`
-compares what the converter wrote under a version's run directory against what the source pack
+way to reach what a server sends a client and what a pack's registry entries cost to send. With
+`--bare`, `--other` or `--reshaped` the joining client is a second one with add-ons of its own, which
+checks the add-on sync. `lan` opens a saved world to the LAN and has that second client join it.
+`convert` compares what the converter wrote under a version's run directory against what the source pack
 holds, and needs no game. `companions` runs the server and the client again and reads the log back
 for the other mods in the room as well: that every mod a version pins really loaded, and that no
 injector on either side lost its target while the other was there.
@@ -44,6 +46,7 @@ from threading import Thread
 USAGE = (__doc__ or "").splitlines()[0]
 
 VERSIONS = ("1.20.1", "1.21.1", "26.1.2", "26.2")
+ROOT = Path(__file__).resolve().parents[2]
 JAVA_HOME = os.environ.get("JAVA_HOME", "/opt/homebrew/opt/openjdk@25")
 
 IMAGE_SUFFIXES = (".png", ".tga", ".jpg", ".jpeg")
@@ -126,9 +129,19 @@ JOINED = re.compile(r"(\S+) joined the game")
 # Why a client left, which is the line carrying a registry the two halves disagreed about.
 LOST_CONNECTION = re.compile(r"lost connection: (.+)")
 
-# What a client says about an entry the server holds and it does not, naming the registry it looked
-# in. A client that never read the packs writes one of these per entry the packs declare.
-MISSING_ENTRY = re.compile(r"is missing from local registry \((minecraft:[a-z_]+)\)")
+# The JVM property `runJoinClient` carries, which names the second client in the process table.
+GUEST_PROPERTY = "mcaddon.role=guest"
+
+# What a client logs as it takes a server's add-ons: how many the server offered, how many it made
+# active, and that it put its own back once the session ended. Dormant add-ons count toward the
+# first number and not the second.
+RECEIVED = re.compile(r"Received (\d+) add-ons from the server\.")
+DOWNLOADING = re.compile(r"Downloading (\d+) add-ons")
+ACTIVATED = re.compile(r"Activated the server's add-on set of (\d+) add-ons\.")
+RESTORED = re.compile(r"Restored the installed add-on set\.")
+
+# The refusal for a server add-on whose Java shape differs from the installed copy of the same one.
+CANNOT_REPLACE = re.compile(r"The server's copy of (.+?) cannot replace yours without a restart\.")
 
 # The mods a version's `gradle.properties` pins, under the id Fabric Loader knows each of them by
 # and the half of the game each belongs to. A property is read by its Modrinth slug and a mod names
@@ -223,6 +236,7 @@ class Launch:
     ready: re.Pattern
     ready_without_addon: re.Pattern
     takes_commands: bool
+    excluding: str = ""
 
 
 SERVER = Launch(
@@ -241,7 +255,14 @@ CLIENT = Launch(
     signature="fabric.dli.env=client",
     ready=CLIENT_DEFINITIONS,
     ready_without_addon=re.compile(r"Sound engine started|Created: \d+x\d+x\d+ .*-atlas"),
-    takes_commands=False)
+    takes_commands=False,
+    excluding=GUEST_PROPERTY)
+
+# The second client, `runJoinClient`, has a run directory and an add-on set of its own and stands for
+# a player joining somebody else's game. Its JVM property is what tells it from the first client in
+# the process table, so that either can be waited on and ended without touching the other.
+GUEST = replace(CLIENT, name="join-client", task="runJoinClient", signature=GUEST_PROPERTY,
+                excluding="")
 
 
 @dataclass
@@ -520,12 +541,19 @@ def running(launch: Launch, version: str) -> set[int]:
     """Every game of this kind and this version running on this machine, whoever started it.
 
     The version matters because the four are checked at the same time: each runs out of its own
-    directory, so one version's run must neither wait for another's nor kill it.
+    directory, so one version's run must neither wait for another's nor kill it. A client belongs to
+    one checkout, because its run directory and world are per checkout, so a client another
+    checkout started is not this run's to wait for. A server holds a port, which every checkout on
+    the machine shares, so servers are counted from all of them.
     """
     found = subprocess.run(["pgrep", "-f", launch.signature], check=False,
                            capture_output=True, text=True)
     pids = {int(one) for one in found.stdout.split() if one.isdigit()}
-    return {pid for pid in pids if version in commandOf(pid)}
+    commands = {pid: commandOf(pid) for pid in pids}
+    ours = f"{ROOT}/.gradle/"
+    return {pid for pid, command in commands.items()
+            if version in command and not (launch.excluding and launch.excluding in command)
+            and (launch.takes_commands or ours in command)}
 
 
 def commandOf(pid: int) -> str:
@@ -630,6 +658,23 @@ def takeLocalJoins(root: Path, version: str) -> None:
     eula.write_text("eula=true\n", encoding="utf-8")
 
 
+def skip_onboarding(root: Path, version: str, launch: Launch) -> None:
+    """Keeps a client that has never run in its directory from opening the accessibility screen.
+
+    A fresh game directory has no `options.txt`, and the game then shows its onboarding screen in
+    place of the quick play it was asked for, so the client sits there and never joins or opens
+    anything. A directory with an `options.txt` of its own is left as it is, except for that one flag.
+    """
+    directory = root / "versions" / version / "run"
+    if GUEST_PROPERTY in launch.signature:
+        directory = directory / "join-client"
+    directory.mkdir(parents=True, exist_ok=True)
+    options = directory / "options.txt"
+    lines = options.read_text(encoding="utf-8").splitlines() if options.is_file() else []
+    lines = [one for one in lines if not one.startswith("onboardAccessibility:")]
+    options.write_text("\n".join(lines + ["onboardAccessibility:false"]) + "\n", encoding="utf-8")
+
+
 def free_world_lock(root: Path, version: str) -> None:
     """Drops the world lock a killed run of this harness left behind."""
     (root / "versions" / version / "run" / "world" / "session.lock").unlink(missing_ok=True)
@@ -690,7 +735,7 @@ def world(root: Path, version: str) -> str | None:
 def play(root: Path, version: str, launch: Launch, ready: re.Pattern,
          script: list[tuple[float, str]], timeout: float, hold: float,
          verbose: bool, quick_play: str | None = None, join: str | None = None,
-         while_loaded=None) -> tuple[list[str], Path, str]:
+         while_loaded=None, serve: Path | None = None) -> tuple[list[str], Path, str]:
     """Starts one game, waits for it to load, and always ends it by the deadline.
 
     A server is asked to stop and killed if it will not; a client has nothing to ask, so it is held
@@ -703,6 +748,8 @@ def play(root: Path, version: str, launch: Launch, ready: re.Pattern,
     log.parent.mkdir(parents=True, exist_ok=True)
     if launch.takes_commands:
         givePort(root, version)
+    else:
+        skip_onboarding(root, version, launch)
 
     lines: list[str] = []
     deadline = time.monotonic() + timeout
@@ -712,6 +759,8 @@ def play(root: Path, version: str, launch: Launch, ready: re.Pattern,
         command.append(f"-PquickPlay={quick_play}")
     if join:
         command.append(f"-PjoinServer={join}")
+    if serve:
+        command.append(f"-Pserved={serve}")
     process = subprocess.Popen(
         command,
         cwd=root, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -1143,58 +1192,105 @@ def check_companions(root: Path, version: str, timeout: float, summons: int, hol
     return found
 
 
-def restore(installed: Path, withheld: Path) -> None:
-    """Puts back the packs a run took away from a client, whether or not that run ended tidily."""
-    if not withheld.is_dir():
-        return
-
-    installed.mkdir(parents=True, exist_ok=True)
-    for addon in sorted(withheld.iterdir()):
-        addon.rename(installed / addon.name)
-    withheld.rmdir()
+def zip_copy(source: Path, destination: Path, edit) -> None:
+    """Writes a copy of an archive with every entry's bytes passed through `edit(name, body)`."""
+    with zipfile.ZipFile(source) as original, \
+            zipfile.ZipFile(destination, "w", zipfile.ZIP_DEFLATED) as copy:
+        for entry in original.infolist():
+            copy.writestr(entry, edit(entry.filename, original.read(entry)))
 
 
-def refused(verdict: Verdict, seen: list[str]) -> Verdict:
-    """What a client joining without the add-on has to do, which is be turned away and told why.
+def bump_version(name: str, body: bytes) -> bytes:
+    """Raises the version a pack's manifest states, which changes the archive and nothing it builds."""
+    if not re.fullmatch(r"[^/]+/manifest\.json", name):
+        return body
+    manifest = json.loads(body)
+    manifest["header"]["version"][2] += 1
+    return json.dumps(manifest, indent=2).encode("utf-8")
 
-    Both halves build a pack's items, blocks, entity types, particles and sound events into the
-    registries themselves as the game starts, so a client that never read the packs is missing
-    entries the server holds and the two cannot agree. `README.md` says as much: a server and every
-    client carry the same packs. What is checked here is that the refusal is the orderly kind, which
-    names the registry and the entry it could not find, rather than a crash or a silent hang.
+
+def widen_block(name: str, body: bytes) -> bytes:
+    """Adds a value to the lamp's `tp:level` state, which changes the block's Java shape.
+
+    A block with one more state is a different set of block states in the registry, so the server's
+    copy of the add-on cannot take the place of this one without a restart.
     """
-    missing = [one for one in seen if MISSING_ENTRY.search(one)]
-    if not missing:
-        verdict.fail("a client without the add-on was not told what it lacked",
-                     "nothing named a registry entry it could not find, so whatever turned it away "
-                     "said nothing a player could act on")
-        return verdict
-
-    named = {match.group(1) for match in (MISSING_ENTRY.search(one) for one in missing) if match}
-    verdict.notes.append(f"turned away naming {len(missing)} entries across "
-                         + ", ".join(sorted(named)))
-    verdict.notes.append(
-        "this is the pass condition: the window shows " + shownAs(seen)
-        + ", which reads as a crash and is the orderly refusal a client without the pack has to get")
-    return verdict
+    if not name.endswith("blocks/lamp.json"):
+        return body
+    block = json.loads(body)
+    levels = block["minecraft:block"]["description"]["states"]["tp:level"]
+    levels.append(max(levels) + 1)
+    return json.dumps(block, indent=2).encode("utf-8")
 
 
-def shownAs(seen: list[str]) -> str:
-    """The words the client put on the screen, which differ by version for the one refusal.
+def stock_guest(root: Path, version: str, variant: str, server_addons: list[Path],
+                verdict: Verdict) -> Path:
+    """Gives the second client the add-ons a variant calls for and nothing from an earlier run.
 
-    A person watching the window sees a disconnect screen either way. Up to 1.21 it carries the
-    count and the namespaces; 26 shows `Network Protocol Error` and nothing else, which looks far
-    worse than what happened. Naming the wording in the verdict is what stops the screen being read
-    as a failure of the run.
+    `bare` leaves it none, which is a player who never installed the add-on. `other` gives it the
+    server's archives with a newer version in each manifest, which takes the replace path because
+    the Java shape is equal, and an add-on the server does not have, which goes dormant while it is
+    away. `reshaped` gives it a copy whose block has one more state, which has to be refused.
     """
-    for line in seen:
-        if "Network Protocol Error" in line:
-            return "'Network Protocol Error', which is all 26 says"
-    return "'Received N registry entries that are unknown to this client' and the namespaces"
+    guest = root / "versions" / version / "run" / "join-client"
+    shutil.rmtree(guest / "addons", ignore_errors=True)
+    shutil.rmtree(guest / ".mcaddon", ignore_errors=True)
+    (guest / "addons").mkdir(parents=True)
+
+    edit = {"other": bump_version, "reshaped": widen_block}.get(variant)
+    for addon in server_addons if edit else []:
+        if addon.is_file():
+            zip_copy(addon, guest / "addons" / addon.name, edit)
+        else:
+            verdict.notes.append(f"{addon.name} is a directory, so the second client has no copy of it")
+
+    if variant == "other":
+        subprocess.run([sys.executable, str(root / "tools" / "testpack" / "build_served.py"),
+                        "--out", str(guest / "addons" / "extra-addon.mcaddon")],
+                       check=True, capture_output=True)
+    return guest
+
+
+def ask_host(directory: Path, *lines: str) -> None:
+    """Hands the host client its next `lan.request`, written whole so it is never read half done."""
+    pending = directory / "lan.request.part"
+    pending.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    pending.rename(directory / "lan.request")
+
+
+def wait_for_file(path: Path, deadline: float) -> str | None:
+    while time.monotonic() < deadline:
+        if path.is_file() and path.read_text(encoding="utf-8").strip():
+            return path.read_text(encoding="utf-8").strip()
+        time.sleep(0.5)
+    return None
+
+
+def wait_for_count(lines: list[str], pattern: re.Pattern, count: int, deadline: float) -> bool:
+    while time.monotonic() < deadline:
+        if sum(1 for one in list(lines) if pattern.search(one)) >= count:
+            return True
+        time.sleep(0.5)
+    return False
+
+
+def sync_lines(lines: list[str], verdict: Verdict, expected: int, side: str) -> None:
+    """Reads a client's log for what taking a server's add-on set looks like, from first to last."""
+    received = [int(match.group(1)) for match in map(RECEIVED.search, lines) if match]
+    activated = [int(match.group(1)) for match in map(ACTIVATED.search, lines) if match]
+    if expected not in received:
+        verdict.fail(f"{side} was not offered the server's add-ons",
+                     f"no `Received {expected} add-ons from the server.` line, saw {received}")
+    if expected not in activated:
+        verdict.fail(f"{side} did not activate the server's add-ons",
+                     f"no `Activated the server's add-on set of {expected} add-ons.` line, saw {activated}")
+    if not any(RESTORED.search(one) for one in lines):
+        verdict.fail(f"{side} did not put its own add-ons back",
+                     "no `Restored the installed add-on set.` line after the session ended")
 
 
 def check_join(root: Path, version: str, timeout: float, hold: float, verbose: bool,
-               bare: bool = False) -> Verdict:
+               variant: str = "plain") -> Verdict:
     """Starts a dedicated server and connects a client to it, which is what a multiplayer world is.
 
     Everything the other two modes reach happens inside one process, where the two halves share
@@ -1208,14 +1304,21 @@ def check_join(root: Path, version: str, timeout: float, hold: float, verbose: b
     the client's log. The last one is the whole round trip, because only the server can send it and
     only a client in that server's world can print it.
 
-    With `bare`, the client is started after its packs have been taken away, which is the player who
-    joins without the add-on installed. A pack claiming a `KnownPack` tells the server that such a
-    client already holds its registry entries, so this is the run that says whether that claim is
-    true: the client has to reach the world all the same, and it may arrive without the add-on but
-    never short of something it was promised.
+    `plain` runs the first client, which shares its add-ons with the server. The other variants run
+    the second client from `run/join-client/`, which has add-ons of its own, and also read what it
+    logged about taking the server's set. `bare` has none, so the whole set is downloaded and
+    activated. `other` has the server's archives at another version, which are replaced, and one the
+    server does not have, which stays installed and goes dormant. `reshaped` has a copy of the
+    server's add-on that cannot be replaced without a restart, so the client has to be turned away
+    with the add-on's name. The harness ends the session of the first two by stopping the server,
+    which is what makes the client put its own set back.
     """
-    verdict = Verdict(f"{version} join" + (" without the add-on" if bare else ""))
-    if occupied(SERVER, verdict, version) or occupied(CLIENT, verdict, version):
+    labels = {"plain": "", "bare": " without the add-on", "other": " with other add-ons",
+              "reshaped": " with a reshaped add-on"}
+    verdict = Verdict(f"{version} join" + labels[variant])
+    guest = variant != "plain"
+    joiner = replace(GUEST if guest else CLIENT, name="join-client")
+    if occupied(SERVER, verdict, version) or occupied(joiner, verdict, version):
         return verdict
 
     addons, _, expected, _ = addon_source(root, version, verdict)
@@ -1228,22 +1331,15 @@ def check_join(root: Path, version: str, timeout: float, hold: float, verbose: b
     marker = f"MCADDONHEARD{os.getpid()}{int(time.time())}"
     heard = re.compile(re.escape(marker))
     client: dict = {"lines": [], "outcome": "never started", "log": None}
-    installed = root / "versions" / version / "run" / "addons"
-    withheld = root / "versions" / version / "run" / "addons-withheld"
-    # A run killed part way through leaves its packs here, and the directory it took them from is
-    # what every other mode reads, so they go back before anything else looks at either.
-    restore(installed, withheld)
-    if bare:
-        withheld.mkdir(parents=True, exist_ok=True)
+    # A refused client never reaches the world, so the refusal is what it is waited on for.
+    ready = re.compile(r"cannot replace yours|[Ll]ost connection|Disconnected") \
+        if variant == "reshaped" else heard
 
     def connect(server: subprocess.Popen, served: list[str]) -> None:
         """Runs a client against the server that is up, and talks to it from the server console."""
         deadline = time.monotonic() + timeout
-        # The server has read its packs by now, so taking them away here leaves a client that has
-        # none of them, which is what a player joining without the add-on installed looks like.
-        if bare:
-            for addon in addons:
-                addon.rename(withheld / addon.name)
+        if guest:
+            stock_guest(root, version, variant, addons, verdict)
 
         def talk() -> None:
             if not wait_for(server, served, JOINED, deadline):
@@ -1253,25 +1349,22 @@ def check_join(root: Path, version: str, timeout: float, hold: float, verbose: b
                 time.sleep(1.5)
                 type_into(server, command)
 
+        def leave(process: subprocess.Popen, lines: list[str]) -> None:
+            """Stops the server under a client that is in its world and waits for it to put its set back."""
+            type_into(server, "stop")
+            wait_for(process, lines, RESTORED, min(deadline, time.monotonic() + 60))
+
         talking = Thread(target=talk, daemon=True)
         talking.start()
-        # A client that was given no packs is going to be turned away, so the refusal is what this
-        # run waits for. Waiting for the round trip instead would sit on the disconnect screen until
-        # the deadline and then report the same thing several minutes later.
         client["lines"], client["log"], client["outcome"] = play(
-            root, version, replace(CLIENT, name="join-client"),
-            MISSING_ENTRY if bare else heard, [], timeout, 0.0 if bare else hold, verbose,
-            join=f"127.0.0.1:{port}")
+            root, version, joiner, ready, [], timeout, hold if variant == "plain" else 0.0, verbose,
+            join=f"127.0.0.1:{port}",
+            while_loaded=leave if variant in ("bare", "other") else None)
         talking.join(timeout=10)
 
-    try:
-        served, log, outcome = play(root, version, replace(SERVER, name="join-server"), SERVER.ready,
-                                    [(1.0, "mcaddon packs")], timeout, 0.0, verbose,
-                                    while_loaded=connect)
-    finally:
-        # However the run ended, the packs go back where they were: a later run reading an addons
-        # directory this one emptied would report on a checkout nobody has.
-        restore(installed, withheld)
+    served, log, outcome = play(root, version, replace(SERVER, name="join-server"), SERVER.ready,
+                                [(1.0, "mcaddon packs")], timeout, 0.0, verbose,
+                                while_loaded=connect)
 
     seen = client["lines"]
     verdict.notes.append(f"server {outcome}, {len(served)} lines in {log.relative_to(root)}")
@@ -1284,20 +1377,22 @@ def check_join(root: Path, version: str, timeout: float, hold: float, verbose: b
 
     scan(served, verdict, (("server reached done", r"Done \("),)
          + (EXPECTED_WITH_ADDON if addons else ()))
-    # A client that was never given the packs is meant to fail, so its log is not read for the
-    # signatures that mean something went wrong. Filtering that log line by line was a losing game:
-    # Fabric names this one refusal four different ways across these four versions. What the run
-    # asserts instead is the positive thing, below, plus that the client did not crash on the way.
-    if not bare:
-        scan(seen, verdict, EXPECTED_WITH_ADDON if addons else ())
-    elif any(re.search(r"[Cc]rash report (?:saved to|has been saved)", one) for one in seen):
-        verdict.fail("the client crashed rather than being turned away",
-                     "a crash report was written, so the refusal was not the orderly kind")
+    scan(seen, verdict, EXPECTED_WITH_ADDON if addons and not guest else ())
     gradle_failed(served, outcome, verdict)
     gradle_failed(seen, client["outcome"], verdict)
 
-    if bare:
-        return refused(verdict, seen)
+    if variant == "reshaped":
+        refusal = [one for one in served + seen if CANNOT_REPLACE.search(one)]
+        if not refusal:
+            verdict.fail("the reshaped add-on was not refused by name",
+                         "nothing said `The server's copy of <add-on> cannot replace yours`")
+        else:
+            named = CANNOT_REPLACE.search(refusal[0])
+            verdict.notes.append(f"refused, naming {named.group(1) if named else 'nothing'}")
+        if any(JOINED.search(one) for one in served):
+            verdict.fail("a client with a reshaped add-on entered the world",
+                         "the server wrote a join for a client that had to be turned away")
+        return verdict
 
     if not any(LOGGED_IN.search(one) for one in served):
         verdict.fail("no client logged in",
@@ -1328,6 +1423,19 @@ def check_join(root: Path, version: str, timeout: float, hold: float, verbose: b
                      f"`give @a {items[0]}` was refused, so the item the packs declare is not "
                      "something the server can hand to somebody standing in it")
 
+    if guest:
+        sync_lines(seen, verdict, len(addons), "the client")
+        if variant == "bare":
+            received = list((root / "versions" / version / "run" / "join-client" / ".mcaddon"
+                             / "received").glob("*.mcaddon"))
+            if len(received) != len(addons):
+                verdict.fail("the add-ons were not kept in the client's cache",
+                             f"{len(received)} archives under `.mcaddon/received` for {len(addons)} add-ons")
+        elif not any(DOWNLOADING.search(one) for one in seen):
+            verdict.fail("the changed add-on was not downloaded",
+                         "no `Downloading N add-ons` line, so the client's own copy was not replaced")
+        return verdict
+
     # Both halves register an add-on's items themselves and the sync then insists the two lists
     # agree, so a count that differs names the cause of a disconnect the reason alone does not.
     byServer = reported_counts(served)
@@ -1340,6 +1448,177 @@ def check_join(root: Path, version: str, timeout: float, hold: float, verbose: b
     verdict.counts = {"source": expected, "reported by the server": byServer,
                       "reported by the client": byClient}
     return verdict
+
+
+LOGGED_IN_NAME = re.compile(r"(\S+)\[[^\]]*\] logged in with entity id")
+
+
+def check_lan(root: Path, version: str, timeout: float, verbose: bool,
+              dormant: bool = False) -> Verdict:
+    """Opens a singleplayer world to the LAN and has a second client join it as a guest.
+
+    The host is the first client with a saved world. Nobody can press the Open to LAN button, so a
+    development-only handler answers a `lan.request` file in its run directory by publishing the
+    world and writing the port back, and runs the console commands the same file carries. The guest
+    is the second client with no add-ons, which has to receive the host's set and use an item from
+    it. The host holds the add-ons in the integrated server it shares with its own client, so what
+    it must never do is download, activate or restore anything: those lines in its log fail the run.
+
+    With `dormant` the host first joins a dedicated server that hands out one more add-on than the
+    host has installed and leaves again, so the host holds that archive as a dormant add-on. The
+    guest is then offered it as an inactive entry and has to reach the world all the same.
+    """
+    verdict = Verdict(f"{version} lan" + (" with a dormant add-on" if dormant else ""))
+    if any(occupied(launch, verdict, version) for launch in (CLIENT, GUEST, SERVER)):
+        return verdict
+
+    addons, _, expected, _ = addon_source(root, version, verdict)
+    items = [one for addon in addons for one in item_identifiers(*open_source(addon))]
+    run = root / "versions" / version / "run"
+    free_world_lock(root, version)
+    marker = f"MCADDONHEARD{os.getpid()}{int(time.time())}"
+    heard = re.compile(re.escape(marker))
+    guest: dict = {"lines": [], "outcome": "never started", "log": None}
+    offered = len(addons)
+
+    if dormant:
+        extra = root / "build" / "verify" / "lan-served"
+        shutil.rmtree(extra, ignore_errors=True)
+        extra.mkdir(parents=True)
+        subprocess.run([sys.executable, str(root / "tools" / "testpack" / "build_served.py"),
+                        "--out", str(extra / "dormant-addon.mcaddon")],
+                       check=True, capture_output=True)
+        offered += 1
+        stocked = lan_stock_dormant(root, version, timeout, verbose, extra, verdict)
+        if not stocked:
+            return verdict
+
+    shutil.rmtree(run / "join-client" / "addons", ignore_errors=True)
+    (run / "join-client" / "addons").mkdir(parents=True)
+    shutil.rmtree(run / "join-client" / ".mcaddon", ignore_errors=True)
+    (run / "lan.port").unlink(missing_ok=True)
+    (run / "lan.request").unlink(missing_ok=True)
+
+    name = world(root, version)
+    if name is None:
+        verdict.fail("no world to host",
+                     "`run` has not been run in this checkout, so there is no saved world to open")
+        return verdict
+
+    deadline = time.monotonic() + timeout
+
+    def host_loaded(host: subprocess.Popen, hosted: list[str]) -> None:
+        ask_host(run, "publish")
+        port = wait_for_file(run / "lan.port", min(deadline, time.monotonic() + 60))
+        if port is None:
+            verdict.fail("the world was never opened to the LAN",
+                         "`lan.request` was not answered with a port")
+            return
+
+        def talk() -> None:
+            if not wait_for_count(hosted, LOGGED_IN, 2, deadline):
+                return
+            time.sleep(3)
+            # Peaceful, because a guest standing in a survival world at night is killed within seconds.
+            ask_host(run, "difficulty peaceful", "list", *[f"give @a {one}" for one in items[:1]],
+                     f"say {marker}")
+
+        def leave(process: subprocess.Popen, lines: list[str]) -> None:
+            names = [match.group(1) for match in map(LOGGED_IN_NAME.search, list(hosted)) if match]
+            if len(names) > 1:
+                ask_host(run, f"kick {names[-1]}")
+            wait_for(process, lines, RESTORED, min(deadline, time.monotonic() + 60))
+
+        talking = Thread(target=talk, daemon=True)
+        talking.start()
+        guest["lines"], guest["log"], guest["outcome"] = play(
+            root, version, GUEST, heard, [], timeout, 0.0, verbose,
+            join=f"127.0.0.1:{port}", while_loaded=leave)
+        talking.join(timeout=10)
+
+    hosted, log, outcome = play(root, version, replace(CLIENT, name="lan-host"), LOGGED_IN, [],
+                                timeout, 0.0, verbose, quick_play=name, while_loaded=host_loaded)
+    seen = guest["lines"]
+    verdict.notes.append(f"host {outcome}, {len(hosted)} lines in {log.relative_to(root)}")
+    verdict.notes.append(f"guest {guest['outcome']}, {len(seen)} lines in "
+                         + (str(guest["log"].relative_to(root)) if guest["log"] else "no log"))
+
+    scan(hosted, verdict, EXPECTED_WITH_ADDON if addons else ())
+    scan(seen, verdict, ())
+    gradle_failed(hosted, outcome, verdict)
+    gradle_failed(seen, guest["outcome"], verdict)
+
+    if not (run / "lan.port").is_file():
+        return verdict
+    if sum(1 for one in hosted if LOGGED_IN.search(one)) < 2:
+        verdict.fail("the guest never logged in to the host's world",
+                     "the host logged one login, which is its own")
+    if not any(heard.search(one) for one in seen):
+        verdict.fail("the guest never heard the host",
+                     f"{marker} was said in the host's world and never reached the guest")
+    if items and not any(GAVE.search(one) for one in hosted):
+        verdict.fail("an add-on item would not reach the guest",
+                     f"`give @a {items[0]}` was refused in the host's world")
+
+    for pattern, what in ((RECEIVED, "received"), (DOWNLOADING, "downloaded"),
+                          (ACTIVATED, "activated"), (RESTORED, "restored")):
+        if any(pattern.search(one) for one in hosted):
+            verdict.fail("the host took part in the sync",
+                         f"the host's log says it {what} add-ons, which only the guest may do")
+
+    received = [int(match.group(1)) for match in map(RECEIVED.search, seen) if match]
+    if offered not in received:
+        verdict.fail("the guest was not offered the host's add-ons",
+                     f"no `Received {offered} add-ons from the server.` line, saw {received}")
+    activated = [int(match.group(1)) for match in map(ACTIVATED.search, seen) if match]
+    if len(addons) not in activated:
+        verdict.fail("the guest did not activate the host's add-ons",
+                     f"no `Activated the server's add-on set of {len(addons)} add-ons.` line, "
+                     f"saw {activated}")
+    if not any(RESTORED.search(one) for one in seen):
+        verdict.fail("the guest did not put its own add-ons back",
+                     "no `Restored the installed add-on set.` line after the host kicked it")
+    return verdict
+
+
+def lan_stock_dormant(root: Path, version: str, timeout: float, verbose: bool, served: Path,
+                      verdict: Verdict) -> bool:
+    """Has the host client join a dedicated server that serves an add-on the host lacks, then leave.
+
+    The client keeps what it received, so afterwards it holds that add-on without having it
+    installed, which is what a dormant add-on is.
+    """
+    port = givePort(root, version)
+    takeLocalJoins(root, version)
+    seen: dict = {"lines": []}
+
+    def connect(server: subprocess.Popen, lines: list[str]) -> None:
+        deadline = time.monotonic() + timeout
+
+        def leave(process: subprocess.Popen, client_lines: list[str]) -> None:
+            wait_for(server, lines, JOINED, deadline)
+            # The server is stopped only once the client has heard it from inside the world, which
+            # is after the activation's resource reload has finished. A disconnect that lands while
+            # that reload is still running leaves the client without a `Restored` line at all.
+            time.sleep(2)
+            tag = f"MCADDONSETTLED{os.getpid()}"
+            type_into(server, f"say {tag}")
+            wait_for(process, client_lines, re.compile(tag), min(deadline, time.monotonic() + 60))
+            type_into(server, "stop")
+            wait_for(process, client_lines, RESTORED, min(deadline, time.monotonic() + 60))
+
+        seen["lines"], _, outcome = play(
+            root, version, replace(CLIENT, name="lan-prejoin"), ACTIVATED, [], timeout, 0.0,
+            verbose, join=f"127.0.0.1:{port}", while_loaded=leave)
+        seen["outcome"] = outcome
+
+    _, _, outcome = play(root, version, replace(SERVER, name="lan-server"), SERVER.ready, [],
+                         timeout, 0.0, verbose, while_loaded=connect, serve=served)
+    if not any(RESTORED.search(one) for one in seen["lines"]):
+        verdict.fail("the host did not take the dormant add-on",
+                     f"its join of the serving server never restored its own set ({outcome})")
+        return False
+    return True
 
 
 def check_conversion(root: Path, source: Path, version: str) -> Verdict:
@@ -1390,9 +1669,11 @@ def report(verdicts: list[Verdict], destination: Path) -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=USAGE)
-    parser.add_argument("mode", choices=("run", "client", "join", "convert", "companions", "all"),
+    parser.add_argument("mode", choices=("run", "client", "join", "lan", "convert", "companions", "all"),
                         help="`run` drives a dev server, `client` a dev client, `join` connects one "
-                             "to the other, `convert` compares a conversion offline, `companions` "
+                             "to the other (`--bare`, `--other` and `--reshaped` give the joining "
+                             "client add-ons of its own), `lan` hosts a world to a second client, "
+                             "`convert` compares a conversion offline, `companions` "
                              "runs a server and a client beside the mods this one is meant to work "
                              "with and reads their failures back as well as this mod's, "
                              "`all` does run, client, join and convert in turn")
@@ -1408,6 +1689,16 @@ def main() -> int:
     parser.add_argument("--report", type=Path, help="where to write the JSON verdict")
     parser.add_argument("--lock-wait", type=float, default=1800.0,
                         help="seconds to wait for another run to release the harness lock")
+    parser.add_argument("--bare", action="store_true",
+                        help="join: the second client has no add-ons and takes the server's")
+    parser.add_argument("--other", action="store_true",
+                        help="join: the second client has other versions of the server's add-ons "
+                             "and an add-on of its own")
+    parser.add_argument("--reshaped", action="store_true",
+                        help="join: the second client has a copy of an add-on the server's cannot "
+                             "replace without a restart")
+    parser.add_argument("--dormant", action="store_true",
+                        help="lan: the host holds an add-on it never installed, as a dormant one")
     parser.add_argument("--verbose", action="store_true", help="mirror the server output")
     arguments = parser.parse_args()
 
@@ -1419,7 +1710,7 @@ def main() -> int:
     # One lock per version, because a server and a client of the same version share a world, and
     # the four versions share nothing: four directories, four ports, four sets of processes. They
     # are checked at the same time, which is most of what a whole run costs.
-    if arguments.mode in ("run", "client", "join", "companions", "all"):
+    if arguments.mode in ("run", "client", "join", "lan", "companions", "all"):
         def checkVersion(version: str) -> list[Verdict]:
             found = []
             with exclusive(root, arguments.lock_wait, version):
@@ -1432,15 +1723,17 @@ def main() -> int:
                 if arguments.mode in ("client", "all"):
                     found.append(check_client(
                         root, version, arguments.timeout, arguments.hold, arguments.verbose))
+                joins = [name for name in ("bare", "other", "reshaped") if getattr(arguments, name)]
+                if arguments.mode == "all":
+                    joins = ["plain", "bare", "other", "reshaped"]
+                elif arguments.mode == "join" and not joins:
+                    joins = ["plain"]
                 if arguments.mode in ("join", "all"):
-                    found.append(check_join(
-                        root, version, arguments.timeout, arguments.hold, arguments.verbose))
-                    # The same world again, with the packs kept from the client. A pack claiming a
-                    # KnownPack promises the server that such a client already holds its registry
-                    # entries, and this is the run that holds the promise to account.
-                    found.append(check_join(
-                        root, version, arguments.timeout, arguments.hold, arguments.verbose,
-                        bare=True))
+                    found += [check_join(root, version, arguments.timeout, arguments.hold,
+                                         arguments.verbose, variant=variant) for variant in joins]
+                if arguments.mode in ("lan", "all"):
+                    found.append(check_lan(root, version, arguments.timeout, arguments.verbose,
+                                           dormant=arguments.dormant))
             return found
 
         with ThreadPoolExecutor(max_workers=len(versions)) as running_versions:

@@ -337,10 +337,33 @@ val clientArgs = buildList {
     }
 }
 
-if (clientArgs.isNotEmpty()) {
+/**
+ * `runJoinClient` is a second client with a run directory and an add-on set of its own, which is
+ * what a player joining somebody else's game is. `verify.py join` and `verify.py lan` start it
+ * beside the dedicated server or the first client, and the property tells the two clients apart in
+ * the process table.
+ */
+run {
     val loom = project.extensions.getByName("loom")
     val runs = loom.javaClass.getMethod("getRuns").invoke(loom)
-    val client = runs.javaClass.getMethod("getByName", String::class.java).invoke(runs, "client")
-    client.javaClass.getMethod("programArgs", Array<String>::class.java)
-        .invoke(client, clientArgs.toTypedArray())
+    val create = runs.javaClass.getMethod("create", String::class.java)
+    val getByName = runs.javaClass.getMethod("getByName", String::class.java)
+    val guest = create.invoke(runs, "joinClient")
+    guest.javaClass.getMethod("client").invoke(guest)
+    guest.javaClass.getMethod("runDir", String::class.java).invoke(guest, "run/join-client")
+    guest.javaClass.getMethod("vmArg", String::class.java).invoke(guest, "-Dmcaddon.role=guest")
+    // A dedicated server hands out every archive in this directory as well as its own add-ons.
+    val servedDirectory = project.findProperty("served") as String?
+    if (!servedDirectory.isNullOrBlank()) {
+        val server = getByName.invoke(runs, "server")
+        server.javaClass.getMethod("vmArg", String::class.java)
+            .invoke(server, "-Dmcaddon.served=$servedDirectory")
+    }
+    if (clientArgs.isNotEmpty()) {
+        for (name in listOf("client", "joinClient")) {
+            val config = getByName.invoke(runs, name)
+            config.javaClass.getMethod("programArgs", Array<String>::class.java)
+                .invoke(config, clientArgs.toTypedArray())
+        }
+    }
 }
