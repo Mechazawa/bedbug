@@ -244,7 +244,7 @@ public final class AddonGameTests {
         }
 
         java.util.List<String> report = AddonEntities.report();
-        helper.assertTrue(report.stream().noneMatch(line -> line.startsWith("    behaviour pack cameras x")),
+        helper.assertTrue(report.stream().noneMatch(line -> line.startsWith("    behaviour pack cameras")),
             "the pack's cameras directory is named as one nothing reads: " + report);
         for (String field : java.util.List.of("player_effects", "extend_player_rendering", "radius", "view_offset",
             "entity_offset")) {

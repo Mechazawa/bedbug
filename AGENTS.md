@@ -1641,12 +1641,13 @@ Mojang's geometry is not committed, so that list is the one place this knowledge
   ```
 
   The published side is Mojang's own pack pair, widened by the material in the same checkout naming a
-  kind that pair happens not to ship. The mod's side is the `READ` and `DEFINED` declarations in
-  `pack/PackFiles.java`, and the difference between them is what `PackFiles.report` names against the
-  pack that shipped it.
+  kind that pair happens not to ship. The mod's side is the `READ` set and the `UNREAD` map in
+  `pack/PackFiles.java`. `UNREAD` gives each kind no reader opens the reason Java has no place for
+  it, and `PackFiles.report` names the kind and that reason against the pack that shipped it, so a
+  kind cannot be declared unread without a reason.
 
-  **The silent column is the one that has to stay at zero.** A kind in `DEFINED` and not in `READ` is
-  reported to the author; a kind in neither is a directory the mod passes over without a word. The
+  **The silent column is the one that has to stay at zero.** A kind in `UNREAD` is reported to the
+  author; a kind in neither is a directory the mod passes over without a word. The
   run also names any path declared as read whose own literal appears in no other source file, which
   is a coverage claim with no reader behind it.
 - **`tools/census/manifest.py`** measures the one file every pack has and no other census looks

@@ -993,6 +993,8 @@ pack lists 20 of the 8039 images it ships, every one of them a file that is ther
 by `terrain_texture.json` or `item_texture.json`. The conversion walks `textures/` itself, so what it
 writes covers whatever the index names and reading the index would change nothing. It is counted and
 named all the same, because a file this mod never opens is a fact the pack's author is owed.
+`/mcaddon entities` names each of the four kinds nothing reads, `ui`, this index, `color_grading` and
+`water`, together with the reason Java has no place for it.
 
 **A dimension with a generator nobody wrote down.** Bedrock builds a dimension a pack declares as
 empty space and accepts `void` and no other generator, so a file naming another one is counted and
