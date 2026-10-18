@@ -335,6 +335,17 @@ These are the checks it runs, and what each one catches:
   form its material sees. A pack marking a texture with one texel at an alpha of one, which a plain
   alpha test never draws, otherwise shows that texel as a speck floating beside the model.
 
+  The shade's first controller also states a `color` halving red and a blue `overlay_color`. A colour
+  mask draws a texel as `mix(rgb, rgb * color, alpha)`, so the marked band takes three parts in 255
+  of that colour where the body takes all of it. The conversion writes the texture as painted
+  beside it, `_tint_weights`, for any texture holding a partly clear texel, and `AddonModels` draws
+  such a pass untinted and then again, blended, from that form in the controller's colour.
+  `RenderControllerClientGameTest.colourMask` reads both passes back. The shade's second controller
+  draws `tp_unlaid`, the pack's own `entity_alphatest` with `USE_OVERLAY` removed, under the same
+  overlay, and the same test asserts that pass takes neither the blue nor the red of a hit. The
+  sprite's cap is a colour mask over the same texture, so the sprite draws three passes and the
+  cap's colour is read off the third.
+
   `tp:shade` also collides in a box of nothing, the way a pack's stand-in for a vanilla mob often
   does. Java scales how far it draws a mob by its box, so `AddonEntityRenderer` measures that
   distance by the model's visible box as well, and `CullingClientGameTest` asserts the shade is drawn.
@@ -375,7 +386,10 @@ These are the checks it runs, and what each one catches:
   what may go in it, an idle sound interval, a dye, a dweller's radius, a leashable refusing to be
   stolen, a ground control, a sittable and a hopper drawing from whatever stands over the entity;
   the primed group holds an explosion, and the warded group
-  a damage sensor refusing the blow and raising an event about it. The box is the one that proves a
+  a damage sensor refusing the blow and raising an event about it. The mortal group's sensor
+  refuses only a blow `has_damage` calls `fatal`, which the sensor answers from the damage on its
+  way in against the health left, and `aDamageSensorKnowsAFatalBlow` deals a scratch and then a
+  killing blow. The box is the one that proves a
   group moves the width and the height apart from each other, which no scale can do, and the laden
   group's components are otherwise unrelated so that each assertion names one of them alone.
 
@@ -1492,7 +1506,10 @@ veka0/mcbe-shader-codebase) multiply a texture by `ChangeColor` only where the m
 with `CHANGE_COLOR` on, which is what `USE_COLOR_MASK` in a `.material` selects: the texel is mixed
 toward itself times the colour by its own alpha, and its alpha is multiplied by the colour's.
 `OverlayColor`, which `overlay_color`, `is_hurt_color` and `on_fire_color` feed, is laid over in
-every one of them. Every vanilla render controller stating a `color` names a material that reads
+every one of them; the legacy `entity.fragment` laid it only under `USE_OVERLAY`, and Microsoft's
+material documentation still lists that define, so `MaterialDefinition.laysOverlay` leaves the
+overlay off a material removing it, as `entity_beam_additive`, `entity_dissolve_layer1` and
+`item_in_hand_multicolor_tint` do. Every vanilla render controller stating a `color` names a material that reads
 it: `player_spectator`, `warden_bioluminescent_layer` and `horse_leather_armor`.
 `MaterialDefinition.readsControllerColour` names the game's own materials defining
 `USE_COLOR_MASK`, read off the game's `entity.material`; `MULTI_COLOR_TINT` (the red channel alone)

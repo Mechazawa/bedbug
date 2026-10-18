@@ -73,10 +73,14 @@ Against a server without this mod a client plays with its own add-ons.
   evaluator, with each pass drawn the way its `.material` asks: alpha tested or blended, culled or
   not, plain or glowing, and lit by the light its controller asked for. A controller's `color`
   tints a pass only where its material is a colour mask, such as `entity_alphatest_change_color` or
-  one defining `USE_COLOR_MASK`, because Bedrock's entity shaders read it nowhere else; its
-  `overlay_color`, `is_hurt_color` and `on_fire_color` are laid over every material. A hurt or dying
+  one defining `USE_COLOR_MASK`, because Bedrock's entity shaders read it nowhere else. Such a mask
+  tints each texel by its own alpha, so over a texture holding partly clear texels the pass is drawn
+  untinted and the tint is laid over it in a second, blended pass that weighs each texel by the alpha
+  the pack painted; a blended colour mask over such a texture is tinted whole and reported. Its
+  `overlay_color`, `is_hurt_color` and `on_fire_color` are laid over every material that keeps
+  `USE_OVERLAY`, which the game's beams and a pack's own material can remove. A hurt or dying
   entity flashes red the way every Bedrock entity does, unless its controller states an
-  `is_hurt_color` of its own, which is drawn instead. A pass whose material
+  `is_hurt_color` of its own, which is drawn instead, or its material removes `USE_OVERLAY`. A pass whose material
   defines `MASKED_MULTITEXTURE`, as the game's villager outfits do, draws its second texture over its
   first with the second's clear but coloured texels showing the first through, which is how a
   villager's profession is worn over the clothes of its biome. A controller's `materials` list gives each bone
@@ -715,8 +719,9 @@ drowning rhythm applies; `has_gravity` is left alone, because Mojang's fish decl
 fall when they leap out of water; a dweller holds to where it stood without joining a Java village;
 a tempt sound's gap is documented in ticks and written by Mojang in two units at once; a turtle egg
 stomper searches the twenty-four blocks Java's goal fixes, whatever its `search_range` says; and how
-fast an entity resends itself over the network is Java's own business. `has_damage` asking whether
-a blow is `fatal` is reported, because the sensor that asks it is not told how hard the blow is.
+fast an entity resends itself over the network is Java's own business. Outside a damage sensor,
+`has_damage` asking whether a blow is `fatal` is reported, because only the sensor is told how hard
+the blow is; inside one it answers whether the damage, before armour, is at least the health left.
 
 **A camera and a touch button.** `minecraft:camera` times the black bars, the shutter and the
 photograph sliding away, which is a full-screen animation the Bedrock client plays while a player
