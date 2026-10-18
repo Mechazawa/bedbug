@@ -43,7 +43,8 @@ public final class AttachedCameraClientGameTest implements FabricClientGameTest 
                 "Camera.attachToEntity({ entity: <the armour stand>, locator: EntityAttachPoint.Feet })");
 
             world.getServer().runCommand("bedrock camera @a clear");
-            Worlds.waitForClient(context, client -> Cameras.at(client, client.player.getEyePosition()), Cameras.PATIENCE,
+            Worlds.waitForClient(context, client -> Cameras.at(client, client.player.getEyePosition()),
+                Cameras.PATIENCE,
                 () -> "/camera clear ends an attachment and gives the camera back to the player's eyes, and it"
                     + " stands at " + Cameras.position(Minecraft.getInstance()) + ".");
 

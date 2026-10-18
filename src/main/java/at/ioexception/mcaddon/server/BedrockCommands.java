@@ -36,7 +36,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
-import java.util.function.Predicate;
 
 /**
  * The Bedrock commands a pack expects to exist and Java does not ship, in the tree `/bedrock` reads

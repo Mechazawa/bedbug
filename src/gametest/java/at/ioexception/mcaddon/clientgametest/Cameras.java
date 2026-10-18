@@ -74,12 +74,16 @@ final class Cameras {
         return Vec3.directionFromRotation(pitch - 90, yaw);
     }
 
-    /** Summons the armour stand the camera tests use, floating where its feet are put, and waits for the client to have it. */
+    /**
+     * Summons the armour stand the camera tests use, floating where its feet are put, and waits for
+     * the client to have it.
+     */
     static void stand(ClientGameTestContext context, TestSingleplayerContext world, Vec3 feet, float yaw) {
         world.getServer().runCommand("kill @e[type=minecraft:armor_stand]");
         world.getServer().runCommand("summon minecraft:armor_stand " + feet.x + " " + feet.y + " " + feet.z
             + " {NoGravity:1b,Rotation:[" + yaw + "f,0f]}");
-        Worlds.waitForClient(context, client -> stand(client) != null && stand(client).position().distanceTo(feet) < 1e-3,
+        Worlds.waitForClient(context,
+            client -> stand(client) != null && stand(client).position().distanceTo(feet) < 1e-3,
             PATIENCE, () -> "an armour stand was summoned at " + feet + " and the client never had it there.");
     }
 

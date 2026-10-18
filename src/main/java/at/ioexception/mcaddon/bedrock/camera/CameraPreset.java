@@ -43,7 +43,8 @@ public record CameraPreset(String identifier, String root, CameraView.Preset cam
         String full = name.contains(":") ? name : "minecraft:" + name;
         CameraView.Preset camera = CameraView.Preset.tryFrom(full);
         return camera == null ? null
-            : new CameraPreset(full, full, camera, null, null, null, false, CameraOrbit.DEFAULT, CameraTracking.DEFAULT);
+            : new CameraPreset(full, full, camera, null, null, null, false, CameraOrbit.DEFAULT,
+                CameraTracking.DEFAULT);
     }
 
     /**

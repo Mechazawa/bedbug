@@ -72,7 +72,8 @@ class CameraPresetTest {
     void inheritsAnOrbit() {
         CameraPreset boom = CameraPreset.builtIn("fixed_boom").inheritedBy("tp:boom", body(
             "{\"radius\": 400, \"view_offset\": [1, 2], \"starting_rot_x\": 45}"))
-            .inheritedBy("tp:aligned", body("{\"entity_offset\": [0, 1, 0], \"align_target_and_camera_forward\": true}"));
+            .inheritedBy("tp:aligned",
+                body("{\"entity_offset\": [0, 1, 0], \"align_target_and_camera_forward\": true}"));
 
         assertEquals(CameraView.Preset.FIXED_BOOM, boom.camera());
         assertEquals(new CameraOrbit(100f, 1f, 2f, new Vec3(0, 1, 0), 45f, null, true), boom.orbit());

@@ -63,7 +63,8 @@ public final class TargetCameraClientGameTest implements FabricClientGameTest {
                 return Cameras.turned(client, Cameras.pitch(towards), Cameras.yaw(towards));
             }, Cameras.PATIENCE, () -> "Camera.setCamera(\"minecraft:free\", { targetEntity, offsetFromTargetCenter:"
                 + " { x: 0, y: 3, z: 0 } }) turns the camera to " + above + ", and from "
-                + Cameras.position(Minecraft.getInstance()) + " it looks at " + Worlds.camera(Minecraft.getInstance()).xRot()
+                + Cameras.position(Minecraft.getInstance()) + " it looks at "
+                + Worlds.camera(Minecraft.getInstance()).xRot()
                 + " and " + Worlds.camera(Minecraft.getInstance()).yRot() + ".");
             world.getServer().runCommand("bedrock camera @a clear");
         }
