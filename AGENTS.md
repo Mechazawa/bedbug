@@ -339,6 +339,17 @@ These are the checks it runs, and what each one catches:
   form its material sees. A pack marking a texture with one texel at an alpha of one, which a plain
   alpha test never draws, otherwise shows that texel as a speck floating beside the model.
 
+  The shade's first controller also states a `color` halving red and a blue `overlay_color`. A colour
+  mask draws a texel as `mix(rgb, rgb * color, alpha)`, so the marked band takes three parts in 255
+  of that colour where the body takes all of it. The conversion writes the texture as painted
+  beside it, `_tint_weights`, for any texture holding a partly clear texel, and `AddonModels` draws
+  such a pass untinted and then again, blended, from that form in the controller's colour.
+  `RenderControllerClientGameTest.colourMask` reads both passes back. The shade's second controller
+  draws `tp_unlaid`, the pack's own `entity_alphatest` with `USE_OVERLAY` removed, under the same
+  overlay, and the same test asserts that pass takes neither the blue nor the red of a hit. The
+  sprite's cap is a colour mask over the same texture, so the sprite draws three passes and the
+  cap's colour is read off the third.
+
   `tp:shade` also collides in a box of nothing, the way a pack's stand-in for a vanilla mob often
   does. Java scales how far it draws a mob by its box, so `AddonEntityRenderer` measures that
   distance by the model's visible box as well, and `CullingClientGameTest` asserts the shade is drawn.
@@ -379,7 +390,10 @@ These are the checks it runs, and what each one catches:
   what may go in it, an idle sound interval, a dye, a dweller's radius, a leashable refusing to be
   stolen, a ground control, a sittable and a hopper drawing from whatever stands over the entity;
   the primed group holds an explosion, and the warded group
-  a damage sensor refusing the blow and raising an event about it. The box is the one that proves a
+  a damage sensor refusing the blow and raising an event about it. The mortal group's sensor
+  refuses only a blow `has_damage` calls `fatal`, which the sensor answers from the damage on its
+  way in against the health left, and `aDamageSensorKnowsAFatalBlow` deals a scratch and then a
+  killing blow. The box is the one that proves a
   group moves the width and the height apart from each other, which no scale can do, and the laden
   group's components are otherwise unrelated so that each assertion names one of them alone.
 
@@ -1496,7 +1510,10 @@ veka0/mcbe-shader-codebase) multiply a texture by `ChangeColor` only where the m
 with `CHANGE_COLOR` on, which is what `USE_COLOR_MASK` in a `.material` selects: the texel is mixed
 toward itself times the colour by its own alpha, and its alpha is multiplied by the colour's.
 `OverlayColor`, which `overlay_color`, `is_hurt_color` and `on_fire_color` feed, is laid over in
-every one of them. Every vanilla render controller stating a `color` names a material that reads
+every one of them; the legacy `entity.fragment` laid it only under `USE_OVERLAY`, and Microsoft's
+material documentation still lists that define, so `MaterialDefinition.laysOverlay` leaves the
+overlay off a material removing it, as `entity_beam_additive`, `entity_dissolve_layer1` and
+`item_in_hand_multicolor_tint` do. Every vanilla render controller stating a `color` names a material that reads
 it: `player_spectator`, `warden_bioluminescent_layer` and `horse_leather_armor`.
 `MaterialDefinition.readsControllerColour` names the game's own materials defining
 `USE_COLOR_MASK`, read off the game's `entity.material`; `MULTI_COLOR_TINT` (the red channel alone)
@@ -1645,12 +1662,13 @@ Mojang's geometry is not committed, so that list is the one place this knowledge
   ```
 
   The published side is Mojang's own pack pair, widened by the material in the same checkout naming a
-  kind that pair happens not to ship. The mod's side is the `READ` and `DEFINED` declarations in
-  `pack/PackFiles.java`, and the difference between them is what `PackFiles.report` names against the
-  pack that shipped it.
+  kind that pair happens not to ship. The mod's side is the `READ` set and the `UNREAD` map in
+  `pack/PackFiles.java`. `UNREAD` gives each kind no reader opens the reason Java has no place for
+  it, and `PackFiles.report` names the kind and that reason against the pack that shipped it, so a
+  kind cannot be declared unread without a reason.
 
-  **The silent column is the one that has to stay at zero.** A kind in `DEFINED` and not in `READ` is
-  reported to the author; a kind in neither is a directory the mod passes over without a word. The
+  **The silent column is the one that has to stay at zero.** A kind in `UNREAD` is reported to the
+  author; a kind in neither is a directory the mod passes over without a word. The
   run also names any path declared as read whose own literal appears in no other source file, which
   is a coverage claim with no reader behind it.
 - **`tools/census/manifest.py`** measures the one file every pack has and no other census looks
@@ -1680,6 +1698,12 @@ Mojang's geometry is not committed, so that list is the one place this knowledge
   ever asks for is a field parsed and then ignored, which is as silent as one never parsed; string
   literals are blanked before that search so a field name spelt in the reader cannot stand in for
   its value being used.
+
+  A slider's `min`, `max` and `step` and a dropdown's `options` are read by `PackManifest.Setting.tryFrom`,
+  which brings the shipped default inside them; `PackOrder.sort` names a non-`optional` script API
+  dependency `ScriptHost.provides` lacks. The test pack's `tp:ember_overdriven` and `tp:ember_drift`
+  settings ship defaults outside their controls so `aPacksOwnSettingsReadBackAtTheirDeclaredValues`
+  can read the correction back.
 
   The count behind each dropped field has two halves. **Vanilla** is Mojang's own pack pair, which
   writes a thin manifest and says little. **Installed** is every manifest in the add-ons under

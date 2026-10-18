@@ -48,11 +48,12 @@ public sealed interface Filter {
 
     /**
      * Everything a test can be asked about: who is being tested, who is doing the testing, and the
-     * damage a damage sensor is deciding about.
+     * damage a damage sensor is deciding about, with how much of it there is before armour.
      */
-    record Context(Entity self, Entity other, Entity target, AddonState state, DamageSource damage) {
+    record Context(Entity self, Entity other, Entity target, AddonState state, DamageSource damage,
+        float amount) {
         public Context(Entity self, Entity other, Entity target, AddonState state) {
-            this(self, other, target, state, null);
+            this(self, other, target, state, null, 0f);
         }
 
         public Entity subject(String name) {
@@ -502,9 +503,14 @@ public sealed interface Filter {
         /**
          * Inside a damage sensor this asks about the damage on its way in. Anywhere else Java has
          * only the source of the last damage taken, so it answers for damage already dealt.
+         *
+         * `fatal` asks whether the damage would kill, which only the damage on its way in can say.
          */
         private Boolean damageCause(Entity entity, Context context) {
-            if (text().equals("fatal")) return null;
+            if (text().equals("fatal")) {
+                return context.damage() == null ? null
+                    : entity instanceof LivingEntity living && context.amount() >= living.getHealth();
+            }
             DamageCause cause = DamageCause.named(text());
             if (cause == null) return false;
 

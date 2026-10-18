@@ -73,10 +73,14 @@ Against a server without this mod a client plays with its own add-ons.
   evaluator, with each pass drawn the way its `.material` asks: alpha tested or blended, culled or
   not, plain or glowing, and lit by the light its controller asked for. A controller's `color`
   tints a pass only where its material is a colour mask, such as `entity_alphatest_change_color` or
-  one defining `USE_COLOR_MASK`, because Bedrock's entity shaders read it nowhere else; its
-  `overlay_color`, `is_hurt_color` and `on_fire_color` are laid over every material. A hurt or dying
+  one defining `USE_COLOR_MASK`, because Bedrock's entity shaders read it nowhere else. Such a mask
+  tints each texel by its own alpha, so over a texture holding partly clear texels the pass is drawn
+  untinted and the tint is laid over it in a second, blended pass that weighs each texel by the alpha
+  the pack painted; a blended colour mask over such a texture is tinted whole and reported. Its
+  `overlay_color`, `is_hurt_color` and `on_fire_color` are laid over every material that keeps
+  `USE_OVERLAY`, which the game's beams and a pack's own material can remove. A hurt or dying
   entity flashes red the way every Bedrock entity does, unless its controller states an
-  `is_hurt_color` of its own, which is drawn instead. A pass whose material
+  `is_hurt_color` of its own, which is drawn instead, or its material removes `USE_OVERLAY`. A pass whose material
   defines `MASKED_MULTITEXTURE`, as the game's villager outfits do, draws its second texture over its
   first with the second's clear but coloured texels showing the first through, which is how a
   villager's profession is worn over the clothes of its biome. A controller's `materials` list gives each bone
@@ -568,7 +572,8 @@ Against a server without this mod a client plays with its own add-ons.
   `/mcaddon packs` says which form was loaded.
 - The settings a pack offers. Bedrock puts a pack's sliders, toggles and dropdowns on a screen
   beside it, and the pack's own Molang and its script read back whatever a player left them at. Java
-  has no such screen, so each one holds the `default` its author declared:
+  has no such screen, so each one holds the `default` its author declared, kept inside the slider's
+  range and step or the dropdown's options:
   `query.get_pack_setting`, `query.is_pack_setting_enabled` and `query.is_pack_setting_selected` are
   answered with it, and so is `World.getPackSettings`. `/mcaddon packs` also says who wrote a pack,
   under what licence and where it lives, which is what its manifest's `metadata` states.
@@ -645,16 +650,17 @@ or to the installation, and `addons/` is one directory per instance with no worl
 to. `pack_optimization_version` is in Mojang's schema and in Mojang's own field table with no
 description in either, so nothing is stated for a reader to act on. A module's `uuid` and `version`
 identify one half of a pack to Bedrock's content updater, and what names one installation of an
-add-on to another here is the header uuid and the header version. `optional` on a script API
-dependency says a pack runs without that module, which it cannot: a module is linked before any of
-the script runs, so a specifier this mod does not provide ends the whole script whatever the flag
-says. `product_type` decides on Bedrock whether a world keeps its achievements and whether the
+add-on to another here is the header uuid and the header version. A script API dependency this mod
+does not provide is a problem `/mcaddon packs` names, unless the dependency is `optional`. The flag
+does not rescue a script that imports the module, because a module is linked before any of the
+script runs. `product_type` decides on Bedrock whether a world keeps its achievements and whether the
 resource pack half is downloaded, and Java locks no advancement behind a pack and installs both
 halves together. The `editorExtension` capability asks for the Bedrock Editor, which Java has not
 got, and `experimental_custom_ui` asks for an HTML interface Bedrock itself dropped in 1.18.10.28.
-A setting's `text`, `min`, `max`, `step` and `options` describe the screen a player would move it
-on: with no such screen nothing moves a setting off its default, so the range it could have moved
-through decides nothing. The `pbr`, `raytraced` and `script_eval` capabilities are answered rather
+A setting's `text` and an option's `text` are labels on a screen Java does not have. A slider's
+`min`, `max` and `step` and a dropdown's `options` are read: they bring the default inside what the
+control could have been set to, so a slider shipped above its maximum answers with the maximum and
+a dropdown shipped at an option it does not list answers with its first. The `pbr`, `raytraced` and `script_eval` capabilities are answered rather
 than named: the first two ask for physically based rendering, which the texture set conversion
 writes as labPBR sidecars, and the third asks for `eval`, which the script host evaluates with no
 permission of its own to grant.
@@ -715,8 +721,9 @@ drowning rhythm applies; `has_gravity` is left alone, because Mojang's fish decl
 fall when they leap out of water; a dweller holds to where it stood without joining a Java village;
 a tempt sound's gap is documented in ticks and written by Mojang in two units at once; a turtle egg
 stomper searches the twenty-four blocks Java's goal fixes, whatever its `search_range` says; and how
-fast an entity resends itself over the network is Java's own business. `has_damage` asking whether
-a blow is `fatal` is reported, because the sensor that asks it is not told how hard the blow is.
+fast an entity resends itself over the network is Java's own business. Outside a damage sensor,
+`has_damage` asking whether a blow is `fatal` is reported, because only the sensor is told how hard
+the blow is; inside one it answers whether the damage, before armour, is at least the health left.
 
 **A camera and a touch button.** `minecraft:camera` times the black bars, the shutter and the
 photograph sliding away, which is a full-screen animation the Bedrock client plays while a player
@@ -993,6 +1000,8 @@ pack lists 20 of the 8039 images it ships, every one of them a file that is ther
 by `terrain_texture.json` or `item_texture.json`. The conversion walks `textures/` itself, so what it
 writes covers whatever the index names and reading the index would change nothing. It is counted and
 named all the same, because a file this mod never opens is a fact the pack's author is owed.
+`/mcaddon entities` names each of the four kinds nothing reads, `ui`, this index, `color_grading` and
+`water`, together with the reason Java has no place for it.
 
 **A dimension with a generator nobody wrote down.** Bedrock builds a dimension a pack declares as
 empty space and accepts `void` and no other generator, so a file naming another one is counted and
