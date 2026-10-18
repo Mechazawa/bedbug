@@ -2970,6 +2970,14 @@ public class AddonEntity extends PathfinderMob
             .toList();
     }
 
+    /** What the goals running at this moment hold between them, so a test can ask what stays free. */
+    public java.util.Set<net.minecraft.world.entity.ai.goal.Goal.Flag> runningControls() {
+        return goalSelector.getAvailableGoals().stream()
+            .filter(net.minecraft.world.entity.ai.goal.WrappedGoal::isRunning)
+            .flatMap(running -> running.getGoal().getFlags().stream())
+            .collect(java.util.stream.Collectors.toSet());
+    }
+
     /** The priorities this entity's goals went in at, which its pack's `priority` fields state. */
     public java.util.Set<Integer> goalPriorities() {
         return goalPriorities;
@@ -3088,9 +3096,10 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.look_at_player" -> goals.add(priority, LookGoal.atPlayers(this, goal));
             case "minecraft:behavior.look_at_trading_player" ->
                 goals.add(priority, LookGoal.atTradingPlayer(this, goal));
-            case "minecraft:behavior.random_look_around",
-                 "minecraft:behavior.random_look_around_and_sit" ->
+            case "minecraft:behavior.random_look_around" ->
                 goals.add(priority, new RandomLookAroundGoal(this));
+            case "minecraft:behavior.random_look_around_and_sit" ->
+                goals.add(priority, new LookAroundAndSitGoal(this, goal));
 
             case "minecraft:behavior.look_at_entity" -> goals.add(priority, LookGoal.atEntities(this, goal));
 
@@ -3382,9 +3391,8 @@ public class AddonEntity extends PathfinderMob
             // the same walk towards a willing partner that every other pack animal does.
             case "minecraft:behavior.make_love", "minecraft:behavior.receive_love" ->
                 goals.add(priority, new BreedGoal(this, goal));
-            // Napping is lying down, and snacking is eating what is already in hand.
-            case "minecraft:behavior.nap" -> goals.add(priority,
-                RestGoal.lyingDown(this, goal));
+            // Snacking is eating what is already in hand.
+            case "minecraft:behavior.nap" -> goals.add(priority, new NapGoal(this, goal));
             case "minecraft:behavior.snacking" -> goals.add(priority,
                 new EatCarriedItemGoal(this, goal));
 

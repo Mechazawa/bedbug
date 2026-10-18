@@ -124,6 +124,23 @@ REASONS = {
 
     # Fields read somewhere other than through a field helper.
     "minecraft:type_family": {"family": "Read where the families are collected."},
+    "minecraft:player.exhaustion": {
+        "*": "Read by `PlayerDefinition.Attribute`, which takes `value` and `max` of the five player "
+             "attributes from one helper. `value` is written into `FoodData`'s exhaustion at join and "
+             "respawn and `max` holds it under the ceiling.",
+    },
+    "minecraft:player.level": {
+        "*": "Read by `PlayerDefinition.Attribute`: `value` sets `Player.experienceLevel` and `max` holds "
+             "the level under the ceiling, which Java does not state.",
+    },
+    "minecraft:player.experience": {
+        "*": "Read by `PlayerDefinition.Attribute`: `value` sets `Player.experienceProgress` and `max` "
+             "holds it under the ceiling.",
+    },
+    "minecraft:exhaustion_values": {
+        "*": "Read by `PlayerDefinition.Action`, whose key is the field name. Each price scales the "
+             "amount Java passes to `Player.causeFoodExhaustion` at that call site.",
+    },
     "minecraft:loot": {"table": "Read by the loot table converter, which files the table under this path."},
     "minecraft:trade_table": {
         "table": "Read where the trades are loaded, while the pack is still open.",

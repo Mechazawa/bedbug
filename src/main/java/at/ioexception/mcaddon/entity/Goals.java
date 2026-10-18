@@ -6,8 +6,10 @@ import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.level.block.Block;
 
+import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
@@ -105,6 +107,20 @@ final class Goals {
             return pair.size() > index ? pair.get(index).getAsDouble() : fallback;
         }
         return value.isJsonObject() ? number(value.getAsJsonObject(), named, fallback) : fallback;
+    }
+
+    /** The controls a goal holds, which a pack names in `control_flags` and which default to none. */
+    static EnumSet<Goal.Flag> controls(JsonObject component) {
+        EnumSet<Goal.Flag> held = EnumSet.noneOf(Goal.Flag.class);
+        for (JsonElement name : Json.list(component, "control_flags")) {
+            switch (name.getAsString()) {
+                case "move" -> held.add(Goal.Flag.MOVE);
+                case "look" -> held.add(Goal.Flag.LOOK);
+                case "jump" -> held.add(Goal.Flag.JUMP);
+                default -> { }
+            }
+        }
+        return held;
     }
 
     /** The event a trigger names, whether the pack wrote the object around it or only the name. */
