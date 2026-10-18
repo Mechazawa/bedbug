@@ -33,7 +33,6 @@ import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.RestrictSunGoal;
 import net.minecraft.world.entity.ai.goal.StrollThroughVillageGoal;
 import net.minecraft.world.entity.ai.goal.TryFindWaterGoal;
-import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomFlyingGoal;
 import net.minecraft.world.entity.ai.navigation.FlyingPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.ai.navigation.WallClimberNavigation;
@@ -1074,13 +1073,23 @@ public class AddonEntity extends PathfinderMob
 
     /**
      * `minecraft:variable_max_auto_step` steps as high as `controlled_value` while a player steers
-     * the entity and as high as `base_value` otherwise. Six tenths of a block is what a Java mob
-     * steps when the pack says nothing.
+     * the entity and as high as `base_value` otherwise, and as high as `jump_prevented_value` on a block
+     * that cuts a jump short whoever steers. Six tenths of a block is what a Java mob steps when the
+     * pack says nothing.
      */
     private void refreshStep() {
         double base = liveNumber("minecraft:variable_max_auto_step", "base_value", 0.6);
-        Platform.setStepHeight(this, (float) (getControllingPassenger() instanceof Player
-            ? liveNumber("minecraft:variable_max_auto_step", "controlled_value", base) : base));
+        float step = (float) (getBlockJumpFactor() < 1
+            ? liveNumber("minecraft:variable_max_auto_step", "jump_prevented_value", base)
+            : getControllingPassenger() instanceof Player
+            ? liveNumber("minecraft:variable_max_auto_step", "controlled_value", base) : base);
+        if (Platform.stepHeight(this) != step) Platform.setStepHeight(this, step);
+    }
+
+    /** Bedrock's `minecraft:water_movement` keeps `drag_factor` of the speed each tick, as Java does. */
+    @Override
+    protected float getWaterSlowDown() {
+        return (float) liveNumber("minecraft:water_movement", "drag_factor", super.getWaterSlowDown());
     }
 
     /** `on_rider_enter_event` runs on this entity, with the rider as the other, as somebody gets on. */
@@ -3086,10 +3095,10 @@ public class AddonEntity extends PathfinderMob
                 goals.add(priority, new MoveTowardsTargetGoal(this, 0.9, 32f));
 
             case "minecraft:behavior.random_fly", "minecraft:behavior.random_hover",
-                 "minecraft:behavior.hover", "minecraft:behavior.float_wander" ->
-                goals.add(priority, new WaterAvoidingRandomFlyingGoal(this, 1.0));
-            case "minecraft:behavior.random_swim", "minecraft:behavior.swim_wander" ->
-                goals.add(priority, StrollGoal.swimming(this, goal));
+                 "minecraft:behavior.hover" -> goals.add(priority, StrollGoal.flying(this, goal));
+            case "minecraft:behavior.float_wander" -> goals.add(priority, StrollGoal.floating(this, goal));
+            case "minecraft:behavior.random_swim" -> goals.add(priority, StrollGoal.swimming(this, goal));
+            case "minecraft:behavior.swim_wander" -> goals.add(priority, StrollGoal.wandering(this, goal));
             case "minecraft:behavior.move_to_water" -> goals.add(priority, MoveToMatchingBlockGoal.water(this, goal));
             case "minecraft:behavior.move_to_liquid" -> goals.add(priority, new TryFindWaterGoal(this));
             case "minecraft:behavior.swim_up_for_breath" ->
@@ -3107,7 +3116,8 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.break_door", "minecraft:annotation.break_door" ->
                 goals.add(priority, new BreakDoorGoal(this, difficulty -> true));
             case "minecraft:behavior.follow_mob" ->
-                goals.add(priority, new FollowMobGoal(this, 1.0, 3f, 7f));
+                goals.add(priority, new FollowMobGoal(this, Goals.number(goal, "speed_multiplier", 1),
+                    (float) Goals.number(goal, "stop_distance", 2), (float) Goals.number(goal, "search_range", 0)));
             // Mojang documents `yd` as a height, but every number its own entities write is the upward
             // speed Java's goal takes for the same animal: four tenths for the wolf, the cat and the spider.
             case "minecraft:behavior.leap_at_target" ->
@@ -4008,6 +4018,7 @@ public class AddonEntity extends PathfinderMob
         wearOffBribe();
         beatTheAir();
         faceTheGrid();
+        refreshStep();
         flock();
         beBoosted();
         faceTheVehicle();

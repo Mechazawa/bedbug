@@ -179,7 +179,17 @@ Against a server without this mod a client plays with its own add-ons.
   `minecraft:entity_spawned`. A mount under `minecraft:tamemount` is broken in by riding, its temper rising with
   its food and each buck, and any rideable entity is mounted by using it, pulls in what touches it
   under `pull_in_entities` and raises its rider events. A school flocks by its separation, cohesion,
-  variant matching, flock limit and loners; an entity walks out under the sky or in under a roof,
+  variant matching, flock limit and loners, keeps off the blocks beside it, between its heights over
+  the ground and, in water, under the surface. A fish swims off at an `interval` of nought and keeps
+  under the surface unless `avoid_surface` says no, a
+  `swim_wander` takes its `interval` as a chance and gives up after its `wander_time`, a flight or a
+  hover aims `y_offset` above the spot it picked and within its `hover_height`, and a float lasts its
+  `float_duration` and picks a new spot on the way under `random_reselect`. A follower looks for a mob
+  as far as `search_range` and stops `stop_distance` short, a raider keeps `follow_distance` from its
+  captain, and a walk to a block looks every `tick_interval` at its `start_chance`, ends at its
+  `target_offset` and raises `on_reach` and `on_stay_completed`. Water slows an entity by its
+  `drag_factor`, and honey lowers its step to `jump_prevented_value`. An entity walks out under the
+  sky or in under a roof,
   looks as far for water as it says, drinks the potion its conditions pick by Bedrock's number,
   holds no more of an item than its shareables allow, leaps at its `yd`, and steps higher while a
   player steers it. A stomper looks for turtle eggs as often as its `interval` says and no further

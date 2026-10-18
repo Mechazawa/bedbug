@@ -218,6 +218,21 @@ REASONS = {
         "*": "Java's merchant screen opens on a click rather than after a mob has shown interest.",
     },
     "minecraft:behavior.trade_with_player": {"filters": "Java's merchant screen opens for whoever clicks."},
+    "minecraft:behavior.swim_wander": {
+        "look_ahead": "Java's swimming navigator plans the whole path through the water, around whatever "
+                      "is in the way, before the entity moves, so there is no distance ahead to look.",
+    },
+    "minecraft:behavior.player_ride_tamed": {
+        "priority": "The behaviour is answered as a rule on who may get on, asked whenever somebody tries, "
+                    "so there is no goal for a priority to place.",
+    },
+    "minecraft:flocking": {
+        "low_flock_limit": "Documented only as the low bound of a flock, with nothing said of what a smaller "
+                           "flock does, so a flock of any size flocks.",
+        "use_center_of_mass": "Documented only as following a flock by its centre of mass, with nothing said "
+                              "of what a flocker follows otherwise, so cohesion pulls towards the middle of "
+                              "the flock either way.",
+    },
 
     # The rest, one component at a time.
     "minecraft:home": {

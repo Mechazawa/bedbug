@@ -439,7 +439,15 @@ These are the checks it runs, and what each one catches:
   in by riding, listed riders, a poisoning attack, the rideable fields, an explosion heeding or
   ignoring the griefing rule and a resistance cap, a potion drunk by its conditions, the shelter
   walks, water looked for, a goal radius, a leap, an area attack's cooldown, a step taken while
-  steered, and four flocking groups. Each event that adds a group is named after it. A few traps met
+  steered, and four flocking groups. Three more flocking groups hold a brute off a wall, between two
+  heights and under the surface of a pool, the last two floating with gravity off; a water drag group
+  is launched down a channel beside a plain brute; two swimming groups and four flying ones are read
+  back through the spot the navigation heads for, the flying ones with a fly navigation of their own;
+  a follow group walks towards a pig ten blocks off, a raider group towards a brute whose group makes
+  it the captain, and three walk groups to a gold block set into the floor, raising `tp:reached` and
+  `tp:stayed`. A walk's `goal_radius` is one block there, because Java's path ends a block short of
+  its target and Bedrock's half block is never reached from there. Each event that adds a group is
+  named after it. A few traps met
   writing them: the empty structure's floor is not a block Java's random walks may end on, so a test
   needing one lays stone first; light under a new roof takes a few ticks to settle, so a test asking
   `canSeeSky` builds first and waits; the older versions place test structures close enough that a

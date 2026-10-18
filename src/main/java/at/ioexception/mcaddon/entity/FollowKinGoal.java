@@ -27,6 +27,8 @@ public final class FollowKinGoal extends Goal {
 
     /** Whether the one worth following is the raid captain rather than the nearest of its kind. */
     private final boolean captain;
+    /** How near the one followed the entity stops, which only a raider's `follow_distance` states. */
+    private final double close;
     private AddonEntity leader;
     private int untilRecheck;
 
@@ -39,6 +41,7 @@ public final class FollowKinGoal extends Goal {
         this.grownOnly = grownOnly;
         this.caravan = caravan;
         this.captain = captain;
+        this.close = captain ? number(component, "follow_distance", COMFORTABLE) : COMFORTABLE;
         setFlags(EnumSet.of(Goal.Flag.MOVE));
     }
 
@@ -97,9 +100,13 @@ public final class FollowKinGoal extends Goal {
 
     @Override
     public void tick() {
-        if (leader == null || mob.distanceTo(leader) <= COMFORTABLE) return;
+        if (leader == null) return;
 
-        mob.getNavigation().moveTo(leader, speed);
+        if (mob.distanceTo(leader) <= close) {
+            mob.getNavigation().stop();
+        } else {
+            mob.getNavigation().moveTo(leader, speed);
+        }
     }
 
     /** The closest one of its own kind that is not this entity, and is grown when that is asked. */

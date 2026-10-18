@@ -6,6 +6,7 @@ import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Vec3i;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.Pose;
@@ -18,6 +19,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
 
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
@@ -41,6 +43,11 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
 
     /** How near the block counts as there, measured the way Java measures it. */
     private final double arrived;
+
+    /** Bedrock's own timing and arrival, which only `minecraft:behavior.move_to_block` states. */
+    private Visit visit;
+    private boolean announced;
+    private int stayed;
 
     private MoveToMatchingBlockGoal(PathfinderMob mob, JsonObject component,
         Predicate<BlockState> wanted, BiConsumer<ServerLevel, BlockPos> arrival) {
@@ -77,6 +84,8 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
     public void start() {
         super.start();
         publish(true);
+        announced = false;
+        stayed = 0;
     }
 
     @Override
@@ -92,9 +101,48 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
         }
     }
 
-    /** `minecraft:behavior.move_to_block`, which names the blocks it is looking for. */
+    /**
+     * `minecraft:behavior.move_to_block`, which names the blocks it is looking for, looks every
+     * `tick_interval` ticks at a `start_chance`, walks to the spot `target_offset` from the block and
+     * raises `on_reach` there and `on_stay_completed` once it has stood there `stay_duration` ticks.
+     */
     public static MoveToMatchingBlockGoal named(PathfinderMob mob, JsonObject component) {
-        return new MoveToMatchingBlockGoal(mob, component, among(component, "target_blocks"), null);
+        MoveToMatchingBlockGoal goal =
+            new MoveToMatchingBlockGoal(mob, component, among(component, "target_blocks"), null);
+        goal.visit = Visit.of(component);
+        return goal;
+    }
+
+    private record Visit(int interval, double chance, Vec3i offset, String onReach, int stay, String onStayed) {
+        static Visit of(JsonObject component) {
+            List<JsonElement> offset = Json.list(component, "target_offset");
+            return new Visit((int) number(component, "tick_interval", 20), number(component, "start_chance", 1),
+                offset.size() == 3 ? new Vec3i((int) Math.floor(offset.get(0).getAsDouble()),
+                    (int) Math.floor(offset.get(1).getAsDouble()), (int) Math.floor(offset.get(2).getAsDouble()))
+                    : Vec3i.ZERO,
+                Goals.event(component, "on_reach"), Math.max(1, (int) number(component, "stay_duration", 0)),
+                Goals.event(component, "on_stay_completed"));
+        }
+    }
+
+    @Override
+    protected int nextStartTick(PathfinderMob mob) {
+        return visit == null ? super.nextStartTick(mob) : reducedTickDelay(Math.max(1, visit.interval()));
+    }
+
+    @Override
+    public boolean canUse() {
+        return super.canUse() && (visit == null || mob.getRandom().nextDouble() < visit.chance());
+    }
+
+    @Override
+    public boolean canContinueToUse() {
+        return super.canContinueToUse() && (visit == null || visit.onStayed() == null || stayed < visit.stay());
+    }
+
+    @Override
+    protected BlockPos getMoveToTarget() {
+        return visit == null ? super.getMoveToTarget() : super.getMoveToTarget().offset(visit.offset());
     }
 
     /** `minecraft:behavior.move_to_land`, which is any ground that is not under a liquid. */
@@ -183,9 +231,19 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
         super.tick();
         if (!isReachedTarget()) return;
         if (settled != null) mob.setPose(settled);
+        if (visit != null && mob instanceof AddonEntity addon) arrive(addon);
         if (arrival == null || !(mob.level() instanceof ServerLevel level)) return;
 
         arrival.accept(level, blockPos);
+    }
+
+    private void arrive(AddonEntity addon) {
+        if (!announced) {
+            announced = true;
+            if (visit.onReach() != null) addon.raiseEvent(visit.onReach());
+            return;
+        }
+        if (++stayed == visit.stay() && visit.onStayed() != null) addon.raiseEvent(visit.onStayed());
     }
 
     @Override
