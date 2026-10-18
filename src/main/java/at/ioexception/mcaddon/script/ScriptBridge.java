@@ -46,6 +46,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.trading.Merchant;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.world.scores.Objective;
@@ -454,9 +455,22 @@ public final class ScriptBridge {
             : new float[] {(float) rotation.get("y").getAsDouble(), (float) rotation.get("x").getAsDouble()};
     }
 
-    /** 26 added a flag for whether a player's camera snaps back to them, which it always does. */
+    /**
+     * 26 added a flag for whether a player's camera snaps back to them, which it always does.
+     *
+     * A merchant moved within its own level keeps whoever is trading with it. Bedrock's villagers do,
+     * and a pack holds one in place while it speaks by teleporting it onto where it stands every
+     * tick, but from 26 on Java's villagers end the trade on any teleport, which would close the
+     * screen of the player the pack is speaking to. Such a merchant is placed rather than teleported.
+     */
     private static boolean teleportTo(Entity entity, ServerLevel target, double x, double y, double z,
         float yaw, float pitch) {
+        if (entity instanceof Merchant merchant && merchant.getTradingPlayer() != null && entity.level() == target) {
+            entity.stopRiding();
+            Platform.placeAt(entity, x, y, z, yaw, pitch);
+            entity.setYHeadRot(yaw);
+            return true;
+        }
         //? if >=1.21.2 {
         return entity.teleportTo(target, x, y, z, Set.of(), yaw, pitch, true);
         //?} else {

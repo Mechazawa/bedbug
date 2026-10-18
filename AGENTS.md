@@ -576,7 +576,10 @@ These are the checks it runs, and what each one catches:
   `spawnEntity("minecraft:villager_v2")`. Every answer is a tag, which `VanillaNamesClientGameTest`
   reads back after summoning a Java villager and an experience orb: a surface reporting or accepting
   only Java's ids, a listener whose options are ignored, or an `entitySpawn` raised before
-  `spawnEntity` has returned each fails there.
+  `spawnEntity` has returned each fails there. A villager a player uses is teleported onto its own
+  position every tick for two seconds afterwards, which is how a pack holds one still while it
+  speaks; from 26 on Java's villager ends its trade on any teleport and Bedrock's does not, so
+  `TradeClientGameTest` keeps the screen open through those two seconds and then buys from it.
 
   Every command line in the pack that runs while the game is going is written so Java's parser
   refuses it as it stands. On `/bedrock scriptevent tp:commands` the script runs, as whatever sent it, a

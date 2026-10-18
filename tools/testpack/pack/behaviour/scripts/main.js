@@ -244,6 +244,22 @@ system.runInterval(() => {
     }
 });
 
+// A villager somebody uses is held where it stands for two seconds, the way a pack keeps one still
+// while it speaks: teleported onto its own position every tick. Bedrock's villager goes on trading
+// through that.
+const HELD_TICKS = 40;
+world.beforeEvents.playerInteractWithEntity.subscribe(({ target }) => {
+    if (target.typeId !== VILLAGER) return;
+    let held = 0;
+    const hold = system.runInterval(() => {
+        if (!target.isValid || ++held > HELD_TICKS) {
+            system.clearRun(hold);
+            return;
+        }
+        target.teleport(target.location);
+    });
+});
+
 // A pack keys its own maps by the objects `spawnEntity` hands back and finds them again through a
 // query, so a sprite this script spawned has to come back from `getEntities` as that same object,
 // whatever its place in the list.

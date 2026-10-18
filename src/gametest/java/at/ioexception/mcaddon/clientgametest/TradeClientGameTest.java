@@ -11,6 +11,7 @@ import net.minecraft.client.gui.screens.inventory.MerchantScreen;
 import net.minecraft.client.input.MouseButtonInfo;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.ItemStack;
@@ -31,9 +32,17 @@ import java.util.TreeMap;
  * three while it is day; its second tier waits for ten experience and sells a golden sword, so the
  * sword is not on the screen of a trader nobody has traded with. Buying the wool earns the trader
  * the one experience the trade states.
+ *
+ * The test add-on's script teleports a Java villager onto its own position every tick for two
+ * seconds after a player uses it, the way a pack holds a villager still while it speaks. Bedrock's
+ * villager goes on trading through that, so the screen has to outlast those two seconds and a
+ * purchase made afterwards has to go through.
  */
 public final class TradeClientGameTest implements FabricClientGameTest {
     private static final Vec3 TRADER = new Vec3(0.5, Stage.FLOOR + 1, 2.5);
+
+    /** How long the test add-on holds a villager after it is used, and then some. */
+    private static final int HELD_TICKS = 40 + 20;
     private static final int EMERALDS = 10;
 
     /** The payment and result slots come first in a merchant's menu. */
@@ -68,18 +77,7 @@ public final class TradeClientGameTest implements FabricClientGameTest {
                 + " tp:ember's second tier, which waits for ten experience, to be off the screen and it offers "
                 + shown + ".");
 
-            int wool = shown.indexOf("2 minecraft:emerald -> 1 minecraft:lime_wool");
-            // Pressed the way Fabric's own clickScreenButton presses a button, which an offer's has no
-            // label for: what a click on it would run, without depending on where the pointer is.
-            context.runOnClient(client -> tradeButtons(client).get(wool).onPress(new MouseButtonInfo(0, 0)));
-            context.waitFor(client -> id(client.player.containerMenu.getSlot(RESULT_SLOT).getItem())
-                .equals("minecraft:lime_wool"));
-            // Picked up rather than shift-clicked, which would buy for as long as the payment lasts.
-            context.runOnClient(client -> client.gameMode.handleContainerInput(
-                client.player.containerMenu.containerId, RESULT_SLOT, 0, ContainerInput.PICKUP, client.player));
-            context.waitTick();
-            context.getInput().pressKey(options -> options.keyInventory);
-            context.waitForScreen(null);
+            buy(context, shown.indexOf("2 minecraft:emerald -> 1 minecraft:lime_wool"), "minecraft:lime_wool");
 
             Worlds.waitForServer(context, world.getServer(),
                 server -> carried(server).containsKey("minecraft:lime_wool"), 40,
@@ -91,7 +89,62 @@ public final class TradeClientGameTest implements FabricClientGameTest {
             int earned = world.getServer().computeOnServer(server -> trader(server).getVillagerXp());
             Assert.that(earned == 1, "Expected tp:ember to earn the one trader_exp its wool trade states and it holds "
                 + earned + ".");
+
+            tradeWithAHeldVillager(context, world);
         }
+    }
+
+    private static void tradeWithAHeldVillager(ClientGameTestContext context, TestSingleplayerContext world) {
+        Stage.build(context, world, "survival");
+        // Tagged as already found, so the test add-on stands none of its sprites in front of it.
+        world.getServer().runCommand("summon minecraft:villager " + TRADER.x + " " + TRADER.y + " " + TRADER.z
+            + " {NoAI:1b,Tags:[\"tp:found_by_query\"],Xp:10,"
+            + "VillagerData:{profession:\"minecraft:farmer\",level:2,type:\"minecraft:plains\"},"
+            + "Offers:{Recipes:[{buy:{id:\"minecraft:emerald\",count:2},sell:{id:\"minecraft:bread\",count:1},"
+            + "maxUses:12}]}}");
+        Entities.waitForClientLiving(context, "minecraft:villager");
+        world.getServer().runCommand("item replace entity @a inventory.0 with minecraft:emerald " + EMERALDS);
+        context.waitFor(client -> client.player.getInventory().countItem(Items.EMERALD) == EMERALDS);
+
+        Stage.lookAt(context, TRADER.add(0, 1, 0));
+        context.waitFor(client -> client.hitResult instanceof EntityHitResult hit
+            && hit.getEntity() instanceof Villager);
+        context.getInput().pressKey(options -> options.keyUse);
+        context.waitForScreen(MerchantScreen.class);
+        int opened = world.getServer().computeOnServer(MinecraftServer::getTickCount);
+        for (int tick = 0; tick < HELD_TICKS; tick++) {
+            context.waitTick();
+            boolean open = context.computeOnClient(client -> Platform.currentScreen() instanceof MerchantScreen);
+            int held = world.getServer().computeOnServer(MinecraftServer::getTickCount) - opened;
+            Assert.that(open, "Expected the villager's trading screen to stay open while the test add-on held the"
+                + " villager in place, and it closed " + held + " ticks after it opened.");
+        }
+
+        buy(context, 0, "minecraft:bread");
+        Worlds.waitForServer(context, world.getServer(),
+            server -> carried(server).containsKey("minecraft:bread"), 40,
+            "The bread was taken out of the held villager's result slot and never reached the player.");
+        Map<String, Integer> carried = world.getServer().computeOnServer(TradeClientGameTest::carried);
+        Assert.that(carried.equals(Map.of("minecraft:emerald", EMERALDS - 2, "minecraft:bread", 1)),
+            "Expected buying the bread to leave " + (EMERALDS - 2) + " emeralds and one bread, and the player"
+                + " carries " + carried + ".");
+    }
+
+    /**
+     * Picks an offer on the open merchant screen, takes what it sells out of the result slot and
+     * closes the screen.
+     */
+    private static void buy(ClientGameTestContext context, int offer, String item) {
+        // Pressed the way Fabric's own clickScreenButton presses a button, which an offer's has no
+        // label for: what a click on it would run, without depending on where the pointer is.
+        context.runOnClient(client -> tradeButtons(client).get(offer).onPress(new MouseButtonInfo(0, 0)));
+        context.waitFor(client -> id(client.player.containerMenu.getSlot(RESULT_SLOT).getItem()).equals(item));
+        // Picked up rather than shift-clicked, which would buy for as long as the payment lasts.
+        context.runOnClient(client -> client.gameMode.handleContainerInput(
+            client.player.containerMenu.containerId, RESULT_SLOT, 0, ContainerInput.PICKUP, client.player));
+        context.waitTick();
+        context.getInput().pressKey(options -> options.keyInventory);
+        context.waitForScreen(null);
     }
 
     private static List<MerchantOffer> offers(Minecraft client) {
