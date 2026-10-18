@@ -41,6 +41,11 @@ import java.util.function.Predicate;
  * `v.chimed` at two and a half seconds, the `ring` controller leaves its first state once that
  * variable holds, writing the moment from `on_exit` and counting from `on_entry`, and the cap's render
  * controller halves its green from then on.
+ *
+ * `tp:gaze`'s `wake` controller starts in a state whose `on_entry` counts `v.woke`, whose one clip
+ * counts `v.stirred` off its timeline at nought seconds, and which leaves on `1` for a state counting
+ * `v.awake`. Entering the first state is the first frame's move, so that frame counts a wake and a
+ * stir and no awakening, and the next frame counts the awakening alone.
  */
 public final class AnimationClientGameTest implements FabricClientGameTest {
     private static final float TOLERANCE = 0.01f;
@@ -74,7 +79,27 @@ public final class AnimationClientGameTest implements FabricClientGameTest {
             chime(context, world);
             molangChannels(context, world);
             timeline(context, world);
+            firstState(context, world);
         }
+    }
+
+    private static void firstState(ClientGameTestContext context, TestSingleplayerContext world) {
+        world.getServer().runCommand("summon tp:gaze ~-3 ~ ~3");
+        AddonEntity gaze = Entities.waitForClient(context, "tp:gaze");
+        List<String> counts = context.computeOnClient(client -> {
+            ScriptClock clock = ScriptClock.of(gaze);
+            List<String> taken = new ArrayList<>();
+            for (int tick = 0; tick < 2; tick++) {
+                clock.tick();
+                taken.add("woke " + clock.variable("woke") + ", stirred " + clock.variable("stirred")
+                    + ", awake " + clock.variable("awake"));
+            }
+            return taken;
+        });
+        List<String> wanted = List.of("woke 1.0, stirred 1.0, awake 0.0", "woke 1.0, stirred 1.0, awake 1.0");
+        Assert.that(counts.equals(wanted), "tp:gaze's wake controller should enter its first state, run its"
+            + " on_entry and play its clip before leaving on its next frame, " + wanted + ", and counted "
+            + counts + ".");
     }
 
     /** The idle clip's two Molang channels, on the bone at two moments and on the drawn body at two more. */

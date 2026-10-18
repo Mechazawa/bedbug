@@ -1,0 +1,50 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:bench",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": ["tp_bench", "inanimate"]
+      },
+      "minecraft:collision_box": {
+        "width": 1,
+        "height": 0.5
+      },
+      "minecraft:physics": {
+        "has_collision": false,
+        "has_gravity": false
+      },
+      "minecraft:rideable": {
+        "seat_count": 2,
+        "seats": [
+          {
+            "min_rider_count": 0,
+            "max_rider_count": 1,
+            "position": [0, 0.5, 0],
+            "lock_rider_rotation": 0,
+            "rotate_rider_by": 90
+          },
+          {
+            "min_rider_count": 2,
+            "max_rider_count": 2,
+            "position": [0.5, 0.5, 0],
+            "lock_rider_rotation": 0,
+            "rotate_rider_by": "q.has_any_family('villager') ? 180 : 0"
+          },
+          {
+            "min_rider_count": 2,
+            "max_rider_count": 2,
+            "position": [-0.5, 0.5, 0],
+            "lock_rider_rotation": 0,
+            "rotate_rider_by": -90
+          }
+        ]
+      }
+    }
+  }
+}

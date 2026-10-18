@@ -5,7 +5,8 @@
       "identifier": "tp:sprite",
       "min_engine_version": "1.16.0",
       "materials": {
-        "default": "entity_alphatest"
+        "default": "entity_alphatest",
+        "cap": "entity_alphatest_change_color"
       },
       "textures": {
         "default": "textures/entity/sprite"

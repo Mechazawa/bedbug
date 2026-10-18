@@ -37,6 +37,7 @@ public final class Channels {
     private static final Identifier FOG = McAddon.id("fog");
     private static final Identifier HUD = McAddon.id("hud");
     private static final Identifier INPUT = McAddon.id("input_permissions");
+    private static final Identifier SEAT_TURN = McAddon.id("seat_turn");
 
     /**
      * The longest form description, form answer or pack list in characters.
@@ -212,6 +213,22 @@ public final class Channels {
         }
     }
 
+    /** How far a mount's seat turns one rider, a number that is not one once no seat does. */
+    private record SeatTurn(int mountId, int riderId, float turn) implements CustomPacketPayload {
+        private static final CustomPacketPayload.Type<SeatTurn> TYPE = new CustomPacketPayload.Type<>(SEAT_TURN);
+
+        private static final StreamCodec<FriendlyByteBuf, SeatTurn> CODEC = StreamCodec.composite(
+            ByteBufCodecs.VAR_INT, SeatTurn::mountId,
+            ByteBufCodecs.VAR_INT, SeatTurn::riderId,
+            ByteBufCodecs.FLOAT, SeatTurn::turn,
+            SeatTurn::new);
+
+        @Override
+        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
     private record Fog(String fog) implements CustomPacketPayload {
         private static final CustomPacketPayload.Type<Fog> TYPE = new CustomPacketPayload.Type<>(FOG);
 
@@ -225,6 +242,42 @@ public final class Channels {
         }
     }
     //?}
+
+    public static void sendSeatTurn(ServerPlayer player, int mountId, int riderId, float turn) {
+        //? if >=1.21 {
+        ServerPlayNetworking.send(player, new SeatTurn(mountId, riderId, turn));
+        //?} else {
+        /*FriendlyByteBuf buffer = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buffer.writeVarInt(mountId);
+        buffer.writeVarInt(riderId);
+        buffer.writeFloat(turn);
+        ServerPlayNetworking.send(player, SEAT_TURN, buffer);
+        *///?}
+    }
+
+    /** What a client needs to face one rider: the mount, the rider and the seat's turn. */
+    @FunctionalInterface
+    public interface SeatTurnHandler {
+        void turn(int mountId, int riderId, float turn);
+    }
+
+    public static void receiveSeatTurn(SeatTurnHandler handler) {
+        //? if >=1.21 {
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+            SeatTurn.TYPE,
+            (payload, context) -> context.client().execute(
+                () -> handler.turn(payload.mountId(), payload.riderId(), payload.turn())));
+        //?} else {
+        /*net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+            SEAT_TURN,
+            (client, network, buffer, sender) -> {
+                int mountId = buffer.readVarInt();
+                int riderId = buffer.readVarInt();
+                float turn = buffer.readFloat();
+                client.execute(() -> handler.turn(mountId, riderId, turn));
+            });
+        *///?}
+    }
 
     public static void sendHud(ServerPlayer player, int hidden) {
         //? if >=1.21 {
@@ -443,6 +496,7 @@ public final class Channels {
         PayloadTypeRegistry.clientboundPlay().register(Fog.TYPE, Fog.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Hud.TYPE, Hud.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Input.TYPE, Input.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(SeatTurn.TYPE, SeatTurn.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(FormResponse.TYPE, FormResponse.CODEC);
         //?}
     }

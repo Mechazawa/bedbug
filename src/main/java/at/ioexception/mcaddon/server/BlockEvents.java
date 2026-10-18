@@ -362,10 +362,12 @@ public final class BlockEvents {
      * Answers `q.block_state('name')` from the block standing in the world.
      *
      * An event that destroys the block runs while air stands in its place, so every state read here
-     * asks the state whether it carries the property before reading it.
+     * asks the state whether it carries the property before reading it. Its temporaries are the ones
+     * every other expression on the server reads and writes.
      */
     private MolangEnvironment environment(BlockState state) {
         MolangEnvironment environment = new MolangEnvironment();
+        if (ServerHooks.state() != null) environment.shareTemporaries(ServerHooks.state().temporaries());
         environment.setQueries((query, arguments) -> {
             if (!query.equals("block_state") || arguments.isEmpty()) return MolangValue.ZERO;
 

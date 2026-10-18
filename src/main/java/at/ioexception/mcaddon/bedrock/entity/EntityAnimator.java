@@ -16,6 +16,7 @@ import org.joml.Vector3f;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -172,6 +173,10 @@ public final class EntityAnimator {
      *
      * A state declaring a `blend_transition` is crossed out of rather than left, so its clips keep
      * running at a falling weight while the state it moved to comes up at a rising one.
+     *
+     * A controller moves at most once a frame, and entering its first state is that frame's move: the
+     * first state's `on_entry` runs and its clips play before any of its transitions is asked, so a
+     * first state that leaves on `1` still sets what its `on_entry` sets and starts its clips once.
      */
     private void runController(AnimationController controller, float deltaSeconds, float weight,
         Set<String> wanted) {
@@ -186,7 +191,10 @@ public final class EntityAnimator {
         AnimationController.State state = controller.states().get(current.state);
         if (state == null) return;
 
-        if (firstRun) fireStateEffects(state);
+        if (firstRun) {
+            for (AnimationAction statement : state.onEntry()) statement.run(entity, environment);
+            fireStateEffects(state);
+        }
 
         current.timeInState += deltaSeconds;
         current.crossFadeSeconds = Math.max(0f, current.crossFadeSeconds - deltaSeconds);
@@ -197,7 +205,8 @@ public final class EntityAnimator {
         player.scopeFinishedTo(state.animations().stream()
             .map(entry -> definition.resolveAnimation(entry.animation()))
             .filter(name -> assets.animationController(name) == null).toList());
-        for (AnimationController.Transition transition : state.transitions()) {
+        for (AnimationController.Transition transition : firstRun ? List.<AnimationController.Transition>of()
+            : state.transitions()) {
             if (!transition.condition().evaluate(environment).truthy()) continue;
             if (!controller.states().containsKey(transition.target())) continue;
 

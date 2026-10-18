@@ -920,6 +920,7 @@ public class AddonEntity extends PathfinderMob
 
         at.ioexception.mcaddon.bedrock.molang.MolangEnvironment environment =
             new at.ioexception.mcaddon.bedrock.molang.MolangEnvironment();
+        if (ServerHooks.state() != null) environment.shareTemporaries(ServerHooks.state().temporaries());
         environment.setQueries((query, arguments) -> query.equals("last_hit_by_player")
             ? at.ioexception.mcaddon.bedrock.molang.MolangValue.of(killedByPlayer)
             : at.ioexception.mcaddon.bedrock.molang.MolangValue.ZERO);
@@ -1203,26 +1204,16 @@ public class AddonEntity extends PathfinderMob
 
     private net.minecraft.world.level.ChunkPos held;
 
-    /**
-     * Where a rider sits, taken from the first seat the pack described.
-     *
-     * A seat is stated in blocks relative to the entity's own position, which is the space Java
-     * answers an attachment point in, and its vertical axis points the same way.
-     */
+    /** Where a rider sits, which is its own seat where the pack describes one for it. */
     //? if >=1.21 {
     @Override
     protected net.minecraft.world.phys.Vec3 getPassengerAttachmentPoint(
         net.minecraft.world.entity.Entity passenger,
         net.minecraft.world.entity.EntityDimensions dimensions, float scale) {
-        return seat() == null
-            ? super.getPassengerAttachmentPoint(passenger, dimensions, scale) : seat();
+        net.minecraft.world.phys.Vec3 seat = seatPosition(passenger);
+        return seat == null ? super.getPassengerAttachmentPoint(passenger, dimensions, scale) : seat;
     }
-    //?} else {
-    /*@Override
-    public double getPassengersRidingOffset() {
-        return seat() == null ? super.getPassengersRidingOffset() : seat().y;
-    }
-    *///?}
+    //?}
 
     /**
      * Picks up what the pack said this entity collects.
@@ -1370,53 +1361,96 @@ public class AddonEntity extends PathfinderMob
 
     private int teleportReadyAt;
 
-    /** Where the first seat a `minecraft:rideable` component names sits, or null when it names none. */
-    private net.minecraft.world.phys.Vec3 seat() {
-        com.google.gson.JsonObject seat = firstSeat();
-        return seat == null ? null
-            : at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.blocks(seat.get("position"), null);
-    }
-
-    /** The first seat a `minecraft:rideable` component names, or null when it names none. */
-    private com.google.gson.JsonObject firstSeat() {
-        com.google.gson.JsonObject body = liveComponent("minecraft:rideable");
-        com.google.gson.JsonArray seats = body == null ? null : body.getAsJsonArray("seats");
-        if (seats == null || seats.isEmpty() || !seats.get(0).isJsonObject()) return null;
-
-        return seats.get(0).getAsJsonObject();
+    /**
+     * Where a rider's seat puts it, from this entity's own position, or null where no seat is its.
+     *
+     * A seat is stated in blocks along the entity's own axes, so it turns with the way the entity
+     * faces, and its vertical axis points the way Java's does.
+     */
+    private net.minecraft.world.phys.Vec3 seatPosition(net.minecraft.world.entity.Entity rider) {
+        com.google.gson.JsonObject seat = seatOf(rider);
+        return seat == null ? null : at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits
+            .blocks(seat.get("position"), net.minecraft.world.phys.Vec3.ZERO)
+            .yRot((float) Math.toRadians(-getYRot()));
     }
 
     /**
-     * Works out how far the seat turns each rider from the way this entity faces, which Bedrock
-     * evaluates every tick as the seat's `rotate_rider_by`.
+     * The seat a rider sits in, or null where the pack describes none for it.
+     *
+     * `seats` is one seat or a list of them. A seat is in use while the number of riders lies between
+     * its `min_rider_count` and its `max_rider_count`, and the riders take the seats in use in the
+     * order the pack lists them, the first aboard the first: Mojang's boat lists one seat for a rider
+     * alone and two more for a pair. A seat stating no `max_rider_count` takes any number.
+     */
+    private com.google.gson.JsonObject seatOf(net.minecraft.world.entity.Entity rider) {
+        java.util.List<net.minecraft.world.entity.Entity> riders = getPassengers();
+        int index = riders.indexOf(rider);
+        if (index < 0) return null;
+
+        java.util.List<com.google.gson.JsonObject> inUse = at.ioexception.mcaddon.util.Json
+            .list(liveComponent("minecraft:rideable"), "seats").stream()
+            .filter(com.google.gson.JsonElement::isJsonObject)
+            .map(com.google.gson.JsonElement::getAsJsonObject)
+            .filter(seat -> at.ioexception.mcaddon.util.Json.number(seat, "min_rider_count", 0) <= riders.size()
+                && riders.size() <= at.ioexception.mcaddon.util.Json.number(seat, "max_rider_count",
+                    Integer.MAX_VALUE))
+            .toList();
+        return index < inUse.size() ? inUse.get(index) : null;
+    }
+
+    /**
+     * Works out how far each rider's seat turns it from the way this entity faces, which Bedrock
+     * evaluates every tick as that seat's `rotate_rider_by`, and tells every client watching.
      *
      * The expression is asked as the rider, so `query.trade_tier` and `query.has_any_family` answer
      * for whoever sits there. It runs before this entity's own scripts, with the rider already moved
      * onto the seat, and its temporaries are the ones every other expression on the server reads: a
      * pack hands what it learnt about a rider to its mount's scripts that way, keyed by where the two
      * stand.
+     *
+     * A player turns itself on its own client, which is why each turn is sent: the client faces its
+     * player by it in `positionRider` the way the server faces any other rider.
      */
     private void turnRiders() {
-        com.google.gson.JsonObject seat = firstSeat();
-        com.google.gson.JsonElement turn = seat == null ? null : seat.get("rotate_rider_by");
-        if (turn == null || !turn.isJsonPrimitive()) {
-            riderTurns.clear();
-            return;
-        }
-        if (turn != seatTurnSource) {
-            seatTurnSource = turn;
-            seatTurn = at.ioexception.mcaddon.bedrock.molang.MolangParser.parse(
-                turn.getAsJsonPrimitive().isNumber() ? (Object) turn.getAsDouble() : turn.getAsString());
-        }
-
+        java.util.Map<Integer, Float> turns = new java.util.HashMap<>();
         java.util.Set<java.util.UUID> aboard = new java.util.HashSet<>();
         for (net.minecraft.world.entity.Entity rider : getPassengers()) {
             aboard.add(rider.getUUID());
+            com.google.gson.JsonObject seat = seatOf(rider);
+            com.google.gson.JsonElement turn = seat == null ? null : seat.get("rotate_rider_by");
+            if (turn == null || !turn.isJsonPrimitive()) continue;
+
             positionRider(rider);
-            riderTurns.put(rider.getUUID(), seatTurn.asFloat(riderQuestions(rider)));
+            at.ioexception.mcaddon.bedrock.molang.MolangExpression expression = seatTurns.computeIfAbsent(turn,
+                written -> at.ioexception.mcaddon.bedrock.molang.MolangParser.parse(
+                    written.getAsJsonPrimitive().isNumber() ? (Object) written.getAsDouble() : written.getAsString()));
+            turns.put(rider.getId(), expression.asFloat(riderQuestions(rider)));
         }
-        riderTurns.keySet().retainAll(aboard);
         riderQuestions.keySet().retainAll(aboard);
+
+        riderTurns.keySet().stream().filter(rider -> !turns.containsKey(rider)).toList()
+            .forEach(rider -> sendSeatTurn(rider, Float.NaN));
+        turns.entrySet().stream().filter(entry -> !entry.getValue().equals(riderTurns.get(entry.getKey())))
+            .forEach(entry -> sendSeatTurn(entry.getKey(), entry.getValue()));
+        riderTurns.clear();
+        riderTurns.putAll(turns);
+    }
+
+    private void sendSeatTurn(int rider, float turn) {
+        net.fabricmc.fabric.api.networking.v1.PlayerLookup.tracking(this)
+            .forEach(player -> at.ioexception.mcaddon.network.Channels.sendSeatTurn(player, getId(), rider, turn));
+    }
+
+    /** Tells a player who starts watching this entity how its seats turn the riders on it now. */
+    public void sendSeatTurns(net.minecraft.server.level.ServerPlayer player) {
+        riderTurns.forEach((rider, turn) ->
+            at.ioexception.mcaddon.network.Channels.sendSeatTurn(player, getId(), rider, turn));
+    }
+
+    /** What the server says a seat turns one rider by, a number that is not one when nothing does. */
+    public void acceptSeatTurn(int rider, float turn) {
+        if (Float.isNaN(turn)) riderTurns.remove(rider);
+        else riderTurns.put(rider, turn);
     }
 
     /** What a seat's expression is answered with about one rider, kept while it stays aboard. */
@@ -1440,26 +1474,41 @@ public class AddonEntity extends PathfinderMob
         return asked.environment();
     }
 
-    private com.google.gson.JsonElement seatTurnSource;
-    private at.ioexception.mcaddon.bedrock.molang.MolangExpression seatTurn;
-    private final java.util.Map<java.util.UUID, Float> riderTurns = new java.util.HashMap<>();
+    /** Each seat's `rotate_rider_by` as it was parsed, by the element the pack wrote it as. */
+    private final java.util.Map<com.google.gson.JsonElement, at.ioexception.mcaddon.bedrock.molang.MolangExpression>
+        seatTurns = new java.util.IdentityHashMap<>();
+    /** How far each rider's seat turns it, by the rider's entity id, on the server and on each client. */
+    private final java.util.Map<Integer, Float> riderTurns = new java.util.HashMap<>();
     private final java.util.Map<java.util.UUID, at.ioexception.mcaddon.bedrock.animation.AnimationPlayer>
         riderQuestions = new java.util.HashMap<>();
 
     /**
      * Faces each rider the way its seat turns it, and keeps it within `lock_rider_rotation` degrees of
      * that where the seat states a limit.
+     *
+     * Before 1.21 Java seats a rider at one height for every passenger, so the rider is placed on
+     * its own seat here.
      */
     @Override
     protected void positionRider(net.minecraft.world.entity.Entity passenger, MoveFunction move) {
+        //? if >=1.21 {
         super.positionRider(passenger, move);
-        Float turn = riderTurns.get(passenger.getUUID());
+        //?} else {
+        /*net.minecraft.world.phys.Vec3 seated = seatPosition(passenger);
+        if (seated == null) {
+            super.positionRider(passenger, move);
+        } else {
+            move.accept(passenger, getX() + seated.x, getY() + seated.y + passenger.getMyRidingOffset(),
+                getZ() + seated.z);
+        }
+        *///?}
+        Float turn = riderTurns.get(passenger.getId());
         if (turn == null) return;
 
         float facing = getYRot() + turn;
         if (passenger instanceof net.minecraft.world.entity.LivingEntity living) living.setYBodyRot(facing);
 
-        com.google.gson.JsonObject seat = firstSeat();
+        com.google.gson.JsonObject seat = seatOf(passenger);
         com.google.gson.JsonElement lock = seat == null ? null : seat.get("lock_rider_rotation");
         if (lock == null || !lock.isJsonPrimitive() || !lock.getAsJsonPrimitive().isNumber()) return;
 
@@ -5251,7 +5300,8 @@ public class AddonEntity extends PathfinderMob
      * Whether a Molang condition a component states holds for the entity now.
      *
      * It is answered with the queries the entity's own scripts get, which is what lets a pack write
-     * the `query.is_baby` it writes in an animation controller into a component as well.
+     * the `query.is_baby` it writes in an animation controller into a component as well, and with the
+     * temporaries every other expression on the server reads and writes.
      */
     public boolean holds(String condition) {
         if (questions == null) {
@@ -5260,6 +5310,9 @@ public class AddonEntity extends PathfinderMob
                 this, questions, at.ioexception.mcaddon.bedrock.entity.EntityQueries.Drawn.NONE,
                 () -> ServerHooks.state() == null
                     ? java.util.Map.of() : ServerHooks.state().properties(getUUID()), false));
+            if (ServerHooks.state() != null) {
+                questions.environment().shareTemporaries(ServerHooks.state().temporaries());
+            }
         }
         questions.environment().setLifeTime(
             tickCount / (float) at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.TICKS_PER_SECOND);

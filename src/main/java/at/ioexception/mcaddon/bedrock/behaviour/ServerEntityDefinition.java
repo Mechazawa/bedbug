@@ -141,6 +141,9 @@ public record ServerEntityDefinition(
 
         at.ioexception.mcaddon.bedrock.molang.MolangEnvironment environment =
             new at.ioexception.mcaddon.bedrock.molang.MolangEnvironment();
+        if (at.ioexception.mcaddon.server.ServerHooks.state() != null) {
+            environment.shareTemporaries(at.ioexception.mcaddon.server.ServerHooks.state().temporaries());
+        }
         environment.setQueries((name, arguments) ->
             at.ioexception.mcaddon.bedrock.molang.MolangValue.of(
                 name.equals("last_hit_by_player") || name.equals("is_alive")));

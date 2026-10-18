@@ -27,6 +27,10 @@ import java.util.function.Predicate;
  * draws a model of its own over, and has to take the whole villager with it. `animation.tp.vanilla.bow`
  * turns `body` a quarter circle forward, which has to swing the legs and the arms round the body's
  * pivot with it rather than leave them standing where they were.
+ *
+ * `animation.tp.vanilla.stoop` turns `body` the same quarter circle and turns `head` ten degrees
+ * relative to the entity. The body still carries the head's pivot round with it, and the head's
+ * own turn is then the ten degrees in the entity's frame rather than on top of the body's.
  */
 public final class JavaModelPoseClientGameTest implements FabricClientGameTest {
     private static final float TOLERANCE = 1e-4f;
@@ -34,6 +38,7 @@ public final class JavaModelPoseClientGameTest implements FabricClientGameTest {
     private static final float HAT_LIFT = 2f;
     private static final float SWAY = (float) Math.toRadians(30);
     private static final float QUARTER = (float) (Math.PI / 2);
+    private static final float NOD = (float) Math.toRadians(10);
 
     /** Ticks to wait for a pose, which covers the command reaching the client and the clip's length. */
     private static final int PATIENCE = 200;
@@ -51,7 +56,28 @@ public final class JavaModelPoseClientGameTest implements FabricClientGameTest {
             sway(context, world, villager, own);
             vanish(context, world, villager);
             bow(context, world, villager, own);
+            stoop(context, world, villager, own);
         }
+    }
+
+    private static void stoop(ClientGameTestContext context, TestSingleplayerContext world, LivingEntity villager,
+        Map<String, PosedParts.Part> own) {
+        waitForPose(context, villager, parts -> Math.abs(parts.get("body").xRot() - own.get("body").xRot()) < TOLERANCE,
+            "animation.tp.vanilla.bow was played to stop after a second and the body stayed bowed.");
+        world.getServer().runCommand("bedrock playanimation @e[type=minecraft:villager] animation.tp.vanilla.stoop"
+            + " none 0 \"q.anim_time > 1\"");
+        Map<String, PosedParts.Part> stooped = waitForPose(context, villager,
+            parts -> Math.abs(parts.get("body").xRot() - own.get("body").xRot() - QUARTER) < TOLERANCE,
+            "animation.tp.vanilla.stoop was played on a villager and its body never turned a quarter circle.");
+
+        PosedParts.Part head = own.get("head");
+        Assert.near(stooped.get("head").y(), -head.z(), TOLERANCE,
+            "the head's height, carried forward round the body's pivot");
+        Assert.near(stooped.get("head").z(), head.y(), TOLERANCE,
+            "the head's depth, carried forward round the body's pivot");
+        Assert.near(stooped.get("head").xRot(), head.xRot() + NOD, TOLERANCE,
+            "the head's pitch, ten degrees in the entity's frame rather than on top of the body's quarter turn");
+        Assert.near(stooped.get("head").yRot(), head.yRot(), TOLERANCE, "the head's yaw under the stoop");
     }
 
     private static void vanish(ClientGameTestContext context, TestSingleplayerContext world,

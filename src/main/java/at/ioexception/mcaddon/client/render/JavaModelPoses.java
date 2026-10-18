@@ -83,7 +83,7 @@ public final class JavaModelPoses {
                 if (part == null) {
                     report("bone " + bone.getKey() + " of a clip played on " + typeOf(entity)
                         + ", which Java's model of it has no part for");
-                } else if (!bone.getValue().isIdentity()) {
+                } else if (!bone.getValue().isIdentity() || bone.getValue().rotationRelativeToEntity) {
                     parts.move(part, bone.getValue());
                     if (BODY.equalsIgnoreCase(bone.getKey())) body = part;
                 }
@@ -91,6 +91,7 @@ public final class JavaModelPoses {
         }
         // Every part's own clip comes first, because what the body carries is the part as posed.
         if (body != null && BODY_CARRIES_EVERYTHING.contains(typeOf(entity))) parts.carryWith(body);
+        parts.keepEntityFrame();
     }
 
     private static final String BODY = "body";

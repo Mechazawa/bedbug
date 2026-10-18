@@ -27,6 +27,11 @@ import java.util.stream.IntStream;
  * overlay from the mark variant and a colour of its own while the entity burns. Each event the test
  * raises changes one of those, and the frame the renderer submits next has to show that change.
  *
+ * Bedrock's entity shaders read a controller's `color` only under a colour mask, and lay the
+ * overlays over every material. The prism's first material is `entity_alphatest_change_color`, which
+ * takes the variant's colour, and its glassy one is `entity_alphablend`, which drops it and keeps
+ * the mark's blue overlay.
+ *
  * The three geometries are told apart by how far their core reaches from the middle, which does not
  * depend on which way the prism faces: two pixels for the round one, four for the square one and
  * one for the young one, each across the diagonal of a square.
@@ -50,6 +55,8 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
      * alpha carry as 128 parts in 255.
      */
     private static final int DYED_AND_MARKED = 0xFF407FFF;
+    /** The mark variant's blue overlay over white at half, under a material that reads no `color`. */
+    private static final int MARKED = 0xFF7F7FFF;
     private static final int ON_FIRE = 0xFFFF0000;
     /** Green laid over white at half, which eight bits of alpha carry as 128 parts in 255. */
     private static final int HURT_GREEN = 0xFF7FFF7F;
@@ -172,7 +179,7 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
             + first.geometry().size() + " pieces of geometry were submitted.");
         Submitted.Geometry body = first.geometry().get(0);
         Assert.that(body.renderType() == Platform.renderType(plain, false, false, false),
-            "tp:prism's variant 0 picks Texture.plain under entity_alphatest, and its pass was drawn with "
+            "tp:prism's variant 0 picks Texture.plain under entity_alphatest_change_color, and its pass was drawn with "
                 + body.renderType() + ".");
         Assert.near(reach(body), ROUND_REACH, TOLERANCE, "the reach of tp:prism's core as Geometry.round");
         Assert.near(body.box().maxY, MARK_TOP, TOLERANCE, "the top of tp:prism with its mark bone drawn");
@@ -209,10 +216,14 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
                 + Integer.toHexString(marked.geometry().get(0).vertices().get(0).colour()) + ".");
 
         world.getServer().runCommand("bedrock event entity @e[type=tp:prism] tp:prism_glaze");
-        Frames.waitFor(context, prism,
+        Submitted glazed = Frames.waitFor(context, prism,
             frame -> frame.geometry().get(0).renderType() == Platform.renderType(dyed, true, false, false),
             "tp:prism's tp:prism_glassy group picks Material.glass, entity_alphablend, and its pass was never"
                 + " drawn blended.");
+        Assert.that(colours(glazed.geometry().get(0), MARKED),
+            "entity_alphablend reads no controller color and every material reads the overlay, so tp:prism"
+                + " glazed is the mark's blue over white at half, and it was drawn in "
+                + Integer.toHexString(glazed.geometry().get(0).vertices().get(0).colour()) + ".");
 
         world.getServer().runCommand("data merge entity @e[type=tp:prism,limit=1] {Fire:400s}");
         Frames.waitFor(context, prism, frame -> colours(frame.geometry().get(0), ON_FIRE),
@@ -319,11 +330,13 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
      * A controller's `materials` list gives each bone the material of the last entry naming it, and
      * each material draws its own bones in a pass of its own.
      *
-     * `tp:tailor`'s fourth controller draws every bone with `entity_alphatest` and the bones matching
-     * `*ARK` with `villager_v2_masked`, under a grey `color`. The sprite geometry's spark is the one bone
-     * the second entry reaches, a star at the front and the capitals notwithstanding, so the plain pass
-     * draws the body, up to half a block, and the masked one draws the spark sitting on top of it.
-     * Bedrock's masked multitexture shader reads no controller colour, so only the plain pass is grey.
+     * `tp:tailor`'s fourth controller draws every bone with `entity_alphatest_change_color` and the
+     * bones matching `*ARK` with `villager_v2_masked`, under a grey `color`. The sprite geometry's spark
+     * is the one bone the second entry reaches, a star at the front and the capitals notwithstanding,
+     * so the colour masked pass draws the body, up to half a block, and the masked one draws the spark
+     * sitting on top of it. Bedrock's masked multitexture shader reads no controller colour, so only
+     * the colour masked pass is grey. The third controller states the same grey under plain
+     * `entity_alphatest`, which reads no controller colour either.
      */
     private static void boneMaterials(ClientGameTestContext context, TestSingleplayerContext world) {
         AddonEntity tailor = Entities.waitForClient(context, "tp:tailor");
@@ -338,7 +351,10 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
         Assert.that(!spark.vertices().isEmpty() && everyVertex(spark, vertex -> vertex.y() >= BODY_TOP - TOLERANCE),
             "tp:tailor's masked pass should draw the spark alone, over " + BODY_TOP + ", and reached " + spark.box()
                 + ".");
-        Assert.that(colours(body, GREY), "tp:tailor's plain pass takes its controller's grey, and was drawn in "
+        Submitted.Geometry plain = frame.geometry().get(2);
+        Assert.that(colours(plain, WHITE), "tp:tailor's entity_alphatest pass takes no controller colour, and was"
+            + " drawn in " + Integer.toHexString(plain.vertices().get(0).colour()) + ".");
+        Assert.that(colours(body, GREY), "tp:tailor's colour masked pass takes its controller's grey, and was drawn in "
             + Integer.toHexString(body.vertices().get(0).colour()) + ".");
         Assert.that(colours(spark, WHITE), "tp:tailor's masked pass takes no controller colour, and was drawn in "
             + Integer.toHexString(spark.vertices().get(0).colour()) + ".");

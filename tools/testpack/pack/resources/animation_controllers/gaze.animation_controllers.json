@@ -1,0 +1,18 @@
+{
+  "format_version": "1.10.0",
+  "animation_controllers": {
+    "controller.animation.tp.gaze.wake": {
+      "initial_state": "waking",
+      "states": {
+        "waking": {
+          "on_entry": ["v.woke = v.woke + 1;"],
+          "animations": ["stir"],
+          "transitions": [{"awake": "1"}]
+        },
+        "awake": {
+          "on_entry": ["v.awake = v.awake + 1;"]
+        }
+      }
+    }
+  }
+}

@@ -430,7 +430,9 @@ These are the checks it runs, and what each one catches:
   `q.life_time` rather than as keyframes. Its chime clip's timeline sets a variable at two and a half
   seconds, its `ring` controller leaves its first state once that variable holds and writes from
   both `on_exit` and `on_entry`, and the cap's controller halves its green once the second of those
-  is set, so the whole chain from a timeline to a render controller reads off one colour. Neither
+  is set, so the whole chain from a timeline to a render controller reads off one colour. The cap is
+  drawn with `entity_alphatest_change_color`, because a controller's `color` tints nothing under any
+  material that is not a colour mask. Neither
   of the sprite's controllers states an `is_hurt_color`, so a hurt sprite is drawn with the red
   every Bedrock entity flashes.
 
@@ -438,7 +440,12 @@ These are the checks it runs, and what each one catches:
   45 degrees forward and its head, a child of the body, is turned 30 degrees about the vertical in
   the entity's frame. `RelativeRotationClientGameTest` reads the head's corners back: carried to
   where the leaning body puts its pivot, standing level and turned 30 degrees. A head turned in its
-  parent's frame leans with the body and fails it.
+  parent's frame leans with the body and fails it. The gaze's `wake` controller starts in a state
+  whose `on_entry` counts `v.woke`, whose one clip counts `v.stirred` off its timeline at nought
+  seconds and which leaves on `1` for a state counting `v.awake`;
+  `AnimationClientGameTest` runs it on a `ScriptClock` and reads a wake and a stir and no awakening
+  off the first frame and the awakening off the second, which is the client controller entering its
+  first state as that frame's one move, the way `ServerAnimator` does a tick's.
 
   `tp:pedlar` is a trader with a trade table, a look at the trading player and a stroll it starts at
   every chance, and no `minecraft:behavior.trade_with_player`.
@@ -452,10 +459,11 @@ These are the checks it runs, and what each one catches:
   `tp:prism` exists to be drawn. Its one render controller picks everything about its one pass by
   Molang over the entity: the geometry from `q.is_baby` and an enum property, the texture from an
   array indexed by `q.variant`, the material from `q.had_component_group` between
-  `entity_alphatest` and `entity_alphablend`, the mark bone's visibility from `q.mark_variant`, a
+  `entity_alphatest_change_color` and `entity_alphablend`, the mark bone's visibility from `q.mark_variant`, a
   texture slide and a colour from the variant, an overlay from the mark variant, an `is_hurt_color`
   that replaces the red of a hit and an `on_fire_color`, and one event per group or property
-  switches one of those. Its three geometries
+  switches one of those. The colour mask takes the variant's colour and the blended material drops
+  it while keeping the mark's overlay, which is what Bedrock's entity shaders do. Its three geometries
   differ in how far the core reaches from the middle, so which one was drawn reads off the vertices
   whichever way it faces. Its skin carries a texture set whose emissive channel glows over the mark,
   so a second, lit pass is drawn for the plain skin and none for the dyed one. Its script runs
@@ -472,11 +480,13 @@ These are the checks it runs, and what each one catches:
   `villager_v2_masked`, and through `entity_alphatest`, which binds the first texture alone. Its base
   is blue all over and its outfit is four bands of an opaque red, a clear white, a clear black and a
   faint green, so `RenderControllerClientGameTest` reads red, blue, nothing and blue off the image
-  each masked pass binds, and blue four times off the plain one. A fourth controller gives the body
-  `entity_alphatest` and every bone matching `*ARK` the game's `villager_v2_masked`, under a grey
-  `color`: the test reads two passes off it, the plain one drawing the body alone in grey and the
-  masked one drawing the spark alone and untinted, because Bedrock's masked multitexture shader reads
-  no controller colour. A pattern starting with its star and written in other capitals than the bone
+  each masked pass binds, and blue four times off the plain one. The third controller states a grey
+  `color` that its `entity_alphatest` leaves unread, so that pass is drawn untinted. A fourth
+  controller gives the body `entity_alphatest_change_color` and every bone matching `*ARK` the game's
+  `villager_v2_masked`, under the same grey: the test reads two passes off it, the colour masked one
+  drawing the body alone in grey and the masked one drawing the spark alone and untinted, because
+  Bedrock's masked multitexture shader reads no controller colour. A pattern starting with its star
+  and written in other capitals than the bone
   is what Mojang's own `*leg` and a pack's careless casing look like.
 
   `tp:perch` is a seat for a villager, written the way a pack learns a Java villager's level. Its
@@ -490,6 +500,17 @@ These are the checks it runs, and what each one catches:
   asked as the rider every tick before the mount's scripts, the temporaries every server expression
   shares, a Java villager's tier and families, a family list letting the villager on, or the first
   state's clips playing on the tick the controller starts.
+  `BehaviourGameTests.aComponentConditionReadsTheTemporariesTheSeatWrote` asks the perch's
+  `holds`, the call a component's Molang condition goes through, for the tier its seat wrote into
+  `t.perch_tier`: a call site keeping temporaries of its own reads nothing there.
+
+  `tp:bench` lists three seats the way Mojang's boat does: one for a rider alone at its middle,
+  turning that rider a quarter, and two for a pair half a block either side along its own X, one
+  turning a villager half a circle and one turning its rider a quarter back, each with
+  `lock_rider_rotation` at nought. `BehaviourGameTests.eachRiderSitsInItsOwnSeat` seats one villager
+  and then a second on a bench facing west and reads where each sits and which way each faces;
+  `SeatClientGameTest` rides it as the player and reads the player's facing off its own client,
+  which the seat's turn reaches only through the `seat_turn` payload.
 
   The recipes cover the seven kinds and the fields that decide what each becomes: a furnace recipe
   naming four cookers and an unlock item, a shapeless one tagged for the stonecutter and unlocked by
@@ -1297,6 +1318,20 @@ geometry once per definition and reads the mask out of the converted image throu
 `ConvertedPack.textureFile`. A block geometry carrying one is reported, since a block model is built
 from elements.
 
+**A controller's `color` is read only under a colour mask.** Bedrock's entity shaders (the
+RenderDragon `Actor`, `ActorMultiTexture` and `ActorTint` materials, reconstructed in
+veka0/mcbe-shader-codebase) multiply a texture by `ChangeColor` only where the material compiles
+with `CHANGE_COLOR` on, which is what `USE_COLOR_MASK` in a `.material` selects: the texel is mixed
+toward itself times the colour by its own alpha, and its alpha is multiplied by the colour's.
+`OverlayColor`, which `overlay_color`, `is_hurt_color` and `on_fire_color` feed, is laid over in
+every one of them. Every vanilla render controller stating a `color` names a material that reads
+it: `player_spectator`, `warden_bioluminescent_layer` and `horse_leather_armor`.
+`MaterialDefinition.readsControllerColour` names the game's own materials defining
+`USE_COLOR_MASK`, read off the game's `entity.material`; `MULTI_COLOR_TINT` (the red channel alone)
+and `COLOR_SECOND_TEXTURE` (a third texture layered over the first) are reported rather than drawn.
+`scratchpad/bedrock-legacy-materials/` and `scratchpad/mcbe-shader-codebase-veka0/` hold the copies
+this was read from.
+
 `blend_transition` is acted on as well: a state declaring one is crossed out of rather than left, its
 clips staying at a falling weight while the state it moved to comes up. `blend_via_shortest_path`
 rides on that crossing: a bone's rotation is the weighted sum of every clip reaching it, so 350 and
@@ -1325,6 +1360,10 @@ again where it is finally drawn, so `ModelFeatureRendererMixin` lays the clip on
 A bone with no part is reported once per kind of entity. Nothing is stored on the server, so a
 player who starts watching later sees whatever the pack plays next, as on an add-on entity, and
 `next_state` is not acted on for either. `JavaModelPoseClientGameTest` reads the posed parts back.
+A bone a clip turns `relative_to` the entity has its part's turn kept in the entity's frame once
+every other part, and the body carrying it, has moved: `JavaModelParts.keepEntityFrame` takes the
+turn of the parts above it back off, the way `BedrockModelRenderer.poseBone` does for a pack's own
+model.
 
 **Bedrock's hierarchy is not Java's.** Bedrock's model of most humanoid mobs hangs the head, the
 arms and the legs off `body`, where Java's model draws them beside it, so a pack hiding a vanilla

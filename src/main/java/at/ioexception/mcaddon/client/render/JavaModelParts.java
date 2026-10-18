@@ -65,6 +65,9 @@ final class JavaModelParts {
     private final Map<String, ModelPart> byName = new HashMap<>();
     private final List<Saved> saved = new ArrayList<>();
 
+    /** The parts a clip turns in the entity's frame, each with the turn it is to have in that frame. */
+    private final Map<ModelPart, Quaternionf> inEntityFrame = new IdentityHashMap<>();
+
     /** Where a part stood before a clip moved it. */
     private record Saved(ModelPart part, float x, float y, float z, float xRot, float yRot, float zRot,
         float xScale, float yScale, float zScale) {
@@ -126,6 +129,9 @@ final class JavaModelParts {
      * The arithmetic is `BedrockModelRenderer`'s, because a Java model part is posed in the same
      * space and in the same order as a baked Bedrock bone: a position whose Y runs the other way,
      * degrees turned to radians with Y negated, and a scale that multiplies.
+     *
+     * A pose whose rotation is relative to the entity keeps the turn the part has here for
+     * `keepEntityFrame` to hold once every other part has moved.
      */
     void move(ModelPart part, BonePose pose) {
         saved.add(Saved.of(part));
@@ -140,6 +146,41 @@ final class JavaModelParts {
         part.xScale *= pose.scale.x;
         part.yScale *= pose.scale.y;
         part.zScale *= pose.scale.z;
+        if (pose.rotationRelativeToEntity) {
+            inEntityFrame.put(part, new Quaternionf().rotationZYX(part.zRot, part.yRot, part.xRot));
+        }
+    }
+
+    /**
+     * Turns each part a clip gave a rotation relative to the entity by that rotation in the entity's
+     * frame, the way `BedrockModelRenderer.poseBone` turns such a bone.
+     *
+     * The parts above it, and the body that carries it, still carry its pivot along; their turn is
+     * taken off its own, so a head keeps looking where the clip says while the body under it leans.
+     * A part nearer the root is settled first, because the parts under it take its turn.
+     */
+    void keepEntityFrame() {
+        if (inEntityFrame.isEmpty()) return;
+
+        inEntityFrame.entrySet().stream()
+            .map(entry -> Map.entry(pathTo(root, entry.getKey()), entry.getValue()))
+            .filter(entry -> !entry.getKey().isEmpty())
+            .sorted(java.util.Comparator.comparingInt(entry -> entry.getKey().size()))
+            .forEach(entry -> turnInEntityFrame(entry.getKey(), entry.getValue()));
+        inEntityFrame.clear();
+    }
+
+    private void turnInEntityFrame(List<ModelPart> path, Quaternionf wanted) {
+        Quaternionf above = new Quaternionf();
+        path.subList(0, path.size() - 1).forEach(part ->
+            above.mul(new Quaternionf().rotationZYX(part.zRot, part.yRot, part.xRot)));
+
+        ModelPart part = path.get(path.size() - 1);
+        saved.add(Saved.of(part));
+        Vector3f turn = above.conjugate().mul(wanted).getEulerAnglesZYX(new Vector3f());
+        part.xRot = turn.x;
+        part.yRot = turn.y;
+        part.zRot = turn.z;
     }
 
     /**
