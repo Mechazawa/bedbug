@@ -1,7 +1,6 @@
 package at.ioexception.mcaddon.convert;
 
 import at.ioexception.mcaddon.bedrock.behaviour.DataValues;
-import at.ioexception.mcaddon.bedrock.camera.CameraPreset;
 import at.ioexception.mcaddon.bedrock.hud.HudElement;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.pack.BedrockPack;
@@ -109,6 +108,10 @@ public final class Functions {
     private static final Set<String> TAIL_REACHES_JAVA =
         Set.of("clone", "effect", "execute", "locate", "loot", "schedule", "time", "title", "titleraw");
 
+    /** The forms of `/camera` whose branch `BedrockCommands` registers. */
+    private static final Set<String> DRAWN_CAMERA_FORMS = Set.of(
+        "set", "clear", "attach_to_entity", "detach_from_entity", "target_entity", "remove_target", "play_spline");
+
     /**
      * Forms of a command this mod does translate that Java has no way to say.
      *
@@ -129,11 +132,7 @@ public final class Functions {
         "ride evict_riders", "ride if_group_fits", "ride no_ride_change", "ride reassign_rides",
         "ride skip_riders", "ride summon_ride", "ride summon_rider", "ride teleport_ride",
         "ride until_full",
-        "camera attach_to_entity", "camera color", "camera detach_from_entity",
-        "camera entity_offset", "camera fade", "camera fov_clear", "camera fov_set",
-        "camera minecraft:control_scheme_camera", "camera minecraft:fixed_boom",
-        "camera minecraft:follow_orbit", "camera play_spline", "camera remove_target",
-        "camera target_center_offset", "camera target_entity", "camera view_offset",
+        "camera color", "camera fade", "camera fov_clear", "camera fov_set",
         "save query",
         "schedule on_area_loaded",
         "structure block_by_block", "structure layer_by_layer", "structure memory", "structure xz",
@@ -1386,31 +1385,19 @@ public final class Functions {
     }
 
     /**
-     * `/camera`, of whose fifteen forms the four presets and their placement are drawn here.
+     * `/camera`, every form of which the command this mod registers draws but the screen fade and the
+     * field of view, which no packet tells a Java client about.
      *
-     * The line reaches the command this mod registers as the pack wrote it, so the only thing to
-     * decide is whether that command has a branch for the form. A preset in a pack's own namespace
-     * is one of the pack's `cameras/presets`, which the command looks up as it runs, because the
-     * functions are translated before the presets are read. The three built-in presets left name a
-     * camera Bedrock draws and Java has none of, and the rest fade the screen, move the field of
-     * view, follow a spline or hang the camera off another entity, none of which a Java client is
-     * told to do by any packet.
+     * The line reaches that command as the pack wrote it, so the only thing to decide is whether it
+     * has a branch for the form. A preset or a spline in a pack's own namespace is looked up as the
+     * command runs, because the functions are translated before the cameras are read.
      */
     private static String camera(String rest, Set<String> unsupported) {
         String[] parts = SPACE.split(rest, 3);
         if (parts.length < 2) return "camera " + rest;
 
         String form = parts[1].toLowerCase(Locale.ROOT);
-        if (form.equals("clear")) return "camera " + rest;
-        if (!form.equals("set")) return dropped("camera", form, unsupported);
-
-        String preset = parts.length > 2 ? SPACE.split(parts[2], 2)[0].toLowerCase(Locale.ROOT) : "";
-        if (preset.contains(":") && !preset.startsWith("minecraft:")) return "camera " + rest;
-
-        CameraPreset builtIn = CameraPreset.builtIn(preset);
-        return builtIn == null || builtIn.camera() == null
-            ? dropped("camera", preset.contains(":") ? preset : "minecraft:" + preset, unsupported)
-            : "camera " + rest;
+        return DRAWN_CAMERA_FORMS.contains(form) ? "camera " + rest : dropped("camera", form, unsupported);
     }
 
     /**

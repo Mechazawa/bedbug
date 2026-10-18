@@ -138,6 +138,7 @@ public final class ServerHooks {
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             ServerPlayer left = handler.player;
             server.execute(() -> {
+                PlayerCameras.forget(left);
                 PlayerFogs.forget(left);
                 PlayerHuds.forget(left);
                 PlayerInputs.forget(left);

@@ -1,17 +1,19 @@
 package at.ioexception.mcaddon.script.surface;
 
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
-import at.ioexception.mcaddon.bedrock.camera.CameraView;
+import at.ioexception.mcaddon.bedrock.camera.AttachPoint;
+import at.ioexception.mcaddon.bedrock.camera.CameraRequest;
+import at.ioexception.mcaddon.bedrock.camera.CameraSpline;
 import at.ioexception.mcaddon.bedrock.camera.Easing;
 import at.ioexception.mcaddon.bedrock.hud.HudElement;
 import at.ioexception.mcaddon.bedrock.input.InputPermission;
 import at.ioexception.mcaddon.client.render.BedrockParticles;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.platform.Platform;
-import at.ioexception.mcaddon.registry.AddonCameras;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.registry.AddonParticles;
 import at.ioexception.mcaddon.script.ScriptCoverage;
+import at.ioexception.mcaddon.server.PlayerCameras;
 import at.ioexception.mcaddon.server.PlayerHuds;
 import at.ioexception.mcaddon.server.PlayerInputs;
 import at.ioexception.mcaddon.server.PropertyOverrides;
@@ -328,23 +330,25 @@ public final class Players extends Surface {
     // The client
 
     /**
-     * Puts the player behind another entity's eyes, which is the view spectator mode rides on.
-     *
-     * Naming the player themselves is how the view comes back, and is what `Camera.clear` does.
+     * `Camera.attachToEntity`, which is `/camera attach_to_entity` with a place on the entity named.
+     * The answer is why it was refused, or null once the order is on its way.
      */
     @HostAccess.Export
-    public void attachCamera(String id, String target) {
+    public String attachCamera(String id, String target, String locator) {
         ServerPlayer player = player(id);
-        net.minecraft.world.entity.Entity seen = entity(target);
-        if (player != null && seen != null) player.setCamera(seen);
+        net.minecraft.world.entity.Entity attached = entity(target);
+        if (player == null || attached == null) return null;
+        return PlayerCameras.attach(player, attached, locator == null ? null : AttachPoint.tryFrom(locator));
     }
 
     /**
      * `Camera.setCamera` and `Camera.setDefaultCamera`, which are `/camera set` for one player.
      *
      * The options are the ones the script stated: a `location`, a `rotation`, a `facingLocation`, the
-     * id of a `facingEntity`, and an `easeType` in the spelling `/camera` takes with its `easeTime`.
-     * The answer is why the preset was refused, or null once the view is on its way.
+     * id of a `facingEntity`, a fixed boom's `viewOffset` and `entityOffset`, the id of a
+     * `targetEntity` with its `offsetFromTargetCenter`, and an `easeType` in the spelling `/camera`
+     * takes with its `easeTime`. The answer is why the preset was refused, or null once the view is on
+     * its way.
      */
     @HostAccess.Export
     public String setCamera(String id, String preset, String optionsJson) {
@@ -355,26 +359,44 @@ public final class Players extends Surface {
         String easeType = Json.text(options, "easeType", null);
         Easing easing = easeType == null ? null : Easing.tryFrom(easeType);
         if (easeType != null && easing == null) return "There is no ease named " + easeType + ".";
-        String refused = AddonCameras.refusal(preset, easing);
-        if (refused != null) return refused;
 
         net.minecraft.world.entity.Entity faced = options.has("facingEntity")
             ? entity(options.get("facingEntity").getAsString()) : null;
         JsonObject rotation = options.getAsJsonObject("rotation");
-        Channels.sendCameraView(player, AddonCameras.presetOf(preset).view(
+        JsonObject viewOffset = options.getAsJsonObject("viewOffset");
+        CameraRequest request = new CameraRequest(
             vector(options.getAsJsonObject("location")),
             rotation == null ? null : (float) Json.number(rotation, "x", 0),
             rotation == null ? null : (float) Json.number(rotation, "y", 0),
             faced != null ? faced.getBoundingBox().getCenter() : vector(options.getAsJsonObject("facingLocation")),
-            easing == null ? 0f : (float) Json.number(options, "easeTime", 1), easing).encode());
-        return null;
+            easing == null ? 0f : (float) Json.number(options, "easeTime", 1), easing,
+            viewOffset == null ? null : (float) Json.number(viewOffset, "x", 0),
+            viewOffset == null ? null : (float) Json.number(viewOffset, "y", 0),
+            vector(options.getAsJsonObject("entityOffset")));
+        String refused = PlayerCameras.set(player, preset, request);
+        if (refused != null || !options.has("targetEntity")) return refused;
+
+        net.minecraft.world.entity.Entity target = entity(options.get("targetEntity").getAsString());
+        Vec3 offset = vector(options.getAsJsonObject("offsetFromTargetCenter"));
+        return target == null ? null : PlayerCameras.target(player, target, offset == null ? Vec3.ZERO : offset);
     }
 
-    /** `Camera.clear`, which gives the player back the camera they had before any preset. */
+    /** `Camera.clear`, which ends every camera order the player is under. */
     @HostAccess.Export
     public void clearCamera(String id) {
         ServerPlayer player = player(id);
-        if (player != null) Channels.sendCameraView(player, CameraView.CLEARED.encode());
+        if (player != null) PlayerCameras.clear(player);
+    }
+
+    /**
+     * `Camera.playAnimation`, whose curve and key frames the script side has written in the spelling
+     * a pack's spline file uses. The answer is why it was refused, or null once it is on its way.
+     */
+    @HostAccess.Export
+    public String playCameraSpline(String id, String splineJson) {
+        ServerPlayer player = player(id);
+        if (player == null) return null;
+        return PlayerCameras.play(player, CameraSpline.read(JsonParser.parseString(splineJson).getAsJsonObject()));
     }
 
     /**

@@ -168,7 +168,7 @@ These are the checks it runs, and what each one catches:
 
   `RenderControllerClientGameTest`, `AnimationClientGameTest`, `AttachableClientGameTest`,
   `TextureMeshClientGameTest`, `RelativeRotationClientGameTest`, `CullingClientGameTest`, `ParticleClientGameTest`, `FogClientGameTest`,
-  `CameraClientGameTest` and `ItemAndBlockClientGameTest` are the drawing side's tests; each class's docblock names the pack
+  `CameraClientGameTest`, the five camera tests named with the test pack below and `ItemAndBlockClientGameTest` are the drawing side's tests; each class's docblock names the pack
   content it reads and what it asserts. Two things about the machine the tests run on: a window
   hidden by the compositor can stall the render thread inside `glfwSwapBuffers` until the server's
   watchdog ends the run, which reads as a hang in whatever test was running, and a dedicated server
@@ -737,18 +737,41 @@ These are the checks it runs, and what each one catches:
   a wisp settled a second after arriving is not, and tags that player when an override of a property
   the wisp never declared is refused; `tp:override_clear` clears the override again.
 
-  `cameras/presets/` holds three presets. `tp:overlook` is a free camera at 0.5 120 0.5 turned to a
+  `cameras/presets/` holds the presets. `tp:overlook` is a free camera at 0.5 120 0.5 turned to a
   pitch of 20 and a yaw of 45 that hears from the player, and also asks for `player_effects` and
   `extend_player_rendering`; `tp:overlook_east` inherits from it and states only its x and its yaw,
-  so a chain walked wrongly leaves the camera at another height, pitch or listener; and `tp:orbit`
-  inherits from `minecraft:follow_orbit` with a radius and two offsets, which is refused by name.
-  `CameraPresetClientGameTest` reads each back off the client's camera and its sound engine's
-  listener, through `/camera` and through four script events (`tp:camera`, `tp:camera_default`,
-  `tp:camera_orbit` and `tp:camera_clear`) calling `Camera.setCamera`, `Camera.setDefaultCamera`
-  and `Camera.clear`, and `AddonGameTests.aCameraPresetsDroppedFieldsAreNamed` asks for the five
-  dropped fields among what `/mcaddon entities` names. A function translates a preset in a pack's
-  own namespace unread, because the functions are converted before the presets are read; the
-  command looks the name up as it runs.
+  so a chain walked wrongly leaves the camera at another height, pitch or listener.
+  `CameraPresetClientGameTest` reads those back off the client's camera and its sound engine's
+  listener, through `/camera` and through three script events (`tp:camera`, `tp:camera_default` and
+  `tp:camera_clear`) calling `Camera.setCamera`, `Camera.setDefaultCamera` and `Camera.clear`, and
+  `AddonGameTests.aCameraPresetsDroppedFieldsAreNamed` asks for the two dropped fields among what
+  `/mcaddon entities` names and for none of the read ones. A function translates a preset or a
+  spline in a pack's own namespace unread, because the functions are converted before the cameras
+  are read; the command looks the name up as it runs.
+
+  The rest of the presets and `camera/splines/sweep.json` are there for the cameras that move on
+  their own, and five client game tests read each one back off the client's camera, all of them on
+  `Stage` with the player at 0.5 120 0.5 looking south:
+
+  - `OrbitCameraClientGameTest`: `minecraft:follow_orbit`, `rot` turning the player, `view_offset`
+    and `entity_offset`, `minecraft:control_scheme_camera`, and `tp:orbit` (a radius of six and both
+    offsets), set by `/camera` and by `tp:camera_orbit`'s `Camera.setCamera` with a view offset of its
+    own. An orbit circles the middle of the box, so the expected place is worked out from the
+    client's own player.
+  - `BoomCameraClientGameTest`: `tp:boom` (a radius of four and a starting turn of 45 and 30), a
+    fixed boom that keeps the player's turn as it was set, `rot` over the preset's turn,
+    `tp:boom_aligned` turning the player to the camera's yaw, and `tp:camera_boom`'s two offsets.
+  - `AttachedCameraClientGameTest`: `attach_to_entity` on an armour stand, an orbit circling it,
+    `detach_from_entity`, `tp:camera_attach`'s `Camera.attachToEntity` at the stand's feet, and a
+    player refused.
+  - `TargetCameraClientGameTest`: `target_entity` with and without `target_center_offset`,
+    `remove_target`, a first person camera refused, `tp:watch` held to ten degrees round and ten
+    above the horizon, `tp:lookout` following nothing past five blocks, `tp:slow` seen partway round
+    at thirty degrees a second, `tp:snap` on the target at once, and `tp:camera_target`'s
+    `targetEntity`.
+  - `SplineCameraClientGameTest`: `play_spline tp:sweep` seen on its first leg and held at its end,
+    `tp:camera_spline`'s Catmull-Rom curve through four points, and a missing spline and a third
+    person camera refused.
 - **`tools/testpack/build_modules.py`** builds a second add-on, whose script imports every
   `@minecraft/*` module the mod provides and calls one thing from each. Its sources are a manifest
   and one script under `tools/testpack/modules/`.
@@ -1733,7 +1756,7 @@ src/main/java/at/ioexception/mcaddon/
   convert/                   Runtime conversion: Targa, Ogg repair, sounds, text, models, functions
   resource/                  The converted packs and how the game is told about them
   registry/                  Sounds, entities, items, blocks, spawns, worldgen and the creative tab
-  bedrock/camera/            What `/camera` and `/camerashake` set, the presets a pack adds, and the
+  bedrock/camera/            What `/camera` and `/camerashake` set, the presets and splines a pack adds, and the
                              easing curves they name
   bedrock/fog/               A pack's `fogs/` settings, as far as Java's one fog can carry them
   bedrock/hud/               The pieces of the heads-up display `/hud` names

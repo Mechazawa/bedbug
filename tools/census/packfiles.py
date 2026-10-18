@@ -45,6 +45,7 @@ WIDENED = {
         "animations": "metadata/doc_modules/animations.json",
         "animation_controllers": "metadata/doc_modules/animations.json",
         "blocks": "metadata/vanilladata_modules/mojang-blocks.json",
+        "camera": None,
         "cameras": "metadata/vanilladata_modules/mojang-camera-presets.json",
         "dialogue": "metadata/json_schemas/client_server/entity",
         "dimensions": "metadata/vanilladata_modules/mojang-dimensions.json",

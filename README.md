@@ -186,17 +186,23 @@ add-ons, or with another release of it, is told which in chat.
   An item the pack lets into the off hand goes there and one it does not is refused, an item that
   clips liquids aims at water and lava, and one carrying a durability sensor shows the particle and
   plays the sound its threshold names as it wears down.
-- `/bedrock camera` and `/bedrock camerashake`, which set one player's own view: the four presets, a position and a
-  rotation of the pack's choosing or a point or an entity to face, all thirty-one of Bedrock's easing
-  curves, and a shake that moves the camera or turns it. An ease to one of the three cameras that
-  follow the player is refused the way Bedrock refuses it, and `minecraft:fixed_boom`,
-  `minecraft:follow_orbit` and `minecraft:control_scheme_camera` are named as cameras Java has no
-  counterpart for. A behaviour pack's own `cameras/presets/` are presets too: each inherits from
-  `minecraft:free` or from another of the pack's, takes the position, the rotation and the listener
-  it states over the ones it inherits, and is set by `/camera set` and by a script's
-  `Camera.setCamera` and `Camera.setDefaultCamera`, with whatever the command or the script states
-  over the preset's own. A preset with `"listener": "player"` hears from the player's head while the
-  camera is away from it.
+- `/bedrock camera` and `/bedrock camerashake`, which set one player's own view: all seven of
+  Bedrock's presets, a position and a rotation of the pack's choosing or a point or an entity to face,
+  all thirty-one of Bedrock's easing curves, and a shake that moves the camera or turns it. An ease to
+  one of the three gameplay cameras is refused the way Bedrock refuses it. `minecraft:follow_orbit`
+  circles the player at a radius and turns as the player turns, with `rot` turning the player;
+  `minecraft:fixed_boom` follows the player at one angle and does not turn with them; and both take
+  `view_offset` and `entity_offset`. `minecraft:control_scheme_camera` is drawn as the orbit, because
+  Mojang publishes nothing about how it differs. `attach_to_entity` and `detach_from_entity` hang the
+  camera off another entity, which an orbit camera then circles and any other camera looks out of.
+  `target_entity` with its `target_center_offset` turns a free camera after an entity until
+  `remove_target`, and `play_spline` carries a free camera along a curve a behaviour pack describes in
+  `camera/splines/`. A behaviour pack's own `cameras/presets/` are presets too: each inherits from one
+  of Bedrock's or from another of the pack's, takes what it states over what it inherits, and is set by
+  `/camera set` and by a script's `Camera.setCamera` and `Camera.setDefaultCamera`, with whatever the
+  command or the script states over the preset's own. A preset with `"listener": "player"` hears from
+  the player's head while the camera is away from it. A script also has `Camera.attachToEntity` and
+  `Camera.playAnimation`.
 - `/bedrock fog`, which layers a pack's own `fogs/` settings over the one the game would draw, with a stack
   per player that `pop` and `remove` take apart the way Bedrock's do. Like the two camera commands it
   is decided on the server and sent to each player alone, so setting one player's view in a
@@ -865,17 +871,29 @@ front of a Java player is what `@minecraft/server-ui` describes and what an NPC 
 states, and both of those are drawn.
 
 **What a camera preset says about Bedrock's own client.** A pack's `cameras/presets/` are read, and
-of what a preset states beside its identifier and its parent, `pos_x`, `pos_y`, `pos_z`, `rot_x`,
-`rot_y` and `listener` are drawn. The rest is named by `/mcaddon entities` as the pack loads.
-`player_effects` and `extend_player_rendering` describe the Bedrock client's renderer: Java draws the
-player's effects whatever the camera and draws every entity the loaded chunks hold. `rotation_speed`,
-`snap_to_target`, `continue_targeting`, `tracking_radius` and the two rotation limits shape how a
-free camera follows the entity `/camera target_entity` names, which this mod does not do. `radius`,
-`view_offset`, `entity_offset`, `starting_rot_x`, `starting_rot_y`, `aim_assist`,
-`align_target_and_camera_forward` and `control_scheme` belong to `minecraft:follow_orbit` and
-`minecraft:fixed_boom`, which Java has no camera for, and a preset built on one of those is refused
-by name. Bedrock keeps a player's `pos` and `rot` for a preset until `default` or a rejoin clears
-them; here a `/camera set` with neither places the camera where the preset says.
+of what a preset states beside its identifier and its parent, the placement (`pos_x`, `pos_y`,
+`pos_z`, `rot_x`, `rot_y`), the `listener`, an orbit camera's `radius`, `view_offset`,
+`entity_offset`, `starting_rot_x`, `starting_rot_y` and `align_target_and_camera_forward`, and the
+fields that shape how a free camera follows its target (`rotation_speed`, `snap_to_target`, the
+two rotation limits, `continue_targeting` and `tracking_radius`) are drawn. The rest is named by
+`/mcaddon entities` as the pack loads. `player_effects` and `extend_player_rendering` describe the
+Bedrock client's renderer: Java draws the player's effects whatever the camera and draws every entity
+the loaded chunks hold. `aim_assist` and `control_scheme` belong to two systems this mod has not got,
+aim assist and `/controlscheme`. Mojang describes `align_target_and_camera_forward` nowhere, so it is
+read by its name: a fixed boom stating it turns the player to face the way the camera looks when it
+is set. Bedrock keeps a player's `pos` and `rot` for a preset until `default` or a rejoin clears them;
+here a `/camera set` with neither places the camera where the preset says.
+
+**What a camera does that Mojang does not write down.** An orbit camera circles the middle of the
+entity's box, the point Mojang's documentation says an entity offset of nothing stands at, and moves
+that point along the world's own axes; Java's camera has no roll, so a spline's rotation about the
+camera's forward axis is named rather than drawn. A spline file is read in the field names of
+Bedrock's own spline definition (`name`, `spline_type`, `total_time`, `control_points`,
+`progress_key_frames`, `rotation_key_frames`), at the top of the file or inside the one object it
+holds. A Catmull-Rom spline passes through every point it is given, the first and the last included,
+which is what Mojang's flyover tutorial draws, and the curve is spread evenly over its points rather
+than over its length. Neither orbit camera is pulled in when a wall stands between it and the entity
+it follows.
 
 **The index beside a pack's textures.** `textures/texture_list.json` is a flat list of texture paths
 written without their extensions, which the Bedrock client keeps so it can resolve a texture by name

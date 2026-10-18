@@ -1,7 +1,8 @@
 package at.ioexception.mcaddon.server;
 
+import at.ioexception.mcaddon.bedrock.camera.CameraRequest;
 import at.ioexception.mcaddon.bedrock.camera.CameraShake;
-import at.ioexception.mcaddon.bedrock.camera.CameraView;
+import at.ioexception.mcaddon.bedrock.camera.CameraSpline;
 import at.ioexception.mcaddon.bedrock.camera.Easing;
 import at.ioexception.mcaddon.bedrock.hud.HudElement;
 import at.ioexception.mcaddon.bedrock.input.InputPermission;
@@ -47,6 +48,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
@@ -64,6 +66,9 @@ import java.util.function.Predicate;
 public final class BedrockCommands {
     /** Bedrock's two shakes: one moves the camera about, the other turns it. Positional is default. */
     private static final List<String> SHAKE_KINDS = List.of("positional", "rotational");
+
+    /** Bedrock holds both offsets of an orbit camera within this many blocks either way. */
+    private static final float OFFSET_REACH = 64;
 
     private BedrockCommands() {
     }
@@ -405,13 +410,17 @@ public final class BedrockCommands {
      * Bedrock lets `ease`, `pos` and `rot` be written in that order and each of them left out, which
      * is why the same tails hang off both the bare preset and the end of an ease. `facing` stands
      * where `rot` would, and `default` stands for the preset's own placement with nothing over it.
-     * One executor reads whichever of them the player typed.
+     * `view_offset` and `entity_offset` close a line for an orbit camera, after a `rot` or in place
+     * of one. One executor reads whichever of them the player typed.
      */
     private static void registerCamera(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("camera")
             .requires(source -> Platform.allowedAt(source, 1))
             .then(Commands.argument("targets", EntityArgument.players())
-                .then(Commands.literal("clear").executes(BedrockCommands::clearCamera))
+                .then(Commands.literal("clear").executes(command -> toPlayers(command, player -> {
+                    PlayerCameras.clear(player);
+                    return null;
+                })))
                 .then(Commands.literal("set")
                     // A preset carries a namespace, which Brigadier's own word argument stops at.
                     .then(Commands.argument("preset", IdentifierArgument.id())
@@ -421,6 +430,8 @@ public final class BedrockCommands {
                         .then(cameraPosition())
                         .then(cameraRotation())
                         .then(cameraFacing())
+                        .then(viewOffset())
+                        .then(entityOffset())
                         .then(Commands.literal("default").executes(BedrockCommands::camera))
                         .then(Commands.literal("ease")
                             .then(Commands.argument("seconds", FloatArgumentType.floatArg(0))
@@ -431,8 +442,37 @@ public final class BedrockCommands {
                                     .then(cameraPosition())
                                     .then(cameraRotation())
                                     .then(cameraFacing())
+                                    .then(viewOffset())
+                                    .then(entityOffset())
                                     .then(Commands.literal("default")
-                                        .executes(BedrockCommands::camera)))))))));
+                                        .executes(BedrockCommands::camera)))))))
+                .then(Commands.literal("attach_to_entity")
+                    .then(Commands.argument("entity", EntityArgument.entity())
+                        .executes(command -> {
+                            Entity entity = EntityArgument.getEntity(command, "entity");
+                            return toPlayers(command, player -> PlayerCameras.attach(player, entity, null));
+                        })))
+                .then(Commands.literal("detach_from_entity").executes(command -> toPlayers(command, player -> {
+                    PlayerCameras.detach(player);
+                    return null;
+                })))
+                .then(Commands.literal("target_entity")
+                    .then(Commands.argument("entity", EntityArgument.entity())
+                        .executes(BedrockCommands::targetCamera)
+                        .then(Commands.literal("target_center_offset")
+                            .then(Commands.argument("xTargetCenterOffset", FloatArgumentType.floatArg())
+                                .then(Commands.argument("yTargetCenterOffset", FloatArgumentType.floatArg())
+                                    .then(Commands.argument("zTargetCenterOffset", FloatArgumentType.floatArg())
+                                        .executes(BedrockCommands::targetCamera)))))))
+                .then(Commands.literal("remove_target").executes(command -> toPlayers(command, player -> {
+                    PlayerCameras.removeTarget(player);
+                    return null;
+                })))
+                .then(Commands.literal("play_spline")
+                    .then(Commands.argument("name", IdentifierArgument.id())
+                        .suggests((command, builder) -> SharedSuggestionProvider.suggest(
+                            AddonCameras.splineNames(), builder))
+                        .executes(BedrockCommands::playSpline)))));
     }
 
     /** `pos` may be followed by `rot` or by `facing`, which are the pairings Bedrock allows. */
@@ -460,7 +500,25 @@ public final class BedrockCommands {
         return Commands.literal("rot")
             .then(Commands.argument("xRot", FloatArgumentType.floatArg(-90, 90))
                 .then(Commands.argument("yRot", FloatArgumentType.floatArg())
-                    .executes(BedrockCommands::camera)));
+                    .executes(BedrockCommands::camera)
+                    .then(viewOffset())
+                    .then(entityOffset())));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> viewOffset() {
+        return Commands.literal("view_offset")
+            .then(Commands.argument("xViewOffset", FloatArgumentType.floatArg(-OFFSET_REACH, OFFSET_REACH))
+                .then(Commands.argument("yViewOffset", FloatArgumentType.floatArg(-OFFSET_REACH, OFFSET_REACH))
+                    .executes(BedrockCommands::camera)
+                    .then(entityOffset())));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> entityOffset() {
+        return Commands.literal("entity_offset")
+            .then(Commands.argument("xEntityOffset", FloatArgumentType.floatArg(-OFFSET_REACH, OFFSET_REACH))
+                .then(Commands.argument("yEntityOffset", FloatArgumentType.floatArg(-OFFSET_REACH, OFFSET_REACH))
+                    .then(Commands.argument("zEntityOffset", FloatArgumentType.floatArg(-OFFSET_REACH, OFFSET_REACH))
+                        .executes(BedrockCommands::camera))));
     }
 
     private static void registerCameraShake(CommandDispatcher<CommandSourceStack> dispatcher) {
@@ -653,8 +711,8 @@ public final class BedrockCommands {
      * Sets what each named player sees.
      *
      * A preset or an ease this mod cannot draw is reported rather than guessed at, because a camera
-     * pointing somewhere nobody asked for is worse than a line that says which word was wrong. An
-     * ease to a camera that follows the player is refused in Bedrock's own words.
+     * pointing somewhere nobody asked for is worse than a line that says which word was wrong. What
+     * Bedrock itself refuses is refused in its words.
      *
      * An entity to face is faced at the middle of its box, which is the point Bedrock documents.
      */
@@ -671,34 +729,67 @@ public final class BedrockCommands {
                 return 0;
             }
         }
-        String refused = AddonCameras.refusal(written, easing);
-        if (refused != null) {
-            command.getSource().sendFailure(Component.literal(refused));
-            return 0;
-        }
 
         Vec3 facing = given(command, "lookAtPosition") ? Vec3Argument.getVec3(command, "lookAtPosition")
             : given(command, "lookAtEntity")
                 ? EntityArgument.getEntity(command, "lookAtEntity").getBoundingBox().getCenter() : null;
-        return send(command, AddonCameras.presetOf(written).view(
+        CameraRequest request = new CameraRequest(
             given(command, "position") ? Vec3Argument.getVec3(command, "position") : null,
             given(command, "xRot") ? FloatArgumentType.getFloat(command, "xRot") : null,
             given(command, "yRot") ? FloatArgumentType.getFloat(command, "yRot") : null,
             facing,
             given(command, "seconds") ? FloatArgumentType.getFloat(command, "seconds") : 0f,
-            easing).encode());
+            easing,
+            given(command, "xViewOffset") ? FloatArgumentType.getFloat(command, "xViewOffset") : null,
+            given(command, "yViewOffset") ? FloatArgumentType.getFloat(command, "yViewOffset") : null,
+            given(command, "xEntityOffset") ? new Vec3(FloatArgumentType.getFloat(command, "xEntityOffset"),
+                FloatArgumentType.getFloat(command, "yEntityOffset"),
+                FloatArgumentType.getFloat(command, "zEntityOffset")) : null);
+        return toPlayers(command, player -> PlayerCameras.set(player, written, request));
     }
 
-    private static int clearCamera(CommandContext<CommandSourceStack> command)
+    private static int targetCamera(CommandContext<CommandSourceStack> command)
         throws com.mojang.brigadier.exceptions.CommandSyntaxException {
-        return send(command, CameraView.CLEARED.encode());
+        Entity target = EntityArgument.getEntity(command, "entity");
+        Vec3 offset = given(command, "xTargetCenterOffset")
+            ? new Vec3(FloatArgumentType.getFloat(command, "xTargetCenterOffset"),
+                FloatArgumentType.getFloat(command, "yTargetCenterOffset"),
+                FloatArgumentType.getFloat(command, "zTargetCenterOffset"))
+            : Vec3.ZERO;
+        return toPlayers(command, player -> PlayerCameras.target(player, target, offset));
     }
 
-    private static int send(CommandContext<CommandSourceStack> command, String view)
+    private static int playSpline(CommandContext<CommandSourceStack> command)
         throws com.mojang.brigadier.exceptions.CommandSyntaxException {
-        Collection<ServerPlayer> targets = EntityArgument.getPlayers(command, "targets");
-        targets.forEach(player -> Channels.sendCameraView(player, view));
-        return targets.size();
+        String name = IdentifierArgument.getId(command, "name").toString();
+        CameraSpline spline = AddonCameras.splineOf(name);
+        if (spline == null) {
+            command.getSource().sendFailure(
+                Component.literal("No add-on describes a camera spline called " + name + "."));
+            return 0;
+        }
+        return toPlayers(command, player -> PlayerCameras.play(player, spline));
+    }
+
+    /**
+     * Gives an order to each named player and says why it was refused where it was.
+     *
+     * Each order answers null when the player took it, and the command answers how many did.
+     */
+    private static int toPlayers(CommandContext<CommandSourceStack> command, Function<ServerPlayer, String> order)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        int taken = 0;
+        String refused = null;
+        for (ServerPlayer player : EntityArgument.getPlayers(command, "targets")) {
+            String answer = order.apply(player);
+            if (answer == null) {
+                taken++;
+            } else {
+                refused = answer;
+            }
+        }
+        if (refused != null) command.getSource().sendFailure(Component.literal(refused));
+        return taken;
     }
 
     /** Bedrock's own defaults: one unit of shake, for one second, moving rather than turning. */

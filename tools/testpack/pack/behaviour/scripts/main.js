@@ -25,7 +25,8 @@
 // the script read back, which is what the test asserts on.
 
 import {
-    BlockPermutation, BlockVolume, CameraShakeType, CloneMode, HudElement, HudVisibility, system, world,
+    BlockPermutation, BlockVolume, CameraShakeType, CatmullRomSpline, CloneMode, EasingType, EntityAttachPoint,
+    HudElement, HudVisibility, system, world,
 } from "@minecraft/server";
 import { ActionFormData, CustomForm, ObservableBoolean, ObservableString } from "@minecraft/server-ui";
 
@@ -196,13 +197,51 @@ function overrideTheWisp(player, overridden) {
     }
 }
 
-// `tp:orbit` is built on a Bedrock camera Java has no counterpart for, so setting it throws.
-function setTheOrbit(player) {
-    try {
-        player.camera.setCamera("tp:orbit");
-    } catch (error) {
-        if (error.message.includes("minecraft:follow_orbit")) player.addTag("tp:camera_refused");
+// The armour stand a camera probe looks at, follows or hangs off: the one nearest the player.
+function nearestStand(player) {
+    return player.dimension.getEntities({ type: "minecraft:armor_stand", location: player.location, closest: 1 })[0];
+}
+
+// The camera probes. Each states what a Bedrock script states, and the client test reads the camera
+// it leaves behind.
+function pointTheCamera(player, probe) {
+    const stand = nearestStand(player);
+    switch (probe) {
+        case "tp:camera_orbit": player.camera.setCamera("tp:orbit", { viewOffset: { x: 0, y: 3 } }); break;
+        case "tp:camera_boom":
+            player.camera.setCamera("minecraft:fixed_boom",
+                { entityOffset: { x: 0, y: 2, z: 0 }, viewOffset: { x: 1, y: 0 } });
+            break;
+        case "tp:camera_attach": player.camera.attachToEntity({ entity: stand, locator: EntityAttachPoint.Feet }); break;
+        case "tp:camera_target":
+            player.camera.setCamera("minecraft:free",
+                { targetEntity: stand, offsetFromTargetCenter: { x: 0, y: 3, z: 0 } });
+            break;
+        case "tp:camera_spline": playTheSpline(player); break;
+        default: break;
     }
+}
+
+// Four points over the platform, the camera arriving at the last one turned to a pitch of 10 and a
+// yaw of -90. Catmull-Rom passes through every point it is given, the first and the last included.
+function playTheSpline(player) {
+    const curve = new CatmullRomSpline();
+    curve.controlPoints = [
+        { x: 0.5, y: 121, z: 0.5 }, { x: 4.5, y: 125, z: 0.5 }, { x: 8.5, y: 125, z: 4.5 }, { x: 8.5, y: 121, z: 8.5 },
+    ];
+    player.camera.playAnimation(curve, {
+        animation: {
+            progressKeyFrames: [
+                { timeSeconds: 0, alpha: 0 },
+                { timeSeconds: 2, alpha: 1, easingFunc: EasingType.InOutSine },
+            ],
+            rotationKeyFrames: [
+                { timeSeconds: 0, rotation: { x: 0, y: 0, z: 0 } },
+                { timeSeconds: 2, rotation: { x: 10, y: -90, z: 0 } },
+            ],
+        },
+        totalTimeSeconds: 2,
+    });
 }
 
 // Each kind of input taken away from a player or given back, named on that player by its number.
@@ -239,7 +278,13 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
             player.camera.setCamera("tp:overlook_east", { rotation: { x: 10, y: 180 } });
             break;
         case "tp:camera_default": player.camera.setDefaultCamera("tp:overlook"); break;
-        case "tp:camera_orbit": setTheOrbit(player); break;
+        case "tp:camera_orbit":
+        case "tp:camera_boom":
+        case "tp:camera_attach":
+        case "tp:camera_target":
+        case "tp:camera_spline":
+            pointTheCamera(player, event.id);
+            break;
         case "tp:camera_clear": player.camera.clear(); break;
         case "tp:hud_hide": hideTheHotbar(player); break;
         case "tp:hud_reset": resetTheHud(player); break;

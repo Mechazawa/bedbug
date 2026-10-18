@@ -3253,16 +3253,22 @@ export class ScreenDisplay {
     }
 }
 
+/** The strongest shake Bedrock lets one event ask for. */
+const MAX_SHAKE = 4;
+
+/** `InOutCubic`, which a script writes, as `in_out_cubic`, which `/camera` writes. */
+function easeName(easingType) {
+    return (easingType ?? EasingType.Linear).replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase();
+}
+
 /**
  * The camera one player sees through.
  *
- * Java has one camera control, the one spectator mode rides on: the view moves to another entity and
- * comes back. A preset, its placement and a shake are what `/camera` and `/camerashake` send, and
- * the player's client draws them. Splines, fades and the field of view are drawn by Bedrock's client
- * off a packet Java has no counterpart for, so each of those reports itself rather than doing nothing.
+ * A preset, its placement, a target, an attachment, a spline and a shake are what `/camera` and
+ * `/camerashake` send, and the player's client draws them. Fades and the field of view are drawn by
+ * Bedrock's client off a packet Java has no counterpart for, so each of those reports itself rather
+ * than doing nothing.
  */
-/** The strongest shake Bedrock lets one event ask for. */
-const MAX_SHAKE = 4;
 
 export class Camera {
     #playerId;
@@ -3277,12 +3283,12 @@ export class Camera {
 
     attachToEntity(options) {
         const target = options?.entity?.id;
-        if (options?.locator !== undefined) unsupported("CameraAttachOptions.locator");
-        if (target !== undefined) bridge.players.attachCamera(this.#playerId, target);
+        if (target === undefined) return;
+        const refused = bridge.players.attachCamera(this.#playerId, target, options?.locator ?? null);
+        if (refused !== null) throw new Error(refused);
     }
 
     clear() {
-        bridge.players.attachCamera(this.#playerId, this.#playerId);
         bridge.players.clearCamera(this.#playerId);
     }
 
@@ -3306,23 +3312,38 @@ export class Camera {
         unsupported("Camera.fade");
     }
 
-    playAnimation() {
-        unsupported("Camera.playAnimation");
+    /**
+     * `/camera play_spline` with the curve stated here, written in the spelling a pack's spline file
+     * uses so one reader takes both.
+     */
+    playAnimation(splineType, cameraAnimationOptions) {
+        const frame = (field, key) => ({
+            time: key.timeSeconds ?? 0,
+            [field]: field === "progress" ? key.alpha ?? 0 : [key.rotation?.x ?? 0, key.rotation?.y ?? 0, key.rotation?.z ?? 0],
+            easing: easeName(key.easingFunc),
+        });
+        const animation = cameraAnimationOptions?.animation ?? {};
+        const refused = bridge.players.playCameraSpline(this.#playerId, JSON.stringify({
+            spline_type: splineType instanceof CatmullRomSpline ? "catmull_rom" : "linear",
+            total_time: cameraAnimationOptions?.totalTimeSeconds ?? 0,
+            control_points: (splineType?.controlPoints ?? []).map(point => ({ position: [point.x, point.y, point.z] })),
+            progress_key_frames: (animation.progressKeyFrames ?? []).map(key => frame("progress", key)),
+            rotation_key_frames: (animation.rotationKeyFrames ?? []).map(key => frame("rotation", key)),
+        }));
+        if (refused !== null) throw new Error(refused);
     }
 
-    /**
-     * `/camera set` for this one player. A fixed boom's offsets and an entity to track belong to
-     * cameras Java has nothing like, so those report themselves and the preset is set without them.
-     */
+    /** `/camera set` for this one player, with a fixed boom's offsets and a free camera's target. */
     setCamera(cameraPreset, setOptions) {
-        if (setOptions?.entityOffset !== undefined) unsupported("CameraFixedBoomOptions.entityOffset");
-        if (setOptions?.viewOffset !== undefined) unsupported("CameraFixedBoomOptions.viewOffset");
-        if (setOptions?.targetEntity !== undefined) unsupported("CameraTargetOptions");
         this.#set(cameraPreset, {
             location: setOptions?.location,
             rotation: setOptions?.rotation,
             facingLocation: setOptions?.facingLocation,
             facingEntity: setOptions?.facingEntity?.id,
+            viewOffset: setOptions?.viewOffset,
+            entityOffset: setOptions?.entityOffset,
+            targetEntity: setOptions?.targetEntity?.id,
+            offsetFromTargetCenter: setOptions?.offsetFromTargetCenter,
         }, setOptions?.easeOptions);
     }
 
@@ -3335,7 +3356,7 @@ export class Camera {
     #set(cameraPreset, placement, easeOptions) {
         const ease = easeOptions === undefined ? {} : {
             easeTime: easeOptions.easeTime ?? 1,
-            easeType: (easeOptions.easeType ?? EasingType.Linear).replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase(),
+            easeType: easeName(easeOptions.easeType),
         };
         const refused = bridge.players.setCamera(this.#playerId, cameraPreset,
             JSON.stringify({ ...placement, ...ease }));
@@ -5463,10 +5484,9 @@ export class ButtonPushAfterEvent {
         return unsupported("ButtonPushAfterEvent.source");
     }
 }
+/** A curve through every one of its points, which `Camera.playAnimation` carries a camera along. */
 export class CatmullRomSpline {
-    get controlPoints() {
-        return unsupported("CatmullRomSpline.controlPoints");
-    }
+    controlPoints = [];
 }
 export class CommandResult {
     get successCount() {
@@ -6141,10 +6161,9 @@ export class LeverActionAfterEvent extends BlockEvent {
         return unsupported("LeverActionAfterEvent.player");
     }
 }
+/** Straight runs from each point to the next, which `Camera.playAnimation` carries a camera along. */
 export class LinearSpline {
-    get controlPoints() {
-        return unsupported("LinearSpline.controlPoints");
-    }
+    controlPoints = [];
 }
 export class LootItem {
     get conditions() {
