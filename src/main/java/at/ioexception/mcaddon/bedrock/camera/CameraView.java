@@ -62,6 +62,10 @@ public record CameraView(Preset preset, Vec3 position, Float xRot, Float yRot, V
 
     public static final CameraView CLEARED = new CameraView(null, null, null, null, null, 0f, null, false);
 
+    /** The kinds a fade and a field of view are sent to a client under, apart from the view itself. */
+    public static final String FADE = "camera_fade";
+    public static final String FOV = "camera_fov";
+
     public boolean cleared() {
         return preset == null;
     }
