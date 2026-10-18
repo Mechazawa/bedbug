@@ -780,6 +780,10 @@ These are the checks it runs, and what each one catches:
   python3 tools/verify/verify.py run --version 26.2      # a server, one version
   python3 tools/verify/verify.py client --version 1.21.1 # a client, one version
   python3 tools/verify/verify.py join --version 26.2     # a client connected to a server
+  python3 tools/verify/verify.py join --bare --version 26.2      # a second client with no add-ons takes the server's
+  python3 tools/verify/verify.py join --other --reshaped --version 26.2   # other versions, and a refused one
+  python3 tools/verify/verify.py lan --version 26.2      # a world opened to LAN, a second client joins it
+  python3 tools/verify/verify.py lan --dormant --version 26.2   # the host also holds a dormant add-on
   python3 tools/verify/verify.py convert --source <extracted pack directory>   # no game
   python3 tools/verify/verify.py companions --version 26.2  # a server and a client beside other mods
   ```
@@ -945,6 +949,39 @@ These are the checks it runs, and what each one catches:
   `-PquickPlay=<world>` the single player half uses. The server is given `online-mode=false` and
   `enforce-secure-profile=false`, because a dev client has a made-up name and no session and is
   refused before any of this mod's code is reached otherwise.
+
+  **The second client and the sync modes.** `./gradlew :<version>:runJoinClient` is a second dev
+  client with run directory `versions/<version>/run/join-client/`, its own `addons/` and
+  `.mcaddon/`, and the JVM property `-Dmcaddon.role=guest`, which is what `running` and `kill` tell
+  it from the first client by. `-PjoinServer` and `-PquickPlay` reach both clients. `-Pserved=<dir>`
+  gives a dedicated server the `mcaddon.served` property, so it also hands out every archive in
+  that directory. The harness only waits on, and ends, clients that belong to its own checkout, so
+  other worktrees' game tests do not block it; servers are counted across all checkouts because
+  they share the ports.
+
+  - `join` is the original check, the first client sharing the server's add-ons.
+  - `join --bare` empties the second client's directory and expects `Downloading N add-ons`,
+    `Received N add-ons from the server.` and `Activated the server's add-on set of N add-ons.`,
+    the item and chat round trip, N archives under `join-client/.mcaddon/received`, and, after the
+    harness stops the server under the client, `Restored the installed add-on set.`.
+  - `join --other` gives the second client the server's archives with the manifest version raised
+    (a same-shape copy that gets replaced) plus the `sv` add-on the server lacks (which stays
+    installed and goes dormant). `join --reshaped` gives it a copy whose `tp:lamp` has one more
+    `tp:level` value, and expects `The server's copy of <add-on> cannot replace yours without a
+    restart.` and no world.
+  - `lan` runs the first client with a saved world as host. A development-only handler,
+    `client/LanRequests`, answers a `lan.request` file in the host's run directory: each line is a
+    console command for the integrated server, and `publish` opens the world to the LAN through
+    `Platform.publishServer`, which also turns authentication off because a dev guest has no
+    session, then writes the port to `lan.port`. The guest is the second client. The host's log
+    must hold no `Received`, `Downloading`, `Activated` or `Restored` line. `--dormant` first has
+    the host join a dedicated server serving an add-on the host has not installed, so the host holds
+    it as a dormant archive, and then expects the guest to be offered it as an inactive entry.
+    Its first phase needs the client to log `Restored the installed add-on set.` when the serving
+    server stops; that line has not been seen there, so the mode is not part of `all`.
+  - A fresh game directory has no `options.txt`, and the game then opens its accessibility
+    onboarding screen instead of the quick play it was told to run, so a client in a new worktree
+    sat on the title screen until the deadline. `play` writes `onboardAccessibility:false` first.
 
   A green `convert` proves the output under `versions/<version>/run/.mcaddon/converted/` holds one
   texture per texture the pack ships, one sound event per definition, and an `_n` and `_s` sidecar

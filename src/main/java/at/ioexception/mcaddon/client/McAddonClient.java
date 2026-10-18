@@ -57,6 +57,8 @@ public final class McAddonClient implements ClientModInitializer {
         if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
             net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK
                 .register(ScreenshotRequests::tick);
+            net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK
+                .register(LanRequests::tick);
         }
 
         ClientEntityEvents.ENTITY_LOAD.register((entity, level) -> mirrorGroups(entity));
