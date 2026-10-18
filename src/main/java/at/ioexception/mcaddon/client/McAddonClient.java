@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.client;
 
 import at.ioexception.mcaddon.bedrock.camera.CameraInstruction;
 import at.ioexception.mcaddon.bedrock.camera.CameraShake;
+import at.ioexception.mcaddon.bedrock.camera.CameraView;
 import at.ioexception.mcaddon.bedrock.fog.FogDefinition;
 import at.ioexception.mcaddon.client.render.AddonClientAssets;
 import at.ioexception.mcaddon.client.render.AddonEntityRenderer;

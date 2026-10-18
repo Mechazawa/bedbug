@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.server;
 
 import at.ioexception.mcaddon.bedrock.camera.CameraRequest;
 import at.ioexception.mcaddon.bedrock.camera.CameraShake;
+import at.ioexception.mcaddon.bedrock.camera.CameraView;
 import at.ioexception.mcaddon.bedrock.camera.CameraSpline;
 import at.ioexception.mcaddon.bedrock.camera.Easing;
 import at.ioexception.mcaddon.bedrock.hud.HudElement;
