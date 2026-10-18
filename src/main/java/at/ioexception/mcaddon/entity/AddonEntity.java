@@ -18,7 +18,6 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.entity.ai.goal.AvoidEntityGoal;
 import net.minecraft.world.entity.ai.goal.BreakDoorGoal;
 import net.minecraft.world.entity.ai.goal.BreathAirGoal;
 import net.minecraft.world.entity.ai.goal.EatBlockGoal;
@@ -36,7 +35,6 @@ import net.minecraft.world.entity.ai.goal.RestrictSunGoal;
 import net.minecraft.world.entity.ai.goal.StrollThroughVillageGoal;
 import net.minecraft.world.entity.ai.goal.TryFindWaterGoal;
 import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomFlyingGoal;
-import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
 import net.minecraft.world.entity.ai.navigation.FlyingPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.ai.navigation.WallClimberNavigation;
@@ -47,7 +45,6 @@ import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.trading.Merchant;
@@ -3039,13 +3036,7 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.random_stroll" -> goals.add(priority, StrollGoal.walking(this, goal));
             case "minecraft:behavior.move_outdoors" -> goals.add(priority, ShelterGoal.outdoors(this, goal));
             case "minecraft:behavior.move_indoors" -> goals.add(priority, ShelterGoal.indoors(this, goal));
-            case "minecraft:behavior.explore_outskirts" -> {
-                // `interval` is the one in N chance of choosing the goal, which Java counts the
-                // same way.
-                WaterAvoidingRandomStrollGoal stroll = new WaterAvoidingRandomStrollGoal(this, speed);
-                stroll.setInterval((int) Goals.number(goal, "interval", 120));
-                goals.add(priority, stroll);
-            }
+            case "minecraft:behavior.explore_outskirts" -> goals.add(priority, new ExploreOutskirtsGoal(this, goal));
             case "minecraft:behavior.look_at_player" -> goals.add(priority, LookGoal.atPlayers(this, goal));
             case "minecraft:behavior.look_at_trading_player" ->
                 goals.add(priority, LookGoal.atTradingPlayer(this, goal));
@@ -3104,8 +3095,9 @@ public class AddonEntity extends PathfinderMob
                 goals.add(priority, new LeapAtTargetGoal(this, (float) Goals.number(goal, "yd", 0)));
             case "minecraft:behavior.stalk_and_pounce_on_target" ->
                 goals.add(priority, new LeapAtTargetGoal(this, 0.4f));
-            case "minecraft:behavior.play", "minecraft:behavior.stroll_towards_village" ->
-                goals.add(priority, new WaterAvoidingRandomStrollGoal(this, speed));
+            case "minecraft:behavior.play" -> goals.add(priority, new PlayGoal(this, goal));
+            case "minecraft:behavior.stroll_towards_village" ->
+                goals.add(priority, new StrollTowardsVillageGoal(this, goal));
             case "minecraft:behavior.follow_owner" ->
                 goals.add(priority, new FollowOwnerGoal(this, goal));
             // Java steers a mount from its rider: a mob riding another plans with the mount's
@@ -3118,15 +3110,7 @@ public class AddonEntity extends PathfinderMob
 
             case "minecraft:behavior.avoid_mob_type" ->
                 goals.add(priority, new AvoidMobsGoal(this, goal));
-            // Hiding and playing are both a Bedrock villager moving somewhere for a reason Java
-            // writes into its own villager. What carries across is the moving.
-            case "minecraft:behavior.hide" -> {
-                TargetSelection avoided = TargetSelection.from(goal, Monster.class, 8);
-                goals.add(priority, new AvoidEntityGoal<>(this, avoided.kind(),
-                    (float) avoided.maxDistance(),
-                    Goals.number(goal, "walk_speed_modifier", 1),
-                    Goals.number(goal, "sprint_speed_modifier", 1.2)));
-            }
+            case "minecraft:behavior.hide" -> goals.add(priority, new HideGoal(this, goal));
             case "minecraft:behavior.avoid_block" ->
                 goals.add(priority, new AvoidBlockGoal(this, goal));
 
