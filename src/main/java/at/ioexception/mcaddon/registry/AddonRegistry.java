@@ -68,16 +68,16 @@ public final class AddonRegistry {
             .findFirst();
     }
 
-    /** Returns the items `set` declares, whether this call registered them or an earlier one did. */
     /**
      * The packs of every archive this process has registered, by digest, in the order they were
      * registered. A server has to be able to hand every one of them out, because Fabric's registry
      * sync names every entry they added.
      */
     public static synchronized Map<String, List<BedrockPack>> archives() {
-        return Map.copyOf(ARCHIVES);
+        return java.util.Collections.unmodifiableMap(new LinkedHashMap<>(ARCHIVES));
     }
 
+    /** Returns the items `set` declares, whether this call registered them or an earlier one did. */
     public static Set<Item> ensureRegistered(AddonSet set) {
         Map<String, List<BedrockPack>> byArchive = set.packs().packs().stream()
             .filter(pack -> pack.archive() != null)

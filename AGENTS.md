@@ -1811,8 +1811,9 @@ refusal `The server's copy of <add-on> cannot replace yours without a restart.`
 Traps met building it:
 
 - **A task queued for the client thread from a disconnect can be thrown away.** The client drops
-  its pending tasks as it disconnects, and Fabric raises the disconnect event on the network thread
-  just before, so a leave handed over with `execute` or `schedule` sometimes never ran. The leave is
+  its pending tasks as a play connection ends (`Minecraft.disconnect` calls `dropAllTasks` before
+  anything else), and Fabric raises the disconnect event before that, so a leave handed over with
+  `execute` or `schedule` never ran. The leave is
   a flag the client's own tick takes instead, and an enter takes any leave still owed first.
 - **Every client game test joining a dedicated server is handed the served add-on.** The server and
   the client share one process, so the add-on is registered from the first such test on, and a test
@@ -1829,7 +1830,25 @@ Tests: `RegistryGameTests` (adding after the freeze, on all four versions), `Act
 (an empty set and back), `ShapeGameTests` (copies that do and do not conflict),
 `ServedArchivesGameTests` (a registered archive handed out dormant), `AddonSyncClientGameTest` (a
 join, a leave and a second join against a dedicated server), and the unit tests `AddonManifestTest`,
-`ReceivedArchivesTest`, `ArchivesTest` and `FunctionNamesTest`.
+`ReceivedArchivesTest`, `ArchivesTest` and `FunctionNamesTest`. Three more client game tests point
+the server at another set through `clientgametest/Served`, which sets `mcaddon.served` to one of
+the directories `installServedPack` writes beside `addons-served` and has the server prepare its
+manifest again: `addons-reshaped` holds a later release of `sv` whose crate has a fourth state, and
+`addons-other` the same content as the add-on `sw`.
+
+- `AddonSyncRefusalClientGameTest` joins once to register `sv`, then joins a server handing out the
+  reshaped copy and expects the disconnect screen naming the add-on, no world, and the installed set
+  active. It fails without `AddonRegistry.conflict` in `AddonSession.activate`.
+- `AddonSyncReloadClientGameTest` closes the connection from the server while the join's reload is
+  on the screen, then again with the client in the world, and expects the installed set back both
+  times. The second close fails when the leave is queued with `Platform.schedule` from the
+  disconnect event: the client drops its queued tasks as a play connection ends
+  (`Minecraft.disconnect` calls `dropAllTasks` first), so the leave never runs.
+- `AddonSyncTransferClientGameTest` has the server hand out `sw` instead of `sv` and `/transfer`
+  the client back to itself, which to the client is a second server with another set. It records
+  every activation through `ActiveAddons.onActivate` and expects the installed set once and then the
+  second set. It fails when the play phase's disconnect does not end the visit. A server needs
+  `accepts-transfers=true` (that spelling) in its properties to take a transfer.
 
 ## Conventions
 
