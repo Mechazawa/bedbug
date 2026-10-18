@@ -93,6 +93,17 @@ around fills a disk, and everything then fails at once in ways that look like an
 disk. Remove a worktree as soon as its branch is merged: `git worktree remove --force <path>`, or
 `rm -rf <worktree>/versions/*/build` to keep the checkout and drop only what a build can make again.
 
+**Run `tools/seed-worktree.sh` once in a new worktree, before its first build.** It copies the
+Loom downloads and remapped companion jars (`.gradle/loom-cache/{minecraftMaven,remapped_mods,natives}`)
+from the main checkout with reflinks where the filesystem has them, which takes a first
+`./gradlew assemble` from about 65 seconds to about 16. It is safe on a worktree that already holds a
+full copy of the main checkout, and it deletes what such a copy gets wrong: `.gradle/loom-cache/projects`
+and `versions/*/build/loom-cache` hold absolute paths to the checkout that made them, and
+`versions/*/build/{run,reports}` and `versions/*/run/{saves,world,.mcaddon,logs,crash-reports}` are
+worlds and caches of that checkout. Loom writes the first two again on the next build. Build outputs
+are not copied, since the Gradle build cache restores them and execution history is keyed by absolute
+path. Run it while the main checkout is not building.
+
 These are the checks it runs, and what each one catches:
 
 - **`./gradlew build`** compiles all four versions and runs every test on each of them: the unit
