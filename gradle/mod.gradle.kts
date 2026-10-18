@@ -1,3 +1,5 @@
+import java.util.concurrent.ConcurrentHashMap
+
 // Shared by both Loom variants. Written against the untyped API because an applied script has no
 // type-safe accessors for extensions the applying script declared.
 fun prop(key: String) = project.property(key) as String
@@ -232,6 +234,32 @@ project.tasks.matching { it.name == "runClientGameTest" }.configureEach {
         val file = c2meConfig.get().asFile
         file.parentFile.mkdirs()
         file.writeText("version = 3\n\n[fixes]\n\tdisableLoggingShutdownHook = false\n")
+    }
+}
+/**
+ * Every checkout on a machine draws its client game tests in windows of their own, and past about
+ * four at once the desktop starves them until the server's watchdog ends a run. With `cpu-lock`
+ * installed, a run first waits for one of four slots of its `minecraft-client` pool and holds it
+ * through a child process that ends once the task does or the Gradle daemon goes away.
+ * `-PclientSlots=<n>` changes the count, and without `cpu-lock` nothing waits.
+ */
+val clientSlotHolders = ConcurrentHashMap<String, Process>()
+val releaseClientSlot = project.tasks.register("releaseClientSlot") {
+    doLast { clientSlotHolders.remove(project.path)?.destroy() }
+}
+project.tasks.matching { it.name == "runClientGameTest" }.configureEach {
+    finalizedBy(releaseClientSlot)
+    doFirst {
+        val lock = File(System.getProperty("user.home"), ".claude/bin/cpu-lock")
+        if (!lock.canExecute()) return@doFirst
+        val slots = project.findProperty("clientSlots")?.toString() ?: "4"
+        val holder = ProcessBuilder(lock.path, "--pool", "minecraft-client", "--slots", slots, "--",
+            "sh", "-c", "echo held; read _")
+            .redirectError(ProcessBuilder.Redirect.INHERIT)
+            .start()
+        logger.lifecycle("Waiting for a minecraft-client slot (cpu-lock --status shows the queue)")
+        holder.inputStream.bufferedReader().readLine()
+        clientSlotHolders[project.path] = holder
     }
 }
 project.tasks.named("check") {
