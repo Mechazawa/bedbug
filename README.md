@@ -33,6 +33,10 @@ downloaded add-on is kept for the next visit, so joining again downloads nothing
 asked for in a month is dropped. The same holds for a guest joining a world opened to LAN: the host
 hands out its add-ons, and the host itself never downloads or changes anything.
 
+A join can take as long as the client needs to download and convert the add-ons, up to ten
+minutes. The server disconnects a client that stops answering, or one that sends nothing for a
+minute while the add-ons download.
+
 What a client refuses, each with a message naming why:
 
 - a server running another release of this mod;

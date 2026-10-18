@@ -19,8 +19,11 @@ import java.util.concurrent.Executors;
  * The server sends the archives a client asks for in pieces, at most `Transfer.WINDOW` of them ahead
  * of the client's acknowledgements, and serves each archive at most once per connection and only
  * when its manifest lists it. The pieces are read on a thread of their own, never on the network
- * thread that heard the acknowledgement. A client that goes quiet for a minute, or takes more than
- * ten minutes in all, is disconnected.
+ * thread that heard the acknowledgement. A client that goes quiet for a minute while the archives
+ * are on their way, or takes more than ten minutes in all, is disconnected. Once it holds every
+ * archive it asked for it only converts and activates them, which sends nothing however long it
+ * takes. A client that stops answering then is dropped by the connection's own read timeout, which
+ * the login's heartbeat and the configuration phase's keep-alive hold off for one that answers.
  */
 public final class Outgoing {
     private static final long QUIET_MILLIS = 60_000;
@@ -51,6 +54,7 @@ public final class Outgoing {
     private Transfer.Wanted current;
     private long size;
     private int inFlight;
+    private boolean requested;
     private boolean finished;
 
     public Outgoing(AddonManifest manifest, Link link) {
@@ -60,6 +64,7 @@ public final class Outgoing {
 
     public synchronized void request(List<Transfer.Wanted> wanted) {
         heard = System.currentTimeMillis();
+        requested = true;
         for (Transfer.Wanted one : wanted) {
             if (manifest.entries().stream().noneMatch(entry -> entry.sha256().equals(one.sha256()))
                 || ServedArchives.file(one.sha256()) == null || !served.add(one.sha256())) {
@@ -83,7 +88,8 @@ public final class Outgoing {
 
     /** Disconnects a client that stopped making progress, and answers whether this transfer is over. */
     public synchronized boolean expire(long now) {
-        if (!finished && (now - heard > QUIET_MILLIS || now - started > WHOLE_MILLIS)) {
+        boolean sending = !requested || inFlight > 0 || !queue.isEmpty() || current != null && current.offset() < size;
+        if (!finished && (sending && now - heard > QUIET_MILLIS || now - started > WHOLE_MILLIS)) {
             finish(false, "The add-on transfer from this server stopped making progress.");
         }
         return finished;
