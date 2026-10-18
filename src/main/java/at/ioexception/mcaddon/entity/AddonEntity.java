@@ -2152,6 +2152,18 @@ public class AddonEntity extends PathfinderMob
             ? null : ServerHooks.state().property(getUUID(), name);
     }
 
+    /** Whom this entity walks behind in a caravan, or null outside one. */
+    private net.minecraft.world.entity.Entity caravanHead;
+
+    public net.minecraft.world.entity.Entity caravanHead() {
+        return caravanHead;
+    }
+
+    void joinCaravan(net.minecraft.world.entity.Entity head) {
+        caravanHead = head;
+        setValue("in_caravan", head != null);
+    }
+
     /** Who this entity belongs to, cached from the add-on state the taming wrote it into. */
     private java.util.UUID owner;
     private boolean ownerRead;

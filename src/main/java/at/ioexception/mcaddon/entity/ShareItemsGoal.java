@@ -43,7 +43,7 @@ public final class ShareItemsGoal extends Goal {
         this.searchRange = Goals.number(component, "max_dist", defaultRange);
         this.reach = Goals.number(component, "goal_radius", 2);
         this.speed = Goals.number(component, "speed_multiplier", 1);
-        this.wanted = component != null && component.has("entity_types") ? Filter.entityTypes(component) : null;
+        this.wanted = component.has("entity_types") ? Filter.entityTypes(component.get("entity_types")) : null;
         setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
     }
 

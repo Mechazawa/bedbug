@@ -42,7 +42,7 @@ public final class DefendVillageGoal extends Goal {
         this.mustSee = Goals.flag(component, "must_see", false);
         this.mustReach = Goals.flag(component, "must_reach", false);
         this.attacksOwner = Goals.flag(component, "attack_owner", false);
-        this.allowed = Filter.entityTypes(component);
+        this.allowed = Filter.entityTypes(component.get("entity_types"));
         setFlags(EnumSet.of(Goal.Flag.TARGET));
     }
 

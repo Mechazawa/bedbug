@@ -37,7 +37,7 @@ public final class WitherGoal extends Goal {
     private WitherGoal(AddonEntity mob, JsonObject component, boolean shoots) {
         this.mob = mob;
         this.shoots = shoots;
-        this.allowed = Filter.entityTypes(component);
+        this.allowed = Filter.entityTypes(component.get("entity_types"));
         setFlags(shoots ? EnumSet.of(Goal.Flag.LOOK) : EnumSet.of(Goal.Flag.TARGET));
     }
 

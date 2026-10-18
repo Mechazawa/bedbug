@@ -688,11 +688,10 @@ public sealed interface Filter {
     }
 
     /**
-     * An `entity_types` list, which admits an entity when any one of its entries does. A component
-     * with no list admits everybody.
+     * An `entity_types` list, which admits an entity when any one of its entries does. No list
+     * admits everybody.
      */
-    static Filter entityTypes(JsonObject component) {
-        JsonElement entries = component == null ? null : component.get("entity_types");
+    static Filter entityTypes(JsonElement entries) {
         if (entries == null || !entries.isJsonArray() || entries.getAsJsonArray().isEmpty()) return parse(entries);
 
         List<Filter> parts = new ArrayList<>();

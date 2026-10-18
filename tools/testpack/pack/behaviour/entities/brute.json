@@ -881,6 +881,30 @@
           ]
         }
       },
+      "tp:brute_caravanning": {
+        "minecraft:behavior.follow_caravan": {
+          "priority": 1,
+          "entity_count": 2,
+          "entity_types": [
+            {
+              "filters": {
+                "any_of": [
+                  {
+                    "test": "is_family",
+                    "subject": "other",
+                    "value": "pig"
+                  },
+                  {
+                    "test": "is_family",
+                    "subject": "other",
+                    "value": "tp_brute"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
       "tp:brute_sharing": {
         "minecraft:behavior.share_items": {
           "priority": 1,
@@ -1477,6 +1501,13 @@
         "add": {
           "component_groups": [
             "tp:brute_playing"
+          ]
+        }
+      },
+      "tp:brute_caravan": {
+        "add": {
+          "component_groups": [
+            "tp:brute_caravanning"
           ]
         }
       },

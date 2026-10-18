@@ -1878,6 +1878,34 @@ public final class GoalGameTests {
     /** The share goal's default `goal_radius` of two, and a block of slack for where the walk ends. */
     private static final double SHARED_NEAR = 3;
 
+    /**
+     * A caravan forms behind a leashed entity its `entity_types` admit, a pig here where Java's
+     * caravan admits only llamas, and holds the two followers its `entity_count` allows: of three
+     * brutes beside a leashed pig, two fall in and the third stays out of the line.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = CARAVAN_TICKS + 20)
+    public void aCaravanFormsBehindWhatItsTypesAdmitAndHoldsItsCount(GameTestHelper helper) {
+        List<AddonEntity> brutes = List.of(STAND, STAND.south(2), STAND.south(4)).stream()
+            .map(where -> withGroup(helper, "tp:brute_caravan", where)).toList();
+        if (brutes.contains(null)) {
+            helper.succeed();
+            return;
+        }
+
+        Mob pig = standing(helper, "pig", STAND.east(3));
+        helper.assertTrue(Platform.leashTo(pig, standing(helper, "cow", STAND.east(4))), "The pig took no lead.");
+        helper.runAfterDelay(CARAVAN_TICKS, () -> {
+            long following = brutes.stream().filter(brute -> brute.caravanHead() != null).count();
+            helper.assertTrue(following == 2, "Two of the brutes fit in the caravan and " + following + " follow.");
+            helper.assertTrue(brutes.stream().anyMatch(brute -> brute.caravanHead() == pig),
+                "No brute heads its caravan behind the leashed pig.");
+            helper.succeed();
+        });
+    }
+
+    /** Long enough for each brute's goal to have looked for a line at least twice. */
+    private static final int CARAVAN_TICKS = 60;
+
     /** A brute with its group on and its goals running. */
     private static AddonEntity withGroup(GameTestHelper helper, String event) {
         return withGroup(helper, event, STAND);
