@@ -16,10 +16,13 @@ import java.util.Set;
  * A kind of settings file for Bedrock's deferred renderer whose every setting is named against the
  * pack rather than converted.
  *
- * Two of the four kinds a resource pack may ship state nothing Java's renderer takes. `water/` sets
- * the concentration of three optical particles, the caustics texture and the shape of the waves,
- * all of them terms of a water surface Java draws from a texture and a biome colour; the surface
- * colour itself is `minecraft:water_appearance` on the client biome, which is read. `color_grading/`
+ * Two of the four kinds a resource pack may ship state nothing Java's renderer takes. `water/` is
+ * read by Bedrock under Vibrant Visuals alone. Its engine turns the three particle concentrations
+ * into the per-channel extinction and albedo its shaders take (`WaterExtinctionCoefficients`,
+ * `WaterAlbedoExtinction`) by a model Mojang does not publish, its waves are surface normals only
+ * its deferred lighting reads, and its default caustics texture is built into the game. Every
+ * other graphics mode, which is what Java draws like, colours water by
+ * `minecraft:water_appearance` on the client biome, and that is read. `color_grading/`
  * sets the contrast, gamma, gain, saturation and colour temperature of the finished frame and the
  * tonemapping operator that maps it back into range, which is a post-process Java has no
  * data-driven form of at all.

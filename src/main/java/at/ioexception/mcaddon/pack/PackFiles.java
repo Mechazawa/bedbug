@@ -45,8 +45,9 @@ public final class PackFiles {
             + "the conversion writes by walking textures/ itself"),
         Map.entry("color_grading", "a grade of the finished frame, where a Java post effect "
             + "carries no grading term and is bound to no biome or dimension"),
-        Map.entry("water", "a deferred water model, where Java water is a flipbook texture "
-            + "tinted by the client biome's own colour"));
+        Map.entry("water", "read by Vibrant Visuals alone, whose engine turns the three particle "
+            + "concentrations into the extinction and albedo its shaders take by a model Mojang does "
+            + "not publish, and whose default caustics texture is built into the game"));
 
     /** The resource pack paths a reader opens. */
     private static final Set<String> RESOURCE_READ = Set.of(

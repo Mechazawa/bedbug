@@ -818,10 +818,10 @@ while an entity is drawn belongs to no effect, so both are named by `/mcaddon en
 
 **The water and the colour grading a resource pack writes for the deferred renderer.** A `water/`
 file states the concentration of three optical particles in milligrams per litre, the texture and
-scale of the caustics, and the frequency, depth, speed and shape of the waves. None of the three is
-a colour: the water surface colour is `minecraft:water_appearance` on the client biome, which is
-read, and Java draws the surface itself from a texture and an animation with no term any of these
-would feed. A `color_grading/` file states the contrast, gamma, gain, saturation and offset of the
+scale of the caustics, and the frequency, depth, speed and shape of the waves. Bedrock reads it
+under Vibrant Visuals alone, and how it turns the concentrations into a colour is not published;
+outside Vibrant Visuals the water colour is `minecraft:water_appearance` on the client biome, which
+is read. A `color_grading/` file states the contrast, gamma, gain, saturation and offset of the
 shadows, midtones and highlights, a colour temperature in kelvin, and which of six tonemapping
 operators maps the finished frame back into range, all of it a post-process Java has no data-driven
 form of. Each setting is counted and named by `/mcaddon entities` rather than the directory alone,
@@ -1061,13 +1061,17 @@ band, its Kelvin `temperature` and its tonemapping `operator` all describe a gra
 effect is `PostChainConfig`, which is internal targets and passes and no grading term at all, with
 nothing binding a chain to a biome or to a dimension.
 
-`water` has nothing either. Its `particle_concentrations` in milligrams per litre, its five
-`caustics` fields and its ten `waves` fields are a deferred water model, where Java water is a
-flipbook texture tinted by one colour. The nearest is `biome_water_color_contribution`, which weights
-how much of a client biome's own `surface_color` reaches that model, and that surface colour is
-already read here in full; a weight of anything but the whole of it has no Java field. The water a
-pack paints comes out of `minecraft:water_appearance` on the client biome rather than out of this
-directory.
+`water` has nothing either, because Bedrock itself reads it only under Vibrant Visuals. In every
+other graphics mode, which is the one Java draws like, water takes its colour from
+`minecraft:water_appearance` on the client biome and its underwater fog from `fogs/`, and both are
+read here. What a `water/` file would add cannot be known from Mojang's material. The engine turns
+the `particle_concentrations` into the extinction and albedo per colour channel its shaders take
+(`WaterExtinctionCoefficients`, `WaterAlbedoExtinction`), and the model it does that by is
+published nowhere: the documentation says only which colours each concentration absorbs, and the
+shaders receive the finished coefficients. `biome_water_color_contribution` mixes the biome's
+`surface_color` into a base colour that same model makes. The `waves` are surface normals that only
+the deferred lighting reads, and their fields reach the shaders through the same unpublished step.
+The `caustics` default to a texture built into the game, which no published pack carries.
 
 **The half of a fog a biome has no field for.** `fogs` states a `distance` block per camera
 location. The `air` and `water` colours become a biome's own fog colour and water fog colour, and
