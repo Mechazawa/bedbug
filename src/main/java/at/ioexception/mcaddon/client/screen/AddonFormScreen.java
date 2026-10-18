@@ -7,6 +7,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import net.minecraft.client.gui.ComponentPath;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
@@ -49,11 +50,16 @@ public final class AddonFormScreen extends Screen {
     /** Between the heading and the first widget, so the two do not read as one block of text. */
     private static final int HEADING_GAP = 6;
 
+    /** Room above the heading, and below the column so its last row does not sit on the edge. */
+    private static final int TOP_MARGIN = 36;
+    private static final int BOTTOM_MARGIN = 8;
+
     private static final String VALUE = "value";
 
     private final int formId;
     private JsonObject description;
     private final Map<Integer, AbstractWidget> widgets = new HashMap<>();
+    private final ScrollingColumn column = new ScrollingColumn(ROW_HEIGHT);
 
     private boolean answered;
 
@@ -108,8 +114,8 @@ public final class AddonFormScreen extends Screen {
     }
 
     /**
-     * Draws a description the server sent for the form already showing, keeping the screen and what
-     * has the focus. A text field the player is typing in keeps what they typed, because an update
+     * Draws a description the server sent for the form already showing, keeping the screen, what has
+     * the focus and how far it is scrolled. A text field the player is typing in keeps what they typed, because an update
      * started before the last keystroke reached the server would otherwise take it away again.
      */
     private void update(JsonObject next) {
@@ -127,9 +133,13 @@ public final class AddonFormScreen extends Screen {
                 .forEach(element -> element.addProperty(VALUE, typing.getValue()));
         }
 
+        // Rebuilding may hand the focus to the first widget and scroll to it, which is not where the
+        // player was reading.
+        int scrolled = column.scrolled();
         description = next;
         rebuildWidgets();
         if (focused != null && widgets.containsKey(focused)) setFocused(widgets.get(focused));
+        column.scrollTo(scrolled);
     }
 
     /**
@@ -159,18 +169,18 @@ public final class AddonFormScreen extends Screen {
     @Override
     protected void init() {
         widgets.clear();
-        List<JsonObject> elements = elements();
-
+        column.clear();
         int left = width / 2 - WIDGET_WIDTH / 2;
-        int row = Math.max(36, height / 2 - elements.size() * ROW_HEIGHT / 2);
+        int row = 0;
         int buttonIndex = 0;
 
         // The heading is what a form is called and what an NPC scene names the speaker with, and a
-        // screen draws nothing of its own title.
-        addRenderableWidget(new StringWidget(left, row - LINE_HEIGHT - HEADING_GAP, WIDGET_WIDTH,
-            LINE_HEIGHT, heading(description), font));
+        // screen draws nothing of its own title. It stays put while the rest scrolls under it.
+        StringWidget heading = addRenderableWidget(new StringWidget(left, 0, WIDGET_WIDTH, LINE_HEIGHT,
+            heading(description), font));
+        addRenderableOnly(column.clip());
 
-        for (JsonObject widget : elements) {
+        for (JsonObject widget : elements()) {
             String type = Json.text(widget, "type", "label");
             String text = Json.text(widget, "text", "");
             AbstractWidget drawn;
@@ -179,13 +189,13 @@ public final class AddonFormScreen extends Screen {
                 case "button", "submit" -> {
                     int index = buttonIndex++;
                     drawn = Button.builder(Component.literal(text), button -> press(widget, index))
-                        .bounds(left, row, WIDGET_WIDTH, 20).build();
+                        .bounds(left, 0, WIDGET_WIDTH, 20).build();
                 }
                 case "toggle" -> drawn = Button.builder(Component.literal(toggleLabel(widget)), button -> {
                     widget.addProperty(VALUE, !Json.bool(widget, VALUE, false));
                     button.setMessage(Component.literal(toggleLabel(widget)));
                     changed(widget);
-                }).bounds(left, row, WIDGET_WIDTH, 20).build();
+                }).bounds(left, 0, WIDGET_WIDTH, 20).build();
                 case "dropdown" -> {
                     List<String> options = new ArrayList<>();
                     for (JsonElement option : Json.list(widget, "options")) options.add(option.getAsString());
@@ -198,16 +208,16 @@ public final class AddonFormScreen extends Screen {
                             widget.addProperty(VALUE, chosen);
                             button.setMessage(Component.literal(text + ": " + options.get(chosen)));
                             changed(widget);
-                        }).bounds(left, row, WIDGET_WIDTH, 20).build();
+                        }).bounds(left, 0, WIDGET_WIDTH, 20).build();
                 }
                 case "slider" -> {
                     double minimum = Json.number(widget, "min", 0);
                     double maximum = Json.number(widget, "max", 1);
-                    drawn = new ValueSlider(left, row, widget, minimum, maximum,
+                    drawn = new ValueSlider(left, 0, widget, minimum, maximum,
                         Json.number(widget, VALUE, minimum));
                 }
                 case "textField" -> {
-                    EditBox field = new EditBox(font, left, row, WIDGET_WIDTH, 20, Component.literal(text));
+                    EditBox field = new EditBox(font, left, 0, WIDGET_WIDTH, 20, Component.literal(text));
                     field.setValue(Json.text(widget, VALUE, ""));
                     field.setHint(Component.literal(Json.text(widget, "placeholder", "")));
                     field.setResponder(typed -> {
@@ -223,8 +233,8 @@ public final class AddonFormScreen extends Screen {
                 }
                 default -> {
                     for (String line : wrapped(text)) {
-                        addRenderableWidget(new StringWidget(left, row, WIDGET_WIDTH, LINE_HEIGHT,
-                            Component.literal(line), font));
+                        addRenderableWidget(column.add(new StringWidget(left, 0, WIDGET_WIDTH, LINE_HEIGHT,
+                            Component.literal(line), font), row));
                         row += LINE_HEIGHT;
                     }
                     continue;
@@ -232,17 +242,76 @@ public final class AddonFormScreen extends Screen {
             }
 
             drawn.active = !Json.bool(widget, "disabled", false);
-            addRenderableWidget(drawn);
+            addRenderableWidget(column.add(drawn, row));
             widgets.put((int) Json.number(widget, "id", -1), drawn);
             row += ROW_HEIGHT;
         }
 
         // A form with no button of its own still needs a way out that counts as an answer.
         if (buttonIndex == 0) {
-            addRenderableWidget(Button.builder(Component.literal("Done"), button -> answer(false, 0, null))
-                .bounds(left, row, WIDGET_WIDTH, 20).build());
+            addRenderableWidget(column.add(Button.builder(Component.literal("Done"), button -> answer(false, 0, null))
+                .bounds(left, 0, WIDGET_WIDTH, 20).build(), row));
+            row += ROW_HEIGHT;
         }
+        addRenderableOnly(column.unclip());
+
+        int top = Math.max(TOP_MARGIN, (height - row) / 2);
+        column.place(left, WIDGET_WIDTH, top, Math.min(height - BOTTOM_MARGIN, top + row), row);
+        heading.setY(top - LINE_HEIGHT - HEADING_GAP);
     }
+
+    /** Tab and the arrow keys move the focus to a widget the column may have scrolled out of sight. */
+    @Override
+    protected void changeFocus(ComponentPath path) {
+        super.changeFocus(path);
+        column.reveal();
+    }
+
+    //? if >=26 {
+    @Override
+    public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event, boolean doubleClick) {
+        return column.grab(event.x(), event.y()) || column.shows(event.y()) && super.mouseClicked(event, doubleClick);
+    }
+
+    @Override
+    public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent event, double dragX, double dragY) {
+        return column.drag(event.y()) || super.mouseDragged(event, dragX, dragY);
+    }
+
+    @Override
+    public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent event) {
+        column.release();
+        return super.mouseReleased(event);
+    }
+    //?} else {
+    /*@Override
+    public boolean mouseClicked(double x, double y, int button) {
+        return column.grab(x, y) || column.shows(y) && super.mouseClicked(x, y, button);
+    }
+
+    @Override
+    public boolean mouseDragged(double x, double y, int button, double dragX, double dragY) {
+        return column.drag(y) || super.mouseDragged(x, y, button, dragX, dragY);
+    }
+
+    @Override
+    public boolean mouseReleased(double x, double y, int button) {
+        column.release();
+        return super.mouseReleased(x, y, button);
+    }
+    *///?}
+
+    //? if >=1.20.2 {
+    @Override
+    public boolean mouseScrolled(double x, double y, double scrollX, double scrollY) {
+        return column.wheel(scrollY) || super.mouseScrolled(x, y, scrollX, scrollY);
+    }
+    //?} else {
+    /*@Override
+    public boolean mouseScrolled(double x, double y, double scrollY) {
+        return column.wheel(scrollY) || super.mouseScrolled(x, y, scrollY);
+    }
+    *///?}
 
     private void press(JsonObject button, int index) {
         if (Json.bool(button, "stay", false)) {

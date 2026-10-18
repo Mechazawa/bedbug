@@ -6,6 +6,10 @@
 // on the screen while its pages turn, so the tag left on the player once `show` resolves says the
 // promise outlived every press and settled only when the form went away.
 //
+// A ledger longer than any window: forty entries, then a tally the pack counts up while the form
+// shows and a button to sign it at the very bottom. `/scriptevent "tp:ledger"` run as a player opens
+// it, and signing tags the player.
+//
 // A shop's catalogue: an ActionFormData of eight hundred buttons, whose description is longer than
 // the 32767 characters a plain network string carries. `/scriptevent "tp:catalogue"` run as a player
 // opens it, and a tag on the player names the button that answered it.
@@ -45,6 +49,22 @@ function openHandbook(player) {
         .closeButton();
 
     form.show().then(reason => player.addTag("tp:handbook_" + reason));
+}
+
+const LEDGER_ENTRIES = 40;
+
+function openLedger(player) {
+    let tallied = 0;
+    const tally = new ObservableString("Tallied 0 times");
+    const form = new CustomForm(player, "Ledger");
+    for (let entry = 1; entry <= LEDGER_ENTRIES; entry++) form.label("Entry " + entry + " of the ledger");
+    form.label(tally)
+        .button("Tally", () => tally.setData("Tallied " + ++tallied + " times"))
+        .button("Sign the ledger", () => {
+            player.addTag("tp:ledger_signed");
+            form.close();
+        });
+    form.show();
 }
 
 /** Pushes the pack's fog twice, once tagged and once not, then takes both off again. */
@@ -168,6 +188,7 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
     switch (event.id) {
         case "tp:handbook": openHandbook(player); break;
         case "tp:catalogue": openCatalogue(player); break;
+        case "tp:ledger": openLedger(player); break;
         case "tp:commands": runBedrockCommands(player); break;
         // A pack handing out one of its own items unless the player already carries it.
         case "tp:stock_up":

@@ -559,7 +559,11 @@ These are the checks it runs, and what each one catches:
   closes it both ways and reads the tag back: a form whose button press closed the screen, or whose
   observables reached the screen only once, fails there. The same script answers
   `/bedrock scriptevent tp:catalogue` with an `ActionFormData` of eight hundred buttons, whose description
-  is longer than the 32767 characters a plain network string carries.
+  is longer than the 32767 characters a plain network string carries. `/bedrock scriptevent tp:ledger`
+  opens a `CustomForm` of forty lines with a tally and a signing button under them, taller than the
+  small window `FormClientGameTest` gives the client: the wheel has to bring the signing button into
+  view where a click with the pointer reaches it, and the tally the pack redraws on a press has to
+  leave the form scrolled where it was.
 
   `animation.tp.wisp.lift` raises the wisp's one bone by four pixels for two seconds, which is what
   `/bedrock playanimation` on an add-on entity is measured by.
