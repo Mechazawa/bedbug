@@ -86,12 +86,31 @@ class FunctionNamesTest {
         assertEquals("say shared", functions.issuedBy("second").pinned("say shared"));
     }
 
-    /** A converted file names other add-ons' functions, so a change to their list has to show. */
+    /** A converted file names another add-on's function where its call reaches one, so that shows. */
     @Test
-    void stampsTheFunctionsOfEveryAddOn() throws IOException {
-        Map<String, List<BedrockPack>> fewer = new LinkedHashMap<>();
-        fewer.put("first", List.of(pack("three", "shared", "tools/only_first")));
-        assertNotEquals(functions.stamp(), FunctionNames.of(fewer).stamp());
+    void stampsWhatAnAddOnsOwnCallsReach() throws IOException {
+        List<BedrockPack> caller = List.of(calling("caller", "function shared"));
+        Map<String, List<BedrockPack>> alone = new LinkedHashMap<>();
+        alone.put("second", List.of(pack("alone", "shared")));
+        assertNotEquals(functions.stampFor("second", caller), FunctionNames.of(alone).stampFor("second", caller));
+    }
+
+    /** An add-on whose calls reach nothing new keeps its conversion when another add-on arrives. */
+    @Test
+    void stampsNothingAboutFunctionsNoCallReaches() throws IOException {
+        List<BedrockPack> caller = List.of(calling("caller", "function tools/only_first"));
+        Map<String, List<BedrockPack>> more = new LinkedHashMap<>();
+        more.put("first", List.of(pack("one", "shared", "tools/only_first")));
+        more.put("second", List.of(pack("two", "shared", "only_second")));
+        more.put("third", List.of(pack("three", "elsewhere")));
+        assertEquals(functions.stampFor("first", caller), FunctionNames.of(more).stampFor("first", caller));
+    }
+
+    private BedrockPack calling(String name, String line) throws IOException {
+        Path file = directory.resolve(name).resolve("functions").resolve("call.mcfunction");
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, line);
+        return new BedrockPack(directory.resolve(name), null, name + ".mcaddon");
     }
 
     private BedrockPack pack(String name, String... functionPaths) throws IOException {

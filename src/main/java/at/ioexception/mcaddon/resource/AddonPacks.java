@@ -118,12 +118,18 @@ public final class AddonPacks {
     /**
      * The version two installations have to agree on before either leaves content out of a sync.
      *
-     * The pack's own version separates two releases of one add-on. The mod's version is here because
-     * the bytes in a converted pack are a function of the converter as much as of the pack: a client
-     * converting the same add-on with a different build of this mod holds different entries, and
-     * saying so costs a sync that sends everything instead of one that sends the wrong thing.
+     * The pack's own version separates two releases of one add-on, and the start of its archive's
+     * digest two copies of one release whose bytes differ, so two copies of an add-on are never one
+     * known pack: the game refuses a join outright when two packs it is offered share one, and a
+     * server must not leave out content a client converted from other bytes. The mod's version is
+     * here because the bytes in a converted pack are a function of the converter as much as of the
+     * pack: a client converting the same add-on with a different build of this mod holds different
+     * entries, and saying so costs a sync that sends everything instead of one that sends the wrong
+     * thing.
      */
     private static String knownVersion(ConvertedPack pack) {
-        return pack.pack().manifest().version() + "+" + McAddon.VERSION;
+        String archive = pack.pack().archive();
+        return pack.pack().manifest().version() + (archive == null ? "" : "+" + archive.substring(0, 8))
+            + "+" + McAddon.VERSION;
     }
 }

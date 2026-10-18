@@ -2218,6 +2218,43 @@ public final class Platform {
         *///?}
     }
 
+    /**
+     * Queues a task for the client thread, even when called on it: `execute` runs a task called on
+     * the client thread at once, inside whatever that thread is in the middle of. Renamed in 26.
+     */
+    public static void schedule(Runnable task) {
+        //? if >=26 {
+        net.minecraft.client.Minecraft.getInstance().schedule(task);
+        //?} else {
+        /*net.minecraft.client.Minecraft.getInstance().tell(task);
+        *///?}
+    }
+
+    /**
+     * Gives an item registered after startup what the game gives every item as it starts.
+     *
+     * Before 26 the item renderer maps every item to its inventory model once, when it is built,
+     * and a reload only rebuilds what that map points at; and a spawn egg is coloured by a provider
+     * registered once, for the eggs there were. From 26 an item's model is looked up by its id and
+     * its colours are tints in that model, so nothing is missing.
+     */
+    public static void prepareLateItem(Item item) {
+        //? if >=1.21 && <26 {
+        /*net.minecraft.client.Minecraft.getInstance().getItemRenderer().getItemModelShaper().register(item,
+            net.minecraft.client.resources.model.ModelResourceLocation.inventory(BuiltInRegistries.ITEM.getKey(item)));
+        *///?} else if <1.21 {
+        /*net.minecraft.client.Minecraft.getInstance().getItemRenderer().getItemModelShaper().register(item,
+            new net.minecraft.client.resources.model.ModelResourceLocation(BuiltInRegistries.ITEM.getKey(item),
+                "inventory"));
+        *///?}
+        //? if <1.21.2 {
+        /*if (item instanceof net.minecraft.world.item.SpawnEggItem egg) {
+            net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry.ITEM.register(
+                (stack, layer) -> egg.getColor(layer), egg);
+        }
+        *///?}
+    }
+
     /** Opens a screen, or closes whatever is open when given null. Renamed in 26. */
     public static void setScreen(net.minecraft.client.gui.screens.Screen screen) {
         //? if >=26 {

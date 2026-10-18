@@ -24,11 +24,14 @@ import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.world.entity.EntityType;
 
+import java.util.List;
+
 public final class McAddonClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         follow();
         ActiveAddons.onActivate(set -> follow());
+        AddonSession.register();
 
         Channels.receiveProperties((entityId, json) -> {
             EntityProperties.accept(entityId, json);
@@ -40,7 +43,6 @@ public final class McAddonClient implements ClientModInitializer {
         Channels.receiveFog(encoded -> PlayerFog.accept(FogDefinition.decode(encoded)));
         Channels.receiveHud(PlayerHud::accept);
         Channels.receiveInputPermissions(PlayerInput::accept);
-        Channels.receivePacks(ServerAddons::receive);
         Channels.receiveAnimation(Animators::play);
         Channels.receiveParticle((effect, x, y, z) ->
             at.ioexception.mcaddon.client.render.AddonEmitters.start(effect, null,
@@ -73,18 +75,20 @@ public final class McAddonClient implements ClientModInitializer {
             PlayerFog.clear();
             PlayerHud.clear();
             PlayerInput.clear();
-            ServerAddons.clear();
             at.ioexception.mcaddon.client.render.AddonEmitters.clear();
         }));
     }
 
     /** What the drawing side registers once per object, so an object registered later is prepared too. */
     private static final java.util.Set<Object> PREPARED = new java.util.HashSet<>();
+    private static final java.util.Set<net.minecraft.world.item.Item> TINTED = new java.util.HashSet<>();
+    private static boolean started;
 
     /**
      * Prepares the drawing side for the active add-ons: their models, a renderer for every entity
      * type and a provider for every particle type registered so far, a tint for every dyeable item,
-     * and creative tabs built again the next time they are opened.
+     * what the game prepared for every item at startup for an item registered since, and creative
+     * tabs built again the next time they are opened.
      */
     private static void follow() {
         AddonClientAssets.load();
@@ -95,8 +99,13 @@ public final class McAddonClient implements ClientModInitializer {
             .forEach(identifier -> Platform.registerParticle(
                 at.ioexception.mcaddon.registry.AddonParticles.typeOf(identifier),
                 sprites -> new AddonParticleProvider(identifier, sprites)));
+        List<net.minecraft.world.item.Item> late = net.minecraft.core.registries.BuiltInRegistries.ITEM.stream()
+            .filter(PREPARED::add).toList();
+        // The game prepares every item there is as it starts, which is after the first of these.
+        if (started) late.forEach(Platform::prepareLateItem);
+        started = true;
         Platform.registerDyeTint(at.ioexception.mcaddon.registry.AddonItems.dyeable().stream()
-            .filter(PREPARED::add).toList());
+            .filter(TINTED::add).toList());
         at.ioexception.mcaddon.mixin.CreativeModeTabsAccessor.mcaddon$setCachedParameters(null);
     }
 

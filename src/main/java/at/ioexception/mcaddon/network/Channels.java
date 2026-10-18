@@ -27,7 +27,6 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
  */
 public final class Channels {
     private static final Identifier PROPERTIES = McAddon.id("entity_properties");
-    private static final Identifier PACKS = McAddon.id("pack_list");
     private static final Identifier FORM = McAddon.id("form");
     private static final Identifier FORM_RESPONSE = McAddon.id("form_response");
     private static final Identifier ANIMATION = McAddon.id("play_animation");
@@ -39,7 +38,7 @@ public final class Channels {
     private static final Identifier INPUT = McAddon.id("input_permissions");
 
     /**
-     * The longest form description, form answer or pack list in characters.
+     * The longest form description or form answer in characters.
      *
      * A plain network string stops at 32767, and a shop's form of a few hundred buttons describes
      * itself in more than that. A connection to a dedicated server encodes every message and drops
@@ -59,22 +58,6 @@ public final class Channels {
             ByteBufCodecs.VAR_INT, Properties::entityId,
             ByteBufCodecs.STRING_UTF8, Properties::values,
             Properties::new);
-
-        @Override
-        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
-            return TYPE;
-        }
-    }
-    //?}
-
-    //? if >=1.21 {
-    /** What the server has loaded, so a client can say which add-ons it is missing. */
-    private record Packs(String packs) implements CustomPacketPayload {
-        private static final CustomPacketPayload.Type<Packs> TYPE = new CustomPacketPayload.Type<>(PACKS);
-
-        private static final StreamCodec<FriendlyByteBuf, Packs> CODEC = StreamCodec.composite(
-            ByteBufCodecs.stringUtf8(LONG_TEXT), Packs::packs,
-            Packs::new);
 
         @Override
         public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
@@ -436,7 +419,6 @@ public final class Channels {
         PayloadTypeRegistry.clientboundPlay().register(Animation.TYPE, Animation.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Particle.TYPE, Particle.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Properties.TYPE, Properties.CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(Packs.TYPE, Packs.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Form.TYPE, Form.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(View.TYPE, View.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Shake.TYPE, Shake.CODEC);
@@ -505,31 +487,6 @@ public final class Channels {
         buffer.writeVarInt(formId);
         buffer.writeUtf(answer, LONG_TEXT);
         net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(FORM_RESPONSE, buffer);
-        *///?}
-    }
-
-    public static void sendPacks(ServerPlayer player, String packs) {
-        //? if >=1.21 {
-        ServerPlayNetworking.send(player, new Packs(packs));
-        //?} else {
-        /*FriendlyByteBuf buffer = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
-        buffer.writeUtf(packs, LONG_TEXT);
-        ServerPlayNetworking.send(player, PACKS, buffer);
-        *///?}
-    }
-
-    public static void receivePacks(java.util.function.Consumer<String> handler) {
-        //? if >=1.21 {
-        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
-            Packs.TYPE,
-            (payload, context) -> context.client().execute(() -> handler.accept(payload.packs())));
-        //?} else {
-        /*net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
-            PACKS,
-            (client, network, buffer, sender) -> {
-                String packs = buffer.readUtf(LONG_TEXT);
-                client.execute(() -> handler.accept(packs));
-            });
         *///?}
     }
 

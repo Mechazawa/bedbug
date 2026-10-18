@@ -36,6 +36,7 @@
     "FoodDataAccessor",
     "MappedRegistryAccessor",
     "CreativeModeTabsAccessor",
+    "ServerCommonPacketListenerAccessor",
     "FoodDataMixin",
     "BlockMinedExhaustionMixin",
     "PlayerAttackExhaustionMixin",

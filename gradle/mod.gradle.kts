@@ -187,8 +187,36 @@ project.tasks.named("runGameTest") {
  * a model and a key press. Only the 26.x targets have the API, and both of them run the tests, because
  * a spelling that differs between the two is exactly what a test on one version alone would miss.
  */
+/**
+ * The add-on the client game tests' server hands out without having loaded it, built from
+ * `tools/testpack/served`. The server and the client share one process and one `addons/`, so this is
+ * how a client joining it can lack an add-on the server has.
+ */
+val installServedPack = project.tasks.register("installServedPack") {
+    group = "verification"
+    description = "Build the add-on the client game tests' server hands out into run/clientGameTest/addons-served."
+
+    val generator = rootProject.layout.projectDirectory.file("tools/testpack/build_served.py").asFile
+    val served = project.layout.buildDirectory.dir("run/clientGameTest/addons-served")
+    inputs.dir(rootProject.layout.projectDirectory.dir("tools/testpack"))
+    outputs.dir(served)
+
+    doLast {
+        val target = served.get().asFile
+        target.mkdirs()
+        val archive = File(target, "served-addon.mcaddon")
+        val process = ProcessBuilder("python3", generator.absolutePath, "--out", archive.absolutePath)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().readText()
+        if (process.waitFor() != 0) throw GradleException("The served pack would not build: $output")
+    }
+}
+
 project.tasks.matching { it.name == "runClientGameTest" }.configureEach {
-    dependsOn(installClientTestPack)
+    dependsOn(installClientTestPack, installServedPack)
+    (this as JavaExec).systemProperty("mcaddon.served",
+        project.layout.buildDirectory.dir("run/clientGameTest/addons-served").get().asFile.absolutePath)
     val saves = project.layout.buildDirectory.dir("run/clientGameTest/saves")
     doFirst { project.delete(saves) }
 

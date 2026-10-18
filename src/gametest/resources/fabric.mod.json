@@ -26,6 +26,7 @@
       "at.ioexception.mcaddon.clientgametest.PackDimensionClientGameTest",
       "at.ioexception.mcaddon.clientgametest.PackCommandClientGameTest",
       "at.ioexception.mcaddon.clientgametest.ServerRegistryClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.AddonSyncClientGameTest",
       "at.ioexception.mcaddon.clientgametest.ServerEntityClientGameTest",
       "at.ioexception.mcaddon.clientgametest.ServerPlayerClientGameTest",
       "at.ioexception.mcaddon.clientgametest.HudClientGameTest",

@@ -87,15 +87,29 @@ public final class FunctionNames {
     }
 
     /**
-     * Every function by its Java id, as one line.
+     * What every call the functions of `behaviours`, written under `namespace`, make is written as,
+     * as one line.
      *
-     * A converted function file names functions other add-ons ship, so what it was converted
-     * against is part of what says it is out of date.
+     * A converted function file names another add-on's function where the call would otherwise reach
+     * the wrong one, so these answers are part of what says the file is out of date. Functions no
+     * call of these reaches are not, which keeps an add-on's conversion when another add-on comes or
+     * goes.
      */
-    public String stamp() {
-        Set<String> ids = new TreeSet<>();
-        paths.forEach((namespace, names) -> names.forEach(path -> ids.add(namespace + ":" + path)));
-        return String.join(",", ids);
+    public String stampFor(String namespace, List<BedrockPack> behaviours) {
+        FunctionNames calls = issuedBy(namespace);
+        Set<String> answers = new TreeSet<>();
+        behaviours.forEach(pack -> pack.list("functions", ".mcfunction").forEach(file ->
+            lines(file).forEach(line -> CALL.matcher(line).results()
+                .forEach(call -> answers.add(call.group(3) + "=" + calls.pinned(call.group()))))));
+        return String.join(",", answers);
+    }
+
+    private static List<String> lines(Path file) {
+        try {
+            return java.nio.file.Files.readAllLines(file);
+        } catch (java.io.IOException | java.io.UncheckedIOException unreadable) {
+            return List.of();
+        }
     }
 
     /** The path a function file is written to under its add-on's namespace. */
