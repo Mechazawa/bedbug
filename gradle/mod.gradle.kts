@@ -219,6 +219,9 @@ project.tasks.matching { it.name == "runClientGameTest" }.configureEach {
     dependsOn(installClientTestPack, installServedPack)
     (this as JavaExec).systemProperty("mcaddon.served",
         project.layout.buildDirectory.dir("run/clientGameTest/addons-served").get().asFile.absolutePath)
+    // How long `HangWatchdog` lets the client and its servers go without a tick before it writes a
+    // thread dump and ends the run.
+    (this as JavaExec).systemProperty("mcaddon.clientHangMinutes", project.findProperty("clientHangMinutes")?.toString() ?: "3")
     val saves = project.layout.buildDirectory.dir("run/clientGameTest/saves")
     doFirst { project.delete(saves) }
 

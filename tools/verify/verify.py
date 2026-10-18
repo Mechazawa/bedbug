@@ -58,6 +58,8 @@ SPECULAR_MAPS = ("metalness_emissive_roughness", "metalness_emissive_roughness_s
 
 # What makes a run fail, most specific first: a line is reported under the first name it matches.
 FAILURES = (
+    # `HangWatchdog` in the client game tests ends a run that stopped ticking and names its dump.
+    ("client game test hang", r"CLIENT GAME TEST HANG: "),
     ("java compile error", r"\.java:\d+: error:"),
     # A registry entry a data pack could not decode stops the world behind a screen asking the
     # player to fix their packs, which a harness with nobody at the keyboard waits out. The line

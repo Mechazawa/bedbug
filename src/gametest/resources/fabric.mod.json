@@ -5,6 +5,9 @@
   "name": "Bedrock Add-ons client game tests",
   "environment": "client",
   "entrypoints": {
+    "client": [
+      "at.ioexception.mcaddon.clientgametest.HangWatchdog"
+    ],
     "fabric-client-gametest": [
       "at.ioexception.mcaddon.clientgametest.WorldClientGameTest",
       "at.ioexception.mcaddon.clientgametest.DrawnSizeClientGameTest",
