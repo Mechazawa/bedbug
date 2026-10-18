@@ -578,6 +578,28 @@
           "ranged_fov": 60
         }
       },
+      "tp:brute_choosy": {
+        "minecraft:shooter": {
+          "def": "minecraft:snowball",
+          "projectiles": [
+            {
+              "def": "minecraft:arrow",
+              "aux_val": 26,
+              "lose_target": true,
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              }
+            }
+          ]
+        },
+        "minecraft:behavior.ranged_attack": {
+          "priority": 0,
+          "attack_interval": 0.5,
+          "attack_radius": 8
+        }
+      },
       "tp:brute_poisoner": {
         "minecraft:shooter": {
           "def": "minecraft:arrow",
@@ -1439,6 +1461,13 @@
         "add": {
           "component_groups": [
             "tp:brute_gunning"
+          ]
+        }
+      },
+      "tp:brute_choose": {
+        "add": {
+          "component_groups": [
+            "tp:brute_choosy"
           ]
         }
       },

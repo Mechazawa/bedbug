@@ -124,6 +124,11 @@ public final class ChargeAttackGoal extends Goal {
     }
 
     @Override
+    public boolean requiresUpdateEveryTick() {
+        return true;
+    }
+
+    @Override
     public void start() {
         charged = 0;
         approaching = true;

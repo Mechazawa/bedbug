@@ -252,6 +252,15 @@ REASONS = {
         "priority": "The long death runs in LivingEntity.tickDeath, once the entity is dead and no goal "
                     "runs, so there is no goal for a priority to order.",
     },
+    "minecraft:projectile": {
+        "is_dangerous": "Java's one dangerous projectile is the blue wither skull, whose flag is a field of "
+                        "WitherSkull that sets its block resistance cap and its look; no goal asks any "
+                        "projectile whether it is dangerous.",
+    },
+    "minecraft:shooter": {
+        "magic": "A drink here takes no time, its effects landing the tick its conditions hold, so the "
+                 "ranged attack never runs beside a drink it would have to be kept apart from.",
+    },
     "minecraft:area_attack": {
         "death_message_override": "Java words a death by the msgId of the damage type that dealt it, a "
                                   "registered type shared by every blow of that kind rather than "

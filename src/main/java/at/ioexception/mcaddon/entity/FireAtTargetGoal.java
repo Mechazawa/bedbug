@@ -40,7 +40,7 @@ public final class FireAtTargetGoal extends Goal {
     private final Vec3 targetOffset;
     private final double halfFieldOfView;
     private int held;
-    private int untilNext;
+    private int readyAt;
     private boolean fired;
 
     public FireAtTargetGoal(AddonEntity mob, JsonObject component) {
@@ -62,7 +62,7 @@ public final class FireAtTargetGoal extends Goal {
 
     @Override
     public boolean canUse() {
-        if (untilNext-- > 0 || projectile == null) return false;
+        if (mob.tickCount < readyAt || projectile == null) return false;
 
         LivingEntity target = mob.getTarget();
         if (target == null || !target.isAlive()) return false;
@@ -100,7 +100,12 @@ public final class FireAtTargetGoal extends Goal {
 
     @Override
     public void stop() {
-        untilNext = cooldown;
+        readyAt = mob.tickCount + cooldown;
+    }
+
+    @Override
+    public boolean requiresUpdateEveryTick() {
+        return true;
     }
 
     private void shoot(LivingEntity target) {

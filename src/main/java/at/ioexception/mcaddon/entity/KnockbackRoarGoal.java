@@ -36,7 +36,7 @@ public final class KnockbackRoarGoal extends Goal {
     private final Filter hurt;
     private final String onEnd;
     private int held;
-    private int untilNext;
+    private int readyAt;
 
     public KnockbackRoarGoal(AddonEntity mob, JsonObject component) {
         this.mob = mob;
@@ -56,7 +56,7 @@ public final class KnockbackRoarGoal extends Goal {
 
     @Override
     public boolean canUse() {
-        return untilNext-- <= 0;
+        return mob.tickCount >= readyAt;
     }
 
     @Override
@@ -106,6 +106,6 @@ public final class KnockbackRoarGoal extends Goal {
     @Override
     public void stop() {
         held = 0;
-        untilNext = cooldown;
+        readyAt = mob.tickCount + cooldown;
     }
 }

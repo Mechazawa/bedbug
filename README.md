@@ -170,7 +170,8 @@ Against a server without this mod a client plays with its own add-ons.
   inside the range's low end and closes in until it has seen its target for `target_in_sight_time`;
   one with a `charge_shoot_trigger` charges while it sees its target, counts as charged for
   `query.is_charged`, and fires a burst of `burst_shots`. Arrows carry the potion `minecraft:shooter`
-  names under `aux_val`. An ocelot attack sneaks, sprints and walks at its
+  names under `aux_val`, and the first of its `projectiles` whose filters hold is shot instead, letting
+  the target go under `lose_target`. An ocelot attack sneaks, sprints and walks at its
   three speeds by its three ranges and strikes within its reach every `cooldown_time`; a pounce stalks
   at `stalk_speed`, stays interested for `interest_time`, leaps by `leap_dist` and `leap_height`,
   strikes within `strike_dist` and is held stuck for `stuck_time` on what `stuck_blocks` names. A leap takes off from the air

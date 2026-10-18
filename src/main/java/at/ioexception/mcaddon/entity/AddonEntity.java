@@ -2877,7 +2877,18 @@ public class AddonEntity extends PathfinderMob
             return;
         }
 
-        String named = liveText("minecraft:shooter", "def");
+        // The first of `projectiles` whose filters hold stands in for the shooter's own `def` and
+        // `aux_val`, and may drop the target once it is thrown, as a witch's healing potion does.
+        com.google.gson.JsonObject shooter = liveComponent("minecraft:shooter");
+        Filter.Context context = new Filter.Context(this, target, target, ServerHooks.state());
+        com.google.gson.JsonObject chosen = at.ioexception.mcaddon.util.Json.list(shooter, "projectiles").stream()
+            .filter(com.google.gson.JsonElement::isJsonObject)
+            .map(com.google.gson.JsonElement::getAsJsonObject)
+            .filter(entry -> Goals.filter(entry, "filters").matches(context))
+            .findFirst()
+            .orElse(shooter);
+        if (Goals.flag(chosen, "lose_target", false)) setTarget(null);
+        String named = Goals.text(chosen, "def");
         net.minecraft.world.entity.EntityType<?> type =
             AddonEntities.typeOf(named == null ? "minecraft:arrow" : named);
         net.minecraft.world.entity.Entity shot = type == null ? null : Platform.createMob(type, level);
@@ -2899,7 +2910,7 @@ public class AddonEntity extends PathfinderMob
         // the potion's time, in both editions.
         if (projectile instanceof Arrow arrow) {
             at.ioexception.mcaddon.bedrock.behaviour.BedrockPotions.numbered(
-                    (int) liveNumber("minecraft:shooter", "aux_val", -1) - 1)
+                    (int) Goals.number(chosen, "aux_val", -1) - 1)
                 .ifPresent(potion -> potion.getEffects().forEach(effect -> arrow.addEffect(
                     new net.minecraft.world.effect.MobEffectInstance(effect.getEffect(),
                         Math.max(1, effect.getDuration() / 8), effect.getAmplifier(),

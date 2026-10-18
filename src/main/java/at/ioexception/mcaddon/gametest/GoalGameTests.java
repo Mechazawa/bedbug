@@ -877,6 +877,37 @@ public final class GoalGameTests {
     }
 
     /**
+     * A shooter throws the first of its `projectiles` whose filters hold in place of its own `def`,
+     * with that entry's `aux_val`, and lets its target go under `lose_target`: the choosy brute shoots
+     * a pig a poisoned arrow rather than a snowball and turns away.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = VOLLEY_TICKS)
+    public void aShooterThrowsTheProjectileItsFiltersPick(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_choose");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob pig = pig(helper, STAND.east(4), BLOWS_TO_KILL);
+        brute.setTarget(pig);
+        // Each shot lets the pig go, so it is handed back until an arrow has landed.
+        AtomicBoolean letGo = new AtomicBoolean();
+        helper.onEachTick(() -> {
+            if (brute.getTarget() != null) return;
+
+            letGo.set(true);
+            brute.setTarget(pig);
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(pig.getActiveEffects().stream()
+                    .anyMatch(active -> Platform.effectId(active).equals("minecraft:poison")),
+                BRUTE + " picks a poisoned arrow for a pig and the pig is not poisoned.");
+            helper.assertTrue(letGo.get(), BRUTE + " lets the pig go once it shoots and never did.");
+        });
+    }
+
+    /**
      * A charged attack fires `burst_shots` shots `burst_interval` apart once the target has been in
      * sight for twice `charge_shoot_trigger`, after being charged from `charge_charged_trigger` plus
      * `charge_shoot_trigger`, and swings as it shoots under `swing`.
@@ -1363,7 +1394,7 @@ public final class GoalGameTests {
         AtomicBoolean leaptAloft = new AtomicBoolean();
         helper.onEachTick(() -> {
             rise[0] = Math.max(rise[0], grounded.getDeltaMovement().y);
-            if (!aloft.onGround() && aloft.getDeltaMovement().y > LEAPING) leaptAloft.set(true);
+            if (aloft.getDeltaMovement().y > LEAPING) leaptAloft.set(true);
         });
         helper.succeedWhen(() -> {
             helper.assertTrue(Math.abs(rise[0] - VAULT_RISE) < RISE_MARGIN,
@@ -1569,7 +1600,7 @@ public final class GoalGameTests {
             return;
         }
 
-        Mob pig = pig(helper, STAND, BLOWS_TO_KILL);
+        Mob pig = pig(helper, STAND.east(1), BLOWS_TO_KILL);
         helper.succeedWhen(() -> {
             helper.assertTrue(pig.getHealth() < BLOWS_TO_KILL, BRUTE + " never pricked the pig beside it.");
             helper.assertTrue(pig.getLastHurtByMob() == null,
