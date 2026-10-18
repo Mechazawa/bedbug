@@ -19,11 +19,12 @@ import java.util.EnumSet;
  *
  * Java has no village object, so the village is the box round the beds, job sites and bells within
  * the entity's `minecraft:dweller` `restriction_radius` (16 blocks where it states none), which is
- * how far from its dwelling Bedrock lets a dweller belong to it. An entity inside that box grown by `dist_from_boundary` walks out
- * on the side of the village it stands on, to `explore_dist` past the edge at its own height. Once
- * there it waits a while between `min_wait_time` and `max_wait_time` divided by `timer_ratio`, then
- * walks to a point within `next_xz` and `next_y` of the last, until `max_wait_time` has gone by
- * since it first arrived. A walk taking longer than `max_travel_time` ends the goal.
+ * how far from its dwelling Bedrock lets a dweller belong to it. An entity inside that box grown by
+ * `dist_from_boundary` walks out on the side of the village it stands on, to `explore_dist` past
+ * the edge at its own height. Once there it waits a while between `min_wait_time` and
+ * `max_wait_time` divided by `timer_ratio`, then walks to a point within `next_xz` and `next_y` of
+ * the last, until `max_wait_time` has gone by since it first arrived.
+ * A walk taking longer than `max_travel_time` ends the goal.
  */
 public final class ExploreOutskirtsGoal extends Goal {
     /** How often an entity outside the goal looks for a village edge, in ticks. */

@@ -11,16 +11,24 @@ import net.minecraft.world.level.block.Blocks;
  *
  * Bedrock gives the goal a one in `interval` chance each tick of looking for an egg, where Java waits
  * ten to twenty seconds between looks. Java's goal searches twenty-four blocks across whatever
- * `search_range` says, because its constructor fixes that number, and counts an egg reached from
- * where a mob stands on it whatever `goal_radius` says.
+ * `search_range` says, because its constructor fixes that number. It counts an egg as reached within
+ * 1.14 blocks of the point above it, which a mob stopping at the edge of its waypoint tolerance on
+ * top of the egg misses. `goal_radius` is added to that as wiggle room.
  */
 public final class StompEggGoal extends RemoveBlockGoal {
     private final int interval;
+    private final double reach;
 
     public StompEggGoal(PathfinderMob mob, JsonObject goal) {
         super(Blocks.TURTLE_EGG, mob, Goals.number(goal, "speed_multiplier", 1),
             (int) Goals.number(goal, "search_height", 1));
+        this.reach = 1.14 + Goals.number(goal, "goal_radius", 0.5);
         this.interval = Math.max(1, (int) Goals.number(goal, "interval", 120));
+    }
+
+    @Override
+    public double acceptedDistance() {
+        return reach;
     }
 
     /** A one in N chance each tick waits N ticks on average, which is twice that drawn evenly. */
