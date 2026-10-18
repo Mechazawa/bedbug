@@ -178,8 +178,6 @@ REASONS = {
     # Goals. Java's goal of the same name takes fewer parameters than Bedrock states.
     "minecraft:behavior.explore_outskirts": {"*": "Java's stroll goal picks its own distance and wait."},
     "minecraft:behavior.stroll_towards_village": {"*": "Java's stroll goal has no village to aim at."},
-    "minecraft:behavior.move_indoors": {"*": "Java's goal has no cooldown of its own."},
-    "minecraft:behavior.move_outdoors": {"*": "Java's goal has no cooldown of its own."},
     "minecraft:behavior.mount_pathing": {
         "*": "A mob riding another steers it in Java: the rider plans with the mount's navigator and the "
              "mount's own movement goals are switched off while it is ridden, so the chase and the "

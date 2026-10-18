@@ -385,6 +385,26 @@
             }
           ]
         }
+      },
+      "tp:brute_outgoing": {
+        "minecraft:behavior.move_outdoors": {
+          "priority": 0,
+          "search_range": 6,
+          "search_height": 2,
+          "search_count": 20,
+          "goal_radius": 0.5,
+          "speed_multiplier": 1,
+          "timeout_cooldown": 0.5
+        }
+      },
+      "tp:brute_homely": {
+        "minecraft:behavior.move_indoors": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "timeout_cooldown": 0.5,
+          "search_range": 4,
+          "search_height": 2
+        }
       }
     },
     "components": {
@@ -595,6 +615,20 @@
         "add": {
           "component_groups": [
             "tp:brute_thirsty"
+          ]
+        }
+      },
+      "tp:brute_go_out": {
+        "add": {
+          "component_groups": [
+            "tp:brute_outgoing"
+          ]
+        }
+      },
+      "tp:brute_go_in": {
+        "add": {
+          "component_groups": [
+            "tp:brute_homely"
           ]
         }
       }

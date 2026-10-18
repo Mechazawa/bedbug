@@ -2871,7 +2871,9 @@ public class AddonEntity extends PathfinderMob
                 goals.add(priority, SlimeGoal.attacking(this, goal));
 
             case "minecraft:behavior.random_stroll" -> goals.add(priority, StrollGoal.walking(this, goal));
-            case "minecraft:behavior.move_outdoors", "minecraft:behavior.explore_outskirts" -> {
+            case "minecraft:behavior.move_outdoors" -> goals.add(priority, ShelterGoal.outdoors(this, goal));
+            case "minecraft:behavior.move_indoors" -> goals.add(priority, ShelterGoal.indoors(this, goal));
+            case "minecraft:behavior.explore_outskirts" -> {
                 // `interval` is the one in N chance of choosing the goal, which Java counts the
                 // same way.
                 WaterAvoidingRandomStrollGoal stroll = new WaterAvoidingRandomStrollGoal(this, speed);
@@ -2888,8 +2890,7 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.look_at_entity" -> goals.add(priority, LookGoal.atEntities(this, goal));
 
             // Bedrock names the kind of wandering; Java has one stroll goal and a speed.
-            case "minecraft:behavior.move_indoors",
-                 "minecraft:behavior.move_towards_dwelling_restriction",
+            case "minecraft:behavior.move_towards_dwelling_restriction",
                  "minecraft:behavior.move_towards_home_restriction",
                  "minecraft:behavior.move_towards_restriction",
                  "minecraft:behavior.go_home" ->

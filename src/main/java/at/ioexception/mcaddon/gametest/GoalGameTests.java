@@ -523,6 +523,58 @@ public final class GoalGameTests {
     }
 
     /**
+     * `minecraft:behavior.move_outdoors` walks an entity under a roof out to the open sky, within
+     * the range its group states, as soon as it is put there; a wander that happened to set off
+     * would be a matter of chance over the same few seconds.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = OUTDOOR_TICKS)
+    public void anEntityUnderARoofWalksOutUnderTheSky(GameTestHelper helper) {
+        roof(helper, new BlockPos(0, 3, 0), new BlockPos(4, 3, 4));
+        walksTo(helper, "tp:brute_go_out", new BlockPos(2, 1, 2), true);
+    }
+
+    /**
+     * `minecraft:behavior.move_indoors` walks an entity under the open sky in under a roof; Java's goal
+     * that stood in for it walks only towards a home, which the brute has none of.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = SHELTER_TICKS)
+    public void anEntityUnderTheSkyWalksInUnderARoof(GameTestHelper helper) {
+        roof(helper, new BlockPos(3, 3, 0), new BlockPos(7, 3, 7));
+        walksTo(helper, "tp:brute_go_in", new BlockPos(1, 1, 4), false);
+    }
+
+    /** Once the light under the roof has settled, a brute put down with the group on gets to the sky or out of it. */
+    private static void walksTo(GameTestHelper helper, String event, BlockPos from, boolean sky) {
+        AddonEntity[] brute = {null};
+        helper.startSequence()
+            .thenExecuteAfter(LIGHT_SETTLES, () -> brute[0] = withGroup(helper, event, from))
+            .thenWaitUntil(() -> helper.assertTrue(brute[0] == null
+                    || helper.getLevel().canSeeSky(brute[0].blockPosition()) == sky,
+                BRUTE + (sky ? " moves outdoors and is still under the roof."
+                    : " moves indoors and is still outside.")))
+            .thenSucceed();
+    }
+
+    private static final int SHELTER_TICKS = 240;
+
+    /** The light settling and three seconds after it, which is plenty for a three block walk. */
+    private static final int OUTDOOR_TICKS = 80;
+
+    /** Java works out the light under a new roof over the ticks after it is built. */
+    private static final int LIGHT_SETTLES = 20;
+
+    /**
+     * A stone floor over the whole structure with a roof over part of it. Java's random walks only
+     * end on a block that renders solid, which the structure's own floor is not.
+     */
+    private static void roof(GameTestHelper helper, BlockPos from, BlockPos to) {
+        BlockPos.betweenClosed(BlockPos.ZERO, new BlockPos(7, 0, 7))
+            .forEach(at -> helper.setBlock(at, net.minecraft.world.level.block.Blocks.STONE));
+        BlockPos.betweenClosed(from, to)
+            .forEach(at -> helper.setBlock(at, net.minecraft.world.level.block.Blocks.STONE));
+    }
+
+    /**
      * `minecraft:addrider` seats every rider its `riders` list names, each raising its own spawn
      * event, and a group bringing the component in is enough for that.
      */
