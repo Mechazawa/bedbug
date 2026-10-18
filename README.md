@@ -300,6 +300,15 @@ add-ons, or with another release of it, is told which in chat.
   plays, and queued behind a track that plays once. A queue behind a looping track is refused, as
   in Bedrock. A track is a pack's own sound or one of the game's under its full name, or a Bedrock
   name such as `record.cat` or `cat`.
+- Six of Bedrock's game rules Java keeps no rule for, set through `/bedrock gamerule` and a
+  script's `world.gameRules`, kept beside the world and acted on by this mod. `recipesunlock` off
+  stops recipes unlocking as a player collects what they take, which Java does through an
+  advancement per recipe, so `/recipe` is then the way a player gets one. `respawnblocksexplode` off
+  leaves a bed or a charged respawn anchor standing where Java would blow it up.
+  `showcoordinates` and `showdaysplayed` write the player's position and the world's day count at
+  the top left of the screen, `showrecipemessages` off shows no toast for a recipe unlocked, and
+  `showtags` off leaves out the lines naming what an item may break or be placed on. A world starts
+  showing no coordinates and no day count, as one a player makes in Bedrock does.
 - Clips on a mob Java draws with a model of its own, such as `playanimation` on a vanilla villager.
   Each Bedrock bone is found among the Java model's parts, and on a mob whose Bedrock geometry hangs
   the head, arms and legs under `body`, those parts move, turn and scale with the body, so a pack

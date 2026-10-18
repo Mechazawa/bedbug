@@ -340,6 +340,26 @@ public final class Platform {
         *///?}
     }
 
+    /** Whether a bed used here blows up rather than letting anybody sleep, which 26 asks the dimension. */
+    public static boolean bedExplodes(Level level, net.minecraft.core.BlockPos pos) {
+        //? if >=26 {
+        return level.environmentAttributes()
+            .getValue(net.minecraft.world.attribute.EnvironmentAttributes.BED_RULE, pos).explodes();
+        //?} else {
+        /*return !net.minecraft.world.level.block.BedBlock.canSetSpawn(level);
+        *///?}
+    }
+
+    /** Whether a player's recipe book holds the recipe of this id. */
+    public static boolean knowsRecipe(ServerPlayer player, Identifier recipe) {
+        //? if >=1.21.2 {
+        return player.getRecipeBook().contains(ResourceKey.create(net.minecraft.core.registries.Registries.RECIPE,
+            recipe));
+        //?} else {
+        /*return player.getRecipeBook().contains(recipe);
+        *///?}
+    }
+
     /** Puts a rider on a vehicle whether or not the rider could climb on by itself. */
     public static boolean mount(Entity rider, Entity vehicle) {
         //? if >=26 {

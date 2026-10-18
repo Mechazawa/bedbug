@@ -36,10 +36,11 @@ public final class BedrockTree {
 
     /**
      * Commands Bedrock and Java share a name and some forms of, where Bedrock adds forms of its own:
-     * `place featurerule` beside Java's `place`, and `schedule on_area_loaded` beside Java's
-     * `schedule function`. This tree's command of each name carries Java's forms as well.
+     * `place featurerule` beside Java's `place`, `schedule on_area_loaded` beside Java's `schedule
+     * function`, and the rules Java keeps none of beside Java's own in `gamerule`. This tree's command
+     * of each name carries Java's forms as well.
      */
-    private static final List<String> SHARED = List.of("place", "schedule");
+    private static final List<String> SHARED = List.of("place", "schedule", "gamerule");
 
     private final CommandDispatcher<CommandSourceStack> bedrock = new CommandDispatcher<>();
     private boolean holdsJava;

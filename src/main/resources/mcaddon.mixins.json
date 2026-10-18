@@ -10,6 +10,9 @@
     "PassengerInvoker",
     "PlayerListLimitMixin",
     "DragonFightMixin",
+    "RecipeRewardMixin",
+    "RespawnBlockMixin",
+    "RespawnAnchorMixin",
     "BiomeSeedAccessor",
     "ItemEntityMixin",
     "ProjectileMixin",
@@ -60,6 +63,8 @@
     "ModelPartMixin",
     "SoundEngineMixin",
     "MusicManagerMixin",
-    "FovMixin"
+    "FovMixin",
+    "RecipeToastMixin",
+    "AdventureTooltipMixin"
   ]
 }

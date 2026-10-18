@@ -682,6 +682,12 @@ These are the checks it runs, and what each one catches:
   across the whole screen, which the test source set's `GuiGraphicsExtractorMixin` writes into
   `Drawn` beside every line of text drawn, and a field of view off the camera a frame was drawn with.
 
+  `BedrockRulesClientGameTest` reads `showcoordinates` and `showdaysplayed` back as the lines the
+  heads-up display drew, `showtags` as the lines a pickaxe's `can_break` writes into its tooltip and
+  `showrecipemessages` as the recipe toast the client is or is not showing; `BedrockCommandGameTests`
+  covers the server's two, `recipesunlock` through an advancement's reward and `respawnblocksexplode`
+  through a bed used in the nether and a charged anchor used in the overworld.
+
   One client game test at a time: the entry point list in `src/gametest/resources/fabric.mod.json`
   is the whole selection, so cutting it down to one class runs that class alone. Put it back after.
 

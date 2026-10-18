@@ -504,6 +504,82 @@ public final class BedrockCommandGameTests {
         }
     }
 
+    /**
+     * The game rules Java keeps none of: with `recipesunlock` off an advancement's reward hands out
+     * no recipe, and with `respawnblocksexplode` off a bed used in the nether and a charged respawn
+     * anchor used in the overworld stay standing, where Java blows both up once the rule is on again.
+     */
+    @GameTest()
+    public void bedrocksOwnRulesAreHeldAndActedOn(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        try {
+            player.addTag("t_rules");
+            BedrockLines.run(helper, "gamerule recipesunlock false");
+            java.util.function.Consumer<String> grant = recipe -> server.getCommands().performPrefixedCommand(
+                server.createCommandSourceStack().withSuppressedOutput(),
+                "advancement grant @a[tag=t_rules] only minecraft:recipes/" + recipe);
+            grant.accept("building_blocks/stone_slab");
+            helper.assertFalse(Platform.knowsRecipe(player, Platform.id("minecraft", "stone_slab")),
+                "an advancement unlocked a recipe with recipesunlock off.");
+            BedrockLines.run(helper, "gamerule recipesunlock true");
+            grant.accept("building_blocks/stone_bricks");
+            helper.assertTrue(Platform.knowsRecipe(player, Platform.id("minecraft", "stone_bricks")),
+                "an advancement unlocked no recipe with recipesunlock on.");
+
+            ServerLevel nether = server.getLevel(net.minecraft.world.level.Level.NETHER);
+            BlockPos here = helper.absolutePos(BlockPos.ZERO);
+            BlockPos bed = new BlockPos(here.getX(), 70, here.getZ());
+            BlockPos anchor = helper.absolutePos(STAND);
+            BedrockLines.run(helper, "gamerule respawnblocksexplode false");
+            if (nether != null) {
+                placeBed(nether, bed);
+                use(player, nether, bed);
+                helper.assertTrue(isBed(nether, bed), "a bed used in the nether went with respawnblocksexplode off.");
+            }
+            helper.setBlock(STAND, Blocks.RESPAWN_ANCHOR.defaultBlockState()
+                .setValue(net.minecraft.world.level.block.RespawnAnchorBlock.CHARGE, 1));
+            use(player, helper.getLevel(), anchor);
+            expect(helper, STAND, Blocks.RESPAWN_ANCHOR, "used in the overworld with respawnblocksexplode off");
+
+            BedrockLines.run(helper, "gamerule respawnblocksexplode true");
+            use(player, helper.getLevel(), anchor);
+            expect(helper, STAND, Blocks.AIR, "used in the overworld with respawnblocksexplode on");
+            if (nether != null) {
+                use(player, nether, bed);
+                helper.assertFalse(isBed(nether, bed), "a bed used in the nether stayed with respawnblocksexplode on.");
+            }
+        } finally {
+            BedrockLines.run(helper, "gamerule recipesunlock true");
+            BedrockLines.run(helper, "gamerule respawnblocksexplode true");
+            server.getPlayerList().remove(player);
+        }
+        helper.succeed();
+    }
+
+    private static boolean isBed(ServerLevel level, BlockPos at) {
+        return level.getBlockState(at).getBlock() instanceof net.minecraft.world.level.block.BedBlock;
+    }
+
+    private static void placeBed(ServerLevel level, BlockPos foot) {
+        net.minecraft.world.level.block.state.BlockState bed = at.ioexception.mcaddon.registry.AddonBlocks
+            .named("minecraft:red_bed").defaultBlockState()
+            .setValue(net.minecraft.world.level.block.BedBlock.FACING, net.minecraft.core.Direction.SOUTH);
+        level.setBlock(foot.below(), Blocks.STONE.defaultBlockState(), 2);
+        level.setBlock(foot.south().below(), Blocks.STONE.defaultBlockState(), 2);
+        level.setBlock(foot, bed.setValue(net.minecraft.world.level.block.BedBlock.PART,
+            net.minecraft.world.level.block.state.properties.BedPart.FOOT), 2);
+        level.setBlock(foot.south(), bed.setValue(net.minecraft.world.level.block.BedBlock.PART,
+            net.minecraft.world.level.block.state.properties.BedPart.HEAD), 2);
+    }
+
+    /** A player using a block with an empty hand, the way pressing the use key reaches it. */
+    private static void use(ServerPlayer player, ServerLevel level, BlockPos at) {
+        player.gameMode.useItemOn(player, level, net.minecraft.world.item.ItemStack.EMPTY,
+            net.minecraft.world.InteractionHand.MAIN_HAND, new net.minecraft.world.phys.BlockHitResult(
+                net.minecraft.world.phys.Vec3.atCenterOf(at), net.minecraft.core.Direction.UP, at, false));
+    }
+
     /** What the console hears back from `/bedrock <line>`, typed as an operator would type it. */
     private static List<String> typed(GameTestHelper helper, String line) {
         List<String> heard = new ArrayList<>();

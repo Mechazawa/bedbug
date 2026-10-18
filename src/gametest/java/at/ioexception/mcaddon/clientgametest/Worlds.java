@@ -26,6 +26,15 @@ final class Worlds {
         *///?}
     }
 
+    /** The toasts the client is showing, which 26.2 moved onto its heads-up display. */
+    static net.minecraft.client.gui.components.toasts.ToastManager toasts(Minecraft client) {
+        //? if >=26.2 {
+        return client.gui.toastManager();
+        //?} else {
+        /*return client.getToastManager();
+        *///?}
+    }
+
     /** The camera the client draws its frames from. */
     static Camera camera(Minecraft client) {
         //? if >=26.2 {

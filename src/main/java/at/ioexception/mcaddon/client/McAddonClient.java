@@ -60,10 +60,14 @@ public final class McAddonClient implements ClientModInitializer {
                 case CameraView.FADE -> at.ioexception.mcaddon.client.render.PlayerFade.accept(body);
                 case CameraView.FOV -> at.ioexception.mcaddon.client.render.PlayerFov.accept(body,
                     net.minecraft.client.Minecraft.getInstance().options.fov().get());
+                case at.ioexception.mcaddon.server.BedrockRules.KIND ->
+                    at.ioexception.mcaddon.client.render.PlayerRules.accept(body);
                 default -> {
                 }
             }
         });
+        Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("bedrock_rules"),
+            at.ioexception.mcaddon.client.render.PlayerRules::draw);
         Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("bedrock_screen"),
             at.ioexception.mcaddon.client.render.PlayerFade::draw);
 
@@ -97,6 +101,7 @@ public final class McAddonClient implements ClientModInitializer {
             PlayerMusic.clear();
             at.ioexception.mcaddon.client.render.PlayerFade.clear();
             at.ioexception.mcaddon.client.render.PlayerFov.clear();
+            at.ioexception.mcaddon.client.render.PlayerRules.clear();
             ServerAddons.clear();
             at.ioexception.mcaddon.client.render.AddonEmitters.clear();
         }));

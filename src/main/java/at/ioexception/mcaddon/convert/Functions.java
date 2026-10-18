@@ -181,22 +181,23 @@ public final class Functions {
         Map.of("functionCommandLimit", "maxCommandChainLength");
 
     /**
-     * Bedrock rules Java keeps no rule of any name for, each reported when a function sets it.
-     *
-     * Five switch a piece of Bedrock's screen. Java's heads-up display has no day count and no
-     * coordinates outside the debug screen, its world border draws whatever a rule says, its toast
-     * for an unlocked recipe and the tooltip lines naming what an item may be placed on and break
-     * answer to no rule either. `recipesUnlock` holds back the recipes a player is given as they
-     * collect ingredients, which Java grants through one advancement per recipe rather than through
-     * a rule, and `respawnBlocksExplode` stops a bed or a respawn anchor exploding in a dimension
-     * that cannot hold a spawn, which `BedBlock` and `RespawnAnchorBlock` do unconditionally.
+     * Bedrock rules Java keeps no rule of any name for, which `server.BedrockRules` keeps beside the
+     * world and acts on itself, read by the `gamerule` the Bedrock tree holds beside Java's.
      */
-    private static final Set<String> RULES_BEDROCK_ONLY = Set.of(
-        "recipesUnlock", "respawnBlocksExplode", "showBorderEffect", "showCoordinates",
-        "showDaysPlayed", "showRecipeMessages", "showTags");
+    private static final Set<String> RULES_HELD_HERE = Set.of(
+        "recipesUnlock", "respawnBlocksExplode", "showCoordinates", "showDaysPlayed", "showRecipeMessages",
+        "showTags");
+
+    /**
+     * Bedrock rules Java has nothing to answer with, each reported when a function sets it.
+     *
+     * `showBorderEffect` switches the particle wall Bedrock's border block draws, and Java has no
+     * border block for it to switch.
+     */
+    private static final Set<String> RULES_BEDROCK_ONLY = Set.of("showBorderEffect");
 
     private static final Map<String, String> GAME_RULES = lowerCased(RULES_JAVA_SHARES,
-        RULES_NEWER_JAVA_HAS, RULES_JAVA_FOLDS);
+        RULES_NEWER_JAVA_HAS, RULES_HELD_HERE, RULES_JAVA_FOLDS);
 
     /**
      * The rule a Bedrock name reaches, under the name `Platform` looks one up by.
@@ -926,6 +927,9 @@ public final class Functions {
     private static String gameRule(String rest, Set<String> unsupported) {
         String[] parts = SPACE.split(rest, 2);
         String bedrock = GAME_RULES.get(parts[0].toLowerCase(Locale.ROOT));
+        if (bedrock != null && RULES_HELD_HERE.contains(bedrock)) {
+            return "gamerule " + bedrock + (parts.length > 1 ? " " + parts[1].toLowerCase(Locale.ROOT) : "");
+        }
         String java = bedrock == null ? null : Platform.gameRuleName(bedrock);
         if (java == null) {
             boolean named = RULES_BEDROCK_ONLY.stream().anyMatch(parts[0]::equalsIgnoreCase);
@@ -1490,10 +1494,10 @@ public final class Functions {
         };
     }
 
-    private static Map<String, String> lowerCased(Set<String> shared, Set<String> newer,
+    private static Map<String, String> lowerCased(Set<String> shared, Set<String> newer, Set<String> held,
         Map<String, String> folds) {
         Map<String, String> byLowerCase = new LinkedHashMap<>();
-        Stream.concat(shared.stream(), newer.stream())
+        Stream.of(shared, newer, held).flatMap(Set::stream)
             .forEach(name -> byLowerCase.put(name.toLowerCase(Locale.ROOT), name));
         folds.forEach((bedrock, java) -> byLowerCase.put(bedrock.toLowerCase(Locale.ROOT), java));
         return Map.copyOf(byLowerCase);

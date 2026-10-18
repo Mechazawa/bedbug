@@ -70,6 +70,7 @@ REGISTRATIONS = (JAVA / "server/BedrockCommands.java", JAVA / "server/Dialogues.
                  JAVA / "server/AreaSchedules.java", JAVA / "server/FeatureRules.java",
                  JAVA / "server/ServerAdmin.java", JAVA / "server/GameTestCommand.java",
                  JAVA / "server/MobEvents.java", JAVA / "server/Music.java",
+                 JAVA / "server/BedrockRules.java",
                  JAVA / "bedrock/camera/CameraView.java", JAVA / "bedrock/hud/HudElement.java",
                  JAVA / "bedrock/input/InputPermission.java")
 DEFAULT_SAMPLES = ROOT / "scratchpad/bedrock/bedrock-samples"
@@ -272,6 +273,7 @@ def surfaces(samples):
     rules = {name.lower() for name in
              literal_set(FUNCTIONS, "RULES_JAVA_SHARES = Set.of")
              | literal_set(FUNCTIONS, "RULES_NEWER_JAVA_HAS = Set.of")
+             | literal_set(FUNCTIONS, "RULES_HELD_HERE = Set.of")
              | literal_keys(FUNCTIONS, "RULES_JAVA_FOLDS =")}
 
     return [
