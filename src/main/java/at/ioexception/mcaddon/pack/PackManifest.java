@@ -123,26 +123,26 @@ public record PackManifest(
      * answers zero rather than being parsed as a number it never was.
      */
     public record Setting(String type, String name, JsonElement value) {
-        static Setting tryFrom(JsonObject json) {
-            String name = Json.text(json, "name", null);
+        static Setting tryFrom(JsonObject setting) {
+            String name = Json.text(setting, "name", null);
             if (name == null) return null;
 
-            String type = Json.text(json, "type", "");
-            JsonElement value = json.get("default");
+            String type = Json.text(setting, "type", "");
+            JsonElement value = setting.get("default");
             if (value == null || !value.isJsonPrimitive()) return new Setting(type, name, value);
 
             JsonElement normalised = switch (type) {
-                case "slider" -> value.getAsJsonPrimitive().isNumber() ? slider(json, value.getAsDouble()) : value;
-                case "dropdown" -> dropdown(json, value);
+                case "slider" -> value.getAsJsonPrimitive().isNumber() ? slider(setting, value.getAsDouble()) : value;
+                case "dropdown" -> dropdown(setting, value);
                 default -> value;
             };
             return new Setting(type, name, normalised);
         }
 
-        private static JsonElement slider(JsonObject json, double shipped) {
-            double low = Json.number(json, "min", Double.NEGATIVE_INFINITY);
-            double high = Json.number(json, "max", Double.POSITIVE_INFINITY);
-            double step = Json.number(json, "step", 0);
+        private static JsonElement slider(JsonObject setting, double shipped) {
+            double low = Json.number(setting, "min", Double.NEGATIVE_INFINITY);
+            double high = Json.number(setting, "max", Double.POSITIVE_INFINITY);
+            double step = Json.number(setting, "step", 0);
 
             double value = Math.max(low, Math.min(high, shipped));
             if (step > 0 && Double.isFinite(low)) {
@@ -152,10 +152,11 @@ public record PackManifest(
             return new JsonPrimitive(value);
         }
 
-        private static JsonElement dropdown(JsonObject json, JsonElement shipped) {
-            List<String> options = Json.list(json, "options").stream()
+        private static JsonElement dropdown(JsonObject setting, JsonElement shipped) {
+            List<String> options = Json.list(setting, "options").stream()
                 .filter(JsonElement::isJsonObject)
-                .map(option -> Json.text(option.getAsJsonObject(), "name", null))
+                .map(JsonElement::getAsJsonObject)
+                .map(option -> Json.text(option, "name", null))
                 .filter(name -> name != null)
                 .toList();
 
