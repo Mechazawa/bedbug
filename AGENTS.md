@@ -233,6 +233,11 @@ These are the checks it runs, and what each one catches:
     the ground.** Asked for a forest, it answered with a point two hundred blocks up over an ocean.
     `PackFeatureClientGameTest` searches for ground whose surface is forest for as far as it counts,
     working the surface out from the generator rather than the chunk.
+  - **Java puts a new player anywhere within the spawn radius**, so a search started from the player
+    looks at different chunks on every run of one seed. `PackFeatureClientGameTest` searches from the
+    middle of the world, and passes over dark forests: their canopy leaves a scatter onto the
+    heightmap almost no ground, and runs there counted between two and five torchflowers in 49
+    chunks, which is one unlucky run from none.
   - **Fabric registers a biome its modification API changed again, without its pack's name.** A
     biome a feature rule or a spawn rule reached carries no `KnownPack` afterwards, though it stays
     stable, and baking a world's dimensions registers every level stem again the same way. Ask a
