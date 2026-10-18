@@ -210,6 +210,8 @@ add-ons, or with another release of it, is told which in chat.
   off the screen where the world has none. Which table a trader offers is whichever its live
   component groups name, because Bedrock states the table inside the group that gives a trader its
   stock, and every table any of an entity's declarations names is read while its pack is still open.
+  A trade stays open while a script moves the trader within its own level, as a pack holding a
+  talking villager in place every tick does; only a move to another dimension ends it.
   A trader whose pack states no `minecraft:behavior.trade_with_player` stands still while a player
   has its shop open, as one stating it does. Bedrock documents nothing about such a trader, and a
   shop that walks away and closes under the player is the more surprising answer.
@@ -246,6 +248,10 @@ add-ons, or with another release of it, is told which in chat.
   `music`, `playanimation`, `scriptevent`, `structure`, `toggledownfall`, Bedrock's `particle` and
   `transfer` and the commands a pack's script declares, are reached through it and nowhere else. It asks for the level Java runs
   a function at, and every command the line names asks for its own on top of that.
+- Clips on a mob Java draws with a model of its own, such as `playanimation` on a vanilla villager.
+  Each Bedrock bone is found among the Java model's parts, and on a mob whose Bedrock geometry hangs
+  the head, arms and legs under `body`, those parts move, turn and scale with the body, so a pack
+  that hides a villager by scaling its body to nothing hides all of it.
 - `.mcfunction` files, written as Java functions whose every line is `bedrock <the line>`, with a
   `tick` function tag. Java's parser reads `/bedrock` and a string, so a file always loads, and a
   line that cannot be translated fails alone. Such a line is reported as the pack loads, whether
