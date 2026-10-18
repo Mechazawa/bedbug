@@ -27,7 +27,7 @@
         "water_identifier": "minecraft:default_water"
       },
       "minecraft:color_grading_identifier": {
-        "color_grading_identifier": "minecraft:default_color_grading"
+        "color_grading_identifier": "tp:glade_grade"
       },
       "minecraft:ambient_sounds": {
         "loop": "tp:ambient.glade.loop",

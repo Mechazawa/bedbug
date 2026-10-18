@@ -30,6 +30,7 @@ import java.util.List;
 public final class McAddonClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
+        at.ioexception.mcaddon.client.render.GradePass.register();
         follow();
         ActiveAddons.onActivate(set -> follow());
         AddonSession.register();
@@ -126,6 +127,7 @@ public final class McAddonClient implements ClientModInitializer {
      */
     private static void follow() {
         AddonClientAssets.load();
+        at.ioexception.mcaddon.client.render.ColourGrading.load();
         AddonEntities.all().keySet().stream().filter(PREPARED::add)
             .forEach(type -> EntityRendererRegistry.register(cast(type), AddonEntityRenderer::new));
         at.ioexception.mcaddon.registry.AddonParticles.all().keySet().stream()

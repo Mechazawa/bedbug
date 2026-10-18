@@ -43,15 +43,13 @@ public final class PackFiles {
             + "where a Java screen is a class with no named controls to patch"),
         Map.entry("textures/texture_list.json", "an index of the textures the pack ships, which "
             + "the conversion writes by walking textures/ itself"),
-        Map.entry("color_grading", "a grade of the finished frame, where a Java post effect "
-            + "carries no grading term and is bound to no biome or dimension"),
         Map.entry("water", "a deferred water model, where Java water is a flipbook texture "
             + "tinted by the client biome's own colour"));
 
     /** The resource pack paths a reader opens. */
     private static final Set<String> RESOURCE_READ = Set.of(
         "manifest.json", "pack_icon.png", "animations", "animation_controllers", "atmospherics",
-        "attachables", "biomes", "biomes_client.json", "blocks.json", "entity", "fogs", "font",
+        "attachables", "biomes", "biomes_client.json", "blocks.json", "color_grading", "entity", "fogs", "font",
         "lighting", "materials", "models", "particles", "render_controllers", "sounds",
         "sounds.json", "subpacks", "texts", "textures",
         "sounds/music_definitions.json", "sounds/sound_definitions.json",

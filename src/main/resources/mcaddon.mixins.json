@@ -60,6 +60,7 @@
   "client": [
     "CameraMixin",
     "FogRendererMixin",
+    "GameRendererGradeMixin",
     "HudMixin",
     "KeyboardInputMixin",
     "MouseHandlerMixin",
