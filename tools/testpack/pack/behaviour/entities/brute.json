@@ -516,6 +516,23 @@
           "max": 2
         }
       },
+      "tp:brute_trampling": {
+        "minecraft:behavior.stomp_attack": {
+          "priority": 0,
+          "reach_multiplier": 8,
+          "stomp_range_multiplier": 2,
+          "no_damage_range_multiplier": 2,
+          "cooldown_time": 0.5
+        }
+      },
+      "tp:brute_winding": {
+        "minecraft:behavior.delayed_attack": {
+          "priority": 0,
+          "reach_multiplier": 4,
+          "attack_duration": 2,
+          "hit_delay_pct": 0.5
+        }
+      },
       "tp:brute_poisoner": {
         "minecraft:shooter": {
           "def": "minecraft:arrow",
@@ -1342,6 +1359,20 @@
         "add": {
           "component_groups": [
             "tp:brute_hauling"
+          ]
+        }
+      },
+      "tp:brute_trample": {
+        "add": {
+          "component_groups": [
+            "tp:brute_trampling"
+          ]
+        }
+      },
+      "tp:brute_wind_up": {
+        "add": {
+          "component_groups": [
+            "tp:brute_winding"
           ]
         }
       },

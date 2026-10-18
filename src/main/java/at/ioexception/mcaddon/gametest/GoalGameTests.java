@@ -1475,6 +1475,72 @@ public final class GoalGameTests {
 
     private static final int HAULED = 6;
 
+    /**
+     * A stomp hurts only within `stomp_range_multiplier` times its width, and one falling short
+     * within `no_damage_range_multiplier` times that hurts nothing: the trampling brute reaches
+     * nearly five blocks and stomps a block and a fifth.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aStompHurtsOnlyWithinItsStompRange(GameTestHelper helper) {
+        AddonEntity near = heldInPlace(helper, "tp:brute_trample");
+        AddonEntity falling = heldInPlace(helper, "tp:brute_trample", new BlockPos(1, 0, 4));
+        if (near == null || falling == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob trampled = pig(helper, STAND.east(1), BLOWS_TO_KILL);
+        Mob spared = pig(helper, new BlockPos(3, 0, 4), BLOWS_TO_KILL);
+        near.setTarget(trampled);
+        falling.setTarget(spared);
+        helper.runAfterDelay(QUIET_VOLLEY, () -> {
+            helper.assertTrue(trampled.getHealth() < BLOWS_TO_KILL, BRUTE + " never stomped the pig beside it.");
+            helper.assertTrue(spared.getHealth() == BLOWS_TO_KILL,
+                BRUTE + " stomps a block and a fifth and hurt a pig two blocks off.");
+            helper.succeed();
+        });
+    }
+
+    /**
+     * A delayed attack lands its blow `hit_delay_pct` of the way through a swing lasting
+     * `attack_duration`, and swings again only once that has passed: the winding brute swings for
+     * two seconds and lands each blow one second in.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = POUNCE_TICKS)
+    public void aDelayedAttackLandsPartWayThroughItsSwing(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_wind_up");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob pig = pig(helper, STAND.east(2), BLOWS_TO_KILL);
+        brute.setTarget(pig);
+        List<Long> swings = new ArrayList<>();
+        List<Long> blows = new ArrayList<>();
+        float[] health = {pig.getHealth()};
+        AtomicBoolean wasSwinging = new AtomicBoolean();
+        helper.onEachTick(() -> {
+            long now = helper.getLevel().getGameTime();
+            if (brute.swinging && !wasSwinging.get()) swings.add(now);
+            wasSwinging.set(brute.swinging);
+            if (pig.getHealth() < health[0]) blows.add(now);
+            health[0] = pig.getHealth();
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(blows.size() >= 2 && !swings.isEmpty(),
+                BRUTE + " swung " + swings.size() + " times and struck " + blows.size() + " times.");
+            helper.assertTrue(Math.abs(blows.get(0) - swings.get(0) - WIND_UP) <= 1,
+                BRUTE + " lands a second into its swing and landed after " + (blows.get(0) - swings.get(0))
+                    + " ticks.");
+            helper.assertTrue(Math.abs(blows.get(1) - blows.get(0) - 2 * WIND_UP) <= 1,
+                BRUTE + " swings every two seconds and struck again after " + (blows.get(1) - blows.get(0))
+                    + " ticks.");
+        });
+    }
+
+    private static final long WIND_UP = 20;
+
     /** The game time of each leap, which is the tick the entity starts rising fast. */
     private static List<Long> leapsOf(GameTestHelper helper, AddonEntity brute) {
         List<Long> leaps = new ArrayList<>();

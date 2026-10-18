@@ -3172,10 +3172,14 @@ public class AddonEntity extends PathfinderMob
                 goals.add(priority,
                     new OpenDoorGoal(this, Goals.flag(goal, "close_door_after", true)));
 
-            case "minecraft:behavior.melee_box_attack" -> goals.add(priority, new MeleeGoal(this, goal, true));
-            case "minecraft:behavior.melee_attack", "minecraft:behavior.delayed_attack",
-                 "minecraft:behavior.stomp_attack" ->
-                goals.add(priority, new MeleeGoal(this, goal, false));
+            case "minecraft:behavior.melee_box_attack" ->
+                goals.add(priority, new MeleeGoal(this, goal, MeleeGoal.Kind.BOX));
+            case "minecraft:behavior.melee_attack" ->
+                goals.add(priority, new MeleeGoal(this, goal, MeleeGoal.Kind.PLAIN));
+            case "minecraft:behavior.delayed_attack" ->
+                goals.add(priority, new MeleeGoal(this, goal, MeleeGoal.Kind.DELAYED));
+            case "minecraft:behavior.stomp_attack" ->
+                goals.add(priority, new MeleeGoal(this, goal, MeleeGoal.Kind.STOMP));
             // A charge is a melee attack run at, which Java expresses as the speed the goal
             // closes the distance with.
             case "minecraft:behavior.charge_attack" ->

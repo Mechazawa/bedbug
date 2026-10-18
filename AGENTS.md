@@ -462,7 +462,7 @@ These are the checks it runs, and what each one catches:
   `tp:brute_pouncing` a pounce whose stuck block is gravel, because a snow layer does not survive on
   the empty structure's barrier floor. `tp:brute_hopping` jumps around its target the way a breeze does. `vaulting` leaps by `target_dist` and from the air, `soothing` hands out an ambient
   effect on a cooldown, `ramming` runs up to a far target, `lunging` rests between aquatic charges and
-  `hauling` holds a strength over its `max`. Four more brute groups each blow up one
+  `hauling` holds a strength over its `max`. `trampling` stomps and `winding` lands a delayed blow. Four more brute groups each blow up one
   way (`submerged`, `gentle`, `switching`, `launching`), read back in `GoalGameTests.aBlast*`. The brute's `tp:brute_roaring` group roars,
   pushing pigs tagged `tp_pushable` and hurting those tagged `tp_hurtable`.
 

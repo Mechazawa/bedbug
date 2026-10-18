@@ -34,12 +34,12 @@ public final class PoseHoldGoal extends Goal {
     private int untilNext;
     private LivingEntity answered;
 
-    private PoseHoldGoal(AddonEntity mob, JsonObject component, Pose pose, String durationKey,
+    private PoseHoldGoal(AddonEntity mob, JsonObject component, Pose pose,
         double durationFallback, String intervalKey, double noticeRadius, boolean needsTarget) {
         this.mob = mob;
         this.pose = pose;
-        this.durationLow = Goals.ticksLow(component, durationKey, durationFallback);
-        this.durationHigh = Goals.ticksHigh(component, durationKey, durationFallback);
+        this.durationLow = Goals.ticksLow(component, "duration", durationFallback);
+        this.durationHigh = Goals.ticksHigh(component, "duration", durationFallback);
         this.intervalLow = intervalKey == null ? 0 : Goals.ticksLow(component, intervalKey, 10);
         this.intervalHigh = intervalKey == null ? 0 : Goals.ticksHigh(component, intervalKey, 10);
         this.conditions = Goals.filter(component, "filters");
@@ -52,23 +52,23 @@ public final class PoseHoldGoal extends Goal {
 
     /** `minecraft:behavior.roar`, which a Bedrock mob does once at whatever it has just noticed. */
     public static PoseHoldGoal roaring(AddonEntity mob, JsonObject component) {
-        return new PoseHoldGoal(mob, component, Pose.ROARING, "duration", 1, null, 0, true);
+        return new PoseHoldGoal(mob, component, Pose.ROARING, 1, null, 0, true);
     }
 
     /** `minecraft:behavior.croak`, which runs on its own clock while the pack's filters hold. */
     public static PoseHoldGoal croaking(AddonEntity mob, JsonObject component) {
-        return new PoseHoldGoal(mob, component, Pose.CROAKING, "duration", 4.5, "interval", 0, false);
+        return new PoseHoldGoal(mob, component, Pose.CROAKING, 4.5, "interval", 0, false);
     }
 
     /** `minecraft:behavior.sniff`, which ends looking at whatever it found within its radius. */
     public static PoseHoldGoal sniffing(AddonEntity mob, JsonObject component) {
-        return new PoseHoldGoal(mob, component, Pose.SNIFFING, "duration", 1, "cooldown_range",
+        return new PoseHoldGoal(mob, component, Pose.SNIFFING, 1, "cooldown_range",
             Goals.number(component, "sniffing_radius", 5), false);
     }
 
     /** `minecraft:behavior.emerge`, which a pack gives to something that arrives out of the ground. */
     public static PoseHoldGoal emerging(AddonEntity mob, JsonObject component) {
-        return new PoseHoldGoal(mob, component, Pose.EMERGING, "duration", 7, null, 0, false);
+        return new PoseHoldGoal(mob, component, Pose.EMERGING, 7, null, 0, false);
     }
 
     /**
@@ -78,7 +78,7 @@ public final class PoseHoldGoal extends Goal {
      * back under, and the pack states it in seconds.
      */
     public static PoseHoldGoal digging(AddonEntity mob, JsonObject component) {
-        return new PoseHoldGoal(mob, component, Pose.DIGGING, "duration", 5.5, "idle_time", 0, false);
+        return new PoseHoldGoal(mob, component, Pose.DIGGING, 5.5, "idle_time", 0, false);
     }
 
     @Override

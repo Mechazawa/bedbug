@@ -176,7 +176,8 @@ Against a server without this mod a client plays with its own add-ons.
   strikes within `strike_dist` and is held stuck for `stuck_time` on what `stuck_blocks` names. A leap takes off from the air
   under `must_be_on_ground` false; a ram runs up at `run_speed` and makes its two sounds; an aquatic
   charge rests `charge_cooldown_time`; a mob effect is handed out from a component group, as an
-  ambient one under `ambient`, and waits `cooldown_time`; a strength stops at its `max`. A jump around the
+  ambient one under `ambient`, and waits `cooldown_time`; a strength stops at its `max`. A delayed attack lands its blow part way through its swing, and a stomp
+  hurts only within its stomp range. A jump around the
   target crouches, then leaps on an arc it can clear to a point behind the target, resting between
   jumps for less when it was hurt lately. A panic starts at
   the causes `damage_sources` lists, can leave every mob's blow out, heads for water under
