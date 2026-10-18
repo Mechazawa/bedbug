@@ -9,6 +9,7 @@
     "JumpingAccessor",
     "PassengerInvoker",
     "PlayerListLimitMixin",
+    "DragonFightMixin",
     "BiomeSeedAccessor",
     "ItemEntityMixin",
     "ProjectileMixin",

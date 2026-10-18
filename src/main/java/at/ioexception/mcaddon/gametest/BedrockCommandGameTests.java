@@ -431,6 +431,79 @@ public final class BedrockCommandGameTests {
         });
     }
 
+    /**
+     * `/mobevent` holds back the dragon the End's fight makes where it finds none, through the event
+     * itself and through `events_enabled`, and lets it be made once both are on again. A pillager
+     * patrol's rule follows its event and `events_enabled` together, and a query answers the event's
+     * own setting.
+     */
+    @GameTest()
+    public void mobEventsHoldBackTheDragonAndThePatrols(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        String patrols = Platform.patrolSpawningRule();
+        try {
+            BedrockLines.run(helper, "mobevent minecraft:pillager_patrols_event false");
+            helper.assertFalse(ruleIsOn(server, patrols), "the patrol event's rule stayed on.");
+            BedrockLines.run(helper, "mobevent events_enabled false");
+            BedrockLines.run(helper, "mobevent minecraft:pillager_patrols_event true");
+            helper.assertFalse(ruleIsOn(server, patrols), "patrols came back while every event was off.");
+            helper.assertTrue(BedrockLines.run(helper, "mobevent minecraft:pillager_patrols_event") == 1,
+                "the query does not answer the event's own setting.");
+            BedrockLines.run(helper, "mobevent events_enabled true");
+            helper.assertTrue(ruleIsOn(server, patrols), "patrols did not come back with every event.");
+
+            ServerLevel end = server.getLevel(net.minecraft.world.level.Level.END);
+            Object fight = end == null ? null : end.getDragonFight();
+            if (fight == null) {
+                helper.succeed();
+                return;
+            }
+            BedrockLines.run(helper, "mobevent minecraft:ender_dragon_event false");
+            helper.assertTrue(madeDragon(helper, fight) == null, "the End made a dragon with its event off.");
+            BedrockLines.run(helper, "mobevent minecraft:ender_dragon_event true");
+            BedrockLines.run(helper, "mobevent events_enabled false");
+            helper.assertTrue(madeDragon(helper, fight) == null, "the End made a dragon with every event off.");
+            BedrockLines.run(helper, "mobevent events_enabled true");
+            java.util.UUID made = madeDragon(helper, fight);
+            helper.assertTrue(made != null, "the End made no dragon with its event on.");
+            Entity dragon = end.getEntity(made);
+            if (dragon != null) dragon.discard();
+        } finally {
+            BedrockLines.run(helper, "mobevent events_enabled true");
+            BedrockLines.run(helper, "mobevent minecraft:pillager_patrols_event true");
+            BedrockLines.run(helper, "mobevent minecraft:ender_dragon_event true");
+        }
+        helper.succeed();
+    }
+
+    /**
+     * What the fight does whenever it ticks without a dragon to follow, called here at once, and the
+     * dragon it now follows. A fight that made none follows none. A freshly made dragon is not yet
+     * among the entities a level hands out, so the fight's own record is what is asked.
+     */
+    private static java.util.UUID madeDragon(GameTestHelper helper, Object fight) {
+        try {
+            java.lang.reflect.Method look = fight.getClass().getDeclaredMethod("findOrCreateDragon");
+            look.setAccessible(true);
+            look.invoke(fight);
+            java.lang.reflect.Field followed = fight.getClass().getDeclaredField("dragonUUID");
+            followed.setAccessible(true);
+            return (java.util.UUID) followed.get(fight);
+        } catch (ReflectiveOperationException unreachable) {
+            helper.fail("the End's fight could not be asked to look for its dragon: " + unreachable);
+            return null;
+        }
+    }
+
+    private static boolean ruleIsOn(MinecraftServer server, String rule) {
+        try {
+            return server.getCommands().getDispatcher().execute("gamerule " + rule,
+                server.createCommandSourceStack().withSuppressedOutput()) != 0;
+        } catch (com.mojang.brigadier.exceptions.CommandSyntaxException unknown) {
+            throw new IllegalStateException(rule + " is no rule.", unknown);
+        }
+    }
+
     /** What the console hears back from `/bedrock <line>`, typed as an operator would type it. */
     private static List<String> typed(GameTestHelper helper, String line) {
         List<String> heard = new ArrayList<>();

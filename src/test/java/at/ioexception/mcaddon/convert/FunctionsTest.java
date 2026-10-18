@@ -142,6 +142,7 @@ class FunctionsTest {
         "'gametest create tp:new 4 3 4', 'gametest create tp:new 4 3 4'",
         "'gametest runsetuntilfail tp:until_fail', 'gametest runsetuntilfail tp:until_fail'",
         "'mobevent events_enabled false', 'mobevent events_enabled false'",
+        "'mobevent minecraft:ender_dragon_event true', 'mobevent minecraft:ender_dragon_event true'",
         "'music stop 2', 'music stop'",
         "'structure save tp:hut 0 0 0 4 4 4 true disk', 'structure save \"tp:hut\" 0 0 0 4 4 4 true disk'",
         "'structure load tp:hut 0 64 0 90_degrees x', 'structure load \"tp:hut\" 0 64 0 90_degrees x'",
@@ -179,8 +180,6 @@ class FunctionsTest {
         "'place structure minecraft:trail_ruins ~ ~ ~ false false false ignore_waterlogging', "
             + "'command place ignore_waterlogging, which Java has no form of'",
         "'permission set @p visitor', 'command permission visitor, which Java has no form of'",
-        "'mobevent minecraft:ender_dragon_event true', "
-            + "'command mobevent minecraft:ender_dragon_event, which Java has no form of'",
     })
     void dropsAFormOfATranslatedCommandJavaCannotSay(String source, String reported) throws IOException {
         assertEquals(List.of(), translate(source));

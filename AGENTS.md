@@ -659,7 +659,12 @@ These are the checks it runs, and what each one catches:
   way a pack runs one has a function's authority and each of these asks for more. `/gametest
   create` lays out the test pack's `tp:hut_stands`, `pos` finds its area, `runthis` runs it there,
   and `runsetuntilfail` runs `tp:fails_the_second_time`, which the test pack's script registers to
-  pass once and fail after, until its second round.
+  pass once and fail after, until its second round. `/mobevent` holds back the dragon the End's
+  fight makes where it finds none, through the event and through `events_enabled`; the test asks
+  the fight to look for its dragon itself, through reflection on its private `findOrCreateDragon`,
+  because a fight only looks once a player has stood in the End long enough for its arena to load,
+  and reads the dragon back from the fight's own record, because a dragon made that moment is not
+  yet among the entities its level hands out.
 
   **A Bedrock line a pack runs has a function's authority, and a command asking for more refuses
   it as an unknown command.** `PackCommand.run` lowers its source to the level Java runs a function

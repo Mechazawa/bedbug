@@ -11,7 +11,6 @@ import at.ioexception.mcaddon.registry.AddonCameras;
 import at.ioexception.mcaddon.registry.AddonFogs;
 import at.ioexception.mcaddon.registry.AddonParticles;
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -130,14 +129,7 @@ public final class BedrockCommands {
         FeatureRules.registerCommand(dispatcher);
         ServerAdmin.registerCommand(dispatcher);
 
-        // A mob event switches a kind of spawning on or off, which Java states as a game rule. Each
-        // event is a literal because its Bedrock name carries a colon, which an unquoted string
-        // argument stops at, and because only these three reach a rule at all.
-        dispatcher.register(Commands.literal("mobevent")
-            .requires(source -> Platform.allowedAt(source, 1))
-            .then(mobEvent("minecraft:pillager_patrols_event"))
-            .then(mobEvent("minecraft:wandering_trader_event"))
-            .then(mobEvent("events_enabled")));
+        MobEvents.registerCommand(dispatcher);
 
         // A pack's effects are emitters rather than single particles, which Java's own `/particle`
         // knows nothing of, so this answers for those and hands any other particle to Java's.
@@ -413,35 +405,6 @@ public final class BedrockCommands {
         command.getSource().sendSuccess(
             () -> Component.literal("Sent " + moved + " player(s) to " + host + ":" + port), true);
         return (int) moved;
-    }
-
-    /**
-     * One mob event, which Bedrock reads without a value and writes with one.
-     *
-     * Bedrock names the event and Java names the rule, and `events_enabled` names every event at
-     * once, so it reads and writes both.
-     */
-    private static LiteralArgumentBuilder<CommandSourceStack> mobEvent(String event) {
-        List<String> rules = switch (event) {
-            case "minecraft:pillager_patrols_event" -> List.of(Platform.patrolSpawningRule());
-            case "minecraft:wandering_trader_event" -> List.of(Platform.traderSpawningRule());
-            default -> List.of(Platform.patrolSpawningRule(), Platform.traderSpawningRule());
-        };
-
-        return Commands.literal(event)
-            .executes(command -> mobEvent(command.getSource(), rules, null))
-            .then(Commands.argument("enabled", BoolArgumentType.bool())
-                .executes(command -> mobEvent(command.getSource(), rules,
-                    BoolArgumentType.getBool(command, "enabled"))));
-    }
-
-    /** Reads the rules behind an event, or writes them all when the caller gave a value. */
-    private static int mobEvent(CommandSourceStack source, List<String> rules, Boolean enabled) {
-        // A read is asked for its answer, so it keeps the output a write has no use for.
-        rules.forEach(rule -> source.getServer().getCommands().performPrefixedCommand(
-            enabled == null ? source : source.withSuppressedOutput(),
-            "gamerule " + rule + (enabled == null ? "" : " " + enabled)));
-        return rules.size();
     }
 
     /** A pack's own effect starts an emitter; anything else is Java's own particle command. */

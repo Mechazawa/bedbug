@@ -119,7 +119,6 @@ public final class Functions {
     private static final Set<String> BEDROCK_ONLY_KEYWORDS = Set.of(
         "changesetting allow-cheats", "changesetting false", "changesetting true",
         "hud paperdoll", "hud tooltips", "hud touch_controls",
-        "mobevent minecraft:ender_dragon_event",
         "music loop", "music volume",
         "permission visitor",
         "place apply_waterlogging", "place ignore_waterlogging",
@@ -1333,17 +1332,12 @@ public final class Functions {
             ? dropped("hud", element.bedrockName(), unsupported) : "hud " + rest;
     }
 
-    /**
-     * `mobevent <event> [enabled]`, of whose four events three reach a Java game rule.
-     *
-     * `events_enabled` names every event at once. The ender dragon's is whether the fight may be
-     * started again, which Java decides from the state of the end itself.
-     */
+    /** `mobevent <event> [enabled]`, whose four events the command built here holds. */
     private static String mobEvent(String rest, Set<String> unsupported) {
         String[] parts = SPACE.split(rest, 2);
         String event = parts[0].toLowerCase(Locale.ROOT);
-        if (!event.equals("minecraft:pillager_patrols_event")
-            && !event.equals("minecraft:wandering_trader_event") && !event.equals("events_enabled")) {
+        if (!event.equals("minecraft:pillager_patrols_event") && !event.equals("minecraft:wandering_trader_event")
+            && !event.equals("minecraft:ender_dragon_event") && !event.equals("events_enabled")) {
             return dropped("mobevent", event, unsupported);
         }
         return "mobevent " + event + (parts.length > 1 ? " " + parts[1] : "");

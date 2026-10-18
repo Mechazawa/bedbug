@@ -282,6 +282,7 @@ public final class ServerHooks {
         state = AddonState.load(server.getWorldPath(LevelResource.ROOT).resolve("data/mcaddon-state.json"));
         TickingAreas.load(state);
         AreaSchedules.load(state);
+        MobEvents.load(state, server);
         scripts = ScriptHost.start(server, McAddon.packs().packs(), state);
         if (scripts != null) {
             CustomCommands.install(server, scripts);
