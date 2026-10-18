@@ -568,7 +568,8 @@ Against a server without this mod a client plays with its own add-ons.
   `/mcaddon packs` says which form was loaded.
 - The settings a pack offers. Bedrock puts a pack's sliders, toggles and dropdowns on a screen
   beside it, and the pack's own Molang and its script read back whatever a player left them at. Java
-  has no such screen, so each one holds the `default` its author declared:
+  has no such screen, so each one holds the `default` its author declared, kept inside the slider's
+  range and step or the dropdown's options:
   `query.get_pack_setting`, `query.is_pack_setting_enabled` and `query.is_pack_setting_selected` are
   answered with it, and so is `World.getPackSettings`. `/mcaddon packs` also says who wrote a pack,
   under what licence and where it lives, which is what its manifest's `metadata` states.
@@ -645,16 +646,17 @@ or to the installation, and `addons/` is one directory per instance with no worl
 to. `pack_optimization_version` is in Mojang's schema and in Mojang's own field table with no
 description in either, so nothing is stated for a reader to act on. A module's `uuid` and `version`
 identify one half of a pack to Bedrock's content updater, and what names one installation of an
-add-on to another here is the header uuid and the header version. `optional` on a script API
-dependency says a pack runs without that module, which it cannot: a module is linked before any of
-the script runs, so a specifier this mod does not provide ends the whole script whatever the flag
-says. `product_type` decides on Bedrock whether a world keeps its achievements and whether the
+add-on to another here is the header uuid and the header version. A script API dependency this mod
+does not provide is a problem `/mcaddon packs` names, unless the dependency is `optional`. The flag
+does not rescue a script that imports the module, because a module is linked before any of the
+script runs. `product_type` decides on Bedrock whether a world keeps its achievements and whether the
 resource pack half is downloaded, and Java locks no advancement behind a pack and installs both
 halves together. The `editorExtension` capability asks for the Bedrock Editor, which Java has not
 got, and `experimental_custom_ui` asks for an HTML interface Bedrock itself dropped in 1.18.10.28.
-A setting's `text`, `min`, `max`, `step` and `options` describe the screen a player would move it
-on: with no such screen nothing moves a setting off its default, so the range it could have moved
-through decides nothing. The `pbr`, `raytraced` and `script_eval` capabilities are answered rather
+A setting's `text` and an option's `text` are labels on a screen Java does not have. A slider's
+`min`, `max` and `step` and a dropdown's `options` are read: they bring the default inside what the
+control could have been set to, so a slider shipped above its maximum answers with the maximum and
+a dropdown shipped at an option it does not list answers with its first. The `pbr`, `raytraced` and `script_eval` capabilities are answered rather
 than named: the first two ask for physically based rendering, which the texture set conversion
 writes as labPBR sidecars, and the third asks for `eval`, which the script host evaluates with no
 permission of its own to grant.

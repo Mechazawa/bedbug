@@ -65,6 +65,25 @@
         {"name": "restless", "text": "Restless"}
       ],
       "default": "restless"
+    },
+    {
+      "type": "slider",
+      "name": "tp:ember_overdriven",
+      "text": "Ember overdrive",
+      "min": 0,
+      "max": 10,
+      "step": 4,
+      "default": 11
+    },
+    {
+      "type": "dropdown",
+      "name": "tp:ember_drift",
+      "text": "Ember drift",
+      "options": [
+        {"name": "north", "text": "North"},
+        {"name": "south", "text": "South"}
+      ],
+      "default": "west"
     }
   ]
 }

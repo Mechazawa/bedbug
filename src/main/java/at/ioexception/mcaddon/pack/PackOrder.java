@@ -1,5 +1,7 @@
 package at.ioexception.mcaddon.pack;
 
+import at.ioexception.mcaddon.script.ScriptHost;
+
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -26,6 +28,13 @@ public final class PackOrder {
     public static PackSet sort(List<BedrockPack> packs, List<String> problems) {
         Set<UUID> known = new HashSet<>();
         for (BedrockPack pack : packs) known.add(pack.manifest().uuid());
+
+        for (BedrockPack pack : packs) {
+            pack.manifest().moduleDependencies().stream()
+                .filter(dependency -> !dependency.optional() && !ScriptHost.provides(dependency.moduleName()))
+                .forEach(dependency -> problems.add(pack.displayName()
+                    + " requires a script API this mod does not provide: " + dependency.moduleName()));
+        }
 
         List<BedrockPack> ordered = new ArrayList<>(packs.size());
         for (PackRole role : List.of(PackRole.RESOURCE, PackRole.BEHAVIOUR)) {

@@ -663,6 +663,11 @@ public final class PackGameTests {
             "The dropdown answered with an option the pack did not ship it at.");
         helper.assertTrue(!PackSettings.of("tp:ember_mood").selected("calm"),
             "The dropdown answered yes to an option it is not set to.");
+        helper.assertTrue(PackSettings.of("tp:ember_overdriven").number() == 8.0,
+            "A slider shipped at 11 beside a maximum of 10 and a step of 4 read back at "
+                + PackSettings.of("tp:ember_overdriven").number() + ", not at 8.");
+        helper.assertTrue(PackSettings.of("tp:ember_drift").selected("north"),
+            "A dropdown shipped at an option it does not list was not set to its first one.");
         helper.assertTrue(PackSettings.values().get("tp:ember_glows") == Boolean.TRUE,
             "A script reading the pack settings is answered differently from the pack's own Molang.");
         helper.succeed();
