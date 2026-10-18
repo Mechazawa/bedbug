@@ -313,6 +313,41 @@ public final class IdleGoalGameTests {
         });
     }
 
+    /**
+     * A sneeze lasts `prepare_time` and startles, inside `within_radius`, only what `entity_types`
+     * names: the pig beside the sneezer jumps and the cow beside it does not.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 60)
+    public void aSneezeStartlesOnlyTheEntityTypesItNames(GameTestHelper helper) {
+        AddonEntity idler = idler(helper, "tp:idler_make_sneezing");
+        if (idler == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob pig = mobAt(helper, "pig", STAND.east(2), false);
+        Mob cow = mobAt(helper, "cow", STAND.east(3), false);
+        double[] rise = {0, 0};
+        long begun = helper.getLevel().getGameTime();
+        long[] sneezing = {-1, -1};
+        helper.onEachTick(() -> {
+            rise[0] = Math.max(rise[0], pig.getY() - helper.absolutePos(STAND).getY());
+            rise[1] = Math.max(rise[1], cow.getY() - helper.absolutePos(STAND).getY());
+            if (Boolean.TRUE.equals(idler.value("is_sneezing"))) {
+                long now = helper.getLevel().getGameTime() - begun;
+                if (sneezing[0] < 0) sneezing[0] = now;
+                sneezing[1] = now;
+            }
+        });
+        helper.runAtTickTime(40, () -> {
+            helper.assertTrue(rise[0] > 0.1, IDLER + " sneezed (" + sneezing[0] + " to " + sneezing[1] + ") and the pig it names did not jump: " + rise[0] + " pig " + pig.onGround() + " " + pig.getDeltaMovement());
+            helper.assertTrue(rise[1] < 0.1, IDLER + " startled a cow that entity_types does not name.");
+            helper.assertTrue(Math.abs(sneezing[1] - sneezing[0] - 10) <= SLACK,
+                IDLER + " prepares a sneeze for half a second and prepared for " + (sneezing[1] - sneezing[0]) + " ticks.");
+            helper.succeed();
+        });
+    }
+
     /** Switches a group on and checks when the pose begins, how long it lasts and how long until it begins again. */
     private static void cycle(GameTestHelper helper, String event, Pose pose, int first, int length, int gap) {
         AddonEntity idler = idler(helper, event);
@@ -335,14 +370,19 @@ public final class IdleGoalGameTests {
 
     /** What the pig standing beside a napper is, which only its detection box and its exceptions decide. */
     private static Mob pigAt(GameTestHelper helper, BlockPos where) {
+        return mobAt(helper, "pig", where, true);
+    }
+
+    private static Mob mobAt(GameTestHelper helper, String name, BlockPos where, boolean floating) {
         Entity created = Platform.createMob(
-            BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("minecraft", "pig")).orElseThrow(),
+            BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("minecraft", name)).orElseThrow(),
             helper.getLevel());
         Mob pig = (Mob) created;
         BlockPos at = helper.absolutePos(where);
         Platform.placeAt(pig, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
-        pig.setNoAi(true);
-        pig.setNoGravity(true);
+        pig.setNoAi(floating);
+        pig.setNoGravity(floating);
+        if (!floating) pig.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(0);
         helper.getLevel().addFreshEntity(pig);
         return pig;
     }

@@ -175,6 +175,24 @@
           "force_below_health": 10
         }
       },
+      "tp:idler_sneezing": {
+        "minecraft:behavior.sneeze": {
+          "priority": 0,
+          "probability": 1,
+          "prepare_time": 0.5,
+          "cooldown_time": 100,
+          "within_radius": 6,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              }
+            }
+          ]
+        }
+      },
       "tp:idler_insomniac": {
         "minecraft:behavior.nap": {
           "priority": 0,
@@ -317,6 +335,13 @@
         "add": {
           "component_groups": [
             "tp:idler_forced_dead"
+          ]
+        }
+      },
+      "tp:idler_make_sneezing": {
+        "add": {
+          "component_groups": [
+            "tp:idler_sneezing"
           ]
         }
       },
