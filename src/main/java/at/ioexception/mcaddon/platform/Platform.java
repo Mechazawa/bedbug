@@ -308,6 +308,38 @@ public final class Platform {
         *///?}
     }
 
+    /** The placed feature a level's registries hold under that id, or null. */
+    public static net.minecraft.world.level.levelgen.placement.PlacedFeature placedFeature(ServerLevel level,
+        Identifier id) {
+        //? if >=26 {
+        return level.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.PLACED_FEATURE)
+            .getValue(id);
+        //?} else {
+        /*return level.registryAccess().registryOrThrow(net.minecraft.core.registries.Registries.PLACED_FEATURE)
+            .get(id);
+        *///?}
+    }
+
+    /** A player's own entry in the operator list, made or taken away. */
+    public static void setOperator(net.minecraft.server.MinecraftServer server, ServerPlayer player,
+        boolean operator) {
+        //? if >=26 {
+        if (operator) server.getPlayerList().op(player.nameAndId());
+        else server.getPlayerList().deop(player.nameAndId());
+        //?} else {
+        /*if (operator) server.getPlayerList().op(player.getGameProfile());
+        else server.getPlayerList().deop(player.getGameProfile());
+        *///?}
+    }
+
+    public static boolean isOperator(net.minecraft.server.MinecraftServer server, ServerPlayer player) {
+        //? if >=26 {
+        return server.getPlayerList().isOp(player.nameAndId());
+        //?} else {
+        /*return server.getPlayerList().isOp(player.getGameProfile());
+        *///?}
+    }
+
     /** Puts a rider on a vehicle whether or not the rider could climb on by itself. */
     public static boolean mount(Entity rider, Entity vehicle) {
         //? if >=26 {

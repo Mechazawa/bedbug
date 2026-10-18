@@ -14,6 +14,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.commands.ExecuteCommand;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 import java.util.concurrent.CompletableFuture;
@@ -33,6 +34,13 @@ public final class BedrockTree {
     private static final Map<CommandDispatcher<CommandSourceStack>, BedrockTree> BY_JAVA_TREE =
         Collections.synchronizedMap(new WeakHashMap<>());
 
+    /**
+     * Commands Bedrock and Java share a name and some forms of, where Bedrock adds forms of its own:
+     * `place featurerule` beside Java's `place`, and `schedule on_area_loaded` beside Java's
+     * `schedule function`. This tree's command of each name carries Java's forms as well.
+     */
+    private static final List<String> SHARED = List.of("place", "schedule");
+
     private final CommandDispatcher<CommandSourceStack> bedrock = new CommandDispatcher<>();
     private boolean holdsJava;
 
@@ -43,7 +51,7 @@ public final class BedrockTree {
     public static void register(CommandDispatcher<CommandSourceStack> java, CommandBuildContext context) {
         BedrockTree tree = new BedrockTree();
         BedrockCommands.register(tree.bedrock);
-        AreaSchedules.registerCommand(tree.bedrock, java);
+        SHARED.forEach(name -> tree.alongsideJava(name, java));
         ExecuteCommand.register(tree.bedrock, context);
         BY_JAVA_TREE.put(java, tree);
 
@@ -57,6 +65,13 @@ public final class BedrockTree {
                     PackCommand line = PackCommand.tryFrom(null, StringArgumentType.getString(command, "line"));
                     return line == null ? null : line.read(source, CommandReport.DATA);
                 }))));
+    }
+
+    /** Hangs the forms Java's command of this name has under this tree's command of the same name. */
+    private void alongsideJava(String name, CommandDispatcher<CommandSourceStack> java) {
+        CommandNode<CommandSourceStack> ours = bedrock.getRoot().getChild(name);
+        CommandNode<CommandSourceStack> javas = java.getRoot().getChild(name);
+        if (ours != null && javas != null) javas.getChildren().forEach(ours::addChild);
     }
 
     /** The tree a translated line is read against on this server. */

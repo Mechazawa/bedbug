@@ -8,6 +8,7 @@
     "LivingEntityMixin",
     "JumpingAccessor",
     "PassengerInvoker",
+    "PlayerListLimitMixin",
     "BiomeSeedAccessor",
     "ItemEntityMixin",
     "ProjectileMixin",

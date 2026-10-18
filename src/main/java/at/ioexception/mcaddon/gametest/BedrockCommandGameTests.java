@@ -4,9 +4,12 @@ import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.commands.CommandSource;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -304,6 +307,117 @@ public final class BedrockCommandGameTests {
             helper.assertTrue(loadedCount(helper) == 1, "the function did not run once its area loaded.");
             BedrockLines.run(helper, "tickingarea remove t_wait_" + tag);
         });
+    }
+
+    /**
+     * `save query` refuses while the world is still being written and lists its files once `save
+     * hold` has stopped that; `setmaxplayers` moves the limit a login is checked against; `packstack`
+     * lists Java's data packs with and without the game's own; and `permission` makes a player an
+     * operator and a member again.
+     *
+     * Each of these asks for more than a function's authority, as it does in Bedrock, so they are
+     * typed by the console after `/bedrock` rather than run the way a pack runs a line.
+     */
+    @GameTest()
+    public void theServersOwnCommandsAnswerFromTheServer(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        helper.assertTrue(typed(helper, "save query").stream().anyMatch(line -> line.contains("not been turned off")),
+            "save query answered while writing was on.");
+        List<String> listed;
+        typed(helper, "save hold");
+        try {
+            listed = typed(helper, "save query");
+        } finally {
+            typed(helper, "save resume");
+        }
+        helper.assertTrue(listed.stream().anyMatch(line -> line.contains("level.dat:")),
+            "save query did not list level.dat once writing was held: " + listed);
+
+        int limit = server.getPlayerList().getMaxPlayers();
+        typed(helper, "setmaxplayers " + (limit + 7));
+        int raised = server.getPlayerList().getMaxPlayers();
+        typed(helper, "setmaxplayers " + limit);
+        helper.assertTrue(raised == limit + 7, "setmaxplayers left the limit at " + raised + ".");
+
+        long everything = typed(helper, "packstack server").stream().filter(line -> line.startsWith("- ")).count();
+        List<String> added = typed(helper, "packstack server exclude-vanilla");
+        helper.assertTrue(everything == server.getPackRepository().getSelectedPacks().size()
+                && added.stream().noneMatch(line -> line.startsWith("- vanilla:")),
+            "packstack server listed " + everything + " packs, and without the game's own " + added);
+
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        try {
+            player.addTag("t_permission");
+            typed(helper, "permission set @a[tag=t_permission] operator");
+            helper.assertTrue(Platform.isOperator(server, player), "permission set operator made no operator.");
+            helper.assertFalse(typed(helper, "ops list").stream().anyMatch(line -> line.startsWith("0 operator")),
+                "ops list named no operator.");
+            typed(helper, "ops set @a[tag=t_permission] member");
+            helper.assertFalse(Platform.isOperator(server, player), "permission set member left an operator.");
+        } finally {
+            Platform.setOperator(server, player, false);
+            server.getPlayerList().remove(player);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * `place featurerule` places the synthetic pack's ore rule into stone the test lays down far from
+     * every other test: six veins of the pack's own lamp between the heights the rule states.
+     */
+    @GameTest()
+    public void aFeatureRuleIsPlacedByItsName(GameTestHelper helper) {
+        if (AddonEntities.typeOf("tp:ember") == null || !Platform.convertsWorldgen()) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        BlockPos origin = new BlockPos((helper.absolutePos(BlockPos.ZERO).getX() >> 4 << 4) + 4096, 0,
+            helper.absolutePos(BlockPos.ZERO).getZ() >> 4 << 4);
+        for (BlockPos stone : BlockPos.betweenClosed(origin.offset(0, -48, 0), origin.offset(15, 64, 15))) {
+            level.setBlock(stone, Blocks.STONE.defaultBlockState(), 2);
+        }
+        List<String> heard = typed(helper, "place featurerule tp:shard_ore_rule " + origin.getX() + " 0 "
+            + origin.getZ());
+
+        Block lamp = at.ioexception.mcaddon.registry.AddonBlocks.named("tp:lamp");
+        long lamps = 0;
+        for (BlockPos found : BlockPos.betweenClosed(origin.offset(-8, -56, -8), origin.offset(23, 72, 23))) {
+            if (level.getBlockState(found).is(lamp)) lamps++;
+        }
+        helper.assertTrue(lamps > 0, "the ore rule placed no lamp into the stone: " + heard);
+        helper.succeed();
+    }
+
+    /** What the console hears back from `/bedrock <line>`, typed as an operator would type it. */
+    private static List<String> typed(GameTestHelper helper, String line) {
+        List<String> heard = new ArrayList<>();
+        CommandSource console = new CommandSource() {
+            @Override
+            public void sendSystemMessage(Component message) {
+                heard.add(message.getString());
+            }
+
+            @Override
+            public boolean acceptsSuccess() {
+                return true;
+            }
+
+            @Override
+            public boolean acceptsFailure() {
+                return true;
+            }
+
+            @Override
+            public boolean shouldInformAdmins() {
+                return false;
+            }
+        };
+        MinecraftServer server = helper.getLevel().getServer();
+        server.getCommands().performPrefixedCommand(server.createCommandSourceStack().withSource(console),
+            "bedrock " + line);
+        return heard;
     }
 
     private static int loadedCount(GameTestHelper helper) {

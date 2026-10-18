@@ -9,7 +9,6 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
-import com.mojang.brigadier.tree.CommandNode;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.IdentifierArgument;
@@ -97,12 +96,10 @@ public final class AreaSchedules {
 
     /**
      * `schedule on_area_loaded add <from> <to>|circle <center> <radius>|tickingarea <name> <function>`
-     * and `schedule on_area_loaded clear tickingarea <name> [function]|function <function>`, with
-     * Java's own `schedule function` and `schedule clear` held beside them.
+     * and `schedule on_area_loaded clear tickingarea <name> [function]|function <function>`.
      */
-    public static void registerCommand(CommandDispatcher<CommandSourceStack> dispatcher,
-        CommandDispatcher<CommandSourceStack> java) {
-        CommandNode<CommandSourceStack> schedule = dispatcher.register(Commands.literal("schedule")
+    public static void registerCommand(CommandDispatcher<CommandSourceStack> dispatcher) {
+        dispatcher.register(Commands.literal("schedule")
             .requires(source -> Platform.allowedAt(source, 1))
             .then(Commands.literal("on_area_loaded")
                 .then(Commands.literal("add")
@@ -128,9 +125,6 @@ public final class AreaSchedules {
                     .then(Commands.literal("function")
                         .then(Commands.argument("function", IdentifierArgument.id())
                             .executes(AreaSchedules::clear))))));
-
-        CommandNode<CommandSourceStack> javas = java.getRoot().getChild("schedule");
-        if (javas != null) javas.getChildren().forEach(schedule::addChild);
     }
 
     private static int add(CommandContext<CommandSourceStack> command) throws CommandSyntaxException {

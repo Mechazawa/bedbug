@@ -67,7 +67,8 @@ public final class Functions {
     private static final Set<String> REGISTERED_HERE = Set.of(
         "playanimation", "event", "scriptevent", "music", "toggledownfall", "structure", "mobevent",
         "particle", "gametest", "dialogue", "transfer", "camera", "camerashake", "fog",
-        "clearspawnpoint", "hud", "inputpermission", "ride", "summon", "tickingarea");
+        "clearspawnpoint", "hud", "inputpermission", "ride", "summon", "tickingarea", "packstack",
+        "setmaxplayers", "permission", "ops");
 
     /**
      * The registered commands whose Bedrock line the command built here reads as it stands.
@@ -77,7 +78,7 @@ public final class Functions {
      */
     static final Set<String> REGISTERED_WHOLE_LINE = Set.of("playanimation", "event",
         "toggledownfall", "transfer", "camerashake", "fog", "clearspawnpoint", "inputpermission",
-        "tickingarea");
+        "tickingarea", "packstack", "setmaxplayers");
 
     /**
      * Commands Bedrock has and Java has no counterpart for.
@@ -94,9 +95,8 @@ public final class Functions {
      * the file again, so a limit Bedrock drops at the end of the session would outlive it here.
      */
     private static final Set<String> BEDROCK_ONLY = Set.of(
-        "aimassist", "connect", "controlscheme", "editor-allowlist",
-        "packstack", "permission", "ops", "project", "reloadconfig", "reloadpacketlimitconfig",
-        "script", "sendshowstoreoffer", "serveridentity", "setmaxplayers", "wsserver");
+        "aimassist", "connect", "controlscheme", "editor-allowlist", "project", "reloadconfig",
+        "reloadpacketlimitconfig", "script", "sendshowstoreoffer", "serveridentity", "wsserver");
 
     /**
      * Commands whose rewrite changes the front of a line and leaves the rest as the pack wrote it.
@@ -123,13 +123,13 @@ public final class Functions {
         "hud paperdoll", "hud tooltips", "hud touch_controls",
         "mobevent minecraft:ender_dragon_event",
         "music loop", "music volume",
-        "place apply_waterlogging", "place featurerule", "place ignore_waterlogging",
+        "permission visitor",
+        "place apply_waterlogging", "place ignore_waterlogging",
         "camera attach_to_entity", "camera color", "camera detach_from_entity",
         "camera entity_offset", "camera fade", "camera fov_clear", "camera fov_set",
         "camera minecraft:control_scheme_camera", "camera minecraft:fixed_boom",
         "camera minecraft:follow_orbit", "camera play_spline", "camera remove_target",
-        "camera target_center_offset", "camera target_entity", "camera view_offset",
-        "save query");
+        "camera target_center_offset", "camera target_entity", "camera view_offset");
 
     /**
      * Commands Java says the same thing with under another name, and nothing else.
@@ -437,6 +437,7 @@ public final class Functions {
             case "replaceitem" -> replaceItem(rest, unsupported);
             case "ride" -> ride(rest, unsupported);
             case "save" -> save(rest, unsupported);
+            case "permission", "ops" -> permission(name, rest, unsupported);
             case "time" -> time(rest);
             case "changesetting" -> changeSetting(rest, unsupported);
             case "music" -> music(rest, unsupported);
@@ -752,23 +753,30 @@ public final class Functions {
     }
 
     /**
-     * `place`, of whose four kinds Java has three.
+     * `place`, whose feature, structure and jigsaw forms Java's own command reads and whose feature
+     * rule the command built here places.
      *
-     * A feature rule is Bedrock's own table of where a feature may appear, which Java reads from
-     * worldgen rather than from a command. What Bedrock writes after the position says how a
-     * structure or a jigsaw is built, and Java's own command decides each of those for itself.
+     * What Bedrock writes after a structure's or a jigsaw's position says how it is built, and Java's
+     * own command builds each with the settings the structure's definition states, so a line naming
+     * any of them loses its line. Whether a placed structure waterlogs is one of those: Java holds it
+     * on a jigsaw structure as `liquid_settings` from 1.21, read from the structure's own file, and
+     * `JigsawPlacement.generateJigsaw` takes none, so no command hands it another.
      */
     private static String place(String rest, Set<String> unsupported) {
         String[] parts = SPACE.split(rest);
         String kind = parts[0].toLowerCase(Locale.ROOT);
         int most = switch (kind) {
-            case "feature", "structure" -> 5;
+            case "feature", "structure", "featurerule" -> 5;
             case "jigsaw" -> 7;
             default -> 0;
         };
 
         if (most == 0) return dropped("place", kind, unsupported);
         if (parts.length <= most) return "place " + rest;
+        if (Arrays.stream(parts).anyMatch(word -> word.equalsIgnoreCase("apply_waterlogging")
+            || word.equalsIgnoreCase("ignore_waterlogging"))) {
+            return dropped("place", parts[parts.length - 1], unsupported);
+        }
 
         unsupported.add("command place " + kind + " with a placement Java builds for itself");
         return null;
@@ -1119,13 +1127,30 @@ public final class Functions {
         return "ride " + parts[0] + " " + mode + " " + type + (parts.length > 3 ? " " + parts[3] : "");
     }
 
-    /** Bedrock holds and resumes the world write; Java turns the same write off and on. */
+    /**
+     * Bedrock holds and resumes the world write, which Java turns off and on, and asks whether what
+     * was held is ready to copy, which the command built here answers.
+     */
     private static String save(String rest, Set<String> unsupported) {
         return switch (rest.toLowerCase(Locale.ROOT)) {
             case "hold" -> "save-off";
             case "resume" -> "save-on";
+            case "query" -> "save query";
             default -> dropped("save", rest, unsupported);
         };
+    }
+
+    /**
+     * `permission list|reload` and `permission set <player> <level>`, which Bedrock also spells
+     * `ops`, read by the command built here. Of Bedrock's three levels, a visitor may only look round,
+     * which no Java operator level or game mode says.
+     */
+    private static String permission(String name, String rest, Set<String> unsupported) {
+        List<String> words = words(rest);
+        if (words.size() > 2 && words.get(2).equalsIgnoreCase("visitor")) {
+            return dropped("permission", "visitor", unsupported);
+        }
+        return name + (rest.isEmpty() ? "" : " " + rest);
     }
 
     /**

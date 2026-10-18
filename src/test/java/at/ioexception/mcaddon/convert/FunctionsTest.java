@@ -115,6 +115,11 @@ class FunctionsTest {
             + "'item replace entity @s armor.body with minecraft:iron_horse_armor'",
         "'loot replace entity @s slot.equippable 1 loot tp:hat', 'loot replace entity @s armor.body loot tp:hat'",
         "'save hold', 'save-off'",
+        "'save query', 'save query'",
+        "'place featurerule tp:rule ~ ~ ~', 'place featurerule tp:rule ~ ~ ~'",
+        "'ops set @p operator', 'ops set @p operator'",
+        "'setmaxplayers 12', 'setmaxplayers 12'",
+        "'packstack server verbose exclude-vanilla', 'packstack server verbose exclude-vanilla'",
         "'tickingarea add 0 0 0 32 0 32 named', 'tickingarea add 0 0 0 32 0 32 named'",
         "'tickingarea remove_all', 'tickingarea remove_all'",
         "'tickingarea preload 0 0 0 true', 'tickingarea preload 0 0 0 true'",
@@ -169,10 +174,11 @@ class FunctionsTest {
     @CsvSource({
         "'gametest runthis', 'command gametest runthis, which Java has no form of'",
         "'music play tp:theme 1 0 loop', 'command music loop, which Java has no form of'",
-        "'save query', 'command save query, which Java has no form of'",
+        "'place structure minecraft:trail_ruins ~ ~ ~ false false false ignore_waterlogging', "
+            + "'command place ignore_waterlogging, which Java has no form of'",
+        "'permission set @p visitor', 'command permission visitor, which Java has no form of'",
         "'mobevent minecraft:ender_dragon_event true', "
             + "'command mobevent minecraft:ender_dragon_event, which Java has no form of'",
-        "'place featurerule tp:rule ~ ~ ~', 'command place featurerule, which Java has no form of'",
     })
     void dropsAFormOfATranslatedCommandJavaCannotSay(String source, String reported) throws IOException {
         assertEquals(List.of(), translate(source));

@@ -135,6 +135,9 @@ public final class BedrockCommands {
 
         StructureCommand.registerCommand(dispatcher);
         TickingAreas.registerCommand(dispatcher);
+        AreaSchedules.registerCommand(dispatcher);
+        FeatureRules.registerCommand(dispatcher);
+        ServerAdmin.registerCommand(dispatcher);
 
         // A mob event switches a kind of spawning on or off, which Java states as a game rule. Each
         // event is a literal because its Bedrock name carries a colon, which an unquoted string

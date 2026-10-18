@@ -278,6 +278,17 @@ add-ons, or with another release of it, is told which in chat.
 - `/bedrock schedule on_area_loaded`, which holds a function back until every chunk of a rectangle,
   a circle or a ticking area is loaded with its entities and then runs it once as the server.
   What is waiting is kept beside the world.
+- `/bedrock place featurerule`, which places a pack's feature rule by its name the way the world
+  would, with the rule's own distribution starting from the position the line names, and a
+  script's `Dimension.placeFeatureRule`, which does the same. The rule's biome filter decides only
+  where the world generates it.
+- The commands that run the server rather than the world. `save query` writes out what `save hold`
+  held back and lists every file of the world with its length; `setmaxplayers` sets the limit a
+  login is checked against for this session only; `packstack server` lists Java's data packs in the
+  order they apply, every converted add-on among them, and `packstack client` the add-on resource
+  packs; `permission` and `ops` list Java's operators, read `ops.json` again and make a player an
+  operator or a member. Like Bedrock's, each asks for more than a function's authority, so an
+  operator types it after `/bedrock` and a pack's function cannot run it.
 - Clips on a mob Java draws with a model of its own, such as `playanimation` on a vanilla villager.
   Each Bedrock bone is found among the Java model's parts, and on a mob whose Bedrock geometry hangs
   the head, arms and legs under `body`, those parts move, turn and scale with the body, so a pack

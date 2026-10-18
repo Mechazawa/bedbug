@@ -653,7 +653,16 @@ These are the checks it runs, and what each one catches:
   rectangle's and a circle's chunks, marks and unmarks one to preload and releases a rectangle
   removed by a position inside it; and `/schedule on_area_loaded` holds the test pack's
   `tp/loaded`, which counts its runs on a scoreboard, until a ticking area loads the far chunk it
-  waits for.
+  waits for. `place featurerule` puts the test pack's ore rule into stone the test lays far from
+  every other test. `save query`, `setmaxplayers`, `packstack` and `permission` are typed by the
+  console after `/bedrock` and read back through what the console is told, because a line run the
+  way a pack runs one has a function's authority and each of these asks for more.
+
+  **A Bedrock line a pack runs has a function's authority, and a command asking for more refuses
+  it as an unknown command.** `PackCommand.run` lowers its source to the level Java runs a function
+  at, and the Bedrock tree asks each command for its Bedrock level plus one, so `place`, `save`,
+  `setmaxplayers` and `permission` parse only for an operator typing `/bedrock`. A test of one of
+  those types it through Java's own tree instead of through `BedrockLines`.
 
   `HudClientGameTest` hides and resets pieces of the heads-up display on a dedicated server, one
   piece at a time, all of them, and through the script's `tp:hud_hide` and `tp:hud_reset` probes.
