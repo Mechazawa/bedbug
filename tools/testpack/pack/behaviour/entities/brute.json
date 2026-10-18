@@ -1,0 +1,100 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:brute",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false,
+      "properties": {
+        "tp:struck": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:felled": {
+          "type": "bool",
+          "default": false
+        }
+      }
+    },
+    "component_groups": {
+      "tp:brute_boxing": {
+        "minecraft:behavior.melee_box_attack": {
+          "priority": 0,
+          "cooldown_time": 1.5,
+          "horizontal_reach": 1.5,
+          "on_attack": {
+            "event": "tp:brute_struck",
+            "target": "self"
+          },
+          "on_kill": {
+            "event": "tp:brute_felled",
+            "target": "self"
+          }
+        }
+      },
+      "tp:brute_reaching": {
+        "minecraft:behavior.melee_attack": {
+          "priority": 0,
+          "reach_multiplier": 6
+        }
+      },
+      "tp:brute_burning": {
+        "minecraft:behavior.melee_box_attack": {
+          "priority": 0,
+          "can_spread_on_fire": true
+        }
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": ["tp_brute", "mob"]
+      },
+      "minecraft:collision_box": {
+        "width": 0.6,
+        "height": 1.0
+      },
+      "minecraft:health": {
+        "value": 20,
+        "max": 20
+      },
+      "minecraft:movement": {
+        "value": 0.25
+      },
+      "minecraft:attack": {
+        "damage": 1
+      },
+      "minecraft:physics": {},
+      "minecraft:movement.basic": {},
+      "minecraft:navigation.walk": {},
+      "minecraft:jump.static": {}
+    },
+    "events": {
+      "tp:brute_box": {
+        "add": {
+          "component_groups": ["tp:brute_boxing"]
+        }
+      },
+      "tp:brute_reach": {
+        "add": {
+          "component_groups": ["tp:brute_reaching"]
+        }
+      },
+      "tp:brute_burn": {
+        "add": {
+          "component_groups": ["tp:brute_burning"]
+        }
+      },
+      "tp:brute_struck": {
+        "set_property": {
+          "tp:struck": true
+        }
+      },
+      "tp:brute_felled": {
+        "set_property": {
+          "tp:felled": true
+        }
+      }
+    }
+  }
+}

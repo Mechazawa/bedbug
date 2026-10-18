@@ -203,13 +203,6 @@ REASONS = {
         "tempt_sound": TEMPT_SOUND,
         "sound_interval": TEMPT_SOUND,
     },
-    "minecraft:behavior.melee_attack": {
-        "reach_multiplier": "Java reaches as far as the mob's own size allows.",
-    },
-    "minecraft:behavior.melee_box_attack": {
-        "*": "Java's melee goal swings on its own cooldown inside its own reach, and raises no event of "
-             "its own when it lands or kills.",
-    },
     "minecraft:behavior.avoid_mob_type": {
         "*": "Java's avoid goal flees whatever it is given at the speed it is given, with no sound, no "
              "probability and no event when it gets away.",
