@@ -1127,7 +1127,10 @@ These are the checks it runs, and what each one catches:
     while it hosts. `--dormant` has the host client join a dedicated server serving an add-on the
     host has not installed, leave, and only then open its world with `open`, all in one process,
     because a dormant add-on is one the process registered: a host started afresh holds none. The
-    guest is then offered it as an inactive entry. `all` runs both.
+    guest is then offered it as an inactive entry. `all` runs both. Before 26 `LanRequests` waits
+    for the resource reload's overlay to go before it acts: the leave's reload is still showing it
+    when the harness asks for `open`, and a world opened under it waits for it inside
+    `Minecraft.doWorldLoad`, which it never leaves.
   - A fresh game directory has no `options.txt`, and the game then opens its accessibility
     onboarding screen instead of the quick play it was told to run, so a client in a new worktree
     sat on the title screen until the deadline. `play` writes `onboardAccessibility:false` first.
@@ -1803,6 +1806,9 @@ camera presets, dialogue scenes and, from 1.21, brewing are read from. An add-on
 active is dormant: its entries stay registered with their last definitions and nothing offers it.
 Spawn rules, feature rules and the nether and end biome lists are registered once for the installed
 set, because they apply as a world loads and a world loads only with the installed set active.
+Before 26 the model bakery asks for a model for every registered item and block, so
+`ModelBakeryMixin` and `BlockStateModelLoaderMixin` leave out what `ActiveAddons.isDormant` names;
+the miss would otherwise be logged as `Unable to load model` on every reload after a visit.
 
 **A same-id copy is checked before anything is registered.** `AddonRegistry.conflict` compares the
 shape every registered object was built from (an entity type's population and size, a block's whole
