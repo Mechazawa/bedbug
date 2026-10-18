@@ -30,9 +30,12 @@ public final class FeatureRules {
     }
 
     public static void registerCommand(CommandDispatcher<CommandSourceStack> dispatcher) {
+        // Java's own `place` forms hang off this node too, so it asks for what Java's `place` asks for,
+        // and Bedrock's own form asks for its higher level on top.
         dispatcher.register(Commands.literal("place")
-            .requires(source -> Platform.allowedAt(source, 2))
+            .requires(source -> Platform.allowedAt(source, 1))
             .then(Commands.literal("featurerule")
+                .requires(source -> Platform.allowedAt(source, 2))
                 .then(Commands.argument("featurerule", IdentifierArgument.id())
                     .executes(command -> place(command, BlockPos.containing(command.getSource().getPosition())))
                     .then(Commands.argument("position", BlockPosArgument.blockPos())

@@ -391,6 +391,50 @@ public final class BedrockCommandGameTests {
     }
 
     /**
+     * `place jigsaw` reads Bedrock's words after the position: the mod's own one piece pool, a jigsaw
+     * block beside a fence, is placed into water with its jigsaw kept and its fence left dry, and again
+     * with its jigsaw gone and its fence waterlogged. 1.20.1 waterlogs whatever a jigsaw places. The
+     * console types both lines, because the words after the position ask for more than a function's
+     * authority.
+     */
+    @GameTest()
+    public void aJigsawKeepsItsJigsawsAndWaterlogsAsTheLineSays(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        for (BlockPos water : BlockPos.betweenClosed(helper.absolutePos(new BlockPos(1, 1, 1)),
+            helper.absolutePos(new BlockPos(6, 3, 6)))) {
+            level.setBlock(water, Blocks.WATER.defaultBlockState(), 2);
+        }
+
+        // Java lowers a jigsaw's start piece by its ground level delta, one block, below the position named.
+        BlockPos dry = helper.absolutePos(new BlockPos(2, 3, 2));
+        if (Platform.placesJigsawsDry()) {
+            List<String> heard = typed(helper, "place jigsaw mcaddon:gametest/fence mcaddon:start 1 " + dry.getX()
+                + " " + dry.getY() + " " + dry.getZ() + " true true ignore_waterlogging");
+            helper.assertTrue(level.getBlockState(dry.below()).is(Blocks.JIGSAW),
+                "keepJigsaws left no jigsaw block: " + heard);
+            helper.assertFalse(fenceBeside(helper, dry.below()).getValue(BlockStateProperties.WATERLOGGED),
+                "ignore_waterlogging waterlogged the fence.");
+        }
+
+        BlockPos wet = helper.absolutePos(new BlockPos(5, 3, 5));
+        List<String> heard = typed(helper, "place jigsaw mcaddon:gametest/fence mcaddon:start 1 " + wet.getX() + " "
+            + wet.getY() + " " + wet.getZ() + " false true apply_waterlogging");
+        helper.assertFalse(level.getBlockState(wet.below()).is(Blocks.JIGSAW),
+            "a jigsaw block stayed with keepJigsaws false: " + heard);
+        helper.assertTrue(fenceBeside(helper, wet.below()).getValue(BlockStateProperties.WATERLOGGED),
+            "apply_waterlogging left the fence dry.");
+        helper.succeed();
+    }
+
+    private static net.minecraft.world.level.block.state.BlockState fenceBeside(GameTestHelper helper, BlockPos at) {
+        return net.minecraft.core.Direction.Plane.HORIZONTAL.stream()
+            .map(side -> helper.getLevel().getBlockState(at.relative(side)))
+            .filter(state -> state.is(Blocks.OAK_FENCE))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("the jigsaw placed no fence beside " + at.toShortString() + "."));
+    }
+
+    /**
      * `/gametest create` lays a test out under a structure block naming it, `pos` says where the
      * source stands against that area, `runthis` runs the test the structure block names there, and
      * `runsetuntilfail` runs the synthetic pack's set again until its test fails, which it does on

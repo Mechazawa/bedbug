@@ -83,16 +83,15 @@ public final class Functions {
     /**
      * Commands Bedrock has and Java has no counterpart for.
      *
-     * Most name a renderer feature Java has none of, or a server Java does not speak to. `schedule`
-     * is here because the two editions mean different things by the word: Bedrock delays until an
-     * area loads, Java delays a function by a time. `transfer` and `save query` report progress
-     * Java's own commands do not carry.
-     *
-     * `serveridentity` saves, deletes and reports the key a Bedrock dedicated server identifies
-     * itself to its services with, and a Java server holds no such key. `setmaxplayers` sets the
-     * limit for one session where Java keeps it as `max-players` in `server.properties`: a final
-     * `PlayerList.maxPlayers` before 26, and from 26 `DedicatedServer.setMaxPlayers`, which writes
-     * the file again, so a limit Bedrock drops at the end of the session would outlive it here.
+     * `aimassist` and `controlscheme` change how a Bedrock client turns input into aim and movement,
+     * which a Java client has no setting for. `editor-allowlist` and `project` belong to Bedrock's
+     * editor and `sendshowstoreoffer` to its marketplace, and Java has neither. `connect` and
+     * `wsserver` open a WebSocket to a tool such as Code Builder, a protocol Java has no part of.
+     * `reloadconfig` and `reloadpacketlimitconfig` read again files only a Bedrock dedicated server
+     * has: the permissions, the script variables and secrets, and the packet limits. `script` drives
+     * the debugger, profiler and watchdog of Bedrock's own script engine through the protocol
+     * Bedrock's tools speak. `serveridentity` saves, deletes and reports the key a Bedrock dedicated
+     * server identifies itself to its services with, and a Java server holds no such key.
      */
     private static final Set<String> BEDROCK_ONLY = Set.of(
         "aimassist", "connect", "controlscheme", "editor-allowlist", "project", "reloadconfig",
@@ -115,12 +114,16 @@ public final class Functions {
      * Each is written `<command> <keyword>`, which is how the published command metadata names one.
      * A line carrying one does not run and the form is reported, rather than reaching a parser that
      * would reject it with a message about the wrong word.
+     *
+     * `changesetting allow-cheats` is the reason given at `changeSetting`. The three `hud` pieces are
+     * drawn by nothing on a Java client, as `HudElement` says. A `permission` visitor may only look,
+     * and Java has no level below a member. The `camera` forms are the ones `camera` names: they ask
+     * for a camera this mod does not draw.
      */
     private static final Set<String> BEDROCK_ONLY_KEYWORDS = Set.of(
         "changesetting allow-cheats", "changesetting false", "changesetting true",
         "hud paperdoll", "hud tooltips", "hud touch_controls",
         "permission visitor",
-        "place apply_waterlogging", "place ignore_waterlogging",
         "camera attach_to_entity", "camera detach_from_entity", "camera entity_offset",
         "camera minecraft:control_scheme_camera", "camera minecraft:fixed_boom",
         "camera minecraft:follow_orbit", "camera play_spline", "camera remove_target",
@@ -748,30 +751,35 @@ public final class Functions {
     }
 
     /**
-     * `place`, whose feature, structure and jigsaw forms Java's own command reads and whose feature
-     * rule the command built here places.
+     * `place`, whose feature and structure forms Java's own command reads, and whose feature rule and
+     * jigsaw the commands built here place.
      *
-     * What Bedrock writes after a structure's or a jigsaw's position says how it is built, and Java's
-     * own command builds each with the settings the structure's definition states, so a line naming
-     * any of them loses its line. Whether a placed structure waterlogs is one of those: Java holds it
-     * on a jigsaw structure as `liquid_settings` from 1.21, read from the structure's own file, and
-     * `JigsawPlacement.generateJigsaw` takes none, so no command hands it another.
+     * What Bedrock writes after a structure's position says how it is built, and Java builds a
+     * structure with the settings its own definition states: a jigsaw structure's waterlogging is the
+     * `liquid_settings` of its file, and `Structure.generate` takes no other. So a structure line
+     * carrying any of them loses its line. A jigsaw is placed from a pool, which states none of them,
+     * so every word of Bedrock's form reaches it except leaving its entities out, which Java's jigsaw
+     * pieces never do.
      */
     private static String place(String rest, Set<String> unsupported) {
         String[] parts = SPACE.split(rest);
         String kind = parts[0].toLowerCase(Locale.ROOT);
         int most = switch (kind) {
             case "feature", "structure", "featurerule" -> 5;
-            case "jigsaw" -> 7;
+            case "jigsaw" -> 10;
             default -> 0;
         };
 
         if (most == 0) return dropped("place", kind, unsupported);
-        if (parts.length <= most) return "place " + rest;
-        if (Arrays.stream(parts).anyMatch(word -> word.equalsIgnoreCase("apply_waterlogging")
-            || word.equalsIgnoreCase("ignore_waterlogging"))) {
-            return dropped("place", parts[parts.length - 1], unsupported);
+        if (kind.equals("jigsaw") && parts.length > 8 && parts[8].equalsIgnoreCase("false")) {
+            unsupported.add("command place jigsaw leaving out its entities");
+            return null;
         }
+        if (kind.equals("jigsaw") && parts.length > 9 && parts[9].equalsIgnoreCase("ignore_waterlogging")
+            && !Platform.placesJigsawsDry()) {
+            return dropped("place", parts[9], unsupported);
+        }
+        if (parts.length <= most) return "place " + rest;
 
         unsupported.add("command place " + kind + " with a placement Java builds for itself");
         return null;
@@ -1189,8 +1197,9 @@ public final class Functions {
     /**
      * `changesetting <setting> <value>`, of whose two settings Java has a command for one.
      *
-     * Whether cheats are allowed is a property of the world a Java server reads at startup, with no
-     * command to move it while the server runs.
+     * Bedrock's `allow-cheats` decides whether an operator may run commands at all. A Java server
+     * always lets an operator run them and has no switch to stop it, and its one switch for cheats,
+     * the one a world opened to the network uses, lets every player run commands instead.
      */
     private static String changeSetting(String rest, Set<String> unsupported) {
         String[] parts = SPACE.split(rest, 2);
@@ -1275,15 +1284,17 @@ public final class Functions {
     }
 
     /**
-     * `/camera`, of whose fifteen forms the four presets and their placement are drawn here.
+     * `/camera`, of whose fifteen forms the four presets, their placement, the fade and the field of
+     * view are drawn here.
      *
      * The line reaches the command this mod registers as the pack wrote it, so the only thing to
      * decide is whether that command has a branch for the form. A preset in a pack's own namespace
      * is one of the pack's `cameras/presets`, which the command looks up as it runs, because the
-     * functions are translated before the presets are read. The three built-in presets left name a
-     * camera Bedrock draws and Java has none of, and the rest fade the screen, move the field of
-     * view, follow a spline or hang the camera off another entity, none of which a Java client is
-     * told to do by any packet.
+     * functions are translated before the presets are read. The three built-in presets left are
+     * cameras Bedrock draws behind or round an entity, and the other forms follow a spline, hang the
+     * camera off an entity, turn it towards one or offset it from one. A Java client draws from an
+     * entity's eyes or from its own third person view at a fixed distance, so each of these is a
+     * camera this mod would have to draw itself, and it draws none of them.
      */
     private static String camera(String rest, Set<String> unsupported) {
         String[] parts = SPACE.split(rest, 3);

@@ -9,6 +9,7 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.tree.LiteralCommandNode;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
@@ -56,16 +57,17 @@ public final class ServerAdmin {
             .then(stack("server"))
             .then(stack("client")));
 
-        for (String name : List.of("permission", "ops")) {
-            dispatcher.register(Commands.literal(name)
-                .requires(source -> Platform.allowedAt(source, 2))
-                .then(Commands.literal("list").executes(ServerAdmin::listOperators))
-                .then(Commands.literal("reload").executes(ServerAdmin::reloadOperators))
-                .then(Commands.literal("set")
-                    .then(Commands.argument("player", EntityArgument.players())
-                        .then(Commands.literal("operator").executes(command -> setOperator(command, true)))
-                        .then(Commands.literal("member").executes(command -> setOperator(command, false))))));
-        }
+        LiteralCommandNode<CommandSourceStack> permission = dispatcher.register(Commands.literal("permission")
+            .requires(source -> Platform.allowedAt(source, 2))
+            .then(Commands.literal("list").executes(ServerAdmin::listOperators))
+            .then(Commands.literal("reload").executes(ServerAdmin::reloadOperators))
+            .then(Commands.literal("set")
+                .then(Commands.argument("player", EntityArgument.players())
+                    .then(Commands.literal("operator").executes(command -> setOperator(command, true)))
+                    .then(Commands.literal("member").executes(command -> setOperator(command, false))))));
+        dispatcher.register(Commands.literal("ops")
+            .requires(source -> Platform.allowedAt(source, 2))
+            .redirect(permission));
     }
 
     /**

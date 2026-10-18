@@ -320,6 +320,58 @@ public final class Platform {
         *///?}
     }
 
+    /**
+     * Whether a jigsaw can be placed without waterlogging what it puts into water. 1.20.1 has no
+     * liquid settings and waterlogs every block that can be.
+     */
+    public static boolean placesJigsawsDry() {
+        //? if >=1.21 {
+        return true;
+        //?} else {
+        /*return false;
+        *///?}
+    }
+
+    /**
+     * Java's `place jigsaw`, with the liquid settings Java's command leaves at the default. False when
+     * nothing fits at that position.
+     */
+    public static boolean placeJigsaw(ServerLevel level,
+        net.minecraft.core.Holder<net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool> pool,
+        Identifier target, int depth, net.minecraft.core.BlockPos at, boolean keepJigsaws, boolean waterlog) {
+        //? if >=1.21 {
+        net.minecraft.world.level.chunk.ChunkGenerator generator = level.getChunkSource().getGenerator();
+        net.minecraft.world.level.levelgen.structure.Structure.GenerationContext context =
+            new net.minecraft.world.level.levelgen.structure.Structure.GenerationContext(level.registryAccess(),
+                generator, generator.getBiomeSource(), level.getChunkSource().randomState(),
+                level.getStructureManager(), level.getSeed(),
+                new net.minecraft.world.level.ChunkPos(at.getX() >> 4, at.getZ() >> 4), level, biome -> true);
+        net.minecraft.world.level.levelgen.structure.templatesystem.LiquidSettings liquid = waterlog
+            ? net.minecraft.world.level.levelgen.structure.templatesystem.LiquidSettings.APPLY_WATERLOGGING
+            : net.minecraft.world.level.levelgen.structure.templatesystem.LiquidSettings.IGNORE_WATERLOGGING;
+        //? if >=26 {
+        var maxDistance = new net.minecraft.world.level.levelgen.structure.structures.JigsawStructure.MaxDistance(128);
+        //?} else {
+        /*int maxDistance = 128;
+        *///?}
+        var stub = net.minecraft.world.level.levelgen.structure.pools.JigsawPlacement.addPieces(context, pool,
+            java.util.Optional.of(target), depth, at, false, java.util.Optional.empty(), maxDistance,
+            net.minecraft.world.level.levelgen.structure.pools.alias.PoolAliasLookup.EMPTY,
+            net.minecraft.world.level.levelgen.structure.structures.JigsawStructure.DEFAULT_DIMENSION_PADDING, liquid);
+        if (stub.isEmpty()) return false;
+
+        stub.get().getPiecesBuilder().build().pieces().stream()
+            .filter(net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece.class::isInstance)
+            .map(net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece.class::cast)
+            .forEach(piece -> piece.place(level, level.structureManager(), generator, level.getRandom(),
+                net.minecraft.world.level.levelgen.structure.BoundingBox.infinite(), at, keepJigsaws));
+        return true;
+        //?} else {
+        /*return net.minecraft.world.level.levelgen.structure.pools.JigsawPlacement.generateJigsaw(level, pool, target,
+            depth, at, keepJigsaws);
+        *///?}
+    }
+
     /** A player's own entry in the operator list, made or taken away. */
     public static void setOperator(net.minecraft.server.MinecraftServer server, ServerPlayer player,
         boolean operator) {

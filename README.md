@@ -305,6 +305,11 @@ add-ons, or with another release of it, is told which in chat.
   would, with the rule's own distribution starting from the position the line names, and a
   script's `Dimension.placeFeatureRule`, which does the same. The rule's biome filter decides only
   where the world generates it.
+- `/bedrock place jigsaw` with the three words Bedrock writes after the position: whether the
+  jigsaw blocks stay, whether the entities come along, which Java's jigsaws always do, and whether a
+  block placed into water is waterlogged. 1.20.1 waterlogs every block a jigsaw places, so
+  `ignore_waterlogging` is reported there. `place structure` with any of Bedrock's settings is
+  reported, because Java builds a structure the way its own definition says.
 - The commands that run the server rather than the world. `save query` writes out what `save hold`
   held back and lists every file of the world with its length; `setmaxplayers` sets the limit a
   login is checked against for this session only; `packstack server` lists Java's data packs in the
@@ -780,23 +785,23 @@ description with its own scattering coefficients. `/fog` carries the `air` block
 pack pushes a fog for; Java draws its own fog for the other media and has no volumetric fog to give
 the second block to.
 
-**A sixth of Bedrock's commands.** The fifteen left divide two ways. `aimassist` and `controlscheme`
-describe a controller and a touchscreen, and `packstack` and `project` describe a Bedrock client's
-pack list and the Bedrock Editor.
-`connect`, `wsserver`, `sendshowstoreoffer`, `ops`, `permission`, `editor-allowlist`,
-`reloadconfig`, `reloadpacketlimitconfig` and `serveridentity` speak to a websocket server, a
-marketplace or a Bedrock server's own configuration and identity. `setmaxplayers` sets the limit for
-one session where Java keeps it as `max-players` in `server.properties`, which 26 writes back to the
-file, so a limit Bedrock forgets at the end of the session would outlive it here. A function using
-any of them keeps its other lines and the dropped command is reported.
+**Eleven of Bedrock's commands.** `aimassist` and `controlscheme` change how a Bedrock client turns
+a controller or a touchscreen into aim and movement, and `project` and `editor-allowlist` belong to
+the Bedrock Editor. `connect` and `wsserver` speak to a WebSocket server, `sendshowstoreoffer` to the
+marketplace, `script` to the debugger and profiler of Bedrock's own script engine, and
+`reloadconfig`, `reloadpacketlimitconfig` and `serveridentity` to a Bedrock server's own
+configuration and identity. A function using any of them keeps its other lines and the dropped
+command is reported.
 
-**One form of a command the rest of which translates.** A `ride` that summons what it mounts or
-empties a vehicle, a `music` that loops, a `structure` mirrored on both axes or placed a block at a
-time, a `summon` that turns or aims what it summons, a `gametest` that lays out a test area, the
-ender dragon's mob event, `replaceitem` into the slot a Bedrock equippable component fills,
-`tickingarea` picked out by name or as a circle, `save query`, `place featurerule` and the setting
-that says whether cheats are allowed: each is a form Java has no way to say. The line does not run
-and the form is named, rather than being handed to a parser that would refuse it over the wrong word.
+**One form of a command the rest of which translates.** The cameras Bedrock draws behind or round an
+entity (`minecraft:follow_orbit`, `minecraft:fixed_boom` and `minecraft:control_scheme_camera`), and
+the camera forms that follow a spline, hang the camera off an entity, turn it towards one or offset
+it from one, which would each be a camera this mod draws itself; the paper doll, the input hints
+and the touch controls `hud` names, which a Java client draws none of; a `permission` visitor, a
+level below Java's member; `changesetting allow-cheats`, because a Java server always lets an
+operator run commands; a jigsaw placed without its entities; and `place structure` with any of
+Bedrock's settings. The line does not run and the form is named, rather than being handed to a
+parser that would refuse it over the wrong word.
 
 Everything else is translated or registered. `effect`, `xp`, `playsound`, `stopsound`,
 `spreadplayers`, `replaceitem`, `ride`, `tickingarea`, `save`, `gamerule`, `gamemode`, `difficulty`,
@@ -806,12 +811,13 @@ rewritten into what Java reads, including the command behind `execute ... run` a
 Bedrock calls the nether. `schedule` is rewritten too, because the two editions agree about more of
 it than the word suggests: Bedrock's `schedule delay add <function> <time> <replace|append>` is
 Java's `schedule function <function> <time> [append|replace]` with one keyword moved and the same two
-words at the end, and `schedule clear` is spelled alike in both. `schedule on_area_loaded`, which
-waits for chunks, is the form Java keeps no queue for and the one that is reported.
+words at the end, and `schedule clear` is spelled alike in both.
 `playanimation`, `event`, `scriptevent`, `music`, `toggledownfall`, `structure`, `mobevent`,
-`particle`, `dialogue`, `gametest`, `transfer`, `camera`, `camerashake`, `fog` and `clearspawnpoint`
-are registered by this mod in the tree a Bedrock line is read against, beside Java's own commands
-and never in Java's tree, and a line using one is written out in the form the command built there
+`particle`, `dialogue`, `gametest`, `transfer`, `camera`, `camerashake`, `fog`, `clearspawnpoint`,
+`hud`, `inputpermission`, `ride`, `summon`, `tickingarea`, `packstack`, `setmaxplayers`,
+`permission` and `ops` are registered by this mod in the tree a Bedrock line is read against,
+beside Java's own commands and never in Java's tree, as are Bedrock's own forms of `place`,
+`schedule` and `gamerule`, and a line using one is written out in the form the command built there
 reads. `clearspawnpoint` takes a
 player's respawn point away, which Java's `/spawnpoint` can only give. `transfer` hands a player to another server,
 which Java carries as `ClientboundTransferPacket` from 1.20.5 rather than as a command of its own; a
@@ -821,10 +827,9 @@ move that never happened. Of Bedrock's thirty-seven game rules, the
 twenty-five every supported version of Java has are set under the name that version knows them by,
 which 26 changed, and four more reach a rule only the newer versions hold. `functioncommandlimit`
 caps the commands one function runs, which Java caps with the rule it caps a chain of command blocks
-with, so it sets that rule. The remaining seven are reported: five switch a piece of Bedrock's screen
-Java draws whatever a rule says, `recipesunlock` holds back recipes Java grants through an
-advancement each, and `respawnblocksexplode` stops beds and anchors exploding where Java's own
-blocks do it unconditionally.
+with, so it sets that rule. Six more Java keeps no rule for are held beside the world and acted on
+by this mod, as described with the commands above. `showbordereffect` is reported: it switches the
+particle wall of Bedrock's border block, which Java has none of.
 
 **The player a test drives itself.** `Test.spawnSimulatedPlayer` and every member of the
 `SimulatedPlayer` it answers with describe a player the game walks, attacks and builds with. Java's

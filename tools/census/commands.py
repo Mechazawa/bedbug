@@ -68,6 +68,7 @@ REGISTRATIONS = (JAVA / "server/BedrockCommands.java", JAVA / "server/Dialogues.
                  JAVA / "server/Rides.java", JAVA / "server/Summons.java",
                  JAVA / "server/StructureCommand.java", JAVA / "server/TickingAreas.java",
                  JAVA / "server/AreaSchedules.java", JAVA / "server/FeatureRules.java",
+                 JAVA / "server/Jigsaws.java",
                  JAVA / "server/ServerAdmin.java", JAVA / "server/GameTestCommand.java",
                  JAVA / "server/MobEvents.java", JAVA / "server/Music.java",
                  JAVA / "server/BedrockRules.java",

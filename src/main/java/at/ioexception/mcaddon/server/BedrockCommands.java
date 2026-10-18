@@ -122,6 +122,7 @@ public final class BedrockCommands {
         TickingAreas.registerCommand(dispatcher);
         AreaSchedules.registerCommand(dispatcher);
         FeatureRules.registerCommand(dispatcher);
+        Jigsaws.registerCommand(dispatcher);
         ServerAdmin.registerCommand(dispatcher);
         BedrockRules.registerCommand(dispatcher);
 

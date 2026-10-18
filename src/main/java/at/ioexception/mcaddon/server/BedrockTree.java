@@ -36,9 +36,9 @@ public final class BedrockTree {
 
     /**
      * Commands Bedrock and Java share a name and some forms of, where Bedrock adds forms of its own:
-     * `place featurerule` beside Java's `place`, `schedule on_area_loaded` beside Java's `schedule
-     * function`, and the rules Java keeps none of beside Java's own in `gamerule`. This tree's command
-     * of each name carries Java's forms as well.
+     * `place featurerule` and Bedrock's longer `place jigsaw` beside Java's `place`, `schedule
+     * on_area_loaded` beside Java's `schedule function`, and the rules Java keeps none of beside
+     * Java's own in `gamerule`. This tree's command of each name carries Java's forms as well.
      */
     private static final List<String> SHARED = List.of("place", "schedule", "gamerule");
 
@@ -68,11 +68,15 @@ public final class BedrockTree {
                 }))));
     }
 
-    /** Hangs the forms Java's command of this name has under this tree's command of the same name. */
+    /**
+     * Hangs the forms Java's command of this name has under this tree's command of the same name,
+     * leaving out a form this tree builds a whole Bedrock version of, such as `place jigsaw`.
+     */
     private void alongsideJava(String name, CommandDispatcher<CommandSourceStack> java) {
         CommandNode<CommandSourceStack> ours = bedrock.getRoot().getChild(name);
         CommandNode<CommandSourceStack> javas = java.getRoot().getChild(name);
-        if (ours != null && javas != null) javas.getChildren().forEach(ours::addChild);
+        if (ours == null || javas == null) return;
+        javas.getChildren().stream().filter(form -> ours.getChild(form.getName()) == null).forEach(ours::addChild);
     }
 
     /** The tree a translated line is read against on this server. */

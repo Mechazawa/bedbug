@@ -682,7 +682,11 @@ These are the checks it runs, and what each one catches:
   removed by a position inside it; and `/schedule on_area_loaded` holds the test pack's
   `tp/loaded`, which counts its runs on a scoreboard, until a ticking area loads the far chunk it
   waits for. `place featurerule` puts the test pack's ore rule into stone the test lays far from
-  every other test. `save query`, `setmaxplayers`, `packstack` and `permission` are typed by the
+  every other test, and `place jigsaw` places the mod's own one piece pool,
+  `mcaddon:gametest/fence`, into water with its jigsaw kept and its fence dry, and again with both
+  words the other way. That pool and its template ship in `src/main/resources/data/mcaddon/`, the
+  template under both `structure/` and `structures/` because 1.20.1 reads the plural; the template
+  is a 248 byte NBT file written by hand, a jigsaw named `mcaddon:start` beside an oak fence. `save query`, `setmaxplayers`, `packstack` and `permission` are typed by the
   console after `/bedrock` and read back through what the console is told, because a line run the
   way a pack runs one has a function's authority and each of these asks for more. `/gametest
   create` lays out the test pack's `tp:hut_stands`, `pos` finds its area, `runthis` runs it there,
@@ -696,8 +700,9 @@ These are the checks it runs, and what each one catches:
 
   **A Bedrock line a pack runs has a function's authority, and a command asking for more refuses
   it as an unknown command.** `PackCommand.run` lowers its source to the level Java runs a function
-  at, and the Bedrock tree asks each command for its Bedrock level plus one, so `place`, `save`,
-  `setmaxplayers` and `permission` parse only for an operator typing `/bedrock`. A test of one of
+  at, and the Bedrock tree asks each command for its Bedrock level plus one, so `place featurerule`,
+  Bedrock's words after a jigsaw's position, `save`, `setmaxplayers` and `permission` parse only for
+  an operator typing `/bedrock`. Java's own `place` forms keep the level Java asks for them. A test of one of
   those types it through Java's own tree instead of through `BedrockLines`.
 
   `MusicClientGameTest` plays the test pack's chime through `/bedrock music` and reads back the
