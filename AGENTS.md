@@ -911,6 +911,7 @@ These are the checks it runs, and what each one catches:
   python3 tools/verify/verify.py lan --dormant --version 26.2   # the host also holds a dormant add-on
   python3 tools/verify/verify.py convert --source <extracted pack directory>   # no game
   python3 tools/verify/verify.py companions --version 26.2  # a server and a client beside other mods
+  python3 tools/verify/verify.py companions --bare --version 26.2  # the same, as a client taking the server's add-ons
   ```
 
   A green `run` proves the mod started, every mixin applied, the packs converted and registered, the
@@ -1137,6 +1138,12 @@ These are the checks it runs, and what each one catches:
     is absent, which is what a mod's optional integration with a mod nobody installed looks like.
   - Fabric resolved the set at all. `Mod resolution failed` means the run proved nothing about
     anybody.
+
+  `companions --bare` runs `join --bare` instead of the server and the client, and reads the same
+  three things out of the join server's and the second client's logs. That client registers the
+  server's blocks, items and entity types after the freeze while every companion is loaded, so a
+  companion holding an array sized at startup from the block state list fails it on the first frame
+  after the join.
 
   The mods themselves are `companionMods()` in `build.remap.gradle.kts` and `build.named.gradle.kts`,
   each pinned by exact version in `versions/<version>/gradle.properties` and installed only for a dev

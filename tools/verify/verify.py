@@ -1111,10 +1111,10 @@ def loaded_mods(lines: list[str]) -> set[str]:
     return found
 
 
-def companions_ran(lines: list[str], pinned: dict[str, str], verdict: Verdict) -> None:
+def companions_ran(lines: list[str], pinned: dict[str, str], verdict: Verdict, side: str) -> None:
     """Every mod the properties pin has to have loaded, or the run proves nothing about it."""
     if not pinned:
-        verdict.notes.append("no companion mod is pinned for this version")
+        verdict.notes.append(f"no companion mod is pinned for this version's {side}")
         return
 
     for line in lines:
@@ -1131,9 +1131,9 @@ def companions_ran(lines: list[str], pinned: dict[str, str], verdict: Verdict) -
                      "pinned in gradle.properties and absent from the loader's own list: "
                      + ", ".join(missing))
     present = sorted(name for name in pinned if name in loaded)
-    verdict.notes.append(f"{len(present)} of {len(pinned)} companion mods this side loaded: "
+    verdict.notes.append(f"{len(present)} of {len(pinned)} companion mods the {side} loaded: "
                          + ", ".join(present))
-    verdict.notes.append(f"{len(loaded)} mods in the game altogether")
+    verdict.notes.append(f"{len(loaded)} mods in the {side} altogether")
 
 
 def blamed_configs(lines: list[str], verdict: Verdict) -> None:
@@ -1167,27 +1167,36 @@ def blamed_configs(lines: list[str], verdict: Verdict) -> None:
 
 
 def check_companions(root: Path, version: str, timeout: float, summons: int, hold: float,
-                     verbose: bool) -> list[Verdict]:
+                     verbose: bool, bare: bool = False) -> list[Verdict]:
     """Runs a server and a client beside the mods this one is meant to work with.
 
     The companions are already on the run classpath, so this starts the same two games `run` and
     `client` do. What it adds is reading the log back for the neighbours as well: that each pinned
     mod really loaded, and that no injector on either side lost its target while the other was
     there.
-    """
-    found = [check_server(root, version, timeout, summons, verbose),
-             check_client(root, version, timeout, hold, verbose)]
 
-    for verdict, name in zip(found, ("server", "client")):
-        pinned = companions_pinned(root, version, name)
-        verdict.subject = f"{version} {name} beside {len(pinned)} companion mods"
+    With `bare` the two games are those of `join --bare` instead: a client with no add-ons joins
+    a dedicated server and registers the server's set while the companions are loaded, which is
+    the one moment their startup caches meet blocks, items and entity types added after the freeze.
+    """
+    if bare:
+        found = [check_join(root, version, timeout, hold, verbose, variant="bare")]
+        sides = [(found[0], "server", "join-server"), (found[0], "client", "join-client")]
+    else:
+        found = [check_server(root, version, timeout, summons, verbose),
+                 check_client(root, version, timeout, hold, verbose)]
+        sides = [(found[0], "server", "server"), (found[1], "client", "client")]
+
+    for verdict, side, name in sides:
+        pinned = companions_pinned(root, version, side)
+        verdict.subject += f", {side} beside {len(pinned)} companion mods"
         log = root / "build" / "verify" / f"{version}-{name}.log"
         if not log.is_file():
-            verdict.fail("no log to read the companions out of", f"{log} was never written")
+            verdict.fail(f"no {side} log to read the companions out of", f"{log} was never written")
             continue
 
         lines = log.read_text(errors="replace").splitlines()
-        companions_ran(lines, pinned, verdict)
+        companions_ran(lines, pinned, verdict, side)
         blamed_configs(lines, verdict)
     return found
 
@@ -1700,7 +1709,8 @@ def main() -> int:
     parser.add_argument("--lock-wait", type=float, default=1800.0,
                         help="seconds to wait for another run to release the harness lock")
     parser.add_argument("--bare", action="store_true",
-                        help="join: the second client has no add-ons and takes the server's")
+                        help="join and companions: the second client has no add-ons and takes "
+                             "the server's")
     parser.add_argument("--other", action="store_true",
                         help="join: the second client has other versions of the server's add-ons "
                              "and an add-on of its own")
@@ -1726,7 +1736,7 @@ def main() -> int:
             with exclusive(root, arguments.lock_wait, version):
                 if arguments.mode == "companions":
                     return check_companions(root, version, arguments.timeout, arguments.summons,
-                                            arguments.hold, arguments.verbose)
+                                            arguments.hold, arguments.verbose, bare=arguments.bare)
                 if arguments.mode in ("run", "all"):
                     found.append(check_server(
                         root, version, arguments.timeout, arguments.summons, arguments.verbose))
