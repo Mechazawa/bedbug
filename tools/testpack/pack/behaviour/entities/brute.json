@@ -545,6 +545,73 @@
           ],
           "goal_radius": 3
         }
+      },
+      "tp:brute_stomping": {
+        "minecraft:behavior.stomp_turtle_egg": {
+          "priority": 1,
+          "speed_multiplier": 1,
+          "search_height": 1,
+          "interval": 1
+        }
+      },
+      "tp:brute_exploring": {
+        "minecraft:dweller": {
+          "dwelling_type": "village",
+          "restriction_radius": 8
+        },
+        "minecraft:behavior.explore_outskirts": {
+          "priority": 1,
+          "speed_multiplier": 1,
+          "explore_dist": 5,
+          "min_dist_from_target": 1,
+          "dist_from_boundary": [
+            5,
+            2,
+            5
+          ],
+          "max_wait_time": 0
+        }
+      },
+      "tp:brute_village_bound": {
+        "minecraft:behavior.stroll_towards_village": {
+          "priority": 1,
+          "speed_multiplier": 1,
+          "goal_radius": 2,
+          "search_range": 16,
+          "cooldown_time": 1,
+          "start_chance": 1
+        }
+      },
+      "tp:brute_hiding": {
+        "minecraft:behavior.hide": {
+          "priority": 1,
+          "speed_multiplier": 1,
+          "poi_type": "bed",
+          "duration": 10
+        }
+      },
+      "tp:brute_playing": {
+        "minecraft:behavior.play": {
+          "priority": 1,
+          "speed_multiplier": 1,
+          "chance_to_start": 1,
+          "follow_distance": 1.5,
+          "friend_search_area": [
+            10,
+            3,
+            10
+          ],
+          "max_play_duration_seconds": 10,
+          "friend_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              }
+            }
+          ]
+        }
       }
     },
     "components": {
@@ -853,6 +920,41 @@
         "add": {
           "component_groups": [
             "tp:brute_digging"
+          ]
+        }
+      },
+      "tp:brute_stomp": {
+        "add": {
+          "component_groups": [
+            "tp:brute_stomping"
+          ]
+        }
+      },
+      "tp:brute_explore": {
+        "add": {
+          "component_groups": [
+            "tp:brute_exploring"
+          ]
+        }
+      },
+      "tp:brute_seek_village": {
+        "add": {
+          "component_groups": [
+            "tp:brute_village_bound"
+          ]
+        }
+      },
+      "tp:brute_hide": {
+        "add": {
+          "component_groups": [
+            "tp:brute_hiding"
+          ]
+        }
+      },
+      "tp:brute_play": {
+        "add": {
+          "component_groups": [
+            "tp:brute_playing"
           ]
         }
       },

@@ -435,8 +435,15 @@ These are the checks it runs, and what each one catches:
   setting the enum property `tp:felt` to the cause it heard: `fall`, `entity_attack`, `projectile`,
   `drowning`, `suffocation` and `contact`, every one but the attack refusing the blow.
   `BehaviourGameTests.aDamageSensorHearsEachCauseByBedrocksName` hurts the ember with the Java
-  source for each and with `magic`, which no trigger names and which lands. The brute's `tp:arrived`
-  property is set by its `minecraft:entity_spawned` and `minecraft:entity_born` events, which is how
+  source for each and with `magic`, which no trigger names and which lands.
+
+  The brute carries five more groups for goals that move it somewhere of its own choosing:
+  `tp:brute_stomping` looks for turtle eggs every tick, `tp:brute_exploring` walks five blocks past
+  the edge of a village, `tp:brute_village_bound` walks to the nearest village, `tp:brute_hiding`
+  runs to a bed when a bell rings and `tp:brute_playing` plays with a pig. `GoalGameTests` builds the
+  village each one needs out of a bell or a bed in the empty structure, which Java registers as a
+  point of interest the moment the block is set. The brute's `tp:arrived` property is set by its
+  `minecraft:entity_spawned` and `minecraft:entity_born` events, which is how
   `GoalGameTests.aBredChildIsBornRatherThanSpawned` tells a bred child from a placed one.
 
   Two more entities are there for what a mob walking about never reaches. One is a projectile with

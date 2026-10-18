@@ -158,7 +158,11 @@ add-ons, or with another release of it, is told which in chat.
   variant matching, flock limit and loners; an entity walks out under the sky or in under a roof,
   looks as far for water as it says, drinks the potion its conditions pick by Bedrock's number,
   holds no more of an item than its shareables allow, leaps at its `yd`, and steps higher while a
-  player steers it.
+  player steers it. A stomper looks for turtle eggs as often as its `interval` says. A villager
+  explores past the edge of its village by `explore_dist`, a fox strolls to the nearest village, a
+  child plays with the friend its `friend_types` name, and `minecraft:behavior.hide` runs to the bed
+  or other place `poi_type` names when a bell rings or a raid is on. Java's village is the beds, job
+  sites and bells within reach, since Java keeps no village of its own.
 - Damage causes in Bedrock's own words. A damage sensor, the `has_damage` filter, a panic, playing
   dead, damage absorption, `minecraft:hurt_on_condition`, a block event's damage, the `damage`
   command and a script's `applyDamage` and `entityHurt` all name a cause the way Bedrock does
@@ -678,9 +682,10 @@ Java builds that screen for its own horses, minecarts and hoppers by class; `suf
 documented as seconds with a default of -20, which no count of seconds can be, so Java's own
 drowning rhythm applies; `has_gravity` is left alone, because Mojang's fish declare it off and still
 fall when they leap out of water; a dweller holds to where it stood without joining a Java village;
-a tempt sound's gap is documented in ticks and written by Mojang in two units at once; and how fast
-an entity resends itself over the network is Java's own business. `has_damage` asking whether a
-blow is `fatal` is reported, because the sensor that asks it is not told how hard the blow is.
+a tempt sound's gap is documented in ticks and written by Mojang in two units at once; a turtle egg
+stomper searches the twenty-four blocks Java's goal fixes, whatever its `search_range` says; and how
+fast an entity resends itself over the network is Java's own business. `has_damage` asking whether
+a blow is `fatal` is reported, because the sensor that asks it is not told how hard the blow is.
 
 **A camera and a touch button.** `minecraft:camera` times the black bars, the shutter and the
 photograph sliding away, which is a full-screen animation the Bedrock client plays while a player

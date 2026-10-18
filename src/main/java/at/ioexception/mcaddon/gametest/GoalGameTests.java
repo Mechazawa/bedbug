@@ -6,15 +6,22 @@ import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BellBlockEntity;
+import net.minecraft.world.level.block.state.properties.BedPart;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * The fields inside a pack's behaviours that decide how a goal plays out, read back off the world.
@@ -213,7 +220,7 @@ public final class GoalGameTests {
             return;
         }
 
-        helper.setBlock(STAND.east(3), net.minecraft.world.level.block.Blocks.WATER);
+        helper.setBlock(STAND.east(3), Blocks.WATER);
         Mob pig = pig(helper, STAND.south(3), BLOWS_TO_KILL);
         Platform.hurt(brute, helper.getLevel(), brute.damageSources().mobAttack(pig), 1f);
         helper.succeedWhen(() -> {
@@ -238,7 +245,7 @@ public final class GoalGameTests {
             return;
         }
 
-        helper.setBlock(MIDDLE.east(1), net.minecraft.world.level.block.Blocks.GOLD_BLOCK);
+        helper.setBlock(MIDDLE.east(1), Blocks.GOLD_BLOCK);
         helper.succeedWhen(() -> helper.assertTrue(Boolean.TRUE.equals(brute.value("tp:escaped")),
             BRUTE + " fled the gold beside it and never raised the event on_escape names."));
     }
@@ -343,6 +350,144 @@ public final class GoalGameTests {
                 BRUTE + " was bred and arrived " + child.value("tp:arrived") + " rather than born.");
         });
     }
+
+    /**
+     * A group's `minecraft:behavior.stomp_turtle_egg` looks for an egg as often as its `interval`
+     * says, here every tick.
+     *
+     * The egg is laid a second after the brute first looked and found nothing. Java's own goal waits
+     * ten to twenty seconds before looking again, so the egg is still whole when the test ends.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = STOMP_TICKS)
+    public void aStomperLooksForEggsAsOftenAsItsGroupSays(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_stomp");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        AtomicBoolean laid = new AtomicBoolean();
+        helper.runAfterDelay(EGG_LAID_AFTER, () -> {
+            helper.setBlock(EGG, Blocks.TURTLE_EGG);
+            laid.set(true);
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(laid.get(), "The egg is not laid yet.");
+            helper.assertTrue(helper.getBlockState(EGG).isAir(),
+                BRUTE + " looks for eggs every tick and left the one laid four blocks off whole.");
+        });
+    }
+
+    /**
+     * `minecraft:behavior.explore_outskirts` walks out past the edge of the village on the side the
+     * entity stands, `explore_dist` beyond it.
+     *
+     * The village is one bell three blocks south of the brute, so its edge is the bell's north face
+     * and the brute walks five blocks north of that, straight away from the bell.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void anExplorerWalksOutPastTheVillageEdge(GameTestHelper helper) {
+        helper.setBlock(VILLAGE_BELL, Blocks.BELL);
+        AddonEntity brute = withGroup(helper, "tp:brute_explore", MIDDLE);
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        BlockPos bell = helper.absolutePos(VILLAGE_BELL);
+        helper.succeedWhen(() -> {
+            double north = bell.getZ() - brute.getZ();
+            helper.assertTrue(north >= OUTSKIRTS_REACHED,
+                BRUTE + " stands " + north + " blocks north of the bell, short of the outskirts.");
+            helper.assertTrue(Math.abs(brute.getX() - (bell.getX() + 0.5)) <= 1,
+                BRUTE + " walked off sideways rather than straight out from the village.");
+        });
+    }
+
+    /** The bell's north face, five blocks out, less the block the brute counts as arriving within. */
+    private static final double OUTSKIRTS_REACHED = 4;
+    private static final BlockPos VILLAGE_BELL = MIDDLE.south(3);
+
+    /** `minecraft:behavior.stroll_towards_village` walks to the nearest place a village is made of. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aStrollerWalksToTheNearestVillage(GameTestHelper helper) {
+        helper.setBlock(FAR_CORNER, Blocks.BELL);
+        AddonEntity brute = withGroup(helper, "tp:brute_seek_village");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Vec3 bell = Vec3.atBottomCenterOf(helper.absolutePos(FAR_CORNER));
+        helper.succeedWhen(() -> helper.assertTrue(brute.position().distanceTo(bell) <= NEAR_ENOUGH,
+            BRUTE + " was sent to the village and stands " + brute.position().distanceTo(bell)
+                + " blocks from its bell."));
+    }
+
+    private static final BlockPos FAR_CORNER = new BlockPos(6, 0, 6);
+    /** The group's two block goal radius, and half a block for where the walk stops. */
+    private static final double NEAR_ENOUGH = 2.5;
+
+    /**
+     * `minecraft:behavior.hide` stays put until a bell rings, then runs to the nearest bed.
+     *
+     * The brute is checked a second and a half in, before the bell rings, and then has to reach the
+     * bed five blocks off.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aHiderRunsToBedWhenTheBellRings(GameTestHelper helper) {
+        var headState = BuiltInRegistries.BLOCK.getOptional(Platform.id("minecraft", "red_bed")).orElseThrow()
+            .defaultBlockState()
+            .setValue(BedBlock.FACING, Direction.SOUTH);
+        helper.setBlock(BED_HEAD, headState.setValue(BedBlock.PART,
+            BedPart.HEAD));
+        helper.setBlock(BED_HEAD.north(), headState.setValue(BedBlock.PART,
+            BedPart.FOOT));
+        helper.setBlock(ALARM_BELL, Blocks.BELL);
+        AddonEntity brute = withGroup(helper, "tp:brute_hide");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Vec3 bed = Vec3.atBottomCenterOf(helper.absolutePos(BED_HEAD));
+        AtomicBoolean rung = new AtomicBoolean();
+        helper.runAfterDelay(QUIET_TICKS, () -> {
+            helper.assertTrue(brute.position().distanceTo(bed) > NEAR_ENOUGH,
+                BRUTE + " ran to bed before any bell rang.");
+            ((BellBlockEntity) helper.getLevel()
+                .getBlockEntity(helper.absolutePos(ALARM_BELL))).onHit(Direction.NORTH);
+            rung.set(true);
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(rung.get(), "The bell has not rung yet.");
+            helper.assertTrue(brute.position().distanceTo(bed) <= NEAR_ENOUGH,
+                BRUTE + " heard the bell and stands " + brute.position().distanceTo(bed) + " blocks from the bed.");
+        });
+    }
+
+    private static final BlockPos BED_HEAD = STAND.east(5).south(1);
+    private static final BlockPos ALARM_BELL = new BlockPos(1, 0, 6);
+    private static final int QUIET_TICKS = 30;
+
+    /** `minecraft:behavior.play` runs to the friend `friend_types` names and keeps up with it. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aPlayerRunsToItsFriend(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_play");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob friend = pig(helper, FAR_CORNER, BLOWS_TO_KILL);
+        helper.succeedWhen(() -> helper.assertTrue(brute.distanceTo(friend) <= NEAR_ENOUGH,
+            BRUTE + " plays with pigs and stays " + brute.distanceTo(friend) + " blocks from the one nearby."));
+    }
+
+    private static final BlockPos EGG = STAND.east(4);
+    private static final int EGG_LAID_AFTER = 20;
+    /** Room for the walk and the three seconds Java's goal stamps on an egg, short of its next look. */
+    private static final int STOMP_TICKS = 220;
 
     /**
      * A child whose `mutation_factor` is certain takes neither parent's variant, mark variant nor
@@ -480,10 +625,10 @@ public final class GoalGameTests {
         // obsidian, which outlasts the blast and leaves each broken block's place standing on it.
         BlockPos hearth = STAND.east(5).south(5);
         BlockPos.betweenClosed(hearth.offset(-2, 0, -2), hearth.offset(2, 0, 2))
-            .forEach(at -> helper.setBlock(at, net.minecraft.world.level.block.Blocks.OBSIDIAN));
+            .forEach(at -> helper.setBlock(at, Blocks.OBSIDIAN));
         BlockPos.betweenClosed(hearth.offset(-1, 1, -1), hearth.offset(1, 1, 1))
-            .forEach(at -> helper.setBlock(at, net.minecraft.world.level.block.Blocks.DIRT));
-        helper.setBlock(hearth.above(), net.minecraft.world.level.block.Blocks.AIR);
+            .forEach(at -> helper.setBlock(at, Blocks.DIRT));
+        helper.setBlock(hearth.above(), Blocks.AIR);
         AddonEntity smouldering = BehaviourGameTests.spawn(helper, BRUTE, hearth.above());
         if (heedless == null || mindful == null || piercing == null || smouldering == null) {
             helper.succeed();
@@ -494,9 +639,9 @@ public final class GoalGameTests {
         EntityEvents.trigger(mindful, "tp:brute_make_mindful", null, ServerHooks.state());
         EntityEvents.trigger(piercing, "tp:brute_make_piercing", null, ServerHooks.state());
         EntityEvents.trigger(smouldering, "tp:brute_make_smouldering", null, ServerHooks.state());
-        helper.setBlock(STAND.south(1), net.minecraft.world.level.block.Blocks.DIRT);
-        helper.setBlock(STAND.east(5).south(1), net.minecraft.world.level.block.Blocks.DIRT);
-        helper.setBlock(STAND.south(4), net.minecraft.world.level.block.Blocks.OBSIDIAN);
+        helper.setBlock(STAND.south(1), Blocks.DIRT);
+        helper.setBlock(STAND.east(5).south(1), Blocks.DIRT);
+        helper.setBlock(STAND.south(4), Blocks.OBSIDIAN);
 
         net.minecraft.server.MinecraftServer server = helper.getLevel().getServer();
         String griefing = Platform.gameRule(server, "mobGriefing");
@@ -515,7 +660,7 @@ public final class GoalGameTests {
             BRUTE + " caps what a block withstands at nothing and left the obsidian beside it.");
         BlockPos burnt = helper.absolutePos(hearth.above());
         helper.assertTrue(BlockPos.betweenClosedStream(burnt.offset(-3, -1, -3), burnt.offset(3, 2, 3))
-                .noneMatch(at -> helper.getLevel().getBlockState(at).is(net.minecraft.world.level.block.Blocks.FIRE)),
+                .noneMatch(at -> helper.getLevel().getBlockState(at).is(Blocks.FIRE)),
             BRUTE + " heeds the griefing rule for its fire and lit one with the rule off.");
         helper.succeed();
     }
@@ -590,9 +735,9 @@ public final class GoalGameTests {
      */
     private static void roof(GameTestHelper helper, BlockPos from, BlockPos to) {
         BlockPos.betweenClosed(BlockPos.ZERO, new BlockPos(7, 0, 7))
-            .forEach(at -> helper.setBlock(at, net.minecraft.world.level.block.Blocks.STONE));
+            .forEach(at -> helper.setBlock(at, Blocks.STONE));
         BlockPos.betweenClosed(from, to)
-            .forEach(at -> helper.setBlock(at, net.minecraft.world.level.block.Blocks.STONE));
+            .forEach(at -> helper.setBlock(at, Blocks.STONE));
     }
 
     /**
@@ -724,8 +869,8 @@ public final class GoalGameTests {
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = SHELTER_TICKS)
     public void anEntityLooksAsFarForWaterAsItsPackSays(GameTestHelper helper) {
         BlockPos.betweenClosed(BlockPos.ZERO, new BlockPos(7, 0, 7))
-            .forEach(at -> helper.setBlock(at, net.minecraft.world.level.block.Blocks.STONE));
-        helper.setBlock(new BlockPos(6, 0, 4), net.minecraft.world.level.block.Blocks.WATER);
+            .forEach(at -> helper.setBlock(at, Blocks.STONE));
+        helper.setBlock(new BlockPos(6, 0, 4), Blocks.WATER);
         AddonEntity brute = withGroup(helper, "tp:brute_parch", new BlockPos(1, 1, 4));
         if (brute == null) {
             helper.succeed();
@@ -744,7 +889,7 @@ public final class GoalGameTests {
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
     public void aWalkToABlockArrivesWithinItsGoalRadius(GameTestHelper helper) {
-        helper.setBlock(STAND.east(2), net.minecraft.world.level.block.Blocks.GOLD_BLOCK);
+        helper.setBlock(STAND.east(2), Blocks.GOLD_BLOCK);
         AddonEntity brute = heldInPlace(helper, "tp:brute_dig");
         if (brute == null) {
             helper.succeed();
