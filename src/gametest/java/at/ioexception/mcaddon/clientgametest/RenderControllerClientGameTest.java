@@ -54,6 +54,12 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
     /** Green laid over white at half, which eight bits of alpha carry as 128 parts in 255. */
     private static final int HURT_GREEN = 0xFF7FFF7F;
 
+    /** Every channel at half, which eight bits carry as 128 parts in 255. */
+    private static final int GREY = 0xFF808080;
+
+    /** The top of the sprite geometry's body, which its spark sits on. */
+    private static final double BODY_TOP = 8 / 16.0;
+
     /** What `tp:tailor`'s base and outfit are painted in. */
     private static final int TAILOR_BASE = 0xFF2846C8;
     private static final int TAILOR_OUTFIT = 0xFFC82828;
@@ -74,6 +80,7 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
             hurtColour(context, world);
             faintTexels(context, world);
             maskedTextures(context, world);
+            boneMaterials(context, world);
         }
     }
 
@@ -287,12 +294,12 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
      * A material defining `MASKED_MULTITEXTURE` draws its pass's second texture over its first, the
      * second's clear but coloured texels showing the first through.
      *
-     * `tp:tailor` draws the same two textures in three passes: through `tp_tailored`, a material of
-     * the pack's own that defines it, through the game's `villager_v2_masked`, and through
-     * `entity_alphatest`, which defines nothing of the kind and so binds the first texture alone. The
-     * base is blue all over and the outfit's four bands of sixteen columns are an opaque red, a clear
-     * white, a clear black and a faint green, which the first two passes draw as red, blue, nothing
-     * and blue.
+     * `tp:tailor` draws the same two textures through `tp_tailored`, a material of the pack's own
+     * that defines it, through the game's `villager_v2_masked`, and through `entity_alphatest`, which
+     * defines nothing of the kind and so binds the first texture alone; its fourth controller draws
+     * one pass of each kind. The base is blue all over and the outfit's four bands of sixteen columns
+     * are an opaque red, a clear white, a clear black and a faint green, which a masked pass draws as
+     * red, blue, nothing and blue.
      */
     private static void maskedTextures(ClientGameTestContext context, TestSingleplayerContext world) {
         world.getServer().runCommand("summon tp:tailor ~3 ~ ~-3");
@@ -304,8 +311,37 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
             .toList());
         List<String> masked = List.of(texel(TAILOR_OUTFIT), texel(TAILOR_BASE), texel(0), texel(TAILOR_BASE));
         List<String> plain = Collections.nCopies(4, texel(TAILOR_BASE));
-        Assert.that(drawn.equals(List.of(masked, masked, plain)), "tp:tailor's three passes should draw the"
-            + " outfit's bands as " + masked + " twice and as " + plain + " once, and drew " + drawn + ".");
+        Assert.that(drawn.equals(List.of(masked, masked, plain, plain, masked)), "tp:tailor's five passes should"
+            + " draw the outfit's bands as " + masked + " or as " + plain + ", and drew " + drawn + ".");
+    }
+
+    /**
+     * A controller's `materials` list gives each bone the material of the last entry naming it, and
+     * each material draws its own bones in a pass of its own.
+     *
+     * `tp:tailor`'s fourth controller draws every bone with `entity_alphatest` and the bones matching
+     * `*ARK` with `villager_v2_masked`, under a grey `color`. The sprite geometry's spark is the one bone
+     * the second entry reaches, a star at the front and the capitals notwithstanding, so the plain pass
+     * draws the body, up to half a block, and the masked one draws the spark sitting on top of it.
+     * Bedrock's masked multitexture shader reads no controller colour, so only the plain pass is grey.
+     */
+    private static void boneMaterials(ClientGameTestContext context, TestSingleplayerContext world) {
+        AddonEntity tailor = Entities.waitForClient(context, "tp:tailor");
+        Submitted frame = Frames.waitFor(context, tailor, drawn -> drawn.geometry().size() == 5,
+            last -> "tp:tailor's four controllers draw five passes, the last one split by bone, and "
+                + last.geometry().size() + " were submitted.");
+        Submitted.Geometry body = frame.geometry().get(3);
+        Submitted.Geometry spark = frame.geometry().get(4);
+        Assert.that(!body.vertices().isEmpty() && everyVertex(body, vertex -> vertex.y() <= BODY_TOP + TOLERANCE),
+            "tp:tailor's plain pass should draw the body alone, under " + BODY_TOP + ", and reached " + body.box()
+                + ".");
+        Assert.that(!spark.vertices().isEmpty() && everyVertex(spark, vertex -> vertex.y() >= BODY_TOP - TOLERANCE),
+            "tp:tailor's masked pass should draw the spark alone, over " + BODY_TOP + ", and reached " + spark.box()
+                + ".");
+        Assert.that(colours(body, GREY), "tp:tailor's plain pass takes its controller's grey, and was drawn in "
+            + Integer.toHexString(body.vertices().get(0).colour()) + ".");
+        Assert.that(colours(spark, WHITE), "tp:tailor's masked pass takes no controller colour, and was drawn in "
+            + Integer.toHexString(spark.vertices().get(0).colour()) + ".");
     }
 
     /** A texel as a reader compares it: its colour, or `clear` where nothing of it is drawn. */

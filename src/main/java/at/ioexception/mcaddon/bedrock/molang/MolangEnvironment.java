@@ -16,7 +16,7 @@ public class MolangEnvironment {
     }
 
     private final Map<String, MolangValue> variables = new HashMap<>();
-    private final Map<String, MolangValue> temporaries = new HashMap<>();
+    private Map<String, MolangValue> temporaries = new HashMap<>();
     private Map<String, List<MolangValue>> arrays = Map.of();
 
     private final Map<String, MolangEnvironment> links = new HashMap<>();
@@ -100,6 +100,17 @@ public class MolangEnvironment {
 
     public void setTemporary(String name, MolangValue value) {
         temporaries.put(name, value);
+    }
+
+    /**
+     * Keeps this environment's `temp.` values in a store other environments write to as well.
+     *
+     * Bedrock clears no temporary between one expression and the next, so a value one entity's
+     * expression leaves behind is still there when another entity's expression reads it. A pack
+     * passes numbers between two entities that way, keyed by where they stand.
+     */
+    public void shareTemporaries(Map<String, MolangValue> shared) {
+        temporaries = shared;
     }
 
     /** The value a keyframe channel is interpolating from, which `this` refers to. */

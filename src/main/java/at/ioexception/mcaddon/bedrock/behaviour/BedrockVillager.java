@@ -10,7 +10,8 @@ import java.util.UUID;
 
 /**
  * A Java villager as Bedrock's `villager_v2` states itself: its profession as `minecraft:variant`, the
- * biome it comes from as `minecraft:mark_variant` and its face as `minecraft:skin_id`.
+ * biome it comes from as `minecraft:mark_variant`, its face as `minecraft:skin_id` and its level as
+ * `query.trade_tier`.
  *
  * A pack replacing the game's villagers reads all three off it, and Java holds a profession and a
  * type by name rather than by number. Each list is in the order Bedrock's own `villager_v2.json` and
@@ -18,7 +19,7 @@ import java.util.UUID;
  * keeps it; Java has nowhere to keep it, so it is worked out from the villager's UUID, which lasts as
  * long as the villager does.
  */
-public record BedrockVillager(String profession, String type, UUID id) {
+public record BedrockVillager(String profession, String type, int level, UUID id) {
     private static final List<String> PROFESSIONS = List.of("none", "farmer", "fisherman", "shepherd",
         "fletcher", "librarian", "cartographer", "cleric", "armorer", "weaponsmith", "toolsmith", "butcher",
         "leatherworker", "mason", "nitwit");
@@ -34,7 +35,8 @@ public record BedrockVillager(String profession, String type, UUID id) {
     }
 
     public static BedrockVillager of(VillagerData data, UUID id) {
-        return new BedrockVillager(Platform.villagerProfession(data), Platform.villagerType(data), id);
+        return new BedrockVillager(Platform.villagerProfession(data), Platform.villagerType(data),
+            Platform.villagerLevel(data), id);
     }
 
     /**
@@ -48,6 +50,14 @@ public record BedrockVillager(String profession, String type, UUID id) {
             case "skin_id" -> (int) Math.floorMod(id.getLeastSignificantBits(), (long) SKINS);
             default -> null;
         };
+    }
+
+    /**
+     * Bedrock numbers trade tiers from nought, a novice being 0 and a master 4, which is how its own
+     * villager indexes the five badges it wears. Java numbers the same levels from one.
+     */
+    public int tradeTier() {
+        return level - 1;
     }
 
     /**
