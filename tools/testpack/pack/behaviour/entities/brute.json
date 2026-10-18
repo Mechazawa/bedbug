@@ -461,6 +461,61 @@
           "entity_bounding_box_scale": 0.5
         }
       },
+      "tp:brute_vaulting": {
+        "minecraft:behavior.leap_at_target": {
+          "priority": 0,
+          "target_dist": 0.6,
+          "must_be_on_ground": false
+        }
+      },
+      "tp:brute_soothing": {
+        "minecraft:mob_effect": {
+          "mob_effect": "glowing",
+          "effect_range": 2,
+          "effect_time": 1,
+          "cooldown_time": 3,
+          "ambient": true,
+          "entity_filter": {
+            "test": "is_family",
+            "subject": "other",
+            "value": "pig"
+          }
+        }
+      },
+      "tp:brute_ramming": {
+        "minecraft:behavior.ram_attack": {
+          "priority": 0,
+          "run_speed": 0.4,
+          "ram_speed": 2,
+          "min_ram_distance": 1,
+          "ram_distance": 3,
+          "cooldown_range": {
+            "min": 0.5,
+            "max": 0.5
+          },
+          "pre_ram_sound": "pre_ram",
+          "ram_impact_sound": "ram_impact"
+        }
+      },
+      "tp:brute_lunging": {
+        "minecraft:behavior.aquatic_charge_attack": {
+          "priority": 0,
+          "charge_cooldown_time": {
+            "min": 1,
+            "max": 1
+          },
+          "charge_speed": 0.3,
+          "max_charge_distance": 8,
+          "attack_reach": 0.5,
+          "knockback_force": 0
+        }
+      },
+      "tp:brute_hauling": {
+        "minecraft:strength": {
+          "value": 7,
+          "max": 2
+        }
+      },
       "tp:brute_poisoner": {
         "minecraft:shooter": {
           "def": "minecraft:arrow",
@@ -1252,6 +1307,41 @@
         "add": {
           "component_groups": [
             "tp:brute_hopping"
+          ]
+        }
+      },
+      "tp:brute_vault": {
+        "add": {
+          "component_groups": [
+            "tp:brute_vaulting"
+          ]
+        }
+      },
+      "tp:brute_soothe": {
+        "add": {
+          "component_groups": [
+            "tp:brute_soothing"
+          ]
+        }
+      },
+      "tp:brute_ram": {
+        "add": {
+          "component_groups": [
+            "tp:brute_ramming"
+          ]
+        }
+      },
+      "tp:brute_lunge": {
+        "add": {
+          "component_groups": [
+            "tp:brute_lunging"
+          ]
+        }
+      },
+      "tp:brute_haul": {
+        "add": {
+          "component_groups": [
+            "tp:brute_hauling"
           ]
         }
       },

@@ -311,7 +311,7 @@ public final class Projectiles {
         if (id == null) return;
 
         Platform.addEffect(struck, id, (int) Json.number(effect, "durationnormal", 0),
-            (int) Json.number(effect, "amplifier", 0), true);
+            (int) Json.number(effect, "amplifier", 0), false, true);
     }
 
     private void hitBlock(BlockHitResult where) {

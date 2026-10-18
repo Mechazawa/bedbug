@@ -21,12 +21,17 @@ import java.util.List;
  *
  * Bedrock's ram, swoop and aquatic charge are the same attack in three mediums: back off, line the
  * target up, cross the gap at speed, and knock whatever is hit away. What differs is where the aim
- * point sits and how much of the knock is upward, so those are what each of the three names.
+ * point sits, how much of the knock is upward and how long each rests between charges, so those
+ * are what each of the three names. A ram also runs up to a target further off than it charges
+ * from, and makes a sound before the charge and another on the hit.
  */
 public final class ChargeAttackGoal extends Goal {
     private final AddonEntity mob;
     private final int cooldownLow;
     private final int cooldownHigh;
+    private final double runSpeed;
+    private final String preSound;
+    private final String impactSound;
     private final double chargeSpeed;
     private final double minDistance;
     private final double maxDistance;
@@ -37,16 +42,21 @@ public final class ChargeAttackGoal extends Goal {
     private final boolean aims;
     private final int chargeTicks;
     private final List<String> startEvents = new ArrayList<>();
-    private int untilNext;
+    private int readyAt;
     private int charged;
+    private boolean approaching;
     private Vec3 towards;
 
-    private ChargeAttackGoal(AddonEntity mob, JsonObject component, double chargeSpeed,
+    private ChargeAttackGoal(AddonEntity mob, JsonObject component, int[] cooldown, double runSpeed,
+        double chargeSpeed,
         double minDistance, double maxDistance, double reach, double knockbackForce,
         double knockbackHeight, double overshoot, boolean aims) {
         this.mob = mob;
-        this.cooldownLow = Goals.ticksLow(component, "cooldown_range", 10);
-        this.cooldownHigh = Goals.ticksHigh(component, "cooldown_range", 20);
+        this.cooldownLow = cooldown[0];
+        this.cooldownHigh = cooldown[1];
+        this.runSpeed = runSpeed;
+        this.preSound = Goals.text(component, "pre_ram_sound");
+        this.impactSound = Goals.text(component, "ram_impact_sound");
         this.chargeSpeed = chargeSpeed;
         this.minDistance = minDistance;
         this.maxDistance = maxDistance;
@@ -66,8 +76,9 @@ public final class ChargeAttackGoal extends Goal {
 
     /** `minecraft:behavior.ram_attack`, which is a goat's shoulder at running speed. */
     public static ChargeAttackGoal ramming(AddonEntity mob, JsonObject component) {
-        return new ChargeAttackGoal(mob, component,
-            Goals.number(component, "ram_speed", 2) * 0.05,
+        return new ChargeAttackGoal(mob, component, new int[] {Goals.ticksLow(component, "cooldown_range", 10),
+                Goals.ticksHigh(component, "cooldown_range", 20)},
+            Goals.number(component, "run_speed", 1), Goals.number(component, "ram_speed", 2) * 0.05,
             Goals.number(component, "min_ram_distance", 4),
             Goals.number(component, "ram_distance", 7),
             Goals.number(component, "attack_reach", 0.2),
@@ -77,15 +88,18 @@ public final class ChargeAttackGoal extends Goal {
 
     /** `minecraft:behavior.swoop_attack`, which is the same run made from above. */
     public static ChargeAttackGoal swooping(AddonEntity mob, JsonObject component) {
-        return new ChargeAttackGoal(mob, component,
-            Goals.number(component, "speed_multiplier", 1) * 0.08, 0, 32,
+        return new ChargeAttackGoal(mob, component, new int[] {Goals.ticksLow(component, "delay_range", 10),
+                Goals.ticksHigh(component, "delay_range", 20)},
+            0, Goals.number(component, "speed_multiplier", 1) * 0.08, 0, 32,
             Goals.number(component, "damage_reach", 0.2), 0.3, 0.2, 1, true);
     }
 
     /** `minecraft:behavior.aquatic_charge_attack`, which aims past the target and swims through it. */
     public static ChargeAttackGoal chargingUnderwater(AddonEntity mob, JsonObject component) {
         return new ChargeAttackGoal(mob, component,
-            Goals.number(component, "charge_speed", 0.06), 0,
+            new int[] {Goals.ticksLow(component, "charge_cooldown_time", 2),
+                Goals.ticksHigh(component, "charge_cooldown_time", 6)},
+            0, Goals.number(component, "charge_speed", 0.06), 0,
             Goals.number(component, "max_charge_distance", 16),
             Goals.number(component, "attack_reach", 0.05),
             Goals.number(component, "knockback_force", 2) * 0.1, 0.1,
@@ -94,27 +108,30 @@ public final class ChargeAttackGoal extends Goal {
 
     @Override
     public boolean canUse() {
-        if (untilNext-- > 0) return false;
+        if (mob.tickCount < readyAt) return false;
 
         LivingEntity target = mob.getTarget();
         if (target == null || !target.isAlive()) return false;
 
         double away = mob.distanceTo(target);
-        return away >= minDistance && away <= maxDistance;
+        return away >= minDistance && (away <= maxDistance || runSpeed > 0);
     }
 
     @Override
     public boolean canContinueToUse() {
         LivingEntity target = mob.getTarget();
-        return towards != null && target != null && target.isAlive() && charged < chargeTicks;
+        return (approaching || towards != null) && target != null && target.isAlive() && charged < chargeTicks;
     }
 
     @Override
     public void start() {
-        LivingEntity target = mob.getTarget();
-        if (target == null) return;
-
         charged = 0;
+        approaching = true;
+    }
+
+    /** Lines the target up and sets off, once a ram has run up to where it charges from. */
+    private void charge(LivingEntity target) {
+        approaching = false;
         mob.setValue("is_ram_attacking", true);
         Vec3 aim = target.position();
         if (overshoot > 0) {
@@ -124,13 +141,22 @@ public final class ChargeAttackGoal extends Goal {
         if (!aims) towards = new Vec3(towards.x, 0, towards.z).normalize();
 
         mob.getNavigation().stop();
+        mob.makeNoise(preSound);
         startEvents.forEach(event -> EntityEvents.trigger(mob, event, target, ServerHooks.state()));
     }
 
     @Override
     public void tick() {
         LivingEntity target = mob.getTarget();
-        if (target == null || towards == null) return;
+        if (target == null) return;
+        if (approaching) {
+            if (mob.distanceTo(target) > maxDistance) {
+                mob.getNavigation().moveTo(target, runSpeed);
+                return;
+            }
+            charge(target);
+        }
+        if (towards == null) return;
 
         charged++;
         mob.getLookControl().setLookAt(target, 30f, 30f);
@@ -146,7 +172,8 @@ public final class ChargeAttackGoal extends Goal {
     @Override
     public void stop() {
         mob.setValue("is_ram_attacking", false);
-        untilNext = Goals.between(mob.getRandom(), cooldownLow, cooldownHigh);
+        readyAt = mob.tickCount + Goals.between(mob.getRandom(), cooldownLow, cooldownHigh);
+        approaching = false;
         towards = null;
     }
 
@@ -155,6 +182,7 @@ public final class ChargeAttackGoal extends Goal {
 
         Platform.hurt(target, level, mob.damageSources().mobAttack(mob),
             (float) mob.getAttributeValue(Attributes.ATTACK_DAMAGE));
+        mob.makeNoise(impactSound);
         Vec3 away = target.position().subtract(mob.position()).normalize();
         target.setDeltaMovement(target.getDeltaMovement().add(
             away.x * knockbackForce, knockbackHeight, away.z * knockbackForce));

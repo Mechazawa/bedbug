@@ -2063,12 +2063,12 @@ public final class BehaviourGameTests {
         }
 
         Identifier poison = Platform.id("minecraft", "poison");
-        helper.assertTrue(Platform.addEffect(ember, poison, IMMUNITY_TICKS, 0, false),
+        helper.assertTrue(Platform.addEffect(ember, poison, IMMUNITY_TICKS, 0, false, false),
             ENTITY + " refused poison before any group said it was immune.");
         Platform.removeEffect(ember, poison);
 
         EntityEvents.trigger(ember, "tp:ember_shoe", null, ServerHooks.state());
-        helper.assertTrue(!Platform.addEffect(ember, poison, IMMUNITY_TICKS, 0, false),
+        helper.assertTrue(!Platform.addEffect(ember, poison, IMMUNITY_TICKS, 0, false, false),
             ENTITY + " gained minecraft:mob_effect_immunity from a group and took the effect anyway.");
         helper.succeed();
     }

@@ -73,7 +73,7 @@ public final class PlayDeadGoal extends Goal {
         mob.setTarget(null);
         mob.getNavigation().stop();
         if (regenerates) {
-            Platform.addEffect(mob, Identifier.tryParse("minecraft:regeneration"), duration, 0, true);
+            Platform.addEffect(mob, Identifier.tryParse("minecraft:regeneration"), duration, 0, false, true);
         }
     }
 

@@ -486,19 +486,19 @@ public final class Platform {
      * registry lookup that returns one was `getHolder` until 26 renamed it to `get`.
      */
     public static boolean addEffect(LivingEntity entity, Identifier effect, int duration, int amplifier,
-        boolean particles) {
+        boolean ambient, boolean particles) {
         //? if >=26 {
         return BuiltInRegistries.MOB_EFFECT.get(effect)
-            .map(holder -> entity.addEffect(new MobEffectInstance(holder, duration, amplifier, false, particles)))
+            .map(holder -> entity.addEffect(new MobEffectInstance(holder, duration, amplifier, ambient, particles)))
             .orElse(false);
         //?} else if >=1.21 {
         /*return BuiltInRegistries.MOB_EFFECT.getHolder(effect)
-            .map(holder -> entity.addEffect(new MobEffectInstance(holder, duration, amplifier, false, particles)))
+            .map(holder -> entity.addEffect(new MobEffectInstance(holder, duration, amplifier, ambient, particles)))
             .orElse(false);
         *///?} else {
         /*net.minecraft.world.effect.MobEffect found = BuiltInRegistries.MOB_EFFECT.get(effect);
         return found != null
-            && entity.addEffect(new MobEffectInstance(found, duration, amplifier, false, particles));
+            && entity.addEffect(new MobEffectInstance(found, duration, amplifier, ambient, particles));
         *///?}
     }
 

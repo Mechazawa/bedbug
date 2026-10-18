@@ -1343,6 +1343,138 @@ public final class GoalGameTests {
     private static final double HOP_LANDS_FROM = 6.2;
     private static final double HOP_LANDS_TO = 7.3;
 
+    /**
+     * A leap rises at the three tenths of a block a tick the ocelot writes as `target_dist`, and
+     * under `must_be_on_ground` set false it leaps from the air as well.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aLeapRisesAtItsTargetDistanceAndLeavesTheAir(GameTestHelper helper) {
+        AddonEntity grounded = heldInPlace(helper, "tp:brute_vault");
+        AddonEntity aloft = heldInPlace(helper, "tp:brute_vault", new BlockPos(1, 2, 4));
+        if (grounded == null || aloft == null) {
+            helper.succeed();
+            return;
+        }
+
+        aloft.setNoGravity(true);
+        grounded.setTarget(pig(helper, STAND.east(3), BLOWS_TO_KILL));
+        aloft.setTarget(pig(helper, new BlockPos(4, 0, 4), BLOWS_TO_KILL));
+        double[] rise = {0};
+        AtomicBoolean leaptAloft = new AtomicBoolean();
+        helper.onEachTick(() -> {
+            rise[0] = Math.max(rise[0], grounded.getDeltaMovement().y);
+            if (!aloft.onGround() && aloft.getDeltaMovement().y > LEAPING) leaptAloft.set(true);
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(Math.abs(rise[0] - VAULT_RISE) < RISE_MARGIN,
+                BRUTE + " leaps at six tenths and rose at " + rise[0] + ".");
+            helper.assertTrue(leaptAloft.get(), BRUTE + " may leap from the air and never left it upward.");
+        });
+    }
+
+    /** Six tenths of a block a tick less one tick of gravity and drag. */
+    private static final double VAULT_RISE = 0.51;
+
+    /**
+     * A mob effect waits `cooldown_time` seconds after handing its effect out and gives it as an
+     * `ambient` one: the soothing brute's second of glowing runs out before its three second wait.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aMobEffectWaitsItsCooldownAndIsAmbient(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_soothe");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob pig = pig(helper, STAND.east(1), BLOWS_TO_KILL);
+        long[] first = {-1};
+        AtomicBoolean ambient = new AtomicBoolean();
+        AtomicBoolean lapsed = new AtomicBoolean();
+        helper.onEachTick(() -> {
+            net.minecraft.world.effect.MobEffectInstance glowing = pig.getActiveEffects().stream()
+                .filter(active -> Platform.effectId(active).equals("minecraft:glowing"))
+                .findFirst().orElse(null);
+            if (glowing != null && first[0] < 0) {
+                first[0] = helper.getLevel().getGameTime();
+                ambient.set(glowing.isAmbient());
+            }
+            if (glowing == null && first[0] >= 0) lapsed.set(true);
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(first[0] >= 0, BRUTE + " never made the pig glow.");
+            helper.assertTrue(ambient.get(), BRUTE + " gives its effect as an ambient one and it was not.");
+            helper.assertTrue(lapsed.get(),
+                BRUTE + " waits three seconds between effects and the pig never stopped glowing.");
+        });
+    }
+
+    /** A ram runs up at `run_speed` to a target further off than it charges from. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aRamRunsUpAtItsRunSpeed(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_ram");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        brute.setTarget(pig(helper, STAND.east(6), BLOWS_TO_KILL));
+        helper.runAfterDelay(SETTLE, () -> {
+            helper.assertTrue(brute.getMoveControl().getSpeedModifier() == RAM_RUN,
+                BRUTE + " runs up at four tenths and moves at " + brute.getMoveControl().getSpeedModifier());
+            helper.succeed();
+        });
+    }
+
+    private static final double RAM_RUN = 0.4;
+
+    /** An aquatic charge rests the `charge_cooldown_time` its pack states between charges. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void anAquaticChargeRestsItsCooldown(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_lunge");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob pig = pig(helper, STAND.east(3), BLOWS_TO_KILL);
+        brute.setTarget(pig);
+        List<Long> blows = new ArrayList<>();
+        float[] health = {pig.getHealth()};
+        helper.onEachTick(() -> {
+            if (pig.getHealth() < health[0]) blows.add(helper.getLevel().getGameTime());
+            health[0] = pig.getHealth();
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(blows.size() >= 2, BRUTE + " struck the pig " + blows.size() + " times.");
+            long gap = blows.get(1) - blows.get(0);
+            helper.assertTrue(gap >= LUNGE_REST && gap <= LUNGE_REST + LUNGE_SLACK,
+                BRUTE + " rests a second between charges and struck again after " + gap + " ticks.");
+        });
+    }
+
+    private static final long LUNGE_REST = 20;
+    private static final long LUNGE_SLACK = 8;
+
+    /** `minecraft:strength` gives three slots a point up to its `max`, so seven stop at two. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aStrengthStopsAtItsMax(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_haul");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.runAfterDelay(1, () -> {
+            helper.assertTrue(brute.inventory() != null && brute.inventory().getContainerSize() == HAULED,
+                BRUTE + " has a strength of two at most and carries "
+                    + (brute.inventory() == null ? 0 : brute.inventory().getContainerSize()) + " slots.");
+            helper.succeed();
+        });
+    }
+
+    private static final int HAULED = 6;
+
     /** The game time of each leap, which is the tick the entity starts rising fast. */
     private static List<Long> leapsOf(GameTestHelper helper, AddonEntity brute) {
         List<Long> leaps = new ArrayList<>();

@@ -23,7 +23,6 @@ import net.minecraft.world.entity.ai.goal.BreathAirGoal;
 import net.minecraft.world.entity.ai.goal.FleeSunGoal;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.ai.goal.FollowMobGoal;
-import net.minecraft.world.entity.ai.goal.LeapAtTargetGoal;
 import net.minecraft.world.entity.ai.goal.MoveBackToVillageGoal;
 import net.minecraft.world.entity.ai.goal.MoveThroughVillageGoal;
 import net.minecraft.world.entity.ai.goal.MoveTowardsRestrictionGoal;
@@ -789,7 +788,8 @@ public class AddonEntity extends PathfinderMob
         if (declaresNow("minecraft:inventory")) {
             slots = Math.max(1, (int) liveNumber("minecraft:inventory", "inventory_size", 5));
         } else if (declaresNow("minecraft:strength")) {
-            slots = Math.max(1, (int) liveNumber("minecraft:strength", "value", 1) * 3);
+            slots = Math.max(1, (int) Math.min(liveNumber("minecraft:strength", "value", 1),
+                liveNumber("minecraft:strength", "max", 5)) * 3);
         }
         if (slots == 0 || (carried != null && carried.getContainerSize() == slots)) return;
 
@@ -2468,29 +2468,35 @@ public class AddonEntity extends PathfinderMob
      * Hands out the effect `minecraft:mob_effect` names to whatever comes close enough.
      *
      * Bedrock states the effect, how far it reaches and how long it lasts, and applies it to
-     * everything the component's filters allow. The entity itself is never one of them.
+     * everything the component's filters allow. The entity itself is never one of them. Once it has
+     * handed the effect out it waits `cooldown_time` seconds before the next, and under `ambient`
+     * the effect shows the faint particles of a beacon's.
      */
     private void giveEffect() {
-        if (!declares("minecraft:mob_effect")) return;
+        com.google.gson.JsonObject live = liveComponent("minecraft:mob_effect");
+        if (live == null || tickCount < effectReadyAt) return;
         if (!(level() instanceof net.minecraft.server.level.ServerLevel)) return;
 
-        String effect = liveText("minecraft:mob_effect", "mob_effect");
+        String effect = Goals.text(live, "mob_effect");
         Identifier id = effect == null ? null : Identifier.tryParse(
             effect.contains(":") ? effect : "minecraft:" + effect);
         if (id == null) return;
 
-        double range = number(definition, "minecraft:mob_effect", "effect_range", 0.2);
-        int seconds = (int) number(definition, "minecraft:mob_effect", "effect_time", 10);
-        Filter filter = Filter.parse(componentBody("minecraft:mob_effect").get("entity_filter"));
-
-        for (net.minecraft.world.entity.LivingEntity nearby : level().getEntitiesOfClass(
-            net.minecraft.world.entity.LivingEntity.class, getBoundingBox().inflate(range))) {
-            if (nearby == this) continue;
-            if (!filter.matches(new Filter.Context(this, nearby, nearby, ServerHooks.state()))) continue;
-
-            Platform.addEffect(nearby, id, seconds * 20, 0, true);
-        }
+        double range = Goals.number(live, "effect_range", 0.2);
+        int seconds = (int) Goals.number(live, "effect_time", 10);
+        Filter filter = Goals.filter(live, "entity_filter");
+        boolean ambient = Goals.flag(live, "ambient", false);
+        long given = level().getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class,
+                getBoundingBox().inflate(range),
+                nearby -> nearby != this
+                    && filter.matches(new Filter.Context(this, nearby, nearby, ServerHooks.state())))
+            .stream()
+            .filter(nearby -> Platform.addEffect(nearby, id, seconds * 20, 0, ambient, true))
+            .count();
+        if (given > 0) effectReadyAt = tickCount + Goals.ticks(live, "cooldown_time", 0);
     }
+
+    private int effectReadyAt;
 
     /**
      * Hurts whatever is standing against the entity, which is what `minecraft:area_attack` does.
@@ -2729,7 +2735,7 @@ public class AddonEntity extends PathfinderMob
             ? net.minecraft.world.effect.MobEffectInstance.INFINITE_DURATION
             : Goals.ticks(attack, "effect_duration", 0);
         if (ticks == 0) return;
-        Platform.addEffect(struck, effect, ticks, (int) Goals.number(attack, "effect_amplifier", 0), true);
+        Platform.addEffect(struck, effect, ticks, (int) Goals.number(attack, "effect_amplifier", 0), false, true);
     }
 
     /**
@@ -3129,10 +3135,7 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.follow_mob" ->
                 goals.add(priority, new FollowMobGoal(this, Goals.number(goal, "speed_multiplier", 1),
                     (float) Goals.number(goal, "stop_distance", 2), (float) Goals.number(goal, "search_range", 0)));
-            // Mojang documents `yd` as a height, but every number its own entities write is the upward
-            // speed Java's goal takes for the same animal: four tenths for the wolf, the cat and the spider.
-            case "minecraft:behavior.leap_at_target" ->
-                goals.add(priority, new LeapAtTargetGoal(this, (float) Goals.number(goal, "yd", 0)));
+            case "minecraft:behavior.leap_at_target" -> goals.add(priority, new LeapGoal(this, goal));
             case "minecraft:behavior.stalk_and_pounce_on_target" -> goals.add(priority, new PounceGoal(this, goal));
             case "minecraft:behavior.play" -> goals.add(priority, new PlayGoal(this, goal));
             case "minecraft:behavior.stroll_towards_village" ->
@@ -3886,7 +3889,7 @@ public class AddonEntity extends PathfinderMob
         Player nearest = level.getNearestPlayer(this, RAID_TRIGGER_RANGE);
         if (nearest == null || Platform.hasEffect(nearest, BAD_OMEN)) return;
 
-        Platform.addEffect(nearest, BAD_OMEN, BAD_OMEN_TICKS, 0, true);
+        Platform.addEffect(nearest, BAD_OMEN, BAD_OMEN_TICKS, 0, false, true);
         fire(Goals.event(componentBody("minecraft:raid_trigger"), "triggered_event"));
     }
 
