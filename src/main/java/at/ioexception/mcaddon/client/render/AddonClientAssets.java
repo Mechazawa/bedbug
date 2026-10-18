@@ -1,10 +1,10 @@
 package at.ioexception.mcaddon.client.render;
 
+import at.ioexception.mcaddon.registry.ActiveAddons;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.BedrockAssets;
 import at.ioexception.mcaddon.bedrock.entity.ClientEntityDefinition;
 import at.ioexception.mcaddon.convert.ConvertedPack;
-import at.ioexception.mcaddon.resource.AddonPacks;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -35,7 +35,7 @@ public final class AddonClientAssets {
         BY_IDENTIFIER.clear();
         ATTACHABLES.clear();
         PACKS.clear();
-        for (ConvertedPack converted : AddonPacks.all()) {
+        for (ConvertedPack converted : ActiveAddons.active().converted()) {
             BedrockAssets assets = BedrockAssets.read(converted.pack());
             AddonModels models = new AddonModels(assets, converted);
             PACKS.add(models);

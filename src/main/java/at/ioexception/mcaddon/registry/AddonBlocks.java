@@ -105,7 +105,14 @@ public final class AddonBlocks {
     private record Declared(BlockDefinition definition, PackShapes shapes) {
     }
 
-    public static void register(PackSet packs) {
+    /**
+     * Registers a block, and an item to place it with, per definition these packs carry that is not
+     * registered yet. Returns the blocks the packs declare, registered now or earlier.
+     *
+     * A block's states, shapes, hardness and light are fixed when it is built, so a block registered
+     * earlier keeps the definition it was built from.
+     */
+    public static List<Block> register(PackSet packs) {
         List<Declared> definitions = new ArrayList<>();
         Map<String, ClientBlockDefinition> appearance = new LinkedHashMap<>();
         for (BedrockPack pack : packs.packs()) {
@@ -118,20 +125,23 @@ public final class AddonBlocks {
             if (pack.role() == PackRole.RESOURCE) appearance.putAll(ClientBlockDefinition.readAll(pack));
         }
 
-        for (Declared declared : definitions) {
-            register(declared.definition(),
-                ClientBlockDefinition.of(appearance, declared.definition().identifier()),
-                declared.shapes());
-        }
-        if (!BY_IDENTIFIER.isEmpty()) {
-            McAddon.LOGGER.info("Registered {} blocks from add-ons.", BY_IDENTIFIER.size());
-        }
+        List<Block> declared = definitions.stream()
+            .map(one -> register(one.definition(),
+                ClientBlockDefinition.of(appearance, one.definition().identifier()), one.shapes()))
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .toList();
+        if (!declared.isEmpty()) McAddon.LOGGER.info("Registered {} blocks from add-ons.", declared.size());
+        return declared;
     }
 
-    private static void register(BlockDefinition definition, ClientBlockDefinition appearance,
+    /** The block a definition stands for, or null where its identifier is unusable or not a pack's. */
+    private static Block register(BlockDefinition definition, ClientBlockDefinition appearance,
         PackShapes shapes) {
+        Block existing = BY_IDENTIFIER.get(definition.identifier());
+        if (existing != null) return existing;
         Identifier id = identifier(definition.identifier());
-        if (id == null || BuiltInRegistries.BLOCK.containsKey(id)) return;
+        if (id == null || BuiltInRegistries.BLOCK.containsKey(id)) return null;
 
         for (String component : definition.components().keySet()) {
             if (!IMPLEMENTED.contains(component)
@@ -169,6 +179,7 @@ public final class AddonBlocks {
             AddonItems.all().put(definition.identifier(), item);
         }
         if (definition.components().has("minecraft:flower_pottable")) registerPotted(id, block);
+        return block;
     }
 
     /**

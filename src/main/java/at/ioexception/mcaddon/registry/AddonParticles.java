@@ -27,14 +27,16 @@ public final class AddonParticles {
     private AddonParticles() {
     }
 
+    /**
+     * Registers a type for each effect not registered yet, and binds every effect these packs
+     * describe to their description. The first pack describing an effect decides it.
+     */
     public static void register(List<ConvertedPack> packs) {
-        DEFINITIONS.clear();
-        TYPES.clear();
-
+        java.util.Set<String> described = new java.util.HashSet<>();
         for (ConvertedPack pack : packs) {
             ParticleDefinition.readAll(pack.pack()).forEach((identifier, definition) -> {
                 Identifier id = idOf(identifier);
-                if (id == null || DEFINITIONS.containsKey(identifier)) return;
+                if (id == null || !described.add(identifier)) return;
 
                 SimpleParticleType type = BuiltInRegistries.PARTICLE_TYPE.getOptional(id)
                     .filter(SimpleParticleType.class::isInstance)
@@ -46,8 +48,8 @@ public final class AddonParticles {
                 TYPES.put(identifier, type);
             });
         }
-        if (!DEFINITIONS.isEmpty()) {
-            McAddon.LOGGER.info("Registered {} particle effects from add-ons.", DEFINITIONS.size());
+        if (!described.isEmpty()) {
+            McAddon.LOGGER.info("Registered {} particle effects from add-ons.", described.size());
         }
     }
 

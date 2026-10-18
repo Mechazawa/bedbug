@@ -1,15 +1,13 @@
 package at.ioexception.mcaddon;
 
+import at.ioexception.mcaddon.registry.ActiveAddons;
 import at.ioexception.mcaddon.pack.PackDiscovery;
 import at.ioexception.mcaddon.pack.PackSet;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.registry.AddonBrewing;
-import at.ioexception.mcaddon.registry.AddonCameras;
 import at.ioexception.mcaddon.registry.AddonCreativeTab;
 import at.ioexception.mcaddon.registry.AddonEntities;
-import at.ioexception.mcaddon.registry.AddonFogs;
-import at.ioexception.mcaddon.registry.AddonRegistry;
 import at.ioexception.mcaddon.registry.AddonSpawns;
 import at.ioexception.mcaddon.registry.AddonWorldgen;
 import at.ioexception.mcaddon.resource.AddonPacks;
@@ -64,24 +62,20 @@ public final class McAddon implements ModInitializer {
         at.ioexception.mcaddon.pack.PackSettings.read(packs);
         packs.report().forEach(LOGGER::info);
 
-        AddonPacks.convert(packs);
-        AddonRegistry.ensureRegistered(packs, AddonPacks.all());
+        ActiveAddons.install(AddonPacks.convert(packs));
         // After the items, because a brewing recipe naming a pack's own bottle has to find it.
-        AddonBrewing.register(packs);
+        AddonBrewing.register();
         // The worldgen before the spawn rules, because a spawn rule may select on a tag only a
         // pack's own biome carries.
-        AddonWorldgen.register(AddonPacks.all());
+        AddonWorldgen.register(ActiveAddons.active().converted());
         AddonSpawns.register(packs);
-        AddonCameras.register(packs);
         // Once the add-ons' own entities, items and blocks are registered, because a function line
         // naming one of them translates only once the name can be found.
         AddonPacks.reportFunctionLines();
         // Logged after the spawn rules are read and the function lines translated, because what
         // either drops belongs in the same register as the components an entity declares.
         AddonEntities.report().forEach(LOGGER::info);
-        AddonFogs.register(AddonPacks.all());
-        AddonCreativeTab.register(packs);
-        at.ioexception.mcaddon.server.Dialogues.read(packs);
+        AddonCreativeTab.register();
         Channels.register();
         ServerHooks.register();
         at.ioexception.mcaddon.structure.PackStructures.register();

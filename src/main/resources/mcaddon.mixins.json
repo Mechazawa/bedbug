@@ -35,6 +35,7 @@
     "ServerLevelGameEventMixin",
     "FoodDataAccessor",
     "MappedRegistryAccessor",
+    "CreativeModeTabsAccessor",
     "FoodDataMixin",
     "BlockMinedExhaustionMixin",
     "PlayerAttackExhaustionMixin",

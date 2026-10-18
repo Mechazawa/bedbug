@@ -12,6 +12,7 @@ import at.ioexception.mcaddon.pack.PackFiles;
 import at.ioexception.mcaddon.pack.PackRole;
 import at.ioexception.mcaddon.pack.PackSet;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.ActiveAddons;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.repository.Pack;
@@ -30,28 +31,7 @@ import java.util.function.Consumer;
  * directories already exist and are only pointed at.
  */
 public final class AddonPacks {
-    private static List<ConvertedPack> converted = List.of();
-    private static FunctionNames functions = FunctionNames.NONE;
-
     private AddonPacks() {
-    }
-
-    public static List<ConvertedPack> all() {
-        return converted;
-    }
-
-    /** The functions every add-on ships, which a function call written in any of them may name. */
-    public static FunctionNames functions() {
-        return functions;
-    }
-
-    /** The namespace the add-on this pack came out of was converted to, or null for a pack of none. */
-    public static String namespaceOf(BedrockPack pack) {
-        return converted.stream()
-            .filter(one -> one.pack().origin().equals(pack.origin()))
-            .map(ConvertedPack::namespace)
-            .findFirst()
-            .orElse(null);
     }
 
     /**
@@ -64,7 +44,7 @@ public final class AddonPacks {
      * the half it has not got. Its items and blocks are registered either way, and without the
      * conversion each of them is a model the game looks for and never finds.
      */
-    public static void convert(PackSet packs) {
+    public static AddonSet convert(PackSet packs) {
         Map<String, List<BedrockPack>> behavioursByOrigin = new LinkedHashMap<>();
         for (BedrockPack pack : packs.packs()) {
             PackFiles.report(pack);
@@ -90,17 +70,18 @@ public final class AddonPacks {
         Map<String, List<BedrockPack>> behavioursByNamespace = new LinkedHashMap<>();
         namespaces.forEach((bundle, namespace) -> behavioursByNamespace
             .computeIfAbsent(namespace, ignored -> new ArrayList<>()).addAll(bundle.behaviours()));
-        functions = FunctionNames.of(behavioursByNamespace);
+        FunctionNames functions = FunctionNames.of(behavioursByNamespace);
 
-        converted = namespaces.entrySet().stream()
+        return new AddonSet(packs, namespaces.entrySet().stream()
             .map(entry -> PackConverter.convert(entry.getKey(), entry.getValue(), functions, McAddonPaths.cache()))
-            .toList();
+            .toList(), functions);
     }
 
-    /** Reports each function line of every add-on that cannot be translated, without running any. */
+    /** Reports each function line of every active add-on that cannot be translated, without running any. */
     public static void reportFunctionLines() {
-        converted.forEach(pack -> pack.behaviours().forEach(behaviour ->
-            Functions.untranslatable(behaviour, functions.issuedBy(pack.namespace()))
+        AddonSet active = ActiveAddons.active();
+        active.converted().forEach(pack -> pack.behaviours().forEach(behaviour ->
+            Functions.untranslatable(behaviour, active.functions().issuedBy(pack.namespace()))
                 .forEach(AddonEntities::unsupported)));
     }
 
@@ -111,8 +92,9 @@ public final class AddonPacks {
      * that another one depends on should be the one overridden, not the one overriding.
      */
     public static void contribute(Consumer<Pack> consumer, PackType type) {
-        for (int index = converted.size() - 1; index >= 0; index--) {
-            ConvertedPack pack = converted.get(index);
+        List<ConvertedPack> offered = ActiveAddons.active().converted();
+        for (int index = offered.size() - 1; index >= 0; index--) {
+            ConvertedPack pack = offered.get(index);
             try {
                 consumer.accept(Platform.directoryPack(
                     McAddon.MOD_ID + "/" + pack.namespace(), pack.displayName(), pack.root(), type,

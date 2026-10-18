@@ -15,6 +15,7 @@ import at.ioexception.mcaddon.client.render.PlayerHud;
 import at.ioexception.mcaddon.client.screen.AddonFormScreen;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.ActiveAddons;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientEntityEvents;
@@ -26,17 +27,8 @@ import net.minecraft.world.entity.EntityType;
 public final class McAddonClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
-        AddonClientAssets.load();
-
-        for (EntityType<?> type : AddonEntities.all().keySet()) {
-            EntityRendererRegistry.register(cast(type), AddonEntityRenderer::new);
-        }
-
-        at.ioexception.mcaddon.registry.AddonParticles.all().keySet().forEach(identifier ->
-            Platform.registerParticle(at.ioexception.mcaddon.registry.AddonParticles.typeOf(identifier),
-                sprites -> new AddonParticleProvider(identifier, sprites)));
-
-        Platform.registerDyeTint(at.ioexception.mcaddon.registry.AddonItems.dyeable());
+        follow();
+        ActiveAddons.onActivate(set -> follow());
 
         Channels.receiveProperties((entityId, json) -> {
             EntityProperties.accept(entityId, json);
@@ -84,6 +76,28 @@ public final class McAddonClient implements ClientModInitializer {
             ServerAddons.clear();
             at.ioexception.mcaddon.client.render.AddonEmitters.clear();
         }));
+    }
+
+    /** What the drawing side registers once per object, so an object registered later is prepared too. */
+    private static final java.util.Set<Object> PREPARED = new java.util.HashSet<>();
+
+    /**
+     * Prepares the drawing side for the active add-ons: their models, a renderer for every entity
+     * type and a provider for every particle type registered so far, a tint for every dyeable item,
+     * and creative tabs built again the next time they are opened.
+     */
+    private static void follow() {
+        AddonClientAssets.load();
+        AddonEntities.all().keySet().stream().filter(PREPARED::add)
+            .forEach(type -> EntityRendererRegistry.register(cast(type), AddonEntityRenderer::new));
+        at.ioexception.mcaddon.registry.AddonParticles.all().keySet().stream()
+            .filter(identifier -> PREPARED.add(at.ioexception.mcaddon.registry.AddonParticles.typeOf(identifier)))
+            .forEach(identifier -> Platform.registerParticle(
+                at.ioexception.mcaddon.registry.AddonParticles.typeOf(identifier),
+                sprites -> new AddonParticleProvider(identifier, sprites)));
+        Platform.registerDyeTint(at.ioexception.mcaddon.registry.AddonItems.dyeable().stream()
+            .filter(PREPARED::add).toList());
+        at.ioexception.mcaddon.mixin.CreativeModeTabsAccessor.mcaddon$setCachedParameters(null);
     }
 
     /** Properties can arrive before the entity they belong to, so both arrivals apply them. */

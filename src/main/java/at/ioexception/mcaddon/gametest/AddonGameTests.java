@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.gametest;
 
+import at.ioexception.mcaddon.registry.ActiveAddons;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.script.ScriptHost;
@@ -203,8 +204,8 @@ public final class AddonGameTests {
      */
     @GameTest()
     public void aPackDimensionIsWrittenOrNamed(GameTestHelper helper) {
-        at.ioexception.mcaddon.convert.ConvertedPack pack = at.ioexception.mcaddon.resource.AddonPacks.all()
-            .stream().filter(one -> one.namespace().equals("tp")).findFirst().orElse(null);
+        at.ioexception.mcaddon.convert.ConvertedPack pack = ActiveAddons.active().converted().stream()
+            .filter(one -> one.namespace().equals("tp")).findFirst().orElse(null);
         if (pack == null) {
             helper.succeed();
             return;
@@ -237,7 +238,7 @@ public final class AddonGameTests {
      */
     @GameTest()
     public void aCameraPresetsDroppedFieldsAreNamed(GameTestHelper helper) {
-        if (at.ioexception.mcaddon.resource.AddonPacks.all().stream().noneMatch(one -> one.namespace().equals("tp"))) {
+        if (ActiveAddons.active().converted().stream().noneMatch(one -> one.namespace().equals("tp"))) {
             helper.succeed();
             return;
         }

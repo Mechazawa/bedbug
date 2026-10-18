@@ -391,16 +391,19 @@ public final class Platform {
         *///?}
     }
 
-    /** Puts items into a tab the game already has, under the name Fabric gives that event in 26. */
+    /**
+     * Puts items into a tab the game already has each time it is built, under the name Fabric gives
+     * that event in 26.
+     */
     public static void addToCreativeTab(
         net.minecraft.resources.ResourceKey<net.minecraft.world.item.CreativeModeTab> tab,
-        java.util.List<net.minecraft.world.item.Item> items) {
+        java.util.function.Supplier<java.util.List<net.minecraft.world.item.Item>> items) {
         //? if >=26 {
         net.fabricmc.fabric.api.creativetab.v1.CreativeModeTabEvents.modifyOutputEvent(tab)
-            .register(output -> items.forEach(output::accept));
+            .register(output -> items.get().forEach(output::accept));
         //?} else {
         /*net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents.modifyEntriesEvent(tab)
-            .register(entries -> items.forEach(entries::accept));
+            .register(entries -> items.get().forEach(entries::accept));
         *///?}
     }
 

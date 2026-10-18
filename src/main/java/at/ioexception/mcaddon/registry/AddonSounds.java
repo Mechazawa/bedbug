@@ -54,7 +54,12 @@ public final class AddonSounds {
             }
         }
         if (registered > 0) McAddon.LOGGER.info("Registered {} sound events from add-ons.", registered);
-        for (ConvertedPack pack : packs) readMusic(pack);
+    }
+
+    /** Replaces the music chosen per biome with what these packs choose. */
+    public static void readMusic(List<ConvertedPack> packs) {
+        MUSIC.clear();
+        packs.forEach(AddonSounds::readMusic);
     }
 
     /**

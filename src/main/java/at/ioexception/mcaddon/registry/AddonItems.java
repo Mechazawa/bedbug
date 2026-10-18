@@ -12,7 +12,7 @@ import at.ioexception.mcaddon.item.AddonShooterItem;
 import at.ioexception.mcaddon.item.AddonThrowableItem;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.PackRole;
-import at.ioexception.mcaddon.pack.PackSet;
+import at.ioexception.mcaddon.resource.AddonSet;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonObject;
@@ -59,6 +59,9 @@ public final class AddonItems {
     private static final Map<Item, DurabilitySensor> SENSORS = new LinkedHashMap<>();
     private static final Set<Item> OFF_HAND_REFUSED = new HashSet<>();
     private static final Set<Item> LIQUID_CLIPPED = new HashSet<>();
+
+    /** The items built from an item definition, as opposed to a block's item or a spawn egg. */
+    private static final Set<Item> BUILT = new HashSet<>();
 
     private AddonItems() {
     }
@@ -193,23 +196,41 @@ public final class AddonItems {
         sensor.reached(level, holder, stack.getMaxDamage() - stack.getDamageValue());
     }
 
-    public static void register(PackSet packs) {
+    /**
+     * Registers an item per definition these add-ons carry that is not registered yet, and a spawn
+     * egg per spawnable entity type of theirs, then binds every one of their items to what they
+     * declare. Returns the items the set declares, registered now or earlier.
+     */
+    public static List<Item> register(AddonSet set, java.util.Collection<EntityType<?>> types) {
         List<ItemDefinition> definitions = new ArrayList<>();
-        for (BedrockPack pack : packs.packs()) {
+        for (BedrockPack pack : set.packs().packs()) {
             if (pack.role() == PackRole.BEHAVIOUR) definitions.addAll(ItemDefinition.readAll(pack));
         }
 
-        for (ItemDefinition definition : definitions) register(definition);
-        registerSpawnEggs();
-
-        if (!BY_IDENTIFIER.isEmpty()) {
-            McAddon.LOGGER.info("Registered {} items from add-ons.", BY_IDENTIFIER.size());
+        List<Item> declared = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (ItemDefinition definition : definitions) {
+            if (!seen.add(definition.identifier())) continue;
+            Item item = register(set, definition);
+            if (item == null) continue;
+            bind(definition, item);
+            declared.add(item);
         }
+        declared.addAll(registerSpawnEggs(set, types));
+
+        if (!declared.isEmpty()) McAddon.LOGGER.info("Registered {} items from add-ons.", declared.size());
+        return declared;
     }
 
-    private static void register(ItemDefinition definition) {
+    /**
+     * The item a definition stands for: the one built for it earlier, or one built now. Null where
+     * the identifier is unusable or another item holds it.
+     */
+    private static Item register(AddonSet set, ItemDefinition definition) {
+        Item existing = BY_IDENTIFIER.get(definition.identifier());
+        if (existing != null && BUILT.contains(existing)) return existing;
         Identifier id = identifier(definition.identifier());
-        if (id == null || BuiltInRegistries.ITEM.containsKey(id)) return;
+        if (id == null || BuiltInRegistries.ITEM.containsKey(id)) return null;
 
         for (String component : definition.components().keySet()) {
             if (!IMPLEMENTED.contains(component)
@@ -218,10 +239,32 @@ public final class AddonItems {
                     + (BEDROCK_ONLY.contains(component) ? ", which Java has nothing for" : ""));
             }
         }
+        if (!definition.absorbedCauses().isEmpty() && definition.durability() <= 0) {
+            // `minecraft:damage_absorption` counts the absorbed hit against the item's own
+            // durability, so an item the pack gave none of has nothing to spend.
+            AddonEntities.unsupported("minecraft:damage_absorption without durability");
+        }
 
-        Item item = build(definition, properties(definition, id), id);
+        Item item = build(set, definition, properties(definition, id), id);
         Registry.register(BuiltInRegistries.ITEM, id, item);
+        BUILT.add(item);
         BY_IDENTIFIER.put(definition.identifier(), item);
+        fuel(definition, item);
+        compostable(definition, item);
+        return item;
+    }
+
+    /**
+     * Binds a registered item to what its definition says, replacing what an earlier set said.
+     *
+     * Everything here is kept beside the item rather than on it, which is what lets a definition
+     * of the same item from another release of its add-on take over.
+     */
+    private static void bind(ItemDefinition definition, Item item) {
+        List.of(PROJECTILES, KINETIC, COOLDOWNS, SENSORS, ABSORBED).forEach(map -> map.remove(item));
+        List.of(KEPT, OFF_HAND_REFUSED, LIQUID_CLIPPED).forEach(held -> held.remove(item));
+        DYEABLE.remove(item);
+
         COMPONENTS.put(item, Set.copyOf(definition.components().keySet()));
         if (definition.dyeColour() >= 0) DYEABLE.add(item);
         if (definition.components().containsKey("minecraft:should_despawn")
@@ -253,26 +296,10 @@ public final class AddonItems {
         if (!definition.declaredTrue("minecraft:allow_off_hand")) OFF_HAND_REFUSED.add(item);
         if (definition.declaredTrue("minecraft:liquid_clipped")) LIQUID_CLIPPED.add(item);
 
-        fuel(definition, item);
-        compostable(definition, item);
-        absorption(definition, item);
-    }
-
-    /**
-     * Remembers what a worn item takes the damage for, where it can spend durability on it.
-     *
-     * `minecraft:damage_absorption` counts the absorbed hit against the item's own durability, so
-     * an item the pack gave none of has nothing to spend and is reported as a gap instead.
-     */
-    private static void absorption(ItemDefinition definition, Item item) {
-        List<String> causes = definition.absorbedCauses();
-        if (causes.isEmpty()) return;
-
-        if (definition.durability() <= 0) {
-            AddonEntities.unsupported("minecraft:damage_absorption without durability");
-            return;
+        // A worn item spends its own durability on an absorbed hit, so one with none absorbs nothing.
+        if (!definition.absorbedCauses().isEmpty() && definition.durability() > 0) {
+            ABSORBED.put(item, Set.copyOf(definition.absorbedCauses()));
         }
-        ABSORBED.put(item, Set.copyOf(causes));
     }
 
     /**
@@ -314,14 +341,14 @@ public final class AddonItems {
      * Placing a block, releasing an entity and throwing one each need a class of their own, and
      * every other component only decorates the plain item at the end.
      */
-    private static Item build(ItemDefinition definition, Item.Properties properties, Identifier id) {
+    private static Item build(AddonSet set, ItemDefinition definition, Item.Properties properties, Identifier id) {
         Block placed = placedBlock(definition);
         if (placed != null) return Platform.buildBlockItem(placed, properties, id);
 
         EntityType<?> released = placedEntity(definition);
         if (released != null) {
             SpawnEggAppearance appearance =
-                appearanceOf(definition.text("minecraft:entity_placer", "entity"));
+                appearanceOf(set, definition.text("minecraft:entity_placer", "entity"));
             Item egg = Platform.spawnEgg(released, id, appearance.baseColour(), appearance.overlayColour());
             if (egg != null) return egg;
         }
@@ -423,28 +450,37 @@ public final class AddonItems {
      * The behaviour lives in the class: a plain item with the same component registers, shows an
      * icon and spawns nothing.
      */
-    private static void registerSpawnEggs() {
-        for (Map.Entry<EntityType<?>, ServerEntityDefinition> entry : AddonEntities.all().entrySet()) {
-            if (!entry.getValue().spawnable()) continue;
+    private static List<Item> registerSpawnEggs(AddonSet set, java.util.Collection<EntityType<?>> types) {
+        List<Item> eggs = new ArrayList<>();
+        for (EntityType<?> spawned : types) {
+            ServerEntityDefinition definition = AddonEntities.definitionOf(spawned);
+            if (!definition.spawnable()) continue;
 
-            Identifier type = identifier(entry.getValue().identifier());
+            Identifier type = identifier(definition.identifier());
             if (type == null) continue;
 
+            String identifier = definition.identifier() + "_spawn_egg";
+            Item existing = BY_IDENTIFIER.get(identifier);
+            if (existing != null) {
+                eggs.add(existing);
+                continue;
+            }
             Identifier id = Platform.id(type.getNamespace(), type.getPath() + "_spawn_egg");
             if (BuiltInRegistries.ITEM.containsKey(id)) continue;
 
-            SpawnEggAppearance appearance = appearanceOf(entry.getValue().identifier());
-            Item egg = Platform.spawnEgg(entry.getKey(), id,
-                appearance.baseColour(), appearance.overlayColour());
+            SpawnEggAppearance appearance = appearanceOf(set, definition.identifier());
+            Item egg = Platform.spawnEgg(spawned, id, appearance.baseColour(), appearance.overlayColour());
             if (egg == null) continue;
             Registry.register(BuiltInRegistries.ITEM, id, egg);
-            BY_IDENTIFIER.put(entry.getValue().identifier() + "_spawn_egg", egg);
+            BY_IDENTIFIER.put(identifier, egg);
+            eggs.add(egg);
         }
+        return eggs;
     }
 
     /** How the pack that declared this entity wants its egg painted, or Bedrock's own colours. */
-    private static SpawnEggAppearance appearanceOf(String identifier) {
-        for (at.ioexception.mcaddon.convert.ConvertedPack pack : at.ioexception.mcaddon.resource.AddonPacks.all()) {
+    private static SpawnEggAppearance appearanceOf(AddonSet set, String identifier) {
+        for (at.ioexception.mcaddon.convert.ConvertedPack pack : set.converted()) {
             SpawnEggAppearance appearance = pack.spawnEggs().get(identifier);
             if (appearance != null) return appearance;
         }
