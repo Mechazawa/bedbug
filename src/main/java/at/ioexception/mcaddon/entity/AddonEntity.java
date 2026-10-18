@@ -20,7 +20,6 @@ import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.BreakDoorGoal;
 import net.minecraft.world.entity.ai.goal.BreathAirGoal;
-import net.minecraft.world.entity.ai.goal.EatBlockGoal;
 import net.minecraft.world.entity.ai.goal.FleeSunGoal;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.ai.goal.FollowMobGoal;
@@ -1982,56 +1981,22 @@ public class AddonEntity extends PathfinderMob
                 .forEach(effect -> addEffect(new net.minecraft.world.effect.MobEffectInstance(effect))));
     }
 
-    /**
-     * Taking the flower a golem is holding out, which is what `behavior.take_flower` waits for.
-     *
-     * Java's golem offers one and its own villager accepts; a pack's entity has to be walked over
-     * and made to take it, which is the whole of what the behaviour describes.
-     */
-    private void takeOfferedFlower() {
-        if (!declaresNow("minecraft:behavior.take_flower")) return;
-
-        net.minecraft.world.entity.Entity golem = Platform.offeredFlower(this, 8);
-        if (golem == null) return;
-
-        if (distanceTo(golem) > 2) {
-            getNavigation().moveTo(golem, 0.6);
-            return;
-        }
-        Platform.takeFlower(golem);
-        setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND,
-            new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.POPPY));
-    }
-
-    /** Ticks of celebrating still owed, and whether the raid underfoot was already won last tick. */
-    private int celebrateFor;
+    /** Whether the raid underfoot was already won last time the entity looked. */
     private boolean sawRaidWon;
 
     /**
-     * Celebrating a raid that has just been beaten.
+     * Raises `minecraft:start_celebrating` once a raid the entity stands in is won.
      *
-     * Bedrock gives the component a duration and the entity jumps for that long. A won raid stands
-     * for a while after it is won, so the countdown starts on the tick the win appears and not on
-     * every tick the win is still there.
+     * That is the event Bedrock's village raises on the entities around a raid it survived, and the
+     * one Mojang's own villagers add their celebrating group from. A won raid stands for a while after
+     * it is won, so the event goes out on the look that first sees the win.
      */
-    private void celebrate() {
-        if (!declaresNow("minecraft:behavior.celebrate_survive")) return;
+    private void noticeRaidWon() {
         if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
 
         boolean won = Platform.raidWon(level, blockPosition());
-        if (won && !sawRaidWon) {
-            celebrateFor = (int) (number(definition, "minecraft:behavior.celebrate_survive",
-                "duration", 30) * 20);
-        }
+        if (won && !sawRaidWon) fire("minecraft:start_celebrating");
         sawRaidWon = won;
-        if (celebrateFor <= 0) return;
-        celebrateFor--;
-
-        getNavigation().stop();
-        if (onGround()) setDeltaMovement(getDeltaMovement().add(0, 0.42, 0));
-        if (celebrateFor % 20 == 0) {
-            playSound(SoundEvents.VILLAGER_CELEBRATE, getSoundVolume(), getVoicePitch());
-        }
     }
 
     /**
@@ -2674,6 +2639,12 @@ public class AddonEntity extends PathfinderMob
     /** Ticks of the entity's own age at which something last hurt it, for the components that wait. */
     private int lastHurtTick = -1000;
 
+    /** Whether a live component's `cooldown_after_being_attacked` has run out since the entity was last hurt. */
+    public boolean calmSinceHurt(String component) {
+        com.google.gson.JsonObject live = liveComponent(component);
+        return tickCount - lastHurtTick >= Goals.ticks(live, "cooldown_after_being_attacked", 10);
+    }
+
     /** Health as it stood last tick, which is how being hurt is noticed without a damage hook. */
     private float healthLastTick = -1;
 
@@ -3125,7 +3096,7 @@ public class AddonEntity extends PathfinderMob
                 goals.add(priority, new BreathAirGoal(this));
 
             case "minecraft:behavior.eat_block" ->
-                goals.add(priority, new EatBlockGoal(this));
+                goals.add(priority, new GrazeGoal(this, goal));
             // Bedrock's find_cover and flee_sun both end with the mob standing out of the light.
             case "minecraft:behavior.flee_sun", "minecraft:behavior.find_cover" ->
                 goals.add(priority, new FleeSunGoal(this, 1.0));
@@ -3231,7 +3202,7 @@ public class AddonEntity extends PathfinderMob
                 MoveToMatchingBlockGoal.anywhere(this, goal));
 
             case "minecraft:behavior.equip_item" -> goals.add(priority,
-                new EquipItemGoal(this, componentBody("minecraft:equip_item")));
+                new EquipItemGoal(this));
             case "minecraft:behavior.hold_ground" ->
                 goals.add(priority, HoldGroundGoal.standing(this));
             case "minecraft:behavior.look_at_target" ->
@@ -3310,8 +3281,12 @@ public class AddonEntity extends PathfinderMob
                 new PlayDeadGoal(this, goal));
             case "minecraft:behavior.scared" -> goals.add(priority,
                 new ScaredGoal(this, goal));
+            case "minecraft:behavior.take_flower" -> goals.add(priority,
+                new TakeFlowerGoal(this, goal));
             case "minecraft:behavior.celebrate" -> goals.add(priority,
-                new CelebrateGoal(this, goal));
+                CelebrateGoal.winning(this, goal));
+            case "minecraft:behavior.celebrate_survive" -> goals.add(priority,
+                CelebrateGoal.surviving(this, goal));
             case "minecraft:behavior.sneeze" -> goals.add(priority,
                 new SneezeGoal(this, goal));
             case "minecraft:behavior.roll" -> goals.add(priority,
@@ -3382,11 +3357,10 @@ public class AddonEntity extends PathfinderMob
             // the same walk towards a willing partner that every other pack animal does.
             case "minecraft:behavior.make_love", "minecraft:behavior.receive_love" ->
                 goals.add(priority, new BreedGoal(this, goal));
-            // Napping is lying down, and snacking is eating what is already in hand.
             case "minecraft:behavior.nap" -> goals.add(priority,
                 RestGoal.lyingDown(this, goal));
             case "minecraft:behavior.snacking" -> goals.add(priority,
-                new EatCarriedItemGoal(this, goal));
+                new SnackGoal(this, goal));
 
             case "minecraft:behavior.admire_item" -> goals.add(priority,
                 BarterGoal.admiring(this, goal));
@@ -3628,8 +3602,7 @@ public class AddonEntity extends PathfinderMob
             rest();
             drink();
             leashChanged(isLeashed());
-            takeOfferedFlower();
-            celebrate();
+            noticeRaidWon();
             rise();
             manageAsTrader();
             despawn();
@@ -4107,41 +4080,40 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
-     * Tells the hunters nearby that something they were after has died.
+     * Lets the hunter that made a kill celebrate it, and tells the hunters around it.
      *
-     * `minecraft:celebrate_hunt` is what makes a piglin cheer over a hoglin. `broadcast` says the
-     * cheer spreads to its own kind within the radius, which is why every entity in range is asked
-     * rather than only whatever landed the kill.
+     * `minecraft:celebrate_hunt` is what makes a piglin cheer over a hoglin. The entity credited with
+     * the kill celebrates, and with `broadcast` on every other entity carrying the component within
+     * its `radius` celebrates with it.
      */
     public static void noticeHuntSucceeded(net.minecraft.world.entity.LivingEntity quarry) {
         if (quarry.level().isClientSide()
-            || !AddonEntities.anyoneDeclares("minecraft:celebrate_hunt")) {
+            || !AddonEntities.anyoneDeclares("minecraft:celebrate_hunt")
+            || !(quarry.getKillCredit() instanceof AddonEntity killer)
+            || !killer.celebrateTheHunt(quarry)) {
             return;
         }
 
-        for (AddonEntity hunter : quarry.level().getEntitiesOfClass(AddonEntity.class,
-            quarry.getBoundingBox().inflate(CELEBRATION_RANGE))) {
-            hunter.celebrateTheHunt(quarry);
-        }
+        com.google.gson.JsonObject hunt = killer.liveComponent("minecraft:celebrate_hunt");
+        if (!Goals.flag(hunt, "broadcast", true)) return;
+
+        double radius = Goals.number(hunt, "radius", 16);
+        quarry.level().getEntitiesOfClass(AddonEntity.class, killer.getBoundingBox().inflate(radius),
+                hunter -> hunter != killer && hunter.distanceToSqr(killer) <= radius * radius)
+            .forEach(hunter -> hunter.celebrateTheHunt(quarry));
     }
 
-    /** The widest radius `minecraft:celebrate_hunt` is given, which bounds the search for hunters. */
-    private static final double CELEBRATION_RANGE = 32;
+    /** Starts celebrating a kill its `celebration_targets` count, and answers whether it did. */
+    private boolean celebrateTheHunt(net.minecraft.world.entity.LivingEntity quarry) {
+        com.google.gson.JsonObject hunt = liveComponent("minecraft:celebrate_hunt");
+        if (hunt == null || quarry == this) return false;
 
-    private void celebrateTheHunt(net.minecraft.world.entity.LivingEntity quarry) {
-        if (definition == null || quarry == this || !declares("minecraft:celebrate_hunt")) return;
+        Filter celebrated = Filter.parse(hunt.get("celebration_targets"));
+        if (!celebrated.matches(new Filter.Context(this, quarry, quarry, ServerHooks.state()))) return false;
 
-        double radius = number(definition, "minecraft:celebrate_hunt", "radius", 16);
-        if (distanceToSqr(quarry) > radius * radius) return;
-
-        Filter celebrated = Filter.parse(componentBody("minecraft:celebrate_hunt")
-            .get("celebration_targets"));
-        if (!celebrated.matches(new Filter.Context(this, quarry, quarry, ServerHooks.state()))) return;
-
-        celebrateUntilTick = tickCount
-            + (int) (number(definition, "minecraft:celebrate_hunt", "duration", 4)
-                * Goals.TICKS_PER_SECOND);
+        celebrateUntilTick = tickCount + Goals.ticks(hunt, "duration", 4);
         ServerHooks.state().setProperty(getUUID(), "is_celebrating", true);
+        return true;
     }
 
     /** Cheers for as long as the hunt's celebration lasts, and stops cheering when it is over. */
@@ -4754,6 +4726,11 @@ public class AddonEntity extends PathfinderMob
     private void growUp() {
         if (age == null || !age.advance(1)) return;
 
+        age.drops().stream()
+            .map(AddonItems::named)
+            .filter(java.util.Objects::nonNull)
+            .forEach(item -> level().addFreshEntity(new net.minecraft.world.entity.item.ItemEntity(
+                level(), getX(), getY(), getZ(), new ItemStack(item))));
         setValue("is_baby", false);
         fire(age.grownEvent());
     }
@@ -5012,7 +4989,9 @@ public class AddonEntity extends PathfinderMob
     /** One of `minecraft:ageable`'s own feed items, which brings growing up forward. */
     private boolean grownByHand(Player player, InteractionHand hand) {
         ItemStack held = player.getItemInHand(hand);
-        if (age == null || !age.fed(held)) return false;
+        if (age == null || !age.fed(held, new Filter.Context(this, player, player, ServerHooks.state()))) {
+            return false;
+        }
 
         if (!player.getAbilities().instabuild) held.shrink(1);
         for (int i = 0; i < 5; i++) {
@@ -5559,6 +5538,11 @@ public class AddonEntity extends PathfinderMob
      * temporaries every other expression on the server reads and writes.
      */
     public boolean holds(String condition) {
+        return answer(condition).truthy();
+    }
+
+    /** What a Molang expression a component states comes to for the entity now, the same way. */
+    public at.ioexception.mcaddon.bedrock.molang.MolangValue answer(String expression) {
         if (questions == null) {
             questions = new at.ioexception.mcaddon.bedrock.animation.AnimationPlayer(null, this);
             questions.environment().setQueries(new at.ioexception.mcaddon.bedrock.entity.EntityQueries(
@@ -5571,8 +5555,8 @@ public class AddonEntity extends PathfinderMob
         }
         questions.environment().setLifeTime(
             tickCount / (float) at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.TICKS_PER_SECOND);
-        return at.ioexception.mcaddon.bedrock.molang.MolangParser.parse(condition)
-            .evaluate(questions.environment()).truthy();
+        return at.ioexception.mcaddon.bedrock.molang.MolangParser.parse(expression)
+            .evaluate(questions.environment());
     }
 
     private at.ioexception.mcaddon.bedrock.animation.AnimationPlayer questions;

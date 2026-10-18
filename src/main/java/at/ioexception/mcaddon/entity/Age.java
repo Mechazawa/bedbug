@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.entity;
 
+import at.ioexception.mcaddon.bedrock.behaviour.Filter;
 import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
@@ -7,7 +8,9 @@ import com.google.gson.JsonObject;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * How far along a young entity is, for the pack that said it grows up.
@@ -18,21 +21,26 @@ import java.util.Map;
  */
 public final class Age {
     private final int duration;
-    private final Map<String, Integer> feedItems;
-    private final Map<String, Integer> pauseItems;
-    private final Map<String, Integer> resetItems;
+    private final Map<String, Double> feedItems;
+    private final Map<String, Double> pauseItems;
+    private final Map<String, Double> resetItems;
+    private final Filter feeders;
+    private final List<String> drops;
     private final String grownEvent;
     private final float startScale;
     private final float endScale;
     private int grown;
     private boolean paused;
 
-    private Age(int duration, Map<String, Integer> feedItems, Map<String, Integer> pauseItems,
-        Map<String, Integer> resetItems, String grownEvent, float startScale, float endScale) {
+    private Age(int duration, Map<String, Double> feedItems, Map<String, Double> pauseItems,
+        Map<String, Double> resetItems, Filter feeders, List<String> drops, String grownEvent,
+        float startScale, float endScale) {
         this.duration = duration;
         this.feedItems = feedItems;
         this.pauseItems = pauseItems;
         this.resetItems = resetItems;
+        this.feeders = feeders;
+        this.drops = drops;
         this.grownEvent = grownEvent;
         this.startScale = startScale;
         this.endScale = endScale;
@@ -58,25 +66,30 @@ public final class Age {
             items(ageable, "feed_items"),
             items(ageable, "pause_growth_items"),
             items(ageable, "reset_growth_items"),
+            Goals.filter(ageable, "interact_filters"),
+            Json.list(ageable, "drop_items").stream()
+                .map(item -> item.isJsonPrimitive() ? item.getAsString() : null)
+                .filter(Objects::nonNull)
+                .toList(),
             growUp == null ? null : Json.text(growUp, "event", null),
             (float) number(scaling, "start_scale", 1),
             (float) number(scaling, "end_scale", 1));
     }
 
     /**
-     * The foods that bring the day forward, and how many seconds each is worth.
+     * The foods that bring the day forward, and what share of the whole wait each is worth.
      *
      * A pack writes an entry either as the item on its own or as the item with its own growth, and
      * an entry without one is worth a tenth of the wait, which is what Bedrock gives it.
      */
-    private static Map<String, Integer> items(JsonObject ageable, String field) {
-        Map<String, Integer> items = new LinkedHashMap<>();
+    private static Map<String, Double> items(JsonObject ageable, String field) {
+        Map<String, Double> items = new LinkedHashMap<>();
         for (JsonElement element : Json.list(ageable, field)) {
             if (element.isJsonPrimitive()) {
-                items.put(element.getAsString(), 0);
+                items.put(element.getAsString(), 0.0);
             } else if (element.isJsonObject()) {
                 String item = Json.text(element.getAsJsonObject(), "item", null);
-                if (item != null) items.put(item, (int) number(element.getAsJsonObject(), "growth", 0));
+                if (item != null) items.put(item, number(element.getAsJsonObject(), "growth", 0));
             }
         }
         return items;
@@ -98,6 +111,11 @@ public final class Age {
         return startScale + (endScale - startScale) * along;
     }
 
+    /** What `drop_items` names, by the names the pack wrote, for the step that finishes the growing. */
+    public List<String> drops() {
+        return drops;
+    }
+
     /** True on the step that finishes the growing, so the pack's event fires once. */
     public boolean advance(int ticks) {
         if (paused || !baby()) return false;
@@ -110,10 +128,11 @@ public final class Age {
      * Being handed one of the foods the pack named, which brings growing up forward.
      *
      * A food with no growth of its own is worth a tenth of the whole wait. False leaves the item in
-     * the player's hand, because nothing was eaten.
+     * the player's hand, because nothing was eaten, which is also the answer for a feeder
+     * `interact_filters` turns away.
      */
-    public boolean fed(ItemStack offered) {
-        if (offered.isEmpty() || !baby()) return false;
+    public boolean fed(ItemStack offered, Filter.Context feeder) {
+        if (offered.isEmpty() || !baby() || !feeders.matches(feeder)) return false;
 
         String id = AddonItems.identifierOf(offered.getItem());
         // A pack names three lists beside each other, and only one of them brings the day forward:
@@ -129,16 +148,16 @@ public final class Age {
             return true;
         }
 
-        for (Map.Entry<String, Integer> item : feedItems.entrySet()) {
+        for (Map.Entry<String, Double> item : feedItems.entrySet()) {
             if (!names(item.getKey(), id)) continue;
 
-            grown += item.getValue() > 0 ? item.getValue() * 20 : Math.max(1, duration / 10);
+            grown += item.getValue() > 0 ? (int) Math.ceil(item.getValue() * duration) : Math.max(1, duration / 10);
             return true;
         }
         return false;
     }
 
-    private static boolean named(Map<String, Integer> items, String id) {
+    private static boolean named(Map<String, Double> items, String id) {
         return items.keySet().stream().anyMatch(name -> names(name, id));
     }
 

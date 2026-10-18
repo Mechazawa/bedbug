@@ -379,6 +379,284 @@ public final class GoalGameTests {
     }
 
     /**
+     * `minecraft:behavior.eat_block` eats the block its pairs name under the entity, as often as its
+     * `success_chance` says, leaves the replacement and raises `on_eat`.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aGrazerEatsTheBlockItsPairsName(GameTestHelper helper) {
+        helper.setBlock(STAND.below(), Blocks.HAY_BLOCK);
+        AddonEntity brute = withGroup(helper, "tp:brute_graze");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.succeedWhen(() -> {
+            helper.assertBlockPresent(Blocks.DIRT, STAND.below());
+            helper.assertTrue(Boolean.TRUE.equals(brute.value("tp:grazed")),
+                BRUTE + " ate the hay and never raised on_eat.");
+        });
+    }
+
+    /**
+     * `minecraft:behavior.snacking` eats only the `items` it names, stops at once on a stop chance of
+     * one, and waits out its cooldown before it snacks again.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = SNACK_TICKS)
+    public void aSnackerEatsOnlyItsItemsAndThenWaits(GameTestHelper helper) {
+        AddonEntity snacker = withGroup(helper, "tp:brute_snack");
+        AddonEntity choosy = withGroup(helper, "tp:brute_snack", FAR_CORNER);
+        if (snacker == null) {
+            helper.succeed();
+            return;
+        }
+
+        snacker.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND,
+            new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.SWEET_BERRIES));
+        choosy.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND,
+            new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.BREAD));
+        helper.runAfterDelay(SNACKED_BY, () -> {
+            helper.assertTrue(snacker.getMainHandItem().isEmpty(),
+                BRUTE + " stops snacking on a stop chance of one and still holds its berries.");
+            snacker.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND,
+                new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.SWEET_BERRIES));
+        });
+        helper.runAfterDelay(SNACK_TICKS - 10, () -> {
+            helper.assertFalse(snacker.getMainHandItem().isEmpty(),
+                BRUTE + " snacked again inside a cooldown of a thousand seconds.");
+            helper.assertFalse(choosy.getMainHandItem().isEmpty(),
+                BRUTE + " snacked on bread, which its items do not name.");
+            helper.succeed();
+        });
+    }
+
+    /** Long past Java's three seconds of holding food before eating it. */
+    private static final int SNACK_TICKS = 140;
+    private static final int SNACKED_BY = 20;
+
+    /**
+     * `minecraft:behavior.lay_egg` lays only where the material above the block is one its
+     * `target_materials_above_block` names, so the nearer sand under a snow layer is passed over.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aLayerLaysOnlyUnderTheMaterialItNames(GameTestHelper helper) {
+        helper.setBlock(STAND.east(2).below(), Blocks.SAND);
+        helper.setBlock(STAND.east(2), Blocks.SNOW);
+        helper.setBlock(STAND.south(4).below(), Blocks.SAND);
+        AddonEntity brute = withGroup(helper, "tp:brute_nest");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.succeedWhen(() -> {
+            helper.assertBlockPresent(Blocks.TURTLE_EGG, STAND.south(4));
+            helper.assertBlockNotPresent(Blocks.TURTLE_EGG, STAND.east(2));
+        });
+    }
+
+    /**
+     * `minecraft:behavior.take_flower` takes a golem's flower only while its `filters` hold, and
+     * raises `on_take_flower` when it does.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = FLOWER_TICKS)
+    public void aFlowerTakerTakesOnlyWhileItsFiltersHold(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_take_flowers");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Entity golem = Platform.createMob(
+            BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("minecraft", "iron_golem")).orElseThrow(),
+            helper.getLevel());
+        BlockPos at = helper.absolutePos(STAND.east(4));
+        Platform.placeAt(golem, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        ((Mob) golem).setNoAi(true);
+        helper.getLevel().addFreshEntity(golem);
+        Platform.offerFlower(golem, true);
+
+        AtomicBoolean befriended = new AtomicBoolean();
+        helper.runAfterDelay(FLOWER_REFUSED_FOR, () -> {
+            helper.assertTrue(Platform.offersFlower(golem),
+                BRUTE + " took the flower while its filters said no.");
+            brute.addTag("tp_flower_friend");
+            befriended.set(true);
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(befriended.get(), BRUTE + " is not allowed the flower yet.");
+            helper.assertTrue(!Platform.offersFlower(golem),
+                BRUTE + " never took the flower once its filters allowed it.");
+            helper.assertTrue(Boolean.TRUE.equals(brute.value("tp:took_flower")),
+                BRUTE + " took the flower and never raised on_take_flower.");
+        });
+    }
+
+    private static final int FLOWER_REFUSED_FOR = 60;
+    private static final int FLOWER_TICKS = 200;
+
+    /**
+     * `minecraft:behavior.celebrate_survive` sends up fireworks at its `fireworks_interval` for as
+     * long as its group is on, with no raid anywhere, and raises `on_celebration_end_event` after its
+     * `duration`.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aSurvivorCelebratesWithFireworksWhileItsGroupIsOn(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_survive");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        AtomicBoolean launched = new AtomicBoolean();
+        helper.onEachTick(() -> launched.compareAndSet(false, !helper.getLevel().getEntitiesOfClass(
+            net.minecraft.world.entity.projectile.FireworkRocketEntity.class,
+            brute.getBoundingBox().inflate(8)).isEmpty()));
+        helper.succeedWhen(() -> {
+            helper.assertTrue(launched.get(), BRUTE + " celebrated and sent up no firework.");
+            helper.assertTrue(Boolean.TRUE.equals(brute.value("tp:celebrated")),
+                BRUTE + " celebrated for its second and never raised on_celebration_end_event.");
+        });
+    }
+
+    /**
+     * `minecraft:equip_item`'s `can_wear_armor` set false leaves a helmet lying at the entity's feet,
+     * while a brute whose own group says nothing puts one on.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void anEntityThatCannotWearArmourLeavesAHelmetLying(GameTestHelper helper) {
+        AddonEntity dresser = withGroup(helper, "tp:brute_dress");
+        AddonEntity plain = withGroup(helper, "tp:brute_go_unarmoured", FAR_CORNER);
+        if (dresser == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.spawnItem(net.minecraft.world.item.Items.IRON_HELMET, STAND);
+        helper.spawnItem(net.minecraft.world.item.Items.IRON_HELMET, FAR_CORNER);
+        helper.runAfterDelay(GOAL_TICKS - 10, () -> {
+            helper.assertFalse(dresser.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.HEAD).isEmpty(),
+                BRUTE + " can wear armour and never put the helmet on.");
+            helper.assertTrue(plain.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.HEAD).isEmpty(),
+                BRUTE + " put on a helmet though its can_wear_armor is false.");
+            helper.succeed();
+        });
+    }
+
+    /**
+     * `minecraft:celebrate_hunt` with `broadcast` off lets the hunter credited with the kill
+     * celebrate and leaves the hunter beside it quiet.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aHuntThatIsNotBroadcastIsCelebratedByItsKillerAlone(GameTestHelper helper) {
+        AddonEntity killer = withGroup(helper, "tp:brute_hunt_alone");
+        AddonEntity bystander = withGroup(helper, "tp:brute_hunt_alone", STAND.east(2));
+        if (killer == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob quarry = pig(helper, MIDDLE, 1);
+        Platform.hurt(quarry, helper.getLevel(), quarry.damageSources().mobAttack(killer), KILLING_BLOW);
+        helper.succeedWhen(() -> {
+            helper.assertTrue(Boolean.TRUE.equals(killer.value("is_celebrating")),
+                BRUTE + " killed the pig and is not celebrating.");
+            helper.assertFalse(Boolean.TRUE.equals(bystander.value("is_celebrating")),
+                BRUTE + " celebrates a kill it did not make, which its hunter did not broadcast.");
+        });
+    }
+
+    /** Far more than the pig's one health. */
+    private static final float KILLING_BLOW = 20;
+
+    /** `minecraft:admire_item`'s `duration` is how long the entity turns over what it holds. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = ADMIRE_TICKS)
+    public void anAdmirerAdmiresForItsDuration(GameTestHelper helper) {
+        AddonEntity brute = admirer(helper);
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        AtomicBoolean admired = new AtomicBoolean();
+        helper.onEachTick(() -> admired.compareAndSet(false, Boolean.TRUE.equals(brute.value("is_admiring"))));
+        helper.runAfterDelay(ADMIRE_TICKS - 10, () -> {
+            helper.assertTrue(admired.get(), BRUTE + " never admired the gold it was handed.");
+            helper.assertFalse(Boolean.TRUE.equals(brute.value("is_admiring")),
+                BRUTE + " is still admiring long after the second its admire_item allows.");
+            helper.succeed();
+        });
+    }
+
+    /** An entity hurt inside `minecraft:admire_item`'s `cooldown_after_being_attacked` admires nothing. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = ADMIRE_TICKS)
+    public void anAdmirerHurtRecentlyAdmiresNothing(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_admire");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.runAfterDelay(1, () -> Platform.hurt(brute, helper.getLevel(), brute.damageSources().generic(), 1));
+        helper.runAfterDelay(3, () -> brute.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND,
+            new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.GOLD_INGOT)));
+        helper.onEachTick(() -> helper.assertFalse(Boolean.TRUE.equals(brute.value("is_admiring")),
+            BRUTE + " admired gold a moment after it was hurt."));
+        helper.runAfterDelay(ADMIRE_TICKS - 10, helper::succeed);
+    }
+
+    /** An entity hurt inside `minecraft:barter`'s `cooldown_after_being_attacked` pays nobody. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = ADMIRE_TICKS)
+    public void aBarterHurtRecentlyPaysNobody(GameTestHelper helper) {
+        AddonEntity brute = admirer(helper);
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        net.minecraft.server.level.ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        Platform.placeAt(player, brute.getX() + 2, brute.getY(), brute.getZ(), 0f, 0f);
+        helper.runAfterDelay(HURT_WHILE_ADMIRING,
+            () -> Platform.hurt(brute, helper.getLevel(), brute.damageSources().generic(), 1));
+        helper.runAfterDelay(ADMIRE_TICKS - 10, () -> {
+            helper.getLevel().getServer().getPlayerList().remove(player);
+            helper.assertFalse(brute.getMainHandItem().isEmpty(),
+                BRUTE + " paid for its gold a second after it was hurt.");
+            helper.succeed();
+        });
+    }
+
+    /** A brute with its admiring group on, handed a gold ingot. */
+    private static AddonEntity admirer(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_admire");
+        if (brute != null) {
+            brute.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND,
+                new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.GOLD_INGOT));
+        }
+        return brute;
+    }
+
+    /** Well past the brute's one second of admiring. */
+    private static final int ADMIRE_TICKS = 90;
+    private static final int HURT_WHILE_ADMIRING = 10;
+
+    /** A stomper whose `search_range` is two blocks does not set off for an egg four blocks off. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = STOMP_TICKS)
+    public void aStomperLooksForEggsNoFurtherThanItsRange(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_stomp_near");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.setBlock(EGG, Blocks.TURTLE_EGG);
+        double start = brute.getX();
+        helper.onEachTick(() -> helper.assertTrue(brute.getX() - start < 1,
+            BRUTE + " walked towards an egg twice as far off as its search_range."));
+        helper.runAfterDelay(STOMP_TICKS - 10, helper::succeed);
+    }
+
+    /**
      * `minecraft:behavior.explore_outskirts` walks out past the edge of the village on the side the
      * entity stands, `explore_dist` beyond it.
      *

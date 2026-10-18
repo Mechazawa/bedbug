@@ -637,6 +637,58 @@ public final class BehaviourGameTests {
         helper.succeed();
     }
 
+    /** `minecraft:ageable`'s `drop_items` fall where the entity grows up, by Bedrock's item names. */
+    @GameTest()
+    public void anEntityGrowingUpDropsWhatItsAgeNames(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_hatch", null, ServerHooks.state());
+        helper.succeedWhen(() -> {
+            helper.assertFalse(ember.isBaby(), ENTITY + " has not grown up yet.");
+            helper.assertTrue(!helper.getLevel().getEntitiesOfClass(ItemEntity.class,
+                    ember.getBoundingBox().inflate(2),
+                    item -> item.getItem().is(AddonItems.named("turtle_shell_piece"))).isEmpty(),
+                ENTITY + " grew up and dropped no turtle_shell_piece.");
+        });
+    }
+
+    /**
+     * `minecraft:ageable`'s `interact_filters` decide who may feed the entity, and a feed item's
+     * `growth` is a share of the whole wait, so a growth of one grows it up at once.
+     */
+    @GameTest()
+    public void onlyAFeederTheAgeFiltersAllowGrowsTheEntityUp(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_make_picky", null, ServerHooks.state());
+        net.minecraft.server.level.ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        try {
+            player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
+            player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.WHEAT, 2));
+            ember.mobInteract(player, InteractionHand.MAIN_HAND);
+            helper.assertTrue(ember.isBaby() && player.getMainHandItem().getCount() == 2,
+                ENTITY + " was fed by a player its interact_filters turn away.");
+
+            player.addTag("tp_feeder");
+            ember.mobInteract(player, InteractionHand.MAIN_HAND);
+            helper.assertTrue(player.getMainHandItem().getCount() == 1,
+                ENTITY + " refused the wheat of a player its interact_filters allow.");
+            helper.assertFalse(ember.isBaby(),
+                ENTITY + " was fed wheat worth the whole wait and is still young.");
+        } finally {
+            helper.getLevel().getServer().getPlayerList().remove(player);
+        }
+        helper.succeed();
+    }
+
     /**
      * A bow a pack declared fires its ammunition when it is drawn and let go.
      *
