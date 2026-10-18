@@ -1352,6 +1352,32 @@ public final class GoalGameTests {
 
     private static final int STAY_TICKS = 20;
 
+    /**
+     * `minecraft:behavior.move_to_block` arrives within its `goal_radius`, half a block by default,
+     * of the spot over the block it looks for, measured from where the entity stands.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aWalkToABlockArrivesWithinItsDefaultRadius(GameTestHelper helper) {
+        helper.setBlock(new BlockPos(5, -1, 4), Blocks.GOLD_BLOCK);
+        AddonEntity brute = withGroup(helper, "tp:brute_seek_closely", new BlockPos(1, 0, 4));
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Vec3 spot = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(5, 0, 4)));
+        helper.succeedWhen(() -> {
+            helper.assertTrue(Boolean.TRUE.equals(brute.value("tp:reached")),
+                BRUTE + " walks to the gold and never raised its arrival, standing "
+                    + brute.position().distanceTo(spot) + " from the spot over it.");
+            helper.assertTrue(brute.position().distanceTo(spot) <= DEFAULT_GOAL_RADIUS,
+                BRUTE + " arrived " + brute.position().distanceTo(spot) + " from the spot over the gold.");
+        });
+    }
+
+    /** Bedrock's default `goal_radius` for `minecraft:behavior.move_to_block`. */
+    private static final double DEFAULT_GOAL_RADIUS = 0.5;
+
     /** `minecraft:behavior.move_to_block` walks to the block moved by `target_offset`, three blocks east. */
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
     public void aWalkToABlockEndsAtItsTargetOffset(GameTestHelper helper) {

@@ -479,7 +479,10 @@ These are the checks it runs, and what each one catches:
   beside a second entry no mob in the test answers, so a list read as all of its entries or a filter
   left wrapped in its entry hands the apple to the nearer cow. `tp:brute_caravanning` forms a
   caravan of at most two behind a leashed pig its `entity_types` admit, so of three brutes beside
-  one, two fall in. Java's own egg search can be
+  one, two fall in. `tp:brute_seeking_closely` walks to gold with the default `goal_radius` of half
+  a block, which Java's own block walk never reaches because its path ends a block short and it
+  measures from the middle of the block, so `MoveToMatchingBlockGoal` paths onto the spot and
+  measures from the feet. Java's own egg search can be
   replaced by a speed mod with one over a fixed twenty-four blocks, so `StompEggGoal` searches in its
   own `canUse`. `GoalGameTests` builds the
   village each one needs out of a bell or a bed in the empty structure, which Java registers as a

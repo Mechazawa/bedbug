@@ -881,6 +881,21 @@
           ]
         }
       },
+      "tp:brute_seeking_closely": {
+        "minecraft:behavior.move_to_block": {
+          "priority": 0,
+          "search_range": 8,
+          "search_height": 2,
+          "tick_interval": 1,
+          "target_blocks": [
+            "minecraft:gold_block"
+          ],
+          "on_reach": {
+            "event": "tp:brute_reached",
+            "target": "self"
+          }
+        }
+      },
       "tp:brute_caravanning": {
         "minecraft:behavior.follow_caravan": {
           "priority": 1,
@@ -1501,6 +1516,13 @@
         "add": {
           "component_groups": [
             "tp:brute_playing"
+          ]
+        }
+      },
+      "tp:brute_seek_closely": {
+        "add": {
+          "component_groups": [
+            "tp:brute_seeking_closely"
           ]
         }
       },
