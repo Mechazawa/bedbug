@@ -231,6 +231,24 @@ public final class AddonGameTests {
         helper.succeed();
     }
 
+    /** The test pack's texture list names one image it ships and one it does not, and only the second is named. */
+    @GameTest()
+    public void aTextureListNamesWhatItListsAndThePackLacks(GameTestHelper helper) {
+        boolean packLoaded = ActiveAddons.active().converted().stream()
+            .anyMatch(one -> one.namespace().equals("tp"));
+        if (!packLoaded) {
+            helper.succeed();
+            return;
+        }
+
+        java.util.List<String> report = AddonEntities.report();
+        helper.assertTrue(report.stream().anyMatch(line -> line.contains("textures/items/vanished_wand is listed")),
+            "The listed texture the pack lacks is not named: " + report);
+        helper.assertTrue(report.stream().noneMatch(line -> line.contains("textures/items/wand is listed")),
+            "A listed texture the pack ships was named: " + report);
+        helper.succeed();
+    }
+
     /**
      * A pack's `cameras/presets` and `camera/splines` are read, and each preset field that Java has
      * nothing to draw with is named: `tp:overlook` asks for the player's effects and a longer

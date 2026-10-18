@@ -1695,7 +1695,10 @@ Mojang's geometry is not committed, so that list is the one place this knowledge
   kind that pair happens not to ship. The mod's side is the `READ` set and the `UNREAD` map in
   `pack/PackFiles.java`. `UNREAD` gives each kind no reader opens the reason Java has no place for
   it, and `PackFiles.report` names the kind and that reason against the pack that shipped it, so a
-  kind cannot be declared unread without a reason.
+  kind cannot be declared unread without a reason. `textures/texture_list.json` is read by
+  `pack/TextureList.java`, which names every listed path the pack ships no `.png` or `.tga` for; the
+  test pack's list names `tp`'s `wand` and a `vanished_wand` it lacks, and
+  `AddonGameTests.aTextureListNamesWhatItListsAndThePackLacks` asserts only the second is named.
 
   **The silent column is the one that has to stay at zero.** A kind in `UNREAD` is reported to the
   author; a kind in neither is a directory the mod passes over without a word. The
