@@ -42,6 +42,11 @@
           "default": false,
           "client_sync": true
         },
+        "tp:felt": {
+          "type": "enum",
+          "values": ["nothing", "fall", "attack", "projectile", "drowning", "suffocation", "contact"],
+          "default": "nothing"
+        },
         "tp:sat": {
           "type": "bool",
           "default": false,
@@ -262,6 +267,18 @@
           "power": 3,
           "breaks_blocks": false,
           "causes_fire": false
+        }
+      },
+      "tp:ember_sensing": {
+        "minecraft:damage_sensor": {
+          "triggers": [
+            { "cause": "fall", "deals_damage": false, "on_damage": { "event": "tp:ember_felt_fall" } },
+            { "cause": "entity_attack", "on_damage": { "event": "tp:ember_felt_attack" } },
+            { "cause": "projectile", "deals_damage": false, "on_damage": { "event": "tp:ember_felt_projectile" } },
+            { "cause": "drowning", "deals_damage": false, "on_damage": { "event": "tp:ember_felt_drowning" } },
+            { "cause": "suffocation", "deals_damage": false, "on_damage": { "event": "tp:ember_felt_suffocation" } },
+            { "cause": "contact", "deals_damage": false, "on_damage": { "event": "tp:ember_felt_contact" } }
+          ]
         }
       },
       "tp:ember_warded": {
@@ -815,6 +832,13 @@
           "component_groups": ["tp:ember_warded"]
         }
       },
+      "tp:ember_sense_on": { "add": { "component_groups": ["tp:ember_sensing"] } },
+      "tp:ember_felt_fall": { "set_property": { "tp:felt": "fall" } },
+      "tp:ember_felt_attack": { "set_property": { "tp:felt": "attack" } },
+      "tp:ember_felt_projectile": { "set_property": { "tp:felt": "projectile" } },
+      "tp:ember_felt_drowning": { "set_property": { "tp:felt": "drowning" } },
+      "tp:ember_felt_suffocation": { "set_property": { "tp:felt": "suffocation" } },
+      "tp:ember_felt_contact": { "set_property": { "tp:felt": "contact" } },
       "tp:ember_scratched": {
         "set_property": {
           "tp:scratched": true

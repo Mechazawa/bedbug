@@ -46,8 +46,15 @@ import java.util.UUID;
 public sealed interface Filter {
     boolean matches(Context context);
 
-    /** Everything a test can be asked about: who is being tested, and who is doing the testing. */
-    record Context(Entity self, Entity other, Entity target, AddonState state) {
+    /**
+     * Everything a test can be asked about: who is being tested, who is doing the testing, and the
+     * damage a damage sensor is deciding about.
+     */
+    record Context(Entity self, Entity other, Entity target, AddonState state, DamageSource damage) {
+        public Context(Entity self, Entity other, Entity target, AddonState state) {
+            this(self, other, target, state, null);
+        }
+
         public Entity subject(String name) {
             return switch (name) {
                 case "other", "damager", "player", "parent" -> other;
@@ -113,32 +120,6 @@ public sealed interface Filter {
             "doDayLightCycle", "doWeatherCycle", "keepInventory", "mobGriefing",
             "naturalRegeneration", "sendCommandFeedback", "showDeathMessages", "doImmediateRespawn",
             "doEntityDrops", "doTileDrops", "commandBlockOutput", "randomTickSpeed");
-
-        /** Bedrock's damage causes under the names Java gives its own damage types. */
-        private static final Map<String, Set<String>> DAMAGE_CAUSES = Map.ofEntries(
-            Map.entry("anvil", Set.of("anvil")),
-            Map.entry("attack", Set.of("mob", "player")),
-            Map.entry("block_explosion", Set.of("explosion")),
-            Map.entry("contact", Set.of("cactus", "sweetBerryBush")),
-            Map.entry("drowning", Set.of("drown")),
-            Map.entry("entity_explosion", Set.of("explosion.player")),
-            Map.entry("fall", Set.of("fall")),
-            Map.entry("falling_block", Set.of("fallingBlock")),
-            Map.entry("fire", Set.of("inFire")),
-            Map.entry("fire_tick", Set.of("onFire")),
-            Map.entry("fly_into_wall", Set.of("flyIntoWall")),
-            Map.entry("lava", Set.of("lava")),
-            Map.entry("magic", Set.of("magic", "indirectMagic")),
-            Map.entry("none", Set.of("generic")),
-            Map.entry("projectile", Set.of("arrow", "thrown", "fireball", "trident")),
-            Map.entry("sonic_boom", Set.of("sonic_boom")),
-            Map.entry("stalactite", Set.of("fallingStalactite")),
-            Map.entry("stalagmite", Set.of("stalagmite")),
-            Map.entry("starve", Set.of("starve")),
-            Map.entry("suffocation", Set.of("inWall")),
-            Map.entry("thorns", Set.of("thorns")),
-            Map.entry("void", Set.of("outOfWorld", "fell_out_of_world")),
-            Map.entry("wither", Set.of("wither", "witherSkull")));
 
         @Override
         public boolean matches(Context context) {
@@ -298,7 +279,7 @@ public sealed interface Filter {
                 case "has_item_with_component" -> carriesComponent(entity);
                 case "actor_has_item_with_enchantment_in_slot" -> enchantedSlot(entity);
                 case "has_ability" -> ability(entity);
-                case "has_damage" -> damageCause(entity);
+                case "has_damage" -> damageCause(entity, context);
 
                 case "is_variant" -> numberProperty(entity, context, "variant");
                 case "is_mark_variant" -> numberProperty(entity, context, "mark_variant");
@@ -519,16 +500,17 @@ public sealed interface Filter {
         }
 
         /**
-         * Java keeps the source of the last damage taken, so this answers for damage already dealt
-         * rather than for damage on its way in.
+         * Inside a damage sensor this asks about the damage on its way in. Anywhere else Java has
+         * only the source of the last damage taken, so it answers for damage already dealt.
          */
-        private Boolean damageCause(Entity entity) {
-            Set<String> names = DAMAGE_CAUSES.get(text());
-            if (names == null) return null;
+        private Boolean damageCause(Entity entity, Context context) {
+            if (text().equals("fatal")) return null;
+            DamageCause cause = DamageCause.named(text());
+            if (cause == null) return false;
 
-            DamageSource source = entity instanceof LivingEntity living
-                ? living.getLastDamageSource() : null;
-            return source != null && names.contains(source.getMsgId());
+            DamageSource source = context.damage() != null ? context.damage()
+                : entity instanceof LivingEntity living ? living.getLastDamageSource() : null;
+            return source != null && cause.matches(source);
         }
 
         /** Bedrock writes a rule's name in lower case, Java spells the same rule mixed. */

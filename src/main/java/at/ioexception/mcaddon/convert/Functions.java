@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.convert;
 
+import at.ioexception.mcaddon.bedrock.behaviour.DamageCause;
 import at.ioexception.mcaddon.bedrock.behaviour.DataValues;
 import at.ioexception.mcaddon.bedrock.camera.CameraPreset;
 import at.ioexception.mcaddon.bedrock.hud.HudElement;
@@ -25,6 +26,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
@@ -445,7 +447,7 @@ public final class Functions {
             case "testforblock" -> testForBlock(rest, unsupported);
             case "clone" -> cloneBlocks(rest, unsupported);
             case "execute" -> execute(rest, functions, unsupported);
-            case "damage" -> damage(rest, unsupported);
+            case "damage" -> damage(rest);
             case "locate" -> locate(rest, unsupported);
             case "loot" -> loot(rest, unsupported);
             case "place" -> place(rest, unsupported);
@@ -743,19 +745,17 @@ public final class Functions {
     /**
      * `damage <target> <amount> [cause] [entity <damager>]`.
      *
-     * Bedrock names a cause out of its own list and Java names a damage type out of a registry, so
-     * a blow lands for the amount the pack asked for by a source that names no cause. Java asks for
-     * that type before it will take the entity that dealt the blow.
+     * Bedrock names a cause out of its own list and Java names a damage type out of a registry; a
+     * cause that is not Bedrock's is dealt as `none`. Java asks for the type before it will take the
+     * entity that dealt the blow.
      */
-    private static String damage(String rest, Set<String> unsupported) {
+    private static String damage(String rest) {
         String[] parts = SPACE.split(rest);
         if (parts.length < 3) return "damage " + rest;
 
-        unsupported.add("command damage with a cause, which Java has no damage type for");
-        if (parts.length < 5 || !parts[3].equalsIgnoreCase("entity")) {
-            return "damage " + parts[0] + " " + parts[1];
-        }
-        return "damage " + parts[0] + " " + parts[1] + " minecraft:generic by " + parts[4];
+        DamageCause cause = Objects.requireNonNullElse(DamageCause.named(parts[2]), DamageCause.NONE);
+        String line = "damage " + parts[0] + " " + parts[1] + " " + cause.damageType();
+        return parts.length < 5 || !parts[3].equalsIgnoreCase("entity") ? line : line + " by " + parts[4];
     }
 
     /** Bedrock searches only the chunks it has yet to generate, which Java has no form of. */

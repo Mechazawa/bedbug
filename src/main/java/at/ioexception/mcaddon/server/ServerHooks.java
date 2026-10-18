@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.server;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.behaviour.DamageCause;
 import at.ioexception.mcaddon.bedrock.behaviour.PlayerDefinition;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.network.Channels;
@@ -251,15 +252,16 @@ public final class ServerHooks {
             if (!element.isJsonObject()) continue;
             com.google.gson.JsonObject trigger = element.getAsJsonObject();
 
-            String cause = at.ioexception.mcaddon.util.Json.text(trigger, "cause", null);
-            if (cause != null && !cause.equals("any") && !cause.equals(source.getMsgId())) continue;
+            DamageCause cause = DamageCause.named(
+                at.ioexception.mcaddon.util.Json.text(trigger, "cause", "all"));
+            if (cause == null || !cause.matches(source)) continue;
 
             com.google.gson.JsonObject onDamage = trigger.getAsJsonObject("on_damage");
             at.ioexception.mcaddon.bedrock.behaviour.Filter filter =
                 at.ioexception.mcaddon.bedrock.behaviour.Filter.parse(
                     onDamage == null ? null : onDamage.get("filters"));
             if (!filter.matches(new at.ioexception.mcaddon.bedrock.behaviour.Filter.Context(
-                entity, source.getEntity() == null ? entity : source.getEntity(), null, state))) {
+                entity, source.getEntity() == null ? entity : source.getEntity(), null, state, source))) {
                 continue;
             }
 
