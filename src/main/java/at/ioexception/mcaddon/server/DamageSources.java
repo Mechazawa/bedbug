@@ -63,6 +63,14 @@ public final class DamageSources {
         return CAUSES.getOrDefault(source.getMsgId(), "none");
     }
 
+    /**
+     * The same cause the way an entity file writes it, which spells each name in lower case with
+     * underscores where a script spells it in camel case: `entity_attack` against `entityAttack`.
+     */
+    public static String componentCauseOf(DamageSource source) {
+        return causeOf(source).replaceAll("([A-Z])", "_$1").toLowerCase(java.util.Locale.ROOT);
+    }
+
     public static Map<String, Object> describe(DamageSource source) {
         Map<String, Object> described = new LinkedHashMap<>();
         described.put("cause", causeOf(source));

@@ -14,6 +14,10 @@
         "tp:felled": {
           "type": "bool",
           "default": false
+        },
+        "tp:escaped": {
+          "type": "bool",
+          "default": false
         }
       }
     },
@@ -44,11 +48,52 @@
           "priority": 0,
           "can_spread_on_fire": true
         }
+      },
+      "tp:brute_skittish": {
+        "minecraft:behavior.panic": {
+          "priority": 0,
+          "damage_sources": [
+            "fall",
+            "entity_attack"
+          ],
+          "ignore_mob_damage": true
+        }
+      },
+      "tp:brute_bolting": {
+        "minecraft:behavior.panic": {
+          "priority": 0,
+          "force": true
+        }
+      },
+      "tp:brute_wading": {
+        "minecraft:behavior.panic": {
+          "priority": 0,
+          "prefer_water": true
+        }
+      },
+      "tp:brute_shy": {
+        "minecraft:behavior.avoid_block": {
+          "priority": 0,
+          "search_range": 3,
+          "search_height": 2,
+          "target_blocks": [
+            "minecraft:gold_block"
+          ],
+          "on_escape": [
+            {
+              "event": "tp:brute_escaped",
+              "target": "self"
+            }
+          ]
+        }
       }
     },
     "components": {
       "minecraft:type_family": {
-        "family": ["tp_brute", "mob"]
+        "family": [
+          "tp_brute",
+          "mob"
+        ]
       },
       "minecraft:collision_box": {
         "width": 0.6,
@@ -72,17 +117,23 @@
     "events": {
       "tp:brute_box": {
         "add": {
-          "component_groups": ["tp:brute_boxing"]
+          "component_groups": [
+            "tp:brute_boxing"
+          ]
         }
       },
       "tp:brute_reach": {
         "add": {
-          "component_groups": ["tp:brute_reaching"]
+          "component_groups": [
+            "tp:brute_reaching"
+          ]
         }
       },
       "tp:brute_burn": {
         "add": {
-          "component_groups": ["tp:brute_burning"]
+          "component_groups": [
+            "tp:brute_burning"
+          ]
         }
       },
       "tp:brute_struck": {
@@ -93,6 +144,39 @@
       "tp:brute_felled": {
         "set_property": {
           "tp:felled": true
+        }
+      },
+      "tp:brute_skit": {
+        "add": {
+          "component_groups": [
+            "tp:brute_skittish"
+          ]
+        }
+      },
+      "tp:brute_bolt": {
+        "add": {
+          "component_groups": [
+            "tp:brute_bolting"
+          ]
+        }
+      },
+      "tp:brute_wade": {
+        "add": {
+          "component_groups": [
+            "tp:brute_wading"
+          ]
+        }
+      },
+      "tp:brute_shy_away": {
+        "add": {
+          "component_groups": [
+            "tp:brute_shy"
+          ]
+        }
+      },
+      "tp:brute_escaped": {
+        "set_property": {
+          "tp:escaped": true
         }
       }
     }

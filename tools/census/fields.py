@@ -195,10 +195,6 @@ REASONS = {
     "minecraft:behavior.float": {
         "*": "Java's float goal swims a mob up with no chance of its own and no passengers to drop.",
     },
-    "minecraft:behavior.panic": {
-        "*": "Java's panic goal runs from whatever hurt the mob, with no sound, no damage list and no "
-             "preference for water.",
-    },
     "minecraft:behavior.tempt": {
         "tempt_sound": TEMPT_SOUND,
         "sound_interval": TEMPT_SOUND,
@@ -206,9 +202,6 @@ REASONS = {
     "minecraft:behavior.avoid_mob_type": {
         "*": "Java's avoid goal flees whatever it is given at the speed it is given, with no sound, no "
              "probability and no event when it gets away.",
-    },
-    "minecraft:behavior.avoid_block": {
-        "*": "Java has no goal that flees a block, so what carries across is the fleeing.",
     },
     "minecraft:behavior.follow_owner": {
         "ignore_vibration": "Whether a vibration interrupts the following. Only the allay says it does, and "

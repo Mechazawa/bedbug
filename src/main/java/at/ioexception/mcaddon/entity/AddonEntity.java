@@ -31,7 +31,6 @@ import net.minecraft.world.entity.ai.goal.MoveThroughVillageGoal;
 import net.minecraft.world.entity.ai.goal.MoveTowardsRestrictionGoal;
 import net.minecraft.world.entity.ai.goal.MoveTowardsTargetGoal;
 import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
-import net.minecraft.world.entity.ai.goal.PanicGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.RestrictSunGoal;
 import net.minecraft.world.entity.ai.goal.StrollThroughVillageGoal;
@@ -2469,8 +2468,7 @@ public class AddonEntity extends PathfinderMob
         String sound = Goals.text(angry, "angry_sound");
         if (sound == null || tickCount < nextAngrySoundAt) return;
 
-        net.minecraft.sounds.SoundEvent made = noise(sound);
-        if (made != null) playSound(made, getSoundVolume(), getVoicePitch());
+        makeNoise(sound);
         com.google.gson.JsonObject interval = angry.has("sound_interval") && angry.get("sound_interval").isJsonObject()
             ? angry.getAsJsonObject("sound_interval") : null;
         double low = Goals.number(interval, "range_min", 0);
@@ -2712,7 +2710,7 @@ public class AddonEntity extends PathfinderMob
 
         switch (behaviour) {
             case "minecraft:behavior.float" -> goals.add(priority, new FloatGoal(this));
-            case "minecraft:behavior.panic" -> goals.add(priority, new PanicGoal(this, speed));
+            case "minecraft:behavior.panic" -> goals.add(priority, new PanickingGoal(this, goal));
             case "minecraft:behavior.swell" ->
                 goals.add(priority, new SwellGoal(this, goal));
             case "minecraft:behavior.beg" ->

@@ -139,16 +139,129 @@ public final class GoalGameTests {
     private static final int BURNING = 200;
 
     /**
-     * A brute with its group on, its goals running and its feet held, so only its reach decides what
-     * it can hit.
+     * A panic starts at a cause `damage_sources` lists and not at a blow `ignore_mob_damage` leaves
+     * out, even one whose cause is on the list.
+     *
+     * The skittish group lists falling, which no panic of Java's starts at, and an attack, while
+     * ignoring every mob; Java panics at a mob's blow and never at a fall. The brute has no other
+     * goal that moves it, so a path in progress is the panic.
      */
-    private static AddonEntity heldInPlace(GameTestHelper helper, String event) {
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aPanicStartsAtTheCausesItsPackLists(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_skit");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob pig = pig(helper, STAND.east(3), BLOWS_TO_KILL);
+        Platform.hurt(brute, helper.getLevel(), brute.damageSources().mobAttack(pig), 1f);
+        helper.startSequence()
+            .thenExecuteAfter(SETTLE_TICKS, () -> {
+                helper.assertFalse(brute.getNavigation().isInProgress(),
+                    BRUTE + " ignores every mob's blow and ran from the pig's.");
+                brute.invulnerableTime = 0;
+                Platform.hurt(brute, helper.getLevel(), brute.damageSources().fall(), 1f);
+            })
+            .thenWaitUntil(() -> helper.assertTrue(brute.getNavigation().isInProgress(),
+                BRUTE + " panics at a fall and stood where it fell."))
+            .thenSucceed();
+    }
+
+    /** Long enough for a goal checked every other tick to have started had it been going to. */
+    private static final int SETTLE_TICKS = 10;
+
+    /**
+     * A panic with `force` set starts with nothing having hurt the entity, and keeps the entity
+     * running for as long as it lasts.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aForcedPanicNeedsNoHurt(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_bolt");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        int[] running = {0};
+        int[] since = {-1};
+        helper.onEachTick(() -> {
+            boolean moving = brute.getNavigation().isInProgress();
+            if (moving && since[0] < 0) since[0] = 0;
+            if (since[0] < 0) return;
+            since[0]++;
+            if (moving) running[0]++;
+        });
+        helper.runAfterDelay(GOAL_TICKS - 20, () -> {
+            helper.assertTrue(since[0] > 0, BRUTE + " panics by force and never ran.");
+            helper.assertTrue(running[0] * 4 >= since[0] * 3, BRUTE + " panics by force and ran for "
+                + running[0] + " of the " + since[0] + " ticks since it set off.");
+            helper.succeed();
+        });
+    }
+
+    /**
+     * A panic with `prefer_water` heads for water within reach whatever hurt the entity.
+     *
+     * Java's own goal heads for water only while the entity burns, and otherwise runs anywhere.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aPanicThatPrefersWaterHeadsForIt(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_wade");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.setBlock(STAND.east(3), net.minecraft.world.level.block.Blocks.WATER);
+        Mob pig = pig(helper, STAND.south(3), BLOWS_TO_KILL);
+        Platform.hurt(brute, helper.getLevel(), brute.damageSources().mobAttack(pig), 1f);
+        helper.succeedWhen(() -> {
+            BlockPos heading = brute.getNavigation().getTargetPos();
+            helper.assertTrue(heading != null
+                    && helper.getLevel().getFluidState(heading).is(net.minecraft.tags.FluidTags.WATER),
+                BRUTE + " prefers water when it panics and ran for " + heading + ".");
+        });
+    }
+
+    /**
+     * An entity fleeing a block raises `on_escape` once the block is out of the box it searches.
+     *
+     * The shy group flees gold within three blocks, and the gold stands beside the brute.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = ESCAPE_TICKS)
+    public void anEntityFleeingABlockRaisesItsEscapeOnceClear(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_shy_away");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.setBlock(STAND.east(1), net.minecraft.world.level.block.Blocks.GOLD_BLOCK);
+        helper.succeedWhen(() -> helper.assertTrue(Boolean.TRUE.equals(brute.value("tp:escaped")),
+            BRUTE + " fled the gold beside it and never raised the event on_escape names."));
+    }
+
+    /** Room for a few runs away, in case the first one stops short of the edge of the search. */
+    private static final int ESCAPE_TICKS = 240;
+
+    /** A brute with its group on and its goals running. */
+    private static AddonEntity withGroup(GameTestHelper helper, String event) {
         AddonEntity brute = BehaviourGameTests.spawn(helper, BRUTE, STAND);
         if (brute == null) return null;
 
         EntityEvents.trigger(brute, event, null, ServerHooks.state());
-        brute.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(0);
         brute.setNoAi(false);
+        return brute;
+    }
+
+    /**
+     * A brute with its group on, its goals running and its feet held, so only its reach decides what
+     * it can hit.
+     */
+    private static AddonEntity heldInPlace(GameTestHelper helper, String event) {
+        AddonEntity brute = withGroup(helper, event);
+        if (brute != null) brute.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(0);
         return brute;
     }
 
