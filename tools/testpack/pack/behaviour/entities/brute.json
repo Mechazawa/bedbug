@@ -355,6 +355,36 @@
           "cooldown_time": 10
         }
       },
+      "tp:brute_submerged": {
+        "minecraft:explode": {
+          "power": 1,
+          "allow_underwater": true
+        }
+      },
+      "tp:brute_gentle": {
+        "minecraft:explode": {
+          "power": 2,
+          "breaks_blocks": false,
+          "damage_scaling": 0,
+          "knockback_scaling": 2
+        }
+      },
+      "tp:brute_switching": {
+        "minecraft:explode": {
+          "power": 1,
+          "breaks_blocks": false,
+          "toggles_blocks": true
+        }
+      },
+      "tp:brute_lofting": {
+        "minecraft:explode": {
+          "power": 1,
+          "breaks_blocks": false,
+          "negates_fall_damage": true,
+          "particle_effect": "wind_burst",
+          "sound_effect": "wind_charge.burst"
+        }
+      },
       "tp:brute_poisoner": {
         "minecraft:shooter": {
           "def": "minecraft:arrow",
@@ -850,6 +880,34 @@
       "tp:brute_roared": {
         "set_property": {
           "tp:roared": true
+        }
+      },
+      "tp:brute_submerge": {
+        "add": {
+          "component_groups": [
+            "tp:brute_submerged"
+          ]
+        }
+      },
+      "tp:brute_soften": {
+        "add": {
+          "component_groups": [
+            "tp:brute_gentle"
+          ]
+        }
+      },
+      "tp:brute_switch": {
+        "add": {
+          "component_groups": [
+            "tp:brute_switching"
+          ]
+        }
+      },
+      "tp:brute_loft": {
+        "add": {
+          "component_groups": [
+            "tp:brute_lofting"
+          ]
         }
       },
       "tp:brute_poison_arrows": {

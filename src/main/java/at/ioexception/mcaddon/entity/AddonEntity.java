@@ -5270,44 +5270,9 @@ public class AddonEntity extends PathfinderMob
         }
     }
 
-    /**
-     * The blast itself. It breaks blocks whatever the mob griefing rule says unless
-     * `destroy_affected_by_griefing` asks for the rule, which is Java's mob blast, and lights fires
-     * the same way under `fire_affected_by_griefing`; `max_resistance` caps how much any block
-     * withstands.
-     */
     private void explode(net.minecraft.server.level.ServerLevel level) {
         com.google.gson.JsonObject explode = liveComponent("minecraft:explode");
-        if (explode == null) return;
-
-        Level.ExplosionInteraction breaking = Goals.number(explode, "breaks_blocks", 1) == 0
-            ? Level.ExplosionInteraction.NONE
-            : Goals.flag(explode, "destroy_affected_by_griefing", false)
-                ? Level.ExplosionInteraction.MOB : Level.ExplosionInteraction.BLOCK;
-        boolean burns = Goals.number(explode, "causes_fire", 0) != 0
-            && (!Goals.flag(explode, "fire_affected_by_griefing", false) || Platform.mobGriefing(level));
-        net.minecraft.world.level.ExplosionDamageCalculator capped = explode.has("max_resistance")
-            ? new ResistanceCap((float) Goals.number(explode, "max_resistance", Float.MAX_VALUE)) : null;
-        level.explode(this, null, capped, getX(), getY(), getZ(),
-            (float) Goals.number(explode, "power", 3), burns, breaking);
-    }
-
-    /** What a block withstands of a blast, never more than the cap the blast states. */
-    private static final class ResistanceCap extends net.minecraft.world.level.ExplosionDamageCalculator {
-        private final float cap;
-
-        ResistanceCap(float cap) {
-            this.cap = cap;
-        }
-
-        @Override
-        public java.util.Optional<Float> getBlockExplosionResistance(
-            net.minecraft.world.level.Explosion explosion, net.minecraft.world.level.BlockGetter level,
-            net.minecraft.core.BlockPos position, net.minecraft.world.level.block.state.BlockState block,
-            net.minecraft.world.level.material.FluidState fluid) {
-            return super.getBlockExplosionResistance(explosion, level, position, block, fluid)
-                .map(resistance -> Math.min(resistance, cap));
-        }
+        if (explode != null) new Blast(this, explode, level).goOff(level);
     }
 
     /**

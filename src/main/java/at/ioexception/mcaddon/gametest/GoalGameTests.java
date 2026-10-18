@@ -909,6 +909,107 @@ public final class GoalGameTests {
     }
 
     /**
+     * A blast under `allow_underwater` breaks the blocks around it in water, which otherwise holds
+     * the blast back from them.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aBlastAllowedUnderwaterBreaksBlocksThere(GameTestHelper helper) {
+        helper.setBlock(STAND, Blocks.WATER);
+        helper.setBlock(STAND.east(5), Blocks.WATER);
+        AddonEntity submerged = BehaviourGameTests.spawn(helper, BRUTE, STAND);
+        AddonEntity plain = BehaviourGameTests.spawn(helper, BRUTE, STAND.east(5));
+        if (submerged == null || plain == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(submerged, "tp:brute_submerge", null, ServerHooks.state());
+        EntityEvents.trigger(plain, "tp:brute_make_volatile", null, ServerHooks.state());
+        helper.setBlock(STAND.south(1), Blocks.DIRT);
+        helper.setBlock(STAND.east(5).south(1), Blocks.DIRT);
+        submerged.detonate();
+        plain.detonate();
+
+        helper.assertTrue(helper.getBlockState(STAND.south(1)).isAir(),
+            BRUTE + " goes off under water as it would in air and left the dirt beside it.");
+        helper.assertFalse(helper.getBlockState(STAND.east(5).south(1)).isAir(),
+            BRUTE + " is held back by the water it stands in and broke the dirt beside it.");
+        helper.succeed();
+    }
+
+    //? if >=1.21 {
+    /**
+     * A blast deals `damage_scaling` times its damage and `knockback_scaling` times its knockback.
+     *
+     * The gentle brute's blast of two hurts nothing and throws a pig a block off twice as hard as
+     * Java's three quarters of a block a tick.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aBlastScalesItsDamageAndItsKnockback(GameTestHelper helper) {
+        AddonEntity gentle = BehaviourGameTests.spawn(helper, BRUTE, STAND);
+        if (gentle == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(gentle, "tp:brute_soften", null, ServerHooks.state());
+        Mob pig = pig(helper, STAND.east(1), BLOWS_TO_KILL);
+        pig.getAttribute(Attributes.KNOCKBACK_RESISTANCE).setBaseValue(0);
+        gentle.detonate();
+
+        helper.assertTrue(pig.getHealth() == BLOWS_TO_KILL,
+            BRUTE + " deals no damage and the pig beside it has " + pig.getHealth() + " health.");
+        helper.assertTrue(pig.getDeltaMovement().horizontalDistance() > DOUBLED_THROW,
+            BRUTE + " throws twice as hard and the pig moves at " + pig.getDeltaMovement() + ".");
+        helper.succeed();
+    }
+
+    /** Past the three quarters of a block a tick Java's blast of two gives a pig a block off. */
+    private static final double DOUBLED_THROW = 1.0;
+
+    /** A blast that breaks nothing under `toggles_blocks` pulls the lever beside it. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aBlastTogglesTheSwitchesAroundIt(GameTestHelper helper) {
+        AddonEntity switching = BehaviourGameTests.spawn(helper, BRUTE, STAND);
+        if (switching == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(switching, "tp:brute_switch", null, ServerHooks.state());
+        helper.setBlock(STAND.east(1), Blocks.LEVER.defaultBlockState()
+            .setValue(net.minecraft.world.level.block.LeverBlock.FACE,
+                net.minecraft.world.level.block.state.properties.AttachFace.FLOOR));
+        switching.detonate();
+
+        helper.assertTrue(helper.getBlockState(STAND.east(1))
+                .getValue(net.minecraft.world.level.block.LeverBlock.POWERED),
+            BRUTE + " toggles blocks and left the lever beside it off.");
+        helper.succeed();
+    }
+
+    /** A blast under `negates_fall_damage` spares a player it throws upward the fall that follows. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aBlastSparesAPlayerItThrowsTheFall(GameTestHelper helper) {
+        AddonEntity lofting = BehaviourGameTests.spawn(helper, BRUTE, STAND);
+        if (lofting == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(lofting, "tp:brute_loft", null, ServerHooks.state());
+        net.minecraft.server.level.ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        BlockPos above = helper.absolutePos(STAND.above(1));
+        Platform.placeAt(player, above.getX() + 0.5, above.getY(), above.getZ() + 0.5, 0f, 0f);
+        lofting.detonate();
+
+        helper.assertTrue(player.isIgnoringFallDamageFromCurrentImpulse(),
+            BRUTE + " negates fall damage and the player it threw will take the fall.");
+        helper.succeed();
+    }
+    //?}
+
+    /**
      * `minecraft:behavior.drink_potion` drinks the first of its `potions` whose filters hold, named
      * by Bedrock's number: the thirsty group drinks potion nineteen, water breathing, under water and
      * potion twelve, fire resistance, while burning, so a burning brute on land gains fire resistance.

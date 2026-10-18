@@ -2770,6 +2770,56 @@ public final class Platform {
         *///?}
     }
 
+    /**
+     * A blast drawn with gusts rather than smoke where `gust` is set, and heard as `sound`.
+     *
+     * Java chose a blast's particles and sound itself before 1.21, which is what a blast there gets.
+     * From 26 the call also takes the block debris, which the gusts of a wind charge go without.
+     */
+    public static void explode(ServerLevel level, Entity source,
+        net.minecraft.world.level.ExplosionDamageCalculator rules, net.minecraft.world.phys.Vec3 at, float power,
+        boolean fire, net.minecraft.world.level.Level.ExplosionInteraction interaction, boolean gust,
+        net.minecraft.core.Holder<net.minecraft.sounds.SoundEvent> sound) {
+        //? if >=1.21 {
+        net.minecraft.core.particles.ParticleOptions small = gust
+            ? net.minecraft.core.particles.ParticleTypes.GUST_EMITTER_SMALL
+            : net.minecraft.core.particles.ParticleTypes.EXPLOSION;
+        net.minecraft.core.particles.ParticleOptions large = gust
+            ? net.minecraft.core.particles.ParticleTypes.GUST_EMITTER_LARGE
+            : net.minecraft.core.particles.ParticleTypes.EXPLOSION_EMITTER;
+        //?}
+        //? if >=26 {
+        level.explode(source, null, rules, at.x, at.y, at.z, power, fire, interaction, small, large,
+            net.minecraft.util.random.WeightedList.of(), sound);
+        //?} else if >=1.21 {
+        /*level.explode(source, null, rules, at.x, at.y, at.z, power, fire, interaction, small, large, sound);
+        *///?} else {
+        /*level.explode(source, null, rules, at.x, at.y, at.z, power, fire, interaction);
+        *///?}
+    }
+
+    /**
+     * Spares a player thrown by a blast the fall that follows, until it lands, the way a wind charge
+     * spares whoever it throws. Nothing before 1.21 keeps track of a throw.
+     */
+    public static void spareTheFall(net.minecraft.world.entity.player.Player player) {
+        //? if >=26 {
+        player.setIgnoreFallDamageFromCurrentImpulse(true, player.position());
+        //?} else if >=1.21 {
+        /*player.currentImpulseImpactPos = player.position();
+        player.setIgnoreFallDamageFromCurrentImpulse(true);
+        *///?}
+    }
+
+    /** A blast that leaves blocks standing and works the switches among them, which 1.20.1 has not got. */
+    public static net.minecraft.world.level.Level.ExplosionInteraction toggling() {
+        //? if >=1.21 {
+        return net.minecraft.world.level.Level.ExplosionInteraction.TRIGGER;
+        //?} else {
+        /*return net.minecraft.world.level.Level.ExplosionInteraction.NONE;
+        *///?}
+    }
+
     /** A null level clears the spawn point. The setter took a record from 26 and five values before. */
     public static void respawnAt(net.minecraft.server.level.ServerPlayer player, ServerLevel level,
         net.minecraft.core.BlockPos at) {

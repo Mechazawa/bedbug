@@ -178,7 +178,10 @@ Against a server without this mod a client plays with its own add-ons.
   removed when struck, hits what its box sweeps through, stops at the first entity it hits unless
   `multiple_targets` lets it on, and bounces back under `should_bounce`; a knockback roar throws
   back and hurts what its two filters name, `attack_time` into the roar, and raises `on_roar_end`; and a blast breaks blocks whatever the griefing rule says unless the pack asks
-  for the rule, under a cap on what a block withstands. A child bred under `minecraft:offspring`
+  for the rule, under a cap on what a block withstands; under
+  `allow_underwater` water does not hold it back, and from 1.21 it scales its damage and knockback,
+  toggles switches when it breaks nothing, spares a player it throws the fall, and bursts with a wind
+  charge's gusts and sound when its pack names them. A child bred under `minecraft:offspring`
   takes a tamed parent's owner, a parent's variant, mark variant, colour and listed properties
   unless a mutation keeps its own, the dye two colours make, and attributes blended the way Java
   breeds a horse, and a bred child arrives with `minecraft:entity_born` rather than
