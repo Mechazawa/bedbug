@@ -3,6 +3,7 @@ package at.ioexception.mcaddon.pack;
 import at.ioexception.mcaddon.registry.AddonEntities;
 
 import java.nio.file.Files;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -10,10 +11,10 @@ import java.util.Set;
  *
  * Every other coverage measurement this repository makes is about the vocabulary inside a file kind
  * the mod already reads. This is about the file kinds themselves: a whole directory an add-on ships
- * that nothing here opens draws no complaint from any of them. `DEFINED` names what Bedrock lets a
- * pack ship, `READ` names the part this mod converts, and the difference is reported against the
- * pack that shipped it, so `/mcaddon entities` says which directory went unread rather than leaving
- * the author to work it out from a world that came up short. A directory outside `READ` may still
+ * that nothing here opens draws no complaint from any of them. `READ` names the part of what Bedrock
+ * lets a pack ship that this mod converts, and `UNREAD` names the rest with the reason Java cannot
+ * take it. A pack shipping one of the second is told so by `/mcaddon entities`, reason included,
+ * rather than left to work it out from a world that came up short. A directory outside `READ` may still
  * be opened to name what is in it, which is what tells an author which setting of theirs is dropped
  * rather than only which directory.
  *
@@ -25,32 +26,27 @@ public final class PackFiles {
     private PackFiles() {
     }
 
-    /** Everything Bedrock lets a behaviour pack ship. */
-    private static final Set<String> BEHAVIOUR_DEFINED = Set.of(
-        "manifest.json", "pack_icon.png", "animations", "animation_controllers", "biomes", "blocks",
-        "cameras", "dialogue", "dimensions", "entities", "feature_rules", "features", "functions",
-        "item_catalog", "items", "loot_tables", "recipes", "scripts", "shapes", "spawn_rules",
-        "structures", "subpacks", "texts", "trading",
-        "texts/language_names.json", "texts/languages.json");
+    /** The behaviour pack paths Bedrock defines and no reader opens, each with the reason. */
+    private static final Map<String, String> BEHAVIOUR_UNREAD = Map.of();
 
     /** The behaviour pack paths a reader opens. */
     private static final Set<String> BEHAVIOUR_READ = Set.of(
         "manifest.json", "pack_icon.png", "animation_controllers", "animations", "biomes", "blocks",
-        "cameras", "dialogue", "dimensions", "entities", "feature_rules", "features", "functions",
+        "camera", "cameras", "dialogue", "dimensions", "entities", "feature_rules", "features", "functions",
         "item_catalog", "items", "loot_tables", "recipes", "scripts", "shapes", "spawn_rules",
         "structures", "subpacks", "texts", "trading", "texts/language_names.json",
         "texts/languages.json");
 
-    /** Everything Bedrock lets a resource pack ship. */
-    private static final Set<String> RESOURCE_DEFINED = Set.of(
-        "manifest.json", "pack_icon.png", "animations", "animation_controllers", "atmospherics",
-        "attachables", "biomes", "biomes_client.json", "blocks.json", "color_grading", "entity",
-        "fogs", "font", "lighting", "materials", "models", "particles", "render_controllers",
-        "sounds", "sounds.json", "subpacks", "texts", "textures", "ui", "water",
-        "sounds/music_definitions.json", "sounds/sound_definitions.json",
-        "textures/flipbook_textures.json", "textures/item_texture.json",
-        "textures/terrain_texture.json", "textures/texture_list.json",
-        "texts/language_names.json", "texts/languages.json");
+    /** The resource pack paths Bedrock defines and no reader opens, each with the reason. */
+    private static final Map<String, String> RESOURCE_UNREAD = Map.ofEntries(
+        Map.entry("ui", "a change to a control inside one of the Bedrock client's own screens, "
+            + "where a Java screen is a class with no named controls to patch"),
+        Map.entry("textures/texture_list.json", "an index of the textures the pack ships, which "
+            + "the conversion writes by walking textures/ itself"),
+        Map.entry("color_grading", "a grade of the finished frame, where a Java post effect "
+            + "carries no grading term and is bound to no biome or dimension"),
+        Map.entry("water", "a deferred water model, where Java water is a flipbook texture "
+            + "tinted by the client biome's own colour"));
 
     /** The resource pack paths a reader opens. */
     private static final Set<String> RESOURCE_READ = Set.of(
@@ -75,14 +71,11 @@ public final class PackFiles {
         if (role == PackRole.OTHER) return;
 
         boolean behaviour = role == PackRole.BEHAVIOUR;
-        Set<String> defined = behaviour ? BEHAVIOUR_DEFINED : RESOURCE_DEFINED;
-        Set<String> read = behaviour ? BEHAVIOUR_READ : RESOURCE_READ;
+        Map<String, String> unread = behaviour ? BEHAVIOUR_UNREAD : RESOURCE_UNREAD;
         String label = behaviour ? "behaviour pack " : "resource pack ";
 
-        for (String path : defined) {
-            if (!read.contains(path) && Files.exists(pack.file(path))) {
-                AddonEntities.unsupported(label + path);
-            }
-        }
+        unread.entrySet().stream().filter(entry -> Files.exists(pack.file(entry.getKey())))
+            .forEach(entry -> AddonEntities.unsupported(
+                label + entry.getKey() + ", " + entry.getValue()));
     }
 }

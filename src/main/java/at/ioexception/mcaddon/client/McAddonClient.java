@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.client;
 
+import at.ioexception.mcaddon.bedrock.camera.CameraInstruction;
 import at.ioexception.mcaddon.bedrock.camera.CameraShake;
 import at.ioexception.mcaddon.bedrock.camera.CameraView;
 import at.ioexception.mcaddon.bedrock.fog.FogDefinition;
@@ -39,7 +40,7 @@ public final class McAddonClient implements ClientModInitializer {
             mirrorGroups(net.minecraft.client.Minecraft.getInstance().level == null
                 ? null : net.minecraft.client.Minecraft.getInstance().level.getEntity(entityId));
         });
-        Channels.receiveCameraView(encoded -> PlayerCamera.accept(CameraView.decode(encoded)));
+        Channels.receiveCameraView(encoded -> PlayerCamera.accept(CameraInstruction.decode(encoded)));
         Channels.receiveCameraShake(encoded -> PlayerCamera.shake(CameraShake.decode(encoded)));
         Channels.receiveFog(encoded -> PlayerFog.accept(FogDefinition.decode(encoded)));
         Channels.receiveHud(PlayerHud::accept);
@@ -107,6 +108,9 @@ public final class McAddonClient implements ClientModInitializer {
             at.ioexception.mcaddon.client.render.PlayerRules.clear();
             at.ioexception.mcaddon.client.render.AddonEmitters.clear();
         }));
+        // Bedrock starts every connection with no camera set, and a world closed from the client is not
+        // always seen as a dropped connection, so the camera is cleared again as the next one starts.
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> PlayerCamera.clear());
     }
 
     /** What the drawing side registers once per object, so an object registered later is prepared too. */

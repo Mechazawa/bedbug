@@ -26,4 +26,15 @@ public record CameraPlacement(Vec3 position, float xRot, float yRot, boolean det
             yRot + Mth.wrapDegrees(to.yRot() - yRot) * progress,
             detached || to.detached());
     }
+
+    /**
+     * This placement turned to look at a point, by the angles `/teleport ... facing` would turn a
+     * player by: due south is a yaw of 0, east -90, and a point below is a positive pitch.
+     */
+    public CameraPlacement turnedTo(Vec3 point) {
+        Vec3 towards = point.subtract(position);
+        double across = Math.sqrt(towards.x * towards.x + towards.z * towards.z);
+        return new CameraPlacement(position, (float) -Math.toDegrees(Math.atan2(towards.y, across)),
+            Mth.wrapDegrees((float) Math.toDegrees(Math.atan2(towards.z, towards.x)) - 90f), detached);
+    }
 }
