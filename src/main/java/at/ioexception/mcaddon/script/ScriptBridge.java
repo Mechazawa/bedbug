@@ -228,9 +228,11 @@ public final class ScriptBridge {
         return new double[] {spawn.getX(), spawn.getY(), spawn.getZ()};
     }
 
-    /** A game rule both editions have. Bedrock's own rules have nowhere to read from. */
+    /** A game rule both editions have, or one of Bedrock's own this mod keeps beside the world. */
     @HostAccess.Export
     public String gameRule(String name) {
+        String held = at.ioexception.mcaddon.server.BedrockRules.value(name);
+        if (held != null) return held;
         String value = Platform.gameRule(server,
             at.ioexception.mcaddon.convert.Functions.gameRuleFor(name));
         if (value == null) unsupported("GameRules." + name);
@@ -239,6 +241,7 @@ public final class ScriptBridge {
 
     @HostAccess.Export
     public void setGameRule(String name, Value value) {
+        if (at.ioexception.mcaddon.server.BedrockRules.set(server, name, String.valueOf(value))) return;
         if (!Platform.setGameRule(server, at.ioexception.mcaddon.convert.Functions.gameRuleFor(name),
             String.valueOf(value))) {
             unsupported("GameRules." + name + " (write)");
@@ -1120,7 +1123,7 @@ public final class ScriptBridge {
 
         StructureTemplate template = server.getStructureManager().getOrCreate(id);
         Platform.fillFromWorld(template, level, new BlockPos(x, y, z),
-            new net.minecraft.core.Vec3i(width, height, depth));
+            new net.minecraft.core.Vec3i(width, height, depth), false);
         return server.getStructureManager().save(id);
     }
 
