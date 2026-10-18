@@ -39,6 +39,7 @@
     "ServerPlayerGameModeMixin",
     "ServerGamePacketListenerMixin",
     "ServerPlayerMixin",
+    "VisitorMenuMixin",
     "ServerLevelGameEventMixin",
     "FoodDataAccessor",
     "MappedRegistryAccessor",

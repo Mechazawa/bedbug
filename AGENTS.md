@@ -799,7 +799,14 @@ These are the checks it runs, and what each one catches:
   spawns its template's entities. `BedrockTree.MERGED_FORMS` merges Java's short `place structure`
   lines into the node `Structures` registers. `save query`, `setmaxplayers`, `packstack` and `permission` are typed by the
   console after `/bedrock` and read back through what the console is told, because a line run the
-  way a pack runs one has a function's authority and each of these asks for more. `/gametest
+  way a pack runs one has a function's authority and each of these asks for more.
+  `PermissionGameTests` sets a mock server player to `visitor` and to `member` through `/bedrock
+  permission set` and reads back whether a door opened, a chest's menu opened, a block was placed
+  and one broken, and a pig lost health. `server.Visitors` holds the visitors in the add-on state
+  and refuses their clicks through Fabric's interaction callbacks and `ALLOW_DAMAGE`, registered
+  before `WorldEvents` so a script hears none of them; `VisitorMenuMixin` refuses a container
+  entity's and a mount's inventory, which open with no click on a block. Everything refused is the
+  wiki's list of the player permissions Bedrock's visitor preset has off. `/gametest
   create` lays out the test pack's `tp:hut_stands`, `pos` finds its area, `runthis` runs it there,
   and `runsetuntilfail` runs `tp:fails_the_second_time`, which the test pack's script registers to
   pass once and fail after, until its second round. `/mobevent` holds back the dragon the End's

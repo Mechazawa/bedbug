@@ -107,6 +107,7 @@ public final class ServerHooks {
         //?}
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> state = null);
         CommandRegistrationCallback.EVENT.register(ServerHooks::registerCommands);
+        Visitors.register();
         WorldEvents.register();
         // Both sides are asked whatever the other answers: a pack's script watches for the attempt
         // and not only for the damage that lands.
@@ -290,6 +291,7 @@ public final class ServerHooks {
         AreaSchedules.load(state);
         MobEvents.load(state, server);
         BedrockRules.load(state);
+        Visitors.load(state);
         scripts = ScriptHost.start(server, McAddon.packs().packs(), state);
         if (scripts != null) {
             CustomCommands.install(server, scripts);
