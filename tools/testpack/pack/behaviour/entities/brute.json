@@ -104,7 +104,12 @@
               "event": "tp:brute_escaped",
               "target": "self"
             }
-          ]
+          ],
+          "avoid_block_sound": "retreat",
+          "sound_interval": {
+            "min": 0.5,
+            "max": 0.5
+          }
         }
       },
       "tp:brute_blinking": {
@@ -420,6 +425,71 @@
             }
           ]
         }
+      },
+      "tp:brute_wailing": {
+        "minecraft:behavior.panic": {
+          "priority": 0,
+          "force": true,
+          "panic_sound": "panic",
+          "sound_interval": {
+            "range_min": 0.5,
+            "range_max": 0.5
+          }
+        }
+      },
+      "tp:brute_parched": {
+        "minecraft:behavior.move_to_water": {
+          "priority": 0,
+          "search_range": 8,
+          "search_height": 2,
+          "goal_radius": 0.5
+        }
+      },
+      "tp:brute_crowded": {
+        "minecraft:flocking": {
+          "influence_radius": 6,
+          "goal_weight": 2,
+          "separation_threshold": 3,
+          "separation_weight": 2,
+          "cohesion_weight": 0
+        }
+      },
+      "tp:brute_schooling": {
+        "minecraft:flocking": {
+          "influence_radius": 8,
+          "goal_weight": 2,
+          "match_variants": true,
+          "separation_threshold": 0.5,
+          "cohesion_threshold": 8,
+          "cohesion_weight": 2,
+          "high_flock_limit": 4
+        }
+      },
+      "tp:brute_solitary": {
+        "minecraft:flocking": {
+          "influence_radius": 8,
+          "goal_weight": 2,
+          "loner_chance": 1,
+          "separation_threshold": 0.5,
+          "cohesion_threshold": 8,
+          "cohesion_weight": 2
+        }
+      },
+      "tp:brute_paired": {
+        "minecraft:flocking": {
+          "influence_radius": 8,
+          "goal_weight": 2,
+          "high_flock_limit": 1,
+          "separation_threshold": 0.5,
+          "cohesion_threshold": 8,
+          "cohesion_weight": 2
+        }
+      },
+      "tp:brute_springing": {
+        "minecraft:behavior.leap_at_target": {
+          "priority": 0,
+          "yd": 0.9
+        }
       }
     },
     "components": {
@@ -651,6 +721,55 @@
         "add": {
           "component_groups": [
             "tp:brute_frugal"
+          ]
+        }
+      },
+      "tp:brute_wail": {
+        "add": {
+          "component_groups": [
+            "tp:brute_wailing"
+          ]
+        }
+      },
+      "tp:brute_parch": {
+        "add": {
+          "component_groups": [
+            "tp:brute_parched"
+          ]
+        }
+      },
+      "tp:brute_crowd": {
+        "add": {
+          "component_groups": [
+            "tp:brute_crowded"
+          ]
+        }
+      },
+      "tp:brute_school": {
+        "add": {
+          "component_groups": [
+            "tp:brute_schooling"
+          ]
+        }
+      },
+      "tp:brute_keep_apart": {
+        "add": {
+          "component_groups": [
+            "tp:brute_solitary"
+          ]
+        }
+      },
+      "tp:brute_pair": {
+        "add": {
+          "component_groups": [
+            "tp:brute_paired"
+          ]
+        }
+      },
+      "tp:brute_spring": {
+        "add": {
+          "component_groups": [
+            "tp:brute_springing"
           ]
         }
       }
