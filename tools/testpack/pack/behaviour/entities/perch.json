@@ -1,0 +1,46 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:perch",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false,
+      "animations": {
+        "settle": "controller.animation.tp.perch.settle",
+        "journeyman": "animation.tp.perch.journeyman"
+      },
+      "scripts": {
+        "animate": [
+          {
+            "settle": "!q.has_rider ? { return 1; }; (t.perch_x ?? -1) == q.position(0) && (t.perch_y ?? -1) == q.position(1) && (t.perch_z ?? -1) == q.position(2) ? { v.rider_tier = t.perch_tier; t.perch_x = -1; }; return 1;"
+          }
+        ]
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": ["tp_perch", "inanimate"]
+      },
+      "minecraft:collision_box": {
+        "width": 0,
+        "height": 0
+      },
+      "minecraft:physics": {
+        "has_collision": false,
+        "has_gravity": false
+      },
+      "minecraft:rideable": {
+        "seat_count": 1,
+        "family_types": ["villager"],
+        "seats": [
+          {
+            "position": [0, 0, 0],
+            "lock_rider_rotation": 0,
+            "rotate_rider_by": "t.perch_tier = q.trade_tier; t.perch_x = q.position(0); t.perch_y = q.position(1); t.perch_z = q.position(2); return q.has_any_family('villager') ? -90 : 0;"
+          }
+        ]
+      }
+    }
+  }
+}

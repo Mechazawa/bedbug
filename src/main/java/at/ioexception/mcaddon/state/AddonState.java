@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.state;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
@@ -38,6 +39,12 @@ public final class AddonState {
     private final Map<String, Map<String, Object>> blockDynamic = new LinkedHashMap<>();
     private final Map<UUID, Map<String, Object>> dialogue = new HashMap<>();
     private boolean dirty;
+
+    /**
+     * The `temp.` values every Molang expression the server runs reads and writes, which nothing
+     * saves. A world reopened starts from none, as Bedrock's does.
+     */
+    private final Map<String, MolangValue> temporaries = new HashMap<>();
 
     private AddonState(Path file) {
         this.file = file;
@@ -108,6 +115,10 @@ public final class AddonState {
 
     public void setProperty(UUID entity, String name, Object value) {
         put(entityProperties.computeIfAbsent(entity, key -> new LinkedHashMap<>()), name, value);
+    }
+
+    public Map<String, MolangValue> temporaries() {
+        return temporaries;
     }
 
     public Map<String, Object> properties(UUID entity) {

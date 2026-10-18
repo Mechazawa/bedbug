@@ -32,6 +32,7 @@ public final class BedrockModelRenderer {
         BakedGeometry geometry,
         EntityAnimator animator,
         Predicate<String> hidden,
+        Predicate<String> drawn,
         UvShift shift,
         PoseStack poseStack,
         VertexConsumer buffer,
@@ -40,7 +41,8 @@ public final class BedrockModelRenderer {
         int colour
     ) {
         for (BakedBone bone : geometry.roots()) {
-            renderBone(bone, new Quaternionf(), animator, hidden, shift, poseStack, buffer, light, overlay, colour);
+            renderBone(bone, new Quaternionf(), animator, hidden, drawn, shift, poseStack, buffer, light, overlay,
+                colour);
         }
     }
 
@@ -49,6 +51,7 @@ public final class BedrockModelRenderer {
         Quaternionf parentTurn,
         EntityAnimator animator,
         Predicate<String> hidden,
+        Predicate<String> drawn,
         UvShift shift,
         PoseStack poseStack,
         VertexConsumer buffer,
@@ -62,10 +65,12 @@ public final class BedrockModelRenderer {
         Quaternionf turn = poseBone(bone, parentTurn, animator, poseStack);
 
         PoseStack.Pose last = poseStack.last();
-        for (BakedQuad quad : bone.quads()) emitQuad(quad, shift, last, buffer, light, overlay, colour);
+        if (drawn.test(bone.name())) {
+            for (BakedQuad quad : bone.quads()) emitQuad(quad, shift, last, buffer, light, overlay, colour);
+        }
 
         for (BakedBone child : bone.children()) {
-            renderBone(child, turn, animator, hidden, shift, poseStack, buffer, light, overlay, colour);
+            renderBone(child, turn, animator, hidden, drawn, shift, poseStack, buffer, light, overlay, colour);
         }
         poseStack.popPose();
     }

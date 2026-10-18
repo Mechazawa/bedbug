@@ -844,6 +844,15 @@ public class AddonEntity extends PathfinderMob
         // survives only as the number a pack's own controllers read back.
         TradeTable trades = trades();
         if (trades != null) setValue("max_trade_tier", (double) trades.tiers());
+        publishTradeTier(trades);
+    }
+
+    /**
+     * The tier the trader has reached, which `query.trade_tier` reads back. Bedrock counts tiers from
+     * nought, so a trader still offering only its first tier answers 0.
+     */
+    private void publishTradeTier(TradeTable trades) {
+        if (trades != null) setValue("trade_tier", (double) (trades.reached(tradeExperience) - 1));
     }
 
     /**
@@ -1072,8 +1081,7 @@ public class AddonEntity extends PathfinderMob
             liveComponent("minecraft:rideable"), "family_types");
         if (families.isEmpty()) return true;
 
-        java.util.Set<String> carried = passenger instanceof AddonEntity addon
-            ? addon.definition().families() : Platform.tagsOf(passenger);
+        java.util.Set<String> carried = at.ioexception.mcaddon.bedrock.behaviour.Families.of(passenger);
         return families.stream()
             .filter(com.google.gson.JsonElement::isJsonPrimitive)
             .map(com.google.gson.JsonElement::getAsString)
@@ -1362,14 +1370,104 @@ public class AddonEntity extends PathfinderMob
 
     private int teleportReadyAt;
 
-    /** The first seat a `minecraft:rideable` component names, or null when it names none. */
+    /** Where the first seat a `minecraft:rideable` component names sits, or null when it names none. */
     private net.minecraft.world.phys.Vec3 seat() {
+        com.google.gson.JsonObject seat = firstSeat();
+        return seat == null ? null
+            : at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.blocks(seat.get("position"), null);
+    }
+
+    /** The first seat a `minecraft:rideable` component names, or null when it names none. */
+    private com.google.gson.JsonObject firstSeat() {
         com.google.gson.JsonObject body = liveComponent("minecraft:rideable");
         com.google.gson.JsonArray seats = body == null ? null : body.getAsJsonArray("seats");
         if (seats == null || seats.isEmpty() || !seats.get(0).isJsonObject()) return null;
 
-        return at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.blocks(
-            seats.get(0).getAsJsonObject().get("position"), null);
+        return seats.get(0).getAsJsonObject();
+    }
+
+    /**
+     * Works out how far the seat turns each rider from the way this entity faces, which Bedrock
+     * evaluates every tick as the seat's `rotate_rider_by`.
+     *
+     * The expression is asked as the rider, so `query.trade_tier` and `query.has_any_family` answer
+     * for whoever sits there. It runs before this entity's own scripts, with the rider already moved
+     * onto the seat, and its temporaries are the ones every other expression on the server reads: a
+     * pack hands what it learnt about a rider to its mount's scripts that way, keyed by where the two
+     * stand.
+     */
+    private void turnRiders() {
+        com.google.gson.JsonObject seat = firstSeat();
+        com.google.gson.JsonElement turn = seat == null ? null : seat.get("rotate_rider_by");
+        if (turn == null || !turn.isJsonPrimitive()) {
+            riderTurns.clear();
+            return;
+        }
+        if (turn != seatTurnSource) {
+            seatTurnSource = turn;
+            seatTurn = at.ioexception.mcaddon.bedrock.molang.MolangParser.parse(
+                turn.getAsJsonPrimitive().isNumber() ? (Object) turn.getAsDouble() : turn.getAsString());
+        }
+
+        java.util.Set<java.util.UUID> aboard = new java.util.HashSet<>();
+        for (net.minecraft.world.entity.Entity rider : getPassengers()) {
+            aboard.add(rider.getUUID());
+            positionRider(rider);
+            riderTurns.put(rider.getUUID(), seatTurn.asFloat(riderQuestions(rider)));
+        }
+        riderTurns.keySet().retainAll(aboard);
+        riderQuestions.keySet().retainAll(aboard);
+    }
+
+    /** What a seat's expression is answered with about one rider, kept while it stays aboard. */
+    private at.ioexception.mcaddon.bedrock.molang.MolangEnvironment riderQuestions(
+        net.minecraft.world.entity.Entity rider) {
+        at.ioexception.mcaddon.bedrock.animation.AnimationPlayer asked = riderQuestions.computeIfAbsent(
+            rider.getUUID(), id -> {
+                at.ioexception.mcaddon.bedrock.animation.AnimationPlayer fresh =
+                    new at.ioexception.mcaddon.bedrock.animation.AnimationPlayer(null, rider);
+                fresh.environment().setQueries(new at.ioexception.mcaddon.bedrock.entity.EntityQueries(
+                    rider, fresh, at.ioexception.mcaddon.bedrock.entity.EntityQueries.Drawn.NONE,
+                    () -> ServerHooks.state() == null ? java.util.Map.of() : ServerHooks.state().properties(id),
+                    false));
+                if (ServerHooks.state() != null) {
+                    fresh.environment().shareTemporaries(ServerHooks.state().temporaries());
+                }
+                return fresh;
+            });
+        asked.environment().setLifeTime(
+            rider.tickCount / (float) at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.TICKS_PER_SECOND);
+        return asked.environment();
+    }
+
+    private com.google.gson.JsonElement seatTurnSource;
+    private at.ioexception.mcaddon.bedrock.molang.MolangExpression seatTurn;
+    private final java.util.Map<java.util.UUID, Float> riderTurns = new java.util.HashMap<>();
+    private final java.util.Map<java.util.UUID, at.ioexception.mcaddon.bedrock.animation.AnimationPlayer>
+        riderQuestions = new java.util.HashMap<>();
+
+    /**
+     * Faces each rider the way its seat turns it, and keeps it within `lock_rider_rotation` degrees of
+     * that where the seat states a limit.
+     */
+    @Override
+    protected void positionRider(net.minecraft.world.entity.Entity passenger, MoveFunction move) {
+        super.positionRider(passenger, move);
+        Float turn = riderTurns.get(passenger.getUUID());
+        if (turn == null) return;
+
+        float facing = getYRot() + turn;
+        if (passenger instanceof net.minecraft.world.entity.LivingEntity living) living.setYBodyRot(facing);
+
+        com.google.gson.JsonObject seat = firstSeat();
+        com.google.gson.JsonElement lock = seat == null ? null : seat.get("lock_rider_rotation");
+        if (lock == null || !lock.isJsonPrimitive() || !lock.getAsJsonPrimitive().isNumber()) return;
+
+        float off = net.minecraft.util.Mth.wrapDegrees(passenger.getYRot() - facing);
+        float kept = net.minecraft.util.Mth.clamp(off, -lock.getAsFloat(), lock.getAsFloat());
+        passenger.yRotO += kept - off;
+        passenger.setYRot(passenger.getYRot() + kept - off);
+        passenger.setYHeadRot(passenger.getYRot());
     }
 
     /**
@@ -3293,6 +3391,7 @@ public class AddonEntity extends PathfinderMob
         super.tick();
         if (definition == null || !(level() instanceof net.minecraft.server.level.ServerLevel)) return;
 
+        turnRiders();
         animateState();
         everyTick();
         if (spawnRuleEvent != null) {
@@ -5763,6 +5862,7 @@ public class AddonEntity extends PathfinderMob
         int index = offers == null ? -1 : offers.indexOf(offer);
         tradeExperience += index >= 0 && index < shown.size()
             ? shown.get(index).experience() : offer.getXp();
+        publishTradeTier(trades());
     }
 
     @Override
