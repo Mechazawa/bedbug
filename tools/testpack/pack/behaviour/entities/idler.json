@@ -14,6 +14,10 @@
         "tp:ended": {
           "type": "bool",
           "default": false
+        },
+        "tp:near": {
+          "type": "bool",
+          "default": false
         }
       }
     },
@@ -127,6 +131,29 @@
           "priority": 0,
           "duration": 2,
           "idle_time": 1
+        }
+      },
+      "tp:idler_holding": {
+        "minecraft:behavior.hold_ground": {
+          "priority": 0,
+          "min_radius": 5,
+          "broadcast": true,
+          "broadcast_range": 8,
+          "within_radius_event": {
+            "event": "tp:idler_near",
+            "target": "self"
+          }
+        }
+      },
+      "tp:idler_watching": {
+        "minecraft:behavior.look_at_target": {
+          "priority": 0,
+          "look_time": {
+            "min": 1,
+            "max": 1
+          },
+          "probability": 1,
+          "look_distance": 12
         }
       },
       "tp:idler_insomniac": {
@@ -246,6 +273,20 @@
           ]
         }
       },
+      "tp:idler_make_holding": {
+        "add": {
+          "component_groups": [
+            "tp:idler_holding"
+          ]
+        }
+      },
+      "tp:idler_make_watching": {
+        "add": {
+          "component_groups": [
+            "tp:idler_watching"
+          ]
+        }
+      },
       "tp:idler_make_insomniac": {
         "add": {
           "component_groups": [
@@ -268,6 +309,11 @@
       "tp:idler_ended": {
         "set_property": {
           "tp:ended": true
+        }
+      },
+      "tp:idler_near": {
+        "set_property": {
+          "tp:near": true
         }
       }
     }

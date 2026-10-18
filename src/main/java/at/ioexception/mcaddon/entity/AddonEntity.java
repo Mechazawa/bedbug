@@ -3220,10 +3220,8 @@ public class AddonEntity extends PathfinderMob
 
             case "minecraft:behavior.equip_item" -> goals.add(priority,
                 new EquipItemGoal(this, componentBody("minecraft:equip_item")));
-            case "minecraft:behavior.hold_ground" ->
-                goals.add(priority, HoldGroundGoal.standing(this));
-            case "minecraft:behavior.look_at_target" ->
-                goals.add(priority, HoldGroundGoal.watching(this));
+            case "minecraft:behavior.hold_ground" -> goals.add(priority, new HoldGroundGoal(this, goal));
+            case "minecraft:behavior.look_at_target" -> goals.add(priority, LookGoal.atTarget(this, goal));
             // Java writes door handling as two goals under one base, and opening is the half
             // Bedrock's own door interaction does.
             case "minecraft:behavior.door_interact" ->

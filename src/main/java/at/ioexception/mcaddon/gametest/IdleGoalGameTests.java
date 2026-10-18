@@ -191,6 +191,75 @@ public final class IdleGoalGameTests {
         cycle(helper, "tp:idler_make_digging", Pose.DIGGING, 20, 40, 20);
     }
 
+    /** A holder keeps its place while its target is at least `min_radius` away and stops once it is closer. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 40)
+    public void aHolderKeepsItsPlaceWhileItsTargetIsFarEnough(GameTestHelper helper) {
+        AddonEntity holder = idler(helper, "tp:idler_make_holding");
+        if (holder == null) {
+            helper.succeed();
+            return;
+        }
+
+        holder.setTarget(pigAt(helper, STAND.east(6)));
+        helper.runAtTickTime(10, () -> {
+            helper.assertTrue(holder.runningGoals().stream().anyMatch(goal -> goal.startsWith("HoldGroundGoal")),
+                IDLER + " did not hold its ground against a target six blocks off.");
+            helper.assertFalse(Boolean.TRUE.equals(holder.value("tp:near")),
+                IDLER + " raised its within-radius event for a target outside the radius.");
+            helper.succeed();
+        });
+    }
+
+    /**
+     * A target inside `min_radius` raises `within_radius_event` on the holder and, with `broadcast`,
+     * on every entity of its kind inside `broadcast_range`, which also takes the target.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 40)
+    public void aTargetInsideTheRadiusRaisesTheHoldersEventAndTheirKins(GameTestHelper helper) {
+        AddonEntity holder = idler(helper, "tp:idler_make_holding");
+        AddonEntity kin = BehaviourGameTests.spawn(helper, IDLER, STAND.south(4));
+        if (holder == null || kin == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(kin, "tp:idler_make_holding", null, ServerHooks.state());
+        Mob pig = pigAt(helper, STAND.east(3));
+        holder.setTarget(pig);
+        helper.runAtTickTime(10, () -> {
+            helper.assertTrue(Boolean.TRUE.equals(holder.value("tp:near")), IDLER + " raised no within-radius event.");
+            helper.assertFalse(holder.runningGoals().stream().anyMatch(goal -> goal.startsWith("HoldGroundGoal")),
+                IDLER + " held its ground against a target inside its radius.");
+            helper.assertTrue(Boolean.TRUE.equals(kin.value("tp:near")), IDLER + " did not broadcast its event.");
+            helper.assertTrue(kin.getTarget() == pig, IDLER + " did not broadcast its target.");
+            helper.succeed();
+        });
+    }
+
+    /** Looking at the target lasts `look_time`, which a look goal states in its own name while it runs. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 40)
+    public void aLookAtTargetGoalLooksForItsLookTime(GameTestHelper helper) {
+        AddonEntity watcher = idler(helper, "tp:idler_make_watching");
+        if (watcher == null) {
+            helper.succeed();
+            return;
+        }
+
+        watcher.setTarget(pigAt(helper, STAND.east(3)));
+        int[] left = {-1};
+        helper.onEachTick(() -> watcher.runningGoals().stream()
+            .filter(goal -> goal.startsWith("LookGoal with "))
+            .findFirst()
+            .filter(goal -> left[0] < 0)
+            .ifPresent(goal -> left[0] = Integer.parseInt(goal.split(" ")[2])));
+        helper.runAtTickTime(30, () -> {
+            helper.assertTrue(left[0] >= 0, IDLER + " never looked at its target.");
+            helper.assertTrue(left[0] >= 16 && left[0] <= 20,
+                IDLER + " began a look of " + left[0] + " ticks and a second is twenty.");
+            helper.succeed();
+        });
+    }
+
     /** Switches a group on and checks when the pose begins, how long it lasts and how long until it begins again. */
     private static void cycle(GameTestHelper helper, String event, Pose pose, int first, int length, int gap) {
         AddonEntity idler = idler(helper, event);
