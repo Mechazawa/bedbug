@@ -61,6 +61,10 @@ TEMPT_SOUND = ("Mojang's documentation counts the gap between tempt sounds in ti
 BOBBING = ("The shape of the rise and fall on the surface. The lift above gives a floating entity Java's own "
            "bob, and nothing in Java lets an entity choose another.")
 
+SLEEPING_BOX = ("From 1.21 Java's `LivingEntity.getDimensions` is final and answers a fixed box of a fifth of a "
+                "block for the sleeping pose, which is the pose a sleeping entity takes here, so a box of a "
+                "pack's own has nowhere to go.")
+
 # A field a reader may skip, and why. Keyed by component, then by field; the key "*" covers every
 # field of that component that no reader names.
 REASONS = {
@@ -108,12 +112,14 @@ REASONS = {
              "Java's villager brain, which a pack's entity has none of; the restriction radius is read.",
     },
     "minecraft:offspring": {
-        "*": "Inheritance between two parents. Java's own animals breed by class, so a child has no "
-             "attributes, colours or variants to blend and nothing to mutate them with.",
+        "blend_attributes": "Mojang's documentation names no attribute and no rule this blends by; the "
+                            "attributes `parent_centric_attribute_blending` lists are blended, by Java's "
+                            "own horse breeding.",
     },
     "minecraft:preferred_path": {
-        "*": "Per-block path costs. Java's navigator prices a route by path type rather than by block, "
-             "so a list of blocks and their prices has nothing to be applied to.",
+        "*": "Per-block path costs. Java's walk node evaluator prices each node by the path type it "
+             "classes the block as and keeps no price per block, so the prices need an evaluator of this "
+             "mod's own, which is not written; `max_fall_blocks` is read.",
     },
 
     # Fields read somewhere other than through a field helper.
@@ -174,48 +180,27 @@ REASONS = {
     },
 
     # Goals. Java's goal of the same name takes fewer parameters than Bedrock states.
-    "minecraft:behavior.explore_outskirts": {"*": "Java's stroll goal picks its own distance and wait."},
-    "minecraft:behavior.stroll_towards_village": {"*": "Java's stroll goal has no village to aim at."},
-    "minecraft:behavior.move_indoors": {"*": "Java's goal has no cooldown of its own."},
-    "minecraft:behavior.move_outdoors": {"*": "Java's goal has no cooldown of its own."},
     "minecraft:behavior.mount_pathing": {
         "*": "A mob riding another steers it in Java: the rider plans with the mount's navigator and the "
              "mount's own movement goals are switched off while it is ridden, so the chase and the "
              "distance kept belong to the rider's attack goal.",
     },
     "minecraft:behavior.share_items": {"*": "Java's stroll goal has no arrival radius of its own."},
-    "minecraft:behavior.play": {"*": "Java writes playing into its own villager, with no friends to name."},
-    "minecraft:behavior.hide": {
-        "*": "Java writes hiding into its own villager, with no point of interest to run to.",
-    },
     "minecraft:behavior.sleep": {
-        "*": "Sleeping is a pose here rather than a bed, so there is no collider to resize and no offset "
-             "to lie at.",
+        "sleep_collider_width": SLEEPING_BOX,
+        "sleep_collider_height": SLEEPING_BOX,
+        "sleep_y_offset": SLEEPING_BOX,
     },
     "minecraft:behavior.float": {
         "*": "Java's float goal swims a mob up with no chance of its own and no passengers to drop.",
-    },
-    "minecraft:behavior.panic": {
-        "*": "Java's panic goal runs from whatever hurt the mob, with no sound, no damage list and no "
-             "preference for water.",
     },
     "minecraft:behavior.tempt": {
         "tempt_sound": TEMPT_SOUND,
         "sound_interval": TEMPT_SOUND,
     },
-    "minecraft:behavior.melee_attack": {
-        "reach_multiplier": "Java reaches as far as the mob's own size allows.",
-    },
-    "minecraft:behavior.melee_box_attack": {
-        "*": "Java's melee goal swings on its own cooldown inside its own reach, and raises no event of "
-             "its own when it lands or kills.",
-    },
     "minecraft:behavior.avoid_mob_type": {
         "*": "Java's avoid goal flees whatever it is given at the speed it is given, with no sound, no "
              "probability and no event when it gets away.",
-    },
-    "minecraft:behavior.avoid_block": {
-        "*": "Java has no goal that flees a block, so what carries across is the fleeing.",
     },
     "minecraft:behavior.follow_owner": {
         "ignore_vibration": "Whether a vibration interrupts the following. Only the allay says it does, and "
@@ -223,7 +208,11 @@ REASONS = {
     },
     "minecraft:behavior.drink_milk": {"filters": "Drinking clears what is harmful whenever there is any."},
     "minecraft:behavior.drink_potion": {
-        "*": "Drinking clears what is harmful rather than applying a potion Java would have to hold.",
+        "speed_modifier": "The potion's effects arrive the moment it is chosen, so there is no time spent "
+                          "drinking for the entity to be slowed through.",
+
+        "priority": "Drinking runs beside the entity's goals on the sensor pass rather than as one of "
+                    "them, so it has no place among them to take.",
     },
     "minecraft:behavior.trade_interest": {
         "*": "Java's merchant screen opens on a click rather than after a mob has shown interest.",
@@ -237,14 +226,12 @@ REASONS = {
                            "the list has nothing to be checked against.",
     },
     "minecraft:rideable": {
-        "*": "The rider sits at the seat the pack gave and gets off where Java puts it: there is no "
-             "dismount rule, no prompt text and no pulling riders in.",
+        "interact_text": "Java shows no prompt of its own for using a mob.",
     },
-    "minecraft:shareables": {"all_items_max_amount": "A Java mob holds one stack in its hand."},
     "minecraft:is_dyeable": {"interact_text": "Java shows no prompt of its own for using a mob."},
-    "minecraft:teleport": {
-        "*": "Teleporting towards a target is a goal rather than a component here, and the entity has "
-             "no target to chase.",
+    "minecraft:tamemount": {
+        "feed_text": "Java shows no prompt of its own for using a mob.",
+        "ride_text": "Java shows no prompt of its own for using a mob.",
     },
 }
 

@@ -12,9 +12,9 @@ import java.util.EnumSet;
  * Bolts about with a rider on its back until it throws them.
  *
  * `minecraft:behavior.run_around_like_crazy` is what an untamed horse does the moment somebody climbs
- * on. Java writes it into `AbstractHorse`, whose taming counter a data-driven entity has none of, so
- * the owner a pack's taming component stores decides instead: an entity nobody owns bucks, and one
- * that has been tamed carries its rider.
+ * on. Java writes it into `AbstractHorse`; here the owner a pack's taming component stores decides
+ * instead: an entity nobody owns bucks, and one that has been tamed carries its rider. Each buck is
+ * a try at breaking the entity in under `minecraft:tamemount`, which the entity answers.
  */
 public final class BuckRiderGoal extends Goal {
     /** How far ahead a bolt aims, in blocks. */
@@ -47,6 +47,12 @@ public final class BuckRiderGoal extends Goal {
         return canUse();
     }
 
+    /** The wait before a buck is counted in ticks, so every tick has to reach it. */
+    @Override
+    public boolean requiresUpdateEveryTick() {
+        return true;
+    }
+
     @Override
     public void start() {
         untilBuck = Goals.between(mob.getRandom(), BUCK_LOW, BUCK_HIGH);
@@ -58,7 +64,8 @@ public final class BuckRiderGoal extends Goal {
         if (--untilBuck > 0) return;
 
         untilBuck = Goals.between(mob.getRandom(), BUCK_LOW, BUCK_HIGH);
-        throwRider();
+        Player rider = rider();
+        if (rider != null && !mob.brokenInBy(rider)) throwRider(rider);
     }
 
     /** Somewhere the entity can reach at a run, which is Java's own answer for a panicking mob. */
@@ -69,10 +76,7 @@ public final class BuckRiderGoal extends Goal {
         mob.getNavigation().moveTo(towards.x, towards.y, towards.z, speed);
     }
 
-    private void throwRider() {
-        Player rider = rider();
-        if (rider == null) return;
-
+    private void throwRider(Player rider) {
         rider.stopRiding();
         rider.setDeltaMovement(rider.getDeltaMovement().add(0, BUCK_LIFT, 0));
     }

@@ -1,0 +1,852 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:brute",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false,
+      "properties": {
+        "tp:struck": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:felled": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:escaped": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:hue": {
+          "type": "int",
+          "range": [
+            0,
+            9
+          ],
+          "default": 0
+        },
+        "tp:tamed": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:boarded": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:alighted": {
+          "type": "bool",
+          "default": false
+        }
+      }
+    },
+    "component_groups": {
+      "tp:brute_boxing": {
+        "minecraft:behavior.melee_box_attack": {
+          "priority": 0,
+          "cooldown_time": 1.5,
+          "horizontal_reach": 1.5,
+          "on_attack": {
+            "event": "tp:brute_struck",
+            "target": "self"
+          },
+          "on_kill": {
+            "event": "tp:brute_felled",
+            "target": "self"
+          }
+        }
+      },
+      "tp:brute_reaching": {
+        "minecraft:behavior.melee_attack": {
+          "priority": 0,
+          "reach_multiplier": 6
+        }
+      },
+      "tp:brute_burning": {
+        "minecraft:behavior.melee_box_attack": {
+          "priority": 0,
+          "can_spread_on_fire": true
+        }
+      },
+      "tp:brute_skittish": {
+        "minecraft:behavior.panic": {
+          "priority": 0,
+          "damage_sources": [
+            "fall",
+            "entity_attack"
+          ],
+          "ignore_mob_damage": true
+        }
+      },
+      "tp:brute_bolting": {
+        "minecraft:behavior.panic": {
+          "priority": 0,
+          "force": true
+        }
+      },
+      "tp:brute_wading": {
+        "minecraft:behavior.panic": {
+          "priority": 0,
+          "prefer_water": true
+        }
+      },
+      "tp:brute_shy": {
+        "minecraft:behavior.avoid_block": {
+          "priority": 0,
+          "search_range": 3,
+          "search_height": 2,
+          "target_blocks": [
+            "minecraft:gold_block"
+          ],
+          "on_escape": [
+            {
+              "event": "tp:brute_escaped",
+              "target": "self"
+            }
+          ],
+          "avoid_block_sound": "retreat",
+          "sound_interval": {
+            "min": 0.5,
+            "max": 0.5
+          }
+        }
+      },
+      "tp:brute_blinking": {
+        "minecraft:teleport": {
+          "random_teleports": false,
+          "min_random_teleport_time": 0.5,
+          "max_random_teleport_time": 0.5,
+          "random_teleport_cube": [
+            6,
+            0,
+            6
+          ],
+          "target_distance": 3,
+          "target_teleport_chance": 1,
+          "teleports_on_projectile_hit": true
+        }
+      },
+      "tp:brute_breeding": {
+        "minecraft:breedable": {
+          "breed_items": [
+            "minecraft:wheat"
+          ],
+          "breeds_with": {
+            "mate_type": "tp:brute",
+            "baby_type": "tp:brute"
+          }
+        },
+        "minecraft:behavior.breed": {
+          "priority": 0
+        },
+        "minecraft:health": {
+          "value": {
+            "range_min": 10,
+            "range_max": 30
+          }
+        },
+        "minecraft:offspring": {
+          "combine_parent_colors": true,
+          "property_inheritance": {
+            "tp:hue": {}
+          },
+          "parent_centric_attribute_blending": [
+            "minecraft:health"
+          ]
+        }
+      },
+      "tp:brute_mutating": {
+        "minecraft:breedable": {
+          "breed_items": [
+            "minecraft:wheat"
+          ],
+          "breeds_with": {
+            "mate_type": "tp:brute",
+            "baby_type": "tp:brute"
+          }
+        },
+        "minecraft:behavior.breed": {
+          "priority": 0
+        },
+        "minecraft:offspring": {
+          "mutation_factor": {
+            "variant": 1,
+            "extra_variant": 1,
+            "color": 1
+          },
+          "mutation_strategy": "random",
+          "random_variant_mutation_interval": [
+            7,
+            7
+          ],
+          "random_extra_variant_mutation_interval": [
+            2,
+            2
+          ]
+        }
+      },
+      "tp:brute_denying": {
+        "minecraft:breedable": {
+          "breed_items": [
+            "minecraft:wheat"
+          ],
+          "breeds_with": {
+            "mate_type": "tp:brute",
+            "baby_type": "tp:brute"
+          }
+        },
+        "minecraft:behavior.breed": {
+          "priority": 0
+        },
+        "minecraft:offspring": {
+          "inherit_tamed": false,
+          "deny_parents_variant": {
+            "chance": 1,
+            "min_variant": 5,
+            "max_variant": 5
+          }
+        }
+      },
+      "tp:brute_carrying": {
+        "minecraft:rideable": {
+          "seat_count": 2,
+          "seats": [
+            {
+              "position": [
+                0,
+                1.0,
+                0
+              ]
+            },
+            {
+              "position": [
+                0,
+                1.0,
+                -0.4
+              ]
+            }
+          ]
+        },
+        "minecraft:addrider": {
+          "riders": [
+            {
+              "entity_type": "minecraft:pig"
+            },
+            {
+              "entity_type": "tp:brute",
+              "spawn_event": "tp:brute_struck"
+            }
+          ]
+        }
+      },
+      "tp:brute_venomous": {
+        "minecraft:attack": {
+          "damage": 1,
+          "effect_name": "poison",
+          "effect_duration": 3,
+          "effect_amplifier": 1
+        },
+        "minecraft:behavior.melee_box_attack": {
+          "priority": 0
+        }
+      },
+      "tp:brute_tameable": {
+        "minecraft:tameable": {
+          "tame_items": [
+            "minecraft:apple"
+          ],
+          "tame_event": {
+            "event": "tp:brute_tamed",
+            "target": "self"
+          }
+        }
+      },
+      "tp:brute_wild": {
+        "minecraft:rideable": {
+          "seat_count": 1,
+          "family_types": [
+            "player"
+          ],
+          "seats": {
+            "position": [
+              0,
+              1.0,
+              0
+            ]
+          }
+        },
+        "minecraft:tamemount": {
+          "min_temper": 0,
+          "max_temper": 100,
+          "feed_items": [
+            {
+              "item": "minecraft:apple",
+              "temper_mod": 100
+            }
+          ],
+          "auto_reject_items": [
+            {
+              "item": "minecraft:saddle"
+            }
+          ],
+          "tame_event": {
+            "event": "tp:brute_tamed",
+            "target": "self"
+          }
+        },
+        "minecraft:behavior.run_around_like_crazy": {
+          "priority": 0,
+          "speed_multiplier": 1.2
+        }
+      },
+      "tp:brute_archer": {
+        "minecraft:shooter": {
+          "def": "minecraft:arrow"
+        },
+        "minecraft:behavior.ranged_attack": {
+          "priority": 0,
+          "attack_interval": {
+            "min": 0.5,
+            "max": 2.5
+          },
+          "attack_range": {
+            "min": 0,
+            "max": 8
+          }
+        }
+      },
+      "tp:brute_ferrying": {
+        "minecraft:rideable": {
+          "seat_count": 2,
+          "pull_in_entities": true,
+          "passenger_max_width": 1.0,
+          "dismount_mode": "on_top_center",
+          "on_rider_enter_event": "tp:brute_boarded",
+          "on_rider_exit_event": "tp:brute_alighted",
+          "seats": [
+            {
+              "position": [
+                0,
+                1.0,
+                0
+              ]
+            },
+            {
+              "position": [
+                0,
+                1.0,
+                -0.4
+              ]
+            }
+          ]
+        }
+      },
+      "tp:brute_volatile": {
+        "minecraft:explode": {
+          "power": 1
+        }
+      },
+      "tp:brute_mindful": {
+        "minecraft:explode": {
+          "power": 1,
+          "destroy_affected_by_griefing": true
+        }
+      },
+      "tp:brute_piercing": {
+        "minecraft:explode": {
+          "power": 1,
+          "max_resistance": 0
+        }
+      },
+      "tp:brute_smouldering": {
+        "minecraft:explode": {
+          "power": 2,
+          "causes_fire": true,
+          "fire_affected_by_griefing": true
+        }
+      },
+      "tp:brute_thirsty": {
+        "minecraft:behavior.drink_potion": {
+          "priority": 0,
+          "potions": [
+            {
+              "id": 19,
+              "chance": 1,
+              "filters": {
+                "test": "is_underwater",
+                "subject": "self",
+                "value": true
+              }
+            },
+            {
+              "id": 12,
+              "chance": 1,
+              "filters": {
+                "test": "on_fire",
+                "subject": "self",
+                "value": true
+              }
+            }
+          ]
+        }
+      },
+      "tp:brute_outgoing": {
+        "minecraft:behavior.move_outdoors": {
+          "priority": 0,
+          "search_range": 6,
+          "search_height": 2,
+          "search_count": 20,
+          "goal_radius": 0.5,
+          "speed_multiplier": 1,
+          "timeout_cooldown": 0.5
+        }
+      },
+      "tp:brute_homely": {
+        "minecraft:behavior.move_indoors": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "timeout_cooldown": 0.5,
+          "search_range": 4,
+          "search_height": 2
+        }
+      },
+      "tp:brute_frugal": {
+        "minecraft:inventory": {
+          "inventory_size": 4
+        },
+        "minecraft:shareables": {
+          "all_items": true,
+          "all_items_max_amount": 2,
+          "items": [
+            {
+              "item": "minecraft:apple",
+              "max_amount": 1
+            }
+          ]
+        }
+      },
+      "tp:brute_wailing": {
+        "minecraft:behavior.panic": {
+          "priority": 0,
+          "force": true,
+          "panic_sound": "panic",
+          "sound_interval": {
+            "range_min": 0.5,
+            "range_max": 0.5
+          }
+        }
+      },
+      "tp:brute_parched": {
+        "minecraft:behavior.move_to_water": {
+          "priority": 0,
+          "search_range": 8,
+          "search_height": 2,
+          "goal_radius": 0.5
+        }
+      },
+      "tp:brute_crowded": {
+        "minecraft:flocking": {
+          "influence_radius": 4,
+          "goal_weight": 2,
+          "separation_threshold": 3,
+          "separation_weight": 2,
+          "cohesion_weight": 0
+        }
+      },
+      "tp:brute_schooling": {
+        "minecraft:flocking": {
+          "influence_radius": 4,
+          "goal_weight": 2,
+          "match_variants": true,
+          "separation_threshold": 0.5,
+          "cohesion_threshold": 4,
+          "cohesion_weight": 2,
+          "high_flock_limit": 4
+        }
+      },
+      "tp:brute_solitary": {
+        "minecraft:flocking": {
+          "influence_radius": 4,
+          "goal_weight": 2,
+          "loner_chance": 1,
+          "separation_threshold": 0.5,
+          "cohesion_threshold": 4,
+          "cohesion_weight": 2
+        }
+      },
+      "tp:brute_paired": {
+        "minecraft:flocking": {
+          "influence_radius": 4,
+          "goal_weight": 2,
+          "high_flock_limit": 1,
+          "separation_threshold": 0.5,
+          "cohesion_threshold": 4,
+          "cohesion_weight": 2
+        }
+      },
+      "tp:brute_springing": {
+        "minecraft:behavior.leap_at_target": {
+          "priority": 0,
+          "yd": 0.9
+        }
+      },
+      "tp:brute_thorny": {
+        "minecraft:area_attack": {
+          "damage_range": 0.5,
+          "damage_per_tick": 1,
+          "damage_cooldown": 1.5
+        }
+      },
+      "tp:brute_steady": {
+        "minecraft:variable_max_auto_step": {
+          "base_value": 0.6,
+          "controlled_value": 1.5
+        },
+        "minecraft:rideable": {
+          "seat_count": 1,
+          "family_types": [
+            "player"
+          ],
+          "seats": {
+            "position": [
+              0,
+              1.0,
+              0
+            ]
+          }
+        },
+        "minecraft:input_ground_controlled": {}
+      },
+      "tp:brute_flocking_near": {
+        "minecraft:flocking": {
+          "influence_radius": 4,
+          "goal_weight": 2,
+          "separation_threshold": 0.5,
+          "cohesion_threshold": 4,
+          "cohesion_weight": 2,
+          "innner_cohesion_threshold": 1.5
+        }
+      },
+      "tp:brute_digging": {
+        "minecraft:behavior.random_search_and_dig": {
+          "priority": 0,
+          "target_blocks": [
+            "minecraft:gold_block"
+          ],
+          "goal_radius": 3
+        }
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": [
+          "tp_brute",
+          "mob"
+        ]
+      },
+      "minecraft:collision_box": {
+        "width": 0.6,
+        "height": 1.0
+      },
+      "minecraft:health": {
+        "value": 20,
+        "max": 20
+      },
+      "minecraft:movement": {
+        "value": 0.25
+      },
+      "minecraft:attack": {
+        "damage": 1
+      },
+      "minecraft:physics": {},
+      "minecraft:movement.basic": {},
+      "minecraft:navigation.walk": {},
+      "minecraft:jump.static": {}
+    },
+    "events": {
+      "tp:brute_box": {
+        "add": {
+          "component_groups": [
+            "tp:brute_boxing"
+          ]
+        }
+      },
+      "tp:brute_reach": {
+        "add": {
+          "component_groups": [
+            "tp:brute_reaching"
+          ]
+        }
+      },
+      "tp:brute_burn": {
+        "add": {
+          "component_groups": [
+            "tp:brute_burning"
+          ]
+        }
+      },
+      "tp:brute_struck": {
+        "set_property": {
+          "tp:struck": true
+        }
+      },
+      "tp:brute_felled": {
+        "set_property": {
+          "tp:felled": true
+        }
+      },
+      "tp:brute_skit": {
+        "add": {
+          "component_groups": [
+            "tp:brute_skittish"
+          ]
+        }
+      },
+      "tp:brute_bolt": {
+        "add": {
+          "component_groups": [
+            "tp:brute_bolting"
+          ]
+        }
+      },
+      "tp:brute_wade": {
+        "add": {
+          "component_groups": [
+            "tp:brute_wading"
+          ]
+        }
+      },
+      "tp:brute_shy_away": {
+        "add": {
+          "component_groups": [
+            "tp:brute_shy"
+          ]
+        }
+      },
+      "tp:brute_escaped": {
+        "set_property": {
+          "tp:escaped": true
+        }
+      },
+      "tp:brute_blink": {
+        "add": {
+          "component_groups": [
+            "tp:brute_blinking"
+          ]
+        }
+      },
+      "tp:brute_breed": {
+        "add": {
+          "component_groups": [
+            "tp:brute_breeding"
+          ]
+        }
+      },
+      "tp:brute_breed_mutating": {
+        "add": {
+          "component_groups": [
+            "tp:brute_mutating"
+          ]
+        }
+      },
+      "tp:brute_breed_denying": {
+        "add": {
+          "component_groups": [
+            "tp:brute_denying"
+          ]
+        }
+      },
+      "tp:brute_carry": {
+        "add": {
+          "component_groups": [
+            "tp:brute_carrying"
+          ]
+        }
+      },
+      "tp:brute_envenom": {
+        "add": {
+          "component_groups": [
+            "tp:brute_venomous"
+          ]
+        }
+      },
+      "tp:brute_make_tameable": {
+        "add": {
+          "component_groups": [
+            "tp:brute_tameable"
+          ]
+        }
+      },
+      "tp:brute_make_wild": {
+        "add": {
+          "component_groups": [
+            "tp:brute_wild"
+          ]
+        }
+      },
+      "tp:brute_tamed": {
+        "set_property": {
+          "tp:tamed": true
+        }
+      },
+      "tp:brute_arm": {
+        "add": {
+          "component_groups": [
+            "tp:brute_archer"
+          ]
+        }
+      },
+      "tp:brute_ferry": {
+        "add": {
+          "component_groups": [
+            "tp:brute_ferrying"
+          ]
+        }
+      },
+      "tp:brute_boarded": {
+        "set_property": {
+          "tp:boarded": true
+        }
+      },
+      "tp:brute_alighted": {
+        "set_property": {
+          "tp:alighted": true
+        }
+      },
+      "tp:brute_make_volatile": {
+        "add": {
+          "component_groups": [
+            "tp:brute_volatile"
+          ]
+        }
+      },
+      "tp:brute_make_mindful": {
+        "add": {
+          "component_groups": [
+            "tp:brute_mindful"
+          ]
+        }
+      },
+      "tp:brute_make_piercing": {
+        "add": {
+          "component_groups": [
+            "tp:brute_piercing"
+          ]
+        }
+      },
+      "tp:brute_make_smouldering": {
+        "add": {
+          "component_groups": [
+            "tp:brute_smouldering"
+          ]
+        }
+      },
+      "tp:brute_thirst": {
+        "add": {
+          "component_groups": [
+            "tp:brute_thirsty"
+          ]
+        }
+      },
+      "tp:brute_go_out": {
+        "add": {
+          "component_groups": [
+            "tp:brute_outgoing"
+          ]
+        }
+      },
+      "tp:brute_go_in": {
+        "add": {
+          "component_groups": [
+            "tp:brute_homely"
+          ]
+        }
+      },
+      "tp:brute_make_frugal": {
+        "add": {
+          "component_groups": [
+            "tp:brute_frugal"
+          ]
+        }
+      },
+      "tp:brute_wail": {
+        "add": {
+          "component_groups": [
+            "tp:brute_wailing"
+          ]
+        }
+      },
+      "tp:brute_parch": {
+        "add": {
+          "component_groups": [
+            "tp:brute_parched"
+          ]
+        }
+      },
+      "tp:brute_crowd": {
+        "add": {
+          "component_groups": [
+            "tp:brute_crowded"
+          ]
+        }
+      },
+      "tp:brute_school": {
+        "add": {
+          "component_groups": [
+            "tp:brute_schooling"
+          ]
+        }
+      },
+      "tp:brute_keep_apart": {
+        "add": {
+          "component_groups": [
+            "tp:brute_solitary"
+          ]
+        }
+      },
+      "tp:brute_pair": {
+        "add": {
+          "component_groups": [
+            "tp:brute_paired"
+          ]
+        }
+      },
+      "tp:brute_spring": {
+        "add": {
+          "component_groups": [
+            "tp:brute_springing"
+          ]
+        }
+      },
+      "tp:brute_bristle": {
+        "add": {
+          "component_groups": [
+            "tp:brute_thorny"
+          ]
+        }
+      },
+      "tp:brute_steady_up": {
+        "add": {
+          "component_groups": [
+            "tp:brute_steady"
+          ]
+        }
+      },
+      "tp:brute_flock_near": {
+        "add": {
+          "component_groups": [
+            "tp:brute_flocking_near"
+          ]
+        }
+      },
+      "tp:brute_dig": {
+        "add": {
+          "component_groups": [
+            "tp:brute_digging"
+          ]
+        }
+      }
+    }
+  }
+}

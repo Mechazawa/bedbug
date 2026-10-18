@@ -22,6 +22,7 @@
       "at.ioexception.mcaddon.gametest.PackGameTests",
       "at.ioexception.mcaddon.gametest.BehaviourGameTests",
       "at.ioexception.mcaddon.gametest.ComponentGameTests",
+      "at.ioexception.mcaddon.gametest.GoalGameTests",
       "at.ioexception.mcaddon.gametest.StructureGameTests",
       "at.ioexception.mcaddon.gametest.PlayerGameTests",
       "at.ioexception.mcaddon.gametest.CommandGameTests",

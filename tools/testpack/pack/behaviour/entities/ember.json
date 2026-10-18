@@ -296,7 +296,9 @@
         "minecraft:variable_max_auto_step": {
           "base_value": 2.0
         },
-        "minecraft:preferred_path": {},
+        "minecraft:preferred_path": {
+          "max_fall_blocks": 7
+        },
         "minecraft:mob_effect_immunity": {
           "mob_effects": ["poison"]
         }

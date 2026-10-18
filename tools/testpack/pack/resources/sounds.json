@@ -9,6 +9,12 @@
           "ambient.in.water": "tp:ember.idle_submerged",
           "ambient.baby": "tp:ember.idle_young"
         }
+      },
+      "tp:brute": {
+        "events": {
+          "panic": "tp:brute.panic",
+          "retreat": "tp:brute.retreat"
+        }
       }
     }
   }

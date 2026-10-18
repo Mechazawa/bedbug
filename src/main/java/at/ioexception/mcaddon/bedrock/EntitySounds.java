@@ -28,10 +28,12 @@ import java.util.Set;
  */
 public record EntitySounds(Map<String, String> events, double volume, double[] pitch) {
     /**
-     * The moments Java asks a mob about, which is the whole of what can be answered here.
+     * The moments Java asks a mob about by itself.
      *
      * The three idle moments beside the plain one are what `minecraft:uses_legacy_ambient_sounds`
-     * picks between, so Java's one question about an idle sound reaches each of them.
+     * picks between, so Java's one question about an idle sound reaches each of them. Every other
+     * moment is kept as well and is made only where one of the entity's components names it, the way
+     * a panic names `panic_sound`, so it is still reported: nothing makes it on its own.
      */
     private static final Set<String> ANSWERED = Set.of("ambient", "ambient.in.air",
         "ambient.in.water", "ambient.baby", "hurt", "death", "step");
@@ -113,10 +115,7 @@ public record EntitySounds(Map<String, String> events, double volume, double[] p
         for (Map.Entry<String, JsonElement> entry : section(body, "events").entrySet()) {
             String named = named(entry.getValue());
             if (named == null || named.isBlank()) continue;
-            if (!ANSWERED.contains(entry.getKey())) {
-                AddonEntities.unsupported("entity sound " + entry.getKey());
-                continue;
-            }
+            if (!ANSWERED.contains(entry.getKey())) AddonEntities.unsupported("entity sound " + entry.getKey());
             events.put(entry.getKey(), named);
         }
 
