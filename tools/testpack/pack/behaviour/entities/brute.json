@@ -353,6 +353,13 @@
           "power": 1,
           "max_resistance": 0
         }
+      },
+      "tp:brute_smouldering": {
+        "minecraft:explode": {
+          "power": 2,
+          "causes_fire": true,
+          "fire_affected_by_griefing": true
+        }
       }
     },
     "components": {
@@ -549,6 +556,13 @@
         "add": {
           "component_groups": [
             "tp:brute_piercing"
+          ]
+        }
+      },
+      "tp:brute_make_smouldering": {
+        "add": {
+          "component_groups": [
+            "tp:brute_smouldering"
           ]
         }
       }

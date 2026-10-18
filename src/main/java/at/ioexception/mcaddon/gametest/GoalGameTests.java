@@ -444,7 +444,8 @@ public final class GoalGameTests {
     /**
      * A blast breaks blocks whatever the mob griefing rule says, unless its
      * `destroy_affected_by_griefing` asks for the rule, and `max_resistance` caps what a block
-     * withstands, so a blast of one breaks obsidian under a cap of nothing.
+     * withstands, so a blast of one breaks obsidian under a cap of nothing. A blast whose
+     * `fire_affected_by_griefing` asks for the rule lights nothing with the rule off.
      *
      * The rule is off only while the first two go off, which all happens inside one call on the
      * server's thread, so no other test runs under it.
@@ -454,7 +455,16 @@ public final class GoalGameTests {
         AddonEntity heedless = BehaviourGameTests.spawn(helper, BRUTE, STAND);
         AddonEntity mindful = BehaviourGameTests.spawn(helper, BRUTE, STAND.east(5));
         AddonEntity piercing = BehaviourGameTests.spawn(helper, BRUTE, STAND.south(5));
-        if (heedless == null || mindful == null || piercing == null) {
+        // Java lights a blast's fire where it broke a block, so the brute stands in a ring of dirt on
+        // obsidian, which outlasts the blast and leaves each broken block's place standing on it.
+        BlockPos hearth = STAND.east(5).south(5);
+        BlockPos.betweenClosed(hearth.offset(-2, 0, -2), hearth.offset(2, 0, 2))
+            .forEach(at -> helper.setBlock(at, net.minecraft.world.level.block.Blocks.OBSIDIAN));
+        BlockPos.betweenClosed(hearth.offset(-1, 1, -1), hearth.offset(1, 1, 1))
+            .forEach(at -> helper.setBlock(at, net.minecraft.world.level.block.Blocks.DIRT));
+        helper.setBlock(hearth.above(), net.minecraft.world.level.block.Blocks.AIR);
+        AddonEntity smouldering = BehaviourGameTests.spawn(helper, BRUTE, hearth.above());
+        if (heedless == null || mindful == null || piercing == null || smouldering == null) {
             helper.succeed();
             return;
         }
@@ -462,6 +472,7 @@ public final class GoalGameTests {
         EntityEvents.trigger(heedless, "tp:brute_make_volatile", null, ServerHooks.state());
         EntityEvents.trigger(mindful, "tp:brute_make_mindful", null, ServerHooks.state());
         EntityEvents.trigger(piercing, "tp:brute_make_piercing", null, ServerHooks.state());
+        EntityEvents.trigger(smouldering, "tp:brute_make_smouldering", null, ServerHooks.state());
         helper.setBlock(STAND.south(1), net.minecraft.world.level.block.Blocks.DIRT);
         helper.setBlock(STAND.east(5).south(1), net.minecraft.world.level.block.Blocks.DIRT);
         helper.setBlock(STAND.south(4), net.minecraft.world.level.block.Blocks.OBSIDIAN);
@@ -471,6 +482,7 @@ public final class GoalGameTests {
         Platform.setGameRule(server, "mobGriefing", "false");
         heedless.detonate();
         mindful.detonate();
+        smouldering.detonate();
         Platform.setGameRule(server, "mobGriefing", griefing);
         piercing.detonate();
 
@@ -480,6 +492,10 @@ public final class GoalGameTests {
             BRUTE + " heeds the griefing rule and broke the dirt with the rule off.");
         helper.assertTrue(helper.getBlockState(STAND.south(4)).isAir(),
             BRUTE + " caps what a block withstands at nothing and left the obsidian beside it.");
+        BlockPos burnt = helper.absolutePos(hearth.above());
+        helper.assertTrue(BlockPos.betweenClosedStream(burnt.offset(-3, -1, -3), burnt.offset(3, 2, 3))
+                .noneMatch(at -> helper.getLevel().getBlockState(at).is(net.minecraft.world.level.block.Blocks.FIRE)),
+            BRUTE + " heeds the griefing rule for its fire and lit one with the rule off.");
         helper.succeed();
     }
 
