@@ -24,6 +24,7 @@
     "TargetBlockMixin",
     "PowderSnowBlockMixin",
     "TamableAnimalMixin",
+    "VillagerMixin",
     "NameTagItemMixin",
     "AbstractHorseMixin",
     "PistonBaseBlockMixin",
@@ -53,6 +54,7 @@
     "MouseHandlerMixin",
     "LivingEntityRendererMixin",
     "ModelFeatureRendererMixin",
-    "ModelPartMixin"
+    "ModelPartMixin",
+    "SoundEngineMixin"
   ]
 }

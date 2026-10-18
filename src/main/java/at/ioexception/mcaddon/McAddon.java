@@ -6,6 +6,7 @@ import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.registry.AddonBrewing;
+import at.ioexception.mcaddon.registry.AddonCameras;
 import at.ioexception.mcaddon.registry.AddonCreativeTab;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.registry.AddonFogs;
@@ -79,6 +80,7 @@ public final class McAddon implements ModInitializer {
         // pack's own biome carries.
         AddonWorldgen.register(AddonPacks.all());
         AddonSpawns.register(packs);
+        AddonCameras.register(packs);
         // Once the add-ons' own entities, items and blocks are registered, because a function line
         // naming one of them translates only once the name can be found.
         AddonPacks.reportFunctionLines();

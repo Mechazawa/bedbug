@@ -32,6 +32,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.entity.animal.wolf.Wolf;
+import net.minecraft.world.entity.npc.villager.VillagerData;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 //? if >=26 {
@@ -1679,6 +1680,27 @@ public final class Platform {
         if (emissive) return RenderTypes.entityTranslucentEmissive(texture);
         if (blend) return RenderTypes.entityTranslucent(texture);
         return cull ? RenderTypes.entityCutoutCull(texture) : RenderTypes.entityCutout(texture);
+    }
+
+    /**
+     * A villager's profession by the name its registry holds it under, `none` for one without a job.
+     * 1.21.5 made the profession and the type registry holders.
+     */
+    public static String villagerProfession(VillagerData data) {
+        //? if >=1.21.5 {
+        return BuiltInRegistries.VILLAGER_PROFESSION.getKey(data.profession().value()).getPath();
+        //?} else {
+        /*return BuiltInRegistries.VILLAGER_PROFESSION.getKey(data.getProfession()).getPath();
+        *///?}
+    }
+
+    /** The biome a villager comes from, by the name its type is registered under. */
+    public static String villagerType(VillagerData data) {
+        //? if >=1.21.5 {
+        return BuiltInRegistries.VILLAGER_TYPE.getKey(data.type().value()).getPath();
+        //?} else {
+        /*return BuiltInRegistries.VILLAGER_TYPE.getKey(data.getType()).getPath();
+        *///?}
     }
 
     /**

@@ -1,0 +1,20 @@
+{
+  "format_version": "1.10.0",
+  "render_controllers": {
+    "controller.render.tp.tailor": {
+      "geometry": "Geometry.default",
+      "materials": [{ "*": "Material.tailored" }],
+      "textures": ["Texture.base", "Texture.outfit"]
+    },
+    "controller.render.tp.tailor.vanilla": {
+      "geometry": "Geometry.default",
+      "materials": [{ "*": "Material.masked" }],
+      "textures": ["Texture.base", "Texture.outfit"]
+    },
+    "controller.render.tp.tailor.plain": {
+      "geometry": "Geometry.default",
+      "materials": [{ "*": "Material.default" }],
+      "textures": ["Texture.base", "Texture.outfit"]
+    }
+  }
+}

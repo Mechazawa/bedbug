@@ -466,6 +466,14 @@ These are the checks it runs, and what each one catches:
   finished. It enables attachables, hides armour and hides what it holds while its mark variant is
   one, so the visor is drawn in its hand and never on its head.
 
+  `tp:tailor` draws the same two textures in three passes, the way a villager wears its profession
+  over the clothes of its biome: through `tp_tailored`, the one material in the pack's own
+  `materials/entity.material`, which defines `MASKED_MULTITEXTURE`, through the game's
+  `villager_v2_masked`, and through `entity_alphatest`, which binds the first texture alone. Its base
+  is blue all over and its outfit is four bands of an opaque red, a clear white, a clear black and a
+  faint green, so `RenderControllerClientGameTest` reads red, blue, nothing and blue off the image
+  each masked pass binds, and blue four times off the plain one.
+
   The recipes cover the seven kinds and the fields that decide what each becomes: a furnace recipe
   naming four cookers and an unlock item, a shapeless one tagged for the stonecutter and unlocked by
   a context, a shaped one keyed on an item tag and carrying a `group`, a `priority` and an unlock
@@ -602,6 +610,11 @@ These are the checks it runs, and what each one catches:
   position every tick for two seconds afterwards, which is how a pack holds one still while it
   speaks; from 26 on Java's villager ends its trade on any teleport and Bedrock's does not, so
   `TradeClientGameTest` keeps the screen open through those two seconds and then buys from it.
+  A villager taking a job is tagged with the `minecraft:become_*` event that reached the script and
+  with the `minecraft:variant`, `minecraft:mark_variant` and `minecraft:skin_id` the script read off
+  it then, which is what a pack dressing its own model of a villager does with that event.
+  `ScriptGameTests.aVillagerTakingAJobTellsTheScriptWhatItBecame` makes a villager a snowy farmer and
+  reads back `become_farmer`, a variant of 1 and a mark variant of 4.
 
   Every command line in the pack that runs while the game is going is written so Java's parser
   refuses it as it stands. On `/bedrock scriptevent tp:commands` the script runs, as whatever sent it, a
@@ -663,6 +676,19 @@ These are the checks it runs, and what each one catches:
   `tp:override` overrides the nearest wisp's `tp:settled` to false for the player who sent it, which
   a wisp settled a second after arriving is not, and tags that player when an override of a property
   the wisp never declared is refused; `tp:override_clear` clears the override again.
+
+  `cameras/presets/` holds three presets. `tp:overlook` is a free camera at 0.5 120 0.5 turned to a
+  pitch of 20 and a yaw of 45 that hears from the player, and also asks for `player_effects` and
+  `extend_player_rendering`; `tp:overlook_east` inherits from it and states only its x and its yaw,
+  so a chain walked wrongly leaves the camera at another height, pitch or listener; and `tp:orbit`
+  inherits from `minecraft:follow_orbit` with a radius and two offsets, which is refused by name.
+  `CameraPresetClientGameTest` reads each back off the client's camera and its sound engine's
+  listener, through `/camera` and through four script events (`tp:camera`, `tp:camera_default`,
+  `tp:camera_orbit` and `tp:camera_clear`) calling `Camera.setCamera`, `Camera.setDefaultCamera`
+  and `Camera.clear`, and `AddonGameTests.aCameraPresetsDroppedFieldsAreNamed` asks for the five
+  dropped fields among what `/mcaddon entities` names. A function translates a preset in a pack's
+  own namespace unread, because the functions are converted before the presets are read; the
+  command looks the name up as it runs.
 - **`tools/testpack/build_modules.py`** builds a second add-on, whose script imports every
   `@minecraft/*` module the mod provides and calls one thing from each. Its sources are a manifest
   and one script under `tools/testpack/modules/`.
@@ -1629,7 +1655,8 @@ src/main/java/at/ioexception/mcaddon/
   convert/                   Runtime conversion: Targa, Ogg repair, sounds, text, models, functions
   resource/                  The converted packs and how the game is told about them
   registry/                  Sounds, entities, items, blocks, spawns, worldgen and the creative tab
-  bedrock/camera/            What `/camera` and `/camerashake` set, and the easing curves they name
+  bedrock/camera/            What `/camera` and `/camerashake` set, the presets a pack adds, and the
+                             easing curves they name
   bedrock/fog/               A pack's `fogs/` settings, as far as Java's one fog can carry them
   bedrock/hud/               The pieces of the heads-up display `/hud` names
   bedrock/input/             The kinds of player input `/inputpermission` names

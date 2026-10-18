@@ -1,0 +1,9 @@
+{
+  "format_version": "1.19.50",
+  "minecraft:camera_preset": {
+    "identifier": "tp:overlook_east",
+    "inherit_from": "tp:overlook",
+    "pos_x": 4.5,
+    "rot_y": -90
+  }
+}

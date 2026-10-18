@@ -7,6 +7,7 @@ import at.ioexception.mcaddon.bedrock.model.BakedGeometry;
 import at.ioexception.mcaddon.bedrock.model.BedrockGeometry;
 import at.ioexception.mcaddon.bedrock.model.ControllerColour;
 import at.ioexception.mcaddon.bedrock.model.GeometryBaker;
+import at.ioexception.mcaddon.bedrock.model.MaskedMultitexture;
 import at.ioexception.mcaddon.bedrock.model.MaterialDefinition;
 import at.ioexception.mcaddon.bedrock.model.PartVisibility;
 import at.ioexception.mcaddon.bedrock.model.RenderController;
@@ -16,18 +17,29 @@ import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import at.ioexception.mcaddon.bedrock.molang.MolangValue;
+import at.ioexception.mcaddon.convert.AlphaTested;
 import at.ioexception.mcaddon.convert.ConvertedPack;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
+import com.mojang.blaze3d.platform.NativeImage;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.phys.AABB;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -91,6 +103,7 @@ public final class AddonModels {
     private final Map<String, Optional<TexelMask>> masks = new HashMap<>();
     private final Map<String, AABB> bounds = new HashMap<>();
     private final Map<String, Optional<String>> alphaTested = new HashMap<>();
+    private final Map<String, Optional<Identifier>> masked = new HashMap<>();
 
     public AddonModels(BedrockAssets assets, ConvertedPack converted) {
         this.assets = assets;
@@ -166,12 +179,12 @@ public final class AddonModels {
         BakedGeometry geometry = geometryId == null ? null : bake(geometryId, definition);
         if (geometry == null) return null;
 
-        String texturePath = null;
+        List<String> texturePaths = new ArrayList<>();
         for (MolangExpression expression : controller.textures()) {
             MolangValue value = expression.evaluate(environment);
-            texturePath = value.isText() ? definition.textures().get(value.text()) : null;
-            if (texturePath != null) break;
+            texturePaths.add(value.isText() ? definition.textures().get(value.text()) : null);
         }
+        String texturePath = texturePaths.stream().filter(Objects::nonNull).findFirst().orElse(null);
         if (texturePath == null) return null;
 
         List<PartVisibility.Rule> visibility = new ArrayList<>();
@@ -184,8 +197,13 @@ public final class AddonModels {
         MaterialDefinition material = resolveMaterial(controller, definition, environment);
         if (material != null && material.invisible()) return null;
 
-        String alphaTested = material != null && material.dropsFaintTexels() ? alphaTested(texturePath) : null;
-        Identifier texture = alphaTested == null ? textureId(texturePath) : identifierOf(alphaTested);
+        boolean tested = material != null && material.dropsFaintTexels();
+        Identifier texture = material != null && material.masksSecondTexture() && texturePaths.size() > 1
+            ? masked(texturePaths.get(0), texturePaths.get(1), tested) : null;
+        if (texture == null) {
+            String alphaTested = tested ? alphaTested(texturePath) : null;
+            texture = alphaTested == null ? textureId(texturePath) : identifierOf(alphaTested);
+        }
 
         UvShift shift = new UvShift(
             number(controller.uvOffsetU(), environment, 0f),
@@ -379,6 +397,55 @@ public final class AddonModels {
     private String alphaTested(String path) {
         return alphaTested.computeIfAbsent(path, bedrock -> Optional.ofNullable(converted.alphaTested(bedrock)))
             .orElse(null);
+    }
+
+    /**
+     * The one image a masked multitexture pass draws its two textures as, null where either of them
+     * was not converted. Each pair is put together once and kept, because a pass is resolved every
+     * frame.
+     */
+    private Identifier masked(String first, String second, boolean tested) {
+        if (first == null || second == null) return null;
+
+        return masked.computeIfAbsent(first + "\n" + second + "\n" + tested,
+            key -> Optional.ofNullable(compose(first, second, tested))).orElse(null);
+    }
+
+    private Identifier compose(String first, String second, boolean tested) {
+        Path firstFile = converted.textureFile(first);
+        Path secondFile = converted.textureFile(second);
+        if (firstFile == null || secondFile == null) return null;
+
+        try {
+            BufferedImage drawn = new MaskedMultitexture(ImageIO.read(firstFile.toFile()),
+                ImageIO.read(secondFile.toFile())).composed();
+            AlphaTested halved = tested ? AlphaTested.tryFrom(drawn) : null;
+            String firstId = converted.texturePaths().get(first);
+            String secondId = converted.texturePaths().get(second);
+            Identifier texture = Platform.id(converted.namespace(), "textures/masked/"
+                + firstId.replace(':', '/') + "/" + secondId.replace(':', '/') + (tested ? AlphaTested.SUFFIX : ""));
+            register(texture, halved == null ? drawn : halved.halved());
+            return texture;
+        } catch (IOException | RuntimeException error) {
+            AddonEntities.unsupported("texture " + second + " masked over " + first + ", which could not be read");
+            return null;
+        }
+    }
+
+    /**
+     * Hands the client an image it draws from by that id, which is how an image made while the game
+     * runs reaches a render type. 1.21.5 gave a texture a label to be known by in debugging.
+     */
+    private static void register(Identifier id, BufferedImage image) throws IOException {
+        ByteArrayOutputStream png = new ByteArrayOutputStream();
+        ImageIO.write(image, "PNG", png);
+        NativeImage pixels = NativeImage.read(new ByteArrayInputStream(png.toByteArray()));
+        //? if >=1.21.5 {
+        DynamicTexture texture = new DynamicTexture(id::toString, pixels);
+        //?} else {
+        /*DynamicTexture texture = new DynamicTexture(pixels);
+        *///?}
+        Minecraft.getInstance().getTextureManager().register(id, texture);
     }
 
     private static Identifier identifierOf(String mapped) {

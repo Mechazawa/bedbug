@@ -16,7 +16,8 @@
 //
 // A watch on the game's own villagers, written the way a pack that replaces them writes it: in
 // Bedrock's ids throughout, so a Java villager is `minecraft:villager_v2` and an experience orb is
-// `minecraft:xp_orb`. Every answer is a tag on the entity it is about.
+// `minecraft:xp_orb`, and one that takes a job says so through the event Bedrock's villager raises
+// then. Every answer is a tag on the entity it is about.
 //
 // A look at the game's own blocks in the same spelling, which a server game test reads back.
 //
@@ -195,6 +196,15 @@ function overrideTheWisp(player, overridden) {
     }
 }
 
+// `tp:orbit` is built on a Bedrock camera Java has no counterpart for, so setting it throws.
+function setTheOrbit(player) {
+    try {
+        player.camera.setCamera("tp:orbit");
+    } catch (error) {
+        if (error.message.includes("minecraft:follow_orbit")) player.addTag("tp:camera_refused");
+    }
+}
+
 // Each kind of input taken away from a player or given back, named on that player by its number.
 world.afterEvents.playerInputPermissionCategoryChange.subscribe(({ player, category, enabled }) =>
     player.addTag("tp:input_" + category + "_" + enabled));
@@ -225,6 +235,12 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
             player.camera.addShake({ intensity: 2, duration: 30, type: CameraShakeType.Rotational });
             break;
         case "tp:still": player.camera.stopShaking(); break;
+        case "tp:camera":
+            player.camera.setCamera("tp:overlook_east", { rotation: { x: 10, y: 180 } });
+            break;
+        case "tp:camera_default": player.camera.setDefaultCamera("tp:overlook"); break;
+        case "tp:camera_orbit": setTheOrbit(player); break;
+        case "tp:camera_clear": player.camera.clear(); break;
         case "tp:hud_hide": hideTheHotbar(player); break;
         case "tp:hud_reset": resetTheHud(player); break;
         case "tp:override": overrideTheWisp(player, true); break;
@@ -252,6 +268,16 @@ tagWhenHurt(world.afterEvents.entityHurt, "tp:hurt_as_zombie", { entityTypes: ["
 tagWhenHurt(world.beforeEvents.entityHurt, "tp:before_hurt_as_villager", { entityFilter: { type: VILLAGER } });
 tagWhenHurt(world.beforeEvents.entityHurt, "tp:before_hurt_as_zombie",
     { entityFilter: { type: "minecraft:zombie" } });
+
+// A villager that takes a job raises the `minecraft:become_*` event its profession names, and a pack
+// dressing its own model for that job reads the profession, the biome and the face off it then.
+world.afterEvents.dataDrivenEntityTrigger.subscribe(({ entity, eventId }) => {
+    if (!eventId.startsWith("minecraft:become_")) return;
+    entity.addTag("tp:" + eventId.slice("minecraft:".length));
+    for (const component of ["variant", "mark_variant", "skin_id"]) {
+        entity.addTag("tp:" + component + "_" + (entity.getComponent("minecraft:" + component)?.value ?? "none"));
+    }
+}, { entityTypes: [VILLAGER] });
 
 // Each villager the query finds once gets a sprite of this pack's own standing beside it.
 system.runInterval(() => {

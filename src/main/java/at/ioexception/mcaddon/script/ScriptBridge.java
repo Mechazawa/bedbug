@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.script;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.behaviour.BedrockVillager;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.structure.McStructure;
@@ -560,7 +561,11 @@ public final class ScriptBridge {
     @HostAccess.Export
     public Object entityProperty(String id, String name) {
         Entity entity = entity(id);
-        return entity == null ? null : state.property(entity.getUUID(), name);
+        if (entity == null) return null;
+
+        BedrockVillager villager = BedrockVillager.tryFrom(entity);
+        Integer answered = villager == null ? null : villager.component(name);
+        return answered != null ? answered : state.property(entity.getUUID(), name);
     }
 
     @HostAccess.Export
@@ -683,6 +688,8 @@ public final class ScriptBridge {
             case "minecraft:type_family" -> true;
             case "minecraft:is_baby" -> entity instanceof LivingEntity living && living.isBaby();
             case "minecraft:item" -> entity instanceof ItemEntity;
+            case "minecraft:variant", "minecraft:mark_variant", "minecraft:skin_id" ->
+                entityProperty(id, component.substring("minecraft:".length())) != null;
             default -> false;
         };
     }
@@ -693,7 +700,7 @@ public final class ScriptBridge {
         for (String component : List.of("minecraft:health", "minecraft:equippable", "minecraft:riding",
             "minecraft:rideable", "minecraft:type_family", "minecraft:is_baby", "minecraft:item",
             "minecraft:movement", "minecraft:onfire", "minecraft:player.hunger",
-            "minecraft:player.saturation")) {
+            "minecraft:player.saturation", "minecraft:variant", "minecraft:mark_variant", "minecraft:skin_id")) {
             if (entityHasComponent(id, component)) present.add(component);
         }
         return present.toArray(String[]::new);
