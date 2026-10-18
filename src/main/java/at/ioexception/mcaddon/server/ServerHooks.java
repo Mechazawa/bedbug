@@ -65,8 +65,9 @@ public final class ServerHooks {
                     addon.restoreGroups();
                 }
                 // Bedrock raises this on every entity as it comes into the world, and a pack's
-                // starting state is usually set from it.
-                EntityEvents.trigger(entity, "minecraft:entity_spawned", null, state);
+                // starting state is usually set from it. A bred one is born rather than spawned.
+                EntityEvents.trigger(entity, born(entity) ? "minecraft:entity_born" : "minecraft:entity_spawned",
+                    null, state);
             }
             at.ioexception.mcaddon.registry.AddonItems.keepDropped(entity);
             raiseEntityEvent("entityLoad", entity);
@@ -316,12 +317,16 @@ public final class ServerHooks {
      * `spawnEntity` returns before its listeners hear about the entity, so a pack that spawns one and
      * then marks it as its own has done both by the time a listener asks whether it is marked.
      */
+    private static boolean born(Entity entity) {
+        return entity instanceof at.ioexception.mcaddon.entity.AddonEntity addon && addon.born();
+    }
+
     private static void raiseEntityEvent(String event, Entity entity) {
         if (scripts == null) return;
 
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("entity", ScriptHost.EntityHandle.of(entity));
-        fields.put("cause", event.equals("entitySpawn") ? "Spawned" : "Loaded");
+        fields.put("cause", !event.equals("entitySpawn") ? "Loaded" : born(entity) ? "Born" : "Spawned");
         scripts.queueWorldEvent(event, fields);
     }
 
