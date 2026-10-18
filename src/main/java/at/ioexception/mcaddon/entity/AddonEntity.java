@@ -3215,7 +3215,12 @@ public class AddonEntity extends PathfinderMob
                 MoveToMatchingBlockGoal.harvest(this, goal));
             case "minecraft:behavior.fertilize_farm_block" -> goals.add(priority,
                 MoveToMatchingBlockGoal.fertilize(this, goal));
-            case "minecraft:behavior.stomp_turtle_egg" -> goals.add(priority, new StompEggGoal(this, goal));
+            // Java's own goal for this is the one its zombie uses on the same block.
+            case "minecraft:behavior.stomp_turtle_egg" -> goals.add(priority,
+                new net.minecraft.world.entity.ai.goal.RemoveBlockGoal(
+                    net.minecraft.world.level.block.Blocks.TURTLE_EGG, this,
+                    number(definition, behaviour, "speed_multiplier", 1),
+                    (int) number(definition, behaviour, "search_height", 2)));
 
             case "minecraft:behavior.timer_flag_1", "minecraft:behavior.timer_flag_2",
                  "minecraft:behavior.timer_flag_3" ->
