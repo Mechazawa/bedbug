@@ -396,7 +396,7 @@
           "toggles_blocks": true
         }
       },
-      "tp:brute_lofting": {
+      "tp:brute_launching": {
         "minecraft:explode": {
           "power": 1,
           "breaks_blocks": false,
@@ -1227,10 +1227,10 @@
           ]
         }
       },
-      "tp:brute_loft": {
+      "tp:brute_launch": {
         "add": {
           "component_groups": [
-            "tp:brute_lofting"
+            "tp:brute_launching"
           ]
         }
       },

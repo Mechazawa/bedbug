@@ -1561,17 +1561,17 @@ public final class GoalGameTests {
     /** A blast under `negates_fall_damage` spares a player it throws upward the fall that follows. */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void aBlastSparesAPlayerItThrowsTheFall(GameTestHelper helper) {
-        AddonEntity lofting = BehaviourGameTests.spawn(helper, BRUTE, STAND);
-        if (lofting == null) {
+        AddonEntity launching = BehaviourGameTests.spawn(helper, BRUTE, STAND);
+        if (launching == null) {
             helper.succeed();
             return;
         }
 
-        EntityEvents.trigger(lofting, "tp:brute_loft", null, ServerHooks.state());
+        EntityEvents.trigger(launching, "tp:brute_launch", null, ServerHooks.state());
         net.minecraft.server.level.ServerPlayer player = helper.makeMockServerPlayerInLevel();
         BlockPos above = helper.absolutePos(STAND.above(1));
         Platform.placeAt(player, above.getX() + 0.5, above.getY(), above.getZ() + 0.5, 0f, 0f);
-        lofting.detonate();
+        launching.detonate();
 
         helper.assertTrue(player.isIgnoringFallDamageFromCurrentImpulse(),
             BRUTE + " negates fall damage and the player it threw will take the fall.");

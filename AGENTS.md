@@ -461,7 +461,7 @@ These are the checks it runs, and what each one catches:
   `tp:dart_bouncing` bounces off an invulnerable one. `tp:brute_stalking` carries an ocelot attack and
   `tp:brute_pouncing` a pounce whose stuck block is gravel, because a snow layer does not survive on
   the empty structure's barrier floor. `tp:brute_hopping` jumps around its target the way a breeze does. Four more brute groups each blow up one
-  way (`submerged`, `gentle`, `switching`, `lofting`), read back in `GoalGameTests.aBlast*`. The brute's `tp:brute_roaring` group roars,
+  way (`submerged`, `gentle`, `switching`, `launching`), read back in `GoalGameTests.aBlast*`. The brute's `tp:brute_roaring` group roars,
   pushing pigs tagged `tp_pushable` and hurting those tagged `tp_hurtable`.
 
   The ember's sensing group carries a `minecraft:damage_sensor` with one trigger per cause, each
