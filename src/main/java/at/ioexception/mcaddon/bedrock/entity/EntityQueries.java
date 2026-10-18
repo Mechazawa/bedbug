@@ -3,7 +3,8 @@ package at.ioexception.mcaddon.bedrock.entity;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.animation.AnimationPlayer;
 import at.ioexception.mcaddon.bedrock.animation.BonePose;
-import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
+import at.ioexception.mcaddon.bedrock.behaviour.BedrockVillager;
+import at.ioexception.mcaddon.bedrock.behaviour.Families;
 import at.ioexception.mcaddon.bedrock.model.BedrockBone;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangValue;
@@ -422,7 +423,8 @@ public final class EntityQueries implements MolangEnvironment.Queries {
             case "is_avoiding_block" -> MolangValue.of(flag(properties, "is_avoiding_block"));
             case "has_target" -> MolangValue.of(flag(properties, "has_target"));
             case "last_hit_by_player" -> MolangValue.of(flag(properties, "last_hit_by_player"));
-            case "trade_tier" -> MolangValue.of(number(properties.get("trade_tier")));
+            case "trade_tier" -> MolangValue.of(BedrockVillager.tryFrom(entity) instanceof BedrockVillager villager
+                ? villager.tradeTier() : number(properties.get("trade_tier")));
             case "max_trade_tier" -> MolangValue.of(number(properties.get("max_trade_tier")));
             case "death_ticks" -> MolangValue.of(entity instanceof LivingEntity living
                 ? living.deathTime : 0);
@@ -773,16 +775,18 @@ public final class EntityQueries implements MolangEnvironment.Queries {
             && subject.getType() == AddonEntities.typeOf(value.text()));
     }
 
-    /** The families a behaviour pack gave the entity. Java's own player belongs to two of them. */
+    /**
+     * The families a behaviour pack gave the entity, or the ones Mojang's gives the game's own. Java's
+     * player belongs to two of them.
+     */
     private boolean hasAnyFamily(List<MolangValue> arguments) {
         if (entity instanceof Player) {
             return arguments.stream().anyMatch(value -> value.isText()
                 && (value.text().equals("player") || value.text().equals("mob")));
         }
 
-        ServerEntityDefinition definition = AddonEntities.definitionOf(entity.getType());
-        return definition != null && arguments.stream().anyMatch(value -> value.isText()
-            && definition.families().contains(value.text()));
+        Set<String> families = Families.of(entity);
+        return arguments.stream().anyMatch(value -> value.isText() && families.contains(value.text()));
     }
 
     /**

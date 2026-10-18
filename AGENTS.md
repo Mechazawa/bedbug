@@ -171,7 +171,7 @@ These are the checks it runs, and what each one catches:
     client may have no audio device and the engine drops a sound before any listener hears it then.
 
   `RenderControllerClientGameTest`, `AnimationClientGameTest`, `AttachableClientGameTest`,
-  `TextureMeshClientGameTest`, `CullingClientGameTest`, `ParticleClientGameTest`, `FogClientGameTest`,
+  `TextureMeshClientGameTest`, `RelativeRotationClientGameTest`, `CullingClientGameTest`, `ParticleClientGameTest`, `FogClientGameTest`,
   `CameraClientGameTest` and `ItemAndBlockClientGameTest` are the drawing side's tests; each class's docblock names the pack
   content it reads and what it asserts. Two things about the machine the tests run on: a window
   hidden by the compositor can stall the render thread inside `glfwSwapBuffers` until the server's
@@ -249,9 +249,9 @@ These are the checks it runs, and what each one catches:
   `ServerEntityClientGameTest` follows a wisp's type, a `client_sync` property, a component group's
   box and drawn size, a wisp settled before the client could see it, and `/bedrock playanimation` on a wisp
   and a villager; `ServerPlayerClientGameTest` adds a second player, `Bystander`, and asserts a form,
-  `/camera`, `/camerashake` and `/fog` reach the player they name and nobody else, that a form's
-  answer counts only from its own player, and that the test pack's eight hundred button catalogue
-  arrives whole.
+  `/camera`, `/camerashake`, `/fog` and a property a script overrides for one player reach the
+  player they name and nobody else, that a form's answer counts only from its own player, and that
+  the test pack's eight hundred button catalogue arrives whole.
 
   What the dedicated server runs on: Fabric starts it with `net.minecraft.server.Main` inside the
   client's own process and in the same run directory, so it has the same mods, reads the same
@@ -438,6 +438,17 @@ These are the checks it runs, and what each one catches:
   of the sprite's controllers states an `is_hurt_color`, so a hurt sprite is drawn with the red
   every Bedrock entity flashes.
 
+  `tp:gaze` is the one entity whose animation turns a bone `relative_to` the entity. Its body leans
+  45 degrees forward and its head, a child of the body, is turned 30 degrees about the vertical in
+  the entity's frame. `RelativeRotationClientGameTest` reads the head's corners back: carried to
+  where the leaning body puts its pivot, standing level and turned 30 degrees. A head turned in its
+  parent's frame leans with the body and fails it.
+
+  `tp:pedlar` is a trader with a trade table, a look at the trading player and a stroll it starts at
+  every chance, and no `minecraft:behavior.trade_with_player`.
+  `BehaviourGameTests.aTraderWithNoTradingGoalStandsStillWhileTrading` gives it a customer and
+  asks that it stands still, then takes the customer away and asks that it walks.
+
   `tp:fade` is the particle painted by curves: one of each of the four kinds, read off
   `variable.particle_age`, sets its alpha, its red, its green and its size, and the bezier chain
   carries a `horizontal_range` Bedrock ignores on a chain.
@@ -465,7 +476,24 @@ These are the checks it runs, and what each one catches:
   `villager_v2_masked`, and through `entity_alphatest`, which binds the first texture alone. Its base
   is blue all over and its outfit is four bands of an opaque red, a clear white, a clear black and a
   faint green, so `RenderControllerClientGameTest` reads red, blue, nothing and blue off the image
-  each masked pass binds, and blue four times off the plain one.
+  each masked pass binds, and blue four times off the plain one. A fourth controller gives the body
+  `entity_alphatest` and every bone matching `*ARK` the game's `villager_v2_masked`, under a grey
+  `color`: the test reads two passes off it, the plain one drawing the body alone in grey and the
+  masked one drawing the spark alone and untinted, because Bedrock's masked multitexture shader reads
+  no controller colour. A pattern starting with its star and written in other capitals than the bone
+  is what Mojang's own `*leg` and a pack's careless casing look like.
+
+  `tp:perch` is a seat for a villager, written the way a pack learns a Java villager's level. Its
+  seat's `rotate_rider_by` writes the rider's `query.trade_tier` and where it sits into temporaries
+  and answers a quarter turn for the villager family, with `lock_rider_rotation` at nought; its
+  animate list copies the tier into a variable when the place written is its own; and the first state
+  of its controller plays a clip tagging the perch `tp_perch_journeyman` for tier two, then leaves on
+  `1` for a state tagging it `tp_perch_settled`.
+  `BehaviourGameTests.aSeatAsksItsRiderWhatItTradesAndTurnsIt` seats a journeyman farmer on it and
+  reads both tags and the villager's facing back. That one test fails when any of these goes: the seat
+  asked as the rider every tick before the mount's scripts, the temporaries every server expression
+  shares, a Java villager's tier and families, a family list letting the villager on, or the first
+  state's clips playing on the tick the controller starts.
 
   The recipes cover the seven kinds and the fields that decide what each becomes: a furnace recipe
   naming four cookers and an unlock item, a shapeless one tagged for the stonecutter and unlocked by
@@ -718,6 +746,9 @@ These are the checks it runs, and what each one catches:
   player's camera and stop it, which only a client can show, so `CameraShakeClientGameTest` reads
   the shake back off the client. The script also refuses to let anything tagged `tp:untameable` be
   tamed, tags whatever a player tamed, and tags a player crouching and standing up again.
+  `tp:override` overrides the nearest wisp's `tp:settled` to false for the player who sent it, which
+  a wisp settled a second after arriving is not, and tags that player when an override of a property
+  the wisp never declared is refused; `tp:override_clear` clears the override again.
 
   `cameras/presets/` holds three presets. `tp:overlook` is a free camera at 0.5 120 0.5 turned to a
   pitch of 20 and a yaw of 45 that hears from the player, and also asks for `player_effects` and

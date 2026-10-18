@@ -39,7 +39,7 @@ class PassLightingTest {
     }
 
     private static AddonModels.Pass pass(boolean ignoresLighting, float multiplier) {
-        return new AddonModels.Pass(null, null, PartVisibility.EVERYTHING, UvShift.NONE, null, 0xFFFFFFFF,
-            ignoresLighting, multiplier, true);
+        return new AddonModels.Pass(null, null, PartVisibility.EVERYTHING, PartVisibility.EVERYTHING, UvShift.NONE,
+            null, 0xFFFFFFFF, ignoresLighting, multiplier, true);
     }
 }

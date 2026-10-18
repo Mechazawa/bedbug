@@ -8,9 +8,11 @@ import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -19,6 +21,9 @@ import net.minecraft.world.entity.ai.control.FlyingMoveControl;
 import net.minecraft.world.entity.ai.navigation.FlyingPathNavigation;
 import net.minecraft.world.entity.ai.navigation.WallClimberNavigation;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.npc.villager.Villager;
+import net.minecraft.world.entity.npc.villager.VillagerData;
+import net.minecraft.world.entity.npc.villager.VillagerProfession;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.item.Item;
@@ -1512,6 +1517,65 @@ public final class BehaviourGameTests {
     }
 
     /**
+     * A seat's `rotate_rider_by` is asked every tick as the rider, turns the rider by what it
+     * answers, and leaves its temporaries where the mount's own scripts read them.
+     *
+     * `tp:perch` seats a villager the way a pack learns a Java villager's level: the seat writes the
+     * rider's `query.trade_tier` and where the rider sits into temporaries, the perch's animate list
+     * copies the tier into a variable when that place is its own, and the first state of its
+     * controller plays a clip tagging the perch for a journeyman before a transition on `1` leaves
+     * it. A journeyman is Java's level three and Bedrock's tier two. The seat turns a villager a
+     * quarter turn back from the way the perch faces and locks it there.
+     */
+    @GameTest()
+    public void aSeatAsksItsRiderWhatItTradesAndTurnsIt(GameTestHelper helper) {
+        AddonEntity perch = spawn(helper, PERCH);
+        if (perch == null) {
+            helper.succeed();
+            return;
+        }
+        perch.setYRot(PERCH_FACING);
+
+        ServerLevel level = helper.getLevel();
+        Villager villager = (Villager) Platform.createMob(BuiltInRegistries.ENTITY_TYPE
+            .getOptional(Platform.id("minecraft", "villager")).orElseThrow(), level);
+        Platform.placeAt(villager, perch.getX(), perch.getY(), perch.getZ(), 0f, 0f);
+        villager.setNoAi(true);
+        villager.setVillagerData(journeyman(villager, level));
+        level.addFreshEntity(villager);
+        helper.assertTrue(villager.startRiding(perch), PERCH + " would not seat a villager.");
+
+        helper.runAfterDelay(SEATED_TICKS, () -> {
+            helper.assertTrue(Platform.tagsOf(perch).contains("tp_perch_settled"),
+                PERCH + "'s controller never left its first state: " + Platform.tagsOf(perch));
+            helper.assertTrue(Platform.tagsOf(perch).contains("tp_perch_journeyman"),
+                PERCH + " never learnt from its seat that a journeyman sat on it: " + Platform.tagsOf(perch));
+            float off = Mth.wrapDegrees(villager.getYRot() - (PERCH_FACING + SEAT_TURN));
+            helper.assertTrue(Math.abs(off) < 0.01f, "The villager on " + PERCH + " faces " + villager.getYRot()
+                + " where its seat turns it to " + (PERCH_FACING + SEAT_TURN) + ".");
+            helper.succeed();
+        });
+    }
+
+    private static final String PERCH = "tp:perch";
+    private static final float PERCH_FACING = 30f;
+
+    /** What `tp:perch`'s seat answers for a rider of the villager family. */
+    private static final float SEAT_TURN = -90f;
+
+    /** Enough for the perch to have run its first state and left it. */
+    private static final int SEATED_TICKS = 5;
+
+    private static VillagerData journeyman(Villager villager, ServerLevel level) {
+        //? if >=1.21.5 {
+        return villager.getVillagerData().withProfession(level.registryAccess(), VillagerProfession.FARMER)
+            .withLevel(3);
+        //?} else {
+        /*return villager.getVillagerData().setProfession(VillagerProfession.FARMER).setLevel(3);
+        *///?}
+    }
+
+    /**
      * A group carrying `minecraft:sittable` lets a player sit the entity down.
      *
      * Sitting is a state rather than a fact, which is why Bedrock puts the component in a group: a
@@ -1806,6 +1870,60 @@ public final class BehaviourGameTests {
             ENTITY + " gained minecraft:mob_effect_immunity from a group and took the effect anyway.");
         helper.succeed();
     }
+
+    /**
+     * A trader whose pack states no `minecraft:behavior.trade_with_player` stands still while a
+     * player has its shop open, and strolls again once nobody does.
+     *
+     * `tp:pedlar` sets out on a stroll at every chance it gets, so a trader that is left to its goals
+     * while the screen is open walks away from the counter within a second.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200)
+    public void aTraderWithNoTradingGoalStandsStillWhileTrading(GameTestHelper helper) {
+        for (int x = 0; x < 8; x++) {
+            for (int z = 0; z < 8; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), net.minecraft.world.level.block.Blocks.STONE);
+            }
+        }
+        AddonEntity pedlar = spawn(helper, TRADER, COUNTER);
+        if (pedlar == null) {
+            helper.succeed();
+            return;
+        }
+
+        Player customer = Platform.mockPlayer(helper);
+        BlockPos beside = helper.absolutePos(COUNTER.east());
+        Platform.placeAt(customer, beside.getX() + 0.5, beside.getY(), beside.getZ() + 0.5, 0f, 0f);
+        pedlar.setTradingPlayer(customer);
+        pedlar.setNoAi(false);
+        net.minecraft.world.phys.Vec3 counter = pedlar.position();
+
+        helper.runAfterDelay(TRADE_WATCH, () -> {
+            helper.assertTrue(pedlar.position().distanceTo(counter) < STOOD_STILL,
+                TRADER + " walked " + pedlar.position().distanceTo(counter) + " blocks while "
+                    + customer.getName().getString() + " had its shop open.");
+            pedlar.setTradingPlayer(null);
+            net.minecraft.world.phys.Vec3 closed = pedlar.position();
+            helper.runAfterDelay(TRADE_WATCH, () -> {
+                helper.assertTrue(pedlar.position().distanceTo(closed) >= STOOD_STILL,
+                    TRADER + " stayed put once nobody was trading, so standing still says nothing"
+                        + " about the shop.");
+                helper.succeed();
+            });
+        });
+    }
+
+    /** The trader the synthetic pack declares with a trade table and no trading goal. */
+    private static final String TRADER = "tp:pedlar";
+
+    /** Where the trader is put, in the middle of the floor the test lays. */
+    private static final BlockPos COUNTER = new BlockPos(4, 1, 4);
+
+    /** Ticks a trader with somewhere to go is watched for, long enough for a stroll to start and carry it. */
+    private static final int TRADE_WATCH = 40;
+
+    /** Less than a stroll moves anything, more than a trader standing still drifts. */
+    private static final double STOOD_STILL = 0.2;
 
     /**
      * A group carrying `minecraft:trade_table` changes what is on the counter.

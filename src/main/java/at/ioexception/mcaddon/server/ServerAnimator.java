@@ -11,6 +11,7 @@ import net.minecraft.world.entity.Entity;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -50,6 +51,7 @@ public final class ServerAnimator {
         player.environment().setQueries(new EntityQueries(entity, player, EntityQueries.Drawn.NONE,
             () -> ServerHooks.state() == null ? Map.of() : ServerHooks.state().properties(entity.getUUID()),
             false));
+        if (ServerHooks.state() != null) player.environment().shareTemporaries(ServerHooks.state().temporaries());
     }
 
     public void tick() {
@@ -88,6 +90,10 @@ public final class ServerAnimator {
      * A state's `on_entry` runs as it is reached and its `on_exit` as it is left, which is where a
      * behaviour pack puts the command or the event the state stands for. Blending has nothing to
      * blend here, so a state is left rather than crossed out of.
+     *
+     * A controller moves at most once a tick, and entering its first state is that tick's move, so
+     * the first state's clips play once even when a transition out of it already holds. A pack
+     * writing a first state that leaves on `1` relies on that to run its clips' timelines once.
      */
     private void runController(AnimationController controller, Set<String> wanted) {
         MolangEnvironment environment = player.environment();
@@ -106,7 +112,8 @@ public final class ServerAnimator {
         current.seconds += SECONDS_PER_TICK;
         environment.setStateTime(current.seconds);
 
-        for (AnimationController.Transition transition : state.transitions()) {
+        for (AnimationController.Transition transition : firstRun ? List.<AnimationController.Transition>of()
+            : state.transitions()) {
             if (!transition.condition().evaluate(environment).truthy()) continue;
             if (!controller.states().containsKey(transition.target())) continue;
 

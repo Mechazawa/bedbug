@@ -55,6 +55,24 @@ class PartVisibilityTest {
         assertFalse(visibility.hides("saddle"));
     }
 
+    /** Mojang's own controllers put the star first (`*leg`) and on both sides (`*saddle*`) as well. */
+    @Test
+    void letsTheStarStandAnywhere() {
+        PartVisibility legs = new PartVisibility(List.of(hide("*leg")));
+        assertTrue(legs.hides("left_leg"));
+        assertFalse(legs.hides("leg_armor"));
+
+        PartVisibility saddle = new PartVisibility(List.of(hide("*saddle*")));
+        assertTrue(saddle.hides("saddle"));
+        assertTrue(saddle.hides("mySaddleStrap"));
+        assertFalse(saddle.hides("sadle"));
+    }
+
+    @Test
+    void namesABoneWithoutRegardToCase() {
+        assertTrue(new PartVisibility(List.of(hide("Bag*"))).hides("bag1"));
+    }
+
     /** The last rule decides, so a pack may name one bone twice and mean the second answer. */
     @Test
     void takesTheLastRuleThatNamesTheBone() {
