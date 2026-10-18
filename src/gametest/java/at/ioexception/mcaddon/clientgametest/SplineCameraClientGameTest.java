@@ -9,13 +9,14 @@ import net.minecraft.world.phys.Vec3;
 /**
  * `/camera play_spline` and `Camera.playAnimation`, which carry a free camera along a curve.
  *
- * The test pack's `camera/splines/sweep.json` names `tp:sweep`: a linear path over two seconds from
+ * The test pack's `camera/splines/sweep.json` names `tp:sweep`: a linear path over eight seconds from
  * 0.5 121 0.5 ten blocks east and then ten up, turning from south to a pitch of 30 and a yaw of 90.
- * The script plays a Catmull-Rom curve through four points that ends at 8.5 121 8.5 turned to a pitch
+ * The script plays a Catmull-Rom curve through four points over eight seconds that ends at 8.5 121 8.5 turned to a pitch
  * of 10 and a yaw of -90.
  *
  * The camera is seen partway along the path, then stays where the path ends with the rotation of the
- * last key frame. Bedrock plays a spline on the free camera alone, so a player on any other camera is
+ * last key frame. A path runs on the client's clock, so each is long enough for a client drawing a
+ * frame a second to be seen partway along it. Bedrock plays a spline on the free camera alone, so a player on any other camera is
  * refused, and so is a name no pack describes.
  */
 public final class SplineCameraClientGameTest implements FabricClientGameTest {

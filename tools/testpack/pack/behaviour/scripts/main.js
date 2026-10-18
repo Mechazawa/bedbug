@@ -234,11 +234,11 @@ function playTheSpline(player) {
         animation: {
             progressKeyFrames: [
                 { timeSeconds: 0, alpha: 0 },
-                { timeSeconds: 2, alpha: 1, easingFunc: EasingType.InOutSine },
+                { timeSeconds: 8, alpha: 1, easingFunc: EasingType.InOutSine },
             ],
             rotationKeyFrames: [
                 { timeSeconds: 0, rotation: { x: 0, y: 0, z: 0 } },
-                { timeSeconds: 2, rotation: { x: 10, y: -90, z: 0 } },
+                { timeSeconds: 8, rotation: { x: 10, y: -90, z: 0 } },
             ],
         },
         totalTimeSeconds: 2,

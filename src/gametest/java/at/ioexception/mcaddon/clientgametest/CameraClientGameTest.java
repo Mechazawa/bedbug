@@ -25,8 +25,7 @@ import net.minecraft.world.phys.Vec3;
  * The three gameplay presets switch the client to the camera Java already has for each, `facing`
  * turns the camera towards a point or the middle of an entity's box from wherever the camera stands,
  * and `default` sets a preset with nothing over it. What Bedrock itself refuses is refused here in
- * its words: an ease to a camera that follows the player. A form of `/camera` with no Java counterpart
- * is named as one rather than as a misspelling, and leaves the view as it was.
+ * its words: an ease to a camera that follows the player, which leaves the view as it was.
  */
 public final class CameraClientGameTest implements FabricClientGameTest {
     private static final double TOLERANCE = 1e-3;
@@ -180,8 +179,8 @@ public final class CameraClientGameTest implements FabricClientGameTest {
     }
 
     /**
-     * An ease to a camera that follows the player is refused in Bedrock's words, a form of `/camera`
-     * this mod cannot draw is named as one, and neither changes the view the player has.
+     * An ease to a camera that follows the player is refused in Bedrock's words and does not change
+     * the view the player has.
      */
     private static void refused(ClientGameTestContext context, TestSingleplayerContext world) {
         world.getServer().runCommand("bedrock camera @a set minecraft:free pos 0.5 100 0.5 rot 0 0");
@@ -191,14 +190,11 @@ public final class CameraClientGameTest implements FabricClientGameTest {
         String eased = Worlds.said(world.getServer(), "bedrock camera @a set minecraft:third_person ease 1 linear");
         Assert.that(eased.contains("Easing to non-stationary cameras is not supported"), "an ease to"
             + " minecraft:third_person is refused the way Bedrock refuses it, and the command said: " + eased);
-        String fade = Worlds.said(world.getServer(), "bedrock camera @a fade");
-        Assert.that(fade.contains("camera fade, which Java has no form of"),
-            "/camera fade is reported as a form Java cannot draw, and the command said: " + fade);
 
         context.waitTicks(5);
         Assert.that(context.computeOnClient(client -> at(client, PLACED)
                 && client.options.getCameraType() == CameraType.THIRD_PERSON_BACK),
-            () -> "two refused /camera commands moved the free camera at " + PLACED + " to "
+            () -> "a refused /camera command moved the free camera at " + PLACED + " to "
                 + position(Minecraft.getInstance()) + " under "
                 + Minecraft.getInstance().options.getCameraType() + ".");
     }

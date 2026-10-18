@@ -3,7 +3,7 @@
   "minecraft:camera_spline": {
     "name": "tp:sweep",
     "spline_type": "linear",
-    "total_time": 2.0,
+    "total_time": 8.0,
     "control_points": [
       { "position": [0.5, 121.0, 0.5] },
       { "position": [10.5, 121.0, 0.5] },
@@ -11,11 +11,11 @@
     ],
     "progress_key_frames": [
       { "progress": 0.0, "time": 0.0, "easing": "linear" },
-      { "progress": 1.0, "time": 2.0, "easing": "linear" }
+      { "progress": 1.0, "time": 8.0, "easing": "linear" }
     ],
     "rotation_key_frames": [
       { "rotation": [0.0, 0.0, 0.0], "time": 0.0, "easing": "linear" },
-      { "rotation": [30.0, 90.0, 0.0], "time": 2.0, "easing": "linear" }
+      { "rotation": [30.0, 90.0, 0.0], "time": 8.0, "easing": "linear" }
     ]
   }
 }
