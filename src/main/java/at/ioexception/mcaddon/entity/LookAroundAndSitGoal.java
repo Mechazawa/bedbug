@@ -56,7 +56,8 @@ public final class LookAroundAndSitGoal extends Goal {
 
     @Override
     public boolean canContinueToUse() {
-        return (looksLeft > 0 || mob.level().getGameTime() < lookUntil) && mob.getTarget() == null && (continuesLeashed || !mob.isLeashed());
+        boolean looking = looksLeft > 0 || mob.level().getGameTime() < lookUntil;
+        return looking && mob.getTarget() == null && (continuesLeashed || !mob.isLeashed());
     }
 
     @Override

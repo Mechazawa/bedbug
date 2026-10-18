@@ -162,7 +162,8 @@ public final class IdleGoalGameTests {
                 IDLER + " makes four looks of half a second and looked for " + (marks[1] - marks[0]) + " ticks.");
             helper.assertTrue(marks[2] - marks[1] >= 40 - SLACK,
                 IDLER + " waits two seconds between rounds and waited " + (marks[2] - marks[1]) + " ticks.");
-            helper.assertTrue(swing[0] <= 31f, IDLER + " turned its head " + swing[0] + " degrees past a window of 30.");
+            helper.assertTrue(swing[0] <= 31f,
+                IDLER + " turned its head " + swing[0] + " degrees past a window of 30.");
             helper.assertTrue(swing[0] >= 3f, IDLER + " never turned its head, which four looks in the window should.");
         });
     }
@@ -340,10 +341,10 @@ public final class IdleGoalGameTests {
             }
         });
         helper.runAtTickTime(40, () -> {
-            helper.assertTrue(rise[0] > 0.1, IDLER + " sneezed (" + sneezing[0] + " to " + sneezing[1] + ") and the pig it names did not jump: " + rise[0] + " pig " + pig.onGround() + " " + pig.getDeltaMovement());
+            helper.assertTrue(rise[0] > 0.1, IDLER + " sneezed and the pig it names did not jump.");
             helper.assertTrue(rise[1] < 0.1, IDLER + " startled a cow that entity_types does not name.");
             helper.assertTrue(Math.abs(sneezing[1] - sneezing[0] - 10) <= SLACK,
-                IDLER + " prepares a sneeze for half a second and prepared for " + (sneezing[1] - sneezing[0]) + " ticks.");
+                IDLER + " prepares a sneeze for half a second and took " + (sneezing[1] - sneezing[0]) + " ticks.");
             helper.succeed();
         });
     }

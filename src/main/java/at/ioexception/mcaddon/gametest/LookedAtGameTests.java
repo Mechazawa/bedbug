@@ -81,7 +81,7 @@ public final class LookedAtGameTests {
             return;
         }
 
-        Player player = observer(helper, gazed, 4, 0f);
+        observer(helper, gazed, 4, 0f);
         long begun = helper.getLevel().getGameTime();
         long[] noticed = {-1, -1};
         helper.onEachTick(() -> {
@@ -92,10 +92,11 @@ public final class LookedAtGameTests {
         });
         helper.succeedWhen(() -> {
             helper.assertTrue(noticed[1] >= 0, GAZED + " noticed the stare " + (noticed[0] < 0 ? 0 : 1) + " times.");
-            helper.assertTrue(noticed[0] >= 20 - 2, GAZED + " noticed a stare of under a second at tick " + noticed[0] + ".");
+            helper.assertTrue(noticed[0] >= 20 - 2,
+                GAZED + " noticed a stare of under a second at tick " + noticed[0] + ".");
             helper.assertTrue(noticed[0] <= NOTICED, GAZED + " noticed the stare late, at tick " + noticed[0] + ".");
             helper.assertTrue(noticed[1] - noticed[0] >= 40 - 2,
-                GAZED + " noticed the stare again after " + (noticed[1] - noticed[0]) + " ticks of a two second cooldown.");
+                GAZED + " noticed the stare again after " + (noticed[1] - noticed[0]) + " ticks of a 2 s cooldown.");
         });
     }
 
@@ -134,7 +135,8 @@ public final class LookedAtGameTests {
         observer(helper, flat, 6, 5f);
         helper.runAtTickTime(20, () -> {
             helper.assertTrue(seen(flat), GAZED + " ignored a stare five degrees off inside an unscaled field of 20.");
-            helper.assertFalse(seen(scaled), GAZED + " saw a stare five degrees off at six blocks inside a scaled field of 20.");
+            helper.assertFalse(seen(scaled),
+                GAZED + " saw a stare five degrees off at six blocks inside a scaled field of 20.");
             helper.succeed();
         });
     }

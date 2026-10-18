@@ -457,6 +457,19 @@ These are the checks it runs, and what each one catches:
   `tp:spark` reflects when struck after a tenth of a second, and its brittle and dull groups are
   removed and stopped when struck instead.
 
+  `tp:idler` is a plain mob for the resting and idling goals, and `IdleGoalGameTests` reads each
+  group back through a pose or a property: timer flags, sitting, lying down, looking around and
+  sitting, napping with its detection box and exceptions, croaking, sniffing, emerging, digging,
+  holding ground, looking at the target, playing dead and sneezing. Java ticks a running goal only
+  every second tick, so a goal that counts its own `tick` calls runs its waits at double length;
+  these goals count on the game clock, and a test that reads a duration off them catches the other
+  kind. `tp:cart`, `tp:cart_keeping` and `tp:cart_checking` carry `minecraft:rail_sensor` and
+  `SensorGameTests` runs them over a rail powered by a block of redstone beside it, because a powered
+  rail set powered by hand is recomputed unpowered. `tp:gazed` carries `minecraft:looked_at` in one
+  group per field and `LookedAtGameTests` aims a player or a pig at it; a mock player made with
+  `makeMockPlayer` is not in the level's entity list, and a creative one is never a valid target, so
+  those tests use `makeMockServerPlayerInLevel` and a pig as the looker whose target is asserted.
+
   The ember's sensing group carries a `minecraft:damage_sensor` with one trigger per cause, each
   setting the enum property `tp:felt` to the cause it heard: `fall`, `entity_attack`, `projectile`,
   `drowning`, `suffocation` and `contact`, every one but the attack refusing the blow.
