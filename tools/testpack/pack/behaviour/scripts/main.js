@@ -157,7 +157,7 @@ function runBedrockCommands(entity) {
     entity.runCommand("execute unless entity @s[hasitem={item=diamond}] run tag @s add tp_has_no_diamond");
     entity.runCommand("tag @e[type=villager_v2,r=4] add tp_selected_as_villager_v2");
     entity.runCommand("function tp/relay");
-    entity.runCommand("aimassist @s clear");
+    entity.runCommand("sendshowstoreoffer @s marketplace tp_offer");
 }
 
 const WARES = 800;

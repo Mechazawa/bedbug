@@ -743,17 +743,18 @@ These are the checks it runs, and what each one catches:
   refuses it as it stands. On `/bedrock scriptevent tp:commands` the script runs, as whatever sent it, a
   selector asking with `hasitem` about the main hand and about everything carried, a selector naming
   `villager_v2`, `function tp/relay` by its path alone (which calls `tp/relayed` the same way inside
-  the file) and `aimassist`, which nothing translates. The ember's `tp:ember_command` event tags it
-  through a Bedrock radius and asks for `aimassist` as well, and its controller's command tags it
+  the file) and `sendshowstoreoffer`, which needs Mojang's marketplace and so is never translated. The
+  ember's `tp:ember_command` event tags it through a Bedrock radius and asks for `sendshowstoreoffer`
+  as well, and its controller's command tags it
   through a Bedrock radius. `CommandGameTests` reads each of those back as a tag, and finds
-  `aimassist` among what `/mcaddon scripts` and `/mcaddon entities` say cannot be translated rather
-  than among what did not parse. No function file of the pack carries `aimassist`, because a function
+  `sendshowstoreoffer` among what `/mcaddon scripts` and `/mcaddon entities` say cannot be translated rather
+  than among what did not parse. No function file of the pack carries `sendshowstoreoffer`, because a function
   line is reported as the pack loads, which would answer the event's assertion before the event ran. The dialogue's first button runs `xp 1L`, and `/bedrock scriptevent tp:stock_up` gives the
   player `tp:dust` unless `hasitem` finds one on them; `PackCommandClientGameTest` presses the button
   and asks for the dust twice, and reads back one level gained and one dust carried.
 
-  `functions/tp/gap.mcfunction` tags whoever runs it on either side of a `controlscheme` line,
-  which nothing translates, so `CommandGameTests` can say the file loaded and both tags landed.
+  `functions/tp/gap.mcfunction` tags whoever runs it on either side of a `project` line,
+  which belongs to Bedrock's editor and is never translated, so `CommandGameTests` can say the file loaded and both tags landed.
   `functions/tp/unrun.mcfunction` is run by nothing, and its `hud @s hide paperdoll` line, a piece no
   Java client draws, has to be among what `/mcaddon entities` names all the same: that is the
   report `Functions.untranslatable` makes of every function line as the pack loads. The same class
