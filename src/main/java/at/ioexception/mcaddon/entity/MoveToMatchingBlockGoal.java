@@ -17,6 +17,7 @@ import net.minecraft.world.level.block.BonemealableBlock;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -41,8 +42,9 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
     /** The pose held on arrival, or null where the walk is all there is to the behaviour. */
     private final Pose settled;
 
-    /** How near the block counts as there, measured the way Java measures it. */
-    private final double arrived;
+    /** How near the spot over the block counts as there, from where the entity stands. */
+    private final double radius;
+    private boolean reached;
 
     /** Bedrock's own timing and arrival, which only `minecraft:behavior.move_to_block` states. */
     private Visit visit;
@@ -63,21 +65,11 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
         Predicate<BlockState> wanted, BiConsumer<ServerLevel, BlockPos> arrival, String flag,
         Pose settled) {
         super(mob, speed(component), range(component), height(component));
-        // Java measures from the middle of the block over the target, half a block above where
-        // Bedrock's `goal_radius` is measured from, which the half added back here makes up for.
-        this.arrived = number(component, "goal_radius", BEDROCK_GOAL_RADIUS) + HALF_BLOCK;
+        this.radius = number(component, "goal_radius", 0.5);
         this.wanted = wanted;
         this.arrival = arrival;
         this.flag = flag;
         this.settled = settled;
-    }
-
-    private static final double BEDROCK_GOAL_RADIUS = 0.5;
-    private static final double HALF_BLOCK = 0.5;
-
-    @Override
-    public double acceptedDistance() {
-        return arrived;
     }
 
     @Override
@@ -227,9 +219,25 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
     }
 
     @Override
+    protected void moveMobToBlock() {
+        walk(getMoveToTarget());
+    }
+
+    /**
+     * Java's own tick paths to within a block of the spot and measures from the middle of that
+     * block, so an entity stops a block short and Bedrock's default radius of half a block is never
+     * reached. This walk paths onto the spot itself and measures from the entity's feet.
+     */
+    @Override
     public void tick() {
-        super.tick();
-        if (!isReachedTarget()) return;
+        BlockPos target = getMoveToTarget();
+        reached = mob.position().closerThan(Vec3.atBottomCenterOf(target), radius);
+        if (reached) {
+            tryTicks--;
+        } else if (++tryTicks % RETRY_TICKS == 0) {
+            walk(target);
+        }
+        if (!reached) return;
         if (settled != null) mob.setPose(settled);
         if (visit != null && mob instanceof AddonEntity addon) arrive(addon);
         if (arrival == null || !(mob.level() instanceof ServerLevel level)) return;
@@ -244,6 +252,18 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
             return;
         }
         if (++stayed == visit.stay() && visit.onStayed() != null) addon.raiseEvent(visit.onStayed());
+    }
+
+    @Override
+    protected boolean isReachedTarget() {
+        return reached;
+    }
+
+    /** How often Java's own goal plans its walk again while it has not arrived. */
+    private static final int RETRY_TICKS = 40;
+
+    private void walk(BlockPos target) {
+        mob.getNavigation().moveTo(mob.getNavigation().createPath(target, 0), speedModifier);
     }
 
     @Override

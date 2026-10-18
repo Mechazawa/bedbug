@@ -1352,6 +1352,32 @@ public final class GoalGameTests {
 
     private static final int STAY_TICKS = 20;
 
+    /**
+     * `minecraft:behavior.move_to_block` arrives within its `goal_radius`, half a block by default,
+     * of the spot over the block it looks for, measured from where the entity stands.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aWalkToABlockArrivesWithinItsDefaultRadius(GameTestHelper helper) {
+        helper.setBlock(new BlockPos(5, -1, 4), Blocks.GOLD_BLOCK);
+        AddonEntity brute = withGroup(helper, "tp:brute_seek_closely", new BlockPos(1, 0, 4));
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Vec3 spot = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(5, 0, 4)));
+        helper.succeedWhen(() -> {
+            helper.assertTrue(Boolean.TRUE.equals(brute.value("tp:reached")),
+                BRUTE + " walks to the gold and never raised its arrival, standing "
+                    + brute.position().distanceTo(spot) + " from the spot over it.");
+            helper.assertTrue(brute.position().distanceTo(spot) <= DEFAULT_GOAL_RADIUS,
+                BRUTE + " arrived " + brute.position().distanceTo(spot) + " from the spot over the gold.");
+        });
+    }
+
+    /** Bedrock's default `goal_radius` for `minecraft:behavior.move_to_block`. */
+    private static final double DEFAULT_GOAL_RADIUS = 0.5;
+
     /** `minecraft:behavior.move_to_block` walks to the block moved by `target_offset`, three blocks east. */
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
     public void aWalkToABlockEndsAtItsTargetOffset(GameTestHelper helper) {
@@ -1851,6 +1877,61 @@ public final class GoalGameTests {
         return value instanceof Number number ? number.doubleValue() : Double.NaN;
     }
 
+    /**
+     * An `entity_types` list admits whoever any one of its entries admits, and an entry written the
+     * older way, an `AND` group over numbered subjects and operators, is read as written: the sharing
+     * brute passes the cow beside it and hands its apple to the pig further off.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void anEntityTypesListPicksWhoAnItemIsSharedWith(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_share");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        brute.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND,
+            new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.APPLE));
+        standing(helper, "cow", STAND.south(2));
+        Mob pig = standing(helper, "pig", STAND.east(5));
+        helper.succeedWhen(() -> {
+            helper.assertTrue(brute.getMainHandItem().isEmpty(), BRUTE + " still holds its apple.");
+            helper.assertTrue(brute.distanceTo(pig) <= SHARED_NEAR,
+                BRUTE + " handed its apple over " + brute.distanceTo(pig) + " blocks from the pig.");
+        });
+    }
+
+    /** The share goal's default `goal_radius` of two, and a block of slack for where the walk ends. */
+    private static final double SHARED_NEAR = 3;
+
+    /**
+     * A caravan forms behind a leashed entity its `entity_types` admit, a pig here where Java's
+     * caravan admits only llamas, and holds the two followers its `entity_count` allows: of three
+     * brutes beside a leashed pig, two fall in and the third stays out of the line.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = CARAVAN_TICKS + 20)
+    public void aCaravanFormsBehindWhatItsTypesAdmitAndHoldsItsCount(GameTestHelper helper) {
+        List<AddonEntity> brutes = List.of(STAND, STAND.south(2), STAND.south(4)).stream()
+            .map(where -> withGroup(helper, "tp:brute_caravan", where)).toList();
+        if (brutes.contains(null)) {
+            helper.succeed();
+            return;
+        }
+
+        Mob pig = standing(helper, "pig", STAND.east(3));
+        helper.assertTrue(Platform.leashTo(pig, standing(helper, "cow", STAND.east(4))), "The pig took no lead.");
+        helper.runAfterDelay(CARAVAN_TICKS, () -> {
+            long following = brutes.stream().filter(brute -> brute.caravanHead() != null).count();
+            helper.assertTrue(following == 2, "Two of the brutes fit in the caravan and " + following + " follow.");
+            helper.assertTrue(brutes.stream().anyMatch(brute -> brute.caravanHead() == pig),
+                "No brute heads its caravan behind the leashed pig.");
+            helper.succeed();
+        });
+    }
+
+    /** Long enough for each brute's goal to have looked for a line at least twice. */
+    private static final int CARAVAN_TICKS = 60;
+
     /** A brute with its group on and its goals running. */
     private static AddonEntity withGroup(GameTestHelper helper, String event) {
         return withGroup(helper, event, STAND);
@@ -1881,20 +1962,26 @@ public final class GoalGameTests {
 
     /** A pig that stays where it is put, blows included, with the health the test asks for. */
     private static Mob pig(GameTestHelper helper, BlockPos where, float health) {
-        ServerLevel level = helper.getLevel();
-        Entity created = Platform.createMob(
-            BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("minecraft", "pig")).orElseThrow(), level);
-        helper.assertTrue(created instanceof Mob, "A pig could not be made.");
-
-        Mob pig = (Mob) created;
-        BlockPos at = helper.absolutePos(where);
-        Platform.placeAt(pig, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
-        pig.setNoAi(true);
+        Mob pig = standing(helper, "pig", where);
         pig.getAttribute(Attributes.MAX_HEALTH).setBaseValue(health);
         pig.setHealth(health);
         // A blow would otherwise knock it out of the reach a test is measuring something else at.
         pig.getAttribute(Attributes.KNOCKBACK_RESISTANCE).setBaseValue(1);
-        level.addFreshEntity(pig);
         return pig;
+    }
+
+    /** One of the game's own mobs, with no goals of its own, where the test puts it. */
+    private static Mob standing(GameTestHelper helper, String kind, BlockPos where) {
+        ServerLevel level = helper.getLevel();
+        Entity created = Platform.createMob(
+            BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("minecraft", kind)).orElseThrow(), level);
+        helper.assertTrue(created instanceof Mob, "A " + kind + " could not be made.");
+
+        Mob mob = (Mob) created;
+        BlockPos at = helper.absolutePos(where);
+        Platform.placeAt(mob, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        mob.setNoAi(true);
+        level.addFreshEntity(mob);
+        return mob;
     }
 }

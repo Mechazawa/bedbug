@@ -34,6 +34,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 
 /**
  * Bedrock's entity filters, which are a small expression language of their own and nothing to do
@@ -647,6 +648,19 @@ public sealed interface Filter {
         }
     }
 
+    /**
+     * The groups a filter object may hold, under every key Mojang writes them with. The upper case
+     * keys come with the numbered subjects and operators of older entity files.
+     */
+    Map<String, Function<List<Filter>, Filter>> GROUPS = Map.of(
+        "all_of", All::new, "all", All::new, "AND", All::new,
+        "any_of", Any::new, "any", Any::new, "OR", Any::new,
+        "none_of", None::new, "NOT", None::new);
+
+    /** The subjects and operators older entity files write by number, in the order they number them. */
+    List<String> NUMBERED_SUBJECTS = List.of("self", "other");
+    List<String> NUMBERED_OPERATORS = List.of("==", "!=");
+
     static Filter parse(JsonElement json) {
         if (json == null || json.isJsonNull()) return new Always();
         if (json.isJsonArray()) return new All(parseAll(json));
@@ -654,17 +668,43 @@ public sealed interface Filter {
         if (!json.isJsonObject()) return new Always();
         JsonObject body = json.getAsJsonObject();
 
-        if (body.has("all_of")) return new All(parseAll(body.get("all_of")));
-        if (body.has("any_of")) return new Any(parseAll(body.get("any_of")));
-        if (body.has("none_of")) return new None(parseAll(body.get("none_of")));
+        // An entry of a list such as `entity_types` holds its filter under `filters` beside fields of its own.
+        if (body.has("filters") && !body.has("test")) return parse(body.get("filters"));
+
+        List<Filter> groups = GROUPS.entrySet().stream()
+            .filter(group -> body.has(group.getKey()))
+            .map(group -> group.getValue().apply(parseAll(body.get(group.getKey()))))
+            .toList();
+        if (groups.size() == 1) return groups.get(0);
+        if (!groups.isEmpty()) return new All(groups);
         if (!body.has("test")) return new Always();
 
         return new Test(
             body.get("test").getAsString(),
-            body.has("subject") ? body.get("subject").getAsString() : "self",
-            body.has("operator") ? body.get("operator").getAsString() : null,
+            word(body.get("subject"), NUMBERED_SUBJECTS, "self"),
+            word(body.get("operator"), NUMBERED_OPERATORS, null),
             body.has("domain") ? body.get("domain").getAsString() : null,
             body.get("value"));
+    }
+
+    /**
+     * An `entity_types` list, which admits an entity when any one of its entries does. No list
+     * admits everybody.
+     */
+    static Filter entityTypes(JsonElement entries) {
+        if (entries == null || !entries.isJsonArray() || entries.getAsJsonArray().isEmpty()) return parse(entries);
+
+        List<Filter> parts = new ArrayList<>();
+        entries.getAsJsonArray().forEach(entry -> parts.add(parse(entry)));
+        return new Any(parts);
+    }
+
+    private static String word(JsonElement value, List<String> numbered, String absent) {
+        if (value == null || !value.isJsonPrimitive()) return absent;
+        if (!value.getAsJsonPrimitive().isNumber()) return value.getAsString();
+
+        int number = value.getAsInt();
+        return number >= 0 && number < numbered.size() ? numbered.get(number) : value.getAsString();
     }
 
     private static List<Filter> parseAll(JsonElement json) {
