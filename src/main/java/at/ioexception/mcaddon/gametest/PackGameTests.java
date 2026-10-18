@@ -150,6 +150,83 @@ public final class PackGameTests {
     }
 
     /**
+     * A projectile struck in flight under `reflect_on_hurt` turns the way its attacker faces and
+     * becomes the attacker's, and one struck inside its `reflect_immunity` does not turn.
+     *
+     * The spark flies east and the player strikes it facing west; Java would hurt a spark of one
+     * health to death either time.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = REFLECT_TICKS)
+    public void aProjectileStruckInFlightTurnsTheWayItsAttackerFaces(GameTestHelper helper) {
+        AddonEntity early = flyingEast(helper, WEST_EDGE);
+        AddonEntity late = flyingEast(helper, WEST_EDGE.south(2));
+        if (early == null || late == null) {
+            helper.succeed();
+            return;
+        }
+
+        net.minecraft.world.entity.player.Player batter = Platform.mockPlayer(helper);
+        // Above the line both sparks fly along, so neither lands on the batter.
+        Platform.placeAt(batter, late.getX(), late.getY() + 3, late.getZ(), WEST, 0f);
+        Platform.hurt(early, helper.getLevel(), early.damageSources().playerAttack(batter), 1f);
+        helper.assertFalse(early.isAlive() && early.getDeltaMovement().x < 0,
+            PROJECTILE + " was struck inside its tenth of a second of immunity and turned anyway.");
+
+        helper.runAfterDelay(PAST_IMMUNITY, () -> {
+            Platform.hurt(late, helper.getLevel(), late.damageSources().playerAttack(batter), 1f);
+            helper.assertTrue(late.isAlive(), PROJECTILE + " reflects when struck and was hurt to death.");
+            helper.assertTrue(late.getDeltaMovement().x < 0,
+                PROJECTILE + " was struck by a player facing west and flies " + late.getDeltaMovement() + ".");
+            helper.assertTrue(late.firedBy() == batter, PROJECTILE + " was batted back and is not its batter's.");
+            helper.succeed();
+        });
+    }
+
+    /** A projectile struck in flight is removed under `destroy_on_hurt` and stops dead under `stop_on_hurt`. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = REFLECT_TICKS)
+    public void aProjectileStruckInFlightGoesOrStopsAsItsGroupSays(GameTestHelper helper) {
+        AddonEntity brittle = flyingEast(helper, STAND);
+        AddonEntity dull = flyingEast(helper, STAND.south(2));
+        if (brittle == null || dull == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(brittle, "tp:make_brittle", null, ServerHooks.state());
+        EntityEvents.trigger(dull, "tp:make_dull", null, ServerHooks.state());
+        net.minecraft.world.entity.player.Player batter = Platform.mockPlayer(helper);
+        Platform.hurt(brittle, helper.getLevel(), brittle.damageSources().playerAttack(batter), 0.5f);
+        Platform.hurt(dull, helper.getLevel(), dull.damageSources().playerAttack(batter), 0.5f);
+        helper.assertTrue(brittle.isRemoved(), PROJECTILE + " is destroyed when struck and flies on.");
+        helper.assertTrue(dull.isAlive() && dull.getDeltaMovement().lengthSqr() == 0,
+            PROJECTILE + " stops when struck and moves at " + dull.getDeltaMovement() + ".");
+        helper.succeed();
+    }
+
+    /** Past the tenth of a second the spark cannot be batted back in, and short of the structure's far side. */
+    private static final int PAST_IMMUNITY = 4;
+    private static final int REFLECT_TICKS = 40;
+
+    private static final BlockPos WEST_EDGE = new BlockPos(0, 2, 1);
+
+    /** The yaw a mob faces west at. */
+    private static final float WEST = 90f;
+
+    /** A spark three blocks up, fired east by nobody. */
+    private static AddonEntity flyingEast(GameTestHelper helper, BlockPos where) {
+        EntityType<?> type = AddonEntities.typeOf(PROJECTILE);
+        if (type == null) return null;
+
+        ServerLevel level = helper.getLevel();
+        Entity shot = Platform.createMob(type, level);
+        BlockPos at = helper.absolutePos(where);
+        Platform.placeAt(shot, at.getX() + 0.5, at.getY() + 3, at.getZ() + 0.5, 0f, 0f);
+        level.addFreshEntity(shot);
+        ((AddonEntity) shot).launchAsProjectile(null, new net.minecraft.world.phys.Vec3(1, 0, 0));
+        return (AddonEntity) shot;
+    }
+
+    /**
      * A projectile that turns `isolated_physics` off is held back by the cobwebs it flies through.
      *
      * The pack's spark turns the flag off, as Mojang's own arrows do, which puts its flight on the

@@ -234,8 +234,8 @@ public final class EntityEvents {
         }
     }
 
-    /** An effect a spell names, which a pack writes as often without its namespace as with it. */
-    private static net.minecraft.resources.Identifier effect(String named) {
+    /** An effect a component names, which a pack writes as often without its namespace as with it. */
+    public static net.minecraft.resources.Identifier effect(String named) {
         return named == null ? null
             : net.minecraft.resources.Identifier.tryParse(named.contains(":") ? named : "minecraft:" + named);
     }

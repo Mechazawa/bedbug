@@ -162,6 +162,45 @@ public final class Projectiles {
         return !ignored.contains(named.toString()) && !ignored.contains(named.getPath());
     }
 
+    /**
+     * What a blow does to the projectile in flight, answering whether the blow is spent on that
+     * rather than on hurting it. The component is read from the live set, so a group can change it.
+     *
+     * `destroy_on_hurt` removes the projectile and `stop_on_hurt` stops it dead. `reflect_on_hurt`
+     * sends it off the way the attacker faces at the speed it had, the attacker's own from then on,
+     * once `reflect_immunity` seconds of flight have passed, which is how a ghast's fireball is
+     * batted back; Java's own fireballs turn the same way. `crit_particle_on_hurt` marks the blow
+     * with a critical hit's sparks.
+     */
+    public boolean struck(net.minecraft.world.damagesource.DamageSource source) {
+        JsonObject live = mob.liveComponent("minecraft:projectile");
+        if (live == null || !(mob.level() instanceof ServerLevel level)) return false;
+
+        if (Json.bool(live, "crit_particle_on_hurt", false)) {
+            level.sendParticles(net.minecraft.core.particles.ParticleTypes.CRIT, mob.getX(), mob.getY(0.5),
+                mob.getZ(), HURT_SPARKS, 0.1, 0.1, 0.1, 0);
+        }
+        if (Json.bool(live, "destroy_on_hurt", false)) {
+            mob.discard();
+            return true;
+        }
+        if (Json.bool(live, "stop_on_hurt", false)) {
+            mob.setDeltaMovement(Vec3.ZERO);
+            return true;
+        }
+
+        Entity attacker = source.getEntity();
+        if (attacker == null || !Json.bool(live, "reflect_on_hurt", false)) return false;
+        if (flownFor < Json.number(live, "reflect_immunity", 0) * Goals.TICKS_PER_SECOND) return false;
+
+        mob.setDeltaMovement(attacker.getLookAngle().scale(mob.getDeltaMovement().length()));
+        if (attacker instanceof LivingEntity living) shooter = living;
+        return true;
+    }
+
+    /** How many sparks a blow on a projectile throws off, which is what Java throws off a crit. */
+    private static final int HURT_SPARKS = 8;
+
     private void strike(ServerLevel level, HitResult hit) {
         if (hit instanceof EntityHitResult on && on.getEntity() instanceof LivingEntity struck) {
             hitEntity(struck);

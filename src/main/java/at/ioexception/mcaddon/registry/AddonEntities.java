@@ -421,7 +421,6 @@ public final class AddonEntities {
     private static final Map<String, Set<String>> UNREAD_FIELDS = Map.of(
         "minecraft:experience_reward", Set.of("on_bred"),
         "minecraft:block_movement_slowdown_immunity", Set.of("tags"),
-        "minecraft:attack", Set.of("effect_name", "effect_duration"),
         "minecraft:spawn_entity", Set.of("spawn_method", "should_leash"),
         "minecraft:drying_out_timer", Set.of("water_bottle_refill_time"),
         "minecraft:damage_sensor", Set.of("damage_modifier", "damage_multiplier",
@@ -429,11 +428,10 @@ public final class AddonEntities {
         "minecraft:custom_hit_test", Set.of("height", "pivot"),
         "minecraft:rail_sensor", Set.of("check_block_types", "tick_command_block_on_activate",
             "tick_command_block_on_deactivate"),
-        "minecraft:projectile", Set.of("arrow_effect", "crit_particle_on_hurt", "destroy_on_hurt",
-            "douse_fire", "hurt_owner", "hit_nearest_passenger", "is_dangerous", "lightning",
-            "multiple_targets", "potion_effect", "reflect_immunity", "reflect_on_hurt",
-            "should_bounce", "spawn_aoe_cloud", "spawn_chance", "splash_range", "stop_on_hurt",
-            "teleport_owner", "thrown_potion_effect", "wind_burst_on_hit"));
+        "minecraft:projectile", Set.of("arrow_effect", "douse_fire", "hurt_owner",
+            "hit_nearest_passenger", "is_dangerous", "lightning", "multiple_targets", "potion_effect",
+            "should_bounce", "spawn_aoe_cloud", "spawn_chance", "splash_range", "teleport_owner",
+            "thrown_potion_effect", "wind_burst_on_hit"));
 
     private static boolean carries(com.google.gson.JsonElement json, String field) {
         if (json.isJsonObject()) {

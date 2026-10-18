@@ -52,7 +52,10 @@ add-ons, or with another release of it, is told which in chat.
   its controller states an `is_hurt_color` of its own, which is drawn instead. A pass whose material
   defines `MASKED_MULTITEXTURE`, as the game's villager outfits do, draws its second texture over its
   first with the second's clear but coloured texels showing the first through, which is how a
-  villager's profession is worn over the clothes of its biome. A model reaching past the box the server gave the entity is culled against
+  villager's profession is worn over the clothes of its biome, and takes none of its controller's
+  `color`, which Bedrock's shader for it never reads. A controller's `materials` list gives each bone
+  the material of the last entry naming it, with a star standing for any run of letters, so a
+  villager's hat can be drawn masked while the rest of it is not. A model reaching past the box the server gave the entity is culled against
   the extent its own geometry declares, so wings and a tail stay drawn while the hitbox is off the
   side of the screen. A controller state a pack gave a blend transition is crossed out of rather
   than left, so a walk releases into an idle instead of snapping. An entity whose pack asked for it
@@ -70,11 +73,17 @@ add-ons, or with another release of it, is told which in chat.
   entity becomes rather than what it is, so a group arriving changes how it gets about: the
   navigator and the move control are built again, and the step it takes, the height it climbs, what
   pushes it, what burns it, what effects land on it and what it has for sale all move with it.
+  A seat's `rotate_rider_by` is asked every tick as the rider and turns the rider that far from the
+  way the mount faces, held there by `lock_rider_rotation`. Bedrock keeps no Molang temporary to one
+  expression, so neither does the server: what the seat's expression writes into `temp.` is what the
+  mount's own scripts read, which is how a pack learns a villager's level by seating it.
 - The clips and controllers a behaviour pack declares, which animate what an entity is rather than
   where its bones are. A moment on a clip's timeline, and a controller state's entry and its exit,
   each raise one of the entity's own events, run a command as the entity, or assign a Molang
   variable the controllers read back, and the whole state machine runs on the server off the
-  entity's own tick. What its transitions ask is answered from the entity itself, so a controller
+  entity's own tick. A controller moves at most once a tick and starting counts as a move, so its
+  first state's clips play once even when a transition out of it holds from the start. What its
+  transitions ask is answered from the entity itself, so a controller
   waiting on `query.is_on_ground`, on the entity's health or on a property the pack declared moves
   when the world does. A command a state names runs with the server's own authority and with `@s`
   standing for the entity, because a mob carries no authority of its own and a pack writing a
@@ -119,6 +128,26 @@ add-ons, or with another release of it, is told which in chat.
   `minecraft:leashable`, stretches and breaks where the preset for its holder says from 26, and
   `can_be_stolen` says whether a player may take it off whatever holds it. A name tag names only what
   `minecraft:nameable` lets one rename, and the name raises the event its `name_actions` lists.
+- How a pack's entity fights, flees and settles, by its behaviours' own fields. A melee blow waits
+  out `cooldown_time`, reaches as far as `reach_multiplier` or `horizontal_reach` say, lands only
+  inside `melee_fov`, raises `on_attack` and `on_kill`, and passes a burning attacker's fire on
+  under `can_spread_on_fire`; a blow also carries the ailment `minecraft:attack` names. A ranged
+  attack reloads for its `attack_interval`, stretched across its `attack_range`. A panic starts at
+  the causes `damage_sources` lists, can leave every mob's blow out, heads for water under
+  `prefer_water` and needs no hurt under `force`; fleeing a block raises `on_escape` once clear; and
+  the panic and the flight make the sound the pack names for them. A teleporter closes on a far
+  target and blinks away from a projectile, a pack's own projectile is batted back, stopped or
+  removed when struck, and a blast breaks blocks whatever the griefing rule says unless the pack asks
+  for the rule, under a cap on what a block withstands. A child bred under `minecraft:offspring`
+  takes a tamed parent's owner, a parent's variant, mark variant, colour and listed properties
+  unless a mutation keeps its own, the dye two colours make, and attributes blended the way Java
+  breeds a horse. A mount under `minecraft:tamemount` is broken in by riding, its temper rising with
+  its food and each buck, and any rideable entity is mounted by using it, pulls in what touches it
+  under `pull_in_entities` and raises its rider events. A school flocks by its separation, cohesion,
+  variant matching, flock limit and loners; an entity walks out under the sky or in under a roof,
+  looks as far for water as it says, drinks the potion its conditions pick by Bedrock's number,
+  holds no more of an item than its shareables allow, leaps at its `yd`, and steps higher while a
+  player steers it.
 - An entity in a bucket. `minecraft:bucketable` lets a player scoop the entity up with a water
   bucket and let it out again in the same component groups it was scooped up in. The component
   names no item, and Java holds a fish in an item per kind of fish, so each such entity is carried
@@ -223,6 +252,9 @@ add-ons, or with another release of it, is told which in chat.
   A trader whose pack states no `minecraft:behavior.trade_with_player` stands still while a player
   has its shop open, as one stating it does. Bedrock documents nothing about such a trader, and a
   shop that walks away and closes under the player is the more surprising answer.
+  `query.trade_tier` answers the tier a trader has reached, counted from nought the way Bedrock
+  counts it, for a pack's own trader and for Java's villager alike, whose novice is 0 and whose
+  master is 4.
 - Brewing. A pack's own brewing stand recipes are added to the list the game builds in code, so a
   mix turning one potion into another over a reagent, and a container recipe turning one bottle into
   another, both work at an ordinary brewing stand. A bottle of the pack's own is accepted as a

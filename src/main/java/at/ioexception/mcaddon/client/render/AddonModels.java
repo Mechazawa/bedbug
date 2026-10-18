@@ -54,13 +54,22 @@ public final class AddonModels {
     /**
      * One pass: a baked model, the texture to draw it with, the bones it draws and its tint.
      *
+     * `visibility` hides a bone and everything hanging off it. `owned` names the bones whose own
+     * boxes this pass draws, because a controller giving one bone a material of its own draws that
+     * bone in a pass of its own while its children may still belong to this one.
+     *
      * `colour` is packed ARGB and multiplies the texture, white leaving it as it is. `redWhenHurt` is
      * false for a pass whose controller states an `is_hurt_color`, which replaces the red Bedrock
      * otherwise flashes a hurt entity with and is folded into `colour` instead.
      */
-    public record Pass(BakedGeometry geometry, Identifier texture, PartVisibility visibility, UvShift shift,
-        MaterialDefinition material, int colour, boolean ignoresLighting, float lightMultiplier,
+    public record Pass(BakedGeometry geometry, Identifier texture, PartVisibility visibility, PartVisibility owned,
+        UvShift shift, MaterialDefinition material, int colour, boolean ignoresLighting, float lightMultiplier,
         boolean redWhenHurt) {
+        /** Whether this pass draws the boxes of the bone of that name. */
+        public boolean draws(String bone) {
+            return !owned.hides(bone);
+        }
+
         /** The overlay Java's entity shaders lay over the pass: the red of a hit, or none at all. */
         public int overlay(boolean hurt) {
             return OverlayTexture.pack(OverlayTexture.u(0f), OverlayTexture.v(hurt && redWhenHurt));
@@ -129,12 +138,11 @@ public final class AddonModels {
             RenderController controller = assets.renderController(entry.name());
             if (controller == null) continue;
 
-            Pass pass = resolvePass(controller, definition, environment);
-            if (pass == null) continue;
-
-            passes.add(pass);
-            Pass glow = emissivePass(pass, definition, environment, controller);
-            if (glow != null) passes.add(glow);
+            for (Pass pass : resolvePasses(controller, definition, environment)) {
+                passes.add(pass);
+                Pass glow = emissivePass(pass, definition, environment, controller);
+                if (glow != null) passes.add(glow);
+            }
         }
         return passes.isEmpty() ? fallback(definition) : passes;
     }
@@ -164,20 +172,24 @@ public final class AddonModels {
                 definition.identifier());
         }
         return List.of(new Pass(geometry, textureId(texturePath), PartVisibility.EVERYTHING,
-            UvShift.NONE, null, OPAQUE_WHITE, false, 1f, true));
+            PartVisibility.EVERYTHING, UvShift.NONE, null, OPAQUE_WHITE, false, 1f, true));
     }
 
-    private Pass resolvePass(RenderController controller, ClientEntityDefinition definition,
+    /**
+     * The passes one controller draws: one for each material its `materials` list gives a bone,
+     * each drawing the boxes of the bones that material is given to.
+     */
+    private List<Pass> resolvePasses(RenderController controller, ClientEntityDefinition definition,
         MolangEnvironment environment) {
         environment.setArrays(controller.arrays());
 
         String geometryKey = controller.geometry() == null
             ? "default" : controller.geometry().evaluate(environment).text();
-        if (geometryKey == null) return null;
+        if (geometryKey == null) return List.of();
 
         String geometryId = definition.geometry().get(geometryKey);
         BakedGeometry geometry = geometryId == null ? null : bake(geometryId, definition);
-        if (geometry == null) return null;
+        if (geometry == null) return List.of();
 
         List<String> texturePaths = new ArrayList<>();
         for (MolangExpression expression : controller.textures()) {
@@ -185,7 +197,7 @@ public final class AddonModels {
             texturePaths.add(value.isText() ? definition.textures().get(value.text()) : null);
         }
         String texturePath = texturePaths.stream().filter(Objects::nonNull).findFirst().orElse(null);
-        if (texturePath == null) return null;
+        if (texturePath == null) return List.of();
 
         List<PartVisibility.Rule> visibility = new ArrayList<>();
         for (Map<String, MolangExpression> rule : controller.partVisibility()) {
@@ -194,25 +206,35 @@ public final class AddonModels {
                     bone.getValue().evaluate(environment).truthy()));
             }
         }
-        MaterialDefinition material = resolveMaterial(controller, definition, environment);
-        if (material != null && material.invisible()) return null;
-
-        boolean tested = material != null && material.dropsFaintTexels();
-        Identifier texture = material != null && material.masksSecondTexture() && texturePaths.size() > 1
-            ? masked(texturePaths.get(0), texturePaths.get(1), tested) : null;
-        if (texture == null) {
-            String alphaTested = tested ? alphaTested(texturePath) : null;
-            texture = alphaTested == null ? textureId(texturePath) : identifierOf(alphaTested);
-        }
-
         UvShift shift = new UvShift(
             number(controller.uvOffsetU(), environment, 0f),
             number(controller.uvOffsetV(), environment, 0f),
             number(controller.uvScaleU(), environment, 1f),
             number(controller.uvScaleV(), environment, 1f));
-        return new Pass(geometry, texture, new PartVisibility(visibility), shift, material,
-            tint(controller, environment), controller.ignoresLighting(),
-            number(controller.lightMultiplier(), environment, 1f), controller.hurt() == null);
+
+        List<BoneMaterial> boneMaterials = boneMaterials(controller, definition, environment);
+        List<MaterialDefinition> materials = boneMaterials.isEmpty() ? NO_MATERIAL
+            : boneMaterials.stream().map(BoneMaterial::material).distinct().toList();
+        List<Pass> passes = new ArrayList<>();
+        for (MaterialDefinition material : materials) {
+            if (material != null && material.invisible()) continue;
+
+            boolean tested = material != null && material.dropsFaintTexels();
+            Identifier composed = material != null && material.masksSecondTexture() && texturePaths.size() > 1
+                ? masked(texturePaths.get(0), texturePaths.get(1), tested) : null;
+            String alphaTested = composed == null && tested ? alphaTested(texturePath) : null;
+            Identifier texture = composed != null ? composed
+                : alphaTested == null ? textureId(texturePath) : identifierOf(alphaTested);
+
+            PartVisibility owned = materials.size() < 2 ? PartVisibility.EVERYTHING
+                : new PartVisibility(boneMaterials.stream()
+                    .map(rule -> new PartVisibility.Rule(rule.pattern(), rule.material().equals(material)))
+                    .toList());
+            passes.add(new Pass(geometry, texture, new PartVisibility(visibility), owned, shift, material,
+                tint(controller, environment, composed != null), controller.ignoresLighting(),
+                number(controller.lightMultiplier(), environment, 1f), controller.hurt() == null));
+        }
+        return passes;
     }
 
     /** Opaque white, which leaves a texture drawn as it was painted. */
@@ -233,10 +255,12 @@ public final class AddonModels {
      * What one pass multiplies its texture by: its colour, with each overlay laid over in turn.
      *
      * Java tints a whole pass with one vertex colour, so the three overlay groups are folded into
-     * that colour by their own alpha rather than drawn as passes of their own.
+     * that colour by their own alpha rather than drawn as passes of their own. A pass drawing two
+     * textures as one takes no colour: Bedrock's masked multitexture shader reads the overlay and
+     * never the controller's `color`.
      */
-    private static int tint(RenderController controller, MolangEnvironment environment) {
-        int colour = controller.colour() == null
+    private static int tint(RenderController controller, MolangEnvironment environment, boolean composed) {
+        int colour = controller.colour() == null || composed
             ? OPAQUE_WHITE : controller.colour().evaluate(environment, OPAQUE_WHITE);
 
         colour = over(colour, controller.overlay(), environment);
@@ -295,7 +319,7 @@ public final class AddonModels {
         int colon = glow.indexOf(':');
         Identifier texture = Platform.id(glow.substring(0, colon),
             "textures/" + glow.substring(colon + 1) + ".png");
-        return new Pass(pass.geometry(), texture, pass.visibility(), pass.shift(), EMISSIVE,
+        return new Pass(pass.geometry(), texture, pass.visibility(), pass.owned(), pass.shift(), EMISSIVE,
             pass.colour(), pass.ignoresLighting(), pass.lightMultiplier(), pass.redWhenHurt());
     }
 
@@ -303,25 +327,38 @@ public final class AddonModels {
     private static final MaterialDefinition EMISSIVE = new MaterialDefinition("emissive", "emissive",
         Set.of("USE_EMISSIVE"), Set.of(), Set.of(), Set.of());
 
-    /**
-     * The material a pass draws with, which decides blending, culling and whether it glows.
-     *
-     * A controller lists one material per bone pattern; the entry for every bone is the one that
-     * describes the pass as a whole, so that is the one taken.
-     */
-    private MaterialDefinition resolveMaterial(RenderController controller,
-        ClientEntityDefinition definition, MolangEnvironment environment) {
-        for (Map<String, MolangExpression> rule : controller.materials()) {
-            MolangExpression expression = rule.get("*");
-            if (expression == null) expression = rule.values().stream().findFirst().orElse(null);
-            if (expression == null) continue;
+    /** What a controller naming no material the definition carries draws its one pass with: Bedrock's default. */
+    private static final List<MaterialDefinition> NO_MATERIAL = java.util.Collections.singletonList(null);
 
-            MolangValue value = expression.evaluate(environment);
-            String key = value.isText() ? value.text() : null;
-            String name = key == null ? null : definition.materials().get(key);
-            if (name != null) return assets.material(name);
+    /** One entry of a controller's `materials` list: the bones it names and the material they take. */
+    private record BoneMaterial(String pattern, MaterialDefinition material) {
+    }
+
+    /**
+     * The material each bone draws with, which decides blending, culling, whether it glows and
+     * whether the pass's second texture is drawn over its first.
+     *
+     * A controller lists one material per bone pattern, and a later entry answers for a bone an
+     * earlier one also matched, the way `part_visibility` does: Mojang's axolotl draws `*` with one
+     * material and `*leg` with another. An entry naming a material the definition does not carry is
+     * passed over. A bone no entry matches takes the first material, which is what an entity whose
+     * one entry names a single bone draws everything else with.
+     */
+    private List<BoneMaterial> boneMaterials(RenderController controller,
+        ClientEntityDefinition definition, MolangEnvironment environment) {
+        List<BoneMaterial> materials = new ArrayList<>();
+        for (Map<String, MolangExpression> rule : controller.materials()) {
+            for (Map.Entry<String, MolangExpression> bone : rule.entrySet()) {
+                MolangValue value = bone.getValue().evaluate(environment);
+                String name = value.isText() ? definition.materials().get(value.text()) : null;
+                MaterialDefinition material = name == null ? null : assets.material(name);
+                if (material == null) continue;
+
+                if (materials.isEmpty()) materials.add(new BoneMaterial("*", material));
+                materials.add(new BoneMaterial(bone.getKey(), material));
+            }
         }
-        return null;
+        return materials;
     }
 
     /**

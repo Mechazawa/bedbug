@@ -398,7 +398,29 @@ These are the checks it runs, and what each one catches:
   laden group's lead carries two presets and refuses to be stolen. The plain ember is the other half
   of most of these assertions, which is why it carries none of them: no `minecraft:breathable`, no
   `minecraft:leashable` and no `minecraft:nameable`, so it never drowns, takes no lead and takes no
-  name tag.
+  name tag. The shod group's preferred path also drops seven blocks, which Java asks the mob for as
+  `getMaxFallDistance`.
+
+  `tp:brute` is a plain mob for the fields inside behaviours, and `GoalGameTests` reads each back
+  off the world. It hits for one point, is not immune to fire and has no goal at the top level, so
+  whatever moves it is the group a test switched on, and a test holding its feet sets its speed to
+  nothing so that a pig standing apart from it is reached by the goal and not by a walk. Its groups
+  cover the melee fields (a cooldown, a box reach, a reach multiple, the attack and kill events, fire
+  passed on), a ranged attack's interval stretched across its range, the panic causes, force and
+  water, an escape from a block, a target and a projectile teleport, three breeding groups (what a
+  child inherits, what a certain mutation and a denied variant give it), taming by item and breaking
+  in by riding, listed riders, a poisoning attack, the rideable fields, an explosion heeding or
+  ignoring the griefing rule and a resistance cap, a potion drunk by its conditions, the shelter
+  walks, water looked for, a goal radius, a leap, an area attack's cooldown, a step taken while
+  steered, and four flocking groups. Each event that adds a group is named after it. A few traps met
+  writing them: the empty structure's floor is not a block Java's random walks may end on, so a test
+  needing one lays stone first; light under a new roof takes a few ticks to settle, so a test asking
+  `canSeeSky` builds first and waits; the older versions place test structures close enough that a
+  flock wider than four blocks takes in the brutes of the next test; and a blast's fire is lit only
+  where it broke a block. `GoalSoundClientGameTest` hears the panic and retreat sounds the brute's
+  `sounds.json` entry names, which a sound moment no Java question reaches has to be kept for.
+  `tp:spark` reflects when struck after a tenth of a second, and its brittle and dull groups are
+  removed and stopped when struck instead.
 
   Two more entities are there for what a mob walking about never reaches. One is a projectile with
   hit boxes wider than the box it collides in, which turns `isolated_physics` off the way Mojang's
@@ -472,7 +494,24 @@ These are the checks it runs, and what each one catches:
   `villager_v2_masked`, and through `entity_alphatest`, which binds the first texture alone. Its base
   is blue all over and its outfit is four bands of an opaque red, a clear white, a clear black and a
   faint green, so `RenderControllerClientGameTest` reads red, blue, nothing and blue off the image
-  each masked pass binds, and blue four times off the plain one.
+  each masked pass binds, and blue four times off the plain one. A fourth controller gives the body
+  `entity_alphatest` and every bone matching `*ARK` the game's `villager_v2_masked`, under a grey
+  `color`: the test reads two passes off it, the plain one drawing the body alone in grey and the
+  masked one drawing the spark alone and untinted, because Bedrock's masked multitexture shader reads
+  no controller colour. A pattern starting with its star and written in other capitals than the bone
+  is what Mojang's own `*leg` and a pack's careless casing look like.
+
+  `tp:perch` is a seat for a villager, written the way a pack learns a Java villager's level. Its
+  seat's `rotate_rider_by` writes the rider's `query.trade_tier` and where it sits into temporaries
+  and answers a quarter turn for the villager family, with `lock_rider_rotation` at nought; its
+  animate list copies the tier into a variable when the place written is its own; and the first state
+  of its controller plays a clip tagging the perch `tp_perch_journeyman` for tier two, then leaves on
+  `1` for a state tagging it `tp_perch_settled`.
+  `BehaviourGameTests.aSeatAsksItsRiderWhatItTradesAndTurnsIt` seats a journeyman farmer on it and
+  reads both tags and the villager's facing back. That one test fails when any of these goes: the seat
+  asked as the rider every tick before the mount's scripts, the temporaries every server expression
+  shares, a Java villager's tier and families, a family list letting the villager on, or the first
+  state's clips playing on the tick the controller starts.
 
   The recipes cover the seven kinds and the fields that decide what each becomes: a furnace recipe
   naming four cookers and an unlock item, a shapeless one tagged for the stonecutter and unlocked by
