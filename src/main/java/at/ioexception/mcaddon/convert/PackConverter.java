@@ -307,6 +307,12 @@ public final class PackConverter {
                     }
                     Flipbook flipbook = flipbooks.get(withoutExtension(relative));
                     if (flipbook != null) flipbook.write(destination);
+                    AlphaTested tested = AlphaTested.tryFrom(decoded);
+                    if (tested != null) {
+                        Path halved = target.resolve(inside + AlphaTested.SUFFIX + ".png");
+                        ImageIO.write(tested.halved(), "PNG", halved.toFile());
+                        if (flipbook != null) flipbook.write(halved);
+                    }
                     written++;
                 } catch (IOException | RuntimeException error) {
                     paths.remove(withoutExtension(relative));

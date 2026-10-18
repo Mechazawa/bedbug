@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.clientgametest;
 
 import at.ioexception.mcaddon.client.render.AddonClientAssets;
 import at.ioexception.mcaddon.client.render.PackTextures;
+import at.ioexception.mcaddon.client.render.ScriptClock;
 import at.ioexception.mcaddon.client.render.Submitted;
 import at.ioexception.mcaddon.entity.AddonEntity;
 import at.ioexception.mcaddon.platform.Platform;
@@ -64,6 +65,7 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
             dimmedLight(context, world);
             hurtRed(context, world);
             hurtColour(context, world);
+            faintTexels(context, world);
         }
     }
 
@@ -245,6 +247,32 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
         Assert.that(drawn == dimmed, "tp:ember stands in light " + Integer.toHexString(around)
             + " and its controller's light_color_multiplier of 0.35 asks for " + Integer.toHexString(dimmed)
             + ", and it was drawn in " + Integer.toHexString(drawn) + ".");
+    }
+
+    /**
+     * A texel the pack left nearly clear is drawn by a material that reads alpha as a tint and
+     * dropped by one that only tests it.
+     *
+     * `tp:sprite` and `tp:shade` draw the same texture, whose top four rows are written at an alpha
+     * of three. The sprite's `entity_alphatest` drops everything under half, so its pass has to bind
+     * a texture in which that texel is clear. The shade's `entity_alphatest_change_color` reads the
+     * alpha as how much to tint and drops only what is fully clear, so its pass has to bind one in
+     * which the texel is whole.
+     */
+    private static void faintTexels(ClientGameTestContext context, TestSingleplayerContext world) {
+        world.getServer().runCommand("summon tp:sprite ~-3 ~ ~-3 {NoAI:1b}");
+        world.getServer().runCommand("summon tp:shade ~ ~1 ~-3");
+        AddonEntity sprite = Entities.waitForClient(context, "tp:sprite");
+        AddonEntity shade = Entities.waitForClient(context, "tp:shade");
+
+        int tested = context.computeOnClient(client ->
+            PackTextures.alphaAt(ScriptClock.of(sprite).passes().get(0).texture(), 0, 0));
+        Assert.that(tested == 0, "tp:sprite draws with entity_alphatest, which drops a texel at an alpha of three,"
+            + " and its pass bound a texture holding that texel at " + tested + ".");
+        int tinted = context.computeOnClient(client ->
+            PackTextures.alphaAt(ScriptClock.of(shade).passes().get(0).texture(), 0, 0));
+        Assert.that(tinted == 0xFF, "tp:shade draws with entity_alphatest_change_color, which keeps a texel at an"
+            + " alpha of three, and its pass bound a texture holding that texel at " + tinted + ".");
     }
 
     private static int dim(int channel) {

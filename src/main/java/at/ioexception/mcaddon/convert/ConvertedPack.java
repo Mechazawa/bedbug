@@ -31,11 +31,24 @@ public record ConvertedPack(BedrockPack pack, List<BedrockPack> behaviours, Path
     /** The image the conversion wrote for a Bedrock texture path, or null where it wrote none. */
     public Path textureFile(String bedrockPath) {
         String mapped = texturePaths.get(bedrockPath);
-        if (mapped == null) return null;
+        return mapped == null ? null : written(mapped);
+    }
 
-        int colon = mapped.indexOf(':');
-        Path file = root.resolve("assets").resolve(mapped.substring(0, colon)).resolve("textures")
-            .resolve(mapped.substring(colon + 1) + ".png");
+    /**
+     * The resource id of the form of a texture Bedrock's plain alpha test draws, or null where the
+     * conversion wrote none because the test would drop nothing Java keeps.
+     */
+    public String alphaTested(String bedrockPath) {
+        String mapped = texturePaths.get(bedrockPath);
+        String tested = mapped == null ? null : mapped + AlphaTested.SUFFIX;
+        return tested != null && written(tested) != null ? tested : null;
+    }
+
+    /** The file a texture's resource id names inside this pack, or null where none was written. */
+    private Path written(String id) {
+        int colon = id.indexOf(':');
+        Path file = root.resolve("assets").resolve(id.substring(0, colon)).resolve("textures")
+            .resolve(id.substring(colon + 1) + ".png");
         return Files.isRegularFile(file) ? file : null;
     }
 }
