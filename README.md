@@ -187,7 +187,12 @@ Against a server without this mod a client plays with its own add-ons.
   snacker eats only its `items` and waits out its cooldown, an egg layer lays only under the
   materials it names, and a flower taker takes a golem's flower only while its filters hold. A
   young entity drops its `drop_items` as it grows up and is fed only by whoever its
-  `interact_filters` allow, and a feed item's `growth` is a share of the whole wait. A villager
+  `interact_filters` allow, and a feed item's `growth` is a share of the whole wait. A won raid
+  raises `minecraft:start_celebrating` on the add-on entities standing in it, and a celebration runs
+  while its group is on: a raider jumps and makes its `celebration_sound`, a villager sends up
+  fireworks, and either raises its end event after its `duration`. An entity hurt recently neither
+  admires nor barters until its `cooldown_after_being_attacked` is over, and an admirer and an egg
+  layer make their pack's own sound. A villager
   explores past the edge of its village by `explore_dist`, a fox strolls to the nearest village, a
   child plays with the friend its `friend_types` name, and `minecraft:behavior.hide` runs to the bed
   or other place `poi_type` names when a bell rings or a raid is on. Java's village is the beds, job

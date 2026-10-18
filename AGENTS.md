@@ -461,7 +461,10 @@ These are the checks it runs, and what each one catches:
   runs to a bed when a bell rings and `tp:brute_playing` plays with a pig. `tp:brute_stomping_near`
   searches two blocks for eggs, `tp:brute_grazing` eats hay into dirt, `tp:brute_snacking` eats only
   sweet berries and then waits, `tp:brute_nesting` lays on sand with nothing above it and
-  `tp:brute_flower_taking` takes a golem's flower once it is tagged. Java's own egg search can be
+  `tp:brute_flower_taking` takes a golem's flower once it is tagged. `tp:brute_admiring` admires
+  for a second and neither admires nor barters for five after being hurt, `tp:brute_cheering` and
+  `tp:brute_celebrating_survival` celebrate with no raid, and `GoalSoundClientGameTest` hears the
+  admiring, cheering and nesting groups' own sound moments. Java's own egg search can be
   replaced by a speed mod with one over a fixed twenty-four blocks, so `StompEggGoal` searches in its
   own `canUse`. `GoalGameTests` builds the
   village each one needs out of a bell or a bed in the empty structure, which Java registers as a

@@ -13,7 +13,10 @@
       "tp:brute": {
         "events": {
           "panic": "tp:brute.panic",
-          "retreat": "tp:brute.retreat"
+          "retreat": "tp:brute.retreat",
+          "admire": "tp:brute.admire",
+          "cheer": "tp:brute.cheer",
+          "lay": "tp:brute.lay"
         }
       }
     }

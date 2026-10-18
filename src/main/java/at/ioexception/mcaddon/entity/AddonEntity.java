@@ -1981,35 +1981,22 @@ public class AddonEntity extends PathfinderMob
                 .forEach(effect -> addEffect(new net.minecraft.world.effect.MobEffectInstance(effect))));
     }
 
-    /** Ticks of celebrating still owed, and whether the raid underfoot was already won last tick. */
-    private int celebrateFor;
+    /** Whether the raid underfoot was already won last time the entity looked. */
     private boolean sawRaidWon;
 
     /**
-     * Celebrating a raid that has just been beaten.
+     * Raises `minecraft:start_celebrating` once a raid the entity stands in is won.
      *
-     * Bedrock gives the component a duration and the entity jumps for that long. A won raid stands
-     * for a while after it is won, so the countdown starts on the tick the win appears and not on
-     * every tick the win is still there.
+     * That is the event Bedrock's village raises on the entities around a raid it survived, and the
+     * one Mojang's own villagers add their celebrating group from. A won raid stands for a while after
+     * it is won, so the event goes out on the look that first sees the win.
      */
-    private void celebrate() {
-        if (!declaresNow("minecraft:behavior.celebrate_survive")) return;
+    private void noticeRaidWon() {
         if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
 
         boolean won = Platform.raidWon(level, blockPosition());
-        if (won && !sawRaidWon) {
-            celebrateFor = (int) (number(definition, "minecraft:behavior.celebrate_survive",
-                "duration", 30) * 20);
-        }
+        if (won && !sawRaidWon) fire("minecraft:start_celebrating");
         sawRaidWon = won;
-        if (celebrateFor <= 0) return;
-        celebrateFor--;
-
-        getNavigation().stop();
-        if (onGround()) setDeltaMovement(getDeltaMovement().add(0, 0.42, 0));
-        if (celebrateFor % 20 == 0) {
-            playSound(SoundEvents.VILLAGER_CELEBRATE, getSoundVolume(), getVoicePitch());
-        }
     }
 
     /**
@@ -2652,6 +2639,12 @@ public class AddonEntity extends PathfinderMob
     /** Ticks of the entity's own age at which something last hurt it, for the components that wait. */
     private int lastHurtTick = -1000;
 
+    /** Whether a live component's `cooldown_after_being_attacked` has run out since the entity was last hurt. */
+    public boolean calmSinceHurt(String component) {
+        com.google.gson.JsonObject live = liveComponent(component);
+        return tickCount - lastHurtTick >= Goals.ticks(live, "cooldown_after_being_attacked", 10);
+    }
+
     /** Health as it stood last tick, which is how being hurt is noticed without a damage hook. */
     private float healthLastTick = -1;
 
@@ -3291,7 +3284,9 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.take_flower" -> goals.add(priority,
                 new TakeFlowerGoal(this, goal));
             case "minecraft:behavior.celebrate" -> goals.add(priority,
-                new CelebrateGoal(this, goal));
+                CelebrateGoal.winning(this, goal));
+            case "minecraft:behavior.celebrate_survive" -> goals.add(priority,
+                CelebrateGoal.surviving(this, goal));
             case "minecraft:behavior.sneeze" -> goals.add(priority,
                 new SneezeGoal(this, goal));
             case "minecraft:behavior.roll" -> goals.add(priority,
@@ -3607,7 +3602,7 @@ public class AddonEntity extends PathfinderMob
             rest();
             drink();
             leashChanged(isLeashed());
-            celebrate();
+            noticeRaidWon();
             rise();
             manageAsTrader();
             despawn();

@@ -495,6 +495,101 @@ public final class GoalGameTests {
     private static final int FLOWER_REFUSED_FOR = 60;
     private static final int FLOWER_TICKS = 200;
 
+    /**
+     * `minecraft:behavior.celebrate_survive` sends up fireworks at its `fireworks_interval` for as
+     * long as its group is on, with no raid anywhere, and raises `on_celebration_end_event` after its
+     * `duration`.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aSurvivorCelebratesWithFireworksWhileItsGroupIsOn(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_survive");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        AtomicBoolean launched = new AtomicBoolean();
+        helper.onEachTick(() -> launched.compareAndSet(false, !helper.getLevel().getEntitiesOfClass(
+            net.minecraft.world.entity.projectile.FireworkRocketEntity.class,
+            brute.getBoundingBox().inflate(8)).isEmpty()));
+        helper.succeedWhen(() -> {
+            helper.assertTrue(launched.get(), BRUTE + " celebrated and sent up no firework.");
+            helper.assertTrue(Boolean.TRUE.equals(brute.value("tp:celebrated")),
+                BRUTE + " celebrated for its second and never raised on_celebration_end_event.");
+        });
+    }
+
+    /** `minecraft:admire_item`'s `duration` is how long the entity turns over what it holds. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = ADMIRE_TICKS)
+    public void anAdmirerAdmiresForItsDuration(GameTestHelper helper) {
+        AddonEntity brute = admirer(helper);
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        AtomicBoolean admired = new AtomicBoolean();
+        helper.onEachTick(() -> admired.compareAndSet(false, Boolean.TRUE.equals(brute.value("is_admiring"))));
+        helper.runAfterDelay(ADMIRE_TICKS - 10, () -> {
+            helper.assertTrue(admired.get(), BRUTE + " never admired the gold it was handed.");
+            helper.assertFalse(Boolean.TRUE.equals(brute.value("is_admiring")),
+                BRUTE + " is still admiring long after the second its admire_item allows.");
+            helper.succeed();
+        });
+    }
+
+    /** An entity hurt inside `minecraft:admire_item`'s `cooldown_after_being_attacked` admires nothing. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = ADMIRE_TICKS)
+    public void anAdmirerHurtRecentlyAdmiresNothing(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_admire");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.runAfterDelay(1, () -> Platform.hurt(brute, helper.getLevel(), brute.damageSources().generic(), 1));
+        helper.runAfterDelay(3, () -> brute.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND,
+            new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.GOLD_INGOT)));
+        helper.onEachTick(() -> helper.assertFalse(Boolean.TRUE.equals(brute.value("is_admiring")),
+            BRUTE + " admired gold a moment after it was hurt."));
+        helper.runAfterDelay(ADMIRE_TICKS - 10, helper::succeed);
+    }
+
+    /** An entity hurt inside `minecraft:barter`'s `cooldown_after_being_attacked` pays nobody. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = ADMIRE_TICKS)
+    public void aBarterHurtRecentlyPaysNobody(GameTestHelper helper) {
+        AddonEntity brute = admirer(helper);
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        net.minecraft.server.level.ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        Platform.placeAt(player, brute.getX() + 2, brute.getY(), brute.getZ(), 0f, 0f);
+        helper.runAfterDelay(HURT_WHILE_ADMIRING,
+            () -> Platform.hurt(brute, helper.getLevel(), brute.damageSources().generic(), 1));
+        helper.runAfterDelay(ADMIRE_TICKS - 10, () -> {
+            helper.getLevel().getServer().getPlayerList().remove(player);
+            helper.assertFalse(brute.getMainHandItem().isEmpty(),
+                BRUTE + " paid for its gold a second after it was hurt.");
+            helper.succeed();
+        });
+    }
+
+    /** A brute with its admiring group on, handed a gold ingot. */
+    private static AddonEntity admirer(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_admire");
+        if (brute != null) {
+            brute.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND,
+                new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.GOLD_INGOT));
+        }
+        return brute;
+    }
+
+    /** Well past the brute's one second of admiring. */
+    private static final int ADMIRE_TICKS = 90;
+    private static final int HURT_WHILE_ADMIRING = 10;
+
     /** A stomper whose `search_range` is two blocks does not set off for an egg four blocks off. */
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = STOMP_TICKS)
     public void aStomperLooksForEggsNoFurtherThanItsRange(GameTestHelper helper) {

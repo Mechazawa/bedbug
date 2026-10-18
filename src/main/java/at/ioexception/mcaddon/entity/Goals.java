@@ -104,7 +104,12 @@ final class Goals {
             JsonArray pair = value.getAsJsonArray();
             return pair.size() > index ? pair.get(index).getAsDouble() : fallback;
         }
-        return value.isJsonObject() ? number(value.getAsJsonObject(), named, fallback) : fallback;
+        if (!value.isJsonObject()) return fallback;
+
+        // Bedrock spells the two ends `min` and `max` in some components and `range_min` and
+        // `range_max` in others.
+        JsonObject ends = value.getAsJsonObject();
+        return number(ends, named, number(ends, "range_" + named, fallback));
     }
 
     /** The event a trigger names, whether the pack wrote the object around it or only the name. */

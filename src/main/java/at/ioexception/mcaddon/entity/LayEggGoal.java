@@ -8,7 +8,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.sounds.SoundEvents;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.level.block.Block;
@@ -40,6 +39,7 @@ public final class LayEggGoal extends Goal {
     private final List<Predicate<BlockState>> roomAbove;
     private final Block egg;
     private final String layEvent;
+    private final String laySound;
     private BlockPos nest;
     private int laid;
 
@@ -54,6 +54,7 @@ public final class LayEggGoal extends Goal {
         this.roomAbove = roomAbove(component);
         this.egg = named(Goals.text(component, "egg_type"));
         this.layEvent = Goals.event(component, "on_lay");
+        this.laySound = Goals.text(component, "lay_egg_sound");
         setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.JUMP));
     }
 
@@ -96,7 +97,7 @@ public final class LayEggGoal extends Goal {
         if (laid < laySeconds || !(mob.level() instanceof ServerLevel level)) return;
 
         level.setBlockAndUpdate(nest.above(), egg.defaultBlockState());
-        mob.playSound(SoundEvents.TURTLE_LAY_EGG, mob.getSoundVolume(), mob.getVoicePitch());
+        mob.makeNoise(laySound == null ? "lay_egg" : laySound);
         if (layEvent != null) EntityEvents.trigger(mob, layEvent, null, ServerHooks.state());
         nest = null;
     }

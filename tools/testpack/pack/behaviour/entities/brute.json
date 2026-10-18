@@ -15,6 +15,10 @@
           "type": "bool",
           "default": false
         },
+        "tp:celebrated": {
+          "type": "bool",
+          "default": false
+        },
         "tp:took_flower": {
           "type": "bool",
           "default": false
@@ -590,7 +594,8 @@
           "search_height": 1,
           "lay_seconds": 0.5,
           "target_blocks": ["sand"],
-          "target_materials_above_block": ["Air"]
+          "target_materials_above_block": ["Air"],
+          "lay_egg_sound": "lay"
         }
       },
       "tp:brute_flower_taking": {
@@ -601,6 +606,40 @@
           "speed_multiplier": 1,
           "filters": { "test": "has_tag", "value": "tp_flower_friend" },
           "on_take_flower": { "event": "tp:brute_took_flower", "target": "self" }
+        }
+      },
+      "tp:brute_admiring": {
+        "minecraft:admire_item": {
+          "duration": 1,
+          "cooldown_after_being_attacked": 5
+        },
+        "minecraft:barter": {
+          "barter_table": "loot_tables/blocks/totem.json",
+          "cooldown_after_being_attacked": 5
+        },
+        "minecraft:behavior.admire_item": {
+          "priority": 1,
+          "admire_item_sound": "admire",
+          "sound_interval": { "range_min": 0.2, "range_max": 0.3 }
+        },
+        "minecraft:behavior.barter": {
+          "priority": 2
+        }
+      },
+      "tp:brute_celebrating_survival": {
+        "minecraft:behavior.celebrate_survive": {
+          "priority": 1,
+          "duration": 1,
+          "fireworks_interval": { "min": 0.1, "max": 0.2 },
+          "on_celebration_end_event": { "event": "tp:brute_celebrated", "target": "self" }
+        }
+      },
+      "tp:brute_cheering": {
+        "minecraft:behavior.celebrate": {
+          "priority": 1,
+          "duration": 5,
+          "celebration_sound": "cheer",
+          "sound_interval": { "min": 0.2, "max": 0.3 }
         }
       },
       "tp:brute_stomping_near": {
@@ -1023,6 +1062,32 @@
       "tp:brute_took_flower": {
         "set_property": {
           "tp:took_flower": true
+        }
+      },
+      "tp:brute_admire": {
+        "add": {
+          "component_groups": [
+            "tp:brute_admiring"
+          ]
+        }
+      },
+      "tp:brute_survive": {
+        "add": {
+          "component_groups": [
+            "tp:brute_celebrating_survival"
+          ]
+        }
+      },
+      "tp:brute_cheer": {
+        "add": {
+          "component_groups": [
+            "tp:brute_cheering"
+          ]
+        }
+      },
+      "tp:brute_celebrated": {
+        "set_property": {
+          "tp:celebrated": true
         }
       },
       "tp:brute_stomp_near": {
