@@ -546,6 +546,10 @@
         }
       },
       "tp:brute_exploring": {
+        "minecraft:dweller": {
+          "dwelling_type": "village",
+          "restriction_radius": 8
+        },
         "minecraft:behavior.explore_outskirts": {
           "priority": 1,
           "speed_multiplier": 1,

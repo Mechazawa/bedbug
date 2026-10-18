@@ -17,7 +17,8 @@ import java.util.EnumSet;
  * village and looks round there.
  *
  * Java has no village object, so the village is the box round the beds, job sites and bells within
- * a village's reach of the entity. An entity inside that box grown by `dist_from_boundary` walks out
+ * the entity's `minecraft:dweller` `restriction_radius` (16 blocks where it states none), which is
+ * how far from its dwelling Bedrock lets a dweller belong to it. An entity inside that box grown by `dist_from_boundary` walks out
  * on the side of the village it stands on, to `explore_dist` past the edge at its own height. Once
  * there it waits a while between `min_wait_time` and `max_wait_time` divided by `timer_ratio`, then
  * walks to a point within `next_xz` and `next_y` of the last, until `max_wait_time` has gone by
@@ -71,8 +72,9 @@ public final class ExploreOutskirtsGoal extends Goal {
         if (mob.tickCount < lookAt || !(mob.level() instanceof ServerLevel level)) return false;
         lookAt = mob.tickCount + LOOK_EVERY;
 
+        int reach = (int) Goals.number(mob.liveComponent("minecraft:dweller"), "restriction_radius", 16);
         AABB village = level.getPoiManager()
-            .getInRange(type -> type.is(PoiTypeTags.VILLAGE), mob.blockPosition(), MoveToPoiGoal.SEARCH_RADIUS,
+            .getInRange(type -> type.is(PoiTypeTags.VILLAGE), mob.blockPosition(), reach,
                 PoiManager.Occupancy.ANY)
             .map(PoiRecord::getPos).map(AABB::new).reduce(AABB::minmax).orElse(null);
         if (village == null || 2 * (village.getXsize() + village.getZsize()) < perimeter) return false;
