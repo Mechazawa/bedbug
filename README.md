@@ -138,6 +138,26 @@ add-ons, or with another release of it, is told which in chat.
   `minecraft:leashable`, stretches and breaks where the preset for its holder says from 26, and
   `can_be_stolen` says whether a player may take it off whatever holds it. A name tag names only what
   `minecraft:nameable` lets one rename, and the name raises the event its `name_actions` lists.
+- How a pack's entity fights, flees and settles, by its behaviours' own fields. A melee blow waits
+  out `cooldown_time`, reaches as far as `reach_multiplier` or `horizontal_reach` say, lands only
+  inside `melee_fov`, raises `on_attack` and `on_kill`, and passes a burning attacker's fire on
+  under `can_spread_on_fire`; a blow also carries the ailment `minecraft:attack` names. A ranged
+  attack reloads for its `attack_interval`, stretched across its `attack_range`. A panic starts at
+  the causes `damage_sources` lists, can leave every mob's blow out, heads for water under
+  `prefer_water` and needs no hurt under `force`; fleeing a block raises `on_escape` once clear; and
+  the panic and the flight make the sound the pack names for them. A teleporter closes on a far
+  target and blinks away from a projectile, a pack's own projectile is batted back, stopped or
+  removed when struck, and a blast breaks blocks whatever the griefing rule says unless the pack asks
+  for the rule, under a cap on what a block withstands. A child bred under `minecraft:offspring`
+  takes a tamed parent's owner, a parent's variant, mark variant, colour and listed properties
+  unless a mutation keeps its own, the dye two colours make, and attributes blended the way Java
+  breeds a horse. A mount under `minecraft:tamemount` is broken in by riding, its temper rising with
+  its food and each buck, and any rideable entity is mounted by using it, pulls in what touches it
+  under `pull_in_entities` and raises its rider events. A school flocks by its separation, cohesion,
+  variant matching, flock limit and loners; an entity walks out under the sky or in under a roof,
+  looks as far for water as it says, drinks the potion its conditions pick by Bedrock's number,
+  holds no more of an item than its shareables allow, leaps at its `yd`, and steps higher while a
+  player steers it.
 - An entity in a bucket. `minecraft:bucketable` lets a player scoop the entity up with a water
   bucket and let it out again in the same component groups it was scooped up in. The component
   names no item, and Java holds a fish in an item per kind of fish, so each such entity is carried

@@ -39,6 +39,9 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
     /** The pose held on arrival, or null where the walk is all there is to the behaviour. */
     private final Pose settled;
 
+    /** How near the block counts as there, measured the way Java measures it. */
+    private final double arrived;
+
     private MoveToMatchingBlockGoal(PathfinderMob mob, JsonObject component,
         Predicate<BlockState> wanted, BiConsumer<ServerLevel, BlockPos> arrival) {
         this(mob, component, wanted, arrival, null, null);
@@ -53,10 +56,21 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
         Predicate<BlockState> wanted, BiConsumer<ServerLevel, BlockPos> arrival, String flag,
         Pose settled) {
         super(mob, speed(component), range(component), height(component));
+        // Java measures from the middle of the block over the target, half a block above where
+        // Bedrock's `goal_radius` is measured from, which the half added back here makes up for.
+        this.arrived = number(component, "goal_radius", BEDROCK_GOAL_RADIUS) + HALF_BLOCK;
         this.wanted = wanted;
         this.arrival = arrival;
         this.flag = flag;
         this.settled = settled;
+    }
+
+    private static final double BEDROCK_GOAL_RADIUS = 0.5;
+    private static final double HALF_BLOCK = 0.5;
+
+    @Override
+    public double acceptedDistance() {
+        return arrived;
     }
 
     @Override
@@ -94,6 +108,12 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
         return new MoveToMatchingBlockGoal(mob, component,
             state -> state.getFluidState().is(Fluids.LAVA)
                 || state.getFluidState().is(Fluids.FLOWING_LAVA), null);
+    }
+
+    /** `minecraft:behavior.move_to_water`, which looks as far for water as its pack says. */
+    public static MoveToMatchingBlockGoal water(PathfinderMob mob, JsonObject component) {
+        return new MoveToMatchingBlockGoal(mob, component,
+            state -> state.getFluidState().is(Fluids.WATER) || state.getFluidState().is(Fluids.FLOWING_WATER), null);
     }
 
     /** `minecraft:behavior.move_to_random_block`, which wants somewhere to stand and nothing more. */

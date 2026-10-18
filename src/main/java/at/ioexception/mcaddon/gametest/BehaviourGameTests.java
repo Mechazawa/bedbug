@@ -1930,6 +1930,26 @@ public final class BehaviourGameTests {
     }
 
     /**
+     * `max_fall_blocks` is how far the entity's pathfinder lets it drop off an edge, which Java asks
+     * the mob for as it plans. The shod group says seven, where Java's own answer is three.
+     */
+    @GameTest()
+    public void thePreferredPathSaysHowFarAPathMayDrop(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_shoe", null, ServerHooks.state());
+        helper.assertTrue(ember.getMaxFallDistance() == SHOD_FALL,
+            ENTITY + " may drop seven blocks on its way and plans drops of " + ember.getMaxFallDistance() + ".");
+        helper.succeed();
+    }
+
+    private static final int SHOD_FALL = 7;
+
+    /**
      * A group carrying `minecraft:mob_effect_immunity` turns the effects it names away.
      *
      * Java asks the entity every time something would apply an effect, so the list can move while
