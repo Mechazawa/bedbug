@@ -14,6 +14,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -22,6 +23,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Predicate;
 
@@ -32,9 +34,12 @@ import java.util.function.Predicate;
  * heights. The bloom rule hangs a scatter on the forests that wraps a weighted pick of two single
  * blocks, so it reaches a block through four features. One of the two is a torchflower, which no
  * feature of the game's places anywhere, so every one found is the pack's.
+ *
+ * The forest is searched for from the middle of the world rather than from the player, whom Java
+ * puts down anywhere within the spawn radius, so every run of one seed counts the same chunks.
  */
 public final class PackFeatureClientGameTest implements FabricClientGameTest {
-    /** The chunks counted, this many either side of the player's own. */
+    /** The chunks counted, this many either side of the middle one. */
     private static final int REACH = 3;
 
     /** The heights the ore rule scatters between, and the room a vein of nine takes round its start. */
@@ -44,6 +49,10 @@ public final class PackFeatureClientGameTest implements FabricClientGameTest {
     private static final int SEARCH_RADIUS = 4096;
     private static final int STEP = 64;
     private static final int PATIENCE = 1200;
+
+    /** The Java biomes Bedrock tags `forest` and not `mutated`, which is what the bloom rule asks for. */
+    private static final Set<String> RULED = Set.of("forest", "birch_forest", "dark_forest", "taiga", "snowy_taiga",
+        "old_growth_pine_taiga", "windswept_forest");
 
     @Override
     public void runTest(ClientGameTestContext context) {
@@ -79,10 +88,9 @@ public final class PackFeatureClientGameTest implements FabricClientGameTest {
 
     /** A forest holds the pack's torchflowers, each standing in a forest. */
     private static void blooms(ClientGameTestContext context, TestServerContext server) {
-        BlockPos forest = server.computeOnServer(minecraft -> forestNear(minecraft.overworld(),
-            player(minecraft).blockPosition()));
+        BlockPos forest = server.computeOnServer(minecraft -> forestNear(minecraft.overworld()));
         Assert.that(forest != null, "No forest as wide as the chunks counted lies within " + SEARCH_RADIUS
-            + " blocks of the spawn.");
+            + " blocks of the middle of the world.");
 
         server.runOnServer(minecraft -> {
             ServerPlayer player = player(minecraft);
@@ -97,25 +105,25 @@ public final class PackFeatureClientGameTest implements FabricClientGameTest {
             + ", whose surface holds " + server.computeOnServer(minecraft -> surface(minecraft.overworld(), forest))
             + ".");
         List<BlockPos> astray = server.computeOnServer(minecraft -> found.stream()
-            .filter(at -> !forest(minecraft.overworld().getBiome(at))).toList());
+            .filter(at -> !ruled(minecraft.overworld().getBiome(at))).toList());
         Assert.that(astray.isEmpty(), "Expected the pack's torchflowers only in forests and found some at " + astray);
     }
 
     /**
-     * The first point, searched outwards from the spawn, whose ground is forest as far as the chunks
-     * counted reach.
+     * The first point, searched outwards from the middle of the world, whose ground is open forest as
+     * far as the chunks counted reach.
      *
      * Biomes are three dimensional, so the forest has to be the biome at the surface rather than at
      * some height over it; a cheap look at sea level rules most points out before the surface is
      * worked out for the rest.
      */
-    private static BlockPos forestNear(ServerLevel overworld, BlockPos spawn) {
+    private static BlockPos forestNear(ServerLevel overworld) {
         for (int ring = 0; ring <= SEARCH_RADIUS; ring += STEP) {
             for (int dx = -ring; dx <= ring; dx += STEP) {
                 for (int dz = -ring; dz <= ring; dz += STEP) {
                     if (Math.max(Math.abs(dx), Math.abs(dz)) != ring) continue;
 
-                    BlockPos centre = spawn.offset(dx, 0, dz);
+                    BlockPos centre = new BlockPos(dx, 0, dz);
                     if (forestAround(overworld, centre, false) && forestAround(overworld, centre, true)) {
                         return surfaceAt(overworld, centre.getX(), centre.getZ());
                     }
@@ -132,7 +140,7 @@ public final class PackFeatureClientGameTest implements FabricClientGameTest {
                 int x = centre.getX() + dx;
                 int z = centre.getZ() + dz;
                 BlockPos at = atSurface ? surfaceAt(overworld, x, z) : new BlockPos(x, overworld.getSeaLevel(), z);
-                if (!forest(overworld.getBiome(at))) return false;
+                if (!open(overworld.getBiome(at))) return false;
             }
         }
         return true;
@@ -158,10 +166,18 @@ public final class PackFeatureClientGameTest implements FabricClientGameTest {
         return seen.toString();
     }
 
-    /** What the bloom rule's filter reaches: a forest, and not the flower forest it calls mutated. */
-    private static boolean forest(Holder<Biome> biome) {
-        String path = biome.unwrapKey().map(key -> key.identifier().getPath()).orElse("");
-        return path.contains("forest") && !path.contains("flower_forest");
+    private static boolean ruled(Holder<Biome> biome) {
+        return biome.unwrapKey().filter(key -> key.identifier().getNamespace().equals("minecraft"))
+            .map(key -> RULED.contains(key.identifier().getPath())).orElse(false);
+    }
+
+    /**
+     * A ruled forest whose canopy leaves ground the sky reaches. A dark forest's covers nearly all of
+     * it, so a scatter onto the heightmap lands on leaves there and a run counts a handful of
+     * flowers, or none.
+     */
+    private static boolean open(Holder<Biome> biome) {
+        return ruled(biome) && !biome.is(Biomes.DARK_FOREST);
     }
 
     /**

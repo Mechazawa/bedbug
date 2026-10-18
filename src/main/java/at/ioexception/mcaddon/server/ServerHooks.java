@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.server;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.behaviour.DamageCause;
 import at.ioexception.mcaddon.bedrock.behaviour.PlayerDefinition;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.network.Channels;
@@ -64,8 +65,9 @@ public final class ServerHooks {
                     addon.restoreGroups();
                 }
                 // Bedrock raises this on every entity as it comes into the world, and a pack's
-                // starting state is usually set from it.
-                EntityEvents.trigger(entity, "minecraft:entity_spawned", null, state);
+                // starting state is usually set from it. A bred one is born rather than spawned.
+                EntityEvents.trigger(entity, born(entity) ? "minecraft:entity_born" : "minecraft:entity_spawned",
+                    null, state);
             }
             at.ioexception.mcaddon.registry.AddonItems.keepDropped(entity);
             raiseEntityEvent("entityLoad", entity);
@@ -254,15 +256,16 @@ public final class ServerHooks {
             if (!element.isJsonObject()) continue;
             com.google.gson.JsonObject trigger = element.getAsJsonObject();
 
-            String cause = at.ioexception.mcaddon.util.Json.text(trigger, "cause", null);
-            if (cause != null && !cause.equals("any") && !cause.equals(source.getMsgId())) continue;
+            DamageCause cause = DamageCause.named(
+                at.ioexception.mcaddon.util.Json.text(trigger, "cause", "all"));
+            if (cause == null || !cause.matches(source)) continue;
 
             com.google.gson.JsonObject onDamage = trigger.getAsJsonObject("on_damage");
             at.ioexception.mcaddon.bedrock.behaviour.Filter filter =
                 at.ioexception.mcaddon.bedrock.behaviour.Filter.parse(
                     onDamage == null ? null : onDamage.get("filters"));
             if (!filter.matches(new at.ioexception.mcaddon.bedrock.behaviour.Filter.Context(
-                entity, source.getEntity() == null ? entity : source.getEntity(), null, state))) {
+                entity, source.getEntity() == null ? entity : source.getEntity(), null, state, source))) {
                 continue;
             }
 
@@ -325,12 +328,16 @@ public final class ServerHooks {
      * `spawnEntity` returns before its listeners hear about the entity, so a pack that spawns one and
      * then marks it as its own has done both by the time a listener asks whether it is marked.
      */
+    private static boolean born(Entity entity) {
+        return entity instanceof at.ioexception.mcaddon.entity.AddonEntity addon && addon.born();
+    }
+
     private static void raiseEntityEvent(String event, Entity entity) {
         if (scripts == null) return;
 
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("entity", ScriptHost.EntityHandle.of(entity));
-        fields.put("cause", event.equals("entitySpawn") ? "Spawned" : "Loaded");
+        fields.put("cause", !event.equals("entitySpawn") ? "Loaded" : born(entity) ? "Born" : "Spawned");
         scripts.queueWorldEvent(event, fields);
     }
 

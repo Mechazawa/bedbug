@@ -1677,7 +1677,7 @@ public class AddonEntity extends PathfinderMob
         if (!player.getAbilities().instabuild) held.shrink(1);
         Platform.placeAt(child, getX(), getY(), getZ(), getYRot(), 0f);
         if (child instanceof AddonEntity young) {
-            young.setYoung();
+            young.beBorn();
             young.inherit(this, this);
         }
         level.addFreshEntity(child);
@@ -2074,9 +2074,21 @@ public class AddonEntity extends PathfinderMob
     /** How long this entity stays willing to breed, counted in its own ticks. */
     private int inLoveUntil;
 
-    /** Marks a newly born one as a baby, which a pack's render controller reads as `q.is_baby`. */
-    void setYoung() {
+    /** Born of its parents, or of a spawn egg used on one, rather than placed in the world. */
+    private boolean born;
+
+    /**
+     * Marks a newly born one as a baby, which a pack's render controller reads as `q.is_baby`, and
+     * as born, so it arrives in the world with `minecraft:entity_born` where a placed one gets
+     * `minecraft:entity_spawned`.
+     */
+    void beBorn() {
+        born = true;
         setValue("is_baby", true);
+    }
+
+    public boolean born() {
+        return born;
     }
 
     /**

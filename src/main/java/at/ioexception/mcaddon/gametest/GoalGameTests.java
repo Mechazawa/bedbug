@@ -331,6 +331,27 @@ public final class GoalGameTests {
     }
 
     /**
+     * A bred child arrives with `minecraft:entity_born`, and only a placed entity with
+     * `minecraft:entity_spawned`. A pack sets a child's young state from the first, and a spawned
+     * one's from the second, which often rolls for a grown adult.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = BREED_TICKS)
+    public void aBredChildIsBornRatherThanSpawned(GameTestHelper helper) {
+        java.util.function.Supplier<AddonEntity> born = breed(helper, "tp:brute_breed");
+        if (born == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.succeedWhen(() -> {
+            AddonEntity child = born.get();
+            helper.assertTrue(child != null, BRUTE + " was fed in pairs and no child was born.");
+            helper.assertTrue("born".equals(child.value("tp:arrived")),
+                BRUTE + " was bred and arrived " + child.value("tp:arrived") + " rather than born.");
+        });
+    }
+
+    /**
      * A group's `minecraft:behavior.stomp_turtle_egg` looks for an egg as often as its `interval`
      * says, here every tick.
      *

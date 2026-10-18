@@ -233,6 +233,11 @@ These are the checks it runs, and what each one catches:
     the ground.** Asked for a forest, it answered with a point two hundred blocks up over an ocean.
     `PackFeatureClientGameTest` searches for ground whose surface is forest for as far as it counts,
     working the surface out from the generator rather than the chunk.
+  - **Java puts a new player anywhere within the spawn radius**, so a search started from the player
+    looks at different chunks on every run of one seed. `PackFeatureClientGameTest` searches from the
+    middle of the world, and passes over dark forests: their canopy leaves a scatter onto the
+    heightmap almost no ground, and runs there counted between two and five torchflowers in 49
+    chunks, which is one unlucky run from none.
   - **Fabric registers a biome its modification API changed again, without its pack's name.** A
     biome a feature rule or a spawn rule reached carries no `KnownPack` afterwards, though it stays
     stable, and baking a world's dimensions registers every level stem again the same way. Ask a
@@ -439,7 +444,7 @@ These are the checks it runs, and what each one catches:
   village each one needs out of a bell or a bed in the empty structure, which Java registers as a
   point of interest the moment the block is set. The brute's `tp:arrived` property is set by its
   `minecraft:entity_spawned` and `minecraft:entity_born` events, which is how
-  `aBredChildIsBornRatherThanSpawned` tells a bred child from a placed one.
+  `GoalGameTests.aBredChildIsBornRatherThanSpawned` tells a bred child from a placed one.
 
   Two more entities are there for what a mob walking about never reaches. One is a projectile with
   hit boxes wider than the box it collides in, which turns `isolated_physics` off the way Mojang's
@@ -1860,7 +1865,8 @@ Java damage types that are the same harm, in both directions, for the types the 
 `DamageTypes` declares. A cause Java has no type for is dealt as its stand-in and hears what the
 stand-in hears. Every place a pack names a cause asks it, and nothing compares a cause against
 `DamageSource.getMsgId()`, which is a death message key several types share: `campfire` and
-`in_fire` are both `inFire`.
+`in_fire` are both `inFire`. The field census reads `name(plain, "text"` as a field read, so a
+constant's Java types are listed before its flags.
 
 **So does an item and a block, everywhere a pack names one.** `AddonItems.named` and
 `AddonBlocks.named` (or `AddonBlocks.stateOf`, where Bedrock's states pick the block) are what a
