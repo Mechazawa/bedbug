@@ -192,26 +192,30 @@ project.tasks.named("runGameTest") {
 /**
  * The add-on the client game tests' server hands out without having loaded it, built from
  * `tools/testpack/served`. The server and the client share one process and one `addons/`, so this is
- * how a client joining it can lack an add-on the server has.
+ * how a client joining it can lack an add-on the server has. Beside `addons-served` go the two
+ * variants a test points the property at to serve another set: `addons-reshaped` and `addons-other`.
  */
 val installServedPack = project.tasks.register("installServedPack") {
     group = "verification"
-    description = "Build the add-on the client game tests' server hands out into run/clientGameTest/addons-served."
+    description = "Build the add-ons the client game tests' server hands out into run/clientGameTest/addons-*."
 
     val generator = rootProject.layout.projectDirectory.file("tools/testpack/build_served.py").asFile
-    val served = project.layout.buildDirectory.dir("run/clientGameTest/addons-served")
+    val run = project.layout.buildDirectory.dir("run/clientGameTest")
+    val variants = mapOf("addons-served" to null, "addons-reshaped" to "reshaped", "addons-other" to "other")
     inputs.dir(rootProject.layout.projectDirectory.dir("tools/testpack"))
-    outputs.dir(served)
+    variants.keys.forEach { directory -> outputs.dir(run.map { it.dir(directory) }) }
 
     doLast {
-        val target = served.get().asFile
-        target.mkdirs()
-        val archive = File(target, "served-addon.mcaddon")
-        val process = ProcessBuilder("python3", generator.absolutePath, "--out", archive.absolutePath)
-            .redirectErrorStream(true)
-            .start()
-        val output = process.inputStream.bufferedReader().readText()
-        if (process.waitFor() != 0) throw GradleException("The served pack would not build: $output")
+        variants.forEach { (directory, variant) ->
+            val target = File(run.get().asFile, directory)
+            target.mkdirs()
+            val archive = File(target, "served-addon.mcaddon")
+            val command = listOf("python3", generator.absolutePath, "--out", archive.absolutePath) +
+                (variant?.let { listOf("--variant", it) } ?: listOf())
+            val process = ProcessBuilder(command).redirectErrorStream(true).start()
+            val output = process.inputStream.bufferedReader().readText()
+            if (process.waitFor() != 0) throw GradleException("The served pack would not build: $output")
+        }
     }
 }
 
@@ -383,6 +387,11 @@ run {
     guest.javaClass.getMethod("client").invoke(guest)
     guest.javaClass.getMethod("runDir", String::class.java).invoke(guest, "run/join-client")
     guest.javaClass.getMethod("vmArg", String::class.java).invoke(guest, "-Dmcaddon.role=guest")
+    // The second client waits this many seconds before activating a server's add-ons.
+    val slowJoin = project.findProperty("slowJoin") as String?
+    if (!slowJoin.isNullOrBlank()) {
+        guest.javaClass.getMethod("vmArg", String::class.java).invoke(guest, "-Dmcaddon.slowJoin=$slowJoin")
+    }
     // A dedicated server hands out every archive in this directory as well as its own add-ons.
     val servedDirectory = project.findProperty("served") as String?
     if (!servedDirectory.isNullOrBlank()) {

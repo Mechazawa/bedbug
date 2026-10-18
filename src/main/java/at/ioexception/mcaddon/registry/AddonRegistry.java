@@ -3,6 +3,8 @@ package at.ioexception.mcaddon.registry;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.PackSet;
 import at.ioexception.mcaddon.resource.AddonSet;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
@@ -15,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -32,6 +35,9 @@ public final class AddonRegistry {
 
     /** The packs of every archive registered in this process, by the archive's digest. */
     private static final Map<String, List<BedrockPack>> ARCHIVES = new LinkedHashMap<>();
+
+    /** Every item an add-on has registered in this process, a block's own item among them. */
+    private static final Set<Identifier> ITEMS = ConcurrentHashMap.newKeySet();
 
     private AddonRegistry() {
     }
@@ -68,16 +74,20 @@ public final class AddonRegistry {
             .findFirst();
     }
 
-    /** Returns the items `set` declares, whether this call registered them or an earlier one did. */
     /**
      * The packs of every archive this process has registered, by digest, in the order they were
      * registered. A server has to be able to hand every one of them out, because Fabric's registry
      * sync names every entry they added.
      */
     public static synchronized Map<String, List<BedrockPack>> archives() {
-        return Map.copyOf(ARCHIVES);
+        return java.util.Collections.unmodifiableMap(new LinkedHashMap<>(ARCHIVES));
     }
 
+    public static boolean registeredItem(Identifier id) {
+        return ITEMS.contains(id);
+    }
+
+    /** Returns the items `set` declares, whether this call registered them or an earlier one did. */
     public static Set<Item> ensureRegistered(AddonSet set) {
         Map<String, List<BedrockPack>> byArchive = set.packs().packs().stream()
             .filter(pack -> pack.archive() != null)
@@ -97,6 +107,7 @@ public final class AddonRegistry {
             items.addAll(AddonItems.register(set, types));
             AddonParticles.register(set.converted());
         });
+        items.stream().map(BuiltInRegistries.ITEM::getKey).forEach(ITEMS::add);
         return items;
     }
 }

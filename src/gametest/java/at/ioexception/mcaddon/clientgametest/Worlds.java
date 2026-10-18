@@ -35,6 +35,35 @@ final class Worlds {
         *///?}
     }
 
+    static net.minecraft.client.gui.screens.Screen screen(Minecraft client) {
+        //? if >=26.2 {
+        return client.gui.screen();
+        //?} else {
+        /*return client.screen;
+        *///?}
+    }
+
+    /** What covers the screen while resources reload, or null. */
+    static net.minecraft.client.gui.screens.Overlay overlay(Minecraft client) {
+        //? if >=26.2 {
+        return client.gui.overlay();
+        //?} else {
+        /*return client.getOverlay();
+        *///?}
+    }
+
+    /**
+     * Starts connecting to a dedicated server the way {@code connect()} does, without waiting for a
+     * world, for a test about a join that never reaches one or that is cut off on the way.
+     */
+    static void startConnecting(ClientGameTestContext context, TestServerContext server) {
+        String address = "127.0.0.1:" + server.computeOnServer(MinecraftServer::getPort);
+        context.runOnClient(client -> net.minecraft.client.gui.screens.ConnectScreen.startConnecting(screen(client),
+            client, net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(address),
+            new net.minecraft.client.multiplayer.ServerData("test", address,
+                net.minecraft.client.multiplayer.ServerData.Type.OTHER), false, null));
+    }
+
     /** The camera the client draws its frames from. */
     static Camera camera(Minecraft client) {
         //? if >=26.2 {
@@ -125,7 +154,12 @@ final class Worlds {
      */
     static net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerContext server(
         ClientGameTestContext context) {
-        java.util.Properties properties = new java.util.Properties();
+        return server(context, new java.util.Properties());
+    }
+
+    /** The same with server properties of the test's own beside the port. */
+    static net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerContext server(
+        ClientGameTestContext context, java.util.Properties properties) {
         try (java.net.ServerSocket probe = new java.net.ServerSocket(0, 0,
             java.net.InetAddress.getByName("127.0.0.1"))) {
             properties.setProperty("server-port", String.valueOf(probe.getLocalPort()));
