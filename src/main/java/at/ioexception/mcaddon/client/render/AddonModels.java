@@ -60,7 +60,8 @@ public final class AddonModels {
      *
      * `colour` is packed ARGB and multiplies the texture, white leaving it as it is. `redWhenHurt` is
      * false for a pass whose controller states an `is_hurt_color`, which replaces the red Bedrock
-     * otherwise flashes a hurt entity with and is folded into `colour` instead.
+     * otherwise flashes a hurt entity with and is folded into `colour` instead, and for a pass whose
+     * material removes `USE_OVERLAY`.
      */
     public record Pass(BakedGeometry geometry, Identifier texture, PartVisibility visibility, PartVisibility owned,
         UvShift shift, MaterialDefinition material, int colour, boolean ignoresLighting, float lightMultiplier,
@@ -112,6 +113,7 @@ public final class AddonModels {
     private final Map<String, Optional<TexelMask>> masks = new HashMap<>();
     private final Map<String, AABB> bounds = new HashMap<>();
     private final Map<String, Optional<String>> alphaTested = new HashMap<>();
+    private final Map<String, Optional<String>> tintWeights = new HashMap<>();
     private final Map<String, Optional<Identifier>> masked = new HashMap<>();
 
     public AddonModels(BedrockAssets assets, ConvertedPack converted) {
@@ -138,11 +140,7 @@ public final class AddonModels {
             RenderController controller = assets.renderController(entry.name());
             if (controller == null) continue;
 
-            for (Pass pass : resolvePasses(controller, definition, environment)) {
-                passes.add(pass);
-                Pass glow = emissivePass(pass, definition, environment, controller);
-                if (glow != null) passes.add(glow);
-            }
+            passes.addAll(resolvePasses(controller, definition, environment));
         }
         return passes.isEmpty() ? fallback(definition) : passes;
     }
@@ -230,11 +228,48 @@ public final class AddonModels {
                 : new PartVisibility(boneMaterials.stream()
                     .map(rule -> new PartVisibility.Rule(rule.pattern(), rule.material().equals(material)))
                     .toList());
-            passes.add(new Pass(geometry, texture, new PartVisibility(visibility), owned, shift, material,
-                tint(controller, environment, material), controller.ignoresLighting(),
-                number(controller.lightMultiplier(), environment, 1f), controller.hurt() == null));
+            int tinted = overlaid(controllerColour(controller, environment, material), controller, environment,
+                material);
+            Identifier weights = composed == null ? tintLayer(controller, material, texturePath) : null;
+            float lightMultiplier = number(controller.lightMultiplier(), environment, 1f);
+            boolean redWhenHurt = (material == null || material.laysOverlay()) && controller.hurt() == null;
+            Pass pass = new Pass(geometry, texture, new PartVisibility(visibility), owned, shift, material,
+                weights == null ? tinted : overlaid(OPAQUE_WHITE, controller, environment, material),
+                controller.ignoresLighting(), lightMultiplier, redWhenHurt);
+            passes.add(pass);
+            if (weights != null) {
+                passes.add(new Pass(geometry, weights, pass.visibility(), owned, shift, material.blended(),
+                    tinted, controller.ignoresLighting(), lightMultiplier, redWhenHurt));
+            }
+            Pass glow = emissivePass(pass, definition, environment, controller);
+            if (glow != null) passes.add(glow);
         }
         return passes;
+    }
+
+    /**
+     * The texture a colour mask's tint is laid over its pass with, null where one colour over the
+     * pass tints it exactly.
+     *
+     * Bedrock draws a texel under `USE_COLOR_MASK` as `mix(rgb, rgb * color, alpha)`, which one vertex
+     * colour cannot carry where a texel is partly clear. Such a pass is drawn untinted and then again,
+     * blended and tinted, from the texture as the pack painted it, so each texel's alpha weighs the
+     * tint. A blended colour mask reads the same alpha as its fade as well, which two passes cannot
+     * keep apart, so it is tinted whole and reported.
+     */
+    private Identifier tintLayer(RenderController controller, MaterialDefinition material, String texturePath) {
+        if (controller.colour() == null || material == null || !material.readsControllerColour()) return null;
+
+        String weights = tintWeights.computeIfAbsent(texturePath,
+            bedrock -> Optional.ofNullable(converted.tintWeights(bedrock))).orElse(null);
+        if (weights == null) return null;
+        if (!material.blends()) return identifierOf(weights);
+
+        if (REPORTED.add(controller.name() + " " + material.name() + " weights")) {
+            AddonEntities.unsupported("color of " + controller.name() + " under " + material.name()
+                + ", a blended colour mask over partly clear texels; tinted whole");
+        }
+        return null;
     }
 
     /** Opaque white, which leaves a texture drawn as it was painted. */
@@ -252,14 +287,10 @@ public final class AddonModels {
     private static final MolangExpression ON_FIRE = MolangParser.parse("query.is_on_fire");
 
     /**
-     * What one pass multiplies its texture by: its colour, with each overlay laid over in turn.
-     *
-     * Java tints a whole pass with one vertex colour, so the three overlay groups are folded into
-     * that colour by their own alpha rather than drawn as passes of their own. Bedrock's entity
-     * shaders lay the overlay over every material and read the controller's `color` only under a
-     * colour mask, so a pass drawn with any other material takes the overlays alone.
+     * The controller's `color`, which Bedrock's entity shaders read only under a colour mask, or
+     * white for a pass drawn with any other material.
      */
-    private static int tint(RenderController controller, MolangEnvironment environment,
+    private static int controllerColour(RenderController controller, MolangEnvironment environment,
         MaterialDefinition material) {
         boolean tinted = controller.colour() != null && material != null && material.readsControllerColour();
         if (controller.colour() != null && material != null && material.readsControllerColourOtherwise()
@@ -267,16 +298,28 @@ public final class AddonModels {
             AddonEntities.unsupported("color of " + controller.name() + " under " + material.name()
                 + ", which tints one channel or a layered texture; drawn untinted");
         }
-        int colour = tinted ? controller.colour().evaluate(environment, OPAQUE_WHITE) : OPAQUE_WHITE;
+        return tinted ? controller.colour().evaluate(environment, OPAQUE_WHITE) : OPAQUE_WHITE;
+    }
 
-        colour = over(colour, controller.overlay(), environment);
+    /**
+     * A pass's colour with each of the controller's overlay groups laid over in turn, under a
+     * material that lays them.
+     *
+     * Java tints a whole pass with one vertex colour, so the three overlay groups are folded into
+     * that colour by their own alpha rather than drawn as passes of their own.
+     */
+    private static int overlaid(int colour, RenderController controller, MolangEnvironment environment,
+        MaterialDefinition material) {
+        if (material != null && !material.laysOverlay()) return colour;
+
+        int laid = over(colour, controller.overlay(), environment);
         if (controller.hurt() != null && HURT.evaluate(environment).truthy()) {
-            colour = over(colour, controller.hurt(), environment);
+            laid = over(laid, controller.hurt(), environment);
         }
         if (controller.onFire() != null && ON_FIRE.evaluate(environment).truthy()) {
-            colour = over(colour, controller.onFire(), environment);
+            laid = over(laid, controller.onFire(), environment);
         }
-        return colour;
+        return laid;
     }
 
     private static int over(int colour, ControllerColour group, MolangEnvironment environment) {

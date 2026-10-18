@@ -71,6 +71,29 @@ public record MaterialDefinition(String name, String parent, Set<String> defines
             || GAME_COLOUR_LAYERED.contains(parent);
     }
 
+    /** This material drawn blended, which is how a colour mask's tint is laid over the pass it tints. */
+    public MaterialDefinition blended() {
+        Set<String> blending = new LinkedHashSet<>(states);
+        blending.add("Blending");
+        return new MaterialDefinition(name, parent, defines, blending, removedStates, removedDefines);
+    }
+
+    /**
+     * Whether the overlay groups and the red of a hit are laid over the pass, which Bedrock's entity
+     * shaders do only under `USE_OVERLAY`.
+     *
+     * Every entity material inherits the define from `entity`, so a material goes without it only by
+     * removing it, the way the game's beams do.
+     */
+    public boolean laysOverlay() {
+        return defines.contains("USE_OVERLAY")
+            || !removedDefines.contains("USE_OVERLAY") && !GAME_UNLAID.contains(parent);
+    }
+
+    /** The game's own entity materials that remove `USE_OVERLAY`, from its `entity.material`. */
+    private static final Set<String> GAME_UNLAID =
+        Set.of("entity_beam_additive", "entity_dissolve_layer1", "item_in_hand_multicolor_tint");
+
     /** The game's own entity materials that define `USE_COLOR_MASK`, from its `entity.material`. */
     private static final Set<String> GAME_COLOUR_MASKED = Set.of(
         "entity_change_color", "entity_change_color_glint", "entity_alphatest_change_color",
