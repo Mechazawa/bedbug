@@ -190,7 +190,11 @@ These are the checks it runs, and what each one catches:
   content it reads and what it asserts. Two things about the machine the tests run on: a window
   hidden by the compositor can stall the render thread inside `glfwSwapBuffers` until the server's
   watchdog ends the run, which reads as a hang in whatever test was running, and a dedicated server
-  test fails at once when another game on the same machine holds port 25565.
+  test fails at once when another game on the same machine holds port 25565. Past about four
+  clients at once the desktop starves every one of them, so where `~/.claude/bin/cpu-lock` is
+  installed `runClientGameTest` first waits for one of four slots of its `minecraft-client` pool
+  across every checkout on the machine (`-PclientSlots=<n>` changes the count, and
+  `cpu-lock --status` shows who holds them and who waits).
 
   Only the 26.x targets ship that API, so the tests are a source set of their own (`gametest`, with
   its own `fabric.mod.json` listing them) that the two older targets never compile, and `check`
