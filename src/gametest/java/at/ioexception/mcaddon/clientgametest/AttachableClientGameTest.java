@@ -59,11 +59,11 @@ public final class AttachableClientGameTest implements FabricClientGameTest {
         AddonEntity warden) {
         world.getServer().runCommand("item replace entity @e[type=tp:sprite] armor.head with tp:visor");
         world.getServer().runCommand("item replace entity @e[type=tp:warden] armor.head with tp:visor");
-        Submitted dressed = Frames.waitFor(context, sprite, frame -> frame.geometry().size() == 3,
+        Submitted dressed = Frames.waitFor(context, sprite, frame -> frame.geometry().size() == 4,
             "tp:sprite enables attachables and wore tp:visor on its head, and the visor was never drawn.");
 
-        AABB visor = dressed.geometry().get(2).box();
-        Assert.near(reach(dressed.geometry().get(2)), VISOR_REACH, TOLERANCE, "the reach of tp:visor's cube");
+        AABB visor = dressed.geometry().get(3).box();
+        Assert.near(reach(dressed.geometry().get(3)), VISOR_REACH, TOLERANCE, "the reach of tp:visor's cube");
         Assert.near(visor.minY, SPRITE_HELMET, SPRITE_BOB + TOLERANCE,
             "the bottom of tp:visor above tp:sprite's feet, hung off its helmet bone");
 

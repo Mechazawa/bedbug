@@ -80,6 +80,31 @@ class PackOrderTest {
         assertEquals(List.of("Alpha requires a pack that is not installed: " + ABSENT + " 1.0.0"), problems);
     }
 
+    @Test
+    void reportsAScriptApiTheGameLacksUnlessThePackMarksItOptional() {
+        PackSet set = PackOrder.sort(List.of(scripted("Alpha", ONE, """
+            [{"module_name": "@minecraft/server", "version": "2.0.0"},
+             {"module_name": "@minecraft/server-net", "version": "1.0.0-beta"},
+             {"module_name": "@minecraft/server-admin", "version": "1.0.0-beta", "optional": true}]
+            """)), problems);
+
+        assertEquals(List.of("Alpha"), names(set));
+        assertEquals(List.of("Alpha requires a script API this mod does not provide: @minecraft/server-net"),
+            problems);
+    }
+
+    private static BedrockPack scripted(String name, String uuid, String dependencies) {
+        String json = """
+            {
+              "header": {"uuid": "%s", "name": "%s", "version": [1, 0, 0]},
+              "modules": [{"type": "script", "entry": "scripts/main.js", "uuid": "%s", "version": [1, 0, 0]}],
+              "dependencies": %s
+            }
+            """.formatted(uuid, name, uuid, dependencies);
+
+        return new BedrockPack(Path.of(name), manifest(json), name + ".mcaddon");
+    }
+
     private static List<String> names(PackSet set) {
         return set.packs().stream().map(BedrockPack::displayName).toList();
     }
