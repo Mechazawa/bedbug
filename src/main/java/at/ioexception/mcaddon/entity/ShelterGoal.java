@@ -73,7 +73,7 @@ final class ShelterGoal extends Goal {
             if (spot == null) spot = DefaultRandomPos.getPos(mob, across, upDown);
             if (spot == null || underSky(mob.level(), BlockPos.containing(spot)) != outdoors) continue;
 
-            // Accuracy 0 ends the walk on the spot itself; moveTo's own accuracy of 1 may end a block short, still under the roof.
+            // Accuracy 0 ends the walk on the spot; moveTo's accuracy of 1 may end a block short, under the roof.
             Path path = mob.getNavigation().createPath(BlockPos.containing(spot), 0);
             if (path != null && path.canReach()) {
                 heading = spot;
