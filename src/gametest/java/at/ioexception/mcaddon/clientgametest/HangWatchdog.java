@@ -108,7 +108,8 @@ public final class HangWatchdog implements ClientModInitializer {
             .append(thread.isDaemon() ? " daemon" : "").append(' ').append(thread.getThreadState());
         Optional.ofNullable(thread.getLockInfo()).ifPresent(lock -> text.append(" on ").append(lock));
         Optional.ofNullable(thread.getLockOwnerName())
-            .ifPresent(owner -> text.append(" owned by \"").append(owner).append("\" #").append(thread.getLockOwnerId()));
+            .ifPresent(owner -> text.append(" owned by \"").append(owner).append("\" #")
+                .append(thread.getLockOwnerId()));
         text.append('\n');
         StackTraceElement[] frames = thread.getStackTrace();
         for (int depth = 0; depth < frames.length; depth++) {
