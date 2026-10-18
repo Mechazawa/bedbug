@@ -1024,6 +1024,30 @@ public final class GoalGameTests {
         });
     }
 
+    /** `minecraft:behavior.follow_target_captain` walks after the captain and stays `follow_distance` off. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS * 2)
+    public void aRaiderKeepsItsFollowDistanceFromTheCaptain(GameTestHelper helper) {
+        AddonEntity raider = withGroup(helper, "tp:brute_fall_in", new BlockPos(0, 0, 4));
+        AddonEntity captain = heldInPlace(helper, "tp:brute_lead", new BlockPos(FOLLOWED, 0, 4));
+        if (raider == null || captain == null) {
+            helper.succeed();
+            return;
+        }
+
+        double[] nearest = {Double.MAX_VALUE};
+        helper.onEachTick(() -> nearest[0] = Math.min(nearest[0], raider.distanceTo(captain)));
+        helper.runAfterDelay(GOAL_TICKS * 2 - 10, () -> {
+            helper.assertTrue(raider.distanceTo(captain) < FOLLOWED - 2,
+                BRUTE + " follows its captain ten blocks off and stands " + raider.distanceTo(captain) + " from it.");
+            helper.assertTrue(nearest[0] > KEPT_FROM_CAPTAIN,
+                BRUTE + " keeps six blocks from its captain and came to " + nearest[0] + ".");
+            helper.succeed();
+        });
+    }
+
+    /** Inside the six blocks the raider keeps, and outside the three it kept whatever the pack said. */
+    private static final double KEPT_FROM_CAPTAIN = 5;
+
     private static final int FOLLOWED = 10;
     /** Inside the five blocks the brute stops at, and outside the three Java's goal stops at. */
     private static final double KEPT_OFF = 4;

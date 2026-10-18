@@ -586,6 +586,16 @@
           "y_dist": 2
         }
       },
+      "tp:brute_captained": {
+        "minecraft:behavior.follow_target_captain": {
+          "priority": 0,
+          "follow_distance": 6,
+          "within_radius": 16
+        }
+      },
+      "tp:brute_leading": {
+        "minecraft:is_illager_captain": {}
+      },
       "tp:brute_springing": {
         "minecraft:behavior.leap_at_target": {
           "priority": 0,
@@ -1034,6 +1044,20 @@
         "add": {
           "component_groups": [
             "tp:brute_deep_swimming"
+          ]
+        }
+      },
+      "tp:brute_fall_in": {
+        "add": {
+          "component_groups": [
+            "tp:brute_captained"
+          ]
+        }
+      },
+      "tp:brute_lead": {
+        "add": {
+          "component_groups": [
+            "tp:brute_leading"
           ]
         }
       },
