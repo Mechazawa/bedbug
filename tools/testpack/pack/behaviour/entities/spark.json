@@ -10,6 +10,16 @@
     "component_groups": {
       "tp:landed": {
         "minecraft:instant_despawn": {}
+      },
+      "tp:brittle": {
+        "minecraft:projectile": {
+          "destroy_on_hurt": true
+        }
+      },
+      "tp:dull": {
+        "minecraft:projectile": {
+          "stop_on_hurt": true
+        }
       }
     },
     "components": {
@@ -53,6 +63,9 @@
         "homing": false,
         "isolated_physics": false,
         "ignored_entities": ["tp:spark"],
+        "reflect_on_hurt": true,
+        "reflect_immunity": 0.1,
+        "crit_particle_on_hurt": true,
         "splash_range": 2,
         "on_hit": {
           "impact_damage": {
@@ -94,6 +107,16 @@
       }
     },
     "events": {
+      "tp:make_brittle": {
+        "add": {
+          "component_groups": ["tp:brittle"]
+        }
+      },
+      "tp:make_dull": {
+        "add": {
+          "component_groups": ["tp:dull"]
+        }
+      },
       "tp:landed": {
         "add": {
           "component_groups": ["tp:landed"]

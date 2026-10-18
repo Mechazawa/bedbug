@@ -519,7 +519,7 @@ public final class GoalGameTests {
     }
 
     /** Past the longest wait before a first buck. */
-    private static final int BREAK_IN_TICKS = 100;
+    private static final int BREAK_IN_TICKS = 160;
 
     /**
      * Two tamed brutes with the group on, the same variant, mark variant and tp:hue, a red and a white

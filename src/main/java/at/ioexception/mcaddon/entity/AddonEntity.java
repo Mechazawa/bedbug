@@ -5453,8 +5453,9 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
-     * The cold hurting five times over, which `minecraft:freezing_vulnerable` asks for, and a
-     * projectile the entity blinks away from not landing at all.
+     * The cold hurting five times over, which `minecraft:freezing_vulnerable` asks for, a projectile
+     * the entity blinks away from not landing at all, and a blow a projectile in flight answers by
+     * turning, stopping or going rather than by being hurt.
      *
      * Java multiplies a freezing blow by five for the mobs its `freeze_hurts_extra_types` tag names,
      * the blaze, the magma cube and the strider, which are the three Mojang writes the component on.
@@ -5463,12 +5464,13 @@ public class AddonEntity extends PathfinderMob
     @Override
     public boolean hurtServer(net.minecraft.server.level.ServerLevel level,
         net.minecraft.world.damagesource.DamageSource source, float amount) {
-        return !dodged(source) && super.hurtServer(level, source, coldScaled(source, amount));
+        if (dodged(source) || flight != null && flight.struck(source)) return false;
+        return super.hurtServer(level, source, coldScaled(source, amount));
     }
     //?} else {
     /*@Override
     public boolean hurt(net.minecraft.world.damagesource.DamageSource source, float amount) {
-        if (!level().isClientSide() && dodged(source)) return false;
+        if (!level().isClientSide() && (dodged(source) || flight != null && flight.struck(source))) return false;
         return super.hurt(source, coldScaled(source, amount));
     }
     *///?}

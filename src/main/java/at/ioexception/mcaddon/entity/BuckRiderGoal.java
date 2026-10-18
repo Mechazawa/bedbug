@@ -47,6 +47,12 @@ public final class BuckRiderGoal extends Goal {
         return canUse();
     }
 
+    /** The wait before a buck is counted in ticks, so every tick has to reach it. */
+    @Override
+    public boolean requiresUpdateEveryTick() {
+        return true;
+    }
+
     @Override
     public void start() {
         untilBuck = Goals.between(mob.getRandom(), BUCK_LOW, BUCK_HIGH);
