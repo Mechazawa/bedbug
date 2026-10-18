@@ -333,43 +333,92 @@ public final class Platform {
     }
 
     /**
-     * Java's `place jigsaw`, with the liquid settings Java's command leaves at the default. False when
-     * nothing fits at that position.
+     * Java's `place jigsaw` with the settings Bedrock's command adds. False when nothing fits at that
+     * position.
      */
     public static boolean placeJigsaw(ServerLevel level,
         net.minecraft.core.Holder<net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool> pool,
-        Identifier target, int depth, net.minecraft.core.BlockPos at, boolean keepJigsaws, boolean waterlog) {
-        //? if >=1.21 {
+        Identifier target, int depth, net.minecraft.core.BlockPos at, JigsawSettings settings) {
+        return place(level, pool, Optional.of(target), depth, at, false, Optional.empty(), null, settings);
+    }
+
+    /**
+     * A jigsaw structure placed from its own definition with the settings Bedrock's `place structure`
+     * adds. Its start height is sampled at the position's column unless `ignoreStartHeight` puts the
+     * start at the position's own height, which also drops the heightmap projection. False when
+     * nothing fits there.
+     */
+    public static boolean placeStructure(ServerLevel level,
+        net.minecraft.world.level.levelgen.structure.structures.JigsawStructure structure,
+        net.minecraft.core.BlockPos at, boolean ignoreStartHeight, JigsawSettings settings) {
+        var fields = (at.ioexception.mcaddon.mixin.JigsawStructureAccessor) (Object) structure;
+        var generator = level.getChunkSource().getGenerator();
+        var start = ignoreStartHeight ? at : at.atY(fields.mcaddon$startHeight().sample(level.getRandom(),
+            new net.minecraft.world.level.levelgen.WorldGenerationContext(generator, level)));
+        return place(level, fields.mcaddon$startPool(), fields.mcaddon$startJigsawName(), fields.mcaddon$maxDepth(),
+            start, fields.mcaddon$useExpansionHack(),
+            ignoreStartHeight ? Optional.empty() : fields.mcaddon$projectStartToHeightmap(), structure, settings);
+    }
+
+    /**
+     * Builds the pieces of a jigsaw and places them, counting the entities the pieces bring along as
+     * new when they were not standing in the area beforehand. A null `from` is a pool placed on its
+     * own, which has no structure definition to take the limits from.
+     */
+    private static boolean place(ServerLevel level,
+        net.minecraft.core.Holder<net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool> pool,
+        Optional<Identifier> target, int depth, net.minecraft.core.BlockPos start, boolean expansionHack,
+        Optional<net.minecraft.world.level.levelgen.Heightmap.Types> project,
+        net.minecraft.world.level.levelgen.structure.structures.JigsawStructure from, JigsawSettings settings) {
         net.minecraft.world.level.chunk.ChunkGenerator generator = level.getChunkSource().getGenerator();
         net.minecraft.world.level.levelgen.structure.Structure.GenerationContext context =
             new net.minecraft.world.level.levelgen.structure.Structure.GenerationContext(level.registryAccess(),
                 generator, generator.getBiomeSource(), level.getChunkSource().randomState(),
                 level.getStructureManager(), level.getSeed(),
-                new net.minecraft.world.level.ChunkPos(at.getX() >> 4, at.getZ() >> 4), level, biome -> true);
-        net.minecraft.world.level.levelgen.structure.templatesystem.LiquidSettings liquid = waterlog
+                new net.minecraft.world.level.ChunkPos(start.getX() >> 4, start.getZ() >> 4), level, biome -> true);
+        var fields = (at.ioexception.mcaddon.mixin.JigsawStructureAccessor) (Object) from;
+        Optional<net.minecraft.world.level.levelgen.structure.Structure.GenerationStub> stub;
+        //? if >=1.21 {
+        var liquid = settings.waterlog()
             ? net.minecraft.world.level.levelgen.structure.templatesystem.LiquidSettings.APPLY_WATERLOGGING
             : net.minecraft.world.level.levelgen.structure.templatesystem.LiquidSettings.IGNORE_WATERLOGGING;
         //? if >=26 {
-        var maxDistance = new net.minecraft.world.level.levelgen.structure.structures.JigsawStructure.MaxDistance(128);
+        var maxDistance = from == null
+            ? new net.minecraft.world.level.levelgen.structure.structures.JigsawStructure.MaxDistance(128)
+            : fields.mcaddon$maxDistanceFromCenter();
         //?} else {
-        /*int maxDistance = 128;
+        /*int maxDistance = from == null ? 128 : fields.mcaddon$maxDistanceFromCenter();
         *///?}
-        var stub = net.minecraft.world.level.levelgen.structure.pools.JigsawPlacement.addPieces(context, pool,
-            java.util.Optional.of(target), depth, at, false, java.util.Optional.empty(), maxDistance,
-            net.minecraft.world.level.levelgen.structure.pools.alias.PoolAliasLookup.EMPTY,
-            net.minecraft.world.level.levelgen.structure.structures.JigsawStructure.DEFAULT_DIMENSION_PADDING, liquid);
+        var aliases = from == null
+            ? net.minecraft.world.level.levelgen.structure.pools.alias.PoolAliasLookup.EMPTY
+            : net.minecraft.world.level.levelgen.structure.pools.alias.PoolAliasLookup.create(
+                fields.mcaddon$poolAliases(), start, level.getSeed());
+        var padding = from == null
+            ? net.minecraft.world.level.levelgen.structure.structures.JigsawStructure.DEFAULT_DIMENSION_PADDING
+            : fields.mcaddon$dimensionPadding();
+        stub = net.minecraft.world.level.levelgen.structure.pools.JigsawPlacement.addPieces(context, pool, target,
+            depth, start, expansionHack, project, maxDistance, aliases, padding, liquid);
+        //?} else {
+        /*int maxDistance = from == null ? 128 : fields.mcaddon$maxDistanceFromCenter();
+        stub = net.minecraft.world.level.levelgen.structure.pools.JigsawPlacement.addPieces(context, pool, target,
+            depth, start, expansionHack, project, maxDistance);
+        *///?}
         if (stub.isEmpty()) return false;
 
-        stub.get().getPiecesBuilder().build().pieces().stream()
+        var pieces = stub.get().getPiecesBuilder().build();
+        var area = net.minecraft.world.phys.AABB.of(pieces.calculateBoundingBox());
+        java.util.Set<Entity> before = new java.util.HashSet<>(level.getEntities((Entity) null, area, entity -> true));
+        pieces.pieces().stream()
             .filter(net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece.class::isInstance)
             .map(net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece.class::cast)
             .forEach(piece -> piece.place(level, level.structureManager(), generator, level.getRandom(),
-                net.minecraft.world.level.levelgen.structure.BoundingBox.infinite(), at, keepJigsaws));
+                net.minecraft.world.level.levelgen.structure.BoundingBox.infinite(), start, settings.keepJigsaws()));
+        if (!settings.includeEntities()) {
+            level.getEntities((Entity) null, area,
+                entity -> !before.contains(entity) && !(entity instanceof net.minecraft.world.entity.player.Player))
+                .forEach(Entity::discard);
+        }
         return true;
-        //?} else {
-        /*return net.minecraft.world.level.levelgen.structure.pools.JigsawPlacement.generateJigsaw(level, pool, target,
-            depth, at, keepJigsaws);
-        *///?}
     }
 
     /** A player's own entry in the operator list, made or taken away. */

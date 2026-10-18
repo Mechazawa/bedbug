@@ -123,6 +123,7 @@ public final class BedrockCommands {
         AreaSchedules.registerCommand(dispatcher);
         FeatureRules.registerCommand(dispatcher);
         Jigsaws.registerCommand(dispatcher);
+        Structures.registerCommand(dispatcher);
         ServerAdmin.registerCommand(dispatcher);
         BedrockRules.registerCommand(dispatcher);
 

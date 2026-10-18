@@ -93,6 +93,18 @@ around fills a disk, and everything then fails at once in ways that look like an
 disk. Remove a worktree as soon as its branch is merged: `git worktree remove --force <path>`, or
 `rm -rf <worktree>/versions/*/build` to keep the checkout and drop only what a build can make again.
 
+**Run `tools/seed-worktree.sh` once in a new worktree, before its first build.** `wt add` runs it
+by itself through `.wt-post-add`; a worktree made any other way runs it by hand. It copies the
+Loom downloads and remapped companion jars (`.gradle/loom-cache/{minecraftMaven,remapped_mods,natives}`)
+from the main checkout with reflinks where the filesystem has them, which takes a first
+`./gradlew assemble` from about 65 seconds to about 16. It is safe on a worktree that already holds a
+full copy of the main checkout, and it deletes what such a copy gets wrong: `.gradle/loom-cache/projects`
+and `versions/*/build/loom-cache` hold absolute paths to the checkout that made them, and
+`versions/*/build/{run,reports}` and `versions/*/run/{saves,world,.mcaddon,logs,crash-reports}` are
+worlds and caches of that checkout. Loom writes the first two again on the next build. Build outputs
+are not copied, since the Gradle build cache restores them and execution history is keyed by absolute
+path. Run it while the main checkout is not building.
+
 These are the checks it runs, and what each one catches:
 
 - **`./gradlew build`** compiles all four versions and runs every test on each of them: the unit
@@ -749,7 +761,16 @@ These are the checks it runs, and what each one catches:
   `mcaddon:gametest/fence`, into water with its jigsaw kept and its fence dry, and again with both
   words the other way. That pool and its template ship in `src/main/resources/data/mcaddon/`, the
   template under both `structure/` and `structures/` because 1.20.1 reads the plural; the template
-  is a 248 byte NBT file written by hand, a jigsaw named `mcaddon:start` beside an oak fence. `save query`, `setmaxplayers`, `packstack` and `permission` are typed by the
+  is a 248 byte NBT file written by hand, a jigsaw named `mcaddon:start` beside an oak fence.
+  `place structure` is tested against `mcaddon:gametest/post`, a jigsaw structure (start height 150)
+  over a pool of one piece, a template like the fence plus an armor stand. One test per word
+  (`ignoreStartHeight`, `keepJigsaws`, `includeEntities`, the liquid setting) reads the blocks and the
+  armor stand back, and one asks that an igloo refuses the words. `Platform.placeStructure` runs the
+  structure's own pool through `JigsawPlacement.addPieces` with the fields it reads through
+  `JigsawStructureAccessor`, because `Structure.generate` takes no override. `includeEntities` false
+  discards the entities that were not in the area before the pieces were placed, since a piece always
+  spawns its template's entities. `BedrockTree.MERGED_FORMS` merges Java's short `place structure`
+  lines into the node `Structures` registers. `save query`, `setmaxplayers`, `packstack` and `permission` are typed by the
   console after `/bedrock` and read back through what the console is told, because a line run the
   way a pack runs one has a function's authority and each of these asks for more. `/gametest
   create` lays out the test pack's `tp:hut_stands`, `pos` finds its area, `runthis` runs it there,

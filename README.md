@@ -371,10 +371,17 @@ Against a server without this mod a client plays with its own add-ons.
   script's `Dimension.placeFeatureRule`, which does the same. The rule's biome filter decides only
   where the world generates it.
 - `/bedrock place jigsaw` with the three words Bedrock writes after the position: whether the
-  jigsaw blocks stay, whether the entities come along, which Java's jigsaws always do, and whether a
-  block placed into water is waterlogged. 1.20.1 waterlogs every block a jigsaw places, so
-  `ignore_waterlogging` is reported there. `place structure` with any of Bedrock's settings is
-  reported, because Java builds a structure the way its own definition says.
+  jigsaw blocks stay, whether the entities come along, and whether a block placed into water is
+  waterlogged. A word the line leaves out takes Bedrock's value (blocks gone, entities left out,
+  waterlogged). 1.20.1 waterlogs every block a jigsaw places, so `ignore_waterlogging` is reported
+  there.
+- `/bedrock place structure` with the four words Bedrock writes after the position:
+  `ignoreStartHeight`, `keepJigsaws`, `includeEntities` and the liquid setting. They apply to a jigsaw
+  structure, which is the only kind Bedrock names there. The placement starts at the structure's own
+  start height unless `ignoreStartHeight` puts it at the height of the position, and the other three
+  words work as they do for `place jigsaw`. The column is the position's own, where Java's short form
+  snaps to the chunk. Any other structure refuses the words with a message when the command runs,
+  and Java's own `place structure <structure> [pos]` places it as before.
 - The commands that run the server rather than the world. `save query` writes out what `save hold`
   held back and lists every file of the world with its length; `setmaxplayers` sets the limit a
   login is checked against for this session only; `packstack server` lists Java's data packs in the
@@ -859,8 +866,8 @@ the camera forms that follow a spline, hang the camera off an entity, turn it to
 it from one, which would each be a camera this mod draws itself; the paper doll, the input hints
 and the touch controls `hud` names, which a Java client draws none of; a `permission` visitor, a
 level below Java's member; `changesetting allow-cheats`, because a Java server always lets an
-operator run commands; a jigsaw placed without its entities; and `place structure` with any of
-Bedrock's settings. The line does not run and the form is named, rather than being handed to a
+operator run commands; and the liquid setting `ignore_waterlogging` on 1.20.1, which waterlogs
+every block a jigsaw or structure places. The line does not run and the form is named, rather than being handed to a
 parser that would refuse it over the wrong word.
 
 Everything else is translated or registered. `effect`, `xp`, `playsound`, `stopsound`,

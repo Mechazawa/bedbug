@@ -10,6 +10,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -180,10 +181,6 @@ class FunctionsTest {
      */
     @ParameterizedTest
     @CsvSource({
-        "'place structure minecraft:trail_ruins ~ ~ ~ false false false ignore_waterlogging', "
-            + "'command place structure with a placement Java builds for itself'",
-        "'place jigsaw minecraft:village/plains/town_centers minecraft:bottom 7 ~ ~ ~ false false', "
-            + "'command place jigsaw leaving out its entities'",
         "'camera @s set minecraft:follow_orbit', 'command camera minecraft:follow_orbit, which Java has no form of'",
         "'permission set @p visitor', 'command permission visitor, which Java has no form of'",
     })
@@ -340,12 +337,23 @@ class FunctionsTest {
         assertEquals("gamerule showCoordinates true", only("gamerule showcoordinates TRUE"));
     }
 
-    /** Bedrock's words after a jigsaw's position reach the `place jigsaw` built here as written. */
-    @Test
-    void passesAJigsawsSettingsToTheCommandBuiltHere() throws IOException {
-        String line = "place jigsaw minecraft:village/plains/town_centers minecraft:bottom 7 ~ ~ ~ true true "
-            + "apply_waterlogging";
+    /** Bedrock's words after a jigsaw's or a structure's position reach the commands built here as written. */
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "place jigsaw minecraft:village/plains/town_centers minecraft:bottom 7 ~ ~ ~ true true apply_waterlogging",
+        "place jigsaw minecraft:village/plains/town_centers minecraft:bottom 7 ~ ~ ~ false false",
+        "place structure minecraft:trail_ruins ~ ~ ~ true",
+        "place structure minecraft:trail_ruins ~ ~ ~ false false false ignore_waterlogging",
+    })
+    void passesPlacementSettingsToTheCommandsBuiltHere(String line) throws IOException {
         assertEquals(line, only(line));
+    }
+
+    /** A word past the last one Bedrock writes for `place structure` is not one Java can be handed. */
+    @Test
+    void dropsAWordPastTheLastOneOfPlaceStructure() throws IOException {
+        assertEquals(List.of(), translate("place structure minecraft:trail_ruins ~ ~ ~ true true true "
+            + "apply_waterlogging extra"));
     }
 
     /** Bedrock caps a function's commands with a rule of its own; Java caps them with its chain rule. */
