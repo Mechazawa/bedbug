@@ -42,6 +42,9 @@ public final class RegistryEdits {
             .filter(registry -> ((MappedRegistryAccessor) registry).mcaddon$frozen())
             .map(Opened::open)
             .toList();
+        //? if <26 {
+        /*int states = net.minecraft.world.level.block.Block.BLOCK_STATE_REGISTRY.size();
+        *///?}
         RuntimeException failure = null;
         try {
             registration.run();
@@ -60,7 +63,7 @@ public final class RegistryEdits {
         //? if <26 {
         /*// 26 has Fabric initialise every state as it is added; before that the client's tag step
         // does it for every state at once, so a block added here is ready before it is used.
-        if (opened.stream().anyMatch(registry -> registry.registry() == BuiltInRegistries.BLOCK)) {
+        if (net.minecraft.world.level.block.Block.BLOCK_STATE_REGISTRY.size() != states) {
             net.minecraft.world.level.block.Blocks.rebuildCache();
         }
         *///?}
@@ -68,12 +71,12 @@ public final class RegistryEdits {
     }
 
     /** One registry opened for writing, and what closing it again has to put back. */
-    private record Opened(Registry<?> registry, MappedRegistryAccessor fields) {
+    private record Opened(Registry<?> registry, MappedRegistryAccessor fields, int size) {
         static Opened open(Registry<?> registry) {
             MappedRegistryAccessor fields = (MappedRegistryAccessor) registry;
             fields.mcaddon$setFrozen(false);
             if (INTRUSIVE.contains(registry)) fields.mcaddon$setUnregisteredHolders(new IdentityHashMap<>());
-            return new Opened(registry, fields);
+            return new Opened(registry, fields, registry.size());
         }
 
         /** Freezes the registry again, and returns what refuses to be frozen, or null. */
@@ -85,9 +88,12 @@ public final class RegistryEdits {
             // A component lookup caches what it found per component type, and freezing is what
             // builds a new one; a holder added afterwards starts with no tags bound at all, where
             // every other holder was bound at the freeze, until the next tag step binds them again.
-            fields.mcaddon$setComponentLookup(
-                new net.minecraft.core.component.DataComponentLookup<>(fields.mcaddon$byId()));
-            fields.mcaddon$refreshTagsInHolders();
+            // A registry that did not grow keeps both, because other threads may be reading them.
+            if (registry.size() != size) {
+                fields.mcaddon$setComponentLookup(
+                    new net.minecraft.core.component.DataComponentLookup<>(fields.mcaddon$byId()));
+                fields.mcaddon$refreshTagsInHolders();
+            }
             //?}
             return unregistered == null || unregistered.isEmpty() ? null
                 : new IllegalStateException(registry.key() + " was left holding values nobody registered: "

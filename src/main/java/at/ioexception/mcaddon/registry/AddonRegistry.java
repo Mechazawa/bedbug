@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.registry;
 
+import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.PackSet;
 import at.ioexception.mcaddon.resource.AddonSet;
 import net.minecraft.world.entity.EntityType;
@@ -8,11 +9,13 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -26,6 +29,9 @@ import java.util.stream.Stream;
 public final class AddonRegistry {
     /** The shape every object was built with, by its kind and identifier. */
     private static final Map<String, Shape> BUILT = new HashMap<>();
+
+    /** The packs of every archive registered in this process, by the archive's digest. */
+    private static final Map<String, List<BedrockPack>> ARCHIVES = new LinkedHashMap<>();
 
     private AddonRegistry() {
     }
@@ -63,7 +69,22 @@ public final class AddonRegistry {
     }
 
     /** Returns the items `set` declares, whether this call registered them or an earlier one did. */
+    /**
+     * The packs of every archive this process has registered, by digest, in the order they were
+     * registered. A server has to be able to hand every one of them out, because Fabric's registry
+     * sync names every entry they added.
+     */
+    public static synchronized Map<String, List<BedrockPack>> archives() {
+        return Map.copyOf(ARCHIVES);
+    }
+
     public static Set<Item> ensureRegistered(AddonSet set) {
+        Map<String, List<BedrockPack>> byArchive = set.packs().packs().stream()
+            .filter(pack -> pack.archive() != null)
+            .collect(Collectors.groupingBy(BedrockPack::archive, LinkedHashMap::new, Collectors.toList()));
+        synchronized (AddonRegistry.class) {
+            byArchive.forEach(ARCHIVES::putIfAbsent);
+        }
         Set<EntityType<?>> types = new LinkedHashSet<>();
         Set<Item> items = new LinkedHashSet<>();
         RegistryEdits.adding(() -> {

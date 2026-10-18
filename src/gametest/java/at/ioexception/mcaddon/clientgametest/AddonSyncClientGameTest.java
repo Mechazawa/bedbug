@@ -5,6 +5,7 @@ import at.ioexception.mcaddon.client.render.AddonClientAssets;
 import at.ioexception.mcaddon.client.render.AddonEntityRenderer;
 import at.ioexception.mcaddon.pack.McAddonPaths;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.ActiveAddons;
 import at.ioexception.mcaddon.sync.AddonManifest;
 import at.ioexception.mcaddon.sync.ServedArchives;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -30,8 +31,9 @@ import java.nio.file.attribute.FileTime;
  * add-ons when it leaves.
  *
  * The server and the client share one process and one `addons/`, so the add-on handed over is one
- * the server serves from `addons-served/` without ever having loaded it: before the join nothing
- * of it is registered anywhere. After the join it has to be in the client's registries, drawn,
+ * the server serves from `addons-served/` without ever having loaded it: only a client joining a
+ * dedicated server registers it, which every other test joining one does too, so this test does not
+ * depend on running first. After the join it has to be in the client's registries, drawn,
  * listed and offered as a pack; after the leave its entries stay registered and nothing offers it;
  * and a second join finds it in the cache and downloads nothing.
  */
@@ -41,8 +43,9 @@ public final class AddonSyncClientGameTest implements FabricClientGameTest {
 
     @Override
     public void runTest(ClientGameTestContext context) {
-        Assert.that(!BuiltInRegistries.ITEM.containsKey(Platform.id("sv", "pellet")),
-            "sv:pellet was registered before any client joined, so the join would prove nothing.");
+        Assert.that(ActiveAddons.installed().packs().packs().stream()
+                .noneMatch(pack -> pack.displayName().equals("Served Add-On")),
+            "The served add-on was installed at startup, so the join would prove nothing.");
 
         try (TestDedicatedServerContext server = Worlds.server(context)) {
             Path archive = served(server);

@@ -32,6 +32,7 @@ public final class McAddonClient implements ClientModInitializer {
         follow();
         ActiveAddons.onActivate(set -> follow());
         AddonSession.register();
+        at.ioexception.mcaddon.pack.ReceivedArchives.inCache().prune();
 
         Channels.receiveProperties((entityId, json) -> {
             EntityProperties.accept(entityId, json);

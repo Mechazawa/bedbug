@@ -5,7 +5,9 @@ import at.ioexception.mcaddon.pack.Archives;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.McAddonPaths;
 import at.ioexception.mcaddon.pack.PackDiscovery;
+import at.ioexception.mcaddon.pack.ReceivedArchives;
 import at.ioexception.mcaddon.registry.ActiveAddons;
+import at.ioexception.mcaddon.registry.AddonRegistry;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -42,6 +44,15 @@ public final class ServedArchives {
         return manifest;
     }
 
+    /**
+     * Forgets the manifest, so the next client to need one is handed what is registered then. A
+     * world opened again after its host visited another server has more registered than before.
+     */
+    public static synchronized void forget() {
+        manifest = null;
+        FILES.clear();
+    }
+
     /** The copy of an archive the manifest lists, or null for one it does not. */
     public static synchronized Path file(String sha256) {
         return FILES.get(sha256);
@@ -64,6 +75,7 @@ public final class ServedArchives {
             }
         });
         entries.addAll(development(served));
+        entries.addAll(dormant(entries));
         McAddon.LOGGER.info("Serving {} add-ons to clients that join.", entries.size());
         return new AddonManifest(McAddon.VERSION, List.copyOf(entries));
     }
@@ -97,6 +109,26 @@ public final class ServedArchives {
             .map(pack -> new AddonManifest.PackId(pack.manifest().uuid().toString(),
                 pack.manifest().version().toString(), pack.displayName()))
             .toList());
+    }
+
+    /**
+     * The archives registered in this process that nothing above serves, which a host
+     * holds from servers it visited before opening its world to LAN. A guest is sent ids for their
+     * entries by Fabric's registry sync, so it is handed them too, to register and keep dormant.
+     * They sit in the received cache already, under their digest, so they are served from there.
+     */
+    private static List<AddonManifest.Entry> dormant(List<AddonManifest.Entry> served) {
+        List<AddonManifest.Entry> entries = new ArrayList<>();
+        ReceivedArchives received = ReceivedArchives.inCache();
+        AddonRegistry.archives().forEach((sha256, packs) -> {
+            if (served.stream().anyMatch(entry -> entry.sha256().equals(sha256)) || !received.has(sha256)) return;
+            try {
+                entries.add(entry(received.archive(sha256), false, packs));
+            } catch (IOException failure) {
+                McAddon.LOGGER.error("Could not hand out the dormant add-on {}.", sha256, failure);
+            }
+        });
+        return entries;
     }
 
     private static List<AddonManifest.Entry> development(Path served) {

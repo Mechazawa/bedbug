@@ -37,6 +37,7 @@
     "MappedRegistryAccessor",
     "CreativeModeTabsAccessor",
     "ServerCommonPacketListenerAccessor",
+    "ServerLoginTimerMixin",
     "FoodDataMixin",
     "BlockMinedExhaustionMixin",
     "PlayerAttackExhaustionMixin",

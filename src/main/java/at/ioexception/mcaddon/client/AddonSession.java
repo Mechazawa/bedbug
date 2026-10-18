@@ -40,6 +40,10 @@ public final class AddonSession {
     /** The connection a transfer is under way on, and the transfer, or null between them. */
     private static volatile Visit current;
     private static volatile Incoming incoming;
+    private static volatile boolean leaving;
+
+    /** The answer to a login's question whether the add-ons are active, which only 1.20.1 asks. */
+    private static volatile CompletableFuture<Transfer.Ready> readied = new CompletableFuture<>();
 
     /** Whether the active set is other than the installed one, which is what a leave puts back. */
     private static boolean visiting;
@@ -100,19 +104,77 @@ public final class AddonSession {
             });
         net.fabricmc.fabric.api.client.networking.v1.ClientConfigurationConnectionEvents.DISCONNECT
             .register((handler, client) -> ended());
-        //?}
-        // Raised on the network thread when a remote connection drops, so the leave is handed over.
+        //?} else {
+        /*// Each login query is answered: the manifest with the archives wanted, a piece as it arrives,
+        // a heartbeat at once, and the question asked at the start once the add-ons are active.
+        net.fabricmc.fabric.api.client.networking.v1.ClientLoginNetworking.registerGlobalReceiver(
+            at.ioexception.mcaddon.network.LoginChannels.MANIFEST, (client, handler, buffer, listeners) -> {
+                CompletableFuture<net.minecraft.network.FriendlyByteBuf> answer = new CompletableFuture<>();
+                CompletableFuture<Transfer.Ready> ready = new CompletableFuture<>();
+                Visit visit = new Visit(ready::complete);
+                current = visit;
+                readied = ready;
+                incoming = offered(at.ioexception.mcaddon.network.LoginChannels.manifest(buffer), visit,
+                    new Incoming.Link() {
+                        @Override
+                        public void want(List<Transfer.Wanted> wanted) {
+                            answer.complete(at.ioexception.mcaddon.network.LoginChannels.wanted(wanted));
+                        }
+
+                        @Override
+                        public void acknowledge(Transfer.Wanted held) {
+                        }
+
+                        @Override
+                        public void ready(Transfer.Ready refused) {
+                            answer.complete(at.ioexception.mcaddon.network.LoginChannels.refused(refused.reason()));
+                            visit.ready(refused.ok(), refused.reason());
+                        }
+                    });
+                answer.complete(at.ioexception.mcaddon.network.LoginChannels.wanted(List.of()));
+                return answer;
+            });
+        net.fabricmc.fabric.api.client.networking.v1.ClientLoginNetworking.registerGlobalReceiver(
+            at.ioexception.mcaddon.network.LoginChannels.PIECE, (client, handler, buffer, listeners) -> {
+                Incoming receiving = incoming;
+                if (receiving != null) receiving.accept(at.ioexception.mcaddon.network.LoginChannels.piece(buffer));
+                return CompletableFuture.completedFuture(at.ioexception.mcaddon.network.LoginChannels.empty());
+            });
+        net.fabricmc.fabric.api.client.networking.v1.ClientLoginNetworking.registerGlobalReceiver(
+            at.ioexception.mcaddon.network.LoginChannels.READY, (client, handler, buffer, listeners) ->
+                readied.thenApply(at.ioexception.mcaddon.network.LoginChannels::ready));
+        net.fabricmc.fabric.api.client.networking.v1.ClientLoginNetworking.registerGlobalReceiver(
+            at.ioexception.mcaddon.network.LoginChannels.HEARTBEAT, (client, handler, buffer, listeners) ->
+                CompletableFuture.completedFuture(at.ioexception.mcaddon.network.LoginChannels.empty()));
+        net.fabricmc.fabric.api.client.networking.v1.ClientLoginConnectionEvents.DISCONNECT
+            .register((handler, client) -> ended());
+        *///?}
         net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.DISCONNECT
             .register((handler, client) -> ended());
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK
+            .register(client -> leaveIfEnded());
     }
 
-    /** The connection a transfer belonged to has ended, in whatever phase it was. */
+    /**
+     * The connection a transfer belonged to has ended, in whatever phase it was.
+     *
+     * This is raised on the network thread when a remote connection drops, and a task queued for the
+     * client thread from there can be dropped with the rest of the connection's tasks as the client
+     * disconnects, so the leave is noted here and taken by the client's own tick.
+     */
     private static void ended() {
         Visit visit = current;
         if (visit != null) visit.close();
         current = null;
         incoming = null;
-        Platform.schedule(AddonSession::leave);
+        leaving = true;
+    }
+
+    /** Leaves once for every connection that ended, before anything that comes after it. */
+    private static void leaveIfEnded() {
+        if (!leaving) return;
+        leaving = false;
+        leave();
     }
 
     /**
@@ -145,6 +207,7 @@ public final class AddonSession {
     }
 
     private static void enter(AddonManifest manifest, Visit visit) {
+        leaveIfEnded();
         settled = settled.thenCompose(ignored -> activate(manifest, visit)).exceptionally(failure -> {
             visit.ready(false, "The server's add-ons could not be loaded: " + failure.getMessage());
             return failed(failure);

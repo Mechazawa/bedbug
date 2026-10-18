@@ -79,6 +79,10 @@ public final class McAddon implements ModInitializer {
         Channels.register();
         at.ioexception.mcaddon.network.SyncChannels.register();
         at.ioexception.mcaddon.server.AddonSyncTask.register();
+        at.ioexception.mcaddon.server.AddonSyncLogin.register();
+        // A world opened again may have more registered behind it than the last one did.
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STARTING.register(
+            server -> at.ioexception.mcaddon.sync.ServedArchives.forget());
         ServerHooks.register();
         at.ioexception.mcaddon.structure.PackStructures.register();
     }

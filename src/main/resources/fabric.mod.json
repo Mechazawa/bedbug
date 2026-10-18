@@ -30,7 +30,8 @@
       "at.ioexception.mcaddon.gametest.ScriptGameTests",
       "at.ioexception.mcaddon.gametest.RegistryGameTests",
       "at.ioexception.mcaddon.gametest.ActiveAddonsGameTests",
-      "at.ioexception.mcaddon.gametest.ShapeGameTests"
+      "at.ioexception.mcaddon.gametest.ShapeGameTests",
+      "at.ioexception.mcaddon.gametest.ServedArchivesGameTests"
     ]
   },
   "mixins": [

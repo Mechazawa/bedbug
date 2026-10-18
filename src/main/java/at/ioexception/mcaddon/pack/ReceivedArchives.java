@@ -100,7 +100,8 @@ public record ReceivedArchives(Path directory) {
         }
     }
 
-    private Path archive(String sha256) {
+    /** Where a held archive is kept. */
+    public Path archive(String sha256) {
         return directory.resolve(sha256 + ARCHIVE);
     }
 
