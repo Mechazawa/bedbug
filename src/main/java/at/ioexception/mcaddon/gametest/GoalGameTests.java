@@ -39,6 +39,7 @@ public final class GoalGameTests {
 
     /** How long a test waiting on a goal may run, with room for Java's second between goal checks. */
     private static final int GOAL_TICKS = 120;
+    private static final int GRAZE_BY = 16;
 
     /**
      * A melee blow waits out the `cooldown_time` its pack states, in seconds, before the next.
@@ -396,6 +397,27 @@ public final class GoalGameTests {
             helper.assertBlockPresent(Blocks.DIRT, STAND.below());
             helper.assertTrue(Boolean.TRUE.equals(brute.value("tp:grazed")),
                 BRUTE + " ate the hay and never raised on_eat.");
+        });
+    }
+
+    /** `time_until_eat` is counted in game ticks, so half a second eats on the tenth tick and not the twentieth. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aGrazerEatsWhenItsTimeUntilEatIsUp(GameTestHelper helper) {
+        helper.setBlock(STAND.below(), Blocks.HAY_BLOCK);
+        AddonEntity brute = withGroup(helper, "tp:brute_graze");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        long[] eatenAt = {-1};
+        helper.onEachTick(() -> {
+            if (eatenAt[0] < 0 && helper.getBlockState(STAND.below()).is(Blocks.DIRT)) eatenAt[0] = helper.getTick();
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(eatenAt[0] >= 0, "The hay is not eaten yet.");
+            helper.assertTrue(eatenAt[0] <= GRAZE_BY,
+                BRUTE + " ate its hay on tick " + eatenAt[0] + " with a time_until_eat of ten ticks.");
         });
     }
 

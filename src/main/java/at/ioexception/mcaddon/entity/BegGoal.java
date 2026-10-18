@@ -60,6 +60,12 @@ public final class BegGoal extends Goal {
         mob.setValue("is_interested", true);
     }
 
+    /** The selector ticks a running goal every second tick unless it asks for each one. */
+    @Override
+    public boolean requiresUpdateEveryTick() {
+        return true;
+    }
+
     @Override
     public void tick() {
         lookingFor--;

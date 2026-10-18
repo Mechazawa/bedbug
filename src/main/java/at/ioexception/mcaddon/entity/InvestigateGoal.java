@@ -61,6 +61,12 @@ public final class InvestigateGoal extends Goal {
         looking = null;
     }
 
+    /** The selector ticks a running goal every second tick unless it asks for each one. */
+    @Override
+    public boolean requiresUpdateEveryTick() {
+        return true;
+    }
+
     @Override
     public void tick() {
         if (looking == null) return;
