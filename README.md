@@ -154,7 +154,12 @@ add-ons, or with another release of it, is told which in chat.
   it states over the ones it inherits, and is set by `/camera set` and by a script's
   `Camera.setCamera` and `Camera.setDefaultCamera`, with whatever the command or the script states
   over the preset's own. A preset with `"listener": "player"` hears from the player's head while the
-  camera is away from it.
+  camera is away from it. `/bedrock camera ... fade` covers the screen in black or the colour it
+  names, coming in, holding and going out over Bedrock's own one second, half a second and one
+  second unless it names others, and a fade asked for while one runs is combined with it the way
+  Bedrock combines them. `fov_set` and `fov_clear` move the field of view to a value or back to the
+  player's own, over the seconds and the ease they name; what sprinting or being under water does to
+  the view still happens on top.
 - `/bedrock fog`, which layers a pack's own `fogs/` settings over the one the game would draw, with a stack
   per player that `pop` and `remove` take apart the way Bedrock's do. Like the two camera commands it
   is decided on the server and sent to each player alone, so setting one player's view in a

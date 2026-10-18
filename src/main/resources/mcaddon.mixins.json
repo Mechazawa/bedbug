@@ -59,6 +59,7 @@
     "ModelFeatureRendererMixin",
     "ModelPartMixin",
     "SoundEngineMixin",
-    "MusicManagerMixin"
+    "MusicManagerMixin",
+    "FovMixin"
   ]
 }

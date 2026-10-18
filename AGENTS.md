@@ -678,6 +678,10 @@ These are the checks it runs, and what each one catches:
   stop`. A server tells a client what only it acts on through `Channels.sendInstruction`, one payload
   carrying a kind and a body, which `McAddonClient` hands to the class the kind names.
 
+  `CameraFadeClientGameTest` reads a fade back as the last rectangle the heads-up display filled
+  across the whole screen, which the test source set's `GuiGraphicsExtractorMixin` writes into
+  `Drawn` beside every line of text drawn, and a field of view off the camera a frame was drawn with.
+
   One client game test at a time: the entry point list in `src/gametest/resources/fabric.mod.json`
   is the whole selection, so cutting it down to one class runs that class alone. Put it back after.
 

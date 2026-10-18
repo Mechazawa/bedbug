@@ -55,8 +55,17 @@ public final class McAddonClient implements ClientModInitializer {
                 new net.minecraft.world.phys.Vec3(x, y, z)));
         Channels.receiveForm(AddonFormScreen::receive);
         Channels.receiveInstructions((kind, body) -> {
-            if (kind.equals(at.ioexception.mcaddon.server.Music.KIND)) PlayerMusic.accept(body);
+            switch (kind) {
+                case at.ioexception.mcaddon.server.Music.KIND -> PlayerMusic.accept(body);
+                case CameraView.FADE -> at.ioexception.mcaddon.client.render.PlayerFade.accept(body);
+                case CameraView.FOV -> at.ioexception.mcaddon.client.render.PlayerFov.accept(body,
+                    net.minecraft.client.Minecraft.getInstance().options.fov().get());
+                default -> {
+                }
+            }
         });
+        Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("bedrock_screen"),
+            at.ioexception.mcaddon.client.render.PlayerFade::draw);
 
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK
             .register(client -> {
@@ -86,6 +95,8 @@ public final class McAddonClient implements ClientModInitializer {
             PlayerHud.clear();
             PlayerInput.clear();
             PlayerMusic.clear();
+            at.ioexception.mcaddon.client.render.PlayerFade.clear();
+            at.ioexception.mcaddon.client.render.PlayerFov.clear();
             ServerAddons.clear();
             at.ioexception.mcaddon.client.render.AddonEmitters.clear();
         }));

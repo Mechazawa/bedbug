@@ -121,8 +121,7 @@ public final class Functions {
         "hud paperdoll", "hud tooltips", "hud touch_controls",
         "permission visitor",
         "place apply_waterlogging", "place ignore_waterlogging",
-        "camera attach_to_entity", "camera color", "camera detach_from_entity",
-        "camera entity_offset", "camera fade", "camera fov_clear", "camera fov_set",
+        "camera attach_to_entity", "camera detach_from_entity", "camera entity_offset",
         "camera minecraft:control_scheme_camera", "camera minecraft:fixed_boom",
         "camera minecraft:follow_orbit", "camera play_spline", "camera remove_target",
         "camera target_center_offset", "camera target_entity", "camera view_offset");
@@ -1287,7 +1286,9 @@ public final class Functions {
         if (parts.length < 2) return "camera " + rest;
 
         String form = parts[1].toLowerCase(Locale.ROOT);
-        if (form.equals("clear")) return "camera " + rest;
+        if (form.equals("clear") || form.equals("fade") || form.equals("fov_set") || form.equals("fov_clear")) {
+            return "camera " + rest;
+        }
         if (!form.equals("set")) return dropped("camera", form, unsupported);
 
         String preset = parts.length > 2 ? SPACE.split(parts[2], 2)[0].toLowerCase(Locale.ROOT) : "";

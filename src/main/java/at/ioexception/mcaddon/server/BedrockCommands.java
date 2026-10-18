@@ -10,6 +10,7 @@ import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonCameras;
 import at.ioexception.mcaddon.registry.AddonFogs;
 import at.ioexception.mcaddon.registry.AddonParticles;
+import com.google.gson.JsonObject;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -48,6 +49,13 @@ import java.util.function.BiConsumer;
 public final class BedrockCommands {
     /** Bedrock's two shakes: one moves the camera about, the other turns it. Positional is default. */
     private static final List<String> SHAKE_KINDS = List.of("positional", "rotational");
+
+    /** Bedrock limits each of a fade's three times to ten seconds. */
+    private static final float LONGEST_FADE = 10f;
+
+    /** The field of view a player may set in either edition's own options. */
+    private static final float MIN_FOV = 30f;
+    private static final float MAX_FOV = 110f;
 
     private BedrockCommands() {
     }
@@ -267,6 +275,19 @@ public final class BedrockCommands {
             .requires(source -> Platform.allowedAt(source, 1))
             .then(Commands.argument("targets", EntityArgument.players())
                 .then(Commands.literal("clear").executes(BedrockCommands::clearCamera))
+                .then(Commands.literal("fade")
+                    .executes(BedrockCommands::fade)
+                    .then(Commands.literal("time")
+                        .then(Commands.argument("fadeInSeconds", FloatArgumentType.floatArg(0, LONGEST_FADE))
+                            .then(Commands.argument("holdSeconds", FloatArgumentType.floatArg(0, LONGEST_FADE))
+                                .then(Commands.argument("fadeOutSeconds",
+                                        FloatArgumentType.floatArg(0, LONGEST_FADE))
+                                    .executes(BedrockCommands::fade)
+                                    .then(fadeColour())))))
+                    .then(fadeColour()))
+                .then(Commands.literal("fov_set")
+                    .then(fovEase(Commands.argument("fov_value", FloatArgumentType.floatArg(MIN_FOV, MAX_FOV)))))
+                .then(fovEase(Commands.literal("fov_clear")))
                 .then(Commands.literal("set")
                     // A preset carries a namespace, which Brigadier's own word argument stops at.
                     .then(Commands.argument("preset", IdentifierArgument.id())
@@ -288,6 +309,71 @@ public final class BedrockCommands {
                                     .then(cameraFacing())
                                     .then(Commands.literal("default")
                                         .executes(BedrockCommands::camera)))))))));
+    }
+
+    /** A colour for the fade, in whole numbers of red, green and blue each up to 255. */
+    private static LiteralArgumentBuilder<CommandSourceStack> fadeColour() {
+        return Commands.literal("color")
+            .then(Commands.argument("red", IntegerArgumentType.integer(0, 255))
+                .then(Commands.argument("green", IntegerArgumentType.integer(0, 255))
+                    .then(Commands.argument("blue", IntegerArgumentType.integer(0, 255))
+                        .executes(BedrockCommands::fade))));
+    }
+
+    /** What may follow a field of view or `fov_clear`: the seconds it eases over, then the ease. */
+    private static <T extends com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, T>> T fovEase(
+        T node) {
+        return node.executes(BedrockCommands::fov)
+            .then(Commands.argument("fovEaseTime", FloatArgumentType.floatArg(0))
+                .executes(BedrockCommands::fov)
+                .then(Commands.argument("fovEaseType", StringArgumentType.word())
+                    .suggests((command, builder) -> SharedSuggestionProvider.suggest(Easing.names(), builder))
+                    .executes(BedrockCommands::fov)));
+    }
+
+    /**
+     * A full-screen fade: in, held and out again over Bedrock's own one second, half a second and
+     * one second unless the line names others, in black unless it names a colour.
+     */
+    private static int fade(CommandContext<CommandSourceStack> command)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        JsonObject fade = new JsonObject();
+        fade.addProperty("in", seconds(command, "fadeInSeconds", 1f));
+        fade.addProperty("hold", seconds(command, "holdSeconds", 0.5f));
+        fade.addProperty("out", seconds(command, "fadeOutSeconds", 1f));
+        fade.addProperty("colour", given(command, "red") ? IntegerArgumentType.getInteger(command, "red") << 16
+            | IntegerArgumentType.getInteger(command, "green") << 8 | IntegerArgumentType.getInteger(command, "blue")
+            : 0);
+        return instruct(command, CameraView.FADE, fade);
+    }
+
+    /** A field of view for `fov_set`, or the player's own for `fov_clear`, eased over the seconds given. */
+    private static int fov(CommandContext<CommandSourceStack> command)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        JsonObject fov = new JsonObject();
+        if (given(command, "fov_value")) fov.addProperty("fov", FloatArgumentType.getFloat(command, "fov_value"));
+        fov.addProperty("seconds", seconds(command, "fovEaseTime", 0f));
+        if (given(command, "fovEaseType")) {
+            String name = StringArgumentType.getString(command, "fovEaseType");
+            if (Easing.tryFrom(name) == null) {
+                command.getSource().sendFailure(Component.literal("There is no ease named " + name + "."));
+                return 0;
+            }
+            fov.addProperty("easing", name);
+        }
+        return instruct(command, CameraView.FOV, fov);
+    }
+
+    private static float seconds(CommandContext<CommandSourceStack> command, String name, float otherwise) {
+        return given(command, name) ? FloatArgumentType.getFloat(command, name) : otherwise;
+    }
+
+    private static int instruct(CommandContext<CommandSourceStack> command, String kind, JsonObject body)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        Collection<ServerPlayer> targets = EntityArgument.getPlayers(command, "targets");
+        String encoded = body.toString();
+        targets.forEach(player -> Channels.sendInstruction(player, kind, encoded));
+        return targets.size();
     }
 
     /** `pos` may be followed by `rot` or by `facing`, which are the pairings Bedrock allows. */
