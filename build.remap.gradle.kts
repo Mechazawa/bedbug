@@ -47,6 +47,16 @@ stonecutter {
             "import net.minecraft.world.entity.projectile.AbstractArrow;")
         replace("import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;",
             "import net.minecraft.world.entity.vehicle.AbstractMinecart;")
+        replace("import net.minecraft.world.entity.npc.villager.Villager;",
+            "import net.minecraft.world.entity.npc.Villager;")
+        replace("import net.minecraft.world.entity.npc.villager.VillagerData;",
+            "import net.minecraft.world.entity.npc.VillagerData;")
+        replace("import net.minecraft.world.entity.npc.villager.VillagerDataHolder;",
+            "import net.minecraft.world.entity.npc.VillagerDataHolder;")
+        replace("import net.minecraft.world.entity.npc.villager.VillagerProfession;",
+            "import net.minecraft.world.entity.npc.VillagerProfession;")
+        replace("import net.minecraft.world.entity.npc.villager.VillagerType;",
+            "import net.minecraft.world.entity.npc.VillagerType;")
         // 1.21.2 renamed what a particle answers with its packed sky and block light.
         replace("getLightCoords(", "getLightColor(")
     }

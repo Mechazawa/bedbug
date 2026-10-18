@@ -40,11 +40,32 @@ public record MaterialDefinition(String name, String parent, Set<String> defines
      * and a material without the test draws every texel whatever its alpha.
      */
     public boolean dropsFaintTexels() {
-        boolean tested = defines.contains("ALPHA_TEST") || parent.contains("alphatest");
+        boolean tested = defines.contains("ALPHA_TEST") || parent.contains("alphatest")
+            || GAME_MASKED.contains(parent) && !removedDefines.contains("ALPHA_TEST");
         boolean readsAlpha = defines.contains("USE_COLOR_MASK") || defines.contains("MULTIPLICATIVE_TINT")
             || parent.contains("change_color");
         return tested && !readsAlpha && !emissive() && !blends();
     }
+
+    /**
+     * Whether the pass draws its second texture over its first, with the second's clear but coloured
+     * texels showing the first through.
+     *
+     * The game's villager outfits are drawn this way: the biome's clothes are the first texture and
+     * the profession's are the second.
+     */
+    public boolean masksSecondTexture() {
+        return defines.contains("MASKED_MULTITEXTURE")
+            || GAME_MASKED.contains(parent) && !removedDefines.contains("MASKED_MULTITEXTURE");
+    }
+
+    /**
+     * The game's own materials that define `MASKED_MULTITEXTURE`, which a pack names without a file.
+     *
+     * Each is `entity_alphatest` with the define added, so each also tests alpha.
+     */
+    private static final Set<String> GAME_MASKED =
+        Set.of("entity_multitexture_masked", "villager_v2_masked", "zombie_villager_v2_masked");
 
     /** Lit at full brightness, which is what Bedrock's emissive materials look like. */
     public boolean emissive() {

@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.client.render;
 
 import at.ioexception.mcaddon.platform.Platform;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.Identifier;
 
 import javax.imageio.ImageIO;
@@ -29,9 +30,20 @@ public final class PackTextures {
 
     /** The alpha of one texel of a texture as the game's resources hold it. */
     public static int alphaAt(Identifier texture, int x, int y) {
-        try (InputStream stream = Minecraft.getInstance().getResourceManager().getResource(texture).orElseThrow()
-            .open()) {
-            return ImageIO.read(stream).getRGB(x, y) >>> 24;
+        return colourAt(texture, x, y) >>> 24;
+    }
+
+    /**
+     * One texel of a texture as packed ARGB, read from the image the client made while the game runs
+     * where there is one and from the game's resources otherwise.
+     */
+    public static int colourAt(Identifier texture, int x, int y) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.getTextureManager().getTexture(texture) instanceof DynamicTexture made) {
+            return made.getPixels().getPixel(x, y);
+        }
+        try (InputStream stream = client.getResourceManager().getResource(texture).orElseThrow().open()) {
+            return ImageIO.read(stream).getRGB(x, y);
         } catch (IOException unreadable) {
             throw new AssertionError("The texture " + texture + " could not be read.", unreadable);
         }

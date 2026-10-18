@@ -8,6 +8,7 @@ import at.ioexception.mcaddon.bedrock.input.InputPermission;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.structure.McStructure;
+import at.ioexception.mcaddon.registry.AddonCameras;
 import at.ioexception.mcaddon.registry.AddonFogs;
 import at.ioexception.mcaddon.registry.AddonParticles;
 import at.ioexception.mcaddon.script.ScriptHost;
@@ -415,7 +416,7 @@ public final class BedrockCommands {
                     // A preset carries a namespace, which Brigadier's own word argument stops at.
                     .then(Commands.argument("preset", IdentifierArgument.id())
                         .suggests((command, builder) -> SharedSuggestionProvider.suggest(
-                            CameraView.presetNames(), builder))
+                            AddonCameras.names(), builder))
                         .executes(BedrockCommands::camera)
                         .then(cameraPosition())
                         .then(cameraRotation())
@@ -660,11 +661,6 @@ public final class BedrockCommands {
     private static int camera(CommandContext<CommandSourceStack> command)
         throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         String written = IdentifierArgument.getId(command, "preset").toString();
-        CameraView.Preset preset = CameraView.Preset.tryFrom(written);
-        if (preset == null) {
-            command.getSource().sendFailure(Component.literal(CameraView.Preset.refusal(written)));
-            return 0;
-        }
 
         Easing easing = null;
         if (given(command, "easeType")) {
@@ -674,18 +670,17 @@ public final class BedrockCommands {
                 command.getSource().sendFailure(Component.literal("There is no ease named " + name + "."));
                 return 0;
             }
-            if (!preset.stationary()) {
-                command.getSource().sendFailure(Component.literal(
-                    "Easing to non-stationary cameras is not supported, and " + preset.bedrockName()
-                        + " follows the player."));
-                return 0;
-            }
+        }
+        String refused = AddonCameras.refusal(written, easing);
+        if (refused != null) {
+            command.getSource().sendFailure(Component.literal(refused));
+            return 0;
         }
 
         Vec3 facing = given(command, "lookAtPosition") ? Vec3Argument.getVec3(command, "lookAtPosition")
             : given(command, "lookAtEntity")
                 ? EntityArgument.getEntity(command, "lookAtEntity").getBoundingBox().getCenter() : null;
-        return send(command, new CameraView(preset,
+        return send(command, AddonCameras.presetOf(written).view(
             given(command, "position") ? Vec3Argument.getVec3(command, "position") : null,
             given(command, "xRot") ? FloatArgumentType.getFloat(command, "xRot") : null,
             given(command, "yRot") ? FloatArgumentType.getFloat(command, "yRot") : null,

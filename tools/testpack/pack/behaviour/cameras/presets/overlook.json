@@ -1,0 +1,15 @@
+{
+  "format_version": "1.19.50",
+  "minecraft:camera_preset": {
+    "identifier": "tp:overlook",
+    "inherit_from": "minecraft:free",
+    "pos_x": 0.5,
+    "pos_y": 120,
+    "pos_z": 0.5,
+    "rot_x": 20,
+    "rot_y": 45,
+    "listener": "player",
+    "player_effects": true,
+    "extend_player_rendering": true
+  }
+}

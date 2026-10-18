@@ -12,7 +12,10 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContex
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.Identifier;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.function.Predicate;
+import java.util.stream.IntStream;
 
 /**
  * A render controller draws what its Molang picks, and draws something else once the entity changes.
@@ -51,6 +54,10 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
     /** Green laid over white at half, which eight bits of alpha carry as 128 parts in 255. */
     private static final int HURT_GREEN = 0xFF7FFF7F;
 
+    /** What `tp:tailor`'s base and outfit are painted in. */
+    private static final int TAILOR_BASE = 0xFF2846C8;
+    private static final int TAILOR_OUTFIT = 0xFFC82828;
+
     private static final int NO_OVERLAY = OverlayTexture.NO_OVERLAY;
     private static final int HURT_RED = OverlayTexture.pack(OverlayTexture.u(0f), OverlayTexture.v(true));
 
@@ -66,6 +73,7 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
             hurtRed(context, world);
             hurtColour(context, world);
             faintTexels(context, world);
+            maskedTextures(context, world);
         }
     }
 
@@ -273,6 +281,36 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
             PackTextures.alphaAt(ScriptClock.of(shade).passes().get(0).texture(), 0, 0));
         Assert.that(tinted == 0xFF, "tp:shade draws with entity_alphatest_change_color, which keeps a texel at an"
             + " alpha of three, and its pass bound a texture holding that texel at " + tinted + ".");
+    }
+
+    /**
+     * A material defining `MASKED_MULTITEXTURE` draws its pass's second texture over its first, the
+     * second's clear but coloured texels showing the first through.
+     *
+     * `tp:tailor` draws the same two textures in three passes: through `tp_tailored`, a material of
+     * the pack's own that defines it, through the game's `villager_v2_masked`, and through
+     * `entity_alphatest`, which defines nothing of the kind and so binds the first texture alone. The
+     * base is blue all over and the outfit's four bands of sixteen columns are an opaque red, a clear
+     * white, a clear black and a faint green, which the first two passes draw as red, blue, nothing
+     * and blue.
+     */
+    private static void maskedTextures(ClientGameTestContext context, TestSingleplayerContext world) {
+        world.getServer().runCommand("summon tp:tailor ~3 ~ ~-3");
+        AddonEntity tailor = Entities.waitForClient(context, "tp:tailor");
+
+        List<List<String>> drawn = context.computeOnClient(client -> ScriptClock.of(tailor).passes().stream()
+            .map(pass -> IntStream.of(8, 24, 40, 56)
+                .mapToObj(x -> texel(PackTextures.colourAt(pass.texture(), x, 8))).toList())
+            .toList());
+        List<String> masked = List.of(texel(TAILOR_OUTFIT), texel(TAILOR_BASE), texel(0), texel(TAILOR_BASE));
+        List<String> plain = Collections.nCopies(4, texel(TAILOR_BASE));
+        Assert.that(drawn.equals(List.of(masked, masked, plain)), "tp:tailor's three passes should draw the"
+            + " outfit's bands as " + masked + " twice and as " + plain + " once, and drew " + drawn + ".");
+    }
+
+    /** A texel as a reader compares it: its colour, or `clear` where nothing of it is drawn. */
+    private static String texel(int argb) {
+        return argb >>> 24 == 0 ? "clear" : Integer.toHexString(argb);
     }
 
     private static int dim(int channel) {

@@ -3255,8 +3255,9 @@ export class ScreenDisplay {
  * The camera one player sees through.
  *
  * Java has one camera control, the one spectator mode rides on: the view moves to another entity and
- * comes back. Bedrock's presets, splines, fades and field of view are drawn by its client off a
- * packet Java has no counterpart for, so each of those reports itself rather than doing nothing.
+ * comes back. A preset, its placement and a shake are what `/camera` and `/camerashake` send, and
+ * the player's client draws them. Splines, fades and the field of view are drawn by Bedrock's client
+ * off a packet Java has no counterpart for, so each of those reports itself rather than doing nothing.
  */
 /** The strongest shake Bedrock lets one event ask for. */
 const MAX_SHAKE = 4;
@@ -3280,6 +3281,7 @@ export class Camera {
 
     clear() {
         bridge.players.attachCamera(this.#playerId, this.#playerId);
+        bridge.players.clearCamera(this.#playerId);
     }
 
     /** `/camerashake add` for this one player, whose client draws the shake. */
@@ -3306,12 +3308,36 @@ export class Camera {
         unsupported("Camera.playAnimation");
     }
 
-    setCamera() {
-        unsupported("Camera.setCamera");
+    /**
+     * `/camera set` for this one player. A fixed boom's offsets and an entity to track belong to
+     * cameras Java has nothing like, so those report themselves and the preset is set without them.
+     */
+    setCamera(cameraPreset, setOptions) {
+        if (setOptions?.entityOffset !== undefined) unsupported("CameraFixedBoomOptions.entityOffset");
+        if (setOptions?.viewOffset !== undefined) unsupported("CameraFixedBoomOptions.viewOffset");
+        if (setOptions?.targetEntity !== undefined) unsupported("CameraTargetOptions");
+        this.#set(cameraPreset, {
+            location: setOptions?.location,
+            rotation: setOptions?.rotation,
+            facingLocation: setOptions?.facingLocation,
+            facingEntity: setOptions?.facingEntity?.id,
+        }, setOptions?.easeOptions);
     }
 
-    setDefaultCamera() {
-        unsupported("Camera.setDefaultCamera");
+    /** `/camera set <preset> default`: the preset's own placement, with nothing stated over it. */
+    setDefaultCamera(cameraPreset, easeOptions) {
+        this.#set(cameraPreset, {}, easeOptions);
+    }
+
+    /** Bedrock writes an ease `InOutCubic` here and `in_out_cubic` in `/camera`. */
+    #set(cameraPreset, placement, easeOptions) {
+        const ease = easeOptions === undefined ? {} : {
+            easeTime: easeOptions.easeTime ?? 1,
+            easeType: (easeOptions.easeType ?? EasingType.Linear).replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase(),
+        };
+        const refused = bridge.players.setCamera(this.#playerId, cameraPreset,
+            JSON.stringify({ ...placement, ...ease }));
+        if (refused !== null) throw new Error(refused);
     }
 
     setFov() {

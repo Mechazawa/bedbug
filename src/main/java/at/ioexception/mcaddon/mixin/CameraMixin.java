@@ -19,7 +19,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * arguments it used to take, which is why the injector carries two bodies.
  *
  * The setters are the game's own, so the forward vectors, the rotation quaternion and the matrices
- * derived from them all follow, which writing the fields would leave stale.
+ * derived from them all follow, which writing the fields would leave stale. A camera placed this way
+ * counts as set up, which is what lets a spare one stand in for the player's ears.
  */
 @Mixin(Camera.class)
 public abstract class CameraMixin implements PlayerCamera.Adjustable {
@@ -31,6 +32,9 @@ public abstract class CameraMixin implements PlayerCamera.Adjustable {
 
     @Shadow
     private boolean detached;
+
+    @Shadow
+    private boolean initialized;
 
     //? if >=26 {
     @Inject(method = "update", at = @At("RETURN"))
@@ -61,5 +65,6 @@ public abstract class CameraMixin implements PlayerCamera.Adjustable {
         setPosition(placement.position());
         setRotation(placement.yRot(), placement.xRot());
         detached = placement.detached();
+        initialized = true;
     }
 }
