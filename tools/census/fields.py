@@ -124,6 +124,18 @@ REASONS = {
 
     # Fields read somewhere other than through a field helper.
     "minecraft:type_family": {"family": "Read where the families are collected."},
+    "minecraft:behavior.random_look_around": {
+        "look_distance": "Java's random look aims at a point one block away at the eye's own height, so the "
+                         "distance along that bearing changes no angle the head turns through.",
+    },
+    "minecraft:rail_sensor": {
+        "tick_command_block_on_activate": "Java's `activateMinecart` is overridden by `MinecartCommandBlock` "
+                                          "alone, and a pack's entity is not one, so it has no command block "
+                                          "to start ticking.",
+        "tick_command_block_on_deactivate": "Java's `activateMinecart` is overridden by `MinecartCommandBlock` "
+                                            "alone, and a pack's entity is not one, so it has no command block "
+                                            "to stop ticking.",
+    },
     "minecraft:player.exhaustion": {
         "*": "Read by `PlayerDefinition.Attribute`, which takes `value` and `max` of the five player "
              "attributes from one helper. `value` is written into `FoodData`'s exhaustion at join and "
