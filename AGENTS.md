@@ -1677,6 +1677,12 @@ Mojang's geometry is not committed, so that list is the one place this knowledge
   literals are blanked before that search so a field name spelt in the reader cannot stand in for
   its value being used.
 
+  A slider's `min`, `max` and `step` and a dropdown's `options` are read by `PackManifest.Setting.tryFrom`,
+  which brings the shipped default inside them; `PackOrder.sort` names a non-`optional` script API
+  dependency `ScriptHost.provides` lacks. The test pack's `tp:ember_overdriven` and `tp:ember_drift`
+  settings ship defaults outside their controls so `aPacksOwnSettingsReadBackAtTheirDeclaredValues`
+  can read the correction back.
+
   The count behind each dropped field has two halves. **Vanilla** is Mojang's own pack pair, which
   writes a thin manifest and says little. **Installed** is every manifest in the add-ons under
   `versions/*/run/addons/`, one copy of each, which is where a real pack's habits show: a worktree
