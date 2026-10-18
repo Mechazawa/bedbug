@@ -286,6 +286,22 @@
           "priority": 0,
           "speed_multiplier": 1.2
         }
+      },
+      "tp:brute_archer": {
+        "minecraft:shooter": {
+          "def": "minecraft:arrow"
+        },
+        "minecraft:behavior.ranged_attack": {
+          "priority": 0,
+          "attack_interval": {
+            "min": 0.5,
+            "max": 2.5
+          },
+          "attack_range": {
+            "min": 0,
+            "max": 8
+          }
+        }
       }
     },
     "components": {
@@ -438,6 +454,13 @@
       "tp:brute_tamed": {
         "set_property": {
           "tp:tamed": true
+        }
+      },
+      "tp:brute_arm": {
+        "add": {
+          "component_groups": [
+            "tp:brute_archer"
+          ]
         }
       }
     }

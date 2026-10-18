@@ -2913,13 +2913,19 @@ public class AddonEntity extends PathfinderMob
                     TargetSelection.from(goal, net.minecraft.world.entity.LivingEntity.class, 0)));
 
             // Bedrock states the gap between shots in seconds and the reach in blocks; Java's
-            // goal counts the gap in ticks and asks the entity itself to release the projectile.
-            case "minecraft:behavior.ranged_attack" -> goals.add(priority,
-                new net.minecraft.world.entity.ai.goal.RangedAttackGoal(this,
-                    number(definition, behaviour, "speed_multiplier", 1),
-                    (int) (number(definition, behaviour, "attack_interval_min", 1) * 20),
-                    (int) (number(definition, behaviour, "attack_interval_max", 1) * 20),
-                    (float) number(definition, behaviour, "attack_radius", 16)));
+            // goal counts the gap in ticks, stretches it with the distance the same way, and asks
+            // the entity itself to release the projectile. `attack_interval` and `attack_range`
+            // are the current spellings of the two pairs older packs write field by field.
+            case "minecraft:behavior.ranged_attack" -> {
+                int fastest = goal.has("attack_interval") ? Goals.ticksLow(goal, "attack_interval", 1)
+                    : Goals.ticks(goal, "attack_interval_min", 1);
+                int slowest = goal.has("attack_interval") ? Goals.ticksHigh(goal, "attack_interval", 1)
+                    : Goals.ticks(goal, "attack_interval_max", 1);
+                double reach = goal.has("attack_range") ? Goals.high(goal, "attack_range", 16)
+                    : Goals.number(goal, "attack_radius", 16);
+                goals.add(priority, new net.minecraft.world.entity.ai.goal.RangedAttackGoal(this, speed,
+                    fastest, Math.max(fastest, slowest), (float) reach));
+            }
             case "minecraft:behavior.ocelotattack" -> goals.add(priority,
                 new net.minecraft.world.entity.ai.goal.OcelotAttackGoal(this));
 

@@ -371,6 +371,42 @@ public final class GoalGameTests {
     }
 
     /**
+     * A ranged attack reloads for the time `attack_interval` states, stretched across it by how far
+     * into `attack_range` the target stands, both read from the group that declares the behaviour.
+     *
+     * The archer's interval runs from half a second to two and a half over a range of eight blocks,
+     * so a pig four blocks off is shot every second and a half.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = VOLLEY_TICKS)
+    public void aRangedAttackReloadsForTheTimeItsRangeStates(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_arm");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob pig = pig(helper, STAND.east(4), BLOWS_TO_KILL);
+        brute.setTarget(pig);
+        java.util.Set<java.util.UUID> seen = new java.util.HashSet<>();
+        List<Long> shots = new ArrayList<>();
+        helper.onEachTick(() -> helper.getLevel().getEntitiesOfClass(
+                net.minecraft.world.entity.projectile.Projectile.class, brute.getBoundingBox().inflate(VOLLEY_SEARCH),
+                shot -> shot.getOwner() == brute && seen.add(shot.getUUID()))
+            .forEach(shot -> shots.add(helper.getLevel().getGameTime())));
+        helper.succeedWhen(() -> {
+            helper.assertTrue(shots.size() >= 2, BRUTE + " shot " + shots.size() + " times.");
+            long gap = shots.get(1) - shots.get(0);
+            helper.assertTrue(Math.abs(gap - HALFWAY_RELOAD) <= 1,
+                BRUTE + " reloads for a second and a half at half its range and shot again after " + gap + " ticks.");
+        });
+    }
+
+    /** Halfway between the archer's half second and two and a half, in Java's ticks. */
+    private static final int HALFWAY_RELOAD = 30;
+    private static final int VOLLEY_TICKS = 160;
+    private static final double VOLLEY_SEARCH = 12;
+
+    /**
      * `minecraft:addrider` seats every rider its `riders` list names, each raising its own spawn
      * event, and a group bringing the component in is enough for that.
      */
