@@ -260,7 +260,7 @@ public final class EntityEvents {
 
         addon.setTarget(null);
         addon.setValue("is_hiding", true);
-        net.minecraft.core.BlockPos home = Platform.home(addon);
+        net.minecraft.core.BlockPos home = Platform.homeOf(addon);
         if (home == null) {
             addon.getNavigation().stop();
             return;
