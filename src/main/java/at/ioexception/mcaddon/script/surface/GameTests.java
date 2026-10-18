@@ -70,6 +70,9 @@ public final class GameTests extends Surface {
 
     private final Map<Integer, Run> runs = new LinkedHashMap<>();
 
+    /** Who waits on the verdict of a run besides the source that started it. */
+    private final Map<Integer, java.util.function.Consumer<Boolean>> listeners = new HashMap<>();
+
     /** Every structure name a test has asked for, against what the packs turned out to hold. */
     private final Map<String, McStructure> structures = new HashMap<>();
 
@@ -91,14 +94,23 @@ public final class GameTests extends Surface {
      * and the world position the test's own coordinates count from.
      */
     public String begin(CommandSourceStack source, String structureName, int padding) {
+        McStructure structure = structure(structureName);
+        int width = structure == null ? DEFAULT_SIDE : structure.width();
+        BlockPos origin = BlockPos.containing(source.getPosition()).offset(nextOffset + 2, 0, 2);
+        nextOffset += width + Math.max(padding, 1) + 1;
+        return beginAt(source, structureName, origin);
+    }
+
+    /**
+     * Builds the test's structure with its lower north-west corner at `origin` and remembers the
+     * area, which is where a structure block naming the test asks for it to run.
+     */
+    public String beginAt(CommandSourceStack source, String structureName, BlockPos origin) {
         ServerLevel level = source.getLevel();
         McStructure structure = structure(structureName);
         int width = structure == null ? DEFAULT_SIDE : structure.width();
         int height = structure == null ? DEFAULT_SIDE : structure.height();
         int depth = structure == null ? DEFAULT_SIDE : structure.depth();
-
-        BlockPos origin = BlockPos.containing(source.getPosition()).offset(nextOffset + 2, 0, 2);
-        nextOffset += width + Math.max(padding, 1) + 1;
 
         List<ChunkPos> held = hold(level, origin, width, depth);
         clear(level, origin, width, height + HEADROOM, depth);
@@ -126,6 +138,11 @@ public final class GameTests extends Surface {
         return placement.toString();
     }
 
+    /** Hears the verdict of one run, once, after whoever started it has been told. */
+    public void listen(int runId, java.util.function.Consumer<Boolean> verdict) {
+        listeners.put(runId, verdict);
+    }
+
     /** Empties every area a run was given and forgets them, which is `/gametest clearall`. */
     public int clearAll() {
         int cleared = runs.size();
@@ -136,6 +153,7 @@ public final class GameTests extends Surface {
             release(level, run);
         });
         runs.clear();
+        listeners.clear();
         nextOffset = 0;
         return cleared;
     }
@@ -158,6 +176,8 @@ public final class GameTests extends Surface {
             run.source().sendFailure(Component.literal(name + " failed: " + message));
         }
         release(level(run.dimension()), run);
+        java.util.function.Consumer<Boolean> listener = listeners.remove(runId);
+        if (listener != null) listener.accept(passed);
     }
 
     /** Lets go of the chunks a run was keeping loaded, once and not again. */

@@ -98,34 +98,61 @@ class FunctionsTest {
             + "'item replace entity @s weapon.mainhand with minecraft:stone'",
         "'replaceitem block ~ ~ ~ slot.container 3 stone 2', "
             + "'item replace block ~ ~ ~ container.3 with minecraft:stone 2'",
-        "'ride @s start_riding @e[type=pig]', "
-            + "'execute as @s at @s run ride @s mount @e[type=minecraft:pig,limit=1]'",
-        "'ride @s stop_riding', 'execute as @s run ride @s dismount'",
+        "'ride @s start_riding @e[type=pig]', 'ride @s start_riding @e[type=minecraft:pig]'",
+        "'ride @s stop_riding', 'ride @s stop_riding'",
+        "'ride @e[type=pig] summon_rider zombie minecraft:as_baby_jockey', "
+            + "'ride @e[type=minecraft:pig] summon_rider minecraft:zombie minecraft:as_baby_jockey'",
+        "'ride @s summon_ride zombie_pigman skip_riders', 'ride @s summon_ride minecraft:zombified_piglin skip_riders'",
+        "'summon pig ~ ~ ~ facing ~ ~1 ~', 'summon minecraft:pig ~ ~ ~ facing ~ ~1 ~'",
+        "'summon pig ~ ~ ~ 90 0 minecraft:entity_born Bob', "
+            + "'summon minecraft:pig ~ ~ ~ 90 0 minecraft:entity_born Bob'",
+        "'replaceitem entity @s slot.armor.head 0 keep diamond_helmet', "
+            + "'execute as @s unless items entity @s armor.head * run item replace entity @s armor.head "
+            + "with minecraft:diamond_helmet'",
+        "'replaceitem block 1 2 3 slot.container 4 keep stone 2', "
+            + "'execute unless items block 1 2 3 container.4 * run item replace block 1 2 3 container.4 "
+            + "with minecraft:stone 2'",
+        "'replaceitem entity @s slot.equippable 1 iron_horse_armor', "
+            + "'item replace entity @s armor.body with minecraft:iron_horse_armor'",
+        "'loot replace entity @s slot.equippable 1 loot tp:hat', 'loot replace entity @s armor.body loot tp:hat'",
         "'save hold', 'save-off'",
-        "'tickingarea add 0 0 0 32 0 32 named', 'forceload add 0 0 32 32'",
-        "'tickingarea remove_all', 'forceload remove all'",
+        "'save query', 'save query'",
+        "'place featurerule tp:rule ~ ~ ~', 'place featurerule tp:rule ~ ~ ~'",
+        "'ops set @p operator', 'ops set @p operator'",
+        "'setmaxplayers 12', 'setmaxplayers 12'",
+        "'packstack server verbose exclude-vanilla', 'packstack server verbose exclude-vanilla'",
+        "'tickingarea add 0 0 0 32 0 32 named', 'tickingarea add 0 0 0 32 0 32 named'",
+        "'tickingarea remove_all', 'tickingarea remove_all'",
+        "'tickingarea preload 0 0 0 true', 'tickingarea preload 0 0 0 true'",
         "'time set sunrise', 'time set 23000'",
         "'time set day', 'time set day'",
         "'changesetting difficulty h', 'difficulty hard'",
         "'damage @s 4 fall', 'damage @s 4'",
         "'damage @s 4 fall entity @p', 'damage @s 4 minecraft:generic by @p'",
         "'execute in nether run say hi', 'execute in the_nether run say hi'",
-        "'tickingarea remove 10 64 20', 'forceload remove 10 20'",
+        "'tickingarea remove 10 64 20', 'tickingarea remove 10 64 20'",
         "'replaceitem entity @s slot.armor 2 iron_leggings', "
             + "'item replace entity @s armor.legs with minecraft:iron_leggings'",
         "'replaceitem entity @s slot.chest 0 chest', 'item replace entity @s horse.chest with minecraft:chest'",
         "'loot replace entity @s slot.armor.head 0 loot tp:hat', "
             + "'loot replace entity @s armor.head loot tp:hat'",
-        "'ride @e[type=zombie] start_riding @e[type=pig] teleport_rider', "
-            + "'execute as @e[type=minecraft:zombie] at @s run ride @s mount @e[type=minecraft:pig,limit=1]'",
+        "'ride @e[type=zombie] start_riding @e[type=pig] teleport_rider if_group_fits', "
+            + "'ride @e[type=minecraft:zombie] start_riding @e[type=minecraft:pig] teleport_rider if_group_fits'",
         "'gametest stopall', 'gametest stopall'",
+        "'gametest runthis', 'gametest runthis'",
+        "'gametest create tp:new 4 3 4', 'gametest create tp:new 4 3 4'",
+        "'gametest runsetuntilfail tp:until_fail', 'gametest runsetuntilfail tp:until_fail'",
         "'mobevent events_enabled false', 'mobevent events_enabled false'",
-        "'music stop 2', 'music stop'",
-        "'structure save tp:hut 0 0 0 4 4 4 true disk', 'structure save \"tp:hut\" 0 0 0 4 4 4'",
-        "'structure load tp:hut 0 64 0 90_degrees x', "
-            + "'place template tp:hut 0 64 0 clockwise_90 front_back'",
+        "'mobevent minecraft:ender_dragon_event true', 'mobevent minecraft:ender_dragon_event true'",
+        "'music stop 2', 'music stop 2'",
+        "'structure save tp:hut 0 0 0 4 4 4 true disk', 'structure save \"tp:hut\" 0 0 0 4 4 4 true disk'",
+        "'structure load tp:hut 0 64 0 90_degrees x', 'structure load \"tp:hut\" 0 64 0 90_degrees x'",
+        "'structure load hut 0 64 0 0_degrees xz layer_by_layer 2 true false true 50 seed', "
+            + "'structure load \"hut\" 0 64 0 0_degrees xz layer_by_layer 2 true false true 50 seed'",
         "'structure delete tp:hut', 'structure delete \"tp:hut\"'",
-        "'music play tp:theme 0.4', 'music play \"tp:theme\" 0.4'",
+        "'music play tp:theme 0.4', 'music play tp:theme 0.4'",
+        "'music queue record.cat 1 2 loop', 'music queue record.cat 1 2 loop'",
+        "'music volume 0.5', 'music volume 0.5'",
         "'particle tp:sparkle ~ ~ ~', 'particle \"tp:sparkle\" ~ ~ ~'",
         "'scriptevent tp:reset go', 'scriptevent \"tp:reset\" go'",
         "'dialogue open @e[type=tp:ember,c=1] @p tp:greeting', "
@@ -137,6 +164,8 @@ class FunctionsTest {
         "'schedule delay add tp:tick 20 append', 'schedule function tp:tick 20 append'",
         "'schedule delay clear tp:tick', 'schedule clear tp:tick'",
         "'schedule clear tp:tick', 'schedule clear tp:tick'",
+        "'schedule on_area_loaded add 0 0 0 8 8 8 tp:tick', 'schedule on_area_loaded add 0 0 0 8 8 8 tp:tick'",
+        "'schedule on_area_loaded clear tickingarea home', 'schedule on_area_loaded clear tickingarea home'",
     })
     void rewritesTheCommandsJavaSpellsDifferently(String source, String expected) throws IOException {
         assertEquals(expected, only(source));
@@ -150,20 +179,12 @@ class FunctionsTest {
      */
     @ParameterizedTest
     @CsvSource({
-        "'gametest runthis', 'command gametest runthis, which Java has no form of'",
-        "'music play tp:theme 1 0 loop', 'command music loop, which Java has no form of'",
-        "'ride @e[type=pig] evict_riders', 'command ride evict_riders, which Java has no form of'",
-        "'ride @s start_riding @e[type=pig] until_full', "
-            + "'command ride until_full, which Java has no form of'",
-        "'save query', 'command save query, which Java has no form of'",
-        "'structure load tp:hut 0 64 0 0_degrees xz', 'command structure xz, which Java has no form of'",
-        "'summon pig ~ ~ ~ facing ~ ~1 ~', 'command summon facing, which Java has no form of'",
-        "'tickingarea preload 0 0 0', 'command tickingarea preload, which Java has no form of'",
-        "'mobevent minecraft:ender_dragon_event true', "
-            + "'command mobevent minecraft:ender_dragon_event, which Java has no form of'",
-        "'place featurerule tp:rule ~ ~ ~', 'command place featurerule, which Java has no form of'",
-        "'schedule on_area_loaded add 0 0 0 8 8 8 tp:tick', "
-            + "'command schedule on_area_loaded, which Java has no form of'",
+        "'place structure minecraft:trail_ruins ~ ~ ~ false false false ignore_waterlogging', "
+            + "'command place structure with a placement Java builds for itself'",
+        "'place jigsaw minecraft:village/plains/town_centers minecraft:bottom 7 ~ ~ ~ false false', "
+            + "'command place jigsaw leaving out its entities'",
+        "'camera @s set minecraft:follow_orbit', 'command camera minecraft:follow_orbit, which Java has no form of'",
+        "'permission set @p visitor', 'command permission visitor, which Java has no form of'",
     })
     void dropsAFormOfATranslatedCommandJavaCannotSay(String source, String reported) throws IOException {
         assertEquals(List.of(), translate(source));
@@ -307,9 +328,23 @@ class FunctionsTest {
 
     @Test
     void dropsAGameRuleJavaDoesNotHave() throws IOException {
-        assertEquals(List.of(), translate("gamerule showcoordinates true"));
-        assertTrue(problems.contains("game rule showcoordinates, which Java keeps no rule for"),
+        assertEquals(List.of(), translate("gamerule showbordereffect true"));
+        assertTrue(problems.contains("game rule showbordereffect, which Java keeps no rule for"),
             problems.toString());
+    }
+
+    /** A rule Java keeps none of is read by the `gamerule` the Bedrock tree holds, under its own name. */
+    @Test
+    void writesARuleHeldHereUnderItsBedrockName() throws IOException {
+        assertEquals("gamerule showCoordinates true", only("gamerule showcoordinates TRUE"));
+    }
+
+    /** Bedrock's words after a jigsaw's position reach the `place jigsaw` built here as written. */
+    @Test
+    void passesAJigsawsSettingsToTheCommandBuiltHere() throws IOException {
+        String line = "place jigsaw minecraft:village/plains/town_centers minecraft:bottom 7 ~ ~ ~ true true "
+            + "apply_waterlogging";
+        assertEquals(line, only(line));
     }
 
     /** Bedrock caps a function's commands with a rule of its own; Java caps them with its chain rule. */
@@ -361,6 +396,9 @@ class FunctionsTest {
         "'execute @a ~ ~ ~ function greet', 'execute as @a at @s positioned ~ ~ ~ run function ns:greet'",
         "'schedule delay add greet 20 append', 'schedule function ns:greet 20 append'",
         "'schedule clear greet', 'schedule clear ns:greet'",
+        "'schedule on_area_loaded add circle 0 0 0 2 greet', 'schedule on_area_loaded add circle 0 0 0 2 ns:greet'",
+        "'schedule on_area_loaded clear tickingarea home greet', "
+            + "'schedule on_area_loaded clear tickingarea home ns:greet'",
         "'function other:greet', 'function other:greet'",
     })
     void namesTheAddOnShippingTheFunctionACallNames(String source, String expected) throws IOException {

@@ -15,6 +15,7 @@ import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.Identifier;
 import net.minecraft.core.Holder;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -415,11 +416,13 @@ public final class Worlds extends Surface {
         return run(level, "place feature " + feature + " " + x + " " + y + " " + z) > 0;
     }
 
-    /** A feature rule is Bedrock's own way of deciding where a feature goes; Java has no registry. */
+    /** The placed feature a pack's feature rule was converted into, the way `place featurerule` places it. */
     @HostAccess.Export
     public boolean placeFeatureRule(String dimension, String rule, int x, int y, int z) {
-        unsupported("Dimension.placeFeatureRule");
-        return false;
+        ServerLevel level = level(dimension);
+        Identifier id = rule == null ? null : Identifier.tryParse(rule);
+        return level != null && id != null
+            && at.ioexception.mcaddon.server.FeatureRules.place(level, id, new BlockPos(x, y, z));
     }
 
     /**
