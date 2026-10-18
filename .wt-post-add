@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Run by `wt add` in each new worktree, after it has copied the source checkout's untracked files.
+exec bash tools/seed-worktree.sh

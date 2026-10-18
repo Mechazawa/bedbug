@@ -7,6 +7,13 @@
     "PackRepositoryMixin",
     "LivingEntityMixin",
     "JumpingAccessor",
+    "JigsawStructureAccessor",
+    "PassengerInvoker",
+    "PlayerListLimitMixin",
+    "DragonFightMixin",
+    "RecipeRewardMixin",
+    "RespawnBlockMixin",
+    "RespawnAnchorMixin",
     "BiomeSeedAccessor",
     "ItemEntityMixin",
     "ProjectileMixin",
@@ -34,6 +41,10 @@
     "ServerPlayerMixin",
     "ServerLevelGameEventMixin",
     "FoodDataAccessor",
+    "MappedRegistryAccessor",
+    "CreativeModeTabsAccessor",
+    "ServerCommonPacketListenerAccessor",
+    "ServerLoginTimerMixin",
     "FoodDataMixin",
     "BlockMinedExhaustionMixin",
     "PlayerAttackExhaustionMixin",
@@ -55,6 +66,10 @@
     "LivingEntityRendererMixin",
     "ModelFeatureRendererMixin",
     "ModelPartMixin",
-    "SoundEngineMixin"
+    "SoundEngineMixin",
+    "MusicManagerMixin",
+    "FovMixin",
+    "RecipeToastMixin",
+    "AdventureTooltipMixin"
   ]
 }

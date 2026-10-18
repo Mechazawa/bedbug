@@ -1,0 +1,22 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:block": {
+    "description": {
+      "identifier": "sv:crate",
+      "states": {
+        "sv:stack": [0, 1, 2]
+      }
+    },
+    "components": {
+      "minecraft:destructible_by_mining": {
+        "seconds_to_destroy": 1
+      },
+      "minecraft:material_instances": {
+        "*": {
+          "texture": "crate",
+          "render_method": "opaque"
+        }
+      }
+    }
+  }
+}

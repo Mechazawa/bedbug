@@ -1,0 +1,17 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "Served Add-On",
+    "description": "How the add-on a test server hands out looks.",
+    "uuid": "e3a2b7c4-9d51-4f08-a6e2-7c1b5d9f2a64",
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 20, 0]
+  },
+  "modules": [
+    {
+      "type": "resources",
+      "uuid": "4b8d1e6f-0a27-4c95-8e3b-2f6a9d4c1e07",
+      "version": [1, 0, 0]
+    }
+  ]
+}

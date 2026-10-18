@@ -19,9 +19,33 @@ Put the jar in `mods/`, then put your packs in `addons/`:
 `.mcaddon`, `.mcpack` and already unpacked pack directories all work. Converted output is cached in
 `.mcaddon/` next to `addons/`; deleting that directory only costs one slower start.
 
-On a server, install the mod on the server and on every client, and give both the same packs. The
-server decides what happens; the client draws it. A player joining without one of the server's
-add-ons, or with another release of it, is told which in chat.
+## Playing on a server
+
+Install the mod on the server and on every client, and put the packs in the server's `addons/`
+only. The server decides what happens; the client draws it.
+
+A client joining a server running this mod is handed the server's add-ons as it joins, with no
+restart. It downloads the ones it lacks into `.mcaddon/received/`, registers what they add, and
+plays with exactly the server's add-ons for that visit: an add-on the client installed and the
+server has not got stays loaded and does nothing until the client leaves, and one the server has
+in another release is replaced by the server's. Leaving puts the client's own add-ons back. A
+downloaded add-on is kept for the next visit, so joining again downloads nothing, and one no server
+asked for in a month is dropped. The same holds for a guest joining a world opened to LAN: the host
+hands out its add-ons, and the host itself never downloads or changes anything.
+
+What a client refuses, each with a message naming why:
+
+- a server running another release of this mod;
+- an add-on larger than 256 MB, more than 1 GB in all, more than 64 add-ons, or more than the disk
+  has room for;
+- an archive that arrives with other bytes than the server promised, or that unpacks into more
+  than 50000 files or 1 GB;
+- a release of an add-on the client already loaded whose items, blocks or entities are built
+  differently, such as a block with another set of states or an item with other components. The
+  message names the add-on: remove or replace it in `addons/` and start the game again.
+
+A client without this mod cannot join a server that has add-ons, and is told which mod to install.
+Against a server without this mod a client plays with its own add-ons.
 
 ## What works
 
@@ -151,13 +175,24 @@ add-ons, or with another release of it, is told which in chat.
   for the rule, under a cap on what a block withstands. A child bred under `minecraft:offspring`
   takes a tamed parent's owner, a parent's variant, mark variant, colour and listed properties
   unless a mutation keeps its own, the dye two colours make, and attributes blended the way Java
-  breeds a horse. A mount under `minecraft:tamemount` is broken in by riding, its temper rising with
+  breeds a horse, and a bred child arrives with `minecraft:entity_born` rather than
+  `minecraft:entity_spawned`. A mount under `minecraft:tamemount` is broken in by riding, its temper rising with
   its food and each buck, and any rideable entity is mounted by using it, pulls in what touches it
   under `pull_in_entities` and raises its rider events. A school flocks by its separation, cohesion,
   variant matching, flock limit and loners; an entity walks out under the sky or in under a roof,
   looks as far for water as it says, drinks the potion its conditions pick by Bedrock's number,
   holds no more of an item than its shareables allow, leaps at its `yd`, and steps higher while a
-  player steers it.
+  player steers it. A stomper looks for turtle eggs as often as its `interval` says. A villager
+  explores past the edge of its village by `explore_dist`, a fox strolls to the nearest village, a
+  child plays with the friend its `friend_types` name, and `minecraft:behavior.hide` runs to the bed
+  or other place `poi_type` names when a bell rings or a raid is on. Java's village is the beds, job
+  sites and bells within reach, since Java keeps no village of its own.
+- Damage causes in Bedrock's own words. A damage sensor, the `has_damage` filter, a panic, playing
+  dead, damage absorption, `minecraft:hurt_on_condition`, a block event's damage, the `damage`
+  command and a script's `applyDamage` and `entityHurt` all name a cause the way Bedrock does
+  (`entity_attack`, `fire_tick`, `suffocation`), and each is matched against the Java damage types
+  that are the same harm on the version that runs. A cause Java has no type for, such as
+  `temperature`, is dealt as the nearest one Java has and hears that one too.
 - An entity in a bucket. `minecraft:bucketable` lets a player scoop the entity up with a water
   bucket and let it out again in the same component groups it was scooped up in. The component
   names no item, and Java holds a fish in an item per kind of fish, so each such entity is carried
@@ -203,6 +238,11 @@ add-ons, or with another release of it, is told which in chat.
   command or the script states over the preset's own. A preset with `"listener": "player"` hears from
   the player's head while the camera is away from it. A script also has `Camera.attachToEntity` and
   `Camera.playAnimation`.
+  `/bedrock camera ... fade` covers the screen in black or the colour it names, coming in, holding
+  and going out over Bedrock's own one second, half a second and one second unless it names others,
+  and a fade asked for while one runs is combined with it the way Bedrock combines them. `fov_set`
+  and `fov_clear` move the field of view to a value or back to the player's own, over the seconds and
+  the ease they name; what sprinting or being under water does to the view still happens on top.
 - `/bedrock fog`, which layers a pack's own `fogs/` settings over the one the game would draw, with a stack
   per player that `pop` and `remove` take apart the way Bedrock's do. Like the two camera commands it
   is decided on the server and sent to each player alone, so setting one player's view in a
@@ -304,6 +344,72 @@ add-ons, or with another release of it, is told which in chat.
   `music`, `playanimation`, `scriptevent`, `structure`, `toggledownfall`, Bedrock's `particle` and
   `transfer` and the commands a pack's script declares, are reached through it and nowhere else. It asks for the level Java runs
   a function at, and every command the line names asks for its own on top of that.
+- `/bedrock ride` and `/bedrock summon` in Bedrock's own forms. `ride` seats a group only when the
+  whole of it fits (`if_group_fits`) or one rider at a time until the vehicle is full, brings the
+  vehicle to its one rider (`teleport_ride`), empties a vehicle (`evict_riders`), and summons a rider
+  for every vehicle with room or a vehicle for every rider under the three ride rules. Whether a
+  vehicle has room is the vehicle's own answer, which for a pack's entity is its
+  `minecraft:rideable`, and a player is never a vehicle, as in Java's `/ride`. `summon` makes the
+  entity the way Java's own summon does and then turns it to a rotation, a point or an entity,
+  names it and raises the spawn event the line picks, and it refuses a hostile mob on peaceful.
+- `replaceitem` and `loot replace` into `slot.equippable`, whose first slot is the saddle and whose
+  second is the horse's armour or the llama's carpet, as on every vanilla entity carrying a
+  `minecraft:equippable`. `replaceitem ... keep` fills a slot only while it is empty, through Java's
+  own `execute unless items`, which 1.20.1 does not have, so there the line is reported instead.
+- `/bedrock structure` in Bedrock's own form. `save` keeps a region in memory, which is Bedrock's
+  default and lasts as long as the server, or writes it beside the world with `disk`, with or
+  without its entities and its blocks; `delete` forgets it and deletes its file. `load` puts the
+  lowest corner of what the structure fills at the position the line names whichever way it is
+  turned or mirrored, mirroring along both axes as a half turn, and takes the entities, the blocks,
+  waterlogging, integrity and seed, and Bedrock's animation, which places the structure a block or
+  a layer at a time over the seconds the line gives.
+- `/bedrock tickingarea`, which forces the chunks of a rectangle or of a circle under a name, as
+  Java's `/forceload` forces a chunk, and keeps the name, the shape and the `preload` mark beside the
+  world, so an area is listed, found by a position inside it or by its name, and let go of without
+  releasing a chunk another area still covers. Bedrock's limits hold: ten areas, a hundred chunks to
+  an area and a circle four chunks across its radius. Java loads every forced chunk before the
+  world starts, which is what `preload` asks for, so the mark is kept and reported.
+- `/bedrock schedule on_area_loaded`, which holds a function back until every chunk of a rectangle,
+  a circle or a ticking area is loaded with its entities and then runs it once as the server.
+  What is waiting is kept beside the world.
+- `/bedrock place featurerule`, which places a pack's feature rule by its name the way the world
+  would, with the rule's own distribution starting from the position the line names, and a
+  script's `Dimension.placeFeatureRule`, which does the same. The rule's biome filter decides only
+  where the world generates it.
+- `/bedrock place jigsaw` with the three words Bedrock writes after the position: whether the
+  jigsaw blocks stay, whether the entities come along, and whether a block placed into water is
+  waterlogged. A word the line leaves out takes Bedrock's value (blocks gone, entities left out,
+  waterlogged). 1.20.1 waterlogs every block a jigsaw places, so `ignore_waterlogging` is reported
+  there.
+- `/bedrock place structure` with the four words Bedrock writes after the position:
+  `ignoreStartHeight`, `keepJigsaws`, `includeEntities` and the liquid setting. They apply to a jigsaw
+  structure, which is the only kind Bedrock names there. The placement starts at the structure's own
+  start height unless `ignoreStartHeight` puts it at the height of the position, and the other three
+  words work as they do for `place jigsaw`. The column is the position's own, where Java's short form
+  snaps to the chunk. Any other structure refuses the words with a message when the command runs,
+  and Java's own `place structure <structure> [pos]` places it as before.
+- The commands that run the server rather than the world. `save query` writes out what `save hold`
+  held back and lists every file of the world with its length; `setmaxplayers` sets the limit a
+  login is checked against for this session only; `packstack server` lists Java's data packs in the
+  order they apply, every converted add-on among them, and `packstack client` the add-on resource
+  packs; `permission` and `ops` list Java's operators, read `ops.json` again and make a player an
+  operator or a member. Like Bedrock's, each asks for more than a function's authority, so an
+  operator types it after `/bedrock` and a pack's function cannot run it.
+- `/bedrock music`, which plays a track to everyone as music rather than as a sound somewhere in the
+  world: in the music category, with the game's own background music waiting until it is over,
+  faded in and out over the seconds the line gives, looped when asked, turned up or down while it
+  plays, and queued behind a track that plays once. A queue behind a looping track is refused, as
+  in Bedrock. A track is a pack's own sound or one of the game's under its full name, or a Bedrock
+  name such as `record.cat` or `cat`.
+- Six of Bedrock's game rules Java keeps no rule for, set through `/bedrock gamerule` and a
+  script's `world.gameRules`, kept beside the world and acted on by this mod. `recipesunlock` off
+  stops recipes unlocking as a player collects what they take, which Java does through an
+  advancement per recipe, so `/recipe` is then the way a player gets one. `respawnblocksexplode` off
+  leaves a bed or a charged respawn anchor standing where Java would blow it up.
+  `showcoordinates` and `showdaysplayed` write the player's position and the world's day count at
+  the top left of the screen, `showrecipemessages` off shows no toast for a recipe unlocked, and
+  `showtags` off leaves out the lines naming what an item may break or be placed on. A world starts
+  showing no coordinates and no day count, as one a player makes in Bedrock does.
 - Clips on a mob Java draws with a model of its own, such as `playanimation` on a vanilla villager.
   Each Bedrock bone is found among the Java model's parts, and on a mob whose Bedrock geometry hangs
   the head, arms and legs under `body`, those parts move, turn and scale with the body, so a pack
@@ -447,7 +553,15 @@ add-ons, or with another release of it, is told which in chat.
 - The tests a behaviour pack ships through `@minecraft/server-gametest`. `/bedrock gametest run <name>`,
   `/bedrock gametest runset <tag>` and `/bedrock gametest runall` build the structure a test named out
   of the pack's own `.mcstructure`, place it beside you, hand the pack's function a `Test` bound to
-  that area and report what it decided. `/bedrock gametest clearall` takes the areas back.
+  that area and report what it decided. `/bedrock gametest clearall` takes the areas back. `run`
+  with a repeat count runs a test again until the count is reached, stopping at a failure when told
+  to, and `runsetuntilfail` runs a set again in the same areas until one of its tests fails.
+  `/bedrock gametest create <name>` lays out a test the way Bedrock's editor does: a structure block
+  naming the test over the area, a floor of polished andesite on dirt, and a command block with a
+  button that runs it. `runthis` runs the test the nearest structure block within fifteen blocks
+  names, in the area that block covers, `runthese` every one within two hundred, and `pos` says where
+  you stand against the nearest such area. A test is always built unturned, so a line asking for
+  rotation steps is refused.
 - The other modules a pack may import: `@minecraft/math`, `@minecraft/common`, and
   `@minecraft/vanilla-data`, whose tables of vanilla ids are read from this game's own registries so
   they hold what the version you play ships.
@@ -605,8 +719,10 @@ Java builds that screen for its own horses, minecarts and hoppers by class; `suf
 documented as seconds with a default of -20, which no count of seconds can be, so Java's own
 drowning rhythm applies; `has_gravity` is left alone, because Mojang's fish declare it off and still
 fall when they leap out of water; a dweller holds to where it stood without joining a Java village;
-a tempt sound's gap is documented in ticks and written by Mojang in two units at once; and how fast
-an entity resends itself over the network is Java's own business.
+a tempt sound's gap is documented in ticks and written by Mojang in two units at once; a turtle egg
+stomper searches the twenty-four blocks Java's goal fixes, whatever its `search_range` says; and how
+fast an entity resends itself over the network is Java's own business. `has_damage` asking whether
+a blow is `fatal` is reported, because the sensor that asks it is not told how hard the blow is.
 
 **A camera and a touch button.** `minecraft:camera` times the black bars, the shutter and the
 photograph sliding away, which is a full-screen animation the Bedrock client plays while a player
@@ -676,13 +792,6 @@ without saying which side is asking, so neither can be answered for them.
 space, and Java keeps a snow layer as a block of its own standing on top, with no second occupant
 for the space below it. Each is reported and the rest of its component still decides.
 
-**The cause a block event names for its damage.** Bedrock picks from its own list of damage causes
-and Java builds a damage source out of what dealt the blow, so a block that hurts whoever set it off
-hurts them for the right amount by a source that names no cause. Every other response a block event
-can give runs: a command, a block state, dying, a sound, a particle, an effect added or taken away,
-a teleport, a swing, a loot table, a spent or swapped held item, and a block replaced here or one
-step away.
-
 **A bone bound to an entity Java draws with a model of its own.** A `binding` names a bone of
 whoever carries the model, which works for a pack's own entity and has nowhere to land on a player
 or a vanilla mob, whose Java model has parts rather than bones with no two models naming theirs
@@ -749,23 +858,23 @@ description with its own scattering coefficients. `/fog` carries the `air` block
 pack pushes a fog for; Java draws its own fog for the other media and has no volumetric fog to give
 the second block to.
 
-**A sixth of Bedrock's commands.** The fifteen left divide two ways. `aimassist` and `controlscheme`
-describe a controller and a touchscreen, and `packstack` and `project` describe a Bedrock client's
-pack list and the Bedrock Editor.
-`connect`, `wsserver`, `sendshowstoreoffer`, `ops`, `permission`, `editor-allowlist`,
-`reloadconfig`, `reloadpacketlimitconfig` and `serveridentity` speak to a websocket server, a
-marketplace or a Bedrock server's own configuration and identity. `setmaxplayers` sets the limit for
-one session where Java keeps it as `max-players` in `server.properties`, which 26 writes back to the
-file, so a limit Bedrock forgets at the end of the session would outlive it here. A function using
-any of them keeps its other lines and the dropped command is reported.
+**Eleven of Bedrock's commands.** `aimassist` and `controlscheme` change how a Bedrock client turns
+a controller or a touchscreen into aim and movement, and `project` and `editor-allowlist` belong to
+the Bedrock Editor. `connect` and `wsserver` speak to a WebSocket server, `sendshowstoreoffer` to the
+marketplace, `script` to the debugger and profiler of Bedrock's own script engine, and
+`reloadconfig`, `reloadpacketlimitconfig` and `serveridentity` to a Bedrock server's own
+configuration and identity. A function using any of them keeps its other lines and the dropped
+command is reported.
 
-**One form of a command the rest of which translates.** A `ride` that summons what it mounts or
-empties a vehicle, a `music` that loops, a `structure` mirrored on both axes or placed a block at a
-time, a `summon` that turns or aims what it summons, a `gametest` that lays out a test area, the
-ender dragon's mob event, `replaceitem` into the slot a Bedrock equippable component fills,
-`tickingarea` picked out by name or as a circle, `save query`, `place featurerule` and the setting
-that says whether cheats are allowed: each is a form Java has no way to say. The line does not run
-and the form is named, rather than being handed to a parser that would refuse it over the wrong word.
+**One form of a command the rest of which translates.** The cameras Bedrock draws behind or round an
+entity (`minecraft:follow_orbit`, `minecraft:fixed_boom` and `minecraft:control_scheme_camera`), and
+the camera forms that follow a spline, hang the camera off an entity, turn it towards one or offset
+it from one, which would each be a camera this mod draws itself; the paper doll, the input hints
+and the touch controls `hud` names, which a Java client draws none of; a `permission` visitor, a
+level below Java's member; `changesetting allow-cheats`, because a Java server always lets an
+operator run commands; and the liquid setting `ignore_waterlogging` on 1.20.1, which waterlogs
+every block a jigsaw or structure places. The line does not run and the form is named, rather than being handed to a
+parser that would refuse it over the wrong word.
 
 Everything else is translated or registered. `effect`, `xp`, `playsound`, `stopsound`,
 `spreadplayers`, `replaceitem`, `ride`, `tickingarea`, `save`, `gamerule`, `gamemode`, `difficulty`,
@@ -775,12 +884,13 @@ rewritten into what Java reads, including the command behind `execute ... run` a
 Bedrock calls the nether. `schedule` is rewritten too, because the two editions agree about more of
 it than the word suggests: Bedrock's `schedule delay add <function> <time> <replace|append>` is
 Java's `schedule function <function> <time> [append|replace]` with one keyword moved and the same two
-words at the end, and `schedule clear` is spelled alike in both. `schedule on_area_loaded`, which
-waits for chunks, is the form Java keeps no queue for and the one that is reported.
+words at the end, and `schedule clear` is spelled alike in both.
 `playanimation`, `event`, `scriptevent`, `music`, `toggledownfall`, `structure`, `mobevent`,
-`particle`, `dialogue`, `gametest`, `transfer`, `camera`, `camerashake`, `fog` and `clearspawnpoint`
-are registered by this mod in the tree a Bedrock line is read against, beside Java's own commands
-and never in Java's tree, and a line using one is written out in the form the command built there
+`particle`, `dialogue`, `gametest`, `transfer`, `camera`, `camerashake`, `fog`, `clearspawnpoint`,
+`hud`, `inputpermission`, `ride`, `summon`, `tickingarea`, `packstack`, `setmaxplayers`,
+`permission` and `ops` are registered by this mod in the tree a Bedrock line is read against,
+beside Java's own commands and never in Java's tree, as are Bedrock's own forms of `place`,
+`schedule` and `gamerule`, and a line using one is written out in the form the command built there
 reads. `clearspawnpoint` takes a
 player's respawn point away, which Java's `/spawnpoint` can only give. `transfer` hands a player to another server,
 which Java carries as `ClientboundTransferPacket` from 1.20.5 rather than as a command of its own; a
@@ -790,10 +900,9 @@ move that never happened. Of Bedrock's thirty-seven game rules, the
 twenty-five every supported version of Java has are set under the name that version knows them by,
 which 26 changed, and four more reach a rule only the newer versions hold. `functioncommandlimit`
 caps the commands one function runs, which Java caps with the rule it caps a chain of command blocks
-with, so it sets that rule. The remaining seven are reported: five switch a piece of Bedrock's screen
-Java draws whatever a rule says, `recipesunlock` holds back recipes Java grants through an
-advancement each, and `respawnblocksexplode` stops beds and anchors exploding where Java's own
-blocks do it unconditionally.
+with, so it sets that rule. Six more Java keeps no rule for are held beside the world and acted on
+by this mod, as described with the commands above. `showbordereffect` is reported: it switches the
+particle wall of Bedrock's border block, which Java has none of.
 
 **The player a test drives itself.** `Test.spawnSimulatedPlayer` and every member of the
 `SimulatedPlayer` it answers with describe a player the game walks, attacks and builds with. Java's

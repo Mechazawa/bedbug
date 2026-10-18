@@ -1,0 +1,106 @@
+package at.ioexception.mcaddon.gametest;
+
+import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.registry.ActiveAddons;
+import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.registry.AddonFogs;
+import at.ioexception.mcaddon.registry.AddonItems;
+import at.ioexception.mcaddon.resource.AddonSet;
+import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.packs.repository.PackRepository;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.Item;
+
+/**
+ * Switching which add-ons answer, which is what a client does as it joins a server and leaves it.
+ *
+ * The switch happens inside one test body on the server thread, so no other test sees the empty
+ * set, and the installed set is active again before the body returns.
+ */
+public final class ActiveAddonsGameTests {
+    private static final String ITEM = "tp:dust";
+    private static final String ENTITY = "tp:ember";
+    private static final String FOG = "tp:dusk";
+    private static final String PACK = McAddon.MOD_ID + "/tp";
+
+    /**
+     * An empty set leaves every add-on registered and offers none of them; the installed set
+     * brought back offers the same objects again.
+     */
+    @GameTest()
+    public void anEmptySetLeavesTheAddOnsRegisteredAndOffersNone(GameTestHelper helper) {
+        Item dust = AddonItems.named(ITEM);
+        EntityType<?> ember = AddonEntities.typeOf(ENTITY);
+        if (dust == null || ember == null) {
+            helper.succeed();
+            return;
+        }
+        ServerLevel level = helper.getLevel();
+        AddonSet installed = ActiveAddons.installed();
+        helper.assertTrue(listed(level, dust), ITEM + " is not in the add-ons' creative tab to begin with.");
+        helper.assertTrue(offered(), PACK + " is not offered to a pack repository to begin with.");
+        //? if >=1.21 {
+        helper.assertTrue(brews(level, dust), ITEM + " brews nothing to begin with.");
+        //?}
+
+        boolean listedWhileEmpty;
+        boolean offeredWhileEmpty;
+        boolean brewsWhileEmpty = false;
+        boolean fogWhileEmpty;
+        Object registeredWhileEmpty;
+        Object definedWhileEmpty;
+        ActiveAddons.activate(AddonSet.EMPTY);
+        try {
+            listedWhileEmpty = listed(level, dust);
+            offeredWhileEmpty = offered();
+            //? if >=1.21 {
+            brewsWhileEmpty = brews(level, dust);
+            //?}
+            fogWhileEmpty = AddonFogs.definitionOf(FOG) != null;
+            registeredWhileEmpty = BuiltInRegistries.ITEM.getOptional(BuiltInRegistries.ITEM.getKey(dust)).orElse(null);
+            definedWhileEmpty = AddonEntities.definitionOf(ember);
+        } finally {
+            ActiveAddons.activate(installed);
+        }
+
+        helper.assertTrue(registeredWhileEmpty == dust, ITEM + " left the item registry with its add-on.");
+        helper.assertTrue(definedWhileEmpty != null, ENTITY + " lost its definition while dormant.");
+        helper.assertFalse(listedWhileEmpty, ITEM + " stayed in the creative tab with its add-on gone.");
+        helper.assertFalse(offeredWhileEmpty, PACK + " was still offered with its add-on gone.");
+        helper.assertFalse(brewsWhileEmpty, ITEM + " still brewed with its add-on gone.");
+        helper.assertFalse(fogWhileEmpty, FOG + " was still described with its add-on gone.");
+
+        helper.assertTrue(AddonItems.named(ITEM) == dust && AddonEntities.typeOf(ENTITY) == ember,
+            "The installed set came back with other objects than it left with.");
+        helper.assertTrue(listed(level, dust) && offered(), "The installed set did not come back whole.");
+        //? if >=1.21 {
+        helper.assertTrue(brews(level, dust), ITEM + " did not brew again with its add-on back.");
+        //?}
+        helper.succeed();
+    }
+
+    private static boolean listed(ServerLevel level, Item item) {
+        CreativeModeTab tab = BuiltInRegistries.CREATIVE_MODE_TAB.getOptional(McAddon.id("addons")).orElseThrow();
+        tab.buildContents(new CreativeModeTab.ItemDisplayParameters(level.enabledFeatures(), true,
+            level.registryAccess()));
+        return tab.getDisplayItems().stream().anyMatch(stack -> stack.is(item));
+    }
+
+    private static boolean offered() {
+        PackRepository repository = new PackRepository();
+        repository.reload();
+        return repository.getAvailableIds().contains(PACK);
+    }
+
+    //? if >=1.21 {
+    /** Whether a brewing stand built now takes the item. 1.20.1 builds its brewing once, for good. */
+    private static boolean brews(ServerLevel level, Item item) {
+        return net.minecraft.world.item.alchemy.PotionBrewing.bootstrap(level.enabledFeatures())
+            .isIngredient(new net.minecraft.world.item.ItemStack(item));
+    }
+    //?}
+}

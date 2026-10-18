@@ -86,7 +86,7 @@ export const EntityDamageCause = Object.freeze({
     contact: "contact", drowning: "drowning", entityAttack: "entityAttack",
     entityExplosion: "entityExplosion", fall: "fall", fallingBlock: "fallingBlock", fire: "fire",
     fireTick: "fireTick", fireworks: "fireworks", flyIntoWall: "flyIntoWall", freezing: "freezing",
-    lava: "lava", lightning: "lightning", magic: "magic", magma: "magma", none: "none",
+    lava: "lava", lightning: "lightning", maceSmash: "maceSmash", magic: "magic", magma: "magma", none: "none",
     override: "override", piston: "piston", projectile: "projectile", ramAttack: "ramAttack",
     selfDestruct: "selfDestruct", sonicBoom: "sonicBoom", soulCampfire: "soulCampfire",
     stalactite: "stalactite", stalagmite: "stalagmite", starve: "starve", suffocation: "suffocation",

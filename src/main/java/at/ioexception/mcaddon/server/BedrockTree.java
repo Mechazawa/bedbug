@@ -14,7 +14,9 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.commands.ExecuteCommand;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.CompletableFuture;
 
@@ -33,6 +35,20 @@ public final class BedrockTree {
     private static final Map<CommandDispatcher<CommandSourceStack>, BedrockTree> BY_JAVA_TREE =
         Collections.synchronizedMap(new WeakHashMap<>());
 
+    /**
+     * Commands Bedrock and Java share a name and some forms of, where Bedrock adds forms of its own:
+     * `place featurerule` and Bedrock's longer `place jigsaw` beside Java's `place`, `schedule
+     * on_area_loaded` beside Java's `schedule function`, and the rules Java keeps none of beside
+     * Java's own in `gamerule`. This tree's command of each name carries Java's forms as well.
+     */
+    private static final List<String> SHARED = List.of("place", "schedule", "gamerule");
+
+    /**
+     * Forms Java and this tree both have words of: Java's own shorter lines are merged into this
+     * tree's node, which holds only the words Bedrock adds after them.
+     */
+    private static final Set<String> MERGED_FORMS = Set.of("structure");
+
     private final CommandDispatcher<CommandSourceStack> bedrock = new CommandDispatcher<>();
     private boolean holdsJava;
 
@@ -43,6 +59,7 @@ public final class BedrockTree {
     public static void register(CommandDispatcher<CommandSourceStack> java, CommandBuildContext context) {
         BedrockTree tree = new BedrockTree();
         BedrockCommands.register(tree.bedrock);
+        SHARED.forEach(name -> tree.alongsideJava(name, java));
         ExecuteCommand.register(tree.bedrock, context);
         BY_JAVA_TREE.put(java, tree);
 
@@ -56,6 +73,20 @@ public final class BedrockTree {
                     PackCommand line = PackCommand.tryFrom(null, StringArgumentType.getString(command, "line"));
                     return line == null ? null : line.read(source, CommandReport.DATA);
                 }))));
+    }
+
+    /**
+     * Hangs the forms Java's command of this name has under this tree's command of the same name,
+     * leaving out a form this tree builds a whole Bedrock version of, such as `place jigsaw`, and
+     * merging one this tree only extends, which is `place structure`.
+     */
+    private void alongsideJava(String name, CommandDispatcher<CommandSourceStack> java) {
+        CommandNode<CommandSourceStack> ours = bedrock.getRoot().getChild(name);
+        CommandNode<CommandSourceStack> javas = java.getRoot().getChild(name);
+        if (ours == null || javas == null) return;
+        javas.getChildren().stream()
+            .filter(form -> ours.getChild(form.getName()) == null || MERGED_FORMS.contains(form.getName()))
+            .forEach(ours::addChild);
     }
 
     /** The tree a translated line is read against on this server. */

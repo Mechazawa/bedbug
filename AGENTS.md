@@ -93,6 +93,20 @@ around fills a disk, and everything then fails at once in ways that look like an
 disk. Remove a worktree as soon as its branch is merged: `git worktree remove --force <path>`, or
 `rm -rf <worktree>/versions/*/build` to keep the checkout and drop only what a build can make again.
 
+**Run `tools/seed-worktree.sh` once in a new worktree, before its first build.** `wt add` runs it
+by itself through `.wt-post-add`; a worktree made any other way runs it by hand. It copies the
+Loom downloads and remapped companion jars (`.gradle/loom-cache/{minecraftMaven,remapped_mods,natives}`)
+from the main checkout with reflinks where the filesystem has them, which takes a first
+`./gradlew assemble` from about 65 seconds to about 16. It is safe on a worktree that already holds a
+full copy of the main checkout, and it deletes what such a copy gets wrong: `.gradle/loom-cache/projects`
+and `versions/*/build/loom-cache` hold absolute paths to the checkout that made them, and
+`versions/*/build/{run,reports}` and `versions/*/run/{saves,world,.mcaddon,logs,crash-reports}` are
+worlds and caches of that checkout. Loom writes the first two again on the next build. The worlds and
+caches are removed only on the first run in a worktree, which `.gradle/seeded-worktree` records by the
+worktree's path, so running it again keeps the worlds the worktree made itself. Build outputs
+are not copied, since the Gradle build cache restores them and execution history is keyed by absolute
+path. Run it while the main checkout is not building.
+
 These are the checks it runs, and what each one catches:
 
 - **`./gradlew build`** compiles all four versions and runs every test on each of them: the unit
@@ -109,7 +123,11 @@ These are the checks it runs, and what each one catches:
   `SharedConstants.tryDetectVersion()` and `Bootstrap.bootStrap()` in a `@BeforeAll`, which is
   enough without launching the game.
 - **`./gradlew :26.2:runGameTest`** runs the Mojang game tests in
-  `src/main/java/at/ioexception/mcaddon/gametest/`, headless, against a real world. `check` depends
+  `src/main/java/at/ioexception/mcaddon/gametest/`, headless, against a real world. The run takes
+  one class or one test at a time through Fabric's selector property, which the forked game reads
+  from the environment: `JAVA_TOOL_OPTIONS='-Dfabric-api.gametest.filter=mcaddon:bedrock_command_game_tests_*'`
+  in front of `./gradlew :26.2:runGameTest`. A test's id is `mcaddon:` and its class and method
+  names in snake case, joined by an underscore. `check` depends
   on it, so a failing one fails `./gradlew build`, and it is gated to the checked-out version like
   everything else. What it covers is the half a unit test cannot reach: that `/bedrock playanimation`
   and `/bedrock event entity` still parse and run, that Java's own tree reads none of Bedrock's
@@ -229,6 +247,11 @@ These are the checks it runs, and what each one catches:
     the ground.** Asked for a forest, it answered with a point two hundred blocks up over an ocean.
     `PackFeatureClientGameTest` searches for ground whose surface is forest for as far as it counts,
     working the surface out from the generator rather than the chunk.
+  - **Java puts a new player anywhere within the spawn radius**, so a search started from the player
+    looks at different chunks on every run of one seed. `PackFeatureClientGameTest` searches from the
+    middle of the world, and passes over dark forests: their canopy leaves a scatter onto the
+    heightmap almost no ground, and runs there counted between two and five torchflowers in 49
+    chunks, which is one unlucky run from none.
   - **Fabric registers a biome its modification API changed again, without its pack's name.** A
     biome a feature rule or a spawn rule reached carries no `KnownPack` afterwards, though it stays
     stable, and baking a world's dimensions registers every level stem again the same way. Ask a
@@ -237,7 +260,7 @@ These are the checks it runs, and what each one catches:
     A defect that only shows on a cached conversion has to be asserted by `runGameTest`, whose
     `.mcaddon/` survives between runs.
 
-  **Multiplayer is asserted against a dedicated server.** The three `Server*ClientGameTest`s call
+  **Multiplayer is asserted against a dedicated server.** The `Server*ClientGameTest`s call
   `worldBuilder().createServer()` and `connect()`, so the client reaches the server over a real TCP
   connection on which every message is encoded, which a single player world's in-memory connection
   never does. `ServerRegistryClientGameTest` compares every add-on entity type, item, block, sound
@@ -421,6 +444,21 @@ These are the checks it runs, and what each one catches:
   `sounds.json` entry names, which a sound moment no Java question reaches has to be kept for.
   `tp:spark` reflects when struck after a tenth of a second, and its brittle and dull groups are
   removed and stopped when struck instead.
+
+  The ember's sensing group carries a `minecraft:damage_sensor` with one trigger per cause, each
+  setting the enum property `tp:felt` to the cause it heard: `fall`, `entity_attack`, `projectile`,
+  `drowning`, `suffocation` and `contact`, every one but the attack refusing the blow.
+  `BehaviourGameTests.aDamageSensorHearsEachCauseByBedrocksName` hurts the ember with the Java
+  source for each and with `magic`, which no trigger names and which lands.
+
+  The brute carries five more groups for goals that move it somewhere of its own choosing:
+  `tp:brute_stomping` looks for turtle eggs every tick, `tp:brute_exploring` walks five blocks past
+  the edge of a village, `tp:brute_village_bound` walks to the nearest village, `tp:brute_hiding`
+  runs to a bed when a bell rings and `tp:brute_playing` plays with a pig. `GoalGameTests` builds the
+  village each one needs out of a bell or a bed in the empty structure, which Java registers as a
+  point of interest the moment the block is set. The brute's `tp:arrived` property is set by its
+  `minecraft:entity_spawned` and `minecraft:entity_born` events, which is how
+  `GoalGameTests.aBredChildIsBornRatherThanSpawned` tells a bred child from a placed one.
 
   Two more entities are there for what a mob walking about never reaches. One is a projectile with
   hit boxes wider than the box it collides in, which turns `isolated_physics` off the way Mojang's
@@ -706,6 +744,72 @@ These are the checks it runs, and what each one catches:
   `ParticleClientGameTest` has the player type `/bedrock particle` and has Java's own `/particle`
   make the one particle Java makes of any type.
 
+  `BedrockCommandGameTests` runs the Bedrock forms of commands whose Java namesake has no word for
+  them, each through `/bedrock` and read back off the world, with vanilla entities so that every one
+  asserts with no pack installed. `/ride` seats a group only when the whole of it fits a boat, fills
+  the boat to its two seats, empties it, brings it to its rider and summons a rider and a ride under
+  each of the three ride rules; `/summon` turns what it makes to a rotation, a point and an entity,
+  takes a name written before the position, and raises a spawn event the ember answers;
+  `/replaceitem` saddles a horse and arms it through `slot.equippable`, and `keep` leaves its armour
+  alone and fills an armour stand's empty head; `/structure` saves a region of six different blocks
+  to memory and to disk, deletes the disk copy, and loads the region mirrored both ways, turned a
+  quarter, without its blocks, at no integrity, into water with and without waterlogging, and a
+  layer at a time, each checked block by block where Bedrock puts it; `/tickingarea` forces a
+  rectangle's and a circle's chunks, marks and unmarks one to preload and releases a rectangle
+  removed by a position inside it; and `/schedule on_area_loaded` holds the test pack's
+  `tp/loaded`, which counts its runs on a scoreboard, until a ticking area loads the far chunk it
+  waits for. `place featurerule` puts the test pack's ore rule into stone the test lays far from
+  every other test, and `place jigsaw` places the mod's own one piece pool,
+  `mcaddon:gametest/fence`, into water with its jigsaw kept and its fence dry, and again with both
+  words the other way. That pool and its template ship in `src/main/resources/data/mcaddon/`, the
+  template under both `structure/` and `structures/` because 1.20.1 reads the plural; the template
+  is a 248 byte NBT file written by hand, a jigsaw named `mcaddon:start` beside an oak fence.
+  `place structure` is tested against `mcaddon:gametest/post`, a jigsaw structure (start height 150)
+  over a pool of one piece, a template like the fence plus an armor stand. One test per word
+  (`ignoreStartHeight`, `keepJigsaws`, `includeEntities`, the liquid setting) reads the blocks and the
+  armor stand back, and one asks that an igloo refuses the words. `Platform.placeStructure` runs the
+  structure's own pool through `JigsawPlacement.addPieces` with the fields it reads through
+  `JigsawStructureAccessor`, because `Structure.generate` takes no override. `includeEntities` false
+  discards the entities that were not in the area before the pieces were placed, since a piece always
+  spawns its template's entities. `BedrockTree.MERGED_FORMS` merges Java's short `place structure`
+  lines into the node `Structures` registers. `save query`, `setmaxplayers`, `packstack` and `permission` are typed by the
+  console after `/bedrock` and read back through what the console is told, because a line run the
+  way a pack runs one has a function's authority and each of these asks for more. `/gametest
+  create` lays out the test pack's `tp:hut_stands`, `pos` finds its area, `runthis` runs it there,
+  and `runsetuntilfail` runs `tp:fails_the_second_time`, which the test pack's script registers to
+  pass once and fail after, until its second round. `/mobevent` holds back the dragon the End's
+  fight makes where it finds none, through the event and through `events_enabled`; the test asks
+  the fight to look for its dragon itself, through reflection on its private `findOrCreateDragon`,
+  because a fight only looks once a player has stood in the End long enough for its arena to load,
+  and reads the dragon back from the fight's own record, because a dragon made that moment is not
+  yet among the entities its level hands out.
+
+  **A Bedrock line a pack runs has a function's authority, and a command asking for more refuses
+  it as an unknown command.** `PackCommand.run` lowers its source to the level Java runs a function
+  at, and the Bedrock tree asks each command for its Bedrock level plus one, so `place featurerule`,
+  Bedrock's words after a jigsaw's position, `save`, `setmaxplayers` and `permission` parse only for
+  an operator typing `/bedrock`. Java's own `place` forms keep the level Java asks for them. A test of one of
+  those types it through Java's own tree instead of through `BedrockLines`.
+
+  `MusicClientGameTest` plays the test pack's chime through `/bedrock music` and reads back the
+  track the client plays: music heard everywhere, looping when asked, turned down by `music volume`,
+  queued behind a track that plays once and not behind one that loops, and gone after `music
+  stop`. A server tells a client what only it acts on through `Channels.sendInstruction`, one payload
+  carrying a kind and a body, which `McAddonClient` hands to the class the kind names.
+
+  `CameraFadeClientGameTest` reads a fade back as the last rectangle the heads-up display filled
+  across the whole screen, which the test source set's `GuiGraphicsExtractorMixin` writes into
+  `Drawn` beside every line of text drawn, and a field of view off the camera a frame was drawn with.
+
+  `BedrockRulesClientGameTest` reads `showcoordinates` and `showdaysplayed` back as the lines the
+  heads-up display drew, `showtags` as the lines a pickaxe's `can_break` writes into its tooltip and
+  `showrecipemessages` as the recipe toast the client is or is not showing; `BedrockCommandGameTests`
+  covers the server's two, `recipesunlock` through an advancement's reward and `respawnblocksexplode`
+  through a bed used in the nether and a charged anchor used in the overworld.
+
+  One client game test at a time: the entry point list in `src/gametest/resources/fabric.mod.json`
+  is the whole selection, so cutting it down to one class runs that class alone. Put it back after.
+
   `HudClientGameTest` hides and resets pieces of the heads-up display on a dedicated server, one
   piece at a time, all of them, and through the script's `tp:hud_hide` and `tp:hud_reset` probes.
   A piece is watched through the sprite Java draws it with, which a mixin of the test source set,
@@ -824,6 +928,10 @@ These are the checks it runs, and what each one catches:
   python3 tools/verify/verify.py run --version 26.2      # a server, one version
   python3 tools/verify/verify.py client --version 1.21.1 # a client, one version
   python3 tools/verify/verify.py join --version 26.2     # a client connected to a server
+  python3 tools/verify/verify.py join --bare --version 26.2      # a second client with no add-ons takes the server's
+  python3 tools/verify/verify.py join --other --reshaped --version 26.2   # other versions, and a refused one
+  python3 tools/verify/verify.py lan --version 26.2      # a world opened to LAN, a second client joins it
+  python3 tools/verify/verify.py lan --dormant --version 26.2   # the host also holds a dormant add-on
   python3 tools/verify/verify.py convert --source <extracted pack directory>   # no game
   python3 tools/verify/verify.py companions --version 26.2  # a server and a client beside other mods
   ```
@@ -859,11 +967,14 @@ These are the checks it runs, and what each one catches:
     `KnownPack`, so a `jukebox_song`, a `test_instance` and a `test_environment` shipped there all
     leave the world stable.
   - **A converted add-on pack** is safe too, because `Platform.directoryPack` gives it a name of its
-    own: `KnownPack("mcaddon", <the manifest header uuid>, <the pack version> + "+" +
-    McAddon.VERSION)`. The uuid is what two installations of one add-on share; the version separates
-    two releases, and carries the mod's version because the bytes in a converted pack are a function
-    of the converter as much as of the pack. Built with that `KnownPack` taken out again, one
-    converted `jukebox_song` is enough to make the world experimental.
+    own: `KnownPack("mcaddon", <the manifest header uuid>, <the pack version> + "+" + <the first
+    eight hex digits of the archive's sha256> + "+" + McAddon.VERSION)`, the digest left out for a
+    pack read from a directory. The uuid is what two installations of one add-on share; the version
+    separates two releases, the digest two copies of one release with other bytes (the game refuses
+    a join outright when two offered packs share one `KnownPack`), and the mod's version is there
+    because the bytes in a converted pack are a function of the converter as much as of the pack.
+    Built with that `KnownPack` taken out again, one converted `jukebox_song` is enough to make the
+    world experimental.
   - **A data pack in the world's own `datapacks/`** is not. One `test_instance` plus one
     `test_environment` written there marks a world exactly as one `jukebox_song` from an unnamed pack
     does, which is what `tools/scene/scene.py` would hit if a scene ever wrote one.
@@ -989,6 +1100,41 @@ These are the checks it runs, and what each one catches:
   `-PquickPlay=<world>` the single player half uses. The server is given `online-mode=false` and
   `enforce-secure-profile=false`, because a dev client has a made-up name and no session and is
   refused before any of this mod's code is reached otherwise.
+
+  **The second client and the sync modes.** `./gradlew :<version>:runJoinClient` is a second dev
+  client with run directory `versions/<version>/run/join-client/`, its own `addons/` and
+  `.mcaddon/`, and the JVM property `-Dmcaddon.role=guest`, which is what `running` and `kill` tell
+  it from the first client by. `-PjoinServer` and `-PquickPlay` reach both clients. `-Pserved=<dir>`
+  gives a dedicated server the `mcaddon.served` property, so it also hands out every archive in
+  that directory. The harness only waits on, and ends, clients that belong to its own checkout, so
+  other worktrees' game tests do not block it; servers are counted across all checkouts because
+  they share the ports.
+
+  - `join` is the original check, the first client sharing the server's add-ons.
+  - `join --bare` empties the second client's directory and expects `Downloading N add-ons`,
+    `Received N add-ons from the server.` and `Activated the server's add-on set of N add-ons.`,
+    the item and chat round trip, N archives under `join-client/.mcaddon/received`, and, after the
+    harness stops the server under the client, `Restored the installed add-on set.`.
+  - `join --other` gives the second client the server's archives with the manifest version raised
+    (a same-shape copy that gets replaced) plus the `sv` add-on the server lacks (which stays
+    installed and goes dormant). `join --reshaped` gives it a copy whose `tp:lamp` has one more
+    `tp:level` value, and expects `The server's copy of <add-on> cannot replace yours without a
+    restart.` and no world.
+  - `lan` runs the first client with a saved world as host. A development-only handler,
+    `client/LanRequests`, answers a `lan.request` file in the host's run directory: each line is a
+    console command for the integrated server, and `publish` opens the world to the LAN through
+    `Platform.publishServer`, which also turns authentication off because a dev guest has no
+    session, then writes the port to `lan.port`; `open <world>` opens a saved world while none is
+    open. The host is made creative and the world peaceful before anybody joins, because a zombie
+    kills a survival host at night and a dead player holds no chunks. The guest is the second
+    client. The host's log must hold no `Received`, `Downloading`, `Activated` or `Restored` line
+    while it hosts. `--dormant` has the host client join a dedicated server serving an add-on the
+    host has not installed, leave, and only then open its world with `open`, all in one process,
+    because a dormant add-on is one the process registered: a host started afresh holds none. The
+    guest is then offered it as an inactive entry. `all` runs both.
+  - A fresh game directory has no `options.txt`, and the game then opens its accessibility
+    onboarding screen instead of the quick play it was told to run, so a client in a new worktree
+    sat on the title screen until the deadline. `play` writes `onboardAccessibility:false` first.
 
   A green `convert` proves the output under `versions/<version>/run/.mcaddon/converted/` holds one
   texture per texture the pack ships, one sound event per definition, and an `_n` and `_s` sidecar
@@ -1634,6 +1780,73 @@ Mojang's geometry is not committed, so that list is the one place this knowledge
   1632 items and 1166 blocks resolved as written, and with the mapping 1869 items and 1408 blocks
   resolve, the 110 and 303 left being Bedrock's own and none unanswered.
 
+## Add-ons handed over at join
+
+A client joining a server that runs this mod plays with exactly the server's add-ons for that
+visit. README's "Playing on a server" says what a player sees; this is how it is built.
+
+**The built-in registries only grow.** Nothing an add-on registered is ever removed and no raw id
+moves. `registry.RegistryEdits.adding` opens the five registries an add-on writes into (sound event,
+particle type, entity type, block, item) after the freeze and freezes them again as
+`MappedRegistry.freeze` would: the intrusive holder map comes back and goes, and from 26 the
+component lookup is rebuilt and every holder's tags are bound. A registry that did not grow is
+closed without either, because the client game tests' server reads those from other threads at the
+same moment. `registry.AddonRegistry.ensureRegistered` runs the writers inside it, and startup goes
+through it too.
+
+**What answers is the active set.** `registry.ActiveAddons` holds the installed set and the active
+one, each a `resource.AddonSet` (the packs, their conversions and their function names). The active
+set is what the pack repository is offered, what the creative tabs list, and what music, fogs,
+camera presets, dialogue scenes and, from 1.21, brewing are read from. An add-on registered and not
+active is dormant: its entries stay registered with their last definitions and nothing offers it.
+Spawn rules, feature rules and the nether and end biome lists are registered once for the installed
+set, because they apply as a world loads and a world loads only with the installed set active.
+
+**A same-id copy is checked before anything is registered.** `AddonRegistry.conflict` compares the
+shape every registered object was built from (an entity type's population and size, a block's whole
+definition, an item's whole component map) against another set's, and names the add-on whose copy
+would have to be built again. A block is never rebound, which is why its whole definition is its
+shape.
+
+**The transfer.** `sync.AddonManifest` names each archive by the sha256 of its bytes;
+`sync.ServedArchives` copies them into `.mcaddon/served/` the first time a client needs one, forgets
+the manifest as a server starts, and lists every archive registered in the process that the server
+did not install as not active, which is what a LAN host visited servers for. `sync.Outgoing` and
+`sync.Incoming` are the two ends of one transfer whatever carries it: from 1.21
+`server.AddonSyncTask`, a configuration task added before Fabric's registry sync, with
+`network.SyncChannels`; on 1.20.1 `server.AddonSyncLogin`, login queries with a heartbeat every five
+seconds and `ServerLoginTimerMixin` holding the login timer, with `network.LoginChannels`. The
+client side is `client.AddonSession`. Archives arrive in `.mcaddon/received/` (`pack.ReceivedArchives`),
+unpack into `.mcaddon/extracted/<sha256>/` and convert into a directory ending in the first eight
+digits of the digest.
+
+**The log lines `verify.py` reads stay as they are:** `Received N add-ons from the server.`,
+`Activated the server's add-on set of N add-ons.`, `Restored the installed add-on set.` and the
+refusal `The server's copy of <add-on> cannot replace yours without a restart.`
+
+Traps met building it:
+
+- **A task queued for the client thread from a disconnect can be thrown away.** The client drops
+  its pending tasks as it disconnects, and Fabric raises the disconnect event on the network thread
+  just before, so a leave handed over with `execute` or `schedule` sometimes never ran. The leave is
+  a flag the client's own tick takes instead, and an enter takes any leave still owed first.
+- **Every client game test joining a dedicated server is handed the served add-on.** The server and
+  the client share one process, so the add-on is registered from the first such test on, and a test
+  cannot ask whether it was registered before the join; it asks whether the server installed it.
+  The client game test task builds it from `tools/testpack/served` into
+  `run/clientGameTest/addons-served/` and names that directory in the `mcaddon.served` property,
+  which `ServedArchives` reads in a development run only.
+- **The client game test harness does not tick the client between tests**, so a leave owed by one
+  test runs as the next one connects, while that test's server configures it.
+- **A configuration that changes nothing must not reload.** A join whose set equals the active one
+  answers at once.
+
+Tests: `RegistryGameTests` (adding after the freeze, on all four versions), `ActiveAddonsGameTests`
+(an empty set and back), `ShapeGameTests` (copies that do and do not conflict),
+`ServedArchivesGameTests` (a registered archive handed out dormant), `AddonSyncClientGameTest` (a
+join, a leave and a second join against a dedicated server), and the unit tests `AddonManifestTest`,
+`ReceivedArchivesTest`, `ArchivesTest` and `FunctionNamesTest`.
+
 ## Conventions
 
 **No add-on content is committed.** No textures, sounds, models or text from any pack. Real packs
@@ -1755,7 +1968,10 @@ src/main/java/at/ioexception/mcaddon/
   pack/                      Discovery, manifests, dependency order
   convert/                   Runtime conversion: Targa, Ogg repair, sounds, text, models, functions
   resource/                  The converted packs and how the game is told about them
-  registry/                  Sounds, entities, items, blocks, spawns, worldgen and the creative tab
+  registry/                  Sounds, entities, items, blocks, spawns, worldgen and the creative tab,
+                             what is registered and what is active
+  sync/                      The add-on hand-over at join: the manifest, what a server serves and
+                             both ends of a transfer
   bedrock/camera/            What `/camera` and `/camerashake` set, the presets and splines a pack adds, and the
                              easing curves they name
   bedrock/fog/               A pack's `fogs/` settings, as far as Java's one fog can carry them
@@ -1801,6 +2017,14 @@ the surface reports (`typeId`, `EntityTypes`, event payloads, families) and `Add
 is what it accepts (spawns, queries, filters), with `BedrockEntityNames` holding the vanilla ids
 the two editions spell differently in both directions. Compare two names through `identifierOf`,
 never the raw registry key, or `minecraft:villager` and `minecraft:villager_v2` read as two types.
+
+**So does a damage cause.** `bedrock.behaviour.DamageCause` holds Bedrock's causes against the
+Java damage types that are the same harm, in both directions, for the types the running version's
+`DamageTypes` declares. A cause Java has no type for is dealt as its stand-in and hears what the
+stand-in hears. Every place a pack names a cause asks it, and nothing compares a cause against
+`DamageSource.getMsgId()`, which is a death message key several types share: `campfire` and
+`in_fire` are both `inFire`. The field census reads `name(plain, "text"` as a field read, so a
+constant's Java types are listed before its flags.
 
 **So does an item and a block, everywhere a pack names one.** `AddonItems.named` and
 `AddonBlocks.named` (or `AddonBlocks.stateOf`, where Bedrock's states pick the block) are what a

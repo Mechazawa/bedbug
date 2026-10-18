@@ -14,6 +14,7 @@ import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -39,22 +40,40 @@ public final class AddonCreativeTab {
         "equipment", CreativeModeTabs.COMBAT,
         "items", CreativeModeTabs.INGREDIENTS);
 
-    public static void register(PackSet packs) {
-        Map<String, Item> items = AddonItems.all();
-        if (items.isEmpty()) return;
+    /** The items the tab lists, in catalog order, and the items each of the game's tabs is given. */
+    private static List<Item> listed = List.of();
+    private static Map<ResourceKey<CreativeModeTab>, List<Item>> joined = Map.of();
 
+    /**
+     * Registers the one tab, and the additions to the game's own tabs, each reading what the active
+     * add-ons list when the game builds the tabs. A tab with nothing in it is not shown.
+     */
+    public static void register() {
+        CreativeModeTab tab = Platform.creativeTab()
+            .icon(() -> new ItemStack(listed.isEmpty() ? Items.BOOK : listed.get(0)))
+            .title(Component.literal("Add-ons"))
+            .displayItems((parameters, output) -> listed.forEach(output::accept))
+            .build();
+        Registry.register(BuiltInRegistries.CREATIVE_MODE_TAB, McAddon.id("addons"), tab);
+        TABS.values().forEach(vanilla -> Platform.addToCreativeTab(vanilla,
+            () -> joined.getOrDefault(vanilla, List.of())));
+    }
+
+    /**
+     * Lists `active` from now on, ordered and filed by the catalogs of `packs`.
+     *
+     * The game builds a tab's contents once and keeps them until something it watches changes, so
+     * a client drops what it built when the set changes under it.
+     */
+    public static void show(PackSet packs, java.util.Collection<Item> active) {
+        Map<String, Item> items = new LinkedHashMap<>();
+        AddonItems.all().forEach((identifier, item) -> {
+            if (active.contains(item)) items.put(identifier, item);
+        });
         ItemCatalog catalog = catalogOf(packs);
         Map<String, Item> ordered = inCatalogOrder(items, catalog);
-
-        Item icon = ordered.values().iterator().next();
-        CreativeModeTab tab = Platform.creativeTab()
-            .icon(() -> new ItemStack(icon))
-            .title(Component.literal("Add-ons"))
-            .displayItems((parameters, output) -> ordered.values().forEach(output::accept))
-            .build();
-
-        Registry.register(BuiltInRegistries.CREATIVE_MODE_TAB, McAddon.id("addons"), tab);
-        joinVanillaTabs(ordered, catalog);
+        listed = List.copyOf(ordered.values());
+        joined = joinVanillaTabs(ordered, catalog);
     }
 
     /** Every behaviour pack's catalog, in pack order, the first to file an item deciding where it goes. */
@@ -88,7 +107,8 @@ public final class AddonCreativeTab {
     }
 
     /** Files each catalogued item into the Java tab its category names, and names a category with none. */
-    private static void joinVanillaTabs(Map<String, Item> items, ItemCatalog catalog) {
+    private static Map<ResourceKey<CreativeModeTab>, List<Item>> joinVanillaTabs(Map<String, Item> items,
+        ItemCatalog catalog) {
         Map<ResourceKey<CreativeModeTab>, List<Item>> byTab = new LinkedHashMap<>();
         catalog.categoryOf().forEach((identifier, category) -> {
             Item item = items.get(identifier);
@@ -102,6 +122,6 @@ public final class AddonCreativeTab {
             byTab.computeIfAbsent(tab, key -> new ArrayList<>()).add(item);
         });
 
-        byTab.forEach((tab, held) -> Platform.addToCreativeTab(tab, List.copyOf(held)));
+        return byTab;
     }
 }

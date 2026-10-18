@@ -1,0 +1,9 @@
+{
+  "resource_pack_name": "sv",
+  "texture_name": "atlas.terrain",
+  "texture_data": {
+    "crate": {
+      "textures": "textures/blocks/crate"
+    }
+  }
+}

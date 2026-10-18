@@ -26,13 +26,20 @@ public final class BedrockPack {
     private final Path root;
     private final PackManifest manifest;
     private final String origin;
+    private final String archive;
     private final Path overlay;
     private Map<String, String> texts;
 
     public BedrockPack(Path root, PackManifest manifest, String origin) {
+        this(root, manifest, origin, null);
+    }
+
+    /** @param archive the sha256 of the archive the pack was unpacked from, or null for a directory */
+    public BedrockPack(Path root, PackManifest manifest, String origin, String archive) {
         this.root = root;
         this.manifest = manifest;
         this.origin = origin;
+        this.archive = archive;
         this.overlay = overlayOf(root, manifest, origin);
     }
 
@@ -67,6 +74,15 @@ public final class BedrockPack {
     /** The `.mcaddon` or directory the user dropped in, for reporting which file a problem is in. */
     public String origin() {
         return origin;
+    }
+
+    /**
+     * The sha256 of the archive the pack was unpacked from, which names one copy of an add-on
+     * wherever it is: on a server, on a client and in either one's cache. Null for a pack read from
+     * a directory, which has no bytes of its own to name it by.
+     */
+    public String archive() {
+        return archive;
     }
 
     public PackRole role() {
@@ -125,21 +141,23 @@ public final class BedrockPack {
     }
 
     /**
-     * A number that changes when anything in the pack changes.
+     * Something that changes when anything in the pack changes.
      *
      * A pack's own version is what an author bumps for players, not for every save, so keying the
-     * converted output on it alone leaves an edited pack showing its last conversion. The path, the
-     * size and the modification time of every file answer that without reading any of them.
+     * converted output on it alone leaves an edited pack showing its last conversion. An archive's
+     * digest says it outright. For a directory the path, the size and the modification time of every
+     * file answer it without reading any of them.
      */
-    public long contentStamp() {
+    public String contentStamp() {
+        if (archive != null) return archive;
         try (Stream<Path> walk = Files.walk(root)) {
-            return walk.filter(Files::isRegularFile)
+            return Long.toHexString(walk.filter(Files::isRegularFile)
                 .sorted()
                 .mapToLong(BedrockPack::stampOf)
-                .reduce(1L, (stamp, file) -> stamp * 31L + file);
+                .reduce(1L, (stamp, file) -> stamp * 31L + file));
         } catch (IOException error) {
             McAddon.LOGGER.warn("Could not read {} to see whether it changed.", origin, error);
-            return 0L;
+            return "";
         }
     }
 

@@ -15,6 +15,7 @@ import at.ioexception.mcaddon.client.render.PlayerHud;
 import at.ioexception.mcaddon.client.screen.AddonFormScreen;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.ActiveAddons;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientEntityEvents;
@@ -23,20 +24,15 @@ import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.world.entity.EntityType;
 
+import java.util.List;
+
 public final class McAddonClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
-        AddonClientAssets.load();
-
-        for (EntityType<?> type : AddonEntities.all().keySet()) {
-            EntityRendererRegistry.register(cast(type), AddonEntityRenderer::new);
-        }
-
-        at.ioexception.mcaddon.registry.AddonParticles.all().keySet().forEach(identifier ->
-            Platform.registerParticle(at.ioexception.mcaddon.registry.AddonParticles.typeOf(identifier),
-                sprites -> new AddonParticleProvider(identifier, sprites)));
-
-        Platform.registerDyeTint(at.ioexception.mcaddon.registry.AddonItems.dyeable());
+        follow();
+        ActiveAddons.onActivate(set -> follow());
+        AddonSession.register();
+        at.ioexception.mcaddon.pack.ReceivedArchives.inCache().prune();
 
         Channels.receiveProperties((entityId, json) -> {
             EntityProperties.accept(entityId, json);
@@ -48,7 +44,6 @@ public final class McAddonClient implements ClientModInitializer {
         Channels.receiveFog(encoded -> PlayerFog.accept(FogDefinition.decode(encoded)));
         Channels.receiveHud(PlayerHud::accept);
         Channels.receiveInputPermissions(PlayerInput::accept);
-        Channels.receivePacks(ServerAddons::receive);
         Channels.receiveAnimation(Animators::play);
         Channels.receiveSeatTurn((mountId, riderId, turn) -> {
             net.minecraft.client.multiplayer.ClientLevel level = net.minecraft.client.Minecraft.getInstance().level;
@@ -60,15 +55,34 @@ public final class McAddonClient implements ClientModInitializer {
             at.ioexception.mcaddon.client.render.AddonEmitters.start(effect, null,
                 new net.minecraft.world.phys.Vec3(x, y, z)));
         Channels.receiveForm(AddonFormScreen::receive);
+        Channels.receiveInstructions((kind, body) -> {
+            switch (kind) {
+                case at.ioexception.mcaddon.server.Music.KIND -> PlayerMusic.accept(body);
+                case CameraView.FADE -> at.ioexception.mcaddon.client.render.PlayerFade.accept(body);
+                case CameraView.FOV -> at.ioexception.mcaddon.client.render.PlayerFov.accept(body,
+                    net.minecraft.client.Minecraft.getInstance().options.fov().get());
+                case at.ioexception.mcaddon.server.BedrockRules.KIND ->
+                    at.ioexception.mcaddon.client.render.PlayerRules.accept(body);
+                default -> {
+                }
+            }
+        });
+        Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("bedrock_rules"),
+            at.ioexception.mcaddon.client.render.PlayerRules::draw);
+        Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("bedrock_screen"),
+            at.ioexception.mcaddon.client.render.PlayerFade::draw);
 
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK
             .register(client -> {
                 at.ioexception.mcaddon.client.render.AddonEmitters.tick();
+                PlayerMusic.tick();
                 if (client.level != null) Animators.tickOffscreen(client.level);
             });
         if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
             net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK
                 .register(ScreenshotRequests::tick);
+            net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK
+                .register(LanRequests::tick);
         }
 
         ClientEntityEvents.ENTITY_LOAD.register((entity, level) -> mirrorGroups(entity));
@@ -87,12 +101,45 @@ public final class McAddonClient implements ClientModInitializer {
             PlayerFog.clear();
             PlayerHud.clear();
             PlayerInput.clear();
-            ServerAddons.clear();
+            PlayerMusic.clear();
+            at.ioexception.mcaddon.client.render.PlayerFade.clear();
+            at.ioexception.mcaddon.client.render.PlayerFov.clear();
+            at.ioexception.mcaddon.client.render.PlayerRules.clear();
             at.ioexception.mcaddon.client.render.AddonEmitters.clear();
         }));
         // Bedrock starts every connection with no camera set, and a world closed from the client is not
         // always seen as a dropped connection, so the camera is cleared again as the next one starts.
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> PlayerCamera.clear());
+    }
+
+    /** What the drawing side registers once per object, so an object registered later is prepared too. */
+    private static final java.util.Set<Object> PREPARED = new java.util.HashSet<>();
+    private static final java.util.Set<net.minecraft.world.item.Item> TINTED = new java.util.HashSet<>();
+    private static boolean started;
+
+    /**
+     * Prepares the drawing side for the active add-ons: their models, a renderer for every entity
+     * type and a provider for every particle type registered so far, a tint for every dyeable item,
+     * what the game prepared for every item at startup for an item registered since, and creative
+     * tabs built again the next time they are opened.
+     */
+    private static void follow() {
+        AddonClientAssets.load();
+        AddonEntities.all().keySet().stream().filter(PREPARED::add)
+            .forEach(type -> EntityRendererRegistry.register(cast(type), AddonEntityRenderer::new));
+        at.ioexception.mcaddon.registry.AddonParticles.all().keySet().stream()
+            .filter(identifier -> PREPARED.add(at.ioexception.mcaddon.registry.AddonParticles.typeOf(identifier)))
+            .forEach(identifier -> Platform.registerParticle(
+                at.ioexception.mcaddon.registry.AddonParticles.typeOf(identifier),
+                sprites -> new AddonParticleProvider(identifier, sprites)));
+        List<net.minecraft.world.item.Item> late = net.minecraft.core.registries.BuiltInRegistries.ITEM.stream()
+            .filter(PREPARED::add).toList();
+        // The game prepares every item there is as it starts, which is after the first of these.
+        if (started) late.forEach(Platform::prepareLateItem);
+        started = true;
+        Platform.registerDyeTint(at.ioexception.mcaddon.registry.AddonItems.dyeable().stream()
+            .filter(TINTED::add).toList());
+        at.ioexception.mcaddon.mixin.CreativeModeTabsAccessor.mcaddon$setCachedParameters(null);
     }
 
     /** Properties can arrive before the entity they belong to, so both arrivals apply them. */

@@ -3,7 +3,7 @@ package at.ioexception.mcaddon.script;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.PackRole;
-import at.ioexception.mcaddon.resource.AddonPacks;
+import at.ioexception.mcaddon.registry.ActiveAddons;
 import at.ioexception.mcaddon.state.AddonState;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -83,7 +83,7 @@ public final class ScriptHost {
         }
 
         ScriptCoverage coverage = new ScriptCoverage();
-        List<String> namespaces = scripted.stream().map(AddonPacks::namespaceOf).distinct().toList();
+        List<String> namespaces = scripted.stream().map(ActiveAddons.installed()::namespaceOf).distinct().toList();
         ScriptBridge bridge = new ScriptBridge(server, state, coverage,
             namespaces.size() == 1 ? namespaces.get(0) : null);
 

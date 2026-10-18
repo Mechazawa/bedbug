@@ -276,6 +276,200 @@ public final class Platform {
         *///?}
     }
 
+    /**
+     * Whether a summon refuses this type while the difficulty is peaceful, as Bedrock's does.
+     *
+     * 26 asks the type itself; before that the types Java removes on peaceful are its monsters.
+     */
+    public static boolean refusedInPeaceful(EntityType<?> type, ServerLevel level) {
+        if (level.getDifficulty() != net.minecraft.world.Difficulty.PEACEFUL) return false;
+        //? if >=26 {
+        return !type.isAllowedInPeaceful();
+        //?} else {
+        /*return type.getCategory() == net.minecraft.world.entity.MobCategory.MONSTER;
+        *///?}
+    }
+
+    /** One chunk's coordinates packed into the number Java keys its chunk maps by. */
+    public static long chunkKey(int x, int z) {
+        //? if >=26 {
+        return net.minecraft.world.level.ChunkPos.pack(x, z);
+        //?} else {
+        /*return net.minecraft.world.level.ChunkPos.asLong(x, z);
+        *///?}
+    }
+
+    /** The chunks a level holds forced, by their packed coordinates. */
+    public static it.unimi.dsi.fastutil.longs.LongSet forcedChunks(ServerLevel level) {
+        //? if >=26 {
+        return level.getForceLoadedChunks();
+        //?} else {
+        /*return level.getForcedChunks();
+        *///?}
+    }
+
+    /** The placed feature a level's registries hold under that id, or null. */
+    public static net.minecraft.world.level.levelgen.placement.PlacedFeature placedFeature(ServerLevel level,
+        Identifier id) {
+        //? if >=26 {
+        return level.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.PLACED_FEATURE)
+            .getValue(id);
+        //?} else {
+        /*return level.registryAccess().registryOrThrow(net.minecraft.core.registries.Registries.PLACED_FEATURE)
+            .get(id);
+        *///?}
+    }
+
+    /**
+     * Whether a jigsaw can be placed without waterlogging what it puts into water. 1.20.1 has no
+     * liquid settings and waterlogs every block that can be.
+     */
+    public static boolean placesJigsawsDry() {
+        //? if >=1.21 {
+        return true;
+        //?} else {
+        /*return false;
+        *///?}
+    }
+
+    /**
+     * Java's `place jigsaw` with the settings Bedrock's command adds. False when nothing fits at that
+     * position.
+     */
+    public static boolean placeJigsaw(ServerLevel level,
+        net.minecraft.core.Holder<net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool> pool,
+        Identifier target, int depth, net.minecraft.core.BlockPos at, JigsawSettings settings) {
+        return place(level, pool, Optional.of(target), depth, at, false, Optional.empty(), null, settings);
+    }
+
+    /**
+     * A jigsaw structure placed from its own definition with the settings Bedrock's `place structure`
+     * adds. Its start height is sampled at the position's column unless `ignoreStartHeight` puts the
+     * start at the position's own height, which also drops the heightmap projection. False when
+     * nothing fits there.
+     */
+    public static boolean placeStructure(ServerLevel level,
+        net.minecraft.world.level.levelgen.structure.structures.JigsawStructure structure,
+        net.minecraft.core.BlockPos at, boolean ignoreStartHeight, JigsawSettings settings) {
+        var fields = (at.ioexception.mcaddon.mixin.JigsawStructureAccessor) (Object) structure;
+        var generator = level.getChunkSource().getGenerator();
+        var start = ignoreStartHeight ? at : at.atY(fields.mcaddon$startHeight().sample(level.getRandom(),
+            new net.minecraft.world.level.levelgen.WorldGenerationContext(generator, level)));
+        return place(level, fields.mcaddon$startPool(), fields.mcaddon$startJigsawName(), fields.mcaddon$maxDepth(),
+            start, fields.mcaddon$useExpansionHack(),
+            ignoreStartHeight ? Optional.empty() : fields.mcaddon$projectStartToHeightmap(), structure, settings);
+    }
+
+    /**
+     * Builds the pieces of a jigsaw and places them, counting the entities the pieces bring along as
+     * new when they were not standing in the area beforehand. A null `from` is a pool placed on its
+     * own, which has no structure definition to take the limits from.
+     */
+    private static boolean place(ServerLevel level,
+        net.minecraft.core.Holder<net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool> pool,
+        Optional<Identifier> target, int depth, net.minecraft.core.BlockPos start, boolean expansionHack,
+        Optional<net.minecraft.world.level.levelgen.Heightmap.Types> project,
+        net.minecraft.world.level.levelgen.structure.structures.JigsawStructure from, JigsawSettings settings) {
+        net.minecraft.world.level.chunk.ChunkGenerator generator = level.getChunkSource().getGenerator();
+        net.minecraft.world.level.levelgen.structure.Structure.GenerationContext context =
+            new net.minecraft.world.level.levelgen.structure.Structure.GenerationContext(level.registryAccess(),
+                generator, generator.getBiomeSource(), level.getChunkSource().randomState(),
+                level.getStructureManager(), level.getSeed(),
+                new net.minecraft.world.level.ChunkPos(start.getX() >> 4, start.getZ() >> 4), level, biome -> true);
+        var fields = (at.ioexception.mcaddon.mixin.JigsawStructureAccessor) (Object) from;
+        Optional<net.minecraft.world.level.levelgen.structure.Structure.GenerationStub> stub;
+        //? if >=1.21 {
+        var liquid = settings.waterlog()
+            ? net.minecraft.world.level.levelgen.structure.templatesystem.LiquidSettings.APPLY_WATERLOGGING
+            : net.minecraft.world.level.levelgen.structure.templatesystem.LiquidSettings.IGNORE_WATERLOGGING;
+        //? if >=26 {
+        var maxDistance = from == null
+            ? new net.minecraft.world.level.levelgen.structure.structures.JigsawStructure.MaxDistance(128)
+            : fields.mcaddon$maxDistanceFromCenter();
+        //?} else {
+        /*int maxDistance = from == null ? 128 : fields.mcaddon$maxDistanceFromCenter();
+        *///?}
+        var aliases = from == null
+            ? net.minecraft.world.level.levelgen.structure.pools.alias.PoolAliasLookup.EMPTY
+            : net.minecraft.world.level.levelgen.structure.pools.alias.PoolAliasLookup.create(
+                fields.mcaddon$poolAliases(), start, level.getSeed());
+        var padding = from == null
+            ? net.minecraft.world.level.levelgen.structure.structures.JigsawStructure.DEFAULT_DIMENSION_PADDING
+            : fields.mcaddon$dimensionPadding();
+        stub = net.minecraft.world.level.levelgen.structure.pools.JigsawPlacement.addPieces(context, pool, target,
+            depth, start, expansionHack, project, maxDistance, aliases, padding, liquid);
+        //?} else {
+        /*int maxDistance = from == null ? 128 : fields.mcaddon$maxDistanceFromCenter();
+        stub = net.minecraft.world.level.levelgen.structure.pools.JigsawPlacement.addPieces(context, pool, target,
+            depth, start, expansionHack, project, maxDistance);
+        *///?}
+        if (stub.isEmpty()) return false;
+
+        var pieces = stub.get().getPiecesBuilder().build();
+        var area = net.minecraft.world.phys.AABB.of(pieces.calculateBoundingBox());
+        java.util.Set<Entity> before = new java.util.HashSet<>(level.getEntities((Entity) null, area, entity -> true));
+        pieces.pieces().stream()
+            .filter(net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece.class::isInstance)
+            .map(net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece.class::cast)
+            .forEach(piece -> piece.place(level, level.structureManager(), generator, level.getRandom(),
+                net.minecraft.world.level.levelgen.structure.BoundingBox.infinite(), start, settings.keepJigsaws()));
+        if (!settings.includeEntities()) {
+            level.getEntities((Entity) null, area,
+                entity -> !before.contains(entity) && !(entity instanceof net.minecraft.world.entity.player.Player))
+                .forEach(Entity::discard);
+        }
+        return true;
+    }
+
+    /** A player's own entry in the operator list, made or taken away. */
+    public static void setOperator(net.minecraft.server.MinecraftServer server, ServerPlayer player,
+        boolean operator) {
+        //? if >=26 {
+        if (operator) server.getPlayerList().op(player.nameAndId());
+        else server.getPlayerList().deop(player.nameAndId());
+        //?} else {
+        /*if (operator) server.getPlayerList().op(player.getGameProfile());
+        else server.getPlayerList().deop(player.getGameProfile());
+        *///?}
+    }
+
+    public static boolean isOperator(net.minecraft.server.MinecraftServer server, ServerPlayer player) {
+        //? if >=26 {
+        return server.getPlayerList().isOp(player.nameAndId());
+        //?} else {
+        /*return server.getPlayerList().isOp(player.getGameProfile());
+        *///?}
+    }
+
+    /** Whether a bed used here blows up rather than letting anybody sleep, which 26 asks the dimension. */
+    public static boolean bedExplodes(Level level, net.minecraft.core.BlockPos pos) {
+        //? if >=26 {
+        return level.environmentAttributes()
+            .getValue(net.minecraft.world.attribute.EnvironmentAttributes.BED_RULE, pos).explodes();
+        //?} else {
+        /*return !net.minecraft.world.level.block.BedBlock.canSetSpawn(level);
+        *///?}
+    }
+
+    /** Whether a player's recipe book holds the recipe of this id. */
+    public static boolean knowsRecipe(ServerPlayer player, Identifier recipe) {
+        //? if >=1.21.2 {
+        return player.getRecipeBook().contains(ResourceKey.create(net.minecraft.core.registries.Registries.RECIPE,
+            recipe));
+        //?} else {
+        /*return player.getRecipeBook().contains(recipe);
+        *///?}
+    }
+
+    /** Puts a rider on a vehicle whether or not the rider could climb on by itself. */
+    public static boolean mount(Entity rider, Entity vehicle) {
+        //? if >=26 {
+        return rider.startRiding(vehicle, true, true);
+        //?} else {
+        /*return rider.startRiding(vehicle, true);
+        *///?}
+    }
+
     public static Entity createMob(EntityType<?> type, ServerLevel level) {
         //? if >=1.21.2 {
         return type.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND);
@@ -391,16 +585,19 @@ public final class Platform {
         *///?}
     }
 
-    /** Puts items into a tab the game already has, under the name Fabric gives that event in 26. */
+    /**
+     * Puts items into a tab the game already has each time it is built, under the name Fabric gives
+     * that event in 26.
+     */
     public static void addToCreativeTab(
         net.minecraft.resources.ResourceKey<net.minecraft.world.item.CreativeModeTab> tab,
-        java.util.List<net.minecraft.world.item.Item> items) {
+        java.util.function.Supplier<java.util.List<net.minecraft.world.item.Item>> items) {
         //? if >=26 {
         net.fabricmc.fabric.api.creativetab.v1.CreativeModeTabEvents.modifyOutputEvent(tab)
-            .register(output -> items.forEach(output::accept));
+            .register(output -> items.get().forEach(output::accept));
         //?} else {
         /*net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents.modifyEntriesEvent(tab)
-            .register(entries -> items.forEach(entries::accept));
+            .register(entries -> items.get().forEach(entries::accept));
         *///?}
     }
 
@@ -1407,6 +1604,39 @@ public final class Platform {
     }
 
     /**
+     * The Java slot a horse's armour and a llama's carpet sit in. Before 1.20.5 that is the horse's
+     * own slot rather than one every entity has.
+     */
+    public static String horseArmourSlot() {
+        //? if >=1.21 {
+        return "armor.body";
+        //?} else {
+        /*return "horse.armor";
+        *///?}
+    }
+
+    /** What a horse wears as armour, which sat in its chest slot before 1.20.5. */
+    public static net.minecraft.world.item.ItemStack horseArmourOf(LivingEntity horse) {
+        //? if >=1.21 {
+        return horse.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.BODY);
+        //?} else {
+        /*return horse.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.CHEST);
+        *///?}
+    }
+
+    /**
+     * `execute if items`, which asks whether a slot holds an item, or false on 1.20.1, which predates
+     * the clause.
+     */
+    public static boolean testsSlots() {
+        //? if >=1.21 {
+        return true;
+        //?} else {
+        /*return false;
+        *///?}
+    }
+
+    /**
      * The rule that decides whether pillager patrols appear, by the name this version calls it.
      *
      * Bedrock has no game rule for either of these: it switches them through `mobevent`, which is
@@ -1651,19 +1881,43 @@ public final class Platform {
         *///?}
     }
 
+    /** Where a structure the world saved under this id is written. */
+    public static java.nio.file.Path savedStructureFile(
+        net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager manager, Identifier id) {
+        //? if >=26 {
+        return manager.worldTemplates().createAndValidatePathToStructure(id, manager.WORLD_STRUCTURE_LISTER);
+        //?} else if >=1.21 {
+        /*return manager.createAndValidatePathToGeneratedStructure(id, ".nbt");
+        *///?} else {
+        /*return manager.getPathToGeneratedStructure(id, ".nbt");
+        *///?}
+    }
+
+    /** Whether a block a template places into water keeps the water, which 1.21 made a setting. */
+    public static void keepLiquids(
+        net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings settings, boolean keep) {
+        //? if >=1.21 {
+        settings.setLiquidSettings(keep
+            ? net.minecraft.world.level.levelgen.structure.templatesystem.LiquidSettings.APPLY_WATERLOGGING
+            : net.minecraft.world.level.levelgen.structure.templatesystem.LiquidSettings.IGNORE_WATERLOGGING);
+        //?} else {
+        /*settings.setKeepLiquids(keep);
+        *///?}
+    }
+
     /**
-     * Copies a region of the world into a structure template.
-     *
-     * What to leave out changed from one block to a list of them in 1.21.2; nothing is left out
-     * either way, which is what Bedrock does when a pack does not say otherwise.
+     * Copies a region of the world into a structure template, leaving out structure voids the way a
+     * structure block does in either edition.
      */
     public static void fillFromWorld(
         net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate template,
-        ServerLevel level, net.minecraft.core.BlockPos corner, net.minecraft.core.Vec3i size) {
+        ServerLevel level, net.minecraft.core.BlockPos corner, net.minecraft.core.Vec3i size, boolean entities) {
         //? if >=1.21.2 {
-        template.fillFromWorld(level, corner, size, false, List.of());
+        template.fillFromWorld(level, corner, size, entities,
+            List.of(net.minecraft.world.level.block.Blocks.STRUCTURE_VOID));
         //?} else {
-        /*template.fillFromWorld(level, corner, size, false, (Block) null);
+        /*template.fillFromWorld(level, corner, size, entities,
+            net.minecraft.world.level.block.Blocks.STRUCTURE_VOID);
         *///?}
     }
 
@@ -1780,6 +2034,69 @@ public final class Platform {
      * writes, so nothing is registered here. 1.21 reads tints from a colour provider instead, and
      * 1.20.1 has no dyed colour on a stack at all.
      */
+    /** What a layer drawn over the heads-up display may do: fill a rectangle and write a line. */
+    public interface Painter {
+        int width();
+
+        int height();
+
+        void fill(int left, int top, int right, int bottom, int argb);
+
+        /** Writes one line with a shadow under it, in the game's own font. */
+        void text(String line, int left, int top, int argb);
+    }
+
+    /** Draws a layer of this mod's own over everything the heads-up display draws, every frame. */
+    public static void drawOverHud(Identifier id, java.util.function.Consumer<Painter> layer) {
+        //? if >=26 {
+        net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry.addLast(id, (graphics, delta) ->
+            layer.accept(new Painter() {
+                @Override
+                public int width() {
+                    return graphics.guiWidth();
+                }
+
+                @Override
+                public int height() {
+                    return graphics.guiHeight();
+                }
+
+                @Override
+                public void fill(int left, int top, int right, int bottom, int argb) {
+                    graphics.fill(left, top, right, bottom, argb);
+                }
+
+                @Override
+                public void text(String line, int left, int top, int argb) {
+                    graphics.text(net.minecraft.client.Minecraft.getInstance().font, line, left, top, argb, true);
+                }
+            }));
+        //?} else {
+        /*net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback.EVENT.register((graphics, delta) ->
+            layer.accept(new Painter() {
+                @Override
+                public int width() {
+                    return graphics.guiWidth();
+                }
+
+                @Override
+                public int height() {
+                    return graphics.guiHeight();
+                }
+
+                @Override
+                public void fill(int left, int top, int right, int bottom, int argb) {
+                    graphics.fill(left, top, right, bottom, argb);
+                }
+
+                @Override
+                public void text(String line, int left, int top, int argb) {
+                    graphics.drawString(net.minecraft.client.Minecraft.getInstance().font, line, left, top, argb, true);
+                }
+            }));
+        *///?}
+    }
+
     public static void registerDyeTint(java.util.List<Item> items) {
         //? if >=1.21 && <26 {
         /*if (items.isEmpty()) return;
@@ -2212,6 +2529,68 @@ public final class Platform {
         if (client.gui.hud.isHidden() != hidden) client.gui.hud.toggle();
         //?} else {
         /*client.options.hideGui = hidden;
+        *///?}
+    }
+
+    /**
+     * Opens a singleplayer world to the LAN on a port, without asking its guests to authenticate:
+     * a development guest has no account, and 1.21.1 and 26 make the integrated server demand one.
+     * The scope argument arrived in 26.2.
+     */
+    public static boolean publishServer(net.minecraft.client.server.IntegratedServer server, int port) {
+        server.setUsesAuthentication(false);
+        //? if >=26.2 {
+        return server.publishServer(net.minecraft.server.MinecraftServer.MultiplayerScope.LAN,
+            net.minecraft.world.level.GameType.SURVIVAL, false, port);
+        //?} else {
+        /*return server.publishServer(net.minecraft.world.level.GameType.SURVIVAL, false, port);
+        *///?}
+    }
+
+    /** Opens a saved singleplayer world by its directory name, the way the world list does. */
+    public static void openWorld(String name) {
+        net.minecraft.client.Minecraft client = net.minecraft.client.Minecraft.getInstance();
+        //? if >=1.21 {
+        client.createWorldOpenFlows().openWorld(name, () -> { });
+        //?} else {
+        /*client.createWorldOpenFlows().loadLevel(client.screen, name);
+        *///?}
+    }
+
+    /**
+     * Queues a task for the client thread, even when called on it: `execute` runs a task called on
+     * the client thread at once, inside whatever that thread is in the middle of. Renamed in 26.
+     */
+    public static void schedule(Runnable task) {
+        //? if >=26 {
+        net.minecraft.client.Minecraft.getInstance().schedule(task);
+        //?} else {
+        /*net.minecraft.client.Minecraft.getInstance().tell(task);
+        *///?}
+    }
+
+    /**
+     * Gives an item registered after startup what the game gives every item as it starts.
+     *
+     * Before 26 the item renderer maps every item to its inventory model once, when it is built,
+     * and a reload only rebuilds what that map points at; and a spawn egg is coloured by a provider
+     * registered once, for the eggs there were. From 26 an item's model is looked up by its id and
+     * its colours are tints in that model, so nothing is missing.
+     */
+    public static void prepareLateItem(Item item) {
+        //? if >=1.21 && <26 {
+        /*net.minecraft.client.Minecraft.getInstance().getItemRenderer().getItemModelShaper().register(item,
+            net.minecraft.client.resources.model.ModelResourceLocation.inventory(BuiltInRegistries.ITEM.getKey(item)));
+        *///?} else if <1.21 {
+        /*net.minecraft.client.Minecraft.getInstance().getItemRenderer().getItemModelShaper().register(item,
+            new net.minecraft.client.resources.model.ModelResourceLocation(BuiltInRegistries.ITEM.getKey(item),
+                "inventory"));
+        *///?}
+        //? if <1.21.2 {
+        /*if (item instanceof net.minecraft.world.item.SpawnEggItem egg) {
+            net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry.ITEM.register(
+                (stack, layer) -> egg.getColor(layer), egg);
+        }
         *///?}
     }
 

@@ -1,0 +1,22 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "sv:drifter",
+      "materials": {
+        "default": "entity_alphatest"
+      },
+      "textures": {
+        "default": "textures/entity/drifter"
+      },
+      "geometry": {
+        "default": "geometry.sv.drifter"
+      },
+      "render_controllers": ["controller.render.sv.drifter"],
+      "spawn_egg": {
+        "base_color": "#3F7F3F",
+        "overlay_color": "#DFDF5F"
+      }
+    }
+  }
+}
