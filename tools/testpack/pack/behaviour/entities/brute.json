@@ -30,6 +30,14 @@
         "tp:tamed": {
           "type": "bool",
           "default": false
+        },
+        "tp:boarded": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:alighted": {
+          "type": "bool",
+          "default": false
         }
       }
     },
@@ -302,6 +310,32 @@
             "max": 8
           }
         }
+      },
+      "tp:brute_ferrying": {
+        "minecraft:rideable": {
+          "seat_count": 2,
+          "pull_in_entities": true,
+          "passenger_max_width": 1.0,
+          "dismount_mode": "on_top_center",
+          "on_rider_enter_event": "tp:brute_boarded",
+          "on_rider_exit_event": "tp:brute_alighted",
+          "seats": [
+            {
+              "position": [
+                0,
+                1.0,
+                0
+              ]
+            },
+            {
+              "position": [
+                0,
+                1.0,
+                -0.4
+              ]
+            }
+          ]
+        }
       }
     },
     "components": {
@@ -461,6 +495,23 @@
           "component_groups": [
             "tp:brute_archer"
           ]
+        }
+      },
+      "tp:brute_ferry": {
+        "add": {
+          "component_groups": [
+            "tp:brute_ferrying"
+          ]
+        }
+      },
+      "tp:brute_boarded": {
+        "set_property": {
+          "tp:boarded": true
+        }
+      },
+      "tp:brute_alighted": {
+        "set_property": {
+          "tp:alighted": true
         }
       }
     }

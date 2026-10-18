@@ -1062,8 +1062,63 @@ public class AddonEntity extends PathfinderMob
         if (getPassengers().size() >= (int) liveNumber("minecraft:rideable", "seat_count", 1)) {
             return false;
         }
+        double widest = liveNumber("minecraft:rideable", "passenger_max_width", 0);
+        if (widest > 0 && passenger.getBbWidth() > widest) return false;
         return ridableBy(passenger);
     }
+
+    /** `on_rider_enter_event` runs on this entity, with the rider as the other, as somebody gets on. */
+    @Override
+    protected void addPassenger(net.minecraft.world.entity.Entity passenger) {
+        super.addPassenger(passenger);
+        if (definition == null || isClientSide()) return;
+
+        String event = Goals.event(liveComponent("minecraft:rideable"), "on_rider_enter_event");
+        if (event != null) EntityEvents.trigger(this, event, passenger, ServerHooks.state());
+    }
+
+    /** `on_rider_exit_event` runs on this entity, with the rider as the other, as somebody gets off. */
+    @Override
+    protected void removePassenger(net.minecraft.world.entity.Entity passenger) {
+        super.removePassenger(passenger);
+        if (definition == null || isClientSide()) return;
+
+        String event = Goals.event(liveComponent("minecraft:rideable"), "on_rider_exit_event");
+        if (event != null) EntityEvents.trigger(this, event, passenger, ServerHooks.state());
+    }
+
+    /**
+     * Where a rider getting off is put. `dismount_mode` set to `on_top_center` puts it on top of the
+     * entity's box, in the middle; anything else is Java's own search for ground beside it.
+     */
+    @Override
+    public net.minecraft.world.phys.Vec3 getDismountLocationForPassenger(
+        net.minecraft.world.entity.LivingEntity passenger) {
+        if (definition != null && "on_top_center".equals(liveText("minecraft:rideable", "dismount_mode"))) {
+            return new net.minecraft.world.phys.Vec3(getX(), getBoundingBox().maxY, getZ());
+        }
+        return super.getDismountLocationForPassenger(passenger);
+    }
+
+    /**
+     * Takes on board whatever is touching the entity and may ride it, which `pull_in_entities` asks
+     * for. Java's boat pulls in the same way: a living thing narrower than the boat, never a player.
+     */
+    private void pullIn() {
+        if (!declaresNow("minecraft:rideable")
+            || !Goals.flag(liveComponent("minecraft:rideable"), "pull_in_entities", false)) {
+            return;
+        }
+        level().getEntities(this, getBoundingBox().inflate(PULL_REACH, 0, PULL_REACH),
+                touching -> touching instanceof net.minecraft.world.entity.LivingEntity
+                    && !(touching instanceof Player) && !touching.isPassenger() && !touching.hasPassenger(this))
+            .stream()
+            .filter(this::canAddPassenger)
+            .forEach(touching -> touching.startRiding(this));
+    }
+
+    /** How far past its own box the entity reaches for something to pull in, which is Java's boat's. */
+    private static final double PULL_REACH = 0.2;
 
     /** A pack listing `family_types` is naming who may ride; listing none allows anyone. */
     private boolean ridableBy(net.minecraft.world.entity.Entity passenger) {
@@ -3366,6 +3421,7 @@ public class AddonEntity extends PathfinderMob
             dryOut();
             showBossBar();
             addRider();
+            pullIn();
             countKin();
             beAngry();
             noticeKinAnger();

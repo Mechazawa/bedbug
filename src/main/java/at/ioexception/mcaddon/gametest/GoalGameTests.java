@@ -407,6 +407,41 @@ public final class GoalGameTests {
     private static final double VOLLEY_SEARCH = 12;
 
     /**
+     * A rideable entity under `pull_in_entities` takes on board a mob touching it, raising
+     * `on_rider_enter_event`; the mob gets off on top of it under `dismount_mode` `on_top_center`,
+     * raising `on_rider_exit_event`; and `passenger_max_width` keeps a wider mob off altogether.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aRideableEntityPullsInWhatTouchesIt(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_ferry", MIDDLE);
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        brute.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(0);
+        Mob golem = (Mob) Platform.createMob(BuiltInRegistries.ENTITY_TYPE
+            .getOptional(Platform.id("minecraft", "iron_golem")).orElseThrow(), helper.getLevel());
+        helper.assertFalse(golem.startRiding(brute),
+            BRUTE + " takes riders no wider than a block and took an iron golem.");
+
+        Mob pig = pig(helper, MIDDLE, BLOWS_TO_KILL);
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(pig.getVehicle() == brute,
+                BRUTE + " pulls in what touches it and the pig beside it is not on board."))
+            .thenExecute(() -> {
+                helper.assertTrue(Boolean.TRUE.equals(brute.value("tp:boarded")),
+                    BRUTE + " took the pig on board and never raised on_rider_enter_event.");
+                pig.stopRiding();
+                helper.assertTrue(Boolean.TRUE.equals(brute.value("tp:alighted")),
+                    BRUTE + " let the pig off and never raised on_rider_exit_event.");
+                helper.assertTrue(Math.abs(pig.getY() - brute.getBoundingBox().maxY) < 0.01,
+                    BRUTE + " puts riders off on its top and the pig stands at " + pig.getY() + ".");
+            })
+            .thenSucceed();
+    }
+
+    /**
      * `minecraft:addrider` seats every rider its `riders` list names, each raising its own spawn
      * event, and a group bringing the component in is enough for that.
      */

@@ -224,8 +224,7 @@ REASONS = {
                            "the list has nothing to be checked against.",
     },
     "minecraft:rideable": {
-        "*": "The rider sits at the seat the pack gave and gets off where Java puts it: there is no "
-             "dismount rule, no prompt text and no pulling riders in.",
+        "interact_text": "Java shows no prompt of its own for using a mob.",
     },
     "minecraft:shareables": {"all_items_max_amount": "A Java mob holds one stack in its hand."},
     "minecraft:is_dyeable": {"interact_text": "Java shows no prompt of its own for using a mob."},
