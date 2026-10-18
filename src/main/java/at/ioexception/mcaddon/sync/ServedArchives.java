@@ -23,10 +23,9 @@ import java.util.stream.Stream;
 /**
  * The archives a server hands to a client joining it, and the manifest naming them.
  *
- * Each is a copy under `.mcaddon/served/<sha256>.mcaddon` taken the first time a client needs one,
- * so an operator replacing a file in `addons/` while the server runs cannot make it send bytes that
- * do not match the digest it promised, and a world nobody joins hashes nothing. A pack directory is
- * zipped into a copy whose bytes depend only on its files.
+ * Each is a copy under `.mcaddon/served/<sha256>.mcaddon`, so an operator replacing a file in
+ * `addons/` while the server runs cannot make it send bytes that do not match the digest it
+ * promised. A pack directory is zipped into a copy whose bytes depend only on its files.
  *
  * A development run also serves every archive in the directory the `mcaddon.served` property
  * names, which the server never loaded, so a client test can join and be sent an add-on it lacks
@@ -45,9 +44,20 @@ public final class ServedArchives {
     }
 
     /**
-     * Forgets the manifest, so the next client to need one is handed what is registered then. A
-     * world opened again after its host visited another server has more registered than before.
+     * Prepares the copies as a dedicated server starts, before anybody can move a file in `addons/`
+     * from under it, and forgets them as any server starts, because a world opened again after its
+     * host visited another server has more registered behind it than before. A world opened alone
+     * prepares nothing until a guest joins it.
      */
+    public static void register() {
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STARTING
+            .register(server -> forget());
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            if (server.isDedicatedServer()) manifest();
+        });
+    }
+
+    /** Forgets the manifest, so the next client to need one is handed what is registered then. */
     public static synchronized void forget() {
         manifest = null;
         FILES.clear();
