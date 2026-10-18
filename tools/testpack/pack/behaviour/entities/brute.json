@@ -536,6 +536,14 @@
           ],
           "goal_radius": 3
         }
+      },
+      "tp:brute_stomping": {
+        "minecraft:behavior.stomp_turtle_egg": {
+          "priority": 1,
+          "speed_multiplier": 1,
+          "search_height": 1,
+          "interval": 1
+        }
       }
     },
     "components": {
@@ -844,6 +852,13 @@
         "add": {
           "component_groups": [
             "tp:brute_digging"
+          ]
+        }
+      },
+      "tp:brute_stomp": {
+        "add": {
+          "component_groups": [
+            "tp:brute_stomping"
           ]
         }
       }

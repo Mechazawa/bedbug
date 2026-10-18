@@ -324,6 +324,38 @@ public final class GoalGameTests {
     }
 
     /**
+     * A group's `minecraft:behavior.stomp_turtle_egg` looks for an egg as often as its `interval`
+     * says, here every tick.
+     *
+     * The egg is laid a second after the brute first looked and found nothing. Java's own goal waits
+     * ten to twenty seconds before looking again, so the egg is still whole when the test ends.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = STOMP_TICKS)
+    public void aStomperLooksForEggsAsOftenAsItsGroupSays(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_stomp");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        java.util.concurrent.atomic.AtomicBoolean laid = new java.util.concurrent.atomic.AtomicBoolean();
+        helper.runAfterDelay(EGG_LAID_AFTER, () -> {
+            helper.setBlock(EGG, net.minecraft.world.level.block.Blocks.TURTLE_EGG);
+            laid.set(true);
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(laid.get(), "The egg is not laid yet.");
+            helper.assertTrue(helper.getBlockState(EGG).isAir(),
+                BRUTE + " looks for eggs every tick and left the one laid four blocks off whole.");
+        });
+    }
+
+    private static final BlockPos EGG = STAND.east(4);
+    private static final int EGG_LAID_AFTER = 20;
+    /** Room for the walk and the three seconds Java's goal stamps on an egg, short of its next look. */
+    private static final int STOMP_TICKS = 220;
+
+    /**
      * A child whose `mutation_factor` is certain takes neither parent's variant, mark variant nor
      * colour, and `mutation_strategy` set to random rolls its variants inside the intervals stated.
      */
