@@ -553,12 +553,7 @@ public final class GoalGameTests {
 
         Mob pig = pig(helper, STAND.east(4), BLOWS_TO_KILL);
         brute.setTarget(pig);
-        java.util.Set<java.util.UUID> seen = new java.util.HashSet<>();
-        List<Long> shots = new ArrayList<>();
-        helper.onEachTick(() -> helper.getLevel().getEntitiesOfClass(
-                net.minecraft.world.entity.projectile.Projectile.class, brute.getBoundingBox().inflate(VOLLEY_SEARCH),
-                shot -> shot.getOwner() == brute && seen.add(shot.getUUID()))
-            .forEach(shot -> shots.add(helper.getLevel().getGameTime())));
+        List<Long> shots = shotsBy(helper, brute);
         helper.succeedWhen(() -> {
             helper.assertTrue(shots.size() >= 2, BRUTE + " shot " + shots.size() + " times.");
             long gap = shots.get(1) - shots.get(0);
@@ -571,6 +566,128 @@ public final class GoalGameTests {
     private static final int HALFWAY_RELOAD = 30;
     private static final int VOLLEY_TICKS = 160;
     private static final double VOLLEY_SEARCH = 12;
+
+    /** The game time of every projectile the brute fires from now on, in the order they appear. */
+    private static List<Long> shotsBy(GameTestHelper helper, AddonEntity brute) {
+        java.util.Set<java.util.UUID> seen = new java.util.HashSet<>();
+        List<Long> shots = new ArrayList<>();
+        helper.onEachTick(() -> helper.getLevel().getEntitiesOfClass(
+                net.minecraft.world.entity.projectile.Projectile.class, brute.getBoundingBox().inflate(VOLLEY_SEARCH),
+                shot -> shot.getOwner() == brute && seen.add(shot.getUUID()))
+            .forEach(shot -> shots.add(helper.getLevel().getGameTime())));
+        return shots;
+    }
+
+    /**
+     * A shooter's `aux_val` names the potion its arrows carry, by Bedrock's number plus one: the
+     * poisoner writes 26, which is poison.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = VOLLEY_TICKS)
+    public void aShotArrowCarriesThePotionItsShooterNames(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_poison_arrows");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob pig = pig(helper, STAND.east(4), BLOWS_TO_KILL);
+        brute.setTarget(pig);
+        helper.succeedWhen(() -> helper.assertTrue(pig.getActiveEffects().stream()
+                .anyMatch(active -> Platform.effectId(active).equals("minecraft:poison")),
+            BRUTE + " shoots arrows of poison and the pig it shot at is not poisoned."));
+    }
+
+    /**
+     * A charged attack fires `burst_shots` shots `burst_interval` apart once the target has been in
+     * sight for twice `charge_shoot_trigger`, after being charged from `charge_charged_trigger` plus
+     * `charge_shoot_trigger`, and swings as it shoots under `swing`.
+     *
+     * The burster charges from fifteen ticks and fires three shots five ticks apart at twenty, then
+     * charges again from nothing.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = VOLLEY_TICKS)
+    public void aChargedAttackFiresItsBurstOnceCharged(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_burst");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob pig = pig(helper, STAND.east(4), BLOWS_TO_KILL);
+        brute.setTarget(pig);
+        List<Long> shots = shotsBy(helper, brute);
+        long[] charged = {-1};
+        AtomicBoolean swung = new AtomicBoolean();
+        helper.onEachTick(() -> {
+            if (charged[0] < 0 && Boolean.TRUE.equals(brute.value("is_charged"))) {
+                charged[0] = helper.getLevel().getGameTime();
+            }
+            if (brute.swinging) swung.set(true);
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(shots.size() >= BURST + 1, BRUTE + " shot " + shots.size() + " times.");
+            helper.assertTrue(shots.get(1) - shots.get(0) == BURST_GAP && shots.get(2) - shots.get(1) == BURST_GAP,
+                BRUTE + " fires its burst five ticks apart and fired at " + shots + ".");
+            helper.assertTrue(shots.get(BURST) - shots.get(BURST - 1) > 2 * BURST_GAP,
+                BRUTE + " fires three shots a burst and fired a fourth at " + shots + ".");
+            helper.assertTrue(charged[0] >= 0 && charged[0] < shots.get(0),
+                BRUTE + " is charged before its burst and was charged at " + charged[0]
+                    + ", shooting at " + shots + ".");
+            helper.assertTrue(swung.get(), BRUTE + " swings as it shoots and never swung.");
+        });
+    }
+
+    private static final int BURST = 3;
+    private static final long BURST_GAP = 5;
+
+    /** A ranged attacker holds its fire while its target stands closer than `attack_radius_min`. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = VOLLEY_TICKS)
+    public void aRangedAttackHoldsItsFireInsideItsMinimumRange(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_make_wary");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob pig = pig(helper, STAND.east(2), BLOWS_TO_KILL);
+        brute.setTarget(pig);
+        List<Long> shots = shotsBy(helper, brute);
+        helper.runAfterDelay(QUIET_VOLLEY, () -> {
+            helper.assertTrue(shots.isEmpty(),
+                BRUTE + " shoots no closer than three blocks and shot at a pig two blocks off "
+                    + shots.size() + " times.");
+            helper.succeed();
+        });
+    }
+
+    private static final int QUIET_VOLLEY = 60;
+
+    /**
+     * A ranged attacker keeps closing on its target until it has seen it for
+     * `target_in_sight_time`, and only then stands to shoot.
+     *
+     * The wary brute looks for two seconds; Java's own goal stands after a quarter of one.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = VOLLEY_TICKS)
+    public void aRangedAttackerClosesInUntilItHasSeenItsTarget(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_make_wary");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob pig = pig(helper, STAND.east(5), BLOWS_TO_KILL);
+        brute.setTarget(pig);
+        helper.startSequence()
+            .thenExecuteAfter(STILL_CLOSING, () -> helper.assertTrue(brute.getNavigation().isInProgress(),
+                BRUTE + " closes in for two seconds and had stopped after one and a half."))
+            .thenExecuteAfter(STANDING - STILL_CLOSING, () -> helper.assertFalse(brute.getNavigation().isInProgress(),
+                BRUTE + " stands to shoot after two seconds and was still closing in after three."))
+            .thenSucceed();
+    }
+
+    private static final int STILL_CLOSING = 30;
+    private static final int STANDING = 60;
 
     /**
      * A rideable entity under `pull_in_entities` takes on board a mob touching it, raising

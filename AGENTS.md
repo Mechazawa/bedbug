@@ -429,7 +429,8 @@ These are the checks it runs, and what each one catches:
   whatever moves it is the group a test switched on, and a test holding its feet sets its speed to
   nothing so that a pig standing apart from it is reached by the goal and not by a walk. Its groups
   cover the melee fields (a cooldown, a box reach, a reach multiple, the attack and kill events, fire
-  passed on), a ranged attack's interval stretched across its range, the panic causes, force and
+  passed on), a ranged attack's interval stretched across its range, its potion arrows, its charged burst and
+  swing, and its minimum range and sight time (`poisoner`, `burster`, `wary`), the panic causes, force and
   water, an escape from a block, a target and a projectile teleport, three breeding groups (what a
   child inherits, what a certain mutation and a denied variant give it), taming by item and breaking
   in by riding, listed riders, a poisoning attack, the rideable fields, an explosion heeding or

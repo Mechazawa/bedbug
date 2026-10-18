@@ -166,7 +166,11 @@ Against a server without this mod a client plays with its own add-ons.
   out `cooldown_time`, reaches as far as `reach_multiplier` or `horizontal_reach` say, lands only
   inside `melee_fov`, raises `on_attack` and `on_kill`, and passes a burning attacker's fire on
   under `can_spread_on_fire`; a blow also carries the ailment `minecraft:attack` names. A ranged
-  attack reloads for its `attack_interval`, stretched across its `attack_range`. A panic starts at
+  attack reloads for its `attack_interval`, stretched across its `attack_range`, holds its fire
+  inside the range's low end and closes in until it has seen its target for `target_in_sight_time`;
+  one with a `charge_shoot_trigger` charges while it sees its target, counts as charged for
+  `query.is_charged`, and fires a burst of `burst_shots`. Arrows carry the potion `minecraft:shooter`
+  names under `aux_val`. A panic starts at
   the causes `damage_sources` lists, can leave every mob's blow out, heads for water under
   `prefer_water` and needs no hurt under `force`; fleeing a block raises `on_escape` once clear; and
   the panic and the flight make the sound the pack names for them. A teleporter closes on a far

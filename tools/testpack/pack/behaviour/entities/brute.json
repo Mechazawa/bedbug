@@ -325,6 +325,43 @@
           }
         }
       },
+      "tp:brute_poisoner": {
+        "minecraft:shooter": {
+          "def": "minecraft:arrow",
+          "aux_val": 26
+        },
+        "minecraft:behavior.ranged_attack": {
+          "priority": 0,
+          "attack_interval": 0.5,
+          "attack_radius": 8
+        }
+      },
+      "tp:brute_burster": {
+        "minecraft:shooter": {
+          "def": "minecraft:arrow"
+        },
+        "minecraft:behavior.ranged_attack": {
+          "priority": 0,
+          "attack_radius": 8,
+          "charge_shoot_trigger": 0.5,
+          "charge_charged_trigger": 0.25,
+          "burst_shots": 3,
+          "burst_interval": 0.25,
+          "swing": true
+        }
+      },
+      "tp:brute_wary": {
+        "minecraft:shooter": {
+          "def": "minecraft:arrow"
+        },
+        "minecraft:behavior.ranged_attack": {
+          "priority": 0,
+          "attack_interval": 0.5,
+          "attack_radius": 8,
+          "attack_radius_min": 3,
+          "target_in_sight_time": 2
+        }
+      },
       "tp:brute_ferrying": {
         "minecraft:rideable": {
           "seat_count": 2,
@@ -770,6 +807,27 @@
         "add": {
           "component_groups": [
             "tp:brute_archer"
+          ]
+        }
+      },
+      "tp:brute_poison_arrows": {
+        "add": {
+          "component_groups": [
+            "tp:brute_poisoner"
+          ]
+        }
+      },
+      "tp:brute_burst": {
+        "add": {
+          "component_groups": [
+            "tp:brute_burster"
+          ]
+        }
+      },
+      "tp:brute_make_wary": {
+        "add": {
+          "component_groups": [
+            "tp:brute_wary"
           ]
         }
       },

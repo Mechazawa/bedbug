@@ -49,6 +49,8 @@ stonecutter {
             "import net.minecraft.world.entity.animal.Wolf;")
         replace("import net.minecraft.world.entity.projectile.arrow.AbstractArrow;",
             "import net.minecraft.world.entity.projectile.AbstractArrow;")
+        replace("import net.minecraft.world.entity.projectile.arrow.Arrow;",
+            "import net.minecraft.world.entity.projectile.Arrow;")
         replace("import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;",
             "import net.minecraft.world.entity.vehicle.AbstractMinecart;")
         replace("import net.minecraft.world.entity.npc.villager.Villager;",

@@ -46,6 +46,7 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.arrow.Arrow;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.trading.Merchant;
 import net.minecraft.world.item.trading.MerchantOffer;
@@ -2905,6 +2906,16 @@ public class AddonEntity extends PathfinderMob
         double toZ = target.getZ() - getZ();
         double flat = Math.sqrt(toX * toX + toZ * toZ);
         projectile.shoot(toX, toY + flat * 0.2, toZ, 1.6f, 6f);
+        // `aux_val` is Bedrock's potion number plus one, and a tipped arrow carries an eighth of
+        // the potion's time, in both editions.
+        if (projectile instanceof Arrow arrow) {
+            at.ioexception.mcaddon.bedrock.behaviour.BedrockPotions.numbered(
+                    (int) liveNumber("minecraft:shooter", "aux_val", -1) - 1)
+                .ifPresent(potion -> potion.getEffects().forEach(effect -> arrow.addEffect(
+                    new net.minecraft.world.effect.MobEffectInstance(effect.getEffect(),
+                        Math.max(1, effect.getDuration() / 8), effect.getAmplifier(),
+                        effect.isAmbient(), effect.isVisible()))));
+        }
 
         playSound(SoundEvents.SKELETON_SHOOT, 1f, 1f / (random.nextFloat() * 0.4f + 0.8f));
         level.addFreshEntity(projectile);
@@ -3195,20 +3206,7 @@ public class AddonEntity extends PathfinderMob
                 targets.add(priority, new RetaliateGoal(this, goal,
                     TargetSelection.from(goal, net.minecraft.world.entity.LivingEntity.class, 0)));
 
-            // Bedrock states the gap between shots in seconds and the reach in blocks; Java's
-            // goal counts the gap in ticks, stretches it with the distance the same way, and asks
-            // the entity itself to release the projectile. `attack_interval` and `attack_range`
-            // are the current spellings of the two pairs older packs write field by field.
-            case "minecraft:behavior.ranged_attack" -> {
-                int fastest = goal.has("attack_interval") ? Goals.ticksLow(goal, "attack_interval", 1)
-                    : Goals.ticks(goal, "attack_interval_min", 1);
-                int slowest = goal.has("attack_interval") ? Goals.ticksHigh(goal, "attack_interval", 1)
-                    : Goals.ticks(goal, "attack_interval_max", 1);
-                double reach = goal.has("attack_range") ? Goals.high(goal, "attack_range", 16)
-                    : Goals.number(goal, "attack_radius", 16);
-                goals.add(priority, new net.minecraft.world.entity.ai.goal.RangedAttackGoal(this, speed,
-                    fastest, Math.max(fastest, slowest), (float) reach));
-            }
+            case "minecraft:behavior.ranged_attack" -> goals.add(priority, new RangedGoal(this, goal, speed));
             case "minecraft:behavior.ocelotattack" -> goals.add(priority,
                 new net.minecraft.world.entity.ai.goal.OcelotAttackGoal(this));
 
