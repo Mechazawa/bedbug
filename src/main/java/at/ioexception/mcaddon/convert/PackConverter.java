@@ -961,7 +961,11 @@ public final class PackConverter {
         JsonArray names = new JsonArray();
 
         JsonObject recipeConditions = new JsonObject();
+        //? if >=26.3 {
+        /*recipeConditions.addProperty("recipes", recipe);
+        *///?} else {
         recipeConditions.addProperty("recipe", recipe);
+        //?}
         criteria.add("has_the_recipe", trigger("minecraft:recipe_unlocked", recipeConditions));
         names.add("has_the_recipe");
 
@@ -1033,8 +1037,18 @@ public final class PackConverter {
         json.addProperty("type", type);
         json.add("ingredient", ingredient(firstIngredient(recipe), Platform.bareRecipeIngredients()));
         json.addProperty("experience", 0.1);
+        json.addProperty("cookingtime", cookingTicks(type));
         Platform.simpleResult(json, recipe.result(), 1);
         return json;
+    }
+
+    /** Java's own time for each kind of cooking, which 26.3 no longer fills in when it is left out. */
+    private static int cookingTicks(String type) {
+        return switch (type) {
+            case "minecraft:blasting", "minecraft:smoking" -> 100;
+            case "minecraft:campfire_cooking" -> 600;
+            default -> 200;
+        };
     }
 
     private static JsonObject stonecutting(RecipeDefinition recipe) {
