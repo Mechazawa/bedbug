@@ -3,10 +3,15 @@ package at.ioexception.mcaddon.server;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.behaviour.DamageCause;
 import at.ioexception.mcaddon.bedrock.behaviour.PlayerDefinition;
+import at.ioexception.mcaddon.bedrock.behaviour.SwingSounds;
 import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.script.CustomCommands;
+import at.ioexception.mcaddon.script.ScriptDebugger;
+import at.ioexception.mcaddon.script.ScriptDiagnostics;
 import at.ioexception.mcaddon.script.ScriptHost;
+import at.ioexception.mcaddon.script.ScriptProfiler;
 import at.ioexception.mcaddon.state.AddonState;
 import com.mojang.brigadier.CommandDispatcher;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
@@ -54,6 +59,7 @@ public final class ServerHooks {
     public static void register() {
         ServerLifecycleEvents.SERVER_STARTED.register(ServerHooks::start);
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> stop());
+        ServerTickEvents.START_SERVER_TICK.register(server -> ScriptDiagnostics.beginTick());
         ServerTickEvents.END_SERVER_TICK.register(ServerHooks::tick);
         ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {
             if (state != null) {
@@ -107,7 +113,9 @@ public final class ServerHooks {
         //?}
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> state = null);
         CommandRegistrationCallback.EVENT.register(ServerHooks::registerCommands);
+        Visitors.register();
         WorldEvents.register();
+        WebSockets.register();
         // Both sides are asked whatever the other answers: a pack's script watches for the attempt
         // and not only for the damage that lands.
         ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> {
@@ -128,10 +136,15 @@ public final class ServerHooks {
                 scripts.formResponse(player, formId, answer);
             }
         });
+        Channels.receiveSwingMissed(player -> {
+            SwingSounds swings = AddonItems.swingSoundsOf(player.getMainHandItem().getItem());
+            if (swings != null) swings.play(player, SwingSounds.Moment.MISS);
+        });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             startState(handler.player);
             Music.joined(handler.player);
             BedrockRules.joined(handler.player);
+            ServerIdentity.joined(handler.player);
             playerJoined(handler.player);
         });
         // A connection is dropped on the thread reading it, and a script and the fog stacks belong
@@ -141,10 +154,13 @@ public final class ServerHooks {
             ServerPlayer left = handler.player;
             server.execute(() -> {
                 PlayerCameras.forget(left);
+                PlayerControlSchemes.forget(left);
                 PlayerFogs.forget(left);
                 PlayerHuds.forget(left);
                 PlayerInputs.forget(left);
+                PlayerAimAssists.forget(left);
                 PropertyOverrides.forget(left);
+                WebSockets.forget(left);
                 playerLeft(left);
             });
         });
@@ -290,6 +306,9 @@ public final class ServerHooks {
         AreaSchedules.load(state);
         MobEvents.load(state, server);
         BedrockRules.load(state);
+        Cheats.start(server);
+        ServerIdentity.start();
+        Visitors.load(state);
         scripts = ScriptHost.start(server, McAddon.packs().packs(), state);
         if (scripts != null) {
             CustomCommands.install(server, scripts);
@@ -298,6 +317,9 @@ public final class ServerHooks {
     }
 
     private static void stop() {
+        ScriptDebugger.closeCurrent();
+        ScriptProfiler.stop();
+        ScriptDiagnostics.stopCapture();
         if (scripts != null) {
             scripts.raiseSystemBeforeEvent("shutdown", Map.of());
             // A test area started and never cleared is holding its chunks, and a chunk held by a
@@ -320,6 +342,7 @@ public final class ServerHooks {
         AreaSchedules.tick(server);
         SelectorTags.finishAll();
         if (state != null && server.getTickCount() % 1200 == 0) state.save();
+        ScriptDiagnostics.endTick(server, scripts);
     }
 
     /**

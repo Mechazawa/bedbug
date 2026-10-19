@@ -125,6 +125,7 @@ public final class AddonCameras {
 
         CameraPreset preset = parent.inheritedBy(identifier, body);
         PRESETS.put(identifier, preset);
+        AddonAimAssist.readCamera(identifier, parentName, body);
         return preset;
     }
 }

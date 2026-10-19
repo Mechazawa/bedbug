@@ -30,8 +30,11 @@ import java.util.List;
 public final class McAddonClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
+        at.ioexception.mcaddon.client.render.GradePass.register();
         follow();
         ActiveAddons.onActivate(set -> follow());
+        at.ioexception.mcaddon.client.screen.PackUi.read(ActiveAddons.active());
+        ActiveAddons.onActivate(at.ioexception.mcaddon.client.screen.PackUi::read);
         AddonSession.register();
         at.ioexception.mcaddon.pack.ReceivedArchives.inCache().prune();
 
@@ -62,21 +65,40 @@ public final class McAddonClient implements ClientModInitializer {
                 case CameraView.FADE -> at.ioexception.mcaddon.client.render.PlayerFade.accept(body);
                 case CameraView.FOV -> at.ioexception.mcaddon.client.render.PlayerFov.accept(body,
                     net.minecraft.client.Minecraft.getInstance().options.fov().get());
+                case at.ioexception.mcaddon.server.PlayerControlSchemes.KIND -> PlayerControl.accept(body);
+                case at.ioexception.mcaddon.bedrock.aim.AimAssistTargeting.KIND -> PlayerAimAssist.accept(body);
                 case at.ioexception.mcaddon.server.BedrockRules.KIND ->
                     at.ioexception.mcaddon.client.render.PlayerRules.accept(body);
+                case at.ioexception.mcaddon.server.WebSockets.CONNECT, at.ioexception.mcaddon.server.WebSockets.ANSWER,
+                    at.ioexception.mcaddon.server.WebSockets.EVENT -> WebSocketLink.accept(kind, body);
+                case at.ioexception.mcaddon.server.ServerIdentity.KIND -> TrustedServers.presented(body);
                 default -> {
                 }
             }
         });
+        Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("paper_doll"),
+            at.ioexception.mcaddon.client.render.PaperDoll::draw);
         Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("bedrock_rules"),
             at.ioexception.mcaddon.client.render.PlayerRules::draw);
+        Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("aim_assist"), PlayerAimAssist::draw);
         Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("bedrock_screen"),
             at.ioexception.mcaddon.client.render.PlayerFade::draw);
+        Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("control_pointer"), PlayerControl::drawPointer);
+        Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("pack_hud"),
+            at.ioexception.mcaddon.client.render.PackHudText::draw);
+        // A chunk the server sends again is read into the chunk the client already holds.
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents.CHUNK_LOAD
+            .register((level, chunk) -> at.ioexception.mcaddon.block.BorderColumns.forget(chunk));
 
+        // Before the client's own tick, whose pick the target is laid over.
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.START_CLIENT_TICK
+            .register(PlayerAimAssist::tick);
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK
             .register(client -> {
                 at.ioexception.mcaddon.client.render.AddonEmitters.tick();
+                at.ioexception.mcaddon.client.render.PaperDoll.tick(client);
                 PlayerMusic.tick();
+                TrustedServers.tick(client);
                 if (client.level != null) Animators.tickOffscreen(client.level);
             });
         if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
@@ -102,15 +124,24 @@ public final class McAddonClient implements ClientModInitializer {
             PlayerFog.clear();
             PlayerHud.clear();
             PlayerInput.clear();
+            PlayerControl.clear();
+            PlayerAimAssist.clear();
             PlayerMusic.clear();
+            TrustedServers.clear();
             at.ioexception.mcaddon.client.render.PlayerFade.clear();
             at.ioexception.mcaddon.client.render.PlayerFov.clear();
             at.ioexception.mcaddon.client.render.PlayerRules.clear();
+            at.ioexception.mcaddon.client.render.PackHudText.clear();
             at.ioexception.mcaddon.client.render.AddonEmitters.clear();
         }));
-        // Bedrock starts every connection with no camera set, and a world closed from the client is not
-        // always seen as a dropped connection, so the camera is cleared again as the next one starts.
-        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> PlayerCamera.clear());
+        // Bedrock starts every connection with no camera set and on the locked control scheme, and a
+        // world closed from the client is not always seen as a dropped connection, so both are cleared
+        // again as the next one starts.
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+            PlayerCamera.clear();
+            PlayerControl.clear();
+            WebSocketLink.joined();
+        });
     }
 
     /** What the drawing side registers once per object, so an object registered later is prepared too. */
@@ -126,6 +157,7 @@ public final class McAddonClient implements ClientModInitializer {
      */
     private static void follow() {
         AddonClientAssets.load();
+        at.ioexception.mcaddon.client.render.ColourGrading.load();
         AddonEntities.all().keySet().stream().filter(PREPARED::add)
             .forEach(type -> EntityRendererRegistry.register(cast(type), AddonEntityRenderer::new));
         at.ioexception.mcaddon.registry.AddonParticles.all().keySet().stream()

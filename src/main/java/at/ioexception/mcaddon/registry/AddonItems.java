@@ -3,6 +3,7 @@ package at.ioexception.mcaddon.registry;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.behaviour.ItemDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
+import at.ioexception.mcaddon.bedrock.behaviour.SwingSounds;
 import at.ioexception.mcaddon.convert.BedrockItemNames;
 import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.convert.SpawnEggAppearance;
@@ -61,6 +62,9 @@ public final class AddonItems {
     private static final Map<Item, DurabilitySensor> SENSORS = new LinkedHashMap<>();
     private static final Set<Item> OFF_HAND_REFUSED = new HashSet<>();
     private static final Set<Item> LIQUID_CLIPPED = new HashSet<>();
+    private static final Map<Item, SwingSounds> SWINGS = new LinkedHashMap<>();
+    private static final Map<Item, Integer> BAG_LIMITS = new LinkedHashMap<>();
+    private static final Map<Item, Integer> STORAGE_WEIGHTS = new LinkedHashMap<>();
 
     /** The items built from an item definition, as opposed to a block's item or a spawn egg. */
     private static final Set<Item> BUILT = new HashSet<>();
@@ -80,6 +84,38 @@ public final class AddonItems {
     /** How long `minecraft:cooldown` keeps a pack's own item busy, in seconds, or nothing. */
     public static float cooldownOf(Item item) {
         return COOLDOWNS.getOrDefault(item, 0f);
+    }
+
+    /** The sounds `minecraft:swing_sounds` names for a pack's own item, or null for anything else. */
+    public static SwingSounds swingSoundsOf(Item item) {
+        return SWINGS.get(item);
+    }
+
+    /** Every level sound event an item's `minecraft:swing_sounds` names. */
+    public static Set<String> swingEvents() {
+        return SWINGS.values().stream().flatMap(SwingSounds::named)
+            .collect(java.util.stream.Collectors.toSet());
+    }
+
+    /**
+     * How much a bag holds, in Bedrock's weight units, of which a stack of 64 weighs 64: what its
+     * `minecraft:storage_weight_limit` states, and 64 for any other bag, which is what Java's own
+     * bundle holds.
+     */
+    public static int bagLimitOf(Item bag) {
+        return BAG_LIMITS.getOrDefault(bag, 64);
+    }
+
+    /**
+     * What one of an item weighs inside a bag, in the same units, where its
+     * `minecraft:storage_weight_modifier` says, or -1 where Java's own weight stands.
+     *
+     * Bedrock keeps an item stating a weight of nothing out of every bag. It is answered as more
+     * than any bag holds, which keeps it out the same way and never has a bag divide by nothing.
+     */
+    public static int bagWeightOf(Item item) {
+        int stated = STORAGE_WEIGHTS.getOrDefault(item, -1);
+        return stated == 0 ? 65 : stated;
     }
 
     public static Map<String, Item> all() {
@@ -282,7 +318,8 @@ public final class AddonItems {
      * of the same item from another release of its add-on take over.
      */
     private static void bind(ItemDefinition definition, Item item) {
-        List.of(PROJECTILES, KINETIC, COOLDOWNS, SENSORS, ABSORBED).forEach(map -> map.remove(item));
+        List.of(PROJECTILES, KINETIC, COOLDOWNS, SENSORS, ABSORBED, SWINGS, BAG_LIMITS, STORAGE_WEIGHTS)
+            .forEach(map -> map.remove(item));
         List.of(KEPT, OFF_HAND_REFUSED, LIQUID_CLIPPED).forEach(held -> held.remove(item));
         DYEABLE.remove(item);
 
@@ -307,6 +344,18 @@ public final class AddonItems {
         }
         float busyFor = definition.number("minecraft:cooldown", "duration", 0f);
         if (busyFor > 0f) COOLDOWNS.put(item, busyFor);
+
+        SwingSounds swings = SwingSounds.tryFrom(definition);
+        if (swings != null) SWINGS.put(item, swings);
+        // Bedrock caps a bag at 64 and has no weight below nothing.
+        if (definition.components().containsKey("minecraft:storage_weight_limit")) {
+            BAG_LIMITS.put(item, Math.max(0, Math.min(64, Math.round(
+                definition.number("minecraft:storage_weight_limit", "max_weight_limit", 64f)))));
+        }
+        if (definition.components().containsKey("minecraft:storage_weight_modifier")) {
+            STORAGE_WEIGHTS.put(item, Math.max(0, Math.round(
+                definition.number("minecraft:storage_weight_modifier", "weight_in_storage_item", 4f))));
+        }
 
         DurabilitySensor sensor = DurabilitySensor.tryFrom(definition);
         if (sensor != null) SENSORS.put(item, sensor);
@@ -1026,7 +1075,8 @@ public final class AddonItems {
         "minecraft:swing_duration", "minecraft:custom_components",
         "minecraft:piercing_weapon", "minecraft:kinetic_weapon", "minecraft:damage_absorption",
         "minecraft:allow_off_hand", "minecraft:liquid_clipped", "minecraft:durability_sensor",
-        "minecraft:stacked_by_data");
+        "minecraft:stacked_by_data", "minecraft:swing_sounds", "minecraft:storage_weight_limit",
+        "minecraft:storage_weight_modifier");
 
     /**
      * Item components read on purpose that the schemas Mojang publishes today do not carry.
@@ -1047,27 +1097,22 @@ public final class AddonItems {
         "minecraft:custom_components");
 
     /**
-     * Item components Java has nothing to answer with, each reported when an item declares it.
+     * Item components whose behaviour cannot be known or needs hardware no Java client has, each
+     * reported when an item declares it.
      *
-     * `minecraft:camera` times the black bars, the shutter and the photograph sliding away while an
-     * Education Edition player takes a picture, and Java has neither the picture nor the screen.
-     * `minecraft:interact_button` writes the word on the button a touchscreen shows, and Java has no
-     * touch controls. `minecraft:storage_weight_limit` and `minecraft:storage_weight_modifier` set a
-     * bag's capacity and one item's weight inside one, where Java measures against the constant
-     * `Fraction.ONE` in `BundleContents.Mutable.getMaxAmountToAdd` and weighs an item in
-     * `BundleContents.getWeight` by its stack size, neither of which reads anything an item carries.
-     * Those constants are the sixty-four and the four in sixty-four every one of Mojang's seventeen
-     * bundles states, so a pack copying them gets what it wrote and only other numbers go unmet.
-     * `minecraft:swing_sounds` names Bedrock level sound events, which a resource pack defines in the
-     * `individual_event_sounds` section of its `sounds.json`, a section this mod reports rather than
-     * reads, and which no table here maps onto Java's sound events.
+     * `minecraft:camera` is Education Edition's camera. Mojang publishes no schema and no
+     * documentation for it, only the five durations its own `camera.json` states (black bars and the
+     * share of the screen they cover, a shutter, the picture and its slide away). What each phase
+     * draws, which way the picture slides and where it ends up are not written down anywhere, and
+     * the picture goes into the portfolio, which is an Education Edition feature of its own.
+     * `minecraft:interact_button` writes the word on the interact button Bedrock shows only under
+     * touch controls, and no Java client has touch input to show such a button for.
      *
      * `tools/census/components.py` counts these as missing and does not fail on them, and names
      * any that become implemented or stop being published.
      */
     public static final Set<String> BEDROCK_ONLY = Set.of("minecraft:camera",
-        "minecraft:interact_button", "minecraft:storage_weight_limit",
-        "minecraft:storage_weight_modifier", "minecraft:swing_sounds");
+        "minecraft:interact_button");
 
     private static Identifier identifier(String bedrock) {
         Names.Identifier split = Names.split(bedrock, "minecraft");

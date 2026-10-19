@@ -938,7 +938,7 @@
       },
       "tp:ember_command": {
         "queue_command": {
-          "command": ["tag @s[r=1] add tp_event_command_translated", "aimassist @a clear"]
+          "command": ["tag @s[r=1] add tp_event_command_translated", "sendshowstoreoffer @a marketplace tp_offer"]
         }
       }
     }

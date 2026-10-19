@@ -30,12 +30,16 @@
       "at.ioexception.mcaddon.gametest.PlayerGameTests",
       "at.ioexception.mcaddon.gametest.CommandGameTests",
       "at.ioexception.mcaddon.gametest.BedrockCommandGameTests",
+      "at.ioexception.mcaddon.gametest.PermissionGameTests",
       "at.ioexception.mcaddon.gametest.NamesGameTests",
       "at.ioexception.mcaddon.gametest.ScriptGameTests",
+      "at.ioexception.mcaddon.gametest.ScriptToolGameTests",
       "at.ioexception.mcaddon.gametest.RegistryGameTests",
       "at.ioexception.mcaddon.gametest.ActiveAddonsGameTests",
       "at.ioexception.mcaddon.gametest.ShapeGameTests",
-      "at.ioexception.mcaddon.gametest.ServedArchivesGameTests"
+      "at.ioexception.mcaddon.gametest.BorderGameTests",
+      "at.ioexception.mcaddon.gametest.ServedArchivesGameTests",
+      "at.ioexception.mcaddon.gametest.StorageGameTests"
     ]
   },
   "mixins": [

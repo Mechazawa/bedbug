@@ -1,3 +1,14 @@
 {
-  "item.mcaddon.entity_bucket": "Bucket of %s"
+  "item.mcaddon.entity_bucket": "Bucket of %s",
+  "block.mcaddon.border_block": "Border",
+  "item.mcaddon.border_block": "Border",
+  "options.mcaddon.colourGrading": "Vibrant Visuals Colour Grading",
+  "options.mcaddon.colourGrading.tooltip": "Lets add-ons grade the picture per biome, the way Bedrock Edition does under Vibrant Visuals. Off by default, as in Bedrock's default graphics.",
+  "options.mcaddon.paperDoll": "Paper Doll",
+  "options.mcaddon.paperDoll.tooltip": "Draws your player small in the top left corner while you sneak, swim, fly, glide or ride, the way Bedrock Edition does.",
+  "mcaddon.server_trust.title": "Server identity changed",
+  "mcaddon.server_trust.message": "%s identifies itself with another key than the last time you joined. Accept the new identity to play, or disconnect.",
+  "mcaddon.server_trust.accept": "Accept",
+  "mcaddon.server_trust.disconnect": "Disconnect",
+  "mcaddon.server_trust.refused": "You did not accept the server's new identity."
 }

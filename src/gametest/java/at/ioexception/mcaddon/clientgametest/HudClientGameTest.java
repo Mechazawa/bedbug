@@ -1,14 +1,24 @@
 package at.ioexception.mcaddon.clientgametest;
 
 import at.ioexception.mcaddon.bedrock.hud.HudElement;
+import at.ioexception.mcaddon.client.render.PaperDoll;
 import at.ioexception.mcaddon.client.render.PlayerHud;
+import at.ioexception.mcaddon.platform.Platform;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestServerContext;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.AbstractButton;
+import net.minecraft.client.gui.components.OptionsList;
+import net.minecraft.client.gui.screens.options.VideoSettingsScreen;
+import net.minecraft.client.input.MouseButtonInfo;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Map;
 
@@ -20,8 +30,9 @@ import java.util.Map;
  * stops being drawn while the rest of the display goes on being drawn around it. The client is the
  * dedicated server's first player and a {@link Bystander} its second: the bystander's display is
  * hidden first and has to leave the client's alone, and nothing the client is told reaches the
- * bystander. The script's `ScreenDisplay.setHudVisibility` changes the same set as the command, and
- * a piece no Java client draws is refused the way a function line naming it is.
+ * bystander. The paper doll, which this mod draws, is watched through the mob the display draws. The
+ * script's `ScreenDisplay.setHudVisibility` changes the same set as the command, and a piece no Java
+ * client draws is refused the way a function line naming it is.
  */
 public final class HudClientGameTest implements FabricClientGameTest {
     private static final String HUD = "mcaddon:hud";
@@ -29,6 +40,9 @@ public final class HudClientGameTest implements FabricClientGameTest {
 
     /** How many ticks a piece is watched for being drawn, or for not being drawn. */
     private static final int WATCHED = 10;
+
+    /** How long the paper doll stays once the player stops doing what it is drawn for, and a little more. */
+    private static final int LINGER = 20;
 
     /** The sprite each piece is drawn with, which a survival player with an effect on sees every frame. */
     private static final Map<HudElement, String> SPRITES = Map.of(
@@ -54,6 +68,7 @@ public final class HudClientGameTest implements FabricClientGameTest {
             SPRITES.keySet().forEach(element -> oneAtATime(context, server, player, element));
             everything(context, server, player);
             refused(server, player);
+            paperDoll(context, server, player);
             fromTheScript(context, server, player);
 
             int sent = server.computeOnServer(minecraft -> bystander.sent(HUD).size());
@@ -110,10 +125,86 @@ public final class HudClientGameTest implements FabricClientGameTest {
     }
 
     private static void refused(TestServerContext server, String player) {
-        String said = Worlds.said(server, "bedrock hud " + player + " hide paperdoll");
-        Assert.that(said.contains("hud paperdoll, which Java has no form of"),
-            "Expected /hud hide paperdoll to be refused as a piece Java has no form of, and the command said: "
+        String said = Worlds.said(server, "bedrock hud " + player + " hide touch_controls");
+        Assert.that(said.contains("hud touch_controls, which Java has no form of"),
+            "Expected /hud hide touch_controls to be refused as a piece Java has no form of, and the command said: "
                 + said);
+    }
+
+    /**
+     * The paper doll is drawn while the player rides and for a moment after, and not while they stand.
+     * `/hud` hides it while the hotbar goes on being drawn, and `reset` draws it again. The video
+     * settings' paper doll button turns it off and on again, and the screen saves that to `options.txt`.
+     */
+    private static void paperDoll(ClientGameTestContext context, TestServerContext server, String player) {
+        dollUndrawn(context, "while " + player + " stood still");
+
+        server.runCommand("execute at " + player + " run summon minecraft:oak_boat ~ ~ ~ {Tags:[\"mcaddon_doll\"]}");
+        server.runCommand("ride " + player + " mount @e[tag=mcaddon_doll,limit=1]");
+        dollDrawn(context, "while " + player + " rode a boat");
+
+        server.runCommand("bedrock hud " + player + " hide paperdoll");
+        Worlds.waitForClient(context, client -> PlayerHud.hides(HudElement.PAPERDOLL), PATIENCE,
+            () -> "Expected /hud hide paperdoll to reach the client.");
+        String hotbar = SPRITES.get(HudElement.HOTBAR);
+        long beside = context.computeOnClient(client -> Drawn.times(hotbar));
+        dollUndrawn(context, "once /hud hid it");
+        Assert.that(context.computeOnClient(client -> Drawn.times(hotbar)) > beside,
+            "Expected the hotbar to go on being drawn while the paper doll was hidden.");
+
+        server.runCommand("bedrock hud " + player + " reset paperdoll");
+        Worlds.waitForClient(context, client -> !PlayerHud.hides(HudElement.PAPERDOLL), PATIENCE,
+            () -> "Expected /hud reset paperdoll to reach the client.");
+        dollDrawn(context, "once /hud reset it");
+
+        pressPaperDollOption(context, false);
+        dollUndrawn(context, "once the paper doll option was turned off");
+        pressPaperDollOption(context, true);
+        dollDrawn(context, "once the paper doll option was turned on again");
+
+        server.runCommand("ride " + player + " dismount");
+        server.runCommand("kill @e[tag=mcaddon_doll]");
+        context.waitTicks(LINGER);
+        dollUndrawn(context, "once " + player + " had left the boat");
+    }
+
+    /** Presses the paper doll's button in the video settings and closes them, which saves the options. */
+    private static void pressPaperDollOption(ClientGameTestContext context, boolean to) {
+        context.runOnClient(client -> Platform.setScreen(new VideoSettingsScreen(null, client, client.options)));
+        context.runOnClient(client -> Platform.currentScreen().children().stream()
+            .filter(OptionsList.class::isInstance).map(OptionsList.class::cast).findFirst()
+            .map(list -> (AbstractButton) list.findOption(PaperDoll.OPTION))
+            .orElseThrow(() -> new AssertionError("Expected the video settings to list the paper doll option."))
+            .onPress(new MouseButtonInfo(0, 0)));
+        context.runOnClient(client -> Platform.setScreen(null));
+        Assert.that(context.computeOnClient(client -> PaperDoll.OPTION.get()) == to,
+            "Expected the paper doll button to turn the option " + (to ? "on" : "off") + ".");
+        String saved = context.computeOnClient(HudClientGameTest::savedOptions);
+        Assert.that(saved.contains("mcaddon.paperDoll:" + to),
+            "Expected options.txt to keep the paper doll option as " + to + ".");
+    }
+
+    private static String savedOptions(Minecraft client) {
+        try {
+            return Files.readString(client.gameDirectory.toPath().resolve("options.txt"));
+        } catch (IOException failure) {
+            throw new UncheckedIOException(failure);
+        }
+    }
+
+    private static void dollDrawn(ClientGameTestContext context, String what) {
+        long before = context.computeOnClient(client -> Drawn.entities());
+        Worlds.waitForClient(context, client -> Drawn.entities() > before, PATIENCE,
+            () -> "Expected the paper doll to be drawn " + what + ", and it was not.");
+    }
+
+    private static void dollUndrawn(ClientGameTestContext context, String what) {
+        context.waitTicks(2);
+        long before = context.computeOnClient(client -> Drawn.entities());
+        context.waitTicks(WATCHED);
+        long since = context.computeOnClient(client -> Drawn.entities()) - before;
+        Assert.that(since == 0, "Expected the paper doll to be drawn no more " + what + ", and it was drawn "
+            + since + " more times.");
     }
 
     /** The script hides the hotbar, reads that back, and resets every piece through the same set. */

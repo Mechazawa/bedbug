@@ -9,6 +9,7 @@
   "client": [
     "AddonParticleAccessor",
     "GuiGraphicsExtractorMixin",
+    "HudTextAccessor",
     "IntegratedServerHaltMixin",
     "ParticleEngineMixin",
     "ParticleMotionAccessor",

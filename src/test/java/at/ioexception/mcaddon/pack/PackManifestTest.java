@@ -48,7 +48,7 @@ class PackManifestTest {
             List.of(new PackManifest.PackDependency(UUID.fromString(OTHER), new SemVer(2, 0, 0))),
             manifest.packDependencies());
         assertEquals(
-            List.of(new PackManifest.ModuleDependency("@minecraft/server", new SemVer(2, 6, 0), false)),
+            List.of(new PackManifest.ModuleDependency("@minecraft/server", new SemVer(2, 6, 0), false, false)),
             manifest.moduleDependencies());
     }
 
@@ -284,7 +284,7 @@ class PackManifestTest {
             """.formatted(SELF, OTHER));
 
         assertEquals(List.of("has_education_metadata", "header.pack_scope", "header.platform_locked",
-            "metadata.product_type", "module.description", "module.uuid", "module.version"),
+            "metadata.product_type", "module.description", "module.version"),
             manifest.unread().stream().sorted().toList());
     }
 

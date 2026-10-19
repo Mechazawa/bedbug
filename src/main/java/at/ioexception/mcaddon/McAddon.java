@@ -57,6 +57,9 @@ public final class McAddon implements ModInitializer {
         // this function type, and the game looks both names up as it parses the table.
         at.ioexception.mcaddon.bedrock.behaviour.BedrockCondition.register();
         at.ioexception.mcaddon.bedrock.behaviour.BedrockFunction.register();
+        // Before the packs are read, because a pack may name Bedrock's border block anywhere it
+        // names a block or an item.
+        at.ioexception.mcaddon.block.BorderBlock.register();
 
         packs = PackDiscovery.scan();
         at.ioexception.mcaddon.pack.PackSettings.read(packs);
@@ -81,6 +84,7 @@ public final class McAddon implements ModInitializer {
         at.ioexception.mcaddon.server.AddonSyncTask.register();
         at.ioexception.mcaddon.server.AddonSyncLogin.register();
         at.ioexception.mcaddon.sync.ServedArchives.register();
+        at.ioexception.mcaddon.server.PacketLimits.register();
         ServerHooks.register();
         at.ioexception.mcaddon.structure.PackStructures.register();
     }

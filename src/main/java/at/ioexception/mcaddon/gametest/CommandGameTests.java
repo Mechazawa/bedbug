@@ -93,16 +93,16 @@ public final class CommandGameTests {
                 "a selector naming minecraft:villager_v2 did not select the villager.");
 
             List<String> report = ServerHooks.scripts().coverage().report();
-            helper.assertTrue(reportedUnder(report, UNTRANSLATED, "    command aimassist x"),
-                "the script's aimassist command is not reported as untranslatable: " + report);
+            helper.assertTrue(reportedUnder(report, UNTRANSLATED, "    command sendshowstoreoffer x"),
+                "the script's sendshowstoreoffer command is not reported as untranslatable: " + report);
         });
     }
 
     /**
      * An entity event's commands are translated, and the one with no Java form is reported.
      *
-     * The ember's event tags it through a selector with a Bedrock radius and asks for an aim assist
-     * Java has no command for, which `/mcaddon entities` has to name.
+     * The ember's event tags it through a selector with a Bedrock radius and asks for a marketplace
+     * offer, which needs Mojang's store and which `/mcaddon entities` has to name.
      */
     @GameTest()
     public void anEntityEventsCommandsAreTranslated(GameTestHelper helper) {
@@ -119,8 +119,8 @@ public final class CommandGameTests {
             helper.assertTrue(Platform.tagsOf(ember).contains("tp_event_command_translated"),
                 ENTITY + "'s event ran a selector with a Bedrock radius and it did not reach the ember.");
             helper.assertTrue(AddonEntities.report().stream()
-                    .anyMatch(line -> line.startsWith("    command aimassist x")),
-                "the event's aimassist command is not reported: " + AddonEntities.report());
+                    .anyMatch(line -> line.startsWith("    command sendshowstoreoffer x")),
+                "the event's sendshowstoreoffer command is not reported: " + AddonEntities.report());
         });
     }
 
@@ -168,7 +168,7 @@ public final class CommandGameTests {
         helper.assertTrue(tags.contains("tp_before_the_gap") && tags.contains("tp_after_the_gap"),
             "the lines either side of the one that cannot run did not both run: " + tags);
         helper.assertTrue(AddonEntities.report().stream()
-                .anyMatch(line -> line.startsWith("    command controlscheme x")),
+                .anyMatch(line -> line.startsWith("    command project x")),
             "the line that cannot run is not reported: " + AddonEntities.report());
         helper.succeed();
     }
@@ -187,7 +187,7 @@ public final class CommandGameTests {
         helper.assertTrue(helper.getLevel().getServer().getFunctions().get(Platform.id("tp", "tp/unrun")).isPresent(),
             "tp:tp/unrun did not load.");
         helper.assertTrue(AddonEntities.report().stream()
-                .anyMatch(line -> line.startsWith("    command hud paperdoll, which Java has no form of x")),
+                .anyMatch(line -> line.startsWith("    command hud touch_controls, which Java has no form of x")),
             "the line of tp:tp/unrun that cannot run is not reported: " + AddonEntities.report());
         helper.succeed();
     }

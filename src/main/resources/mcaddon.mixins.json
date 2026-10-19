@@ -5,6 +5,11 @@
   "compatibilityLevel": "JAVA_17",
   "mixins": [
     "PackRepositoryMixin",
+    "BlockItemMixin",
+    "ServerPlayerChatMixin",
+    "CommandsMixin",
+    "ConnectionPacketLimitMixin",
+    "SettingsAccessor",
     "LivingEntityMixin",
     "JumpingAccessor",
     "JigsawStructureAccessor",
@@ -39,6 +44,7 @@
     "ServerPlayerGameModeMixin",
     "ServerGamePacketListenerMixin",
     "ServerPlayerMixin",
+    "VisitorMenuMixin",
     "ServerLevelGameEventMixin",
     "FoodDataAccessor",
     "MappedRegistryAccessor",
@@ -52,15 +58,24 @@
     "PlayerMovementExhaustionMixin",
     "LungeExhaustionMixin",
     "MountPermissionMixin",
-    "DismountPermissionMixin"
+    "DismountPermissionMixin",
+    "PlayerSwingSoundMixin",
+    "BundleWeightMixin",
+    "BundleCapacityMixin",
+    "BundleItemMixin",
+    "BorderCollisionMixin",
+    "BorderChunkMixin"
   ],
   "injectors": {
     "defaultRequire": 1
   },
   "client": [
+    "AimAssistPickMixin",
     "CameraMixin",
     "FogRendererMixin",
+    "GameRendererGradeMixin",
     "HudMixin",
+    "HudTextMixin",
     "KeyboardInputMixin",
     "MouseHandlerMixin",
     "LivingEntityRendererMixin",
@@ -71,6 +86,9 @@
     "FovMixin",
     "RecipeToastMixin",
     "AdventureTooltipMixin",
+    "OptionsMixin",
+    "VideoSettingsScreenMixin",
+    "AttackMissMixin",
     "ModelBakeryMixin",
     "BlockStateModelLoaderMixin"
   ]

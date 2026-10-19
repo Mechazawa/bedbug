@@ -7,6 +7,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.SlabType;
+import net.minecraft.world.level.block.state.properties.WallSide;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -112,10 +113,28 @@ class BedrockBlockNamesTest {
 
     @Test
     void answersNothingForABlockJavaLacks() {
-        assertNull(BedrockBlockNames.java("minecraft:border_block"));
+        assertNull(BedrockBlockNames.java("minecraft:allow"));
         assertNull(BedrockBlockNames.state("minecraft:element_1", Map.of(), reported::add));
         assertTrue(BedrockBlockNames.bedrockOnly("minecraft:element_1"));
         assertTrue(BedrockBlockNames.bedrockOnly("minecraft:hard_red_stained_glass_pane"));
+    }
+
+    /** The border block is the mod's own, and its item and its block are reported under Bedrock's id. */
+    @Test
+    void namesTheBorderBlockThisModBuilds() {
+        assertEquals("mcaddon:border_block", BedrockBlockNames.java("minecraft:border_block"));
+        assertEquals("mcaddon:border_block", BedrockItemNames.java("minecraft:border_block"));
+        assertEquals("minecraft:border_block", BedrockItemNames.bedrock("mcaddon:border_block"));
+    }
+
+    @Test
+    void readsAWallsPostAndSides() {
+        BlockState wall = state("minecraft:cobblestone_wall",
+            Map.of("wall_post_bit", 0, "wall_connection_type_east", "short", "wall_connection_type_north", "tall"));
+        assertEquals(Boolean.FALSE, wall.getValue(BlockStateProperties.UP));
+        assertEquals(WallSide.LOW, wall.getValue(BlockStateProperties.EAST_WALL));
+        assertEquals(WallSide.TALL, wall.getValue(BlockStateProperties.NORTH_WALL));
+        assertEquals(List.of(), reported);
     }
 
     @ParameterizedTest

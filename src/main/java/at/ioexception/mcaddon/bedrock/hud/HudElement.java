@@ -10,13 +10,15 @@ import java.util.Set;
  * The constants stand in the order of the script API's own `HudElement`, so a constant's ordinal is
  * the number a script names it by, and a set of them crosses to a client as one bitmask.
  *
- * Three of Bedrock's pieces are drawn by nothing on a Java client: the paper doll, the touch
- * controls, and the hints Bedrock calls tooltips, which say what pressing a key would do to the
- * block or entity under the crosshair. Java's one such hint, how to get off a mount, is written to
- * the action bar a pack writes to as well.
+ * The paper doll is drawn by this mod, in `client.render.PaperDoll`. Two pieces are drawn by
+ * nothing. The touch controls are the buttons Bedrock draws on a touch screen, which a Java client
+ * never runs on. The tooltips are Bedrock's lists of button prompts (`left_helpers` and
+ * `right_helpers` in its `hud_screen.json`), which say what a key would do to the block or entity
+ * under the crosshair: which prompts show, for which key, on which side and in what order is
+ * decided in engine code Mojang publishes nowhere.
  */
 public enum HudElement {
-    PAPERDOLL("paperdoll", false),
+    PAPERDOLL("paperdoll", true),
     ARMOR("armor", true),
     TOOLTIPS("tooltips", false),
     TOUCH_CONTROLS("touch_controls", false),

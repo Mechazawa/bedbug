@@ -13,6 +13,9 @@ java.toolchain.languageVersion.set(JavaLanguageVersion.of(prop("deps.java").toIn
  *
  * The artifacts are listed rather than resolved through the `js-community` aggregator POM, because
  * Loom nests declared dependencies and not transitive ones. Same version for all of them.
+ *
+ * `profiler-tool` is the CPU sampler `/script profiler` records with, and it needs the shadowed
+ * JSON library. The debugger `/script debugger` drives is part of `truffle-api`.
  */
 val graalArtifacts = listOf(
     "org.graalvm.polyglot:polyglot",
@@ -23,7 +26,9 @@ val graalArtifacts = listOf(
     "org.graalvm.sdk:nativeimage",
     "org.graalvm.sdk:word",
     "org.graalvm.shadowed:icu4j",
+    "org.graalvm.shadowed:json",
     "org.graalvm.shadowed:xz",
+    "org.graalvm.tools:profiler-tool",
     "org.graalvm.truffle:truffle-api",
     "org.graalvm.truffle:truffle-compiler",
     "org.graalvm.truffle:truffle-runtime",
@@ -217,6 +222,11 @@ val installServedPack = project.tasks.register("installServedPack") {
             if (process.waitFor() != 0) throw GradleException("The served pack would not build: $output")
         }
     }
+}
+
+// Fabric empties the client test run directory before a run, so the packs go in after it has.
+listOf(installClientTestPack, installServedPack).forEach { install ->
+    install.configure { mustRunAfter(project.tasks.matching { it.name == "deleteGameTestRunDir" }) }
 }
 
 project.tasks.matching { it.name == "runClientGameTest" }.configureEach {

@@ -3084,15 +3084,17 @@ export class Player extends Entity {
     }
 
     getAimAssist() {
-        return unsupported("Player.getAimAssist", new PlayerAimAssist());
+        return new PlayerAimAssist(this.id);
     }
 
     getControlScheme() {
-        return unsupported("Player.getControlScheme");
+        return bridge.players.controlScheme(this.id);
     }
 
-    setControlScheme() {
-        unsupported("Player.setControlScheme");
+    /** With no scheme the player goes back to the one their camera starts on. */
+    setControlScheme(controlScheme) {
+        const refused = bridge.players.setControlScheme(this.id, controlScheme ?? null);
+        if (refused !== null) throw new Error(refused);
     }
 
     // An override changes what this player's client draws the entity from, and nothing else.
@@ -3511,6 +3513,308 @@ export class PlayerInputPermissions {
 
     setPermissionCategory(permissionCategory, isEnabled) {
         bridge.players.setInputEnabled(this.#playerId, permissionCategory, isEnabled);
+    }
+}
+
+function requireNamespace(identifier) {
+    if (typeof identifier !== "string" || !identifier.includes(":")) {
+        throw new NamespaceNameError("An aim assist id needs a namespace, and " + identifier + " has none.");
+    }
+}
+
+/** A category the world holds, as the bridge answered it. */
+export class AimAssistCategory {
+    #json;
+
+    constructor(json) {
+        this.#json = json;
+    }
+
+    get defaultBlockPriority() {
+        return this.#json.priorities.block_default;
+    }
+
+    get defaultEntityPriority() {
+        return this.#json.priorities.entity_default;
+    }
+
+    get identifier() {
+        return this.#json.name;
+    }
+
+    getBlockPriorities() {
+        return { ...this.#json.priorities.blocks };
+    }
+
+    getBlockTagPriorities() {
+        return { ...this.#json.priorities.block_tags };
+    }
+
+    getEntityPriorities() {
+        return { ...this.#json.priorities.entities };
+    }
+
+    getEntityTypeFamilyPriorities() {
+        return { ...this.#json.priorities.entity_type_families };
+    }
+}
+
+/** What `AimAssistRegistry.addCategory` makes a category from. */
+export class AimAssistCategorySettings {
+    #identifier;
+    #blocks = {};
+    #blockTags = {};
+    #entities = {};
+    #families = {};
+
+    constructor(identifier) {
+        this.#identifier = identifier;
+        this.defaultBlockPriority = 1;
+        this.defaultEntityPriority = 1;
+    }
+
+    get identifier() {
+        return this.#identifier;
+    }
+
+    getBlockPriorities() {
+        return { ...this.#blocks };
+    }
+
+    getBlockTagPriorities() {
+        return { ...this.#blockTags };
+    }
+
+    getEntityPriorities() {
+        return { ...this.#entities };
+    }
+
+    getEntityTypeFamilyPriorities() {
+        return { ...this.#families };
+    }
+
+    setBlockPriorities(blockPriorities) {
+        this.#blocks = { ...blockPriorities };
+    }
+
+    setBlockTagPriorities(blockTagPriorities) {
+        this.#blockTags = { ...blockTagPriorities };
+    }
+
+    setEntityPriorities(entityPriorities) {
+        this.#entities = { ...entityPriorities };
+    }
+
+    setEntityTypeFamilyPriorities(entityTypeFamilyPriorities) {
+        this.#families = { ...entityTypeFamilyPriorities };
+    }
+}
+
+/** A preset the world holds, as the bridge answered it. */
+export class AimAssistPreset {
+    #json;
+
+    constructor(json) {
+        this.#json = json;
+    }
+
+    get defaultItemSettings() {
+        return this.#json.default_item_settings;
+    }
+
+    get handSettings() {
+        return this.#json.hand_settings;
+    }
+
+    get identifier() {
+        return this.#json.identifier;
+    }
+
+    getExcludedBlockTagTargets() {
+        return [...this.#json.excluded_block_tags];
+    }
+
+    getExcludedBlockTargets() {
+        return [...this.#json.excluded_blocks];
+    }
+
+    getExcludedEntityTargets() {
+        return [...this.#json.excluded_entities];
+    }
+
+    getExcludedEntityTypeFamilyTargets() {
+        return [...this.#json.excluded_entity_type_families];
+    }
+
+    getItemSettings() {
+        return { ...this.#json.item_settings };
+    }
+
+    getLiquidTargetingItems() {
+        return [...this.#json.liquid_targeting_list];
+    }
+}
+
+/** What `AimAssistRegistry.addPreset` makes a preset from. */
+export class AimAssistPresetSettings {
+    #identifier;
+    #items = {};
+    #blockTags;
+    #blocks;
+    #entities;
+    #families;
+    #liquids;
+
+    constructor(identifier) {
+        this.#identifier = identifier;
+        this.defaultItemSettings = undefined;
+        this.handSettings = undefined;
+    }
+
+    get identifier() {
+        return this.#identifier;
+    }
+
+    getExcludedBlockTagTargets() {
+        return this.#blockTags === undefined ? undefined : [...this.#blockTags];
+    }
+
+    getExcludedBlockTargets() {
+        return this.#blocks === undefined ? undefined : [...this.#blocks];
+    }
+
+    getExcludedEntityTargets() {
+        return this.#entities === undefined ? undefined : [...this.#entities];
+    }
+
+    getExcludedEntityTypeFamilyTargets() {
+        return this.#families === undefined ? undefined : [...this.#families];
+    }
+
+    getItemSettings() {
+        return { ...this.#items };
+    }
+
+    getLiquidTargetingItems() {
+        return this.#liquids === undefined ? undefined : [...this.#liquids];
+    }
+
+    setExcludedBlockTagTargets(blockTagTargets) {
+        this.#blockTags = blockTagTargets === undefined ? undefined : [...blockTagTargets];
+    }
+
+    setExcludedBlockTargets(blockTargets) {
+        this.#blocks = blockTargets === undefined ? undefined : [...blockTargets];
+    }
+
+    setExcludedEntityTargets(entityTargets) {
+        this.#entities = entityTargets === undefined ? undefined : [...entityTargets];
+    }
+
+    setExcludedEntityTypeFamilyTargets(entityTypeFamilyTargets) {
+        this.#families = entityTypeFamilyTargets === undefined ? undefined : [...entityTypeFamilyTargets];
+    }
+
+    setItemSettings(itemSettings) {
+        Object.values(itemSettings).forEach(requireNamespace);
+        this.#items = { ...itemSettings };
+    }
+
+    setLiquidTargetingItems(items) {
+        this.#liquids = items === undefined ? undefined : [...items];
+    }
+}
+
+/**
+ * The presets and categories the world holds: the game's own default of each, every one the packs'
+ * files describe, and every one a script added.
+ */
+export class AimAssistRegistry {
+    static DefaultCategoryId = "minecraft:default";
+    static DefaultPresetId = "minecraft:aim_assist_default";
+
+    addCategory(category) {
+        requireNamespace(category.identifier);
+        return new AimAssistCategory(JSON.parse(bridge.worlds.addAimAssistCategory(JSON.stringify({
+            name: category.identifier,
+            priorities: {
+                entity_default: category.defaultEntityPriority,
+                block_default: category.defaultBlockPriority,
+                entities: category.getEntityPriorities(),
+                blocks: category.getBlockPriorities(),
+                entity_type_families: category.getEntityTypeFamilyPriorities(),
+                block_tags: category.getBlockTagPriorities(),
+            },
+        }))));
+    }
+
+    addPreset(preset) {
+        requireNamespace(preset.identifier);
+        return new AimAssistPreset(JSON.parse(bridge.worlds.addAimAssistPreset(JSON.stringify({
+            identifier: preset.identifier,
+            item_settings: preset.getItemSettings(),
+            default_item_settings: preset.defaultItemSettings,
+            hand_settings: preset.handSettings,
+            exclusion_list: [...(preset.getExcludedBlockTargets() ?? []), ...(preset.getExcludedEntityTargets() ?? [])],
+            excluded_entity_type_families: preset.getExcludedEntityTypeFamilyTargets() ?? [],
+            excluded_block_tags: preset.getExcludedBlockTagTargets() ?? [],
+            liquid_targeting_list: preset.getLiquidTargetingItems() ?? [],
+        }))));
+    }
+
+    getCategories() {
+        return JSON.parse(bridge.worlds.aimAssistCategories()).map(json => new AimAssistCategory(json));
+    }
+
+    getCategory(categoryId) {
+        return this.getCategories().find(category => category.identifier === categoryId);
+    }
+
+    getPreset(presetId) {
+        return this.getPresets().find(preset => preset.identifier === presetId);
+    }
+
+    getPresets() {
+        return JSON.parse(bridge.worlds.aimAssistPresets()).map(json => new AimAssistPreset(json));
+    }
+}
+
+/** One player's aim assist, which is what `/aimassist` sets as well. */
+export class PlayerAimAssist {
+    #playerId;
+
+    constructor(playerId) {
+        this.#playerId = playerId;
+    }
+
+    get settings() {
+        const json = bridge.players.aimAssist(this.#playerId);
+        if (json === null) return undefined;
+
+        const settings = JSON.parse(json);
+        return {
+            presetId: settings.preset,
+            targetMode: settings.target_mode === "distance" ? AimAssistTargetMode.Distance : AimAssistTargetMode.Angle,
+            viewAngle: { x: settings.angle[0], y: settings.angle[1] },
+            distance: settings.distance,
+        };
+    }
+
+    set(settings) {
+        if (settings === undefined || settings === null) {
+            bridge.players.setAimAssist(this.#playerId, null);
+            return;
+        }
+        requireNamespace(settings.presetId);
+        const refused = bridge.players.setAimAssist(this.#playerId, JSON.stringify({
+            preset: settings.presetId,
+            target_mode: settings.targetMode === AimAssistTargetMode.Distance ? "distance" : "angle",
+            angle: [settings.viewAngle?.x ?? 50, settings.viewAngle?.y ?? 50],
+            distance: settings.distance ?? 8,
+        }));
+        if (refused === null) return;
+        if (refused.includes("must be between")) throw new RangeError(refused);
+        throw new Error(refused);
     }
 }
 
@@ -4457,7 +4761,7 @@ export class World {
     }
 
     getAimAssist() {
-        return unsupported("World.getAimAssist", new AimAssistRegistry());
+        return new AimAssistRegistry();
     }
 
     getPackSettings() {
@@ -6937,203 +7241,6 @@ export class WorldLoadAfterEvent {}
 // it runs, so a pack importing one of these would lose its whole script over a name rather than
 // over the one line that used it. Each is here so the import succeeds; reaching for what they would
 // do reports through the same path every other gap does.
-export class AimAssistCategory {
-    get defaultBlockPriority() {
-        return unsupported("AimAssistCategory.defaultBlockPriority");
-    }
-
-    get defaultEntityPriority() {
-        return unsupported("AimAssistCategory.defaultEntityPriority");
-    }
-
-    get identifier() {
-        return unsupported("AimAssistCategory.identifier");
-    }
-
-    getBlockPriorities() {
-        return unsupported("AimAssistCategory.getBlockPriorities");
-    }
-
-    getBlockTagPriorities() {
-        return unsupported("AimAssistCategory.getBlockTagPriorities");
-    }
-
-    getEntityPriorities() {
-        return unsupported("AimAssistCategory.getEntityPriorities");
-    }
-
-    getEntityTypeFamilyPriorities() {
-        return unsupported("AimAssistCategory.getEntityTypeFamilyPriorities");
-    }
-}
-export class AimAssistCategorySettings {
-    get defaultBlockPriority() {
-        return unsupported("AimAssistCategorySettings.defaultBlockPriority");
-    }
-
-    get defaultEntityPriority() {
-        return unsupported("AimAssistCategorySettings.defaultEntityPriority");
-    }
-
-    get identifier() {
-        return unsupported("AimAssistCategorySettings.identifier");
-    }
-
-    getBlockPriorities() {
-        return unsupported("AimAssistCategorySettings.getBlockPriorities");
-    }
-
-    getBlockTagPriorities() {
-        return unsupported("AimAssistCategorySettings.getBlockTagPriorities");
-    }
-
-    getEntityPriorities() {
-        return unsupported("AimAssistCategorySettings.getEntityPriorities");
-    }
-
-    getEntityTypeFamilyPriorities() {
-        return unsupported("AimAssistCategorySettings.getEntityTypeFamilyPriorities");
-    }
-
-    setBlockPriorities() {
-        return unsupported("AimAssistCategorySettings.setBlockPriorities");
-    }
-
-    setBlockTagPriorities() {
-        return unsupported("AimAssistCategorySettings.setBlockTagPriorities");
-    }
-
-    setEntityPriorities() {
-        return unsupported("AimAssistCategorySettings.setEntityPriorities");
-    }
-
-    setEntityTypeFamilyPriorities() {
-        return unsupported("AimAssistCategorySettings.setEntityTypeFamilyPriorities");
-    }
-}
-export class AimAssistPreset {
-    get defaultItemSettings() {
-        return unsupported("AimAssistPreset.defaultItemSettings");
-    }
-
-    get handSettings() {
-        return unsupported("AimAssistPreset.handSettings");
-    }
-
-    get identifier() {
-        return unsupported("AimAssistPreset.identifier");
-    }
-
-    getExcludedBlockTagTargets() {
-        return unsupported("AimAssistPreset.getExcludedBlockTagTargets");
-    }
-
-    getExcludedBlockTargets() {
-        return unsupported("AimAssistPreset.getExcludedBlockTargets");
-    }
-
-    getExcludedEntityTargets() {
-        return unsupported("AimAssistPreset.getExcludedEntityTargets");
-    }
-
-    getExcludedEntityTypeFamilyTargets() {
-        return unsupported("AimAssistPreset.getExcludedEntityTypeFamilyTargets");
-    }
-
-    getItemSettings() {
-        return unsupported("AimAssistPreset.getItemSettings");
-    }
-
-    getLiquidTargetingItems() {
-        return unsupported("AimAssistPreset.getLiquidTargetingItems");
-    }
-}
-export class AimAssistPresetSettings {
-    get defaultItemSettings() {
-        return unsupported("AimAssistPresetSettings.defaultItemSettings");
-    }
-
-    get handSettings() {
-        return unsupported("AimAssistPresetSettings.handSettings");
-    }
-
-    get identifier() {
-        return unsupported("AimAssistPresetSettings.identifier");
-    }
-
-    getExcludedBlockTagTargets() {
-        return unsupported("AimAssistPresetSettings.getExcludedBlockTagTargets");
-    }
-
-    getExcludedBlockTargets() {
-        return unsupported("AimAssistPresetSettings.getExcludedBlockTargets");
-    }
-
-    getExcludedEntityTargets() {
-        return unsupported("AimAssistPresetSettings.getExcludedEntityTargets");
-    }
-
-    getExcludedEntityTypeFamilyTargets() {
-        return unsupported("AimAssistPresetSettings.getExcludedEntityTypeFamilyTargets");
-    }
-
-    getItemSettings() {
-        return unsupported("AimAssistPresetSettings.getItemSettings");
-    }
-
-    getLiquidTargetingItems() {
-        return unsupported("AimAssistPresetSettings.getLiquidTargetingItems");
-    }
-
-    setExcludedBlockTagTargets() {
-        return unsupported("AimAssistPresetSettings.setExcludedBlockTagTargets");
-    }
-
-    setExcludedBlockTargets() {
-        return unsupported("AimAssistPresetSettings.setExcludedBlockTargets");
-    }
-
-    setExcludedEntityTargets() {
-        return unsupported("AimAssistPresetSettings.setExcludedEntityTargets");
-    }
-
-    setExcludedEntityTypeFamilyTargets() {
-        return unsupported("AimAssistPresetSettings.setExcludedEntityTypeFamilyTargets");
-    }
-
-    setItemSettings() {
-        return unsupported("AimAssistPresetSettings.setItemSettings");
-    }
-
-    setLiquidTargetingItems() {
-        return unsupported("AimAssistPresetSettings.setLiquidTargetingItems");
-    }
-}
-export class AimAssistRegistry {
-    addCategory() {
-        return unsupported("AimAssistRegistry.addCategory");
-    }
-
-    addPreset() {
-        return unsupported("AimAssistRegistry.addPreset");
-    }
-
-    getCategories() {
-        return unsupported("AimAssistRegistry.getCategories");
-    }
-
-    getCategory() {
-        return unsupported("AimAssistRegistry.getCategory");
-    }
-
-    getPreset() {
-        return unsupported("AimAssistRegistry.getPreset");
-    }
-
-    getPresets() {
-        return unsupported("AimAssistRegistry.getPresets");
-    }
-}
 export class BlockComponentBlockStateChangeEvent extends BlockEvent {
     get previousPermutation() {
         return unsupported("BlockComponentBlockStateChangeEvent.previousPermutation");
@@ -7219,15 +7326,6 @@ export class LocatorBar {
 
     removeWaypoint() {
         return unsupported("LocatorBar.removeWaypoint");
-    }
-}
-export class PlayerAimAssist {
-    get settings() {
-        return unsupported("PlayerAimAssist.settings");
-    }
-
-    set() {
-        return unsupported("PlayerAimAssist.set");
     }
 }
 export class PlayerCancelBreakingBlockAfterEvent extends BlockEvent {

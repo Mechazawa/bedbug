@@ -16,8 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** A resource pack shipping a kind of file nothing converts is told which, and why. */
 class PackFilesTest {
 
-    private static final List<String> UNREAD = List.of("ui/server_form.json",
-        "textures/texture_list.json", "color_grading/grading.json", "water/water.json");
+    private static final List<String> UNREAD = List.of("water/water.json");
 
     @Test
     void anUnreadKindIsNamedWithItsReason(@TempDir Path root) throws IOException {
@@ -34,7 +33,7 @@ class PackFilesTest {
             }
             """).getAsJsonObject()), "test"));
 
-        for (String kind : List.of("ui", "textures/texture_list.json", "color_grading", "water")) {
+        for (String kind : List.of("water")) {
             assertTrue(AddonEntities.report().stream()
                 .anyMatch(line -> line.trim().startsWith("resource pack " + kind + ", ")),
                 kind + " was not named with a reason: " + AddonEntities.report());

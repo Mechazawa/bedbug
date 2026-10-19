@@ -1,0 +1,13 @@
+{
+  "format_version": "1.21.90",
+  "minecraft:camera_preset": {
+    "identifier": "tp:steered",
+    "inherit_from": "minecraft:free",
+    "pos_x": 0.5,
+    "pos_y": 110,
+    "pos_z": 0.5,
+    "rot_x": 30,
+    "rot_y": 90,
+    "control_scheme": "camera_relative"
+  }
+}

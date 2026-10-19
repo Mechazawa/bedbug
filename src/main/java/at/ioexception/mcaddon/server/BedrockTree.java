@@ -69,8 +69,12 @@ public final class BedrockTree {
             .requires(source -> Platform.allowedAt(source, 1))
             .then(Commands.argument("line", StringArgumentType.greedyString())
                 .suggests(BedrockTree::suggest)
-                .executes(Platform.runningLine((command, source) -> {
-                    PackCommand line = PackCommand.tryFrom(null, StringArgumentType.getString(command, "line"));
+                .executes(Platform.runningLine((command, source, topLevel) -> {
+                    String written = StringArgumentType.getString(command, "line");
+                    boolean typed = topLevel && command.getInput().startsWith("bedrock ");
+                    if (WebSockets.connectTyped(source, written, typed)) return null;
+
+                    PackCommand line = PackCommand.tryFrom(null, written);
                     return line == null ? null : line.read(source, CommandReport.DATA);
                 }))));
     }

@@ -1,11 +1,13 @@
 package at.ioexception.mcaddon.script.surface;
 
+import at.ioexception.mcaddon.bedrock.aim.AimAssistSettings;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
 import at.ioexception.mcaddon.bedrock.camera.AttachPoint;
 import at.ioexception.mcaddon.bedrock.camera.CameraRequest;
 import at.ioexception.mcaddon.bedrock.camera.CameraSpline;
 import at.ioexception.mcaddon.bedrock.camera.Easing;
 import at.ioexception.mcaddon.bedrock.hud.HudElement;
+import at.ioexception.mcaddon.bedrock.input.ControlScheme;
 import at.ioexception.mcaddon.bedrock.input.InputPermission;
 import at.ioexception.mcaddon.client.render.BedrockParticles;
 import at.ioexception.mcaddon.network.Channels;
@@ -13,10 +15,13 @@ import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.registry.AddonParticles;
 import at.ioexception.mcaddon.script.ScriptCoverage;
+import at.ioexception.mcaddon.server.PlayerAimAssists;
 import at.ioexception.mcaddon.server.PlayerCameras;
+import at.ioexception.mcaddon.server.PlayerControlSchemes;
 import at.ioexception.mcaddon.server.PlayerHuds;
 import at.ioexception.mcaddon.server.PlayerInputs;
 import at.ioexception.mcaddon.server.PropertyOverrides;
+import at.ioexception.mcaddon.server.Visitors;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -243,9 +248,10 @@ public final class Players extends Surface {
         return 0;
     }
 
-    /** Java has operators and everyone else, which are Bedrock's `Operator` and `Member`. */
+    /** Bedrock's `Visitor`, `Member` and `Operator`, a Java operator being the last. */
     @HostAccess.Export
     public int playerPermissionLevel(String id) {
+        if (Visitors.is(player(id))) return 0;
         return commandPermissionLevel(id) >= 1 ? 2 : 1;
     }
 
@@ -531,6 +537,60 @@ public final class Players extends Surface {
         } else if (player != null) {
             PlayerInputs.set(player, permission, enabled);
         }
+    }
+
+    // Control schemes
+
+    @HostAccess.Export
+    public String controlScheme(String id) {
+        ServerPlayer player = player(id);
+        return (player == null ? ControlScheme.DEFAULT : PlayerControlSchemes.of(player)).scriptName();
+    }
+
+    /**
+     * Puts the player on a scheme, or back on their camera's with none, and answers why that was
+     * refused or null once it is set.
+     */
+    @HostAccess.Export
+    public String setControlScheme(String id, String name) {
+        ServerPlayer player = player(id);
+        if (player == null) return null;
+        if (name == null) {
+            PlayerControlSchemes.clear(player);
+            return null;
+        }
+
+        ControlScheme scheme = ControlScheme.tryFrom(name);
+        if (scheme == null) return "There is no control scheme named " + name + ".";
+        return PlayerControlSchemes.set(player, scheme) ? null
+            : "The camera " + player.getName().getString() + " is on does not allow " + scheme.scriptName() + ".";
+    }
+
+    // Aim assist
+
+    /** What `/aimassist` or a script set for the player, in a camera preset's `aim_assist` shape, or null. */
+    @HostAccess.Export
+    public String aimAssist(String id) {
+        ServerPlayer player = player(id);
+        AimAssistSettings settings = player == null ? null : PlayerAimAssists.of(player);
+        return settings == null ? null : settings.toJson().toString();
+    }
+
+    /** Turns aim assist off for a null body. Answers why it was refused, in Bedrock's words, or null. */
+    @HostAccess.Export
+    public String setAimAssist(String id, String body) {
+        ServerPlayer player = player(id);
+        if (player == null) return "The player is not valid.";
+        if (body == null) {
+            PlayerAimAssists.clear(player);
+            return null;
+        }
+        JsonObject json = JsonParser.parseString(body).getAsJsonObject();
+        JsonArray angle = json.getAsJsonArray("angle");
+        AimAssistSettings.TargetMode mode = AimAssistSettings.TargetMode.tryFrom(Json.text(json, "target_mode", ""));
+        return PlayerAimAssists.set(player, new AimAssistSettings(Json.text(json, "preset", ""),
+            mode == null ? AimAssistSettings.TargetMode.ANGLE : mode, angle.get(0).getAsFloat(),
+            angle.get(1).getAsFloat(), (float) Json.number(json, "distance", AimAssistSettings.DEFAULT_DISTANCE)));
     }
 
     /** The language the client asked for, which a 1.20.1 server is sent but keeps to itself. */

@@ -6,12 +6,14 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * How many times the client has drawn each sprite, counted from the first frame, the colour of the
- * last rectangle filled over the whole screen, and every line of text drawn since it was cleared.
+ * How many times the client has drawn each sprite and a mob into the display, counted from the first
+ * frame, the colour of the last rectangle filled over the whole screen, and every line of text drawn
+ * since it was cleared.
  */
 public final class Drawn {
     private static final Map<String, Long> SPRITES = new ConcurrentHashMap<>();
     private static final java.util.Set<String> TEXTS = ConcurrentHashMap.newKeySet();
+    private static final java.util.concurrent.atomic.AtomicLong ENTITIES = new java.util.concurrent.atomic.AtomicLong();
     private static volatile int screenFill;
 
     private Drawn() {
@@ -23,6 +25,15 @@ public final class Drawn {
 
     public static long times(String sprite) {
         return SPRITES.getOrDefault(sprite, 0L);
+    }
+
+    public static void recordEntity() {
+        ENTITIES.incrementAndGet();
+    }
+
+    /** How many times a mob was drawn into the display, the way the inventory and the paper doll draw one. */
+    public static long entities() {
+        return ENTITIES.get();
     }
 
     public static void recordScreenFill(int argb) {

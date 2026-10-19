@@ -42,6 +42,7 @@ import net.minecraft.world.level.gamerules.GameRules;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -194,9 +195,15 @@ public final class Platform {
 
     @FunctionalInterface
     public interface LineReader {
-        /** Null for a line with nothing in it to run. */
+        /**
+         * Null for a line with nothing in it to run.
+         *
+         * `topLevel` is whether the command is the one a chat line or a command block started, as
+         * against a line of a function. From 1.20.3 a function's lines run one frame deeper; before
+         * that nothing tells them apart and it is always false.
+         */
         ReadLine read(com.mojang.brigadier.context.CommandContext<CommandSourceStack> command,
-            CommandSourceStack source) throws com.mojang.brigadier.exceptions.CommandSyntaxException;
+            CommandSourceStack source, boolean topLevel) throws com.mojang.brigadier.exceptions.CommandSyntaxException;
     }
 
     /**
@@ -213,7 +220,7 @@ public final class Platform {
         return new RunningLine(reader);
         //?} else {
         /*return command -> {
-            ReadLine read = reader.read(command, command.getSource());
+            ReadLine read = reader.read(command, command.getSource(), false);
             if (read == null) return 0;
             try {
                 return runToEnd(read.parsed(), read.line());
@@ -240,7 +247,8 @@ public final class Platform {
             net.minecraft.commands.execution.ChainModifiers modifiers,
             net.minecraft.commands.execution.ExecutionControl<CommandSourceStack> output)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
-            ReadLine read = reader.read(step.getTopContext().copyFor(sender), sender);
+            ReadLine read = reader.read(step.getTopContext().copyFor(sender), sender,
+                output.currentFrame().depth() == 0);
             if (read == null) return;
 
             com.mojang.brigadier.context.ContextChain<CommandSourceStack> chain;
@@ -801,14 +809,27 @@ public final class Platform {
     public static at.ioexception.mcaddon.block.AddonBlock buildStatefulBlock(
         BlockBehaviour.Properties properties, Identifier id,
         java.util.List<net.minecraft.world.level.block.state.properties.Property<?>> states) {
-        //? if >=1.21.2 {
-        BlockBehaviour.Properties named = properties
-            .setId(ResourceKey.create(net.minecraft.core.registries.Registries.BLOCK, id));
-        //?} else {
-        /*BlockBehaviour.Properties named = properties;
-        *///?}
-        return at.ioexception.mcaddon.block.AddonBlock.build(named, states,
+        return at.ioexception.mcaddon.block.AddonBlock.build(named(properties, id), states,
             at.ioexception.mcaddon.block.AddonBlock::new);
+    }
+
+    /** Properties carrying the registry id a block built from them is registered under. */
+    public static BlockBehaviour.Properties named(BlockBehaviour.Properties properties, Identifier id) {
+        //? if >=1.21.2 {
+        return properties.setId(ResourceKey.create(net.minecraft.core.registries.Registries.BLOCK, id));
+        //?} else {
+        /*return properties;
+        *///?}
+    }
+
+    /** Java's coloured dust, whose colour is a packed integer from 1.21.2 and a vector before. */
+    public static net.minecraft.core.particles.DustParticleOptions dust(int rgb, float scale) {
+        //? if >=1.21.2 {
+        return new net.minecraft.core.particles.DustParticleOptions(rgb, scale);
+        //?} else {
+        /*return new net.minecraft.core.particles.DustParticleOptions(new org.joml.Vector3f(
+            (rgb >> 16 & 0xFF) / 255f, (rgb >> 8 & 0xFF) / 255f, (rgb & 0xFF) / 255f), scale);
+        *///?}
     }
 
     public static Item buildBlockItem(Block block, Item.Properties properties, Identifier id) {
@@ -2035,7 +2056,10 @@ public final class Platform {
      * writes, so nothing is registered here. 1.21 reads tints from a colour provider instead, and
      * 1.20.1 has no dyed colour on a stack at all.
      */
-    /** What a layer drawn over the heads-up display may do: fill a rectangle and write a line. */
+    /**
+     * What a layer drawn over the heads-up display or a screen may do: fill a rectangle, write a line,
+     * draw a mob and stretch a whole texture over a rectangle.
+     */
     public interface Painter {
         int width();
 
@@ -2045,58 +2069,168 @@ public final class Platform {
 
         /** Writes one line with a shadow under it, in the game's own font. */
         void text(String line, int left, int top, int argb);
+
+        /**
+         * Draws a mob standing in a box the way the inventory draws the player, turned to look at a
+         * point `lookX` and `lookY` from the middle of the box.
+         */
+        void entity(LivingEntity entity, int left, int top, int right, int bottom, int size, float lookX,
+            float lookY);
+
+        /** Stretches the whole of a texture over a rectangle. */
+        void image(Identifier texture, int left, int top, int width, int height);
+    }
+
+    /**
+     * Where a point in the world lands on the heads-up display, in its own scaled units, or null for a
+     * point behind the camera.
+     *
+     * Before 26 the camera keeps no field of view of its own, so the player's chosen one stands in
+     * for it there, which leaves out what sprinting or a spyglass does to it.
+     */
+    public static float[] onScreen(net.minecraft.world.phys.Vec3 point, int width, int height) {
+        net.minecraft.client.Minecraft client = net.minecraft.client.Minecraft.getInstance();
+        //? if >=26.2 {
+        net.minecraft.client.Camera camera = client.gameRenderer.mainCamera();
+        org.joml.Vector3fc forward = camera.forwardVector();
+        org.joml.Vector3fc up = camera.upVector();
+        org.joml.Vector3fc left = camera.leftVector();
+        float fov = camera.getFov();
+        //?} elif >=26 {
+        /*net.minecraft.client.Camera camera = client.gameRenderer.getMainCamera();
+        org.joml.Vector3fc forward = camera.forwardVector();
+        org.joml.Vector3fc up = camera.upVector();
+        org.joml.Vector3fc left = camera.leftVector();
+        float fov = camera.getFov();
+        *///?} else {
+        /*net.minecraft.client.Camera camera = client.gameRenderer.getMainCamera();
+        org.joml.Vector3fc forward = camera.getLookVector();
+        org.joml.Vector3fc up = camera.getUpVector();
+        org.joml.Vector3fc left = camera.getLeftVector();
+        float fov = client.options.fov().get();
+        *///?}
+        net.minecraft.world.phys.Vec3 offset = point.subtract(cameraPosition());
+        double depth = offset.x * forward.x() + offset.y * forward.y() + offset.z * forward.z();
+        if (depth < 0.05) return null;
+
+        double scale = height / 2.0 / Math.tan(Math.toRadians(fov) / 2) / depth;
+        return new float[] {
+            (float) (width / 2.0 - (offset.x * left.x() + offset.y * left.y() + offset.z * left.z()) * scale),
+            (float) (height / 2.0 - (offset.x * up.x() + offset.y * up.y() + offset.z * up.z()) * scale)};
+    }
+
+    /**
+     * How far the player reaches an entity or a block. 1.20.1 holds both on the game mode, as the
+     * game's own pick does: three blocks to an entity, or six in creative, and the pick range to a
+     * block.
+     */
+    public static double interactionRange(net.minecraft.world.entity.player.Player player, boolean entity) {
+        //? if >=1.21 {
+        return entity ? player.entityInteractionRange() : player.blockInteractionRange();
+        //?} else {
+        /*net.minecraft.client.multiplayer.MultiPlayerGameMode mode =
+            net.minecraft.client.Minecraft.getInstance().gameMode;
+        return entity ? (mode.hasFarPickRange() ? 6 : 3) : mode.getPickRange();
+        *///?}
     }
 
     /** Draws a layer of this mod's own over everything the heads-up display draws, every frame. */
     public static void drawOverHud(Identifier id, java.util.function.Consumer<Painter> layer) {
         //? if >=26 {
         net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry.addLast(id, (graphics, delta) ->
-            layer.accept(new Painter() {
-                @Override
-                public int width() {
-                    return graphics.guiWidth();
-                }
-
-                @Override
-                public int height() {
-                    return graphics.guiHeight();
-                }
-
-                @Override
-                public void fill(int left, int top, int right, int bottom, int argb) {
-                    graphics.fill(left, top, right, bottom, argb);
-                }
-
-                @Override
-                public void text(String line, int left, int top, int argb) {
-                    graphics.text(net.minecraft.client.Minecraft.getInstance().font, line, left, top, argb, true);
-                }
-            }));
+            layer.accept(painter(graphics)));
         //?} else {
         /*net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback.EVENT.register((graphics, delta) ->
-            layer.accept(new Painter() {
-                @Override
-                public int width() {
-                    return graphics.guiWidth();
-                }
-
-                @Override
-                public int height() {
-                    return graphics.guiHeight();
-                }
-
-                @Override
-                public void fill(int left, int top, int right, int bottom, int argb) {
-                    graphics.fill(left, top, right, bottom, argb);
-                }
-
-                @Override
-                public void text(String line, int left, int top, int argb) {
-                    graphics.drawString(net.minecraft.client.Minecraft.getInstance().font, line, left, top, argb, true);
-                }
-            }));
+            layer.accept(painter(graphics)));
         *///?}
     }
+
+    /** Something a screen draws among its widgets through a painter. */
+    public static net.minecraft.client.gui.components.Renderable renderable(
+        java.util.function.Consumer<Painter> layer) {
+        return (graphics, mouseX, mouseY, delta) -> layer.accept(painter(graphics));
+    }
+
+    //? if >=26 {
+    private static Painter painter(net.minecraft.client.gui.GuiGraphicsExtractor graphics) {
+        return new Painter() {
+            @Override
+            public int width() {
+                return graphics.guiWidth();
+            }
+
+            @Override
+            public int height() {
+                return graphics.guiHeight();
+            }
+
+            @Override
+            public void fill(int left, int top, int right, int bottom, int argb) {
+                graphics.fill(left, top, right, bottom, argb);
+            }
+
+            @Override
+            public void text(String line, int left, int top, int argb) {
+                graphics.text(net.minecraft.client.Minecraft.getInstance().font, line, left, top, argb, true);
+            }
+
+            @Override
+            public void entity(LivingEntity entity, int left, int top, int right, int bottom, int size,
+                float lookX, float lookY) {
+                net.minecraft.client.gui.screens.inventory.InventoryScreen.extractEntityInInventoryFollowsMouse(
+                    graphics, left, top, right, bottom, size, 0.0625F,
+                    (left + right) / 2F + lookX, (top + bottom) / 2F + lookY, entity);
+            }
+
+            @Override
+            public void image(Identifier texture, int left, int top, int width, int height) {
+                graphics.blit(texture, left, top, left + width, top + height, 0, 1, 0, 1);
+            }
+        };
+    }
+    //?} else {
+    /*private static Painter painter(net.minecraft.client.gui.GuiGraphics graphics) {
+        return new Painter() {
+            @Override
+            public int width() {
+                return graphics.guiWidth();
+            }
+
+            @Override
+            public int height() {
+                return graphics.guiHeight();
+            }
+
+            @Override
+            public void fill(int left, int top, int right, int bottom, int argb) {
+                graphics.fill(left, top, right, bottom, argb);
+            }
+
+            @Override
+            public void text(String line, int left, int top, int argb) {
+                graphics.drawString(net.minecraft.client.Minecraft.getInstance().font, line, left, top, argb, true);
+            }
+
+            @Override
+            public void entity(LivingEntity entity, int left, int top, int right, int bottom, int size,
+                float lookX, float lookY) {
+                //? if >=1.21 {
+                net.minecraft.client.gui.screens.inventory.InventoryScreen.renderEntityInInventoryFollowsMouse(
+                    graphics, left, top, right, bottom, size, 0.0625F,
+                    (left + right) / 2F + lookX, (top + bottom) / 2F + lookY, entity);
+                //?} else {
+                /^net.minecraft.client.gui.screens.inventory.InventoryScreen.renderEntityInInventoryFollowsMouse(
+                    graphics, (left + right) / 2, bottom, size, -lookX, -lookY, entity);
+                ^///?}
+            }
+
+            @Override
+            public void image(Identifier texture, int left, int top, int width, int height) {
+                graphics.blit(texture, left, top, 0, 0, width, height, width, height);
+            }
+        };
+    }
+    *///?}
 
     public static void registerDyeTint(java.util.List<Item> items) {
         //? if >=1.21 && <26 {
@@ -2626,6 +2760,61 @@ public final class Platform {
         *///?}
     }
 
+    //? if >=26.2 {
+    /**
+     * A pipeline drawing one screen covering triangle from no vertices, reading one texture and one
+     * uniform block. 26.2 groups a pipeline's bindings into layouts and names its topology alone.
+     */
+    public static com.mojang.blaze3d.pipeline.RenderPipeline screenPipeline(Identifier location, Identifier shader,
+        String sampler, String uniformBlock) {
+        return com.mojang.blaze3d.pipeline.RenderPipeline.builder()
+            .withLocation(location)
+            .withVertexShader(shader)
+            .withFragmentShader(shader)
+            .withBindGroupLayout(com.mojang.blaze3d.pipeline.BindGroupLayout.builder()
+                .withSampler(sampler)
+                .withUniform(uniformBlock, com.mojang.blaze3d.shaders.UniformType.UNIFORM_BUFFER)
+                .build())
+            .withDepthStencilState(java.util.Optional.empty())
+            .withCull(false)
+            .withPrimitiveTopology(com.mojang.blaze3d.PrimitiveTopology.TRIANGLES)
+            .build();
+    }
+
+    public static com.mojang.blaze3d.systems.RenderPass screenPass(com.mojang.blaze3d.systems.CommandEncoder encoder,
+        java.util.function.Supplier<String> label, com.mojang.blaze3d.textures.GpuTextureView colour) {
+        return encoder.createRenderPass(label, colour, java.util.Optional.empty());
+    }
+
+    public static void drawScreenTriangle(com.mojang.blaze3d.systems.RenderPass pass) {
+        pass.draw(3, 1, 0, 0);
+    }
+    //?} elif >=26 {
+    /*public static com.mojang.blaze3d.pipeline.RenderPipeline screenPipeline(Identifier location, Identifier shader,
+        String sampler, String uniformBlock) {
+        return com.mojang.blaze3d.pipeline.RenderPipeline.builder()
+            .withLocation(location)
+            .withVertexShader(shader)
+            .withFragmentShader(shader)
+            .withSampler(sampler)
+            .withUniform(uniformBlock, com.mojang.blaze3d.shaders.UniformType.UNIFORM_BUFFER)
+            .withDepthStencilState(java.util.Optional.empty())
+            .withCull(false)
+            .withVertexFormat(com.mojang.blaze3d.vertex.DefaultVertexFormat.EMPTY,
+                com.mojang.blaze3d.vertex.VertexFormat.Mode.TRIANGLES)
+            .build();
+    }
+
+    public static com.mojang.blaze3d.systems.RenderPass screenPass(com.mojang.blaze3d.systems.CommandEncoder encoder,
+        java.util.function.Supplier<String> label, com.mojang.blaze3d.textures.GpuTextureView colour) {
+        return encoder.createRenderPass(label, colour, java.util.OptionalInt.empty());
+    }
+
+    public static void drawScreenTriangle(com.mojang.blaze3d.systems.RenderPass pass) {
+        pass.draw(0, 3);
+    }
+    *///?}
+
     /** The resource pack format this version reads, taken from the game rather than a table. */
     public static int resourcePackFormat() {
         //? if >=26 {
@@ -2695,18 +2884,31 @@ public final class Platform {
         *///?}
     }
 
-    /** The enchantments on a stack, by name. They became data-driven holders in 1.21. */
-    public static Set<String> enchantmentsOf(net.minecraft.world.item.ItemStack stack) {
+    /** The enchantments on a stack, by name, with their levels. They became data-driven holders in 1.21. */
+    public static Map<String, Integer> enchantmentsOf(net.minecraft.world.item.ItemStack stack) {
         //? if >=1.21 {
-        return EnchantmentHelper.getEnchantmentsForCrafting(stack).keySet().stream()
-            .map(holder -> holder.unwrapKey().map(key -> idOf(key).getPath()).orElse(""))
-            .collect(Collectors.toSet());
+        net.minecraft.world.item.enchantment.ItemEnchantments enchantments =
+            EnchantmentHelper.getEnchantmentsForCrafting(stack);
+        return enchantments.keySet().stream().collect(Collectors.toMap(
+            holder -> holder.unwrapKey().map(key -> idOf(key).getPath()).orElse(""),
+            enchantments::getLevel, Math::max));
         //?} else {
-        /*return EnchantmentHelper.getEnchantments(stack).keySet().stream()
-            .map(BuiltInRegistries.ENCHANTMENT::getKey)
-            .filter(java.util.Objects::nonNull)
-            .map(Identifier::getPath)
-            .collect(Collectors.toSet());
+        /*return EnchantmentHelper.getEnchantments(stack).entrySet().stream()
+            .filter(enchantment -> BuiltInRegistries.ENCHANTMENT.getKey(enchantment.getKey()) != null)
+            .collect(Collectors.toMap(
+                enchantment -> BuiltInRegistries.ENCHANTMENT.getKey(enchantment.getKey()).getPath(),
+                Map.Entry::getValue, Math::max));
+        *///?}
+    }
+
+    /** Which chat type a message was sent as. The bound type became a holder in 1.20.5. */
+    public static ResourceKey<net.minecraft.network.chat.ChatType> chatTypeOf(
+        net.minecraft.network.chat.ChatType.Bound bound, net.minecraft.core.RegistryAccess access) {
+        //? if >=1.21 {
+        return bound.chatType().unwrapKey().orElse(null);
+        //?} else {
+        /*return access.registryOrThrow(net.minecraft.core.registries.Registries.CHAT_TYPE)
+            .getResourceKey(bound.chatType()).orElse(null);
         *///?}
     }
 

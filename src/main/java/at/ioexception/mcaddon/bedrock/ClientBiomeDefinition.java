@@ -41,11 +41,14 @@ public record ClientBiomeDefinition(int water, int sky, int grass, int foliage, 
     /** What a biome no resource pack states a water colour for is drawn with. */
     public static final int DEFAULT_WATER = 4159204;
 
-    /** The components a converted biome carries something of. */
+    /**
+     * The components a converted biome carries something of, and the grade the client draws it
+     * with, which `ColourGrading` reads.
+     */
     private static final Set<String> READ = Set.of("minecraft:water_appearance",
         "minecraft:sky_color", "minecraft:grass_appearance", "minecraft:foliage_appearance",
         "minecraft:dry_foliage_color", "minecraft:fog_appearance", "minecraft:ambient_sounds",
-        "minecraft:biome_music", "minecraft:precipitation");
+        "minecraft:biome_music", "minecraft:precipitation", "minecraft:color_grading_identifier");
 
     /** What one entry in the whole-pack file states that a converted biome carries something of. */
     private static final Set<String> LEGACY_READ = Set.of("water_surface_color", "water_fog_color",

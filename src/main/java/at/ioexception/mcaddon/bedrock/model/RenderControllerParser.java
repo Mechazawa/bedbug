@@ -17,13 +17,12 @@ import java.util.Map;
 public final class RenderControllerParser {
 
     /**
-     * How Bedrock's own renderer schedules and lights a pass.
+     * Fields Mojang documents nowhere, so what they do to a pass cannot be known.
      *
-     * `rebuild_animation_matrices` asks it to pose the skeleton again before this pass, and every
-     * pass here already reads one skeleton posed for the frame from the same variables, so there is
-     * nothing a rebuild between passes would change. `filter_lighting` picks between two ways of
-     * sampling the light over a model, and Java lights a whole entity from the one value at its
-     * position, so there is no second way to pick.
+     * Neither name appears in the published schemas, the doc modules, the entity documentation or
+     * the reconstructed RenderDragon shader source; only Mojang's own render controllers declare
+     * them. `rebuild_animation_matrices` sits on second passes over another geometry, which every
+     * pass here already gets, since `BedrockModelRenderer` poses each pass from its own geometry.
      */
     private static final List<String> UNREAD = List.of(
         "rebuild_animation_matrices", "filter_lighting");

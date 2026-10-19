@@ -10,6 +10,7 @@ import at.ioexception.mcaddon.bedrock.camera.CameraSpline;
 import at.ioexception.mcaddon.bedrock.camera.CameraTarget;
 import at.ioexception.mcaddon.bedrock.camera.CameraTracking;
 import at.ioexception.mcaddon.bedrock.camera.CameraView;
+import at.ioexception.mcaddon.client.PlayerControl;
 import net.minecraft.client.Camera;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
@@ -120,6 +121,7 @@ public final class PlayerCamera {
                 if (orbit.alignsFollowed()) turn(player, player.getXRot(), boom.yRot());
             }
         }
+        PlayerControl.seed();
         chooseCamera();
     }
 
@@ -162,7 +164,7 @@ public final class PlayerCamera {
         lastFrame = now;
         SHAKES.removeIf(running -> running.shake().finishedAt(elapsed(running.start(), now)));
 
-        CameraPlacement natural = camera.mcaddon$placement();
+        CameraPlacement natural = PlayerControl.turnedCamera(camera.mcaddon$placement());
         boolean unset = view.cleared() && attachment.detached() && SHAKES.isEmpty();
         if (unset || Minecraft.getInstance().player == null || Minecraft.getInstance().level == null) {
             last = natural;
@@ -250,6 +252,11 @@ public final class PlayerCamera {
         if (attachment.detached()) return null;
         Entity entity = Minecraft.getInstance().level.getEntity(attachment.entity());
         return entity == null || entity.isRemoved() ? null : entity;
+    }
+
+    /** Where the camera stood on the last frame drawn under an order, or null before any. */
+    public static CameraPlacement placement() {
+        return view.cleared() ? null : last;
     }
 
     /**

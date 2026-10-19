@@ -52,6 +52,9 @@ public final class IdCensus {
         BedrockBlockNames.Resolved resolved = data.matches()
             ? BedrockBlockNames.state(data.group(1), Integer.parseInt(data.group(2)), ignored -> { })
             : BedrockBlockNames.state(bedrock, Map.of(), ignored -> { });
-        return resolved == null ? null : resolved.command();
+        if (resolved != null) return resolved.command();
+        // A block this mod builds is registered by the mod, which a bootstrapped registry lacks.
+        String built = BedrockBlockNames.java(bedrock);
+        return built != null && BedrockBlockNames.BUILT_BACK.containsKey(built) ? built : null;
     }
 }

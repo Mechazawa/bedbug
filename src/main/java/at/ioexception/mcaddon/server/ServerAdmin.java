@@ -37,7 +37,7 @@ import java.util.stream.Stream;
  * lists the world's files. The player limit is the one the player list checks a login against, set
  * for this session only, as Bedrock's is. The pack stack is Java's own list of data packs, which
  * holds every converted add-on, and the add-on resource packs a client is expected to have. The
- * operators are Java's, kept in `ops.json`.
+ * operators are Java's, kept in `ops.json`, and the visitors are `Visitors`'.
  */
 public final class ServerAdmin {
     private ServerAdmin() {
@@ -63,8 +63,9 @@ public final class ServerAdmin {
             .then(Commands.literal("reload").executes(ServerAdmin::reloadOperators))
             .then(Commands.literal("set")
                 .then(Commands.argument("player", EntityArgument.players())
-                    .then(Commands.literal("operator").executes(command -> setOperator(command, true)))
-                    .then(Commands.literal("member").executes(command -> setOperator(command, false))))));
+                    .then(Commands.literal("operator").executes(command -> setLevel(command, true, false)))
+                    .then(Commands.literal("member").executes(command -> setLevel(command, false, false)))
+                    .then(Commands.literal("visitor").executes(command -> setLevel(command, false, true))))));
         dispatcher.register(Commands.literal("ops")
             .requires(source -> Platform.allowedAt(source, 2))
             .redirect(permission));
@@ -166,9 +167,12 @@ public final class ServerAdmin {
 
     private static int listOperators(CommandContext<CommandSourceStack> command) {
         String[] operators = command.getSource().getServer().getPlayerList().getOps().getUserList();
+        List<String> visitors = Visitors.names();
         command.getSource().sendSuccess(() -> Component.literal(operators.length + " operator(s): "
             + String.join(", ", operators)), false);
-        return operators.length;
+        command.getSource().sendSuccess(() -> Component.literal(visitors.size() + " visitor(s): "
+            + String.join(", ", visitors)), false);
+        return operators.length + visitors.size();
     }
 
     /** Reads `ops.json` again and tells each player online what their level now is. */
@@ -186,13 +190,15 @@ public final class ServerAdmin {
 
     /**
      * An operator is an operator in both editions, and a member is a player with no operator entry.
-     * Bedrock's third level, a visitor who may only look, has no Java counterpart, so the line naming
-     * it is reported by the translation and never reaches this.
+     * A visitor is a member `Visitors` holds to looking round.
      */
-    private static int setOperator(CommandContext<CommandSourceStack> command, boolean operator)
+    private static int setLevel(CommandContext<CommandSourceStack> command, boolean operator, boolean visitor)
         throws CommandSyntaxException {
         Collection<ServerPlayer> players = EntityArgument.getPlayers(command, "player");
-        players.forEach(player -> Platform.setOperator(command.getSource().getServer(), player, operator));
+        players.forEach(player -> {
+            Platform.setOperator(command.getSource().getServer(), player, operator);
+            Visitors.set(player, visitor);
+        });
         return players.size();
     }
 

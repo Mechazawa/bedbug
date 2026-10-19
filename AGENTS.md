@@ -361,6 +361,21 @@ These are the checks it runs, and what each one catches:
   tags whoever uses it, half-high boxes a permutation makes whole on the third use, and a loot
   table of its own, against `tp:lamp`, which names none and so drops itself.
 
+  `tp:pouch` holds 48 of Bedrock's 64 by its `minecraft:storage_weight_limit`, `tp:dust` weighs 16
+  and `tp:berry` nothing by their `minecraft:storage_weight_modifier`. Java's bundle contents know
+  nothing of the bag carrying them, so `BundleItemMixin` hands the bag's limit to the
+  `BundleContents.Mutable` it opens through `BagCapacity`, `BundleCapacityMixin` measures against
+  it, and `BundleWeightMixin` answers a stated weight; a weight of nothing is answered as 65, more
+  than any bag holds, which keeps the item out without a division by nothing. `StorageGameTests`
+  clicks a cursor stack onto a fresh pouch and counts what stayed on the cursor. `tp:wand` names a
+  level sound event for each moment of `minecraft:swing_sounds`, and the resource pack's
+  `individual_event_sounds` gives each a definition of its own. The server plays a hit and a
+  critical hit in place of Java's own (`PlayerSwingSoundMixin`); a swing at nothing is known only
+  to the client, so `AttackMissMixin` sends the `swing_missed` payload from `startAttack`'s miss
+  branch and the server plays the miss for everyone near. `SwingSoundClientGameTest` hears all
+  three. An `individual_event_sounds` entry no item names is reported, since in Bedrock it would
+  change that moment for every player.
+
   A third entity, `tp:wisp`, states the numbers whose unit differs between the two editions: a health
   `value` below its `max`, a goal priority that is neither the first nor the last of its goals, an
   anger duration in seconds with an event at the end of it, a teleport cube in blocks beside a
@@ -841,18 +856,19 @@ These are the checks it runs, and what each one catches:
   refuses it as it stands. On `/bedrock scriptevent tp:commands` the script runs, as whatever sent it, a
   selector asking with `hasitem` about the main hand and about everything carried, a selector naming
   `villager_v2`, `function tp/relay` by its path alone (which calls `tp/relayed` the same way inside
-  the file) and `aimassist`, which nothing translates. The ember's `tp:ember_command` event tags it
-  through a Bedrock radius and asks for `aimassist` as well, and its controller's command tags it
+  the file) and `sendshowstoreoffer`, which needs Mojang's marketplace and so is never translated. The
+  ember's `tp:ember_command` event tags it through a Bedrock radius and asks for `sendshowstoreoffer`
+  as well, and its controller's command tags it
   through a Bedrock radius. `CommandGameTests` reads each of those back as a tag, and finds
-  `aimassist` among what `/mcaddon scripts` and `/mcaddon entities` say cannot be translated rather
-  than among what did not parse. No function file of the pack carries `aimassist`, because a function
+  `sendshowstoreoffer` among what `/mcaddon scripts` and `/mcaddon entities` say cannot be translated rather
+  than among what did not parse. No function file of the pack carries `sendshowstoreoffer`, because a function
   line is reported as the pack loads, which would answer the event's assertion before the event ran. The dialogue's first button runs `xp 1L`, and `/bedrock scriptevent tp:stock_up` gives the
   player `tp:dust` unless `hasitem` finds one on them; `PackCommandClientGameTest` presses the button
   and asks for the dust twice, and reads back one level gained and one dust carried.
 
-  `functions/tp/gap.mcfunction` tags whoever runs it on either side of a `controlscheme` line,
-  which nothing translates, so `CommandGameTests` can say the file loaded and both tags landed.
-  `functions/tp/unrun.mcfunction` is run by nothing, and its `hud @s hide paperdoll` line, a piece no
+  `functions/tp/gap.mcfunction` tags whoever runs it on either side of a `project` line,
+  which belongs to Bedrock's editor and is never translated, so `CommandGameTests` can say the file loaded and both tags landed.
+  `functions/tp/unrun.mcfunction` is run by nothing, and its `hud @s hide touch_controls` line, a piece no
   Java client draws, has to be among what `/mcaddon entities` names all the same: that is the
   report `Functions.untranslatable` makes of every function line as the pack loads. The same class
   types `/bedrock` itself: an `execute` chain selecting embers by `hasitem` and running a Bedrock
@@ -897,7 +913,14 @@ These are the checks it runs, and what each one catches:
   spawns its template's entities. `BedrockTree.MERGED_FORMS` merges Java's short `place structure`
   lines into the node `Structures` registers. `save query`, `setmaxplayers`, `packstack` and `permission` are typed by the
   console after `/bedrock` and read back through what the console is told, because a line run the
-  way a pack runs one has a function's authority and each of these asks for more. `/gametest
+  way a pack runs one has a function's authority and each of these asks for more.
+  `PermissionGameTests` sets a mock server player to `visitor` and to `member` through `/bedrock
+  permission set` and reads back whether a door opened, a chest's menu opened, a block was placed
+  and one broken, and a pig lost health. `server.Visitors` holds the visitors in the add-on state
+  and refuses their clicks through Fabric's interaction callbacks and `ALLOW_DAMAGE`, registered
+  before `WorldEvents` so a script hears none of them; `VisitorMenuMixin` refuses a container
+  entity's and a mount's inventory, which open with no click on a block. Everything refused is the
+  wiki's list of the player permissions Bedrock's visitor preset has off. `/gametest
   create` lays out the test pack's `tp:hut_stands`, `pos` finds its area, `runthis` runs it there,
   and `runsetuntilfail` runs `tp:fails_the_second_time`, which the test pack's script registers to
   pass once and fail after, until its second round. `/mobevent` holds back the dragon the End's
@@ -914,11 +937,49 @@ These are the checks it runs, and what each one catches:
   an operator typing `/bedrock`. Java's own `place` forms keep the level Java asks for them. A test of one of
   those types it through Java's own tree instead of through `BedrockLines`.
 
+  **`allow-cheats` refuses only what a player types.** `server.Cheats` holds the switch for the
+  session and `CommandsMixin` asks it at the head of `Commands.performCommand`, where a typed command
+  still carries the source that typed it; a command whose source is a player is refused unless
+  Bedrock's command metadata marks it `requires_cheats` false (the line after `/bedrock` is judged by
+  the Bedrock command it names, and a script's custom command by its `cheatsRequired`). Which origins
+  keep running was measured on Bedrock Dedicated Server 1.26.52 with cheats off: the console, a
+  repeating command block, `tick.json`, a scheduled function, a script's `runCommand`, an animation
+  controller's command and an entity event's `queue_command` all ran a cheat command. Bedrock refuses
+  some game rules with cheats off (`commands.gamerule.type.nocheatsenabled`) without publishing
+  which, so `gamerule` is left to run. `changesettingAllowCheatsStopsWhatAPlayerTypes` in
+  `BedrockCommandGameTests` asserts both halves.
+
   `MusicClientGameTest` plays the test pack's chime through `/bedrock music` and reads back the
   track the client plays: music heard everywhere, looping when asked, turned down by `music volume`,
   queued behind a track that plays once and not behind one that loops, and gone after `music
   stop`. A server tells a client what only it acts on through `Channels.sendInstruction`, one payload
   carrying a kind and a body, which `McAddonClient` hands to the class the kind names.
+
+  **`/bedrock wsserver` (and `connect`) is held by the client.** Bedrock opens the WebSocket from
+  the game the player runs, so it reaches what that machine reaches and outlives the world.
+  `server.WebSockets` only sends the player's client the address, and only for a line the player
+  typed: the `/bedrock` command's executor calls `WebSockets.connectTyped`, which accepts a line
+  when `Platform.LineReader`'s `topLevel` is true (frame depth 0, so not a function line), the
+  Java input begins `bedrock ` (so not `execute ... run bedrock`) and the entity is a player. The
+  Bedrock tree's own `wsserver`/`connect` always refuse, which covers `PackCommand` (scripts,
+  events, timelines, dialogue, functions, WebSocket-run lines), a Bedrock `execute` and the
+  console. `client.WebSocketLink` holds a
+  `java.net.http.WebSocket` and speaks the JSON protocol. A subscription set and each
+  `commandRequest` go back to the server through `Channels.sendRequest`, the one client-to-server
+  payload beside a form's answer; a line runs through `PackCommand.said` as the player with the
+  player's own authority, and its answer carries Bedrock's status code: 0, `-2147483648` for a line
+  that did not parse and `-2147352576` for one that failed. A failure is told from a success by
+  the red `CommandSourceStack.sendFailure` wraps it in, since both reach a source through one method.
+  `PlayerMessage` (from `ServerPlayerChatMixin`, one call per receiving player), `BlockBroken` and
+  `BlockPlaced` (`BlockItemMixin`) are raised; their bodies follow what `socket-be` records Bedrock
+  sending, and a field nothing records the values of (a player's `color`, `destructionMethod`, an
+  enchantment's `name`) is left out. The other events, `PlayerTravelled`, `ItemUsed` and the rest,
+  are not raised: their numbering (travel methods, use methods, Bedrock's numeric entity and biome
+  ids) and when each fires are known only from a few observations. Encryption is the ECDH and
+  AES-256-CFB8 exchange behind `ws:encrypt`; the old `enableencryption` command form and the
+  `cfb` mode are refused. `WebSocketClientGameTest` runs `WebSocketPeer`, an RFC 6455 server on a
+  plain socket bound to 127.0.0.1, and asserts the answers, the world change, the three events, an
+  encrypted round trip and `closewebsocket`.
 
   `CameraFadeClientGameTest` reads a fade back as the last rectangle the heads-up display filled
   across the whole screen, which the test source set's `GuiGraphicsExtractorMixin` writes into
@@ -930,6 +991,25 @@ These are the checks it runs, and what each one catches:
   covers the server's two, `recipesunlock` through an advancement's reward and `respawnblocksexplode`
   through a bed used in the nether and a charged anchor used in the overworld.
 
+  Bedrock's border block is `block.BorderBlock`, registered as `mcaddon:border_block` before any
+  pack is read and reached from `minecraft:border_block` through `BedrockBlockNames.BUILT_HERE`.
+  `BorderCollisionMixin` cuts an entity's movement at the head of `Entity.collide`, before Lithium's
+  own redirect inside it, against the columns `BorderColumns` holds per loaded chunk; the
+  `LevelChunk.setBlockState` mixin and the client's chunk load event forget a chunk's columns. A
+  unit test's bootstrapped registry has no such block, so `IdCensus` answers it from the name alone.
+  `BorderGameTests` stops a pig five blocks over the block from two sides; `BorderClientGameTest`
+  walks the player into the column over a block under the floor and reads the dust `BorderDust` adds
+  going up and down, and none once `showbordereffect` is off.
+
+  `PacketLimitClientGameTest` starts a dedicated server with `enable-packet-rate-limiter=true`,
+  writes `packetlimitconfig.json` into the run directory, sends bursts of commands that each add one
+  to a score, and reads the score back: a bucket of three that never drains lets three through, a
+  looser file nobody reloaded changes nothing, and `/bedrock reloadpacketlimitconfig` lets the next
+  burst through whole. `server.PacketLimits` holds the file as read, `BedrockPacketIds` the Java
+  packets each Bedrock id stands for, and `ConnectionPacketLimitMixin` drops a packet on the network
+  thread before any listener sees it. The switch is read off the dedicated server's own
+  `server.properties` through `SettingsAccessor`, so a single player world never limits anything.
+
   One client game test at a time: the entry point list in `src/gametest/resources/fabric.mod.json`
   is the whole selection, so cutting it down to one class runs that class alone. Put it back after.
 
@@ -938,10 +1018,24 @@ These are the checks it runs, and what each one catches:
   A piece is watched through the sprite Java draws it with, which a mixin of the test source set,
   `GuiGraphicsExtractorMixin`, counts into `Drawn`: a hidden piece's sprite stops being drawn while
   another piece's goes on. The bystander's display is hidden first and has to leave the client's
-  alone, and nothing the client is told may reach the bystander. `InputPermissionClientGameTest`
+  alone, and nothing the client is told may reach the bystander. The paper doll is this mod's own
+  layer, `client.render.PaperDoll`, drawn through `Platform.Painter.entity` with the inventory's
+  own helper for a mob that follows the pointer, so the mixin counts it at `GuiGraphicsExtractor.entity`:
+  the test puts the player in a boat with `/ride`, hides and resets the doll, presses the doll's
+  button in the video settings off and on again and reads `options.txt` after each press, and reads
+  it gone once the player has left the boat for longer than the 15 ticks it stays. The option is
+  `PaperDoll.OPTION`: `VideoSettingsScreenMixin` adds it to the Preferences group (to the one list
+  the screen has before 26), and `OptionsMixin` saves and loads it through the operation that
+  processes Java's first option, because `Options.FieldAccess` is package private. `InputPermissionClientGameTest`
   holds the forward key and moves the mouse the way a player would, and reads back that the player
   neither walked nor turned while `/bedrock inputpermission` had taken the input away, and did both
-  once it was given back.
+  once it was given back. `ControlSchemeClientGameTest` drives each control scheme the same way and
+  reads where the player stands and faces: the right key turning the player in place under
+  `player_relative`, the mouse turning a follow orbit camera and not the player, the test pack's
+  `tp:steered` (a free camera looking west whose preset names `camera_relative`) walking the player
+  west whichever way they faced, and the pointer of `camera_relative_strafe` under a camera looking
+  straight down turning the player toward it. The script's `tp:control_scheme <scheme>` probe calls
+  `Player.setControlScheme` and tags the player with `getControlScheme()` or with the refusal.
 
   Four more things name the game's own items and blocks by Bedrock's ids, each of which Java's
   parser refuses as written and refuses whole: `loot_tables/names.json` drops `golden_rail`,
@@ -962,7 +1056,10 @@ These are the checks it runs, and what each one catches:
   tamed, tags whatever a player tamed, and tags a player crouching and standing up again.
   `tp:override` overrides the nearest wisp's `tp:settled` to false for the player who sent it, which
   a wisp settled a second after arriving is not, and tags that player when an override of a property
-  the wisp never declared is refused; `tp:override_clear` clears the override again.
+  the wisp never declared is refused; `tp:override_clear` clears the override again. `tp:config` tags the player with two variables and a
+  secret `config/` hands the pack, which `ScriptGameTests` writes, reads again with
+  `bedrock reloadconfig` from the console and asserts on, and `tp:operator` makes the player an
+  operator and unmakes it twice each.
 
   `cameras/presets/` holds the presets. `tp:overlook` is a free camera at 0.5 120 0.5 turned to a
   pitch of 20 and a yaw of 45 that hears from the player, and also asks for `player_effects` and
@@ -975,6 +1072,14 @@ These are the checks it runs, and what each one catches:
   `/mcaddon entities` names and for none of the read ones. A function translates a preset or a
   spline in a pack's own namespace unread, because the functions are converted before the cameras
   are read; the command looks the name up as it runs.
+
+  `aim_assist/` holds the preset `tp:aim` and the categories `tp:cow_first` and `tp:pig_first`. An
+  empty hand takes `tp:cow_first`, which gives a cow ten times the priority of anything else, and
+  the preset leaves sheep out. `cameras/presets/aimed.json` is `tp:aimed`, a third person camera whose
+  `aim_assist` names `tp:aim`. `AimAssistClientGameTest` floats a pig 20 degrees to one side of where
+  the player faces, a cow 40 degrees to the other and a sheep straight ahead out of reach, and reads
+  `PlayerAimAssist.target()` and the client's own `crosshairPickEntity` back under the default
+  preset, `tp:aim`, `clear`, first person and `tp:aimed`.
 
   The rest of the presets and `camera/splines/sweep.json` are there for the cameras that move on
   their own, and five client game tests read each one back off the client's camera, all of them on
@@ -1673,6 +1778,33 @@ and `COLOR_SECOND_TEXTURE` (a third texture layered over the first) are reported
 `scratchpad/bedrock-legacy-materials/` and `scratchpad/mcbe-shader-codebase-veka0/` hold the copies
 this was read from.
 
+**A `color_grading/` file grades the frame through a pass of this mod's own, from 26, and only when
+the player turns on `ColourGrading.OPTION`.** The option is off by default because Bedrock grades only
+under Vibrant Visuals. `OptionsMixin` saves it as `mcaddon.colourGrading` and `VideoSettingsScreenMixin`
+lists it beside Paper Doll. With it off `ColourGrading.at` returns no grade, so `GradePass` skips the
+copy and the draw.
+`GameRendererGradeMixin` runs `client/render/GradePass` after `renderLevel`, which copies the main
+target's colour aside and draws one triangle back over it through
+`assets/mcaddon/shaders/post/colour_grade.fsh`, a pipeline registered with `RenderPipelines.register`
+as the client starts so the shader manager compiles it with the game's own. `Platform.screenPipeline`,
+`screenPass` and `drawScreenTriangle` hold what 26.1.2 and 26.2 spell differently. Before 26 the pass
+draws nothing and the conversion names every grading file. The arithmetic is Bedrock's
+`ColorPostProcessing` fragment shader (veka0/mcbe-shader-codebase) with its tone mapper off and the
+average luminance at its fixed 0.18, and `bedrock.grading.GradeUniforms.grade` is the same arithmetic
+in Java, which `ColourGradeTest` checks against numbers worked out by hand. Three things the
+published material gets wrong or leaves out: the documentation says `color_temperature` warms the
+image as the number rises, while the vanilla pack grades its hot biomes at 4000 K and its cold ones at
+10000 K under that type, so the files win; no default is published for `shadowsMax` or
+`highlightsMin`, so both are the average itself; and the contrast pivot is a shader constant no file
+states, taken as the average. `client/render/ColourGrading` decides which collection a biome takes,
+with `VANILLA` carrying Bedrock's own client biomes' naming onto Java's biome ids, and blends the
+grade around the camera with Java's fog colour weights. `ColourGradingClientGameTest` reads a
+wall's pixel out of the main target in plains and again in `tp:glade` and asks that the second is
+the first through `tp:glade_grade`. It reads through `Screenshot.takeScreenshot` rather than the
+test API's `takeScreenshot`, which draws a frame of its own that Sodium refuses on 26.1.2 (`Global
+terrain uniforms have not been updated`). A blend of one grade alone hands back that grade, because
+the weighted sum divided back out is not the same floats and the pass would never be skipped.
+
 `blend_transition` is acted on as well: a state declaring one is crossed out of rather than left, its
 clips staying at a falling weight while the state it moved to comes up. `blend_via_shortest_path`
 rides on that crossing: a bone's rotation is the weighted sum of every clip reaching it, so 350 and
@@ -1817,7 +1949,10 @@ Mojang's geometry is not committed, so that list is the one place this knowledge
   kind that pair happens not to ship. The mod's side is the `READ` set and the `UNREAD` map in
   `pack/PackFiles.java`. `UNREAD` gives each kind no reader opens the reason Java has no place for
   it, and `PackFiles.report` names the kind and that reason against the pack that shipped it, so a
-  kind cannot be declared unread without a reason.
+  kind cannot be declared unread without a reason. `textures/texture_list.json` is read by
+  `pack/TextureList.java`, which names every listed path the pack ships no `.png` or `.tga` for; the
+  test pack's list names `tp`'s `wand` and a `vanished_wand` it lacks, and
+  `AddonGameTests.aTextureListNamesWhatItListsAndThePackLacks` asserts only the second is named.
 
   **The silent column is the one that has to stay at zero.** A kind in `UNREAD` is reported to the
   author; a kind in neither is a directory the mod passes over without a word. The
@@ -1937,6 +2072,44 @@ Mojang's geometry is not committed, so that list is the one place this knowledge
   1632 items and 1166 blocks resolved as written, and with the mapping 1869 items and 1408 blocks
   resolve, the 110 and 303 left being Bedrock's own and none unanswered.
 
+## JSON UI
+
+`bedrock/ui/` reads a resource pack's `ui/` files and lays out what packs do with them to a server's
+forms and to the heads-up display's title and action bar; `client/screen/PackUi` holds the active
+set's definitions. `UiDefinitions` merges definitions key by key (a pack's same-named control lays
+its keys over the lower one, `controls` and `bindings` are replaced whole, `modifications` edit them
+in place) and settles `$variables`; `UiExpression` evaluates binding expressions; `UiLayout` places
+controls by `size`, `offset` and anchors, with stack panels, grids and collection factories.
+`ServerFormUi` and `HudUi` are what a form and the display hand that layout as bindings, collections
+and factories, both pure, so they read the same on every version.
+
+- **Mojang's UI files are not shipped**, so a definition resting on one of Bedrock's controls has no
+  base. Three stand-ins answer for it in `UiDefinitions.standIn`: `server_form.long_form_panel` is
+  this mod's own form screen (`UiControl.VANILLA_FORM`), `common_dialogs.main_panel_no_buttons` a
+  225 by 200 panel showing its `$child_control`, and any `common.*button` or `common_buttons.*` a Java
+  button labelled with its `$button_text`. Anything else is drawn from what the pack wrote and named.
+- **`long_form` is Bedrock's until a pack states its `controls` or `type`.** A pack only adding
+  bindings to it keeps this mod's form, hidden where those bindings say so; `ServerFormUi.made`
+  builds that stand-in.
+- **The form kind comes from the script.** `minecraft_server_ui.js` gives each form class a static
+  `serverForm` (`long_form` or `custom_form`) and the description carries it as `kind`; `body()` is
+  its own element type so `#form_text` can be told from a label. A data driven `CustomForm` has none
+  and is never laid out from a pack.
+- **The title and action bar are taken as they arrive.** `HudTextMixin` hands each `setTitle`,
+  `setSubtitle` and `setOverlayMessage` to `client/render/PackHudText`, which drops Java's own when a
+  pack hides Bedrock's for that text. It is a mixin of its own beside `HudMixin`, and the pack's
+  controls are drawn by a layer added through `Platform.drawOverHud`.
+- **What is not drawn is reported by file or control** through `UiDefinitions.report`, called from
+  `PackFiles.report`: a file changing a screen outside `server_form` and `hud` (followed through every
+  name they mention), an undrawn control type, `anims`, a font size and a `custom_form` layout.
+
+`JsonUiClientGameTest` opens the test pack's `tp:tiles` form under a routed title and reads the
+panel, the grid cells, the icon and the heading back off the screen, presses a tile with the pointer
+and reads the selection back as a tag, then opens the same form under a plain title and finds Java's
+buttons. It sends a `tp_banner:` title and a `tp_tally:` action bar and reads the pack's labels, their
+places and Java's own hidden title and action bar back, then a plain one of each. The pack side is
+`tools/testpack/pack/resources/ui/`.
+
 ## Add-ons handed over at join
 
 A client joining a server that runs this mod plays with exactly the server's add-ons for that
@@ -2035,6 +2208,42 @@ manifest again: `addons-reshaped` holds a later release of `sv` whose crate has 
   second set. It fails when the play phase's disconnect does not end the visit. A server needs
   `accepts-transfers=true` (that spelling) in its properties to take a transfer.
 
+## Script developer tools
+
+`/bedrock script` is `server.ScriptCommand`, over three classes in `script/`:
+
+- **`ScriptDebugger`** speaks the protocol of Mojang's VS Code extension (github.com/Mojang/minecraft-debugger,
+  `src/protocol-events.ts` and `src/session.ts`). `DebugConnection` frames it: eight hex digits of
+  length, a newline, one line of JSON counted with its newline. Minecraft sends a `ProtocolEvent`
+  (version 11, one plugin per script module uuid), the extension answers `protocol`, sets its
+  breakpoints and sends `resume`; DAP requests arrive as `{"type":"request","request":{...}}` and
+  are answered as `{"type":"response","request_seq":...,"body":...}`. A script is named by its path
+  inside its pack's `scripts/` folder, which is what the extension's `generatedSourceRoot` produces.
+  The answers come from Truffle's `com.oracle.truffle.api.debug`, which ships in `truffle-api`.
+- **`ScriptProfiler`** is Truffle's `CPUSampler` from `org.graalvm.tools:profiler-tool`, written out
+  as a Chrome `.cpuprofile` with the `$vscode.locations` the extension's capture handler reads.
+- **`ScriptDiagnostics`** builds one `StatEvent2` per tick, sent live to an attached extension and
+  written one per line under a `{"encoding":"utf8"}` header by a capture: the `.mcstats` replay
+  format of the extension's `src/stats/replay-stats-provider.ts`.
+
+Traps:
+
+- **A suspended Truffle frame may only be read on the thread it stopped on.** The server thread
+  stays inside the suspend callback and answers the requests the socket thread queues; the socket
+  thread only answers what needs no frame. A closed socket lets the thread go.
+- **An attach holds the scripts until the extension's `resume`**, as Bedrock does, through
+  `ScriptDebugger.awaitConfiguration` in `ScriptHost.enter`. So does a breakpoint, so a client of
+  the debugger in a test runs on a thread of its own.
+- **The entry script is evaluated as a file-named source** (`Source.newBuilder("js", File)` with its
+  content), so its URI is the same `file:///<uuid>/scripts/...` its imports get from the guest file
+  system. Giving a literal source a `uri` instead broke the relative imports of the entry.
+
+`ScriptToolGameTests` asserts all three: a profile naming `weighTheProbe` in `weigh.js` with as
+many samples as its hit count and time deltas inside its span (the sampler's hit times are wall
+clock milliseconds), a capture of one `StatEvent2` a tick under its header, and a socket client
+that stops on the marked line of the test pack's `scripts/weigh.js` and reads the stack. Bedrock's command metadata lists no `watchdog` form, so
+there is no `exportstats` to answer.
+
 ## Conventions
 
 **No add-on content is committed.** No textures, sounds, models or text from any pack. Real packs
@@ -2105,12 +2314,55 @@ three bodies: `Gui` up to 26.1.2 and `Hud` from 26.2 hold the same `extract*` me
 before 26 the armour, the hunger and the air bubbles are drawn inline in `renderPlayerHealth` (the
 air bubbles alone on 1.21.1), so the drawing calls inside Mojang's own profiler section of that name
 are what is skipped there. A script's `ScreenDisplay` and `Player.inputPermissions` reach the same two
-classes, so a command and a script never disagree about one player. A script, an entity event, a timeline, a dialogue scene and a block hand their lines to
+classes, so a command and a script never disagree about one player.
+
+`/controlscheme`, a camera preset's `control_scheme` and `Player.setControlScheme` go through
+`server.PlayerControlSchemes`, which keeps the chosen `bedrock.input.ControlScheme` per player and
+works out the one in force against the camera `server.PlayerCameras` holds: the chosen scheme where
+the camera allows it, else the preset's own, else the locked one, which is Java's. A camera change
+works it out again, and the client is sent it as an instruction whenever it changes.
+`client.PlayerControl` acts on it from `KeyboardInputMixin`, which hands it each tick's movement, and
+`MouseHandlerMixin`, which hands it each mouse turn; under the schemes that turn the camera the
+camera keeps a turn of its own, which `PlayerCamera.apply` puts in place of the player's. Mojang's
+table of the schemes each camera allows leaves out `minecraft:control_scheme_camera`, which allows
+all five here, and publishes no rate for the side keys' turn under `player_relative`, which is half
+a circle a second here. A script, an entity event, a timeline, a dialogue scene and a block hand their lines to
 `PackCommand` directly, which runs each to its end in an execution context of its own with the
 authority of a function, because the server's context runs a line queued during another command
 only once that command is done. A new path that runs a pack's commands takes the issuing add-on's
 namespace and a `CommandReport`, never a dispatcher directly, and a new Bedrock command goes into
 `BedrockCommands`, never into Java's tree.
+
+**Aim assist is picked on the client.** `server.PlayerAimAssists` keeps what `/aimassist` and a
+script set, and sends the player an `AimAssistTargeting` (the settings, the preset and every category
+it names, as `AddonAimAssist.targeting` resolves them) under `Channels.sendInstruction`, again whenever
+the player's camera preset changes, because a camera preset's `aim_assist` overrides the command's
+while it is set. `client.PlayerAimAssist` picks the target at the start of each client tick, and
+`AimAssistPickMixin` lays it over every pick after it (`Minecraft.pick` from 26, `GameRenderer.pick`
+before), where it becomes the hit result only within the player's reach. Ids are kept as
+`identifierOf` reports them on both sides, so a preset naming either edition's spelling matches.
+What Mojang does not publish, decided here: the cone reaches its X and Y angle either side of the way
+the player faces, not across its whole width; a candidate is scored at the middle of its box; a
+priority of 0 or below leaves a target out; a hand with no `hand_settings`, and an item with no
+setting and no `default_item_settings`, use `minecraft:default`, which like `minecraft:aim_assist_default`
+gives everything a priority of 1 and leaves nothing out; a target out of reach is marked but never
+acted on. Before 26 the reticle is placed with the player's own field of view, which leaves out what
+sprinting does to it.
+
+**A server's identity is a key the client remembers.** `server.ServerIdentity` takes
+`keys/server_identity_key.pem` in the game directory as the session's P-384 key when the server
+starts, or generates one and keeps it in memory, and sends the public half to every joining client as
+the `server_identity` instruction. Bedrock's own server documentation says this much and no more: the
+key identifies the server to clients, a generated key makes players re-accept server trust, and the
+server validates the key at start. It does not say what a server does with a key that fails that
+check, so a bad file is logged at `ERROR` and a generated key used. It publishes no wording for the
+client's question either, so `client.TrustedServers` asks in plain words of its own (the
+`mcaddon.server_trust.*` keys in `en_us.json`), keeps the trusted keys by the address the player
+typed in `mcaddon_trusted_servers.json` in the game directory, and asks once the world is up with no
+other screen open. The key is one per process, so a dedicated server and a client in one process
+(the client game tests) read the same `running()`. `ServerTrustClientGameTest` starts two servers on
+one port with `Worlds.server(context, port)`, because every other server test takes a free port and
+so a new address, which a client trusts without asking.
 
 **A goal's waits are not counted in `tick()` calls.** The selector runs `canUse`, `canContinueToUse` and a running goal's `tick` only every second tick, unless the goal's `requiresUpdateEveryTick` is true. A wait a pack states in seconds is counted against `tickCount` or the game clock, or the goal asks for every tick when it also steers each one. `aGrazerEatsWhenItsTimeUntilEatIsUp` reads the first.
 
@@ -2195,7 +2447,15 @@ src/main/resources/assets/mcaddon/script/
   minecraft_vanilla_data.js  The @minecraft/vanilla-data tables, read from the registries
   minecraft_server_gametest.js  The @minecraft/server-gametest surface: registrations, the Test
                                 object, the sequence and the runner the server tick drives
+  minecraft_server_admin.js  The @minecraft/server-admin surface: `config/` variables and secrets,
+                             `dedicatedServer`, operators
 ```
+
+**Every pack's script shares one copy of each module**, so `minecraft_server_admin.js` tells which
+pack called by the first frame of the stack whose file sits under a pack's header uuid, which is
+the folder `ScriptHost.load` puts a pack's scripts in. `script.ScriptConfig` maps that header uuid
+to the script module uuid naming the pack's folder under `config/`. A game test server answers
+`isDedicatedServer()` with true, so `dedicatedServer` is decided by the server's class instead.
 
 `ScriptHost.MODULES` maps an import specifier to one of these files. A module is linked before any
 of it runs, so a specifier a pack imports that is not in that map, or a named export missing from

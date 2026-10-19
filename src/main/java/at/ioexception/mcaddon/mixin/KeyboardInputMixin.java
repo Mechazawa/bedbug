@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.mixin;
 
 import at.ioexception.mcaddon.bedrock.input.InputPermission;
+import at.ioexception.mcaddon.client.PlayerControl;
 import at.ioexception.mcaddon.client.PlayerInput;
 import net.minecraft.client.player.KeyboardInput;
 import org.spongepowered.asm.mixin.Mixin;
@@ -11,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * Lets go of the keys whose input the server has taken away, once the keyboard has been read for a
- * tick and before the player moves by it.
+ * tick and before the player moves by it, and hands the movement to the player's control scheme.
  *
  * The keys are let go of rather than the movement stopped, so what Java works out from them, a jump,
  * a crouch, flying up or down, follows the keys as it would for a player who never pressed them.
@@ -32,8 +33,9 @@ public abstract class KeyboardInputMixin extends net.minecraft.client.player.Cli
             pressed.jump() && PlayerInput.allows(InputPermission.JUMP),
             pressed.shift() && PlayerInput.allows(InputPermission.SNEAK),
             pressed.sprint());
-        moveVector = new net.minecraft.world.phys.Vec2(mcaddon$impulse(keyPresses.left(), keyPresses.right()),
-            mcaddon$impulse(keyPresses.forward(), keyPresses.backward())).normalized();
+        moveVector = PlayerControl.steer(new net.minecraft.world.phys.Vec2(
+            mcaddon$impulse(keyPresses.left(), keyPresses.right()),
+            mcaddon$impulse(keyPresses.forward(), keyPresses.backward())).normalized());
     }
 //?} else {
 /*public abstract class KeyboardInputMixin extends net.minecraft.client.player.Input {
@@ -46,8 +48,10 @@ public abstract class KeyboardInputMixin extends net.minecraft.client.player.Cli
         jumping &= PlayerInput.allows(InputPermission.JUMP);
         shiftKeyDown &= PlayerInput.allows(InputPermission.SNEAK);
         float scale = slow ? slowFactor : 1f;
-        forwardImpulse = mcaddon$impulse(up, down) * scale;
-        leftImpulse = mcaddon$impulse(left, right) * scale;
+        net.minecraft.world.phys.Vec2 steered = PlayerControl.steer(new net.minecraft.world.phys.Vec2(
+            mcaddon$impulse(left, right) * scale, mcaddon$impulse(up, down) * scale));
+        leftImpulse = steered.x;
+        forwardImpulse = steered.y;
     }
 *///?}
 

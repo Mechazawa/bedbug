@@ -1,0 +1,26 @@
+{
+  "format_version": "1.21.50",
+  "minecraft:aim_assist_categories": {
+    "categories": [
+      {
+        "name": "tp:cow_first",
+        "priorities": {
+          "entity_default": 1,
+          "block_default": 1,
+          "entities": {
+            "minecraft:cow": 10
+          }
+        }
+      },
+      {
+        "name": "tp:pig_first",
+        "priorities": {
+          "entities": {
+            "minecraft:pig": 10,
+            "minecraft:cow": 0
+          }
+        }
+      }
+    ]
+  }
+}

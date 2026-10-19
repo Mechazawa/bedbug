@@ -120,6 +120,7 @@ class FunctionsTest {
         "'save query', 'save query'",
         "'place featurerule tp:rule ~ ~ ~', 'place featurerule tp:rule ~ ~ ~'",
         "'ops set @p operator', 'ops set @p operator'",
+        "'permission set @p visitor', 'permission set @p visitor'",
         "'setmaxplayers 12', 'setmaxplayers 12'",
         "'packstack server verbose exclude-vanilla', 'packstack server verbose exclude-vanilla'",
         "'tickingarea add 0 0 0 32 0 32 named', 'tickingarea add 0 0 0 32 0 32 named'",
@@ -171,21 +172,6 @@ class FunctionsTest {
     })
     void rewritesTheCommandsJavaSpellsDifferently(String source, String expected) throws IOException {
         assertEquals(expected, only(source));
-    }
-
-    /**
-     * Forms of a command that does translate, which Java has no way to say.
-     *
-     * Each has to leave the line rather than be handed to Java, because a line Java's parser
-     * rejects costs the whole function.
-     */
-    @ParameterizedTest
-    @CsvSource({
-        "'permission set @p visitor', 'command permission visitor, which Java has no form of'",
-    })
-    void dropsAFormOfATranslatedCommandJavaCannotSay(String source, String reported) throws IOException {
-        assertEquals(List.of(), translate(source));
-        assertTrue(problems.contains(reported), problems.toString());
     }
 
     /** Bedrock switches fire spreading where Java from 26 measures how far a player carries it. */
@@ -274,7 +260,7 @@ class FunctionsTest {
 
     @ParameterizedTest
     @CsvSource({
-        "'give @p minecraft:border_block', 'command give, which names an item Java does not have'",
+        "'give @p minecraft:allow', 'command give, which names an item Java does not have'",
         "'setblock ~ ~ ~ element_3', 'command setblock, which names a block Java does not have'",
         "'testforblock ~ ~ ~ furnace 2', 'command testforblock with a block data value'",
         "'execute if block ~ ~ ~ minecraft:allow run say no', "
@@ -313,27 +299,27 @@ class FunctionsTest {
 
     @Test
     void dropsAnExecuteWhoseOwnCommandJavaHasNoCounterpartFor() throws IOException {
-        assertEquals(List.of(), translate("execute as @a run controlscheme @s clear"));
-        assertTrue(problems.contains("command controlscheme"), problems.toString());
+        assertEquals(List.of(), translate("execute as @a run project export world"));
+        assertTrue(problems.contains("command project"), problems.toString());
     }
 
     @Test
     void dropsACommandNeitherEditionShares() throws IOException {
-        assertEquals(List.of(), translate("aimassist @a set preset"));
-        assertTrue(problems.contains("command aimassist"), problems.toString());
+        assertEquals(List.of(), translate("sendshowstoreoffer @a marketplace offer"));
+        assertTrue(problems.contains("command sendshowstoreoffer"), problems.toString());
     }
 
     @Test
     void dropsAGameRuleJavaDoesNotHave() throws IOException {
-        assertEquals(List.of(), translate("gamerule showbordereffect true"));
-        assertTrue(problems.contains("game rule showbordereffect, which Java keeps no rule for"),
-            problems.toString());
+        assertEquals(List.of(), translate("gamerule nosuchrule true"));
+        assertTrue(problems.contains("game rule nosuchrule"), problems.toString());
     }
 
     /** A rule Java keeps none of is read by the `gamerule` the Bedrock tree holds, under its own name. */
     @Test
     void writesARuleHeldHereUnderItsBedrockName() throws IOException {
         assertEquals("gamerule showCoordinates true", only("gamerule showcoordinates TRUE"));
+        assertEquals("gamerule showBorderEffect false", only("gamerule showbordereffect false"));
     }
 
     /** Bedrock's words after a jigsaw's or a structure's position reach the commands built here as written. */
@@ -444,8 +430,8 @@ class FunctionsTest {
 
     @Test
     void dropsABedrockOnlyCommandAndSaysWhichOne() throws IOException {
-        assertEquals(List.of(), translate("wsserver ws://127.0.0.1:19131"));
-        assertTrue(problems.contains("command wsserver"), problems.toString());
+        assertEquals(List.of(), translate("sendshowstoreoffer @s 1234"));
+        assertTrue(problems.contains("command sendshowstoreoffer"), problems.toString());
     }
 
     /** The commands acting on a player's own view and input keep the arguments a pack writes them with. */
@@ -475,14 +461,15 @@ class FunctionsTest {
         "'hud @a reset all'",
         "'hud @a[tag=watching] hide crosshair'",
         "'hud @s reset progress_bar'",
+        "'hud @s hide paperdoll'",
     })
     void keepsAHudLineNamingAPieceJavaDrawsWhole(String source) throws IOException {
         assertEquals(source, only(source));
     }
 
-    /** No Java client draws the paper doll, the touch controls or Bedrock's interaction hints. */
+    /** No Java client draws the touch controls or Bedrock's button prompts. */
     @ParameterizedTest
-    @CsvSource({"paperdoll", "touch_controls", "tooltips"})
+    @CsvSource({"touch_controls", "tooltips"})
     void dropsAHudLineNamingAPieceNoJavaClientDraws(String element) throws IOException {
         assertEquals(List.of(), translate("hud @a hide " + element));
         assertTrue(problems.contains("command hud " + element + ", which Java has no form of"),
@@ -492,7 +479,7 @@ class FunctionsTest {
     @Test
     void keepsTheRestOfAFunctionThatHasOneDroppedLine() throws IOException {
         assertEquals(List.of("say before", "say after"),
-            translate("say before", "controlscheme @a clear", "say after"));
+            translate("say before", "project export world", "say after"));
     }
 
     /**
@@ -502,8 +489,8 @@ class FunctionsTest {
     @Test
     void writesEveryLineOfAFunctionForBedrockToRun() throws IOException {
         assertEquals(
-            List.of("bedrock say before", "# a note", "bedrock controlscheme @a clear", "bedrock kill @e[r=5]"),
-            converted("say before", "# a note", "", "controlscheme @a clear", "/kill @e[r=5]"));
+            List.of("bedrock say before", "# a note", "bedrock project export world", "bedrock kill @e[r=5]"),
+            converted("say before", "# a note", "", "project export world", "/kill @e[r=5]"));
         assertTrue(problems.isEmpty(), problems.toString());
     }
 

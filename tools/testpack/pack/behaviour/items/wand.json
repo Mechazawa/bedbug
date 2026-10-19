@@ -17,6 +17,11 @@
       "minecraft:hand_equipped": true,
       "minecraft:allow_off_hand": true,
       "minecraft:liquid_clipped": true,
+      "minecraft:swing_sounds": {
+        "attack_miss": "item.spear.attack_miss",
+        "attack_hit": "item.spear.attack_hit",
+        "attack_critical_hit": "attack.critical"
+      },
       "minecraft:shooter": {
         "ammunition": [
           {

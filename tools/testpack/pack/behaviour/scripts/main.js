@@ -30,6 +30,8 @@ import {
 } from "@minecraft/server";
 import { ActionFormData, CustomForm, ObservableBoolean, ObservableString } from "@minecraft/server-ui";
 import { register } from "@minecraft/server-gametest";
+import { weighTheProbe } from "./weigh.js";
+import { dedicatedServer, deopPlayer, opPlayer, secrets, SecretString, variables } from "@minecraft/server-admin";
 
 const VILLAGER = "minecraft:villager_v2";
 
@@ -148,6 +150,10 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
     world.structureManager.place("tp:hut", world.getDimension("overworld"), { x, y, z });
 });
 
+system.afterEvents.scriptEventReceive.subscribe(event => {
+    if (event.id === "tp:weigh") weighTheProbe(Number(event.message));
+});
+
 // Commands written the way a pack writes them, none of which Java's parser reads as they stand: a
 // selector asking about an inventory, a selector naming Bedrock's villager, a function named by its
 // path alone and a command Java has nothing like. Each answer is a tag on the entity running them.
@@ -157,7 +163,7 @@ function runBedrockCommands(entity) {
     entity.runCommand("execute unless entity @s[hasitem={item=diamond}] run tag @s add tp_has_no_diamond");
     entity.runCommand("tag @e[type=villager_v2,r=4] add tp_selected_as_villager_v2");
     entity.runCommand("function tp/relay");
-    entity.runCommand("aimassist @s clear");
+    entity.runCommand("sendshowstoreoffer @s marketplace tp_offer");
 }
 
 const WARES = 800;
@@ -166,6 +172,17 @@ function openCatalogue(player) {
     const catalogue = new ActionFormData().title("Catalogue");
     for (let ware = 1; ware <= WARES; ware++) catalogue.button("Ware " + ware + " of the catalogue");
     catalogue.show(player).then(response => player.addTag("tp:catalogue_" + response.selection));
+}
+
+// Six tiles in an action form. A title starting with "tp_tiles:" is one the resource pack's
+// `server_form.json` lays out as a grid; `/scriptevent tp:tiles plain` sends the same tiles under a
+// title it leaves alone. The tag on the player names the tile that answered.
+function openTiles(player, message) {
+    const tiles = new ActionFormData()
+        .title(message === "plain" ? "Plain tiles" : "tp_tiles:Tiles")
+        .body("Pick a tile");
+    for (let tile = 1; tile <= 6; tile++) tiles.button("Tile " + tile, "textures/items/berry");
+    tiles.show(player).then(response => player.addTag("tp:tiles_" + response.selection));
 }
 
 // The script half of `/hud`, which hides the same pieces on the same player's client. What the
@@ -249,6 +266,32 @@ function playTheSpline(player) {
 world.afterEvents.playerInputPermissionCategoryChange.subscribe(({ player, category, enabled }) =>
     player.addTag("tp:input_" + category + "_" + enabled));
 
+// What `config/` hands this pack: two variables, one of them overridden by the module's own folder,
+// and a secret whose value has to stay out of everything the script can see.
+function readTheConfig(player) {
+    player.addTag(`tp:config_${variables.get("tp_shared")}_${variables.get("tp_greeting")}`);
+    player.addTag(`tp:dedicated_${dedicatedServer !== undefined}`);
+    const token = secrets.get("tp_token");
+    player.addTag(`tp:secret_${secrets.names.join("+")}_${token instanceof SecretString}`);
+    player.addTag(`tp:secret_shown_${JSON.stringify(token)}${String(token)}${Object.getOwnPropertyNames(token)}`);
+}
+
+// Makes the player an operator twice and takes it away twice, tagging what each answered.
+function swapOperator(player) {
+    const attempt = (name, call) => {
+        try {
+            call(player);
+            player.addTag(`tp:${name}_done`);
+        } catch (error) {
+            player.addTag(`tp:${name}_${error.constructor.name}`);
+        }
+    };
+    attempt("op", opPlayer);
+    attempt("op_again", opPlayer);
+    attempt("deop", deopPlayer);
+    attempt("deop_again", deopPlayer);
+}
+
 system.afterEvents.scriptEventReceive.subscribe(event => {
     const player = event.sourceEntity;
     if (player === undefined) return;
@@ -257,6 +300,7 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
         case "tp:handbook": openHandbook(player); break;
         case "tp:catalogue": openCatalogue(player); break;
         case "tp:ledger": openLedger(player); break;
+        case "tp:tiles": openTiles(player, event.message); break;
         case "tp:commands": runBedrockCommands(player); break;
         // A pack handing out one of its own items unless the player already carries it.
         case "tp:stock_up":
@@ -291,9 +335,25 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
         case "tp:hud_reset": resetTheHud(player); break;
         case "tp:override": overrideTheWisp(player, true); break;
         case "tp:override_clear": overrideTheWisp(player, false); break;
+        case "tp:control_scheme": steer(player, event.message); break;
+        case "tp:config": readTheConfig(player); break;
+        case "tp:config_reload": dedicatedServer?.reloadScriptingConfig(); readTheConfig(player); break;
+        case "tp:operator": swapOperator(player); break;
         default: break;
     }
 });
+
+// `/scriptevent tp:control_scheme <scheme>` puts the player on a control scheme, or back on their
+// camera's for `clear`, and tags them with the scheme they are on, or with the refusal.
+function steer(player, scheme) {
+    player.getTags().filter(tag => tag.startsWith("tp_control_")).forEach(tag => player.removeTag(tag));
+    try {
+        player.setControlScheme(scheme === "clear" ? undefined : scheme);
+        player.addTag("tp_control_" + player.getControlScheme());
+    } catch (error) {
+        player.addTag("tp_control_refused");
+    }
+}
 
 world.afterEvents.entitySpawn.subscribe(({ entity }) => {
     if (entity.typeId === VILLAGER) entity.addTag("tp:spawn_seen");

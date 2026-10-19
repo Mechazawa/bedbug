@@ -157,15 +157,27 @@ final class Worlds {
         return server(context, new java.util.Properties());
     }
 
-    /** The same with server properties of the test's own beside the port. */
+    /** The same, with the `server.properties` settings a test names; a port it names is kept. */
     static net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerContext server(
         ClientGameTestContext context, java.util.Properties properties) {
+        properties.putIfAbsent("server-port", String.valueOf(freePort()));
+        return context.worldBuilder().createServer(properties);
+    }
+
+    /** A dedicated server on the given port, for a test that needs a second server at the address of the first. */
+    static net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerContext server(
+        ClientGameTestContext context, int port) {
+        java.util.Properties properties = new java.util.Properties();
+        properties.setProperty("server-port", String.valueOf(port));
+        return server(context, properties);
+    }
+
+    static int freePort() {
         try (java.net.ServerSocket probe = new java.net.ServerSocket(0, 0,
             java.net.InetAddress.getByName("127.0.0.1"))) {
-            properties.setProperty("server-port", String.valueOf(probe.getLocalPort()));
+            return probe.getLocalPort();
         } catch (java.io.IOException unavailable) {
             throw new AssertionError("No free port for a dedicated server: " + unavailable.getMessage());
         }
-        return context.worldBuilder().createServer(properties);
     }
 }

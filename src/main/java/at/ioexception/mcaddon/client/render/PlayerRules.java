@@ -39,7 +39,7 @@ public final class PlayerRules {
         LocalPlayer player = client.player;
         if (player == null || client.level == null) return;
 
-        int top = TOP;
+        int top = PaperDoll.shown() ? TOP + PaperDoll.PADDING : TOP;
         if (on(BedrockRules.SHOW_COORDINATES, false)) {
             BlockPos at = player.blockPosition();
             painter.text("Position: " + at.getX() + ", " + at.getY() + ", " + at.getZ(), LEFT, top, WHITE);
