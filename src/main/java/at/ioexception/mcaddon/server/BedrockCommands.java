@@ -170,6 +170,7 @@ public final class BedrockCommands {
         registerControlScheme(dispatcher);
         PlayerAimAssists.registerCommand(dispatcher);
         GameTestCommand.registerCommand(dispatcher);
+        ScriptCommand.registerCommand(dispatcher);
     }
 
     /**

@@ -69,7 +69,7 @@ public final class Functions {
         "playanimation", "event", "scriptevent", "music", "toggledownfall", "structure", "mobevent",
         "particle", "gametest", "dialogue", "transfer", "camera", "camerashake", "fog",
         "clearspawnpoint", "hud", "inputpermission", "ride", "summon", "tickingarea", "packstack",
-        "setmaxplayers", "permission", "ops", "controlscheme", "wsserver", "connect", "aimassist");
+        "setmaxplayers", "permission", "ops", "controlscheme", "wsserver", "connect", "aimassist", "script");
 
     /**
      * The registered commands whose Bedrock line the command built here reads as it stands.
@@ -80,7 +80,7 @@ public final class Functions {
     static final Set<String> REGISTERED_WHOLE_LINE = Set.of("playanimation", "event",
         "toggledownfall", "transfer", "camerashake", "fog", "clearspawnpoint", "inputpermission",
         "tickingarea", "packstack", "setmaxplayers", "music", "controlscheme", "wsserver", "connect",
-        "aimassist");
+        "aimassist", "script");
 
     /**
      * Commands Bedrock has and Java has no counterpart for.
@@ -88,14 +88,13 @@ public final class Functions {
      * `editor-allowlist` and `project` belong to Bedrock's
      * editor and `sendshowstoreoffer` to its marketplace, and Java has neither. `reloadconfig` and
      * `reloadpacketlimitconfig` read again files only a Bedrock dedicated server has: the permissions,
-     * the script variables and secrets, and the packet limits. `script` drives
-     * the debugger, profiler and watchdog of Bedrock's own script engine through the protocol
-     * Bedrock's tools speak. `serveridentity` saves, deletes and reports the key a Bedrock dedicated
-     * server identifies itself to its services with, and a Java server holds no such key.
+     * the script variables and secrets, and the packet limits. `serveridentity` saves, deletes and
+     * reports the key a Bedrock dedicated server identifies itself to its services with, and a Java
+     * server holds no such key.
      */
     private static final Set<String> BEDROCK_ONLY = Set.of(
         "editor-allowlist", "project", "reloadconfig",
-        "reloadpacketlimitconfig", "script", "sendshowstoreoffer", "serveridentity");
+        "reloadpacketlimitconfig", "sendshowstoreoffer", "serveridentity");
 
     /**
      * Commands whose rewrite changes the front of a line and leaves the rest as the pack wrote it.

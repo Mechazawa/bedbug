@@ -46,8 +46,11 @@ public record PackManifest(
         }
     }
 
-    /** `entry` and `language` are set only on a script module. */
-    public record Module(ModuleType type, String entry, String language) {
+    /**
+     * `entry` and `language` are set only on a script module. `uuid` is what a script debugger names
+     * the module it attaches to, and is null where the manifest states none.
+     */
+    public record Module(ModuleType type, UUID uuid, String entry, String language) {
     }
 
     /** One pack requiring another, by the required pack's header uuid. */
@@ -226,11 +229,11 @@ public record PackManifest(
      * The module fields Bedrock defines that nothing here acts on.
      *
      * `description` is the author's note about that half of the pack and names nothing to load.
-     * `uuid` and `version` identify one module to Bedrock's content updater, and a pack is loaded
-     * here from the directory it sits in: what names one installation of an add-on to another is
-     * the header uuid and the header version.
+     * `version` identifies one module to Bedrock's content updater, and a pack is loaded here from
+     * the directory it sits in: what names one installation of an add-on to another is the header
+     * uuid and the header version.
      */
-    private static final Set<String> MODULE_DROPPED = Set.of("description", "uuid", "version");
+    private static final Set<String> MODULE_DROPPED = Set.of("description", "version");
 
     /**
      * `product_type` marks a pack as an add-on, which on Bedrock decides whether a world keeps its
@@ -272,6 +275,7 @@ public record PackManifest(
             JsonObject module = element.getAsJsonObject();
             modules.add(new Module(
                 ModuleType.of(Json.text(module, "type", "").toLowerCase(Locale.ROOT)),
+                uuid(module.get("uuid")),
                 Json.text(module, "entry", null),
                 Json.text(module, "language", null)
             ));
@@ -341,10 +345,14 @@ public record PackManifest(
 
     /** The script module's entry file, or null when the pack ships no script. */
     public String scriptEntry() {
+        Module script = scriptModule();
+        return script == null ? null : script.entry();
+    }
+
+    /** The module naming the pack's script entry, or null when the pack ships no script. */
+    public Module scriptModule() {
         return modules.stream()
-            .filter(module -> module.type() == ModuleType.SCRIPT)
-            .map(Module::entry)
-            .filter(entry -> entry != null)
+            .filter(module -> module.type() == ModuleType.SCRIPT && module.entry() != null)
             .findFirst()
             .orElse(null);
     }

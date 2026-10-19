@@ -284,7 +284,7 @@ class PackManifestTest {
             """.formatted(SELF, OTHER));
 
         assertEquals(List.of("has_education_metadata", "header.pack_scope", "header.platform_locked",
-            "metadata.product_type", "module.description", "module.uuid", "module.version"),
+            "metadata.product_type", "module.description", "module.version"),
             manifest.unread().stream().sorted().toList());
     }
 

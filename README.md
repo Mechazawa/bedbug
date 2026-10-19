@@ -597,6 +597,16 @@ Against a server without this mod a client plays with its own add-ons.
   types, entity filter, event ids and damage or heal causes an entity event names. `entitySpawn`
   and `entityLoad` arrive on the tick after the entity came into the world, so a script that spawns
   one and then marks it has done both before a listener asks.
+- Bedrock's script developer tools, through `/bedrock script`. `debugger listen <port>` and
+  `debugger connect [host] [port]` attach Mojang's Minecraft Bedrock Edition Debugger for Visual
+  Studio Code, in either of its modes and with the same `launch.json`: breakpoints by script and
+  line, stopping on uncaught exceptions, stepping, the call stack, scopes,
+  variables, the debug console, the extension's command box, its profiler buttons and its live
+  diagnostics. A breakpoint holds the server thread, as one holds a Bedrock game. `profiler start`
+  and `profiler stop` write a `.cpuprofile` under `logs/profiles/`, named the way Bedrock names one,
+  which Visual Studio Code opens. `diagnostics startcapture` and `stopcapture` write the server's
+  per-tick statistics to an `.mcstats` file under `logs/diagnostics/`, which the extension replays.
+  The debugger socket is opened on the loopback address only.
 - The world events a script subscribes to, raised out of the game rather than out of a pack's own
   data: what a player breaks, places, uses, picks up and swings at, where they go and what they
   hold, the weather turning and a game rule being set, an explosion and each block it takes, a
@@ -907,8 +917,8 @@ description with its own scattering coefficients. `/fog` carries the `air` block
 pack pushes a fog for; Java draws its own fog for the other media and has no volumetric fog to give
 the second block to.
 
-**Seven of Bedrock's commands.** `project` and `editor-allowlist` belong to
-the Bedrock Editor. `sendshowstoreoffer` speaks to the marketplace, `script` to the debugger and profiler of Bedrock's own script engine, and
+**Six of Bedrock's commands.** `project` and `editor-allowlist` belong to
+the Bedrock Editor. `sendshowstoreoffer` speaks to the marketplace, and
 `reloadconfig`, `reloadpacketlimitconfig` and `serveridentity` to a Bedrock server's own
 configuration and identity. A function using any of them keeps its other lines and the dropped
 command is reported.
@@ -935,7 +945,7 @@ words at the end, and `schedule clear` is spelled alike in both.
 `playanimation`, `event`, `scriptevent`, `music`, `toggledownfall`, `structure`, `mobevent`,
 `particle`, `dialogue`, `gametest`, `transfer`, `camera`, `camerashake`, `fog`, `clearspawnpoint`,
 `hud`, `inputpermission`, `ride`, `summon`, `tickingarea`, `packstack`, `setmaxplayers`,
-`permission`, `ops`, `aimassist`, `controlscheme`, `wsserver` and `connect` are registered by this mod in the tree a Bedrock line is read against,
+`permission`, `ops`, `aimassist`, `controlscheme`, `wsserver`, `connect` and `script` are registered by this mod in the tree a Bedrock line is read against,
 beside Java's own commands and never in Java's tree, as are Bedrock's own forms of `place`,
 `schedule` and `gamerule`, and a line using one is written out in the form the command built there
 reads. `clearspawnpoint` takes a

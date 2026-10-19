@@ -29,6 +29,7 @@
       "at.ioexception.mcaddon.gametest.BedrockCommandGameTests",
       "at.ioexception.mcaddon.gametest.NamesGameTests",
       "at.ioexception.mcaddon.gametest.ScriptGameTests",
+      "at.ioexception.mcaddon.gametest.ScriptToolGameTests",
       "at.ioexception.mcaddon.gametest.RegistryGameTests",
       "at.ioexception.mcaddon.gametest.ActiveAddonsGameTests",
       "at.ioexception.mcaddon.gametest.ShapeGameTests",

@@ -1991,6 +1991,42 @@ Tests: `RegistryGameTests` (adding after the freeze, on all four versions), `Act
 join, a leave and a second join against a dedicated server), and the unit tests `AddonManifestTest`,
 `ReceivedArchivesTest`, `ArchivesTest` and `FunctionNamesTest`.
 
+## Script developer tools
+
+`/bedrock script` is `server.ScriptCommand`, over three classes in `script/`:
+
+- **`ScriptDebugger`** speaks the protocol of Mojang's VS Code extension (github.com/Mojang/minecraft-debugger,
+  `src/protocol-events.ts` and `src/session.ts`). `DebugConnection` frames it: eight hex digits of
+  length, a newline, one line of JSON counted with its newline. Minecraft sends a `ProtocolEvent`
+  (version 11, one plugin per script module uuid), the extension answers `protocol`, sets its
+  breakpoints and sends `resume`; DAP requests arrive as `{"type":"request","request":{...}}` and
+  are answered as `{"type":"response","request_seq":...,"body":...}`. A script is named by its path
+  inside its pack's `scripts/` folder, which is what the extension's `generatedSourceRoot` produces.
+  The answers come from Truffle's `com.oracle.truffle.api.debug`, which ships in `truffle-api`.
+- **`ScriptProfiler`** is Truffle's `CPUSampler` from `org.graalvm.tools:profiler-tool`, written out
+  as a Chrome `.cpuprofile` with the `$vscode.locations` the extension's capture handler reads.
+- **`ScriptDiagnostics`** builds one `StatEvent2` per tick, sent live to an attached extension and
+  written one per line under a `{"encoding":"utf8"}` header by a capture: the `.mcstats` replay
+  format of the extension's `src/stats/replay-stats-provider.ts`.
+
+Traps:
+
+- **A suspended Truffle frame may only be read on the thread it stopped on.** The server thread
+  stays inside the suspend callback and answers the requests the socket thread queues; the socket
+  thread only answers what needs no frame. A closed socket lets the thread go.
+- **An attach holds the scripts until the extension's `resume`**, as Bedrock does, through
+  `ScriptDebugger.awaitConfiguration` in `ScriptHost.enter`. So does a breakpoint, so a client of
+  the debugger in a test runs on a thread of its own.
+- **The entry script is evaluated as a file-named source** (`Source.newBuilder("js", File)` with its
+  content), so its URI is the same `file:///<uuid>/scripts/...` its imports get from the guest file
+  system. Giving a literal source a `uri` instead broke the relative imports of the entry.
+
+`ScriptToolGameTests` asserts all three: a profile naming `weighTheProbe` in `weigh.js` with as
+many samples as its hit count and time deltas inside its span (the sampler's hit times are wall
+clock milliseconds), a capture of one `StatEvent2` a tick under its header, and a socket client
+that stops on the marked line of the test pack's `scripts/weigh.js` and reads the stack. Bedrock's command metadata lists no `watchdog` form, so
+there is no `exportstats` to answer.
+
 ## Conventions
 
 **No add-on content is committed.** No textures, sounds, models or text from any pack. Real packs
