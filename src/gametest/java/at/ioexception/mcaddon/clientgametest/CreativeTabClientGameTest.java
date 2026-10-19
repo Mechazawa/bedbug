@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.clientgametest;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.ActiveAddons;
 import at.ioexception.mcaddon.registry.AddonItems;
 import net.fabricmc.fabric.api.client.creativetab.v1.FabricCreativeModeInventoryScreen;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -10,6 +11,7 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContex
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationUiState;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.CreativeModeTabs;
@@ -34,7 +36,9 @@ public final class CreativeTabClientGameTest implements FabricClientGameTest {
             context.getInput().pressKey(options -> options.keyInventory);
             context.waitForScreen(CreativeModeInventoryScreen.class);
 
+            // A server test earlier in the run may have registered an add-on this world does not offer.
             Set<String> declared = new TreeSet<>(AddonItems.all().keySet());
+            declared.removeIf(id -> ActiveAddons.isDormant(Identifier.parse(id)));
             Assert.that(!declared.isEmpty(), "The test add-on registered no items to look for.");
             Set<String> own = shown(context, BuiltInRegistries.CREATIVE_MODE_TAB.getValue(McAddon.id("addons")));
             Set<String> missing = new TreeSet<>(declared);
