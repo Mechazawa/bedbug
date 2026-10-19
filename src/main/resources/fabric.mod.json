@@ -5,7 +5,7 @@
   "name": "${mod_name}",
   "description": "${mod_description}",
   "authors": [
-    "Bas Bieling"
+    "Mechazawa"
   ],
   "license": "MIT",
   "environment": "*",
