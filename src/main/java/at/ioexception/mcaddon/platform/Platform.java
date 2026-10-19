@@ -2839,17 +2839,18 @@ public final class Platform {
      * one more uniform of its layout.
      ^/
     public static com.mojang.renderpearl.api.pipeline.RenderPipeline screenPipeline(Identifier location,
-        Identifier shader, String sampler, String uniformBlock) {
+        Identifier fragmentShader, String sampler, String uniformBlock) {
         return com.mojang.renderpearl.api.pipeline.RenderPipeline.builder()
             .withLocation(location)
-            .withVertexShader(shader)
-            .withFragmentShader(shader)
+            .withVertexShader(Identifier.withDefaultNamespace("core/screenquad"))
+            .withFragmentShader(fragmentShader)
             .withBindGroupLayout(com.mojang.renderpearl.api.pipeline.BindGroupLayout.builder()
                 .withUniform(sampler, com.mojang.renderpearl.api.pipeline.UniformType.COMBINED_IMAGE_SAMPLER)
                 .withUniform(uniformBlock, com.mojang.renderpearl.api.pipeline.UniformType.UNIFORM_BUFFER)
                 .build())
             .withDepthStencilState(java.util.Optional.empty())
             .withCull(false)
+            .withColorTargetState(com.mojang.renderpearl.api.pipeline.ColorTargetState.DEFAULT)
             .withPrimitiveTopology(com.mojang.renderpearl.api.pipeline.PrimitiveTopology.TRIANGLES)
             .build();
     }
@@ -2868,12 +2869,12 @@ public final class Platform {
      * A pipeline drawing one screen covering triangle from no vertices, reading one texture and one
      * uniform block. 26.2 groups a pipeline's bindings into layouts and names its topology alone.
      */
-    public static com.mojang.blaze3d.pipeline.RenderPipeline screenPipeline(Identifier location, Identifier shader,
-        String sampler, String uniformBlock) {
+    public static com.mojang.blaze3d.pipeline.RenderPipeline screenPipeline(Identifier location,
+        Identifier fragmentShader, String sampler, String uniformBlock) {
         return com.mojang.blaze3d.pipeline.RenderPipeline.builder()
             .withLocation(location)
-            .withVertexShader(shader)
-            .withFragmentShader(shader)
+            .withVertexShader(Identifier.withDefaultNamespace("core/screenquad"))
+            .withFragmentShader(fragmentShader)
             .withBindGroupLayout(com.mojang.blaze3d.pipeline.BindGroupLayout.builder()
                 .withSampler(sampler)
                 .withUniform(uniformBlock, com.mojang.blaze3d.shaders.UniformType.UNIFORM_BUFFER)
@@ -2893,12 +2894,12 @@ public final class Platform {
         pass.draw(3, 1, 0, 0);
     }
     //?} elif >=26 {
-    /*public static com.mojang.blaze3d.pipeline.RenderPipeline screenPipeline(Identifier location, Identifier shader,
-        String sampler, String uniformBlock) {
+    /*public static com.mojang.blaze3d.pipeline.RenderPipeline screenPipeline(Identifier location,
+        Identifier fragmentShader, String sampler, String uniformBlock) {
         return com.mojang.blaze3d.pipeline.RenderPipeline.builder()
             .withLocation(location)
-            .withVertexShader(shader)
-            .withFragmentShader(shader)
+            .withVertexShader(Identifier.withDefaultNamespace("core/screenquad"))
+            .withFragmentShader(fragmentShader)
             .withSampler(sampler)
             .withUniform(uniformBlock, com.mojang.blaze3d.shaders.UniformType.UNIFORM_BUFFER)
             .withDepthStencilState(java.util.Optional.empty())

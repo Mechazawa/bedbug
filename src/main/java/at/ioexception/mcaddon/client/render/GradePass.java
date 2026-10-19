@@ -29,7 +29,7 @@ import org.lwjgl.system.MemoryStack;
 /**
  * Grades the finished frame of the world, before the heads-up display is drawn over it.
  *
- * The frame is copied aside and drawn back over itself through `colour_grade.fsh`, one triangle
+ * The frame is copied aside and drawn back over itself through `colour_grade.glsl`, one triangle
  * covering the screen, as a pipeline of the game's own device. A grade that leaves every pixel alone
  * draws nothing. Before 26 nothing is drawn.
  */
@@ -51,12 +51,12 @@ public final class GradePass {
      * compiles as resources load; from 26.3 the game compiles a pipeline the first time it is used.
      */
     public static void register() {
-        RenderPipeline built = Platform.screenPipeline(McAddon.id("pipeline/colour_grade"),
-            McAddon.id("post/colour_grade"), "InSampler", "ColourGrade");
         //? if >=26.3 {
-        /*pipeline = built;
+        /*pipeline = Platform.screenPipeline(McAddon.id("pipeline/colour_grade"),
+            McAddon.id("post/colour_grade_spirv"), "InSampler", "ColourGrade");
         *///?} else {
-        pipeline = net.minecraft.client.renderer.RenderPipelines.register(built);
+        pipeline = net.minecraft.client.renderer.RenderPipelines.register(Platform.screenPipeline(
+            McAddon.id("pipeline/colour_grade"), McAddon.id("post/colour_grade"), "InSampler", "ColourGrade"));
         //?}
     }
 
