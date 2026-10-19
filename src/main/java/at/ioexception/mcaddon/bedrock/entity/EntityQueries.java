@@ -642,9 +642,8 @@ public final class EntityQueries implements MolangEnvironment.Queries {
 
             case "noise" -> MolangValue.of(noise(arguments));
 
-            // `q.any` and `q.all` take a subject and a list of conditions the caller already resolved.
-            case "any" -> MolangValue.of(arguments.stream().skip(2).anyMatch(MolangValue::truthy));
-            case "all" -> MolangValue.of(arguments.stream().skip(2).allMatch(MolangValue::truthy));
+            case "any" -> MolangValue.of(MolangValue.matchesAny(arguments));
+            case "all" -> MolangValue.of(MolangValue.matchesAll(arguments));
             case "approx_eq" -> approximatelyEqual(arguments);
             case "count" -> MolangValue.of(arguments.size());
             case "get_actor_info_id" -> MolangValue.of(actorInfoId(arguments));
