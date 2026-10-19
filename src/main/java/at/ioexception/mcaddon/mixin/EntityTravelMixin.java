@@ -39,8 +39,19 @@ public abstract class EntityTravelMixin implements Travelled {
     @Unique
     private float mcaddonTravelled;
 
+    @Shadow
+    public int tickCount;
+
+    /**
+     * Nothing is counted before the entity's first tick, because its old position is not a place it
+     * stood until then. An entity is made at the origin and placed afterwards: the server's
+     * `snapTo` counts that placement as a step, and a client's copy is placed with `absSnapTo`,
+     * which leaves the old position at the origin unless a frame drew it before its first tick.
+     */
     @Inject(method = "setOldPosAndRot()V", at = @At("HEAD"))
     private void mcaddon$countStep(CallbackInfo info) {
+        if (tickCount == 0) return;
+
         mcaddonTravelled += (float) Math.hypot(getX() - xOld, getZ() - zOld) * STRIDE;
     }
 
