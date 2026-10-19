@@ -1030,6 +1030,21 @@ public final class Platform {
     }
 
     /**
+     * Whether brewing, furnace fuel and composting are written in a data pack.
+     *
+     * From 26.3 a brewing stand reads `minecraft:brewing` recipes, and an item burns or composts
+     * by a component naming a `context_int_provider` entry. Before that the game builds all three
+     * as lists in code.
+     */
+    public static boolean brewingFuelAndCompostAreData() {
+        //? if >=26.3 {
+        /*return true;
+        *///?} else {
+        return false;
+        //?}
+    }
+
+    /**
      * What a crafting grid one square wide makes out of these stacks, by the recipes the data packs
      * loaded, or an empty stack when no recipe takes them.
      *

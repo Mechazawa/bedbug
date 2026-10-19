@@ -11,7 +11,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.ComposterBlock;
 import org.graalvm.polyglot.HostAccess;
 
 import java.util.LinkedHashMap;
@@ -287,13 +286,61 @@ public final class Items extends Surface {
 
     /** Java keeps the chance as a fraction; Bedrock reports it as a percentage. */
     private void describeCompostable(JsonObject into, Item item) {
-        if (!ComposterBlock.COMPOSTABLES.containsKey(item)) return;
+        //? if >=26.3 {
+        /*net.minecraft.world.item.component.Compostable compostable =
+            item.components().get(net.minecraft.core.component.DataComponents.COMPOSTABLE);
+        if (compostable == null) return;
+        float chance = layerChance(compostable.layers());
+        *///?} else {
+        if (!net.minecraft.world.level.block.ComposterBlock.COMPOSTABLES.containsKey(item)) return;
+        float chance = net.minecraft.world.level.block.ComposterBlock.COMPOSTABLES.getFloat(item);
+        //?}
 
         JsonObject described = new JsonObject();
-        described.addProperty("compostingChance",
-            Math.round(ComposterBlock.COMPOSTABLES.getFloat(item) * 100.0F));
+        described.addProperty("compostingChance", Math.round(chance * 100.0F));
         into.add("compostable", described);
     }
+
+    //? if >=26.3 {
+    /*// The chance an item adds a layer to a composter already holding some, read off the shape of the
+    // `context_int_provider` entry its component names: a dispatcher's default, a weighted list's
+    // share of entries adding a layer, or a constant.
+    private float layerChance(
+        net.minecraft.world.level.storage.loot.providers.number.ints.ResolvableInt layers) {
+        if (layers instanceof
+            net.minecraft.world.level.storage.loot.providers.number.ints.ResolvableInt.Constant constant) {
+            return constant.value() > 0 ? 1f : 0f;
+        }
+        if (!(layers instanceof
+            net.minecraft.world.level.storage.loot.providers.number.ints.ResolvableInt.Reference reference)) {
+            return 0f;
+        }
+        return server.reloadableRegistries().lookup()
+            .lookup(net.minecraft.core.registries.Registries.CONTEXT_INT_PROVIDER)
+            .flatMap(providers -> providers.get(reference.key()))
+            .map(provider -> layerChance(provider.value()))
+            .orElse(0f);
+    }
+
+    private static float layerChance(
+        net.minecraft.world.level.storage.loot.providers.number.ints.ContextIntProvider provider) {
+        return switch (provider) {
+            case net.minecraft.world.level.storage.loot.providers.number.ints.NumberDispatcher dispatcher ->
+                layerChance(dispatcher.defaultValue().value());
+            case net.minecraft.world.level.storage.loot.providers.number.ints.WeightedListValue weighted -> {
+                var entries = weighted.distribution().unwrap();
+                float total = entries.stream().mapToInt(entry -> entry.weight()).sum();
+                float adding = (float) entries.stream()
+                    .mapToDouble(entry -> entry.weight() * layerChance(entry.value().value()))
+                    .sum();
+                yield total <= 0f ? 0f : adding / total;
+            }
+            case net.minecraft.world.level.storage.loot.providers.number.ints.ConstantValue constant ->
+                constant.value() > 0 ? 1f : 0f;
+            default -> 0f;
+        };
+    }
+    *///?}
 
     private static Item item(String itemId) {
         return itemId == null ? null : AddonItems.named(itemId);

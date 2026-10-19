@@ -402,10 +402,11 @@ Against a server without this mod a client plays with its own add-ons.
   `query.trade_tier` answers the tier a trader has reached, counted from nought the way Bedrock
   counts it, for a pack's own trader and for Java's villager alike, whose novice is 0 and whose
   master is 4.
-- Brewing. A pack's own brewing stand recipes are added to the list the game builds in code, so a
-  mix turning one potion into another over a reagent, and a container recipe turning one bottle into
-  another, both work at an ordinary brewing stand. A bottle of the pack's own is accepted as a
-  container to brew in.
+- Brewing. A pack's own brewing stand recipes are added to the list the game builds in code, or
+  from 26.3 written as `minecraft:brewing` recipes in the add-on's data pack, so a mix turning one
+  potion into another over a reagent, and a container recipe turning one bottle into another, both
+  work at an ordinary brewing stand. A bottle of the pack's own is accepted as a container to brew
+  in. From 26.3 a mix reaches the game's three bottles and the bottles its own add-on names.
 - Recipes: shaped, shapeless, furnace, smithing transform and smithing trim. `tags` names the block
   a recipe is made at, so one Bedrock furnace recipe listing a furnace, a blast furnace, a smoker
   and a campfire becomes four Java recipes, a shapeless recipe tagged for the stonecutter becomes a
