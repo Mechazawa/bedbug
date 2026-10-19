@@ -2425,7 +2425,7 @@ there is no `exportstats` to answer.
 ## Releasing
 
 A pushed `v*` tag runs `.github/workflows/release.yml`, which builds the jars, makes the GitHub release and then runs `tools/release/modrinth.py` to publish each jar to Modrinth.
-The repository secret `MODRINTH_TOKEN` must hold a Modrinth token with the create-version and write-version scopes. `--dry-run` prints the requests without a token.
+The repository secret `MODRINTH_TOKEN` must hold a Modrinth token with the read-project, read-version, create-version and write-version scopes. The read scopes are needed while the project is a draft. `--dry-run` prints the requests without a token.
 
 ## Conventions
 
