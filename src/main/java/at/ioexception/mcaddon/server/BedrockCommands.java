@@ -132,6 +132,7 @@ public final class BedrockCommands {
         Structures.registerCommand(dispatcher);
         ServerAdmin.registerCommand(dispatcher);
         PacketLimits.registerCommand(dispatcher);
+        ServerIdentity.registerCommand(dispatcher);
         BedrockRules.registerCommand(dispatcher);
         Cheats.registerCommand(dispatcher);
 

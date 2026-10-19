@@ -421,6 +421,15 @@ Against a server without this mod a client plays with its own add-ons.
   operator or the console, reads the files again for the running scripts. `opPlayer` and
   `deopPlayer` change Java's operator list; the allow list, level storage, kicks, transfers and the
   join event are reported as not implemented.
+- The server identity key, with `serveridentity save`, `delete` and `status` as on a Bedrock
+  dedicated server. A server starts with the unencrypted P-384 private key at
+  `keys/server_identity_key.pem` in its directory (SEC1 or PKCS#8 PEM, as
+  `openssl ecparam -name secp384r1 -genkey -noout` writes), or with a key it makes and keeps in
+  memory, so it is a new server to its clients each time it starts until a key is saved. A key file
+  that cannot be read is logged and a generated key is used. Each client running this mod keeps
+  the key a server presented by the address it joined at, in `mcaddon_trusted_servers.json`, and
+  asks the player before playing on a known address presenting another key: accepting keeps the new
+  key and refusing disconnects. A world the client hosts is not asked about.
 - `/bedrock music`, which plays a track to everyone as music rather than as a sound somewhere in the
   world: in the music category, with the game's own background music waiting until it is over,
   faded in and out over the seconds the line gives, looped when asked, turned up or down while it
@@ -887,12 +896,11 @@ description with its own scattering coefficients. `/fog` carries the `air` block
 pack pushes a fog for; Java draws its own fog for the other media and has no volumetric fog to give
 the second block to.
 
-**Nine of Bedrock's commands.** `aimassist` and `controlscheme` change how a Bedrock client turns
+**Eight of Bedrock's commands.** `aimassist` and `controlscheme` change how a Bedrock client turns
 a controller or a touchscreen into aim and movement, and `project` and `editor-allowlist` belong to
 the Bedrock Editor. `connect` and `wsserver` speak to a WebSocket server, `sendshowstoreoffer` to the
-marketplace, `script` to the debugger and profiler of Bedrock's own script engine, and
-`serveridentity` to a Bedrock server's own identity. A function using any of them keeps its other
-lines and the dropped command is reported.
+marketplace, and `script` to the debugger and profiler of Bedrock's own script engine. A function
+using any of them keeps its other lines and the dropped command is reported.
 
 **One form of a command the rest of which translates.** The cameras Bedrock draws behind or round an
 entity (`minecraft:follow_orbit`, `minecraft:fixed_boom` and `minecraft:control_scheme_camera`), and
@@ -915,7 +923,8 @@ words at the end, and `schedule clear` is spelled alike in both.
 `playanimation`, `event`, `scriptevent`, `music`, `toggledownfall`, `structure`, `mobevent`,
 `particle`, `dialogue`, `gametest`, `transfer`, `camera`, `camerashake`, `fog`, `clearspawnpoint`,
 `hud`, `inputpermission`, `ride`, `summon`, `tickingarea`, `packstack`, `setmaxplayers`,
-`permission`, `ops` and `reloadpacketlimitconfig` are registered by this mod in the tree a Bedrock line is read against,
+`permission`, `ops`, `changesetting`, `reloadconfig`, `reloadpacketlimitconfig` and `serveridentity`
+are registered by this mod in the tree a Bedrock line is read against,
 beside Java's own commands and never in Java's tree, as are Bedrock's own forms of `place`,
 `schedule` and `gamerule`, and a line using one is written out in the form the command built there
 reads. `clearspawnpoint` takes a

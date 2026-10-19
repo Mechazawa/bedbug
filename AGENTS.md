@@ -1983,6 +1983,21 @@ only once that command is done. A new path that runs a pack's commands takes the
 namespace and a `CommandReport`, never a dispatcher directly, and a new Bedrock command goes into
 `BedrockCommands`, never into Java's tree.
 
+**A server's identity is a key the client remembers.** `server.ServerIdentity` takes
+`keys/server_identity_key.pem` in the game directory as the session's P-384 key when the server
+starts, or generates one and keeps it in memory, and sends the public half to every joining client as
+the `server_identity` instruction. Bedrock's own server documentation says this much and no more: the
+key identifies the server to clients, a generated key makes players re-accept server trust, and the
+server validates the key at start. It does not say what a server does with a key that fails that
+check, so a bad file is logged at `ERROR` and a generated key used. It publishes no wording for the
+client's question either, so `client.TrustedServers` asks in plain words of its own (the
+`mcaddon.server_trust.*` keys in `en_us.json`), keeps the trusted keys by the address the player
+typed in `mcaddon_trusted_servers.json` in the game directory, and asks once the world is up with no
+other screen open. The key is one per process, so a dedicated server and a client in one process
+(the client game tests) read the same `running()`. `ServerTrustClientGameTest` starts two servers on
+one port with `Worlds.server(context, port)`, because every other server test takes a free port and
+so a new address, which a client trusts without asking.
+
 **A gap and an answer are counted apart.** A command the game read and then declined, a selector that
 matched nothing, a structure holding a chest this cannot fill: those are listed after the verdict
 line rather than among the gaps, because counting them would make a pack asking an ordinary question

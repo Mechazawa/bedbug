@@ -1,3 +1,8 @@
 {
-  "item.mcaddon.entity_bucket": "Bucket of %s"
+  "item.mcaddon.entity_bucket": "Bucket of %s",
+  "mcaddon.server_trust.title": "Server identity changed",
+  "mcaddon.server_trust.message": "%s identifies itself with another key than the last time you joined. Accept the new identity to play, or disconnect.",
+  "mcaddon.server_trust.accept": "Accept",
+  "mcaddon.server_trust.disconnect": "Disconnect",
+  "mcaddon.server_trust.refused": "You did not accept the server's new identity."
 }
