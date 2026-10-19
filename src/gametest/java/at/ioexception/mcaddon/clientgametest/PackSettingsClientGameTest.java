@@ -9,6 +9,7 @@ import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.server.ServerHooks;
 import at.ioexception.mcaddon.server.WorldPackSettings;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerContext;
@@ -247,7 +248,7 @@ public final class PackSettingsClientGameTest implements FabricClientGameTest {
                 (widget.getY() + widget.getHeight() / 2.0) * scale};
         });
         context.getInput().setCursorPos(point[0], point[1]);
-        context.getInput().pressMouse(0);
+        context.getInput().pressMouse(InputConstants.MOUSE_BUTTON_LEFT);
         context.waitTick();
     }
 

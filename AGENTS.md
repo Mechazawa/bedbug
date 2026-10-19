@@ -88,6 +88,8 @@ code and the 26.2 ones are commented, so an edit made then is written in that fo
 
 - The GPU API left `com.mojang.blaze3d` for `com.mojang.renderpearl.api`, a pipeline is compiled
   when first used rather than registered, and `PoseStack.mulPose(Quaternionf)` is `rotate`.
+- The window and input moved from GLFW to SDL, so key and mouse button numbers are SDL's: the left
+  button is 1, not 0. A test presses a button or a key by its `InputConstants` name, never by number.
 - A player's swing starts on the server, so the swing event listens in the packet listener's
   punch, use and interact handlers.
 - Brewing is a recipe type, and fuel and composting are item components naming entries the
