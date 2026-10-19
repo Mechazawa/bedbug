@@ -2422,6 +2422,11 @@ clock milliseconds), a capture of one `StatEvent2` a tick under its header, and 
 that stops on the marked line of the test pack's `scripts/weigh.js` and reads the stack. Bedrock's command metadata lists no `watchdog` form, so
 there is no `exportstats` to answer.
 
+## Releasing
+
+A pushed `v*` tag runs `.github/workflows/release.yml`, which builds the jars, makes the GitHub release and then runs `tools/release/modrinth.py` to publish each jar to Modrinth.
+The repository secret `MODRINTH_TOKEN` must hold a Modrinth token with the create-version and write-version scopes. `--dry-run` prints the requests without a token.
+
 ## Conventions
 
 **No add-on content is committed.** No textures, sounds, models or text from any pack. Real packs

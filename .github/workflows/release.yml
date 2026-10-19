@@ -79,3 +79,10 @@ jobs:
 
             Put either file in `addons/`. Both work on every Minecraft version listed in the README.
           generate_release_notes: true
+
+      # Reruns skip a version Modrinth already has. The token is the repository secret MODRINTH_TOKEN.
+      - name: Publish to Modrinth
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+        run: python3 tools/release/modrinth.py --version "${GITHUB_REF_NAME#v}" versions/26.*/build/libs/*.jar
