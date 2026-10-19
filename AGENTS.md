@@ -677,6 +677,13 @@ These are the checks it runs, and what each one catches:
   and written in other capitals than the bone
   is what Mojang's own `*leg` and a pack's careless casing look like.
 
+  `tp:apprentice` draws the tailor's two masked controllers over textures whose last texel is a red
+  marker at an alpha of one, which every villager texture of Villager News carries. Bedrock mixes
+  the two textures as painted and tests the alpha of the mix, so the marker is dropped; the mix is
+  therefore made from each texture's `_tint_weights` form, which keeps the alpha `AlphaMask` raised
+  in the texture itself, and `RenderControllerClientGameTest.maskedMarkers` reads the marker back
+  clear.
+
   `tp:perch` is a seat for a villager, written the way a pack learns a Java villager's level. Its
   seat's `rotate_rider_by` writes the rider's `query.trade_tier` and where it sits into temporaries
   and answers a quarter turn for the villager family, with `lock_rider_rotation` at nought; its
