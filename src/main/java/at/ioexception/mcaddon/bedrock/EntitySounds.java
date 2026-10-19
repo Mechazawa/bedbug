@@ -93,12 +93,12 @@ public record EntitySounds(Map<String, String> events, double volume, double[] p
      * What the rest of the file says, which describes a Bedrock client rather than a mob.
      *
      * `block_sounds` is answered through the sound group a block's own `blocks.json` entry names,
-     * which is how Java gives a block its sounds. The other three attach a sound to a moment in the
-     * Bedrock interface: an item used on a block, a named one-off, and the click of a screen.
+     * which is how Java gives a block its sounds, and `individual_event_sounds` is read by
+     * `EventSounds`. The other two attach a sound to a moment in the Bedrock interface: a named
+     * one-off and the click of a screen.
      */
     private static void reportOtherSections(JsonObject body) {
-        for (String section : Set.of("individual_event_sounds", "individual_named_sounds",
-            "interactive_sounds")) {
+        for (String section : Set.of("individual_named_sounds", "interactive_sounds")) {
             if (body.has(section)) AddonEntities.unsupported("sounds.json " + section);
         }
     }
@@ -133,7 +133,7 @@ public record EntitySounds(Map<String, String> events, double volume, double[] p
     }
 
     /** Null where nothing is written; a single number is a range of no width. */
-    private static double[] range(JsonElement value) {
+    static double[] range(JsonElement value) {
         if (value == null) return null;
         if (value.isJsonPrimitive()) {
             return new double[] {value.getAsDouble(), value.getAsDouble()};

@@ -328,6 +328,21 @@ These are the checks it runs, and what each one catches:
   tags whoever uses it, half-high boxes a permutation makes whole on the third use, and a loot
   table of its own, against `tp:lamp`, which names none and so drops itself.
 
+  `tp:pouch` holds 48 of Bedrock's 64 by its `minecraft:storage_weight_limit`, `tp:dust` weighs 16
+  and `tp:berry` nothing by their `minecraft:storage_weight_modifier`. Java's bundle contents know
+  nothing of the bag carrying them, so `BundleItemMixin` hands the bag's limit to the
+  `BundleContents.Mutable` it opens through `BagCapacity`, `BundleCapacityMixin` measures against
+  it, and `BundleWeightMixin` answers a stated weight; a weight of nothing is answered as 65, more
+  than any bag holds, which keeps the item out without a division by nothing. `StorageGameTests`
+  clicks a cursor stack onto a fresh pouch and counts what stayed on the cursor. `tp:wand` names a
+  level sound event for each moment of `minecraft:swing_sounds`, and the resource pack's
+  `individual_event_sounds` gives each a definition of its own. The server plays a hit and a
+  critical hit in place of Java's own (`PlayerSwingSoundMixin`); a swing at nothing is known only
+  to the client, so `AttackMissMixin` sends the `swing_missed` payload from `startAttack`'s miss
+  branch and the server plays the miss for everyone near. `SwingSoundClientGameTest` hears all
+  three. An `individual_event_sounds` entry no item names is reported, since in Bedrock it would
+  change that moment for every player.
+
   A third entity, `tp:wisp`, states the numbers whose unit differs between the two editions: a health
   `value` below its `max`, a goal priority that is neither the first nor the last of its goals, an
   anger duration in seconds with an event at the end of it, a teleport cube in blocks beside a

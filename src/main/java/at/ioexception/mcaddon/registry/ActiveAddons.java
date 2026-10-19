@@ -54,6 +54,7 @@ public final class ActiveAddons {
         active = set;
         java.util.Set<net.minecraft.world.item.Item> items = AddonRegistry.ensureRegistered(set);
         AddonSounds.readMusic(set.converted());
+        AddonSounds.readEvents(set.converted(), AddonItems.swingEvents());
         AddonFogs.register(set.converted());
         AddonCameras.register(set.packs());
         Dialogues.read(set);

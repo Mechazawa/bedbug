@@ -38,6 +38,7 @@ public final class Channels {
     private static final Identifier INPUT = McAddon.id("input_permissions");
     private static final Identifier SEAT_TURN = McAddon.id("seat_turn");
     private static final Identifier INSTRUCTION = McAddon.id("instruction");
+    private static final Identifier SWING_MISSED = McAddon.id("swing_missed");
 
     /**
      * The longest form description or form answer in characters.
@@ -112,6 +113,19 @@ public final class Channels {
             ByteBufCodecs.VAR_INT, FormResponse::formId,
             ByteBufCodecs.stringUtf8(LONG_TEXT), FormResponse::answer,
             FormResponse::new);
+
+        @Override
+        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /** A swing of the main hand that met nothing, which only the client that swung can tell. */
+    private record SwingMissed() implements CustomPacketPayload {
+        private static final SwingMissed INSTANCE = new SwingMissed();
+        private static final CustomPacketPayload.Type<SwingMissed> TYPE =
+            new CustomPacketPayload.Type<>(SWING_MISSED);
+        private static final StreamCodec<FriendlyByteBuf, SwingMissed> CODEC = StreamCodec.unit(INSTANCE);
 
         @Override
         public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
@@ -530,7 +544,27 @@ public final class Channels {
         PayloadTypeRegistry.clientboundPlay().register(SeatTurn.TYPE, SeatTurn.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Instruction.TYPE, Instruction.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(FormResponse.TYPE, FormResponse.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(SwingMissed.TYPE, SwingMissed.CODEC);
         //?}
+    }
+
+    public static void sendSwingMissed() {
+        //? if >=1.21 {
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(SwingMissed.INSTANCE);
+        //?} else {
+        /*net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(SWING_MISSED,
+            new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer()));
+        *///?}
+    }
+
+    public static void receiveSwingMissed(java.util.function.Consumer<ServerPlayer> handler) {
+        //? if >=1.21 {
+        ServerPlayNetworking.registerGlobalReceiver(SwingMissed.TYPE,
+            (payload, context) -> context.server().execute(() -> handler.accept(context.player())));
+        //?} else {
+        /*ServerPlayNetworking.registerGlobalReceiver(SWING_MISSED,
+            (server, player, network, buffer, sender) -> server.execute(() -> handler.accept(player)));
+        *///?}
     }
 
     public static void sendForm(ServerPlayer player, int formId, String description) {

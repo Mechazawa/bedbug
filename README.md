@@ -221,7 +221,12 @@ Against a server without this mod a client plays with its own add-ons.
   ingredients. Food takes as long to eat as the pack says, which before 1.21.2 is one of Java's two
   eating times, the quick one for a pack asking for 0.8 seconds or less. A dyeable
   item takes the colour the pack painted it and the one a player dyes it. A bow draws and fires
-  whatever the pack loads it with. A bag holds other items. A drop the pack asks to keep lies there.
+  whatever the pack loads it with. A bag holds other items, as much as its
+  `minecraft:storage_weight_limit` allows, and an item weighs in it what its
+  `minecraft:storage_weight_modifier` says, a weight of nothing keeping it out of every bag. An item's
+  `minecraft:swing_sounds` plays, for everyone near, the sound the resource pack's
+  `individual_event_sounds` gives each level sound event it names, in place of Java's own for a swing
+  that meets nothing or does no damage, a hit and a critical hit. A drop the pack asks to keep lies there.
   An item the pack lets into the off hand goes there and one it does not is refused, an item that
   clips liquids aims at water and lava, and one carrying a durability sensor shows the particle and
   plays the sound its threshold names as it wears down.
@@ -609,7 +614,7 @@ of them compare what they read against the names this mod acts on:
 | Molang queries | 100% |
 | Molang maths | 100% |
 | Block components | 100% |
-| Item components | 90% |
+| Item components | 96% |
 | Command names | 84% |
 | Command keywords | 75% |
 | Game rules | 81% |
@@ -709,16 +714,6 @@ one entry, line or recipe that names it.
 different thing: it says whether two stacks of one id but different numbers may merge, and in Java
 two stacks of one id are the same item, so both answers to it describe what already happens.
 
-**What a bag may hold.** `minecraft:storage_weight_limit` caps what a bag carries at up to 64 and
-`minecraft:storage_weight_modifier` prices one item inside one at 4 by default. Java counts the same
-two numbers and keeps both inside `BundleContents`: `BundleContents.Mutable.getMaxAmountToAdd`
-returns `(Fraction.ONE - weight) / perItem`, and an item's weight is the private static
-`BundleContents.getWeight`, one over its stack size. `Mutable` holds the items, their total and the
-selected index, and no reference to the stack carrying them, so a cap of a pack's own cannot be
-handed to the arithmetic; it needs the whole insertion path replaced, which is a mixin on both of
-`BundleItem`'s `override*` methods and on `getWeight`. 1.20.1 has no `BundleContents` at all. A bag
-from a pack is a Java bundle of the ordinary size, and both components are counted.
-
 **The fields of an entity's components with no Java place.** `tools/census/fields.py` keeps a
 written reason beside each one. The main ones: a player cannot open an entity's inventory, because
 Java builds that screen for its own horses, minecarts and hoppers by class; `suffocate_time` is
@@ -731,20 +726,13 @@ fast an entity resends itself over the network is Java's own business. Outside a
 `has_damage` asking whether a blow is `fatal` is reported, because only the sensor is told how hard
 the blow is; inside one it answers whether the damage, before armour, is at least the health left.
 
-**A camera and a touch button.** `minecraft:camera` times the black bars, the shutter and the
-photograph sliding away, which is a full-screen animation the Bedrock client plays while a player
-takes a picture in a world. Java has neither the picture nor the screen. `minecraft:interact_button`
-writes the word on the button a touchscreen shows for using what is held, and Java has no touch
-controls to put one on.
-
-**The sounds a swing makes.** `minecraft:swing_sounds` states `attack_miss`, `attack_hit` and
-`attack_critical_hit`, and Java plays exactly those three: `SoundEvents.PLAYER_ATTACK_NODAMAGE`,
-`PLAYER_ATTACK_STRONG` and `PLAYER_ATTACK_CRIT`, from the method `Player.attack` hands its visual
-effects to. What each field takes is a member of Bedrock's own level sound event list, 570 names the
-engine resolves through a catalogue of its own, and only some of those are spelled the same as a
-Java sound event; the rest would need the name mapping this mod already keeps for the 70 ambient and
-music names a biome may write, widened to a list four times longer. The three sounds have a Java
-home, the naming does not, and the component is counted.
+**A camera and a touch button.** `minecraft:camera` is Minecraft Education's camera. Mojang
+publishes no schema and no documentation for it, only the five durations its own camera item states:
+black bars and the share of the screen they cover, a shutter, the picture and the picture sliding
+away. What each phase draws, which way the picture slides and where it ends up are written down
+nowhere, and the picture goes into the Education Edition portfolio. `minecraft:interact_button`
+writes the word on the interact button Bedrock shows under touch controls alone, and no Java client
+has touch input to show such a button for.
 
 **What prices a trade, read out of a loot table.** `enchant_book_for_trading` states four costs
 beside the enchantments it picks between: a base, a base spread, and both again per level. In a trade
