@@ -72,6 +72,10 @@
   `hide_armor` hides armour slots and keeps hand items.
 - A root bone with `binding` hangs on the named bone of the wearer, so a shield stays in the hand.
   `context.item_slot` is the slot, as Mojang's `query.item_slot_to_bone_name` bindings expect.
+  On a player or a vanilla mob the bone is the Java model part of the same name, and
+  `rightItem` and `leftItem` are on the arms. A hat follows the head.
+- Java does not draw an item that an attachable draws: no item on the head, no armour piece and
+  no item in the hand.
 - An item with no attachable is drawn at a `rightItem` or `leftItem` bone, scaled by
   `held_item_scale`, full bright under `held_item_ignores_lighting`, and hidden under
   `hide_held_items`. A model with neither bone draws no item.
@@ -155,8 +159,8 @@ From 26, a resource pack's colour grading is drawn over the world, before the HU
 - `bone_orientation_matrix` and `combine_entities` return a matrix and an array. Both are reported.
   A query with several numbers works one member at a time (`q.bone_aabb('leg1a').max.y`). Storing
   the whole value in a variable is reported.
-- A `binding` or `parent_setup` on a player or a vanilla mob is reported. Java models have parts with
-  different names.
+- A `parent_setup` on a player or a vanilla mob is reported. A `binding` to a bone the Java model
+  has no part for is reported.
 - `filter_lighting` in a render controller is ignored. Mojang does not document what it does.
 - `MULTI_COLOR_TINT` and `COLOR_SECOND_TEXTURE` materials are reported.
 - `ui/` files that change Bedrock's own screens (inventory, settings, chat, pause menu) are reported.

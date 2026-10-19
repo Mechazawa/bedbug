@@ -84,7 +84,8 @@ public final class AttachableClientGameTest implements FabricClientGameTest {
             held(context, world, sprite, warden);
             prism(context, world, prism);
             onAPlayer(context, world);
-            onAMob(context, world);        }
+            onAMob(context, world);
+        }
     }
 
     /**

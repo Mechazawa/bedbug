@@ -610,9 +610,11 @@ These are the checks it runs, and what each one catches:
 
   The sprite's geometry also carries the two bones a Bedrock model says where its hands and its head
   are with, `rightItem` and `helmet`, and its client definition asks for an item in that hand at
-  twice the size and lit by nothing around it. Beside it is the pack's one attachable, whose root
+  twice the size and lit by nothing around it. Beside it is the visor's attachable, whose root
   bone binds with `q.item_slot_to_bone_name(c.item_slot)`, which is the spelling every binding Mojang
-  publishes uses and the one that needs `context.item_slot` answered. The warden shares the sprite's
+  publishes uses and the one that needs `context.item_slot` answered. `tp:topper` (a hat pivoted at
+  28 pixels and modelled on top of a humanoid head) and `tp:baton` (a cube at its pivot) bind the
+  same way, and `AttachableClientGameTest` puts them on the player and a husk. The warden shares the sprite's
   geometry and declares neither `enable_attachables` nor a held item scale, so a picture of the two
   side by side is the same model with and without each. The `held` scene is where they are looked at.
 
@@ -1750,10 +1752,18 @@ decide what it acts on and a reported field is still a dropped one.
   `display`, Bedrock's `shelf` becoming Java's `on_shelf` from 26. The `embedded` context, the two
   pivots and `fit_to_frame` are reported in `BlockGeometry.display`, because Java has no context for
   an embedded visual, turns and scales a model about its middle, and never fits an item to its frame.
-- **`parent_setup` and `binding`** are reported only for the wearer they cannot reach. An attachable
-  writes the first into whoever is carrying it and hangs itself off the bone the second names, which
-  both work for a pack's own entity and have nowhere to land on one Java draws with a model of its
-  own, since such a model has parts rather than bones with no two naming theirs alike.
+- **`parent_setup`** is reported for a wearer Java draws with a model of its own, which has no
+  variables to write into. **`binding`** on such a wearer finds the part `JavaModelParts` answers
+  to the bone, with `rightItem` and `leftItem` seven pixels down each arm as Mojang's humanoid
+  geometry puts them, and is reported only for a bone with no part.
+
+**A bound model is drawn in the bone's own frame, its pivots left where the pack wrote them.**
+Bedrock makes the bound bone's pivot the model's origin less 24 pixels (Mojang's spyglass is
+moved to 27 pixels up to scope at the eye, and wiki.bedrock.dev's attachable guide counters the
+same 24), and Java's model origin is already 24 pixels up. `AttachableLayer` is added as
+`LivingEntityRenderer`'s constructor returns, before any subclass adds its layers, so it runs
+first and clears the head item, armour and hand items of each slot it draws from the render state
+the later layers read.
 
 Seven fields are read outside the renderer itself, which is where to look for them:
 
