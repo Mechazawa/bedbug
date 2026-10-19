@@ -12,10 +12,6 @@
       "minecraft:foil": true,
       "minecraft:stacked_by_data": true,
       "minecraft:interact_button": "action.tp.shard",
-      "minecraft:swing_sounds": {
-        "attack": "attack",
-        "attack_strong": "attack.strong"
-      },
       "minecraft:dyeable": {
         "default_color": "#4C8FD1"
       },

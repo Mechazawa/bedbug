@@ -7,6 +7,9 @@
     "components": {
       "minecraft:icon": "berry",
       "minecraft:max_stack_size": 16,
+      "minecraft:storage_weight_modifier": {
+        "weight_in_storage_item": 0
+      },
       "minecraft:food": {
         "nutrition": 4,
         "saturation_modifier": 0.5

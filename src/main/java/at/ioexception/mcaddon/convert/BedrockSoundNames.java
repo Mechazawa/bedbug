@@ -59,7 +59,32 @@ public final class BedrockSoundNames {
         Map.entry("music.overworld.mesa", "music.overworld.badlands"),
         Map.entry("music.overworld.swamp_music", "music.overworld.swamp"));
 
+    /**
+     * The level sound events a swing names, against the Java sound Bedrock's own entry for each
+     * plays. Bedrock's entry for each metal spear names the one spear sound, which is why only the
+     * plain spear and the wooden one, which has sounds of its own, are listed.
+     */
+    private static final Map<String, String> EVENTS = Map.ofEntries(
+        Map.entry("attack.critical", "entity.player.attack.crit"),
+        Map.entry("attack.nodamage", "entity.player.attack.nodamage"),
+        Map.entry("attack.strong", "entity.player.attack.strong"),
+        Map.entry("item.spear.attack_hit", "item.spear.hit"),
+        Map.entry("item.spear.attack_miss", "item.spear.attack"),
+        Map.entry("item.wooden_spear.attack_hit", "item.spear_wood.hit"),
+        Map.entry("item.wooden_spear.attack_miss", "item.spear_wood.attack"),
+        Map.entry("item.wooden_spear.use", "item.spear_wood.use"));
+
     private BedrockSoundNames() {
+    }
+
+    /**
+     * The Java id for what one of Bedrock's level sound events plays where no pack gives it a sound,
+     * or null where this version has nothing for it.
+     */
+    public static String javaForEvent(String event) {
+        String plain = event.replaceFirst("^item\\.(copper|diamond|golden|iron|netherite|stone)_spear\\.",
+            "item.spear.");
+        return java(EVENTS.getOrDefault(plain, plain));
     }
 
     /**

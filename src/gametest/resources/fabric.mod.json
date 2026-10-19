@@ -12,6 +12,7 @@
       "at.ioexception.mcaddon.clientgametest.JsonUiClientGameTest",
       "at.ioexception.mcaddon.clientgametest.GroupGoalClientGameTest",
       "at.ioexception.mcaddon.clientgametest.GoalSoundClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.SwingSoundClientGameTest",
       "at.ioexception.mcaddon.clientgametest.JavaModelPoseClientGameTest",
       "at.ioexception.mcaddon.clientgametest.ItemUseClientGameTest",
       "at.ioexception.mcaddon.clientgametest.BlockClientGameTest",

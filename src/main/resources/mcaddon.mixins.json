@@ -54,7 +54,11 @@
     "PlayerMovementExhaustionMixin",
     "LungeExhaustionMixin",
     "MountPermissionMixin",
-    "DismountPermissionMixin"
+    "DismountPermissionMixin",
+    "PlayerSwingSoundMixin",
+    "BundleWeightMixin",
+    "BundleCapacityMixin",
+    "BundleItemMixin"
   ],
   "injectors": {
     "defaultRequire": 1
@@ -76,6 +80,7 @@
     "RecipeToastMixin",
     "AdventureTooltipMixin",
     "OptionsMixin",
-    "VideoSettingsScreenMixin"
+    "VideoSettingsScreenMixin",
+    "AttackMissMixin"
   ]
 }

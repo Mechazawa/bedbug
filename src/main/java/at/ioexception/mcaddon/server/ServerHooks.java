@@ -3,7 +3,9 @@ package at.ioexception.mcaddon.server;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.behaviour.DamageCause;
 import at.ioexception.mcaddon.bedrock.behaviour.PlayerDefinition;
+import at.ioexception.mcaddon.bedrock.behaviour.SwingSounds;
 import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.script.CustomCommands;
 import at.ioexception.mcaddon.script.ScriptHost;
@@ -128,6 +130,10 @@ public final class ServerHooks {
             } else if (scripts != null) {
                 scripts.formResponse(player, formId, answer);
             }
+        });
+        Channels.receiveSwingMissed(player -> {
+            SwingSounds swings = AddonItems.swingSoundsOf(player.getMainHandItem().getItem());
+            if (swings != null) swings.play(player, SwingSounds.Moment.MISS);
         });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             startState(handler.player);
