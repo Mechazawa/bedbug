@@ -365,7 +365,9 @@ These are the checks it runs, and what each one catches:
   and a function using the commands and selector arguments that need translating.
 
   The hands-on client tests use a few things of their own. `tp:berry` is food eaten in 0.8 seconds,
-  half Java's default, and `tp:pebble` throws `tp:spark`. `tp:totem` is a block with a
+  half Java's default, and `tp:pebble` throws `tp:spark`. `tp:berry` also composts at a chance of
+  40, which `SurfaceGameTests` reads back, and `tp:wand` burns for five seconds, which
+  `PackGameTests` lights a furnace with. `tp:totem` is a block with a
   `minecraft:placement_direction` trait turned by a `y_rotation_offset`, a use counter driven by
   `minecraft:on_interact`, a script component (`tp:tapped`, registered by the pack's script) that
   tags whoever uses it, half-high boxes a permutation makes whole on the third use, and a loot
@@ -2182,7 +2184,10 @@ through it too.
 **What answers is the active set.** `registry.ActiveAddons` holds the installed set and the active
 one, each a `resource.AddonSet` (the packs, their conversions and their function names). The active
 set is what the pack repository is offered, what the creative tabs list, and what music, fogs,
-camera presets, dialogue scenes and, from 1.21, brewing are read from. An add-on registered and not
+camera presets, dialogue scenes and, from 1.21, brewing are read from. From 26.3 brewing, an item's
+burn time and its composting chance are files in the converted data pack (`minecraft:brewing`
+recipes and `context_int_provider` entries the item's components name), so they follow the active
+set by the pack being offered and change on the reload an activation runs. An add-on registered and not
 active is dormant: its entries stay registered with their last definitions and nothing offers it.
 Spawn rules, feature rules and the nether and end biome lists are registered once for the installed
 set, because they apply as a world loads and a world loads only with the installed set active.
