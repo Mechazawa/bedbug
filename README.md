@@ -893,7 +893,9 @@ rest of what it asked for is done.
 **The paper doll** is drawn the way Bedrock draws it: the player, small and turned a little, in
 the top left corner while they sneak, swim, fly, glide or ride and for 15 ticks after, with the
 coordinates and the day count moved below it. It shows with or without an add-on installed, and
-`/hud` hides it.
+`/hud` hides it. A player who does not want it turns off **Paper Doll** under Options, Video
+Settings. It is on by default and saved in `options.txt` as
+`mcaddon.paperDoll`.
 
 **The fog a pack describes for water, lava and powder snow, and its volumetric block.** A Bedrock fog
 file says what the world looks like through each medium the camera can be in, and adds a second

@@ -3,7 +3,9 @@ package at.ioexception.mcaddon.client.render;
 import at.ioexception.mcaddon.bedrock.hud.HudElement;
 import at.ioexception.mcaddon.platform.Platform;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.OptionInstance;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.network.chat.Component;
 
 /**
  * Bedrock's paper doll: the player drawn small in the top left corner while they sneak, swim, fly,
@@ -11,7 +13,8 @@ import net.minecraft.client.player.LocalPlayer;
  *
  * Bedrock's `hud_screen.json` anchors it 15 pixels in from that corner and moves the text written
  * there {@link #PADDING} pixels down while it is shown. `/hud` and `ScreenDisplay.setHudVisibility`
- * hide it as `paperdoll`.
+ * hide it as `paperdoll`, and a player turns it off for good with {@link #OPTION}, listed in the video
+ * settings and kept in `options.txt`.
  */
 public final class PaperDoll {
     public static final int PADDING = 50;
@@ -24,6 +27,9 @@ public final class PaperDoll {
 
     /** Looking at a point this far right of its middle turns the doll's body 16 degrees and its head 31. */
     private static final float LOOK_RIGHT = 40;
+
+    public static final OptionInstance<Boolean> OPTION = OptionInstance.createBoolean("options.mcaddon.paperDoll",
+        OptionInstance.cachedConstantTooltip(Component.translatable("options.mcaddon.paperDoll.tooltip")), true);
 
     private static int remaining;
 
@@ -38,7 +44,7 @@ public final class PaperDoll {
     }
 
     public static boolean shown() {
-        return remaining > 0 && !PlayerHud.hides(HudElement.PAPERDOLL);
+        return remaining > 0 && OPTION.get() && !PlayerHud.hides(HudElement.PAPERDOLL);
     }
 
     public static void draw(Platform.Painter painter) {
