@@ -30,7 +30,7 @@ public final class PackSelectionClientGameTest implements FabricClientGameTest {
     }
 
     private static void resourcePacks(ClientGameTestContext context) {
-        context.runOnClient(client -> Platform.setScreen(new OptionsScreen(null, client.options, false)));
+        context.runOnClient(client -> Platform.setScreen(options(client)));
         context.waitForScreen(OptionsScreen.class);
         context.clickScreenButton("options.resourcepack");
         context.waitForScreen(PackSelectionScreen.class);
@@ -42,6 +42,14 @@ public final class PackSelectionClientGameTest implements FabricClientGameTest {
         Assert.that(context.computeOnClient(client -> client.getResourcePackRepository().getSelectedIds())
             .contains(PACK), "Pressing Done in Resource Packs deselected the add-on's pack.");
         context.runOnClient(client -> Platform.setScreen(null));
+    }
+
+    private static OptionsScreen options(Minecraft client) {
+        //? if >=26.3 {
+        return new OptionsScreen(null, client.options);
+        //?} else {
+        /*return new OptionsScreen(null, client.options, false);
+        *///?}
     }
 
     private static void dataPacks(ClientGameTestContext context) {
