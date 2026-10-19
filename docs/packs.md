@@ -34,6 +34,8 @@ then the resource pack's, if it says something else.
 
 A pack's settings open from **Settings** on the Add-Ons screen.
 
+Add-on packs are not listed in Java's Resource Packs and Data Packs screens. They are managed in the Add-Ons screen.
+
 - Labels, toggles, sliders and dropdowns appear in manifest order, translated through the pack's
   `texts/`.
 - A slider stops on its steps. A dropdown moves to its next option on each press.
