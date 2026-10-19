@@ -46,40 +46,46 @@ public final class PackSelectionClientGameTest implements FabricClientGameTest {
 
     private static OptionsScreen options(Minecraft client) {
         //? if >=26.3 {
-        return new OptionsScreen(null, client.options);
-        //?} else {
-        /*return new OptionsScreen(null, client.options, false);
-        *///?}
+        /*return new OptionsScreen(null, client.options);
+        *///?} else {
+        return new OptionsScreen(null, client.options, false);
+        //?}
     }
 
     private static void dataPacks(ClientGameTestContext context) {
         context.runOnClient(client -> CreateWorldScreen.openFresh(client, () -> { }));
         context.waitForScreen(CreateWorldScreen.class);
-        context.runOnClient(client -> ((TabNavigationBar) field(CreateWorldScreen.class, "tabNavigationBar", Platform.currentScreen()))
-            .selectTab(MORE_TAB, true));
+        context.runOnClient(client -> ((TabNavigationBar)
+            field(CreateWorldScreen.class, "tabNavigationBar", Platform.currentScreen())).selectTab(MORE_TAB, true));
         context.waitTick();
         context.clickScreenButton("selectWorld.dataPacks");
         context.waitForScreen(PackSelectionScreen.class);
 
         PackRepository repository = context.computeOnClient(client -> {
-            PackSelectionModel model = (PackSelectionModel) field(PackSelectionScreen.class, "model", Platform.currentScreen());
+            PackSelectionModel model = model();
             return (PackRepository) field(PackSelectionModel.class, "repository", model);
         });
-        Assert.that(repository.getSelectedIds().contains(PACK), "The data pack repository offers no pack for the test add-on.");
+        Assert.that(repository.getSelectedIds().contains(PACK),
+            "The data pack repository offers no pack for the test add-on.");
         assertNothingListed(context, "Data Packs");
         context.clickScreenButton("gui.done");
         context.waitForScreen(CreateWorldScreen.class);
-        Assert.that(repository.getSelectedIds().contains(PACK), "Pressing Done in Data Packs deselected the add-on's pack.");
+        Assert.that(repository.getSelectedIds().contains(PACK),
+            "Pressing Done in Data Packs deselected the add-on's pack.");
         context.runOnClient(client -> Platform.setScreen(null));
     }
 
     private static void assertNothingListed(ClientGameTestContext context, String screen) {
         long listed = context.computeOnClient(client -> {
-            PackSelectionModel model = (PackSelectionModel) field(PackSelectionScreen.class, "model", Platform.currentScreen());
+            PackSelectionModel model = model();
             return Stream.concat(model.getSelected(), model.getUnselected())
                 .filter(entry -> entry.getId().startsWith(McAddon.MOD_ID + "/")).count();
         });
         Assert.that(listed == 0, "The " + screen + " screen lists " + listed + " add-on packs.");
+    }
+
+    private static PackSelectionModel model() {
+        return (PackSelectionModel) field(PackSelectionScreen.class, "model", Platform.currentScreen());
     }
 
     private static Object field(Class<?> owner, String name, Object instance) {
