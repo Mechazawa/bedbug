@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.entity;
 
+import at.ioexception.mcaddon.platform.Platform;
 import com.google.gson.JsonObject;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
@@ -152,6 +153,6 @@ public final class RangedGoal extends Goal {
 
     private void shoot(float pull) {
         mob.performRangedAttack(target, Math.max(0.1f, Math.min(1f, pull)));
-        if (swing) mob.swing(InteractionHand.MAIN_HAND);
+        if (swing) Platform.swing(mob, InteractionHand.MAIN_HAND, true);
     }
 }

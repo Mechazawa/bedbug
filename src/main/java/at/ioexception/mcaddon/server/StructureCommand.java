@@ -138,7 +138,7 @@ public final class StructureCommand {
         Vec3i size = new Vec3i(Math.abs(from.getX() - to.getX()) + 1,
             Math.abs(from.getY() - to.getY()) + 1, Math.abs(from.getZ() - to.getZ()) + 1);
 
-        StructureTemplateManager manager = command.getSource().getServer().getStructureManager();
+        StructureTemplateManager manager = Platform.structureTemplates(command.getSource().getServer());
         StructureTemplate template = manager.getOrCreate(id);
         Platform.fillFromWorld(template, command.getSource().getLevel(), corner, size,
             flag(command, "includeEntities", true));
@@ -156,7 +156,7 @@ public final class StructureCommand {
     private static int load(CommandContext<CommandSourceStack> command) throws CommandSyntaxException {
         Identifier id = id(command);
         Optional<StructureTemplate> template = id == null ? Optional.empty()
-            : command.getSource().getServer().getStructureManager().get(id);
+            : Platform.structureTemplates(command.getSource().getServer()).get(id);
         if (template.isEmpty()) return failed(command, "There is no structure called " + id + ".");
 
         Rotation rotation = picked(command, ROTATIONS, Rotation.NONE);
@@ -183,7 +183,7 @@ public final class StructureCommand {
         Identifier id = id(command);
         if (id == null) return failed(command, "That is not a usable structure name.");
 
-        StructureTemplateManager manager = command.getSource().getServer().getStructureManager();
+        StructureTemplateManager manager = Platform.structureTemplates(command.getSource().getServer());
         if (manager.get(id).isEmpty()) return failed(command, "There is no structure called " + id + ".");
         manager.remove(id);
         try {

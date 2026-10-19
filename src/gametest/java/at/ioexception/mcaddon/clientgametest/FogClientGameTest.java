@@ -62,23 +62,30 @@ public final class FogClientGameTest implements FabricClientGameTest {
         world.getServer().runCommand("time set noon");
         context.waitTicks(2);
         BlockPos standing = context.computeOnClient(client -> client.player.blockPosition());
-        int before = context.computeOnClient(client ->
-            client.level.environmentAttributes().getValue(EnvironmentAttributes.FOG_COLOR, standing));
+        int before = context.computeOnClient(client -> fogColour(client, standing));
         Assert.that((before & 0xFFFFFF) != GLADE, "the world's own biome already has tp:glade's fog colour.");
 
         // The flat world's floor is four blocks above the bottom of the world, so the fill starts at the feet.
         world.getServer().runCommand("execute as @p at @s run fillbiome ~-16 ~ ~-16 ~16 ~8 ~16 tp:glade");
-        Worlds.waitForClient(context, client -> (client.level.environmentAttributes()
-                .getValue(EnvironmentAttributes.FOG_COLOR, standing) & 0xFFFFFF) == GLADE, PATIENCE,
+        Worlds.waitForClient(context, client -> (fogColour(client, standing) & 0xFFFFFF) == GLADE, PATIENCE,
             () -> "the player stands in " + Minecraft.getInstance().level.getBiome(standing).getRegisteredName()
                 + ", whose client biome names tp:fog_glade, and the fog colour there is "
-                + Integer.toHexString(Minecraft.getInstance().level.environmentAttributes()
-                .getValue(EnvironmentAttributes.FOG_COLOR, standing)) + " where it was "
+                + Integer.toHexString(fogColour(Minecraft.getInstance(), standing)) + " where it was "
                 + Integer.toHexString(before) + ".");
         float waterEnd = context.computeOnClient(client ->
             client.level.environmentAttributes().getValue(EnvironmentAttributes.WATER_FOG_END_DISTANCE, standing));
         Assert.near(waterEnd, GLADE_WATER_END, DISTANCE_TOLERANCE,
             "where tp:glade's water fog ends, the eighteen blocks tp:fog_glade states for water");
+    }
+
+    /** The fog colour the biome states at a place, which 26.3 keeps as a vector of three channels. */
+    private static int fogColour(Minecraft client, BlockPos at) {
+        //? if >=26.3 {
+        /*return net.minecraft.util.ARGB.colorFromVector3f(
+            client.level.environmentAttributes().getValue(EnvironmentAttributes.FOG_COLOR, at));
+        *///?} else {
+        return client.level.environmentAttributes().getValue(EnvironmentAttributes.FOG_COLOR, at);
+        //?}
     }
 
     private static void waitForColour(ClientGameTestContext context, int colour, String failure) {

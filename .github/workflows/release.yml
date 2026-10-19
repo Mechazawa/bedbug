@@ -36,8 +36,16 @@ jobs:
       - name: Build and test
         run: >
           ./gradlew --no-daemon $VERSION_ARG
-          :26.1.2:assemble :26.2:assemble
+          :26.1.2:assemble :26.2:assemble :26.3:assemble
           :26.2:checkstyleMain :26.2:test :26.2:runGameTest
+
+      # The tests run for the active Stonecutter version only, so 26.3's run after switching to it.
+      # The switch rewrites the sources in place, which is why it comes after every other step that
+      # reads them.
+      - name: Test 26.3
+        run: |
+          ./gradlew --no-daemon "Set active project to 26.3"
+          ./gradlew --no-daemon $VERSION_ARG :26.3:test :26.3:runGameTest
 
       - uses: actions/upload-artifact@v4
         with:

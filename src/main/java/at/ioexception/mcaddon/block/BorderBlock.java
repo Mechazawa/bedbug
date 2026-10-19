@@ -17,7 +17,6 @@ import net.minecraft.world.level.block.WallBlock;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.MapColor;
-import net.minecraft.world.level.material.PushReaction;
 
 import java.util.List;
 
@@ -43,7 +42,7 @@ public final class BorderBlock extends WallBlock {
             .forceSolidOn()
             .strength(-1.0F, 3600000.0F)
             .noLootTable()
-            .pushReaction(PushReaction.BLOCK)
+            .pushReaction(Platform.IMMOVABLE)
             .sound(SoundType.STONE);
         Block block = Registry.register(BuiltInRegistries.BLOCK, ID, new BorderBlock(Platform.named(properties, ID)));
         Item item = Registry.register(BuiltInRegistries.ITEM, ID,
