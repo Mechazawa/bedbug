@@ -84,6 +84,9 @@ public final class McAddonClient implements ClientModInitializer {
         Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("control_pointer"), PlayerControl::drawPointer);
         Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("pack_hud"),
             at.ioexception.mcaddon.client.render.PackHudText::draw);
+        // A chunk the server sends again is read into the chunk the client already holds.
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents.CHUNK_LOAD
+            .register((level, chunk) -> at.ioexception.mcaddon.block.BorderColumns.forget(chunk));
 
         // Before the client's own tick, whose pick the target is laid over.
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.START_CLIENT_TICK

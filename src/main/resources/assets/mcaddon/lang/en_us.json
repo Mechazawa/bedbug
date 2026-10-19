@@ -1,5 +1,7 @@
 {
   "item.mcaddon.entity_bucket": "Bucket of %s",
+  "block.mcaddon.border_block": "Border",
+  "item.mcaddon.border_block": "Border",
   "options.mcaddon.paperDoll": "Paper Doll",
   "options.mcaddon.paperDoll.tooltip": "Draws your player small in the top left corner while you sneak, swim, fly, glide or ride, the way Bedrock Edition does."
 }

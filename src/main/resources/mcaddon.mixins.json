@@ -58,7 +58,9 @@
     "PlayerSwingSoundMixin",
     "BundleWeightMixin",
     "BundleCapacityMixin",
-    "BundleItemMixin"
+    "BundleItemMixin",
+    "BorderCollisionMixin",
+    "BorderChunkMixin"
   ],
   "injectors": {
     "defaultRequire": 1

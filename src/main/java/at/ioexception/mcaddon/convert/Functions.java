@@ -189,16 +189,11 @@ public final class Functions {
      * world and acts on itself, read by the `gamerule` the Bedrock tree holds beside Java's.
      */
     private static final Set<String> RULES_HELD_HERE = Set.of(
-        "recipesUnlock", "respawnBlocksExplode", "showCoordinates", "showDaysPlayed", "showRecipeMessages",
-        "showTags");
+        "recipesUnlock", "respawnBlocksExplode", "showBorderEffect", "showCoordinates", "showDaysPlayed",
+        "showRecipeMessages", "showTags");
 
-    /**
-     * Bedrock rules Java has nothing to answer with, each reported when a function sets it.
-     *
-     * `showBorderEffect` switches the particle wall Bedrock's border block draws, and Java has no
-     * border block for it to switch.
-     */
-    private static final Set<String> RULES_BEDROCK_ONLY = Set.of("showBorderEffect");
+    /** Bedrock rules Java has nothing to answer with, each reported when a function sets it. */
+    private static final Set<String> RULES_BEDROCK_ONLY = Set.of();
 
     private static final Map<String, String> GAME_RULES = lowerCased(RULES_JAVA_SHARES,
         RULES_NEWER_JAVA_HAS, RULES_HELD_HERE, RULES_JAVA_FOLDS);

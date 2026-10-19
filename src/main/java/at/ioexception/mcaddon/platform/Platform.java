@@ -801,14 +801,27 @@ public final class Platform {
     public static at.ioexception.mcaddon.block.AddonBlock buildStatefulBlock(
         BlockBehaviour.Properties properties, Identifier id,
         java.util.List<net.minecraft.world.level.block.state.properties.Property<?>> states) {
-        //? if >=1.21.2 {
-        BlockBehaviour.Properties named = properties
-            .setId(ResourceKey.create(net.minecraft.core.registries.Registries.BLOCK, id));
-        //?} else {
-        /*BlockBehaviour.Properties named = properties;
-        *///?}
-        return at.ioexception.mcaddon.block.AddonBlock.build(named, states,
+        return at.ioexception.mcaddon.block.AddonBlock.build(named(properties, id), states,
             at.ioexception.mcaddon.block.AddonBlock::new);
+    }
+
+    /** Properties carrying the registry id a block built from them is registered under. */
+    public static BlockBehaviour.Properties named(BlockBehaviour.Properties properties, Identifier id) {
+        //? if >=1.21.2 {
+        return properties.setId(ResourceKey.create(net.minecraft.core.registries.Registries.BLOCK, id));
+        //?} else {
+        /*return properties;
+        *///?}
+    }
+
+    /** Java's coloured dust, whose colour is a packed integer from 1.21.2 and a vector before. */
+    public static net.minecraft.core.particles.DustParticleOptions dust(int rgb, float scale) {
+        //? if >=1.21.2 {
+        return new net.minecraft.core.particles.DustParticleOptions(rgb, scale);
+        //?} else {
+        /*return new net.minecraft.core.particles.DustParticleOptions(new org.joml.Vector3f(
+            (rgb >> 16 & 0xFF) / 255f, (rgb >> 8 & 0xFF) / 255f, (rgb & 0xFF) / 255f), scale);
+        *///?}
     }
 
     public static Item buildBlockItem(Block block, Item.Properties properties, Identifier id) {

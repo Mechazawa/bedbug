@@ -274,7 +274,7 @@ class FunctionsTest {
 
     @ParameterizedTest
     @CsvSource({
-        "'give @p minecraft:border_block', 'command give, which names an item Java does not have'",
+        "'give @p minecraft:allow', 'command give, which names an item Java does not have'",
         "'setblock ~ ~ ~ element_3', 'command setblock, which names a block Java does not have'",
         "'testforblock ~ ~ ~ furnace 2', 'command testforblock with a block data value'",
         "'execute if block ~ ~ ~ minecraft:allow run say no', "
@@ -325,15 +325,15 @@ class FunctionsTest {
 
     @Test
     void dropsAGameRuleJavaDoesNotHave() throws IOException {
-        assertEquals(List.of(), translate("gamerule showbordereffect true"));
-        assertTrue(problems.contains("game rule showbordereffect, which Java keeps no rule for"),
-            problems.toString());
+        assertEquals(List.of(), translate("gamerule nosuchrule true"));
+        assertTrue(problems.contains("game rule nosuchrule"), problems.toString());
     }
 
     /** A rule Java keeps none of is read by the `gamerule` the Bedrock tree holds, under its own name. */
     @Test
     void writesARuleHeldHereUnderItsBedrockName() throws IOException {
         assertEquals("gamerule showCoordinates true", only("gamerule showcoordinates TRUE"));
+        assertEquals("gamerule showBorderEffect false", only("gamerule showbordereffect false"));
     }
 
     /** Bedrock's words after a jigsaw's or a structure's position reach the commands built here as written. */

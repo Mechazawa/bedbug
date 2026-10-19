@@ -868,6 +868,16 @@ These are the checks it runs, and what each one catches:
   covers the server's two, `recipesunlock` through an advancement's reward and `respawnblocksexplode`
   through a bed used in the nether and a charged anchor used in the overworld.
 
+  Bedrock's border block is `block.BorderBlock`, registered as `mcaddon:border_block` before any
+  pack is read and reached from `minecraft:border_block` through `BedrockBlockNames.BUILT_HERE`.
+  `BorderCollisionMixin` cuts an entity's movement at the head of `Entity.collide`, before Lithium's
+  own redirect inside it, against the columns `BorderColumns` holds per loaded chunk; the
+  `LevelChunk.setBlockState` mixin and the client's chunk load event forget a chunk's columns. A
+  unit test's bootstrapped registry has no such block, so `IdCensus` answers it from the name alone.
+  `BorderGameTests` stops a pig five blocks over the block from two sides; `BorderClientGameTest`
+  walks the player into the column over a block under the floor and reads the dust `BorderDust` adds
+  going up and down, and none once `showbordereffect` is off.
+
   One client game test at a time: the entry point list in `src/gametest/resources/fabric.mod.json`
   is the whole selection, so cutting it down to one class runs that class alone. Put it back after.
 
