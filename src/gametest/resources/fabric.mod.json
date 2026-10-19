@@ -35,6 +35,7 @@
       "at.ioexception.mcaddon.clientgametest.MusicClientGameTest",
       "at.ioexception.mcaddon.clientgametest.CameraFadeClientGameTest",
       "at.ioexception.mcaddon.clientgametest.BedrockRulesClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.BorderClientGameTest",
       "at.ioexception.mcaddon.clientgametest.RenderControllerClientGameTest",
       "at.ioexception.mcaddon.clientgametest.AnimationClientGameTest",
       "at.ioexception.mcaddon.clientgametest.AttachableClientGameTest",
