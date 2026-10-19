@@ -6,6 +6,7 @@ import at.ioexception.mcaddon.platform.Platform;
 import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Vector3f;
 import net.minecraft.client.model.EntityModel;
+import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.renderer.entity.RenderLayerParent;
 import net.minecraft.client.renderer.entity.layers.RenderLayer;
 import net.minecraft.world.entity.LivingEntity;
@@ -17,7 +18,12 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 
 //? if >=1.21.2 {
 import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.entity.state.ArmedEntityRenderState;
+import net.minecraft.client.renderer.entity.state.HumanoidRenderState;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.HumanoidArm;
+import net.minecraft.world.item.ItemStack;
 //?} else {
 /*import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -82,30 +88,84 @@ public class AttachableLayer<S extends LivingEntityRenderState, M extends Entity
     }
 
     /**
-     * Everything the entity has on that an add-on described.
+     * Everything the entity has on that an add-on described, each pass hung off the part of the
+     * wearer's model its binding named.
      *
-     * The wearer is drawn from a Java model wherever this layer runs, except for a pack's own
-     * entity, which carries an animator an attachable can reach and write into.
+     * The wearer is drawn from a Java model wherever this layer runs, so its parts are what a
+     * binding finds, and an attachable has none of the wearer's variables to write into.
      */
-    private static List<Attachables.Drawn> worn(LivingEntity entity, float partialTick) {
+    private static List<Attachables.Drawn> worn(LivingEntity entity, float partialTick, ModelPart root) {
         if (entity == null || !AddonClientAssets.anyAttachables()) return List.of();
 
-        return Attachables.on(entity, Animators.rootOf(entity.getId()), partialTick);
+        List<Attachables.Drawn> drawn = Attachables.on(entity, Animators.rootOf(entity.getId()), partialTick);
+        if (root == null) return drawn;
+
+        JavaModelParts parts = JavaModelParts.of(root);
+        return drawn.stream().map(each -> each.hungFrom(parts)).toList();
     }
 
     //? if >=1.21.2 {
+    /**
+     * Leaves out Java's own drawing of every item an attachable draws in its place, as Bedrock does.
+     *
+     * The head layer's item and skull, the armour and the wings, and the item in each hand are all
+     * read from the render state by the layers after this one. This layer is added as
+     * `LivingEntityRenderer`'s constructor returns, before any renderer extending it adds its own,
+     * so it runs first and the state it clears is the one those layers read.
+     */
+    private static void hideCovered(LivingEntityRenderState state, List<Attachables.Drawn> worn) {
+        worn.stream().map(Attachables.Drawn::slot).distinct().forEach(slot -> {
+            switch (slot) {
+                case HEAD -> {
+                    state.headItem.clear();
+                    state.wornHeadType = null;
+                    state.wornHeadProfile = null;
+                    if (state instanceof HumanoidRenderState humanoid) humanoid.headEquipment = ItemStack.EMPTY;
+                }
+                case CHEST -> {
+                    if (state instanceof HumanoidRenderState humanoid) humanoid.chestEquipment = ItemStack.EMPTY;
+                }
+                case LEGS -> {
+                    if (state instanceof HumanoidRenderState humanoid) humanoid.legsEquipment = ItemStack.EMPTY;
+                }
+                case FEET -> {
+                    if (state instanceof HumanoidRenderState humanoid) humanoid.feetEquipment = ItemStack.EMPTY;
+                }
+                case MAINHAND, OFFHAND -> {
+                    if (state instanceof ArmedEntityRenderState armed) clearHand(armed, slot);
+                }
+                default -> {
+                }
+            }
+        });
+    }
+
+    private static void clearHand(ArmedEntityRenderState state, EquipmentSlot slot) {
+        boolean right = (slot == EquipmentSlot.MAINHAND) == (state.mainArm == HumanoidArm.RIGHT);
+        if (right) {
+            state.rightHandItemState.clear();
+            state.rightHandItemStack = ItemStack.EMPTY;
+        } else {
+            state.leftHandItemState.clear();
+            state.leftHandItemStack = ItemStack.EMPTY;
+        }
+    }
+
     @Override
     public void submit(PoseStack poseStack, SubmitNodeCollector collector, int light, S state,
         float yRot, float xRot) {
         LivingEntity entity = RenderStates.of(state);
         if (entity == null) return;
 
-        List<Attachables.Drawn> worn = worn(entity, 0);
+        List<Attachables.Drawn> worn = worn(entity, 0, getParentModel().root());
         if (worn.isEmpty()) return;
 
+        hideCovered(state, worn);
         boolean pushed = intoModelSpace(poseStack, entity, 0);
         for (Attachables.Drawn each : worn) {
             AddonModels.Pass pass = each.pass();
+            poseStack.pushPose();
+            if (each.anchor() != null) Platform.mulPose(poseStack, each.anchor());
             collector.submitCustomGeometry(poseStack, renderTypeOf(pass),
                 (pose, buffer) -> {
                     PoseStack local = new PoseStack();
@@ -113,6 +173,7 @@ public class AttachableLayer<S extends LivingEntityRenderState, M extends Entity
                     BedrockModelRenderer.render(pass.geometry(), each.animator(), pass.visibility()::hides, pass::draws,
                         pass.shift(), local, buffer, pass.light(light), OverlayTexture.NO_OVERLAY, pass.colour());
                 });
+            poseStack.popPose();
         }
         if (pushed) poseStack.popPose();
     }
@@ -121,15 +182,18 @@ public class AttachableLayer<S extends LivingEntityRenderState, M extends Entity
     public void render(PoseStack poseStack, MultiBufferSource buffers, int light, T entity,
         float limbSwing, float limbSwingAmount, float partialTick,
         float ageInTicks, float netHeadYaw, float headPitch) {
-        List<Attachables.Drawn> worn = worn(entity, partialTick);
+        List<Attachables.Drawn> worn = worn(entity, partialTick, JavaModelPoses.rootOf(getParentModel()));
         if (worn.isEmpty()) return;
 
         boolean pushed = intoModelSpace(poseStack, entity, partialTick);
         for (Attachables.Drawn each : worn) {
             AddonModels.Pass pass = each.pass();
             VertexConsumer buffer = buffers.getBuffer(renderTypeOf(pass));
+            poseStack.pushPose();
+            if (each.anchor() != null) Platform.mulPose(poseStack, each.anchor());
             BedrockModelRenderer.render(pass.geometry(), each.animator(), pass.visibility()::hides, pass::draws,
                 pass.shift(), poseStack, buffer, pass.light(light), OverlayTexture.NO_OVERLAY, pass.colour());
+            poseStack.popPose();
         }
         if (pushed) poseStack.popPose();
     }

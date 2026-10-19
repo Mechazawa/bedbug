@@ -51,23 +51,6 @@ class BoneAnchorTest {
         assertNull(anchorOf("leftitem"));
     }
 
-    /**
-     * A bound model's own pivot lands on the bone it hangs off rather than where the pivot points.
-     *
-     * The pivot stops being a place in the wearer and becomes the point the model's animation turns
-     * it about. Mojang's own trident settles it: the bone pivots at 24 pixels with boxes running
-     * from 27 below that point to 4 above, which is a pole gripped at the pivot rather than one
-     * standing over a mob's head.
-     */
-    @Test
-    void landsABoundModelsOwnPivotOnTheBone() {
-        Vector3f boundPivot = new Vector3f(0, -24f, 0);
-        Matrix4f hang = BedrockModelRenderer.hangFrom(anchorOf("rightitem"), boundPivot);
-
-        assertEquals(new Vector3f(-6f / 16f, 9f / 16f, 1f / 16f),
-            hang.transformPosition(new Vector3f(boundPivot).mul(1f / 16f)));
-    }
-
     private static Matrix4f anchorOf(String bone) {
         BakedGeometry baked = GeometryBaker.bake(
             GeometryParser.readGeometry("geometry.thing", Json.parse(HUMANOID).getAsJsonObject()),

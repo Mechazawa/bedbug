@@ -11,7 +11,6 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import org.joml.Matrix4f;
-import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -26,36 +25,45 @@ import java.util.Set;
  * carries the animator that poses it.
  */
 public final class Attachables {
-    /** A model's own root bone asking to hang off a bone of whoever carries it. */
-    public record Bound(String bone, Vector3f pivot) {
-    }
-
     /**
      * One drawing pass, the animator whose bones it is posed by, and the slot it stands for.
      *
-     * `bound` is the `binding` this pass declared, and `anchor` is where it puts the pass once the
-     * wearer has been found to carry the bone it named.
+     * `bone` is the wearer's bone this pass's `binding` named, and `anchor` is that bone's frame
+     * once the wearer has been found to carry it.
+     *
+     * Bedrock makes the bound bone's pivot the origin of the attachable's model, lowered by 24
+     * pixels, so a model bound to a humanoid's head is drawn where it was modelled on that head:
+     * Mojang's spyglass, moved to 27 pixels up while scoping, sits at the eye. Java's model space
+     * already starts 24 pixels above the feet, so the bone's own frame is that origin as it stands,
+     * and the attachable's own pivots stay where its pack wrote them.
      */
     public record Drawn(AddonModels.Pass pass, EntityAnimator animator, EquipmentSlot slot,
-        Bound bound, Matrix4f anchor) {
+        String bone, Matrix4f anchor) {
 
         Drawn(AddonModels.Pass pass, EntityAnimator animator, EquipmentSlot slot) {
             this(pass, animator, slot, null, null);
         }
 
-        /** The same pass, hung off the bone of the wearer it named, where the wearer has one. */
+        /** The same pass, hung off the bone of a Bedrock wearer it named, where the wearer has one. */
         public Drawn hungFrom(BakedGeometry wearer, EntityAnimator wearerAnimator) {
-            if (bound == null || wearer == null) return this;
+            if (bone == null || wearer == null) return this;
 
-            Matrix4f found = BedrockModelRenderer.anchorOf(wearer, wearerAnimator, bound.bone());
+            return hungAt(BedrockModelRenderer.anchorOf(wearer, wearerAnimator, bone));
+        }
+
+        /** The same pass, hung off the part of a Java model answering to the bone it named. */
+        Drawn hungFrom(JavaModelParts wearer) {
+            if (bone == null) return this;
+
+            return hungAt(wearer.anchorOf(bone));
+        }
+
+        private Drawn hungAt(Matrix4f found) {
             if (found == null) {
-                if (REPORTED.add(bound.bone())) {
-                    AddonEntities.unsupported("geometry binding " + bound.bone());
-                }
+                if (REPORTED.add(bone)) AddonEntities.unsupported("geometry binding " + bone);
                 return this;
             }
-            return new Drawn(pass, animator, slot, bound,
-                BedrockModelRenderer.hangFrom(found, bound.pivot()));
+            return new Drawn(pass, animator, slot, bone, found);
         }
     }
 
@@ -111,12 +119,12 @@ public final class Attachables {
      * with `q.item_slot_to_bone_name(c.item_slot)` and the spyglass moves between the hand and the
      * head by the same call. Every published one sits on the model's single root.
      */
-    private static Bound boundBone(BakedGeometry geometry, EntityAnimator animator) {
+    private static String boundBone(BakedGeometry geometry, EntityAnimator animator) {
         for (BakedBone root : geometry.roots()) {
             if (root.binding() == null) continue;
 
             String bone = root.binding().evaluate(animator.environment()).text();
-            if (bone != null && !bone.isEmpty()) return new Bound(bone, root.pivot());
+            if (bone != null && !bone.isEmpty()) return bone;
         }
         return null;
     }
