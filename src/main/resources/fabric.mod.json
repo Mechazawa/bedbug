@@ -8,6 +8,7 @@
     "Mechazawa"
   ],
   "license": "MIT",
+  "icon": "assets/mcaddon/icon.png",
   "environment": "*",
   "entrypoints": {
     "main": [
