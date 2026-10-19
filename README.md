@@ -399,6 +399,15 @@ Against a server without this mod a client plays with its own add-ons.
   packs; `permission` and `ops` list Java's operators, read `ops.json` again and make a player an
   operator or a member. Like Bedrock's, each asks for more than a function's authority, so an
   operator types it after `/bedrock` and a pack's function cannot run it.
+- Bedrock's packet rate limiter, on a dedicated server whose `server.properties` holds
+  `enable-packet-rate-limiter=true` (off when the line is absent, as on Bedrock). It reads
+  `packetlimitconfig.json` from the server's directory in Bedrock's own format: each limit group's
+  `BucketPacketLimitAlgorithm` gives every connection a bucket per Bedrock packet id, and a
+  `defaultAlgorithm` one per Java packet type once the player is in the world. A packet with no room
+  in its bucket is dropped and logged as a `Packet Limit Violation`. Each Bedrock id is matched to the
+  Java packets carrying the same message, so `9` limits chat and `77` commands; an id no Java client
+  sends, such as a skin upload, is named in the log. `/bedrock reloadpacketlimitconfig` reads the file
+  again for every connected player.
 - `/bedrock music`, which plays a track to everyone as music rather than as a sound somewhere in the
   world: in the music category, with the game's own background music waiting until it is over,
   faded in and out over the seconds the line gives, looped when asked, turned up or down while it
@@ -865,12 +874,11 @@ description with its own scattering coefficients. `/fog` carries the `air` block
 pack pushes a fog for; Java draws its own fog for the other media and has no volumetric fog to give
 the second block to.
 
-**Eleven of Bedrock's commands.** `aimassist` and `controlscheme` change how a Bedrock client turns
+**Ten of Bedrock's commands.** `aimassist` and `controlscheme` change how a Bedrock client turns
 a controller or a touchscreen into aim and movement, and `project` and `editor-allowlist` belong to
 the Bedrock Editor. `connect` and `wsserver` speak to a WebSocket server, `sendshowstoreoffer` to the
 marketplace, `script` to the debugger and profiler of Bedrock's own script engine, and
-`reloadconfig`, `reloadpacketlimitconfig` and `serveridentity` to a Bedrock server's own
-configuration and identity. A function using any of them keeps its other lines and the dropped
+`reloadconfig` and `serveridentity` to a Bedrock server's own configuration and identity. A function using any of them keeps its other lines and the dropped
 command is reported.
 
 **One form of a command the rest of which translates.** The cameras Bedrock draws behind or round an
@@ -895,7 +903,7 @@ words at the end, and `schedule clear` is spelled alike in both.
 `playanimation`, `event`, `scriptevent`, `music`, `toggledownfall`, `structure`, `mobevent`,
 `particle`, `dialogue`, `gametest`, `transfer`, `camera`, `camerashake`, `fog`, `clearspawnpoint`,
 `hud`, `inputpermission`, `ride`, `summon`, `tickingarea`, `packstack`, `setmaxplayers`,
-`permission` and `ops` are registered by this mod in the tree a Bedrock line is read against,
+`permission`, `ops` and `reloadpacketlimitconfig` are registered by this mod in the tree a Bedrock line is read against,
 beside Java's own commands and never in Java's tree, as are Bedrock's own forms of `place`,
 `schedule` and `gamerule`, and a line using one is written out in the form the command built there
 reads. `clearspawnpoint` takes a

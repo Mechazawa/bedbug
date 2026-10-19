@@ -125,7 +125,12 @@ final class Worlds {
      */
     static net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerContext server(
         ClientGameTestContext context) {
-        java.util.Properties properties = new java.util.Properties();
+        return server(context, new java.util.Properties());
+    }
+
+    /** The same, with the `server.properties` settings a test names. */
+    static net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerContext server(
+        ClientGameTestContext context, java.util.Properties properties) {
         try (java.net.ServerSocket probe = new java.net.ServerSocket(0, 0,
             java.net.InetAddress.getByName("127.0.0.1"))) {
             properties.setProperty("server-port", String.valueOf(probe.getLocalPort()));
