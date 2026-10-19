@@ -27,9 +27,6 @@
         "temperature": 4300,
         "type": "color_temperature"
       }
-    },
-    "tone_mapping": {
-      "operator": "generic"
     }
   }
 }
