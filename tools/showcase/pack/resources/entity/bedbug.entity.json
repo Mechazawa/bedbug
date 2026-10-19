@@ -1,0 +1,25 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "bb:bedbug",
+      "materials": {"default": "entity_alphatest"},
+      "textures": {
+        "chestnut": "textures/entity/bedbug_chestnut",
+        "rose": "textures/entity/bedbug_rose",
+        "plum": "textures/entity/bedbug_plum"
+      },
+      "geometry": {"default": "geometry.bb.bedbug"},
+      "animations": {
+        "idle": "animation.bb.bedbug.idle",
+        "walk": "animation.bb.bedbug.walk",
+        "look_at_target": "animation.bb.bedbug.look_at_target"
+      },
+      "scripts": {
+        "animate": ["idle", {"walk": "q.modified_move_speed * 2.5"}, "look_at_target"]
+      },
+      "render_controllers": ["controller.render.bb.bedbug"],
+      "spawn_egg": {"base_color": "#963c2c", "overlay_color": "#f6d6a0"}
+    }
+  }
+}

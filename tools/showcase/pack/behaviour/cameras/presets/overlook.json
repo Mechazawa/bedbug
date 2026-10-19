@@ -1,0 +1,11 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:camera_preset": {
+    "identifier": "bb:overlook",
+    "inherit_from": "minecraft:free",
+    "rot_x": 35,
+    "rot_y": 0,
+    "listener": "player",
+    "player_effects": true
+  }
+}

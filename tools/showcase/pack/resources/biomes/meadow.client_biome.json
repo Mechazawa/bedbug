@@ -1,0 +1,14 @@
+{
+  "format_version": "1.21.120",
+  "minecraft:client_biome": {
+    "description": {
+      "identifier": "bb:meadow"
+    },
+    "components": {
+      "minecraft:water_appearance": {"surface_color": "#5ad0e8"},
+      "minecraft:sky_color": {"sky_color": "#9ec8ff"},
+      "minecraft:fog_appearance": {"fog_identifier": "bb:meadow_mist"},
+      "minecraft:color_grading_identifier": {"color_grading_identifier": "bb:golden_hour"}
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:block": {
+    "description": {
+      "identifier": "bb:quilt",
+      "menu_category": {"category": "construction"}
+    },
+    "components": {
+      "minecraft:material_instances": {
+        "*": {"texture": "bb_quilt_side", "render_method": "opaque"},
+        "up": {"texture": "bb_quilt_top", "render_method": "opaque"},
+        "down": {"texture": "bb_quilt_top", "render_method": "opaque"}
+      },
+      "minecraft:destructible_by_mining": {"seconds_to_destroy": 0.8},
+      "minecraft:sound": {"sound": "cloth"},
+      "minecraft:flammable": {"catch_chance_modifier": 30, "destroy_chance_modifier": 60}
+    }
+  }
+}

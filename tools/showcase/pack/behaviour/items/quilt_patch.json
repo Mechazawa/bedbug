@@ -1,0 +1,13 @@
+{
+  "format_version": "1.21.20",
+  "minecraft:item": {
+    "description": {
+      "identifier": "bb:quilt_patch",
+      "menu_category": {"category": "items"}
+    },
+    "components": {
+      "minecraft:icon": "bb_quilt_patch",
+      "minecraft:max_stack_size": 64
+    }
+  }
+}

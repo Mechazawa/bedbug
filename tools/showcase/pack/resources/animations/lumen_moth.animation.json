@@ -1,0 +1,27 @@
+{
+  "format_version": "1.8.0",
+  "animations": {
+    "animation.bb.lumen_moth.hover": {
+      "loop": true,
+      "bones": {
+        "root": {
+          "position": [0, "math.sin(q.life_time * 90 + v.phase) * 2", 0],
+          "rotation": ["math.sin(q.life_time * 90 + v.phase + 60) * 4", 0, "math.sin(q.life_time * 45 + v.phase) * 5"]
+        },
+        "wing_left": {"rotation": [0, 0, "math.sin(q.life_time * 360 * v.beats + v.phase) * 30 + 22"]},
+        "wing_right": {"rotation": [0, 0, "math.sin(q.life_time * 360 * v.beats + v.phase) * -30 - 22"]},
+        "hind_wing_left": {"rotation": [0, 0, "math.sin(q.life_time * 360 * v.beats + v.phase - 25) * 24 + 16"]},
+        "hind_wing_right": {"rotation": [0, 0, "math.sin(q.life_time * 360 * v.beats + v.phase - 25) * -24 - 16"]},
+        "antenna_left": {"rotation": ["math.sin(q.life_time * 200 + v.phase) * 6", 0, 0]},
+        "antenna_right": {"rotation": ["math.sin(q.life_time * 200 + v.phase + 40) * 6", 0, 0]}
+      }
+    },
+    "animation.bb.lumen_moth.trail": {
+      "loop": true,
+      "animation_length": 0.6,
+      "particle_effects": {
+        "0.0": {"effect": "mote", "locator": "tail"}
+      }
+    }
+  }
+}

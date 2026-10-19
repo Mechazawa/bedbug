@@ -1,0 +1,20 @@
+{
+  "format_version": "1.10.0",
+  "render_controllers": {
+    "controller.render.bb.bedbug": {
+      "arrays": {
+        "textures": {
+          "Array.skins": ["Texture.chestnut", "Texture.rose", "Texture.plum"]
+        }
+      },
+      "geometry": "Geometry.default",
+      "materials": [{"*": "Material.default"}],
+      "textures": ["Array.skins[q.variant]"]
+    },
+    "controller.render.bb.lumen_moth": {
+      "geometry": "Geometry.default",
+      "materials": [{"*": "Material.default"}],
+      "textures": ["Texture.default"]
+    }
+  }
+}

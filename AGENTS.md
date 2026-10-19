@@ -1183,6 +1183,20 @@ These are the checks it runs, and what each one catches:
   The block it ships names a custom component, which the script registers as the world starts up, so
   `BLOCKPROBE customComponentPlaced=bp:scripted` in a run is the whole path answering: the pack
   registered a component, a block of its own named it, and placing that block reached the pack again.
+- **`tools/showcase/build.py`** builds the Bedbug Showcase, the add-on the store page's pictures are
+  taken of. It is written to look good rather than to cover a reader: two mobs with their own
+  geometry, animations and render controllers, a quilt block, a toadstool drawn from its own
+  geometry, four items, two particles, a biome with a fog and a colour grade, a free camera preset,
+  a script whose `/scriptevent bb:guide` opens an action form and whose `bb:swarm` reads the world's
+  pack settings, and settings in both manifests. `icons.py` and `skins.py` paint every texture.
+  Nothing checks it, so it is not a place for a test to assert against.
+
+  ```bash
+  python3 tools/showcase/build.py --version 26.2
+  ```
+
+  The lumen moth states `has_gravity` false, which this mod leaves alone, so a moth summoned in the
+  air falls unless the summon adds `{NoGravity:1b}`.
 - **`tools/verify/verify.py`** does those game runs without a human watching the log. It starts the
   game, reads the output back for the failures that only appear at runtime, writes
   `build/verify/verdict.json` and a log per run under `build/verify/`, and exits non-zero when

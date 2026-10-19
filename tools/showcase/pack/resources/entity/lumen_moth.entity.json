@@ -1,0 +1,23 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "bb:lumen_moth",
+      "materials": {"default": "entity_alphatest"},
+      "textures": {"default": "textures/entity/lumen_moth"},
+      "geometry": {"default": "geometry.bb.lumen_moth"},
+      "animations": {
+        "hover": "animation.bb.lumen_moth.hover",
+        "trail": "animation.bb.lumen_moth.trail"
+      },
+      "particle_effects": {"mote": "bb:mote"},
+      "scripts": {
+        "initialize": ["v.phase = math.random(0, 360);"],
+        "pre_animation": ["v.beats = math.max(1, q.get_pack_setting('bb:flap_speed'));"],
+        "animate": ["hover", {"trail": "q.is_pack_setting_enabled('bb:twinkles')"}]
+      },
+      "render_controllers": ["controller.render.bb.lumen_moth"],
+      "spawn_egg": {"base_color": "#c4d2ec", "overlay_color": "#fcc860"}
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "bb:lumen_moth",
+      "is_spawnable": true,
+      "is_summonable": true
+    },
+    "components": {
+      "minecraft:type_family": {"family": ["moth", "arthropod", "mob"]},
+      "minecraft:collision_box": {"width": 0.8, "height": 0.6},
+      "minecraft:health": {"value": 4, "max": 4},
+      "minecraft:physics": {"has_gravity": false},
+      "minecraft:scale": {"value": 1.6},
+      "minecraft:pushable": {"is_pushable": false, "is_pushable_by_piston": false},
+      "minecraft:nameable": {},
+      "minecraft:persistent": {},
+      "minecraft:damage_sensor": {
+        "triggers": {"cause": "fall", "deals_damage": "no"}
+      },
+      "minecraft:behavior.look_at_player": {"priority": 6, "look_distance": 8.0, "probability": 0.05}
+    }
+  }
+}
