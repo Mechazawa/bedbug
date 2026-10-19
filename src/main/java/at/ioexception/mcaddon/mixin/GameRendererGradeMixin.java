@@ -13,7 +13,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /** Grades the world's frame once it is drawn, hand and screen effects included, and before the HUD. */
 @Mixin(GameRenderer.class)
 public abstract class GameRendererGradeMixin {
-    //? if >=1.21 {
+    //? if >=26.3 {
+    /*@Inject(method = "render", at = @At(value = "INVOKE", shift = At.Shift.AFTER,
+        target = "Lnet/minecraft/client/renderer/GameRenderer;renderLevel()V"))
+    *///?} elif >=1.21 {
     @Inject(method = "render", at = @At(value = "INVOKE", shift = At.Shift.AFTER,
         target = "Lnet/minecraft/client/renderer/GameRenderer;renderLevel(Lnet/minecraft/client/DeltaTracker;)V"))
     //?} else {

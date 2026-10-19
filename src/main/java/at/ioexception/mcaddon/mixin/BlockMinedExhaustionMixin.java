@@ -15,9 +15,15 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
  */
 @Mixin(Block.class)
 public abstract class BlockMinedExhaustionMixin {
+    //? if >=26.3 {
+    /*@ModifyArg(method = "playerDestroy",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/server/level/ServerPlayer;causeFoodExhaustion(F)V"))
+    *///?} else {
     @ModifyArg(method = "playerDestroy",
         at = @At(value = "INVOKE",
             target = "Lnet/minecraft/world/entity/player/Player;causeFoodExhaustion(F)V"))
+    //?}
     private float mcaddon$miningCost(float amount) {
         return PlayerDefinition.cost(Action.MINE, amount);
     }
