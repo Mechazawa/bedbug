@@ -17,6 +17,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * server teleports nor a client's copy of another entity ever runs. The level asks every entity to
  * remember where it stood once a tick, just before it ticks, so the step taken since the last such
  * moment is counted there.
+ *
+ * Nothing is counted before the entity's first tick. A client's copy of a living entity is placed
+ * without its previous position, which stays at the origin until that tick, and a summoned entity
+ * is moved from the origin to where it appears.
  */
 @Mixin(Entity.class)
 public abstract class EntityTravelMixin implements Travelled {
@@ -31,6 +35,9 @@ public abstract class EntityTravelMixin implements Travelled {
     public double zOld;
 
     @Shadow
+    public int tickCount;
+
+    @Shadow
     public abstract double getX();
 
     @Shadow
@@ -38,9 +45,6 @@ public abstract class EntityTravelMixin implements Travelled {
 
     @Unique
     private float mcaddonTravelled;
-
-    @Shadow
-    public int tickCount;
 
     /**
      * Nothing is counted before the entity's first tick, because its old position is not a place it
@@ -51,7 +55,6 @@ public abstract class EntityTravelMixin implements Travelled {
     @Inject(method = "setOldPosAndRot()V", at = @At("HEAD"))
     private void mcaddon$countStep(CallbackInfo info) {
         if (tickCount == 0) return;
-
         mcaddonTravelled += (float) Math.hypot(getX() - xOld, getZ() - zOld) * STRIDE;
     }
 

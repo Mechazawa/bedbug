@@ -112,9 +112,15 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
      * screen.
      */
     @Override
+    //? if >=26.3 {
+    /*public boolean shouldRender(AddonEntity entity, Frustum frustum, double cameraX, double cameraY,
+        double cameraZ, float partialTick) {
+        if (super.shouldRender(entity, frustum, cameraX, cameraY, cameraZ, partialTick)) return true;
+    *///?} else {
     public boolean shouldRender(AddonEntity entity, Frustum frustum, double cameraX, double cameraY,
         double cameraZ) {
         if (super.shouldRender(entity, frustum, cameraX, cameraY, cameraZ)) return true;
+    //?}
 
         AddonClientAssets.Binding binding = AddonClientAssets.of(identifierOf(entity));
         AABB declared = binding == null ? null : binding.models().visibleBounds(binding.definition());
@@ -281,8 +287,8 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
     private static void intoHand(PoseStack poseStack, HeldItems.Held held) {
         poseStack.pushPose();
         Platform.mulPose(poseStack, held.anchor());
-        poseStack.mulPose(Axis.XP.rotationDegrees(-90f));
-        poseStack.mulPose(Axis.YP.rotationDegrees(180f));
+        Platform.rotate(poseStack, Axis.XP.rotationDegrees(-90f));
+        Platform.rotate(poseStack, Axis.YP.rotationDegrees(180f));
         poseStack.scale(held.scale(), held.scale(), held.scale());
     }
 
@@ -304,7 +310,7 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
      * feet and the model stands on the ground at any size.
      */
     static void applyModelSpace(PoseStack poseStack, float bodyRotation, Vector3f scale) {
-        poseStack.mulPose(Axis.YP.rotationDegrees(180f - bodyRotation));
+        Platform.rotate(poseStack, Axis.YP.rotationDegrees(180f - bodyRotation));
         poseStack.scale(-1f, -1f, 1f);
         poseStack.scale(scale.x, scale.y, scale.z);
         poseStack.translate(0, -MODEL_ORIGIN_BLOCKS, 0);

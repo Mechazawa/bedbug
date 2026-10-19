@@ -20,6 +20,7 @@ Bedbug caches converted packs in `.mcaddon/`. Deleting that folder costs one slo
 
 | Minecraft | Java | Status |
 | --- | --- | --- |
+| 26.3 | 25 | Supported |
 | 26.2 | 25 | Supported |
 | 26.1.2 | 25 | Supported |
 | 1.21.1 | 21 | Built from the same source, no new work for now |

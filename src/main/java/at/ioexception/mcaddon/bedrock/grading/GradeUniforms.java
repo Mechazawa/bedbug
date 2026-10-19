@@ -16,7 +16,7 @@ import java.util.Arrays;
  *
  * {@link #grade} is Bedrock's `ColorPostProcessing` fragment shader with its tone mapper switched off,
  * the branch that shader takes when `TonemapParams0.y` is below one half, and with its average
- * luminance held at the 0.18 it uses when exposure does not adapt. `colour_grade.fsh` is the same
+ * luminance held at the 0.18 it uses when exposure does not adapt. `colour_grade.glsl` is the same
  * arithmetic on the frame.
  */
 public final class GradeUniforms {

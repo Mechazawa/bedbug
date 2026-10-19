@@ -69,7 +69,9 @@ public final class ActiveAddonsGameTests {
         try {
             listedWhileEmpty = listed(level, dust);
             offeredWhileEmpty = offered();
-            //? if >=1.21 {
+            // From 26.3 brewing is a recipe in the add-on's own data pack, so the pack no longer
+            // being offered is what takes it away, and the server's recipes change only on a reload.
+            //? if >=1.21 && <26.3 {
             brewsWhileEmpty = brews(level, dust);
             //?}
             fogWhileEmpty = AddonFogs.definitionOf(FOG) != null;
@@ -116,10 +118,19 @@ public final class ActiveAddonsGameTests {
     }
 
     //? if >=1.21 {
-    /** Whether a brewing stand built now takes the item. 1.20.1 builds its brewing once, for good. */
+    /**
+     * Whether a brewing stand takes the item: one built now, or from 26.3 the server's own recipes.
+     * 1.20.1 builds its brewing once, for good.
+     */
     private static boolean brews(ServerLevel level, Item item) {
+        //? if >=26.3 {
+        /*return level.recipeAccess()
+            .propertySet(net.minecraft.world.item.crafting.RecipePropertySet.BREWING_REAGENTS)
+            .test(new net.minecraft.world.item.ItemStack(item));
+        *///?} else {
         return net.minecraft.world.item.alchemy.PotionBrewing.bootstrap(level.enabledFeatures())
             .isIngredient(new net.minecraft.world.item.ItemStack(item));
+        //?}
     }
     //?}
 }

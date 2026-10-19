@@ -117,8 +117,8 @@ public final class BedrockModelRenderer {
         }
         Quaternionf own = new Quaternionf().rotationZYX(zRot, yRot, xRot);
         boolean fromEntity = pose != null && pose.rotationRelativeToEntity;
-        if (fromEntity) poseStack.mulPose(new Quaternionf(parentTurn).conjugate());
-        if (xRot != 0 || yRot != 0 || zRot != 0) poseStack.mulPose(own);
+        if (fromEntity) Platform.rotate(poseStack, new Quaternionf(parentTurn).conjugate());
+        if (xRot != 0 || yRot != 0 || zRot != 0) Platform.rotate(poseStack, own);
         if (pose != null && !pose.scale.equals(1, 1, 1)) {
             poseStack.scale(pose.scale.x, pose.scale.y, pose.scale.z);
         }

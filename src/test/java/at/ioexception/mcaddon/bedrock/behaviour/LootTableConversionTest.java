@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.bedrock.behaviour;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.SharedConstants;
@@ -41,7 +42,7 @@ class LootTableConversionTest {
                             {"function": "set_damage", "damage": 0.5}]}]}]}
             """);
 
-        assertEquals(2, entry.getAsJsonArray("functions").size());
+        assertEquals(2, functions(entry).size());
     }
 
     @Test
@@ -52,11 +53,10 @@ class LootTableConversionTest {
                 "conditions": [{"condition": "random_chance", "chance": 0.25}]}]}]}
             """);
 
-        assertEquals(1, pool.getAsJsonArray("conditions").size());
-        assertEquals("minecraft:killed_by_player", pool.getAsJsonArray("conditions").get(0)
-            .getAsJsonObject().get("condition").getAsString());
-        assertEquals(0.25, pool.getAsJsonArray("entries").get(0).getAsJsonObject()
-            .getAsJsonArray("conditions").get(0).getAsJsonObject().get("chance").getAsDouble());
+        assertEquals(1, conditions(pool).size());
+        assertEquals("minecraft:killed_by_player", conditionType(conditions(pool).get(0)));
+        assertEquals(0.25, conditions(pool.getAsJsonArray("entries").get(0).getAsJsonObject())
+            .get(0).getAsJsonObject().get("chance").getAsDouble());
     }
 
     @Test
@@ -68,11 +68,11 @@ class LootTableConversionTest {
 
     @Test
     void writesALevelRangeAsAUniformDistributionWhateverShapeItWasWrittenIn() throws IOException {
-        JsonObject enchantments = firstEntry("""
+        JsonObject enchantments = firstFunction("""
             {"pools": [{"rolls": 1, "entries": [{"type": "item", "name": "minecraft:diamond_sword",
               "functions": [{"function": "specific_enchants",
                 "enchants": [{"id": "sharpness", "level": [1, 3]}]}]}]}]}
-            """).getAsJsonArray("functions").get(0).getAsJsonObject().getAsJsonObject("enchantments");
+            """).getAsJsonObject("enchantments");
 
         JsonObject level = enchantments.getAsJsonObject("minecraft:sharpness");
         assertEquals("minecraft:uniform", level.get("type").getAsString());
@@ -88,9 +88,8 @@ class LootTableConversionTest {
                             {"function": "set_count", "count": 2}]}]}]}
             """);
 
-        assertEquals(1, entry.getAsJsonArray("functions").size());
-        assertEquals("minecraft:set_count", entry.getAsJsonArray("functions").get(0)
-            .getAsJsonObject().get("function").getAsString());
+        assertEquals(1, functions(entry).size());
+        assertEquals("minecraft:set_count", functionType(functions(entry).get(0)));
     }
 
     /**
@@ -107,7 +106,7 @@ class LootTableConversionTest {
             """);
 
         assertEquals("minecraft:lapis_lazuli", entry.get("name").getAsString());
-        assertFalse(entry.has("functions"));
+        assertFalse(hasFunctions(entry));
     }
 
     /** A Bedrock id with no data value beside it means the first of what Java split it into. */
@@ -132,8 +131,8 @@ class LootTableConversionTest {
             """);
 
         assertEquals("minecraft:orange_wool", entry.get("name").getAsString());
-        JsonObject function = entry.getAsJsonArray("functions").get(0).getAsJsonObject();
-        assertEquals(BedrockFunction.NAME, function.get("function").getAsString());
+        JsonObject function = functions(entry).get(0).getAsJsonObject();
+        assertEquals(BedrockFunction.NAME, functionType(function));
         assertTrue(function.get("bedrock").getAsString().contains("minecraft:magenta_wool"));
     }
 
@@ -145,7 +144,7 @@ class LootTableConversionTest {
               "functions": [{"function": "minecraft:set_data_from_color_index"}]}]}]}
             """);
 
-        assertEquals(BedrockFunction.NAME, function.get("function").getAsString());
+        assertEquals(BedrockFunction.NAME, functionType(function));
         assertEquals(16, JsonParser.parseString(function.get("bedrock").getAsString())
             .getAsJsonObject().getAsJsonArray("items").size());
     }
@@ -163,7 +162,7 @@ class LootTableConversionTest {
               "functions": [{"function": "set_data", "data": 4}]}]}]}
             """);
 
-        assertEquals("minecraft:set_stew_effect", function.get("function").getAsString());
+        assertEquals("minecraft:set_stew_effect", functionType(function));
         assertEquals(1, function.getAsJsonArray("effects").size());
         assertEquals("minecraft:poison", function.getAsJsonArray("effects").get(0)
             .getAsJsonObject().get("type").getAsString());
@@ -190,7 +189,7 @@ class LootTableConversionTest {
               "functions": [{"function": "set_data", "data": {"min": 0, "max": 3}}]}]}]}
             """);
 
-        assertEquals("minecraft:set_instrument", function.get("function").getAsString());
+        assertEquals("minecraft:set_instrument", functionType(function));
         assertEquals("#minecraft:regular_goat_horns", function.get("options").getAsString());
     }
 
@@ -203,7 +202,7 @@ class LootTableConversionTest {
             """);
 
         assertEquals("minecraft:oak_sign", entry.get("name").getAsString());
-        assertFalse(entry.has("functions"));
+        assertFalse(hasFunctions(entry));
     }
 
     @Test
@@ -236,10 +235,10 @@ class LootTableConversionTest {
 
     @Test
     void dropsAStewEffectNumberNoEffectAnswersToRatherThanNamingTheWrongOne() throws IOException {
-        assertFalse(firstEntry("""
+        assertFalse(hasFunctions(firstEntry("""
             {"pools": [{"rolls": 1, "entries": [{"type": "item", "name": "minecraft:suspicious_stew",
               "functions": [{"function": "set_stew_effect", "effects": [{"id": 40}]}]}]}]}
-            """).has("functions"));
+            """)));
     }
 
     @Test
@@ -257,20 +256,20 @@ class LootTableConversionTest {
 
     @Test
     void writesNoPatternForTheBannerTypeThatMeansAPlainOne() throws IOException {
-        assertFalse(firstEntry("""
+        assertFalse(hasFunctions(firstEntry("""
             {"pools": [{"rolls": 1, "entries": [{"type": "item", "name": "minecraft:white_banner",
               "functions": [{"function": "set_banner_details", "type": 0}]}]}]}
-            """).has("functions"));
+            """)));
     }
 
     @Test
     void reportsATrimNoSupportedVersionShipsRatherThanNamingARegistryEntryWithNothingBehindIt()
         throws IOException {
-        assertFalse(firstEntry("""
+        assertFalse(hasFunctions(firstEntry("""
             {"pools": [{"rolls": 1, "entries": [{"type": "item", "name": "minecraft:iron_helmet",
               "functions": [{"function": "set_armor_trim",
                 "material": "copper", "pattern": "invented"}]}]}]}
-            """).has("functions"));
+            """)));
     }
 
     @Test
@@ -280,19 +279,18 @@ class LootTableConversionTest {
               "functions": [{"function": "enchant_random_gear", "chance": 0.25}]}]}]}
             """);
 
-        assertEquals("minecraft:enchant_with_levels", function.get("function").getAsString());
-        assertEquals(BedrockCondition.NAME, function.getAsJsonArray("conditions").get(0)
-            .getAsJsonObject().get("condition").getAsString());
+        assertEquals("minecraft:enchant_with_levels", functionType(function));
+        assertEquals(BedrockCondition.NAME, conditionType(conditions(function).get(0)));
     }
 
     @Test
     void keepsTheBedrockObjectOfAConditionThisModAnswersAsTheLootIsRolled() throws IOException {
-        JsonObject condition = firstPool("""
+        JsonObject condition = conditions(firstPool("""
             {"pools": [{"rolls": 1, "conditions": [{"condition": "has_mark_variant", "value": 3}],
               "entries": [{"type": "item", "name": "minecraft:stick"}]}]}
-            """).getAsJsonArray("conditions").get(0).getAsJsonObject();
+            """)).get(0).getAsJsonObject();
 
-        assertEquals(BedrockCondition.NAME, condition.get("condition").getAsString());
+        assertEquals(BedrockCondition.NAME, conditionType(condition));
         assertTrue(condition.get("bedrock").getAsString().contains("has_mark_variant"));
     }
 
@@ -304,18 +302,61 @@ class LootTableConversionTest {
      */
     @Test
     void keepsTheMealAConditionAsksAbout() throws IOException {
-        JsonObject condition = firstPool("""
+        JsonObject condition = conditions(firstPool("""
             {"pools": [{"rolls": 1, "conditions": [{"condition": "entity_killed",
               "entity_type": "minecraft:slime"}],
               "entries": [{"type": "item", "name": "minecraft:slime_ball"}]}]}
-            """).getAsJsonArray("conditions").get(0).getAsJsonObject();
+            """)).get(0).getAsJsonObject();
 
-        assertEquals(BedrockCondition.NAME, condition.get("condition").getAsString());
+        assertEquals(BedrockCondition.NAME, conditionType(condition));
         assertTrue(condition.get("bedrock").getAsString().contains("minecraft:slime"));
     }
 
     private JsonObject firstFunction(String table) throws IOException {
-        return firstEntry(table).getAsJsonArray("functions").get(0).getAsJsonObject();
+        return functions(firstEntry(table)).get(0).getAsJsonObject();
+    }
+
+    private static boolean hasFunctions(JsonObject holder) {
+        return !functions(holder).isEmpty();
+    }
+
+    private static JsonArray functions(JsonObject holder) {
+        //? if >=26.3 {
+        /*return holder.has("modifier") ? holder.getAsJsonArray("modifier") : new JsonArray();
+        *///?} else {
+        return holder.has("functions") ? holder.getAsJsonArray("functions") : new JsonArray();
+        //?}
+    }
+
+    private static String functionType(JsonElement function) {
+        //? if >=26.3 {
+        /*return function.getAsJsonObject().get("type").getAsString();
+        *///?} else {
+        return function.getAsJsonObject().get("function").getAsString();
+        //?}
+    }
+
+    private static JsonArray conditions(JsonObject holder) {
+        //? if >=26.3 {
+        /*if (!holder.has("condition")) return new JsonArray();
+        JsonObject condition = holder.getAsJsonObject("condition");
+        if (!conditionType(condition).equals("minecraft:all_of")) {
+            JsonArray single = new JsonArray();
+            single.add(condition);
+            return single;
+        }
+        return condition.getAsJsonArray("terms");
+        *///?} else {
+        return holder.has("conditions") ? holder.getAsJsonArray("conditions") : new JsonArray();
+        //?}
+    }
+
+    private static String conditionType(JsonElement condition) {
+        //? if >=26.3 {
+        /*return condition.getAsJsonObject().get("type").getAsString();
+        *///?} else {
+        return condition.getAsJsonObject().get("condition").getAsString();
+        //?}
     }
 
     private JsonObject firstPool(String table) throws IOException {

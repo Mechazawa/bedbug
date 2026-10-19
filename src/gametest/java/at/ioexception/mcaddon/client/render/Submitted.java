@@ -183,8 +183,13 @@ public final class Submitted {
     @SuppressWarnings("unchecked")
     private void keepItem(Object[] arguments) {
         PoseStack poseStack = (PoseStack) arguments[0];
+        //? if >=26.3 {
+        /*List<BakedQuad> quads = ((net.minecraft.client.resources.model.geometry.ItemQuads) arguments[6]).all();
+        *///?} else {
+        List<BakedQuad> quads = (List<BakedQuad>) arguments[6];
+        //?}
         items.add(new Item(new Matrix4f(poseStack.last().pose()), (int) arguments[2],
-            ((int[]) arguments[5]).clone(), List.copyOf((List<BakedQuad>) arguments[6])));
+            ((int[]) arguments[5]).clone(), List.copyOf(quads)));
     }
 
     static AABB box(List<Vertex> vertices) {
@@ -255,6 +260,13 @@ public final class Submitted {
             this.light = u | v << 16;
             return this;
         }
+
+        //? if >=26.3 {
+        /*@Override
+        public VertexConsumer setUv3(float u, float v) {
+            return this;
+        }
+        *///?}
 
         @Override
         public VertexConsumer setNormal(float x, float y, float z) {

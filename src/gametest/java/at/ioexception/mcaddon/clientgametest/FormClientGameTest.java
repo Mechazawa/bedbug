@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.clientgametest;
 
 import at.ioexception.mcaddon.client.screen.AddonFormScreen;
 import at.ioexception.mcaddon.platform.Platform;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
@@ -129,7 +130,7 @@ public final class FormClientGameTest implements FabricClientGameTest {
                 (widget.getY() + widget.getHeight() / 2.0) * scale};
         });
         context.getInput().setCursorPos(centre[0], centre[1]);
-        context.getInput().pressMouse(0);
+        context.getInput().pressMouse(InputConstants.MOUSE_BUTTON_LEFT);
         context.waitTick();
     }
 

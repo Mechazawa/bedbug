@@ -81,7 +81,9 @@ Shaped, shapeless, furnace, smithing transform, smithing trim and brewing.
 - The unlock condition becomes the advancement that unlocks the recipe, so it reaches the recipe
   book.
 - Brewing: a mix (one potion to another over a reagent) and a container recipe (one bottle to
-  another) work at an ordinary brewing stand. A pack's own bottle is a valid container.
+  another) work at an ordinary brewing stand. A pack's own bottle is a valid container. On 26.3,
+  where brewing is a recipe type, a mix reaches the game's three bottles and the bottles its own
+  add-on names, but not a bottle only a different add-on declares.
 
 ## Loot tables
 

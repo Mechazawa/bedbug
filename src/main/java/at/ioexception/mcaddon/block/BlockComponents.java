@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.block;
 
 import at.ioexception.mcaddon.bedrock.ClientBlockDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.BlockDefinition;
+import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.server.BlockEvents;
@@ -683,12 +684,12 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
     }
 
     private static PushReaction pushReaction(String movement) {
-        if (movement == null) return PushReaction.NORMAL;
+        if (movement == null) return Platform.PUSH_PULL;
         return switch (movement) {
-            case "push" -> PushReaction.PUSH_ONLY;
-            case "popped" -> PushReaction.DESTROY;
-            case "immovable" -> PushReaction.BLOCK;
-            default -> PushReaction.NORMAL;
+            case "push" -> Platform.PUSH_ONLY;
+            case "popped" -> Platform.POPPED;
+            case "immovable" -> Platform.IMMOVABLE;
+            default -> Platform.PUSH_PULL;
         };
     }
 

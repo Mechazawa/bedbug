@@ -89,7 +89,7 @@ public final class EntityMembers extends Surface {
         Entity entity = entity(id);
         if (entity == null) return;
         entity.setDeltaMovement(forceX, verticalStrength, forceZ);
-        entity.hurtMarked = true;
+        Platform.syncVelocity(entity);
     }
 
     @HostAccess.Export

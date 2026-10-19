@@ -91,6 +91,36 @@ public final class PackGameTests {
     }
 
     /**
+     * An item whose `minecraft:fuel` states a duration lights a furnace and burns away.
+     *
+     * The fuel list is a registry up to 26.2 and from 26.3 a component naming an entry the
+     * converter writes, so either half going missing leaves the furnace cold with the wand in it.
+     */
+    @GameTest()
+    public void aPackItemBurnsInAFurnace(GameTestHelper helper) {
+        Item wand = AddonItems.named("tp:wand");
+        if (wand == null) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        BlockPos at = helper.absolutePos(STAND);
+        level.setBlockAndUpdate(at, net.minecraft.world.level.block.Blocks.FURNACE.defaultBlockState());
+        net.minecraft.world.Container furnace = (net.minecraft.world.Container) level.getBlockEntity(at);
+        furnace.setItem(0, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.RAW_IRON));
+        furnace.setItem(1, new net.minecraft.world.item.ItemStack(wand));
+
+        helper.runAfterDelay(5, () -> {
+            helper.assertTrue(level.getBlockState(at).getValue(
+                net.minecraft.world.level.block.state.properties.BlockStateProperties.LIT),
+                "A furnace fed tp:wand did not light.");
+            helper.assertTrue(furnace.getItem(1).isEmpty(), "A lit furnace did not burn tp:wand.");
+            helper.succeed();
+        });
+    }
+
+    /**
      * The health a pack asked for is the health the entity has.
      *
      * `minecraft:health` becomes an attribute on the type, which is fixed when the type is built, so

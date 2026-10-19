@@ -66,7 +66,7 @@ class BedrockItemNamesTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"minecraft:allow", "minecraft:white_cushion", "minecraft:no_such_item"})
+    @ValueSource(strings = {"minecraft:allow", "minecraft:no_such_item"})
     void answersNothingForAnItemJavaLacks(String bedrock) {
         assertNull(BedrockItemNames.java(bedrock));
     }
@@ -116,6 +116,6 @@ class BedrockItemNamesTest {
             if (!java.equals(BedrockItemNames.java(bedrock))) lost.add(java + " -> " + bedrock);
         }
         assertTrue(lost.isEmpty(), lost.toString());
-        assertTrue(BedrockItemNames.bedrockOnly("minecraft:white_cushion"));
+        assertTrue(BedrockItemNames.bedrockOnly("minecraft:allow"));
     }
 }

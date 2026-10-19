@@ -31,7 +31,9 @@ import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.RestrictSunGoal;
 import net.minecraft.world.entity.ai.goal.StrollThroughVillageGoal;
+//? if <26.3 {
 import net.minecraft.world.entity.ai.goal.TryFindWaterGoal;
+//?}
 import net.minecraft.world.entity.ai.navigation.FlyingPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.ai.navigation.WallClimberNavigation;
@@ -2654,7 +2656,7 @@ public class AddonEntity extends PathfinderMob
         if (!(state.getBlock() instanceof net.minecraft.world.level.block.BonemealableBlock crop)) return;
         if (!Platform.canBonemeal(crop, level, at, state)) return;
 
-        crop.performBonemeal(level, random, at, state);
+        Platform.bonemeal(crop, level, random, at, state);
         cropCharges--;
     }
 
@@ -3190,7 +3192,12 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.random_swim" -> goals.add(priority, StrollGoal.swimming(this, goal));
             case "minecraft:behavior.swim_wander" -> goals.add(priority, StrollGoal.wandering(this, goal));
             case "minecraft:behavior.move_to_water" -> goals.add(priority, MoveToMatchingBlockGoal.water(this, goal));
+            //? if >=26.3 {
+            /*case "minecraft:behavior.move_to_liquid" -> goals.add(priority,
+                new net.minecraft.world.entity.ai.goal.TryFindLiquidGoal(this, net.minecraft.tags.FluidTags.WATER));
+            *///?} else {
             case "minecraft:behavior.move_to_liquid" -> goals.add(priority, new TryFindWaterGoal(this));
+            //?}
             case "minecraft:behavior.swim_up_for_breath" ->
                 goals.add(priority, new BreathAirGoal(this));
 
@@ -3634,9 +3641,11 @@ public class AddonEntity extends PathfinderMob
     @Override
     public void aiStep() {
         float facing = getYRot();
+        //? if <26.3 {
         // Java counts a swing down only for monsters and players, and a swing never counted down
         // leaves every later one unseen by whatever watches for the arm going up.
         updateSwingTime();
+        //?}
         super.aiStep();
         if (definition == null || isClientSide() || getControllingPassenger() instanceof Player) return;
 
@@ -6012,7 +6021,7 @@ public class AddonEntity extends PathfinderMob
     public net.minecraft.world.level.material.PushReaction getPistonPushReaction() {
         if (definition != null && declaresNow("minecraft:pushable")
             && liveNumber("minecraft:pushable", "is_pushable_by_piston", 1) == 0) {
-            return net.minecraft.world.level.material.PushReaction.IGNORE;
+            return Platform.IGNORED;
         }
         return super.getPistonPushReaction();
     }

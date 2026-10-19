@@ -25,7 +25,6 @@ import net.minecraft.world.level.block.FlowerPotBlock;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
-import net.minecraft.world.level.material.PushReaction;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -210,7 +209,7 @@ public final class AddonBlocks {
         BlockBehaviour.Properties properties = BlockBehaviour.Properties.of()
             .instabreak()
             .noOcclusion()
-            .pushReaction(PushReaction.DESTROY);
+            .pushReaction(Platform.POPPED);
         //? if >=1.21.2 {
         properties = properties.setId(ResourceKey.create(Registries.BLOCK, potted));
         //?}

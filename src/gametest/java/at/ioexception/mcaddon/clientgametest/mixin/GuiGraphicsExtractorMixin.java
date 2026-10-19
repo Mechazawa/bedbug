@@ -1,7 +1,11 @@
 package at.ioexception.mcaddon.clientgametest.mixin;
 
 import at.ioexception.mcaddon.clientgametest.Drawn;
+//? if >=26.3 {
+/*import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+*///?} else {
 import com.mojang.blaze3d.pipeline.RenderPipeline;
+//?}
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.resources.Identifier;
 import org.spongepowered.asm.mixin.Mixin;
@@ -16,8 +20,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Mixin(GuiGraphicsExtractor.class)
 public abstract class GuiGraphicsExtractorMixin {
+    //? if >=26.3 {
+    /*@Inject(method = "blitSprite(Lcom/mojang/renderpearl/api/pipeline/RenderPipeline;"
+        + "Lnet/minecraft/resources/Identifier;IIII)V", at = @At("HEAD"))
+    *///?} else {
     @Inject(method = "blitSprite(Lcom/mojang/blaze3d/pipeline/RenderPipeline;"
         + "Lnet/minecraft/resources/Identifier;IIII)V", at = @At("HEAD"))
+    //?}
     private void mcaddon$recordSprite(RenderPipeline pipeline, Identifier sprite, int x, int y, int width, int height,
         CallbackInfo info) {
         Drawn.record(sprite);
