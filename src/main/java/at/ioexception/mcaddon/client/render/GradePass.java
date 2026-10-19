@@ -94,9 +94,11 @@ public final class GradePass {
             //?}
             pass.setUniform("ColourGrade", uniforms);
             //? if >=26.3 {
-            /*pass.setUniform("InSampler", copyView, RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
+            /*pass.setUniform("InSampler", copyView,
+                RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
             *///?} else {
-            pass.bindTexture("InSampler", copyView, RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
+            pass.bindTexture("InSampler", copyView,
+                RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
             //?}
             Platform.drawScreenTriangle(pass);
         }

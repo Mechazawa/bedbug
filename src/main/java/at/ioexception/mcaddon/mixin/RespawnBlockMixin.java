@@ -1,6 +1,8 @@
 package at.ioexception.mcaddon.mixin;
 
+//? if <26.3 {
 import at.ioexception.mcaddon.platform.Platform;
+//?}
 import at.ioexception.mcaddon.server.BedrockRules;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionResult;
