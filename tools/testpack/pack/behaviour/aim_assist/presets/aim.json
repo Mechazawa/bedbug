@@ -1,0 +1,13 @@
+{
+  "format_version": "1.21.50",
+  "minecraft:aim_assist_preset": {
+    "identifier": "tp:aim",
+    "item_settings": {
+      "minecraft:stick": "tp:pig_first"
+    },
+    "default_item_settings": "minecraft:default",
+    "hand_settings": "tp:cow_first",
+    "exclusion_list": ["minecraft:sheep", "minecraft:bedrock"],
+    "liquid_targeting_list": ["minecraft:bucket"]
+  }
+}

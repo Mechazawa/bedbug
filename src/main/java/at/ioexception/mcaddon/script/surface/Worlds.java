@@ -1,7 +1,10 @@
 package at.ioexception.mcaddon.script.surface;
 
+import at.ioexception.mcaddon.bedrock.aim.AimAssistCategory;
+import at.ioexception.mcaddon.bedrock.aim.AimAssistPreset;
 import at.ioexception.mcaddon.pack.PackSettings;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonAimAssist;
 import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.script.ScriptBridge;
@@ -14,6 +17,7 @@ import com.google.gson.JsonArray;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.core.Holder;
@@ -491,6 +495,51 @@ public final class Worlds extends Surface {
     @HostAccess.Export
     public String packSettings() {
         return Json.encode(PackSettings.values());
+    }
+
+    @HostAccess.Export
+    public String aimAssistPresets() {
+        JsonArray presets = new JsonArray();
+        AddonAimAssist.presets().stream().map(Worlds::presetJson).forEach(presets::add);
+        return presets.toString();
+    }
+
+    /**
+     * A preset in the shape a pack's file writes, with its exclusions also split into
+     * `excluded_entities` and `excluded_blocks` by whether an entity answers each id.
+     */
+    private static JsonObject presetJson(AimAssistPreset preset) {
+        JsonObject json = preset.toJson();
+        JsonArray entities = new JsonArray();
+        JsonArray blocks = new JsonArray();
+        preset.excluded().forEach(id -> (AddonEntities.typeOf(id) != null ? entities : blocks).add(id));
+        json.add("excluded_entities", entities);
+        json.add("excluded_blocks", blocks);
+        return json;
+    }
+
+    /** Every aim assist category there is, each in the shape a pack's file writes. */
+    @HostAccess.Export
+    public String aimAssistCategories() {
+        JsonArray categories = new JsonArray();
+        AddonAimAssist.categories().stream().map(AimAssistCategory::toJson).forEach(categories::add);
+        return categories.toString();
+    }
+
+    /** Adds or replaces a preset, and answers it as it was kept. */
+    @HostAccess.Export
+    public String addAimAssistPreset(String body) {
+        AimAssistPreset preset = AimAssistPreset.tryFrom(JsonParser.parseString(body).getAsJsonObject());
+        AddonAimAssist.add(preset);
+        return presetJson(preset).toString();
+    }
+
+    /** Adds or replaces a category, and answers it as it was kept. */
+    @HostAccess.Export
+    public String addAimAssistCategory(String body) {
+        AimAssistCategory category = AimAssistCategory.tryFrom(JsonParser.parseString(body).getAsJsonObject());
+        AddonAimAssist.add(category);
+        return category.toJson().toString();
     }
 
     /** A string, because a Bedrock seed does not fit a double without losing its low bits. */

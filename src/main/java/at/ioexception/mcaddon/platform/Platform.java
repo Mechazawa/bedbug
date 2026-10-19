@@ -2035,7 +2035,7 @@ public final class Platform {
      * writes, so nothing is registered here. 1.21 reads tints from a colour provider instead, and
      * 1.20.1 has no dyed colour on a stack at all.
      */
-    /** What a layer drawn over the heads-up display may do: fill a rectangle, write a line, draw a mob. */
+    /** What a layer drawn over the heads-up display may do: fill a rectangle, write a line, draw a mob or an image. */
     public interface Painter {
         int width();
 
@@ -2052,6 +2052,62 @@ public final class Platform {
          */
         void entity(LivingEntity entity, int left, int top, int right, int bottom, int size, float lookX,
             float lookY);
+
+        /** Stretches the whole of a texture over a rectangle. */
+        void image(Identifier texture, int left, int top, int right, int bottom);
+    }
+
+    /**
+     * Where a point in the world lands on the heads-up display, in its own scaled units, or null for a
+     * point behind the camera.
+     *
+     * Before 26 the camera keeps no field of view of its own, so the player's chosen one stands in
+     * for it there, which leaves out what sprinting or a spyglass does to it.
+     */
+    public static float[] onScreen(net.minecraft.world.phys.Vec3 point, int width, int height) {
+        net.minecraft.client.Minecraft client = net.minecraft.client.Minecraft.getInstance();
+        //? if >=26.2 {
+        net.minecraft.client.Camera camera = client.gameRenderer.mainCamera();
+        org.joml.Vector3fc forward = camera.forwardVector();
+        org.joml.Vector3fc up = camera.upVector();
+        org.joml.Vector3fc left = camera.leftVector();
+        float fov = camera.getFov();
+        //?} elif >=26 {
+        /*net.minecraft.client.Camera camera = client.gameRenderer.getMainCamera();
+        org.joml.Vector3fc forward = camera.forwardVector();
+        org.joml.Vector3fc up = camera.upVector();
+        org.joml.Vector3fc left = camera.leftVector();
+        float fov = camera.getFov();
+        *///?} else {
+        /*net.minecraft.client.Camera camera = client.gameRenderer.getMainCamera();
+        org.joml.Vector3fc forward = camera.getLookVector();
+        org.joml.Vector3fc up = camera.getUpVector();
+        org.joml.Vector3fc left = camera.getLeftVector();
+        float fov = client.options.fov().get();
+        *///?}
+        net.minecraft.world.phys.Vec3 offset = point.subtract(cameraPosition());
+        double depth = offset.x * forward.x() + offset.y * forward.y() + offset.z * forward.z();
+        if (depth < 0.05) return null;
+
+        double scale = height / 2.0 / Math.tan(Math.toRadians(fov) / 2) / depth;
+        return new float[] {
+            (float) (width / 2.0 - (offset.x * left.x() + offset.y * left.y() + offset.z * left.z()) * scale),
+            (float) (height / 2.0 - (offset.x * up.x() + offset.y * up.y() + offset.z * up.z()) * scale)};
+    }
+
+    /**
+     * How far the player reaches an entity or a block. 1.20.1 holds both on the game mode, as the
+     * game's own pick does: three blocks to an entity, or six in creative, and the pick range to a
+     * block.
+     */
+    public static double interactionRange(net.minecraft.world.entity.player.Player player, boolean entity) {
+        //? if >=1.21 {
+        return entity ? player.entityInteractionRange() : player.blockInteractionRange();
+        //?} else {
+        /*net.minecraft.client.multiplayer.MultiPlayerGameMode mode =
+            net.minecraft.client.Minecraft.getInstance().gameMode;
+        return entity ? (mode.hasFarPickRange() ? 6 : 3) : mode.getPickRange();
+        *///?}
     }
 
     /** Draws a layer of this mod's own over everything the heads-up display draws, every frame. */
@@ -2085,6 +2141,11 @@ public final class Platform {
                     net.minecraft.client.gui.screens.inventory.InventoryScreen.extractEntityInInventoryFollowsMouse(
                         graphics, left, top, right, bottom, size, 0.0625F,
                         (left + right) / 2F + lookX, (top + bottom) / 2F + lookY, entity);
+                }
+
+                @Override
+                public void image(Identifier texture, int left, int top, int right, int bottom) {
+                    graphics.blit(texture, left, top, right, bottom, 0f, 1f, 0f, 1f);
                 }
             }));
         //?} else {
@@ -2121,6 +2182,11 @@ public final class Platform {
                     /^net.minecraft.client.gui.screens.inventory.InventoryScreen.renderEntityInInventoryFollowsMouse(
                         graphics, (left + right) / 2, bottom, size, -lookX, -lookY, entity);
                     ^///?}
+                }
+
+                @Override
+                public void image(Identifier texture, int left, int top, int right, int bottom) {
+                    graphics.blit(texture, left, top, 0f, 0f, right - left, bottom - top, right - left, bottom - top);
                 }
             }));
         *///?}

@@ -69,7 +69,7 @@ public final class Functions {
         "playanimation", "event", "scriptevent", "music", "toggledownfall", "structure", "mobevent",
         "particle", "gametest", "dialogue", "transfer", "camera", "camerashake", "fog",
         "clearspawnpoint", "hud", "inputpermission", "ride", "summon", "tickingarea", "packstack",
-        "setmaxplayers", "permission", "ops", "controlscheme", "wsserver", "connect");
+        "setmaxplayers", "permission", "ops", "controlscheme", "wsserver", "connect", "aimassist");
 
     /**
      * The registered commands whose Bedrock line the command built here reads as it stands.
@@ -79,13 +79,13 @@ public final class Functions {
      */
     static final Set<String> REGISTERED_WHOLE_LINE = Set.of("playanimation", "event",
         "toggledownfall", "transfer", "camerashake", "fog", "clearspawnpoint", "inputpermission",
-        "tickingarea", "packstack", "setmaxplayers", "music", "controlscheme", "wsserver", "connect");
+        "tickingarea", "packstack", "setmaxplayers", "music", "controlscheme", "wsserver", "connect",
+        "aimassist");
 
     /**
      * Commands Bedrock has and Java has no counterpart for.
      *
-     * `aimassist` changes how a Bedrock client turns input into aim, which a Java client has no
-     * setting for. `editor-allowlist` and `project` belong to Bedrock's
+     * `editor-allowlist` and `project` belong to Bedrock's
      * editor and `sendshowstoreoffer` to its marketplace, and Java has neither. `reloadconfig` and
      * `reloadpacketlimitconfig` read again files only a Bedrock dedicated server has: the permissions,
      * the script variables and secrets, and the packet limits. `script` drives
@@ -94,7 +94,7 @@ public final class Functions {
      * server identifies itself to its services with, and a Java server holds no such key.
      */
     private static final Set<String> BEDROCK_ONLY = Set.of(
-        "aimassist", "editor-allowlist", "project", "reloadconfig",
+        "editor-allowlist", "project", "reloadconfig",
         "reloadpacketlimitconfig", "script", "sendshowstoreoffer", "serveridentity");
 
     /**

@@ -38,7 +38,8 @@ public record CameraPreset(String identifier, String root, CameraView.Preset cam
         "identifier", "inherit_from", "pos_x", "pos_y", "pos_z", "rot_x", "rot_y", "listener",
         "radius", "view_offset", "entity_offset", "starting_rot_x", "starting_rot_y",
         "align_target_and_camera_forward", "rotation_speed", "snap_to_target", "horizontal_rotation_limit",
-        "vertical_rotation_limit", "continue_targeting", "tracking_radius", "control_scheme");
+        "vertical_rotation_limit", "continue_targeting", "tracking_radius", "control_scheme",
+        "aim_assist");
 
     /** Null for a name that is no built-in preset. The namespace may be left off, and usually is. */
     public static CameraPreset builtIn(String written) {

@@ -63,6 +63,7 @@ public final class McAddonClient implements ClientModInitializer {
                 case CameraView.FOV -> at.ioexception.mcaddon.client.render.PlayerFov.accept(body,
                     net.minecraft.client.Minecraft.getInstance().options.fov().get());
                 case at.ioexception.mcaddon.server.PlayerControlSchemes.KIND -> PlayerControl.accept(body);
+                case at.ioexception.mcaddon.bedrock.aim.AimAssistTargeting.KIND -> PlayerAimAssist.accept(body);
                 case at.ioexception.mcaddon.server.BedrockRules.KIND ->
                     at.ioexception.mcaddon.client.render.PlayerRules.accept(body);
                 case at.ioexception.mcaddon.server.WebSockets.CONNECT, at.ioexception.mcaddon.server.WebSockets.ANSWER,
@@ -75,10 +76,14 @@ public final class McAddonClient implements ClientModInitializer {
             at.ioexception.mcaddon.client.render.PaperDoll::draw);
         Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("bedrock_rules"),
             at.ioexception.mcaddon.client.render.PlayerRules::draw);
+        Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("aim_assist"), PlayerAimAssist::draw);
         Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("bedrock_screen"),
             at.ioexception.mcaddon.client.render.PlayerFade::draw);
         Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("control_pointer"), PlayerControl::drawPointer);
 
+        // Before the client's own tick, whose pick the target is laid over.
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.START_CLIENT_TICK
+            .register(PlayerAimAssist::tick);
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK
             .register(client -> {
                 at.ioexception.mcaddon.client.render.AddonEmitters.tick();
@@ -110,6 +115,7 @@ public final class McAddonClient implements ClientModInitializer {
             PlayerHud.clear();
             PlayerInput.clear();
             PlayerControl.clear();
+            PlayerAimAssist.clear();
             PlayerMusic.clear();
             at.ioexception.mcaddon.client.render.PlayerFade.clear();
             at.ioexception.mcaddon.client.render.PlayerFov.clear();

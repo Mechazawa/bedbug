@@ -44,6 +44,7 @@ public final class PlayerCameras {
         SET.put(player.getUUID(), preset);
         send(player, preset.view(request));
         PlayerControlSchemes.refresh(player);
+        PlayerAimAssists.send(player);
         return null;
     }
 
@@ -52,6 +53,7 @@ public final class PlayerCameras {
         SET.remove(player.getUUID());
         send(player, CameraView.CLEARED);
         PlayerControlSchemes.refresh(player);
+        PlayerAimAssists.send(player);
     }
 
     /** The preset the player's camera is set to, or null while they are on their own view. */

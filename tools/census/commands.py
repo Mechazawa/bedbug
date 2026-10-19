@@ -72,7 +72,8 @@ REGISTRATIONS = (JAVA / "server/BedrockCommands.java", JAVA / "server/Dialogues.
                  JAVA / "server/Structures.java",
                  JAVA / "server/ServerAdmin.java", JAVA / "server/GameTestCommand.java",
                  JAVA / "server/MobEvents.java", JAVA / "server/Music.java",
-                 JAVA / "server/BedrockRules.java",
+                 JAVA / "server/BedrockRules.java", JAVA / "server/PlayerAimAssists.java",
+                 JAVA / "bedrock/aim/AimAssistSettings.java",
                  JAVA / "bedrock/camera/CameraView.java", JAVA / "bedrock/hud/HudElement.java",
                  JAVA / "bedrock/input/InputPermission.java", JAVA / "bedrock/input/ControlScheme.java")
 DEFAULT_SAMPLES = ROOT / "scratchpad/bedrock/bedrock-samples"
