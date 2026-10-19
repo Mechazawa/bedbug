@@ -2035,7 +2035,10 @@ public final class Platform {
      * writes, so nothing is registered here. 1.21 reads tints from a colour provider instead, and
      * 1.20.1 has no dyed colour on a stack at all.
      */
-    /** What a layer drawn over the heads-up display may do: fill a rectangle, write a line, draw a mob or an image. */
+    /**
+     * What a layer drawn over the heads-up display or a screen may do: fill a rectangle, write a line,
+     * draw a mob and stretch a whole texture over a rectangle.
+     */
     public interface Painter {
         int width();
 
@@ -2054,7 +2057,7 @@ public final class Platform {
             float lookY);
 
         /** Stretches the whole of a texture over a rectangle. */
-        void image(Identifier texture, int left, int top, int right, int bottom);
+        void image(Identifier texture, int left, int top, int width, int height);
     }
 
     /**
@@ -2114,83 +2117,99 @@ public final class Platform {
     public static void drawOverHud(Identifier id, java.util.function.Consumer<Painter> layer) {
         //? if >=26 {
         net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry.addLast(id, (graphics, delta) ->
-            layer.accept(new Painter() {
-                @Override
-                public int width() {
-                    return graphics.guiWidth();
-                }
-
-                @Override
-                public int height() {
-                    return graphics.guiHeight();
-                }
-
-                @Override
-                public void fill(int left, int top, int right, int bottom, int argb) {
-                    graphics.fill(left, top, right, bottom, argb);
-                }
-
-                @Override
-                public void text(String line, int left, int top, int argb) {
-                    graphics.text(net.minecraft.client.Minecraft.getInstance().font, line, left, top, argb, true);
-                }
-
-                @Override
-                public void entity(LivingEntity entity, int left, int top, int right, int bottom, int size,
-                    float lookX, float lookY) {
-                    net.minecraft.client.gui.screens.inventory.InventoryScreen.extractEntityInInventoryFollowsMouse(
-                        graphics, left, top, right, bottom, size, 0.0625F,
-                        (left + right) / 2F + lookX, (top + bottom) / 2F + lookY, entity);
-                }
-
-                @Override
-                public void image(Identifier texture, int left, int top, int right, int bottom) {
-                    graphics.blit(texture, left, top, right, bottom, 0f, 1f, 0f, 1f);
-                }
-            }));
+            layer.accept(painter(graphics)));
         //?} else {
         /*net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback.EVENT.register((graphics, delta) ->
-            layer.accept(new Painter() {
-                @Override
-                public int width() {
-                    return graphics.guiWidth();
-                }
-
-                @Override
-                public int height() {
-                    return graphics.guiHeight();
-                }
-
-                @Override
-                public void fill(int left, int top, int right, int bottom, int argb) {
-                    graphics.fill(left, top, right, bottom, argb);
-                }
-
-                @Override
-                public void text(String line, int left, int top, int argb) {
-                    graphics.drawString(net.minecraft.client.Minecraft.getInstance().font, line, left, top, argb, true);
-                }
-
-                @Override
-                public void entity(LivingEntity entity, int left, int top, int right, int bottom, int size,
-                    float lookX, float lookY) {
-                    //? if >=1.21 {
-                    net.minecraft.client.gui.screens.inventory.InventoryScreen.renderEntityInInventoryFollowsMouse(
-                        graphics, left, top, right, bottom, size, 0.0625F,
-                        (left + right) / 2F + lookX, (top + bottom) / 2F + lookY, entity);
-                    //?} else {
-                    /^net.minecraft.client.gui.screens.inventory.InventoryScreen.renderEntityInInventoryFollowsMouse(
-                        graphics, (left + right) / 2, bottom, size, -lookX, -lookY, entity);
-                    ^///?}
-                }
-
-                @Override
-                public void image(Identifier texture, int left, int top, int right, int bottom) {
-                    graphics.blit(texture, left, top, 0f, 0f, right - left, bottom - top, right - left, bottom - top);
-                }
-            }));
+            layer.accept(painter(graphics)));
         *///?}
     }
+
+    /** Something a screen draws among its widgets through a painter. */
+    public static net.minecraft.client.gui.components.Renderable renderable(
+        java.util.function.Consumer<Painter> layer) {
+        return (graphics, mouseX, mouseY, delta) -> layer.accept(painter(graphics));
+    }
+
+    //? if >=26 {
+    private static Painter painter(net.minecraft.client.gui.GuiGraphicsExtractor graphics) {
+        return new Painter() {
+            @Override
+            public int width() {
+                return graphics.guiWidth();
+            }
+
+            @Override
+            public int height() {
+                return graphics.guiHeight();
+            }
+
+            @Override
+            public void fill(int left, int top, int right, int bottom, int argb) {
+                graphics.fill(left, top, right, bottom, argb);
+            }
+
+            @Override
+            public void text(String line, int left, int top, int argb) {
+                graphics.text(net.minecraft.client.Minecraft.getInstance().font, line, left, top, argb, true);
+            }
+
+            @Override
+            public void entity(LivingEntity entity, int left, int top, int right, int bottom, int size,
+                float lookX, float lookY) {
+                net.minecraft.client.gui.screens.inventory.InventoryScreen.extractEntityInInventoryFollowsMouse(
+                    graphics, left, top, right, bottom, size, 0.0625F,
+                    (left + right) / 2F + lookX, (top + bottom) / 2F + lookY, entity);
+            }
+
+            @Override
+            public void image(Identifier texture, int left, int top, int width, int height) {
+                graphics.blit(texture, left, top, left + width, top + height, 0, 1, 0, 1);
+            }
+        };
+    }
+    //?} else {
+    /*private static Painter painter(net.minecraft.client.gui.GuiGraphics graphics) {
+        return new Painter() {
+            @Override
+            public int width() {
+                return graphics.guiWidth();
+            }
+
+            @Override
+            public int height() {
+                return graphics.guiHeight();
+            }
+
+            @Override
+            public void fill(int left, int top, int right, int bottom, int argb) {
+                graphics.fill(left, top, right, bottom, argb);
+            }
+
+            @Override
+            public void text(String line, int left, int top, int argb) {
+                graphics.drawString(net.minecraft.client.Minecraft.getInstance().font, line, left, top, argb, true);
+            }
+
+            @Override
+            public void entity(LivingEntity entity, int left, int top, int right, int bottom, int size,
+                float lookX, float lookY) {
+                //? if >=1.21 {
+                net.minecraft.client.gui.screens.inventory.InventoryScreen.renderEntityInInventoryFollowsMouse(
+                    graphics, left, top, right, bottom, size, 0.0625F,
+                    (left + right) / 2F + lookX, (top + bottom) / 2F + lookY, entity);
+                //?} else {
+                /^net.minecraft.client.gui.screens.inventory.InventoryScreen.renderEntityInInventoryFollowsMouse(
+                    graphics, (left + right) / 2, bottom, size, -lookX, -lookY, entity);
+                ^///?}
+            }
+
+            @Override
+            public void image(Identifier texture, int left, int top, int width, int height) {
+                graphics.blit(texture, left, top, 0, 0, width, height, width, height);
+            }
+        };
+    }
+    *///?}
 
     public static void registerDyeTint(java.util.List<Item> items) {
         //? if >=1.21 && <26 {

@@ -64,6 +64,7 @@
     "CameraMixin",
     "FogRendererMixin",
     "HudMixin",
+    "HudTextMixin",
     "KeyboardInputMixin",
     "MouseHandlerMixin",
     "LivingEntityRendererMixin",

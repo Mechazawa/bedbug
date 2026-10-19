@@ -32,6 +32,8 @@ public final class McAddonClient implements ClientModInitializer {
     public void onInitializeClient() {
         follow();
         ActiveAddons.onActivate(set -> follow());
+        at.ioexception.mcaddon.client.screen.PackUi.read(ActiveAddons.active());
+        ActiveAddons.onActivate(at.ioexception.mcaddon.client.screen.PackUi::read);
         AddonSession.register();
         at.ioexception.mcaddon.pack.ReceivedArchives.inCache().prune();
 
@@ -80,6 +82,8 @@ public final class McAddonClient implements ClientModInitializer {
         Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("bedrock_screen"),
             at.ioexception.mcaddon.client.render.PlayerFade::draw);
         Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("control_pointer"), PlayerControl::drawPointer);
+        Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("pack_hud"),
+            at.ioexception.mcaddon.client.render.PackHudText::draw);
 
         // Before the client's own tick, whose pick the target is laid over.
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.START_CLIENT_TICK
@@ -120,6 +124,7 @@ public final class McAddonClient implements ClientModInitializer {
             at.ioexception.mcaddon.client.render.PlayerFade.clear();
             at.ioexception.mcaddon.client.render.PlayerFov.clear();
             at.ioexception.mcaddon.client.render.PlayerRules.clear();
+            at.ioexception.mcaddon.client.render.PackHudText.clear();
             at.ioexception.mcaddon.client.render.AddonEmitters.clear();
         }));
         // Bedrock starts every connection with no camera set and on the locked control scheme, and a

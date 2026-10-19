@@ -1861,6 +1861,44 @@ Mojang's geometry is not committed, so that list is the one place this knowledge
   1632 items and 1166 blocks resolved as written, and with the mapping 1869 items and 1408 blocks
   resolve, the 110 and 303 left being Bedrock's own and none unanswered.
 
+## JSON UI
+
+`bedrock/ui/` reads a resource pack's `ui/` files and lays out what packs do with them to a server's
+forms and to the heads-up display's title and action bar; `client/screen/PackUi` holds the active
+set's definitions. `UiDefinitions` merges definitions key by key (a pack's same-named control lays
+its keys over the lower one, `controls` and `bindings` are replaced whole, `modifications` edit them
+in place) and settles `$variables`; `UiExpression` evaluates binding expressions; `UiLayout` places
+controls by `size`, `offset` and anchors, with stack panels, grids and collection factories.
+`ServerFormUi` and `HudUi` are what a form and the display hand that layout as bindings, collections
+and factories, both pure, so they read the same on every version.
+
+- **Mojang's UI files are not shipped**, so a definition resting on one of Bedrock's controls has no
+  base. Three stand-ins answer for it in `UiDefinitions.standIn`: `server_form.long_form_panel` is
+  this mod's own form screen (`UiControl.VANILLA_FORM`), `common_dialogs.main_panel_no_buttons` a
+  225 by 200 panel showing its `$child_control`, and any `common.*button` or `common_buttons.*` a Java
+  button labelled with its `$button_text`. Anything else is drawn from what the pack wrote and named.
+- **`long_form` is Bedrock's until a pack states its `controls` or `type`.** A pack only adding
+  bindings to it keeps this mod's form, hidden where those bindings say so; `ServerFormUi.made`
+  builds that stand-in.
+- **The form kind comes from the script.** `minecraft_server_ui.js` gives each form class a static
+  `serverForm` (`long_form` or `custom_form`) and the description carries it as `kind`; `body()` is
+  its own element type so `#form_text` can be told from a label. A data driven `CustomForm` has none
+  and is never laid out from a pack.
+- **The title and action bar are taken as they arrive.** `HudTextMixin` hands each `setTitle`,
+  `setSubtitle` and `setOverlayMessage` to `client/render/PackHudText`, which drops Java's own when a
+  pack hides Bedrock's for that text. It is a mixin of its own beside `HudMixin`, and the pack's
+  controls are drawn by a layer added through `Platform.drawOverHud`.
+- **What is not drawn is reported by file or control** through `UiDefinitions.report`, called from
+  `PackFiles.report`: a file changing a screen outside `server_form` and `hud` (followed through every
+  name they mention), an undrawn control type, `anims`, a font size and a `custom_form` layout.
+
+`JsonUiClientGameTest` opens the test pack's `tp:tiles` form under a routed title and reads the
+panel, the grid cells, the icon and the heading back off the screen, presses a tile with the pointer
+and reads the selection back as a tag, then opens the same form under a plain title and finds Java's
+buttons. It sends a `tp_banner:` title and a `tp_tally:` action bar and reads the pack's labels, their
+places and Java's own hidden title and action bar back, then a plain one of each. The pack side is
+`tools/testpack/pack/resources/ui/`.
+
 ## Add-ons handed over at join
 
 A client joining a server that runs this mod plays with exactly the server's add-ons for that

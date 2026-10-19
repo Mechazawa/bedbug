@@ -106,7 +106,7 @@ public final class PlayerAimAssist {
 
         Identifier image = reticle(target instanceof EntityHitResult ? ENTITY_RETICLE : BLOCK_RETICLE);
         if (image != null) {
-            painter.image(image, (int) left, (int) top, (int) right, (int) bottom);
+            painter.image(image, (int) left, (int) top, (int) (right - left), (int) (bottom - top));
             return;
         }
         int size = Math.max(2, (int) Math.min(right - left, bottom - top) / 4);

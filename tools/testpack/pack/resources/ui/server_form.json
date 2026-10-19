@@ -1,0 +1,145 @@
+{
+  // An action form whose title starts with "tp_tiles:" is drawn as a grid of tiles, three across and
+  // two down, each a button showing its icon and its text; any other action form is Bedrock's own.
+  "namespace": "server_form",
+
+  "long_form": {
+    "modifications": [
+      {
+        "array_name": "bindings",
+        "operation": "insert_back",
+        "value": [
+          { "binding_name": "#title_text" },
+          {
+            "binding_type": "view",
+            "source_property_name": "((#title_text - 'tp_tiles:') = #title_text)",
+            "target_property_name": "#visible"
+          }
+        ]
+      }
+    ]
+  },
+
+  "tp_tiles_form": {
+    "type": "panel",
+    "size": [180, 120],
+    "$prefix": "tp_tiles:",
+    "bindings": [
+      { "binding_name": "#title_text" },
+      {
+        "binding_type": "view",
+        "source_property_name": "(not ((#title_text - $prefix) = #title_text))",
+        "target_property_name": "#visible"
+      }
+    ],
+    "controls": [
+      {
+        "heading": {
+          "type": "label",
+          "anchor_from": "top_left",
+          "anchor_to": "top_left",
+          "offset": [6, 4],
+          "color": [1.0, 0.8, 0.2],
+          "text": "#heading",
+          "bindings": [
+            {
+              "binding_type": "view",
+              "source_control_name": "tp_tiles_form",
+              "source_property_name": "(#title_text - $prefix)",
+              "target_property_name": "#heading"
+            }
+          ]
+        }
+      },
+      {
+        "tiles@server_form.tp_tile_grid": {
+          "anchor_from": "bottom_middle",
+          "anchor_to": "bottom_middle",
+          "offset": [0, -6]
+        }
+      }
+    ]
+  },
+
+  "tp_tile_grid": {
+    "type": "grid",
+    "size": [150, 64],
+    "grid_dimensions": [3, 2],
+    "grid_item_template": "server_form.tp_tile",
+    "collection_name": "form_buttons"
+  },
+
+  "tp_tile": {
+    "type": "button",
+    "size": [50, 32],
+    "default_control": "default",
+    "hover_control": "hover",
+    "$pressed_button_name": "button.form_button_click",
+    "bindings": [
+      { "binding_type": "collection_details", "binding_collection_name": "form_buttons" }
+    ],
+    "controls": [
+      {
+        "default": {
+          "type": "panel",
+          "controls": [
+            {
+              "icon": {
+                "type": "image",
+                "size": [16, 16],
+                "anchor_from": "left_middle",
+                "anchor_to": "left_middle",
+                "offset": [2, 0],
+                "bindings": [
+                  {
+                    "binding_name": "#form_button_texture",
+                    "binding_name_override": "#texture",
+                    "binding_type": "collection",
+                    "binding_collection_name": "form_buttons"
+                  }
+                ]
+              }
+            },
+            {
+              "caption": {
+                "type": "label",
+                "anchor_from": "right_middle",
+                "anchor_to": "right_middle",
+                "offset": [-2, 0],
+                "text": "#form_button_text",
+                "bindings": [
+                  {
+                    "binding_name": "#form_button_text",
+                    "binding_type": "collection",
+                    "binding_collection_name": "form_buttons"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      { "hover": { "type": "label", "text": "under the pointer" } }
+    ]
+  },
+
+  "main_screen_content": {
+    "modifications": [
+      {
+        "array_name": "controls",
+        "operation": "insert_back",
+        "value": [
+          {
+            "tp_factory": {
+              "type": "panel",
+              "factory": {
+                "name": "server_form_factory",
+                "control_ids": { "long_form": "@server_form.tp_tiles_form" }
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
