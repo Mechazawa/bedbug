@@ -28,7 +28,7 @@ import java.util.Set;
  * The worldgen half of a behaviour pack, as the data pack registries Java reads it from.
  *
  * Three directories become three registries. A `biomes/` file becomes a `worldgen/biome` entry, a
- * `features/` file becomes a `worldgen/configured_feature` entry with a bare `worldgen/placed_feature`
+ * `features/` file becomes a configured feature entry with a bare `worldgen/placed_feature`
  * beside it so another feature can name it, and a `feature_rules/` file becomes a second placed
  * feature carrying the scatter the rule asked for. Which biomes that last one reaches is decided at
  * world load rather than in a file, because a Java biome lists its own features and nothing a data
@@ -95,7 +95,7 @@ public final class Worldgen {
             if (configured == null) continue;
 
             Names.Identifier id = Names.split(feature.identifier(), namespace);
-            write(fresh, path(root, id, "worldgen/configured_feature"), configured);
+            write(fresh, path(root, id, Platform.featureDirectory()), configured);
             write(fresh, path(root, id, "worldgen/placed_feature"),
                 placed(id.namespace() + ":" + id.path(), new JsonArray()));
             built.add(feature.identifier());
@@ -130,9 +130,7 @@ public final class Worldgen {
         JsonArray steps = new JsonArray();
         for (int step = 0; step < DECORATION_STEPS; step++) steps.add(new JsonArray());
         json.add("features", steps);
-        json.add("spawners", new JsonObject());
-        json.add("spawn_costs", new JsonObject());
-        json.addProperty("creature_spawn_probability", biome.creatureSpawnProbability());
+        Platform.biomeSpawning(json, biome.creatureSpawnProbability());
         return json;
     }
 
@@ -196,12 +194,7 @@ public final class Worldgen {
     }
 
     private static JsonObject typed(String type, JsonObject config) {
-        if (config == null) return null;
-
-        JsonObject json = new JsonObject();
-        json.addProperty("type", type);
-        json.add("config", config);
-        return json;
+        return config == null ? null : Platform.feature(type, config);
     }
 
     /**
@@ -232,8 +225,9 @@ public final class Worldgen {
     }
 
     private static void addTargets(JsonArray targets, JsonObject rule) {
-        JsonObject state = blockState(rule.get("places_block"));
-        if (state == null) return;
+        BlockReference placed = block(rule.get("places_block"));
+        if (placed == null) return;
+        JsonObject state = placed.json();
 
         JsonElement replaceable = rule.get("may_replace");
         List<JsonElement> named = replaceable != null && replaceable.isJsonArray()
@@ -244,8 +238,8 @@ public final class Worldgen {
             return;
         }
         named.forEach(one -> {
-            JsonObject replaced = blockState(one);
-            if (replaced != null) targets.add(target(blockMatch(replaced.get("Name").getAsString()), state));
+            BlockReference replaced = block(one);
+            if (replaced != null) targets.add(target(blockMatch(replaced.id()), state));
         });
     }
 
@@ -289,26 +283,26 @@ public final class Worldgen {
             places.getAsJsonArray().forEach(one -> {
                 if (!one.isJsonObject()) return;
                 JsonObject weighted = one.getAsJsonObject();
-                JsonObject state = blockState(weighted.get("block"));
+                BlockReference state = block(weighted.get("block"));
                 if (state == null) return;
 
                 JsonObject entry = new JsonObject();
-                entry.add("data", state);
+                entry.add("data", state.json());
                 entry.addProperty("weight", Math.max(1, (int) Json.number(weighted, "weight", 1)));
                 entries.add(entry);
             });
             if (entries.isEmpty()) return null;
 
             provider = new JsonObject();
-            provider.addProperty("type", "minecraft:weighted_state_provider");
+            provider.addProperty("type", Platform.stateProvider("weighted"));
             provider.add("entries", entries);
         } else {
-            JsonObject state = blockState(places);
+            BlockReference state = block(places);
             if (state == null) return null;
 
             provider = new JsonObject();
-            provider.addProperty("type", "minecraft:simple_state_provider");
-            provider.add("state", state);
+            provider.addProperty("type", Platform.stateProvider("simple"));
+            provider.add("state", state.json());
         }
 
         JsonObject config = new JsonObject();
@@ -576,7 +570,7 @@ public final class Worldgen {
      * `spruce` is a spruce log. A pack's own block is registered after its features are written,
      * so its name is written as it stands and its states, which are its own, are named instead.
      */
-    private static JsonObject blockState(JsonElement declared) {
+    private static BlockReference block(JsonElement declared) {
         String name = declared == null ? null : declared.isJsonPrimitive() ? declared.getAsString()
             : declared.isJsonObject() ? Json.text(declared.getAsJsonObject(), "name", null) : null;
         if (name == null) return null;
@@ -587,11 +581,9 @@ public final class Worldgen {
             written.entrySet().forEach(state -> states.put(state.getKey(), state.getValue().getAsString()));
         }
 
-        JsonObject state = new JsonObject();
         if (DataValues.vanilla(name) == null) {
             if (!states.isEmpty()) AddonEntities.unsupported("feature block states");
-            state.addProperty("Name", BedrockBlockNames.packOwn(name));
-            return state;
+            return new BlockReference(BedrockBlockNames.packOwn(name), Map.of());
         }
 
         BedrockBlockNames.Resolved resolved = BedrockBlockNames.state(name, states,
@@ -601,12 +593,13 @@ public final class Worldgen {
             return null;
         }
 
-        state.addProperty("Name", resolved.id());
-        if (!resolved.stated().isEmpty()) {
-            JsonObject properties = new JsonObject();
-            resolved.properties().forEach(properties::addProperty);
-            state.add("Properties", properties);
+        return new BlockReference(resolved.id(),
+            resolved.stated().isEmpty() ? Map.of() : resolved.properties());
+    }
+
+    private record BlockReference(String id, Map<String, String> properties) {
+        JsonObject json() {
+            return Platform.blockState(id, properties);
         }
-        return state;
     }
 }

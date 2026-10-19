@@ -12,6 +12,7 @@ import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.bedrock.particle.ParticleDefinition;
 import at.ioexception.mcaddon.block.AddonBlock;
 import at.ioexception.mcaddon.block.BlockComponents;
+import at.ioexception.mcaddon.bedrock.behaviour.JavaLoot;
 import at.ioexception.mcaddon.bedrock.behaviour.LootTableDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.RecipeDefinition;
 import at.ioexception.mcaddon.pack.BedrockPack;
@@ -1630,15 +1631,13 @@ public final class PackConverter {
         JsonArray entries = new JsonArray();
         entries.add(entry);
 
-        JsonObject survives = new JsonObject();
-        survives.addProperty("condition", "minecraft:survives_explosion");
         JsonArray conditions = new JsonArray();
-        conditions.add(survives);
+        conditions.add(JavaLoot.condition("minecraft:survives_explosion"));
 
         JsonObject pool = new JsonObject();
         pool.addProperty("rolls", 1);
         pool.add("entries", entries);
-        pool.add("conditions", conditions);
+        JavaLoot.conditions(pool, conditions);
         JsonArray pools = new JsonArray();
         pools.add(pool);
 
