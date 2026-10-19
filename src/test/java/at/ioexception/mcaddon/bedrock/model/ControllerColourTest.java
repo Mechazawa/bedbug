@@ -51,6 +51,13 @@ class ControllerColourTest {
         assertEquals(0x80FF0000, overlay.evaluate(environment, 0));
     }
 
+    @Test
+    void evaluatesRedBeforeAlphaSoTemporariesCarryOver() {
+        assertEquals(0x80FF0000, colour("""
+            {"color": {"r": "{t.half = 0.501960784; return 1.0;}", "g": 0.0, "b": 0.0, "a": "t.half"}}
+            """).evaluate(new MolangEnvironment(), WHITE));
+    }
+
     private static ControllerColour colour(String body) {
         return colour(body, "color");
     }
