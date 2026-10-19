@@ -1950,6 +1950,91 @@ public final class BehaviourGameTests {
     }
 
     /**
+     * A scaled mob pushing at a wall takes no suffocation damage from it.
+     *
+     * `tp:mite` states a box of 0.8 by 0.5 and a scale of 1.35, which makes it 1.08 blocks wide. Three
+     * of them are stood at the middle of the blocks beside a wall two blocks high, so each box reaches
+     * four hundredths of a block into the wall, and driven at it for five seconds. Java's collision
+     * lets a box go on into a block it already reaches into, until the eyes are in it.
+     */
+    @GameTest(maxTicks = PRESSED_TICKS + 20)
+    public void aScaledMobPressedAgainstAWallTakesNoWallDamage(GameTestHelper helper) {
+        for (int x = 0; x <= STAND.getX() + 1; x++) {
+            for (int z = 0; z <= PEN_DEPTH; z++) {
+                helper.setBlock(new BlockPos(x, STAND.getY() - 1, z), net.minecraft.world.level.block.Blocks.STONE);
+            }
+        }
+        for (int z = 0; z <= PEN_DEPTH; z++) {
+            BlockPos wall = new BlockPos(STAND.getX() + 1, STAND.getY(), z);
+            helper.setBlock(wall, net.minecraft.world.level.block.Blocks.BARRIER);
+            helper.setBlock(wall.above(), net.minecraft.world.level.block.Blocks.BARRIER);
+        }
+        List<AddonEntity> mites = java.util.stream.Stream.of(STAND, STAND.south(), STAND.south(2))
+            .map(spot -> spawn(helper, MITE, spot))
+            .filter(java.util.Objects::nonNull)
+            .toList();
+        if (mites.isEmpty()) {
+            helper.succeed();
+            return;
+        }
+
+        mites.forEach(mite -> mite.setNoAi(false));
+        BlockPos beyond = helper.absolutePos(STAND.east(4));
+        helper.onEachTick(() -> mites.forEach(mite -> mite.getMoveControl()
+            .setWantedPosition(beyond.getX() + 0.5, mite.getY(), mite.getZ(), 1)));
+        helper.runAfterDelay(PRESSED_TICKS, () -> {
+            mites.forEach(mite -> helper.assertTrue(mite.getHealth() == mite.getMaxHealth(),
+                MITE + " pushed at a wall and has " + mite.getHealth() + " of its " + mite.getMaxHealth()
+                    + " health, last hurt by "
+                    + (mite.getLastDamageSource() == null ? "nothing" : mite.getLastDamageSource().getMsgId())
+                    + "."));
+            helper.succeed();
+        });
+    }
+
+    private static final String MITE = "tp:mite";
+
+    /** Five seconds of pushing, half a dozen times what a mob inside a wall needs to be hurt. */
+    private static final int PRESSED_TICKS = 100;
+
+    /** The last row of the pen, which holds the three mites side by side. */
+    private static final int PEN_DEPTH = 4;
+
+    /**
+     * A mob with `minecraft:movement.hover` stays in the air where it was let go.
+     *
+     * `tp:hoverer` is Mojang's bee pattern: `minecraft:can_fly`, `minecraft:navigation.hover` and
+     * `minecraft:movement.hover` beside a `minecraft:physics` that leaves gravity on. It has no goal,
+     * so nothing asks it to move, and Bedrock keeps such a mob where it is.
+     */
+    @GameTest(maxTicks = HOVER_TICKS + 20)
+    public void aHoveringMobLetGoInTheAirStaysThere(GameTestHelper helper) {
+        AddonEntity hoverer = spawn(helper, HOVERER, STAND.above(3));
+        if (hoverer == null) {
+            helper.succeed();
+            return;
+        }
+
+        hoverer.setNoAi(false);
+        double released = hoverer.getY();
+        double[] lowest = {released};
+        helper.onEachTick(() -> lowest[0] = Math.min(lowest[0], hoverer.getY()));
+        helper.runAfterDelay(HOVER_TICKS, () -> {
+            helper.assertTrue(released - lowest[0] < HOVER_BAND,
+                HOVERER + " was let go in the air and sank " + (released - lowest[0]) + " blocks.");
+            helper.succeed();
+        });
+    }
+
+    private static final String HOVERER = "tp:hoverer";
+
+    /** Three seconds, long enough for a mob that falls to reach the floor three blocks down. */
+    private static final int HOVER_TICKS = 60;
+
+    /** How far a hovering mob may drift down while it holds its place. */
+    private static final double HOVER_BAND = 0.25;
+
+    /**
      * A group saying the entity climbs gives it a navigator that goes up walls, and says so.
      *
      * `minecraft:can_climb` decides the navigator and is also one of the flags a pack's own render

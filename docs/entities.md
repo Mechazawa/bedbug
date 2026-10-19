@@ -80,6 +80,11 @@ the entity's tick.
 - `minecraft:uses_legacy_ambient_sounds`: the idle sound depends on head under water, off the
   ground, or young, from the moments in `sounds.json`.
 - Water slows it by `drag_factor`. Honey lowers its jump to `jump_prevented_value`.
+- It despawns only as its `minecraft:despawn` says. Without one it never does, however far the
+  nearest player is.
+- A block it overlaps from the side by up to half its width pushes it back out. Java lets a box walk
+  on into a block it already reaches into, so a mob wider than a block, placed beside a wall, would
+  otherwise suffocate in the wall.
 
 ## Fields read inside components
 
@@ -88,7 +93,8 @@ the entity's tick.
 - **Navigation**: prices water, lava and damaging blocks as its allowances say. A generic navigation
   that swims and never walks plans like a fish.
 - **Movement**: turns no faster than `max_turn` (default 30 degrees per tick). Strolls and swims as
-  far as `xz_dist` and `y_dist`. Jumps at `jump_power`.
+  far as `xz_dist` and `y_dist`. Jumps at `jump_power`. `minecraft:movement.hover` holds its height
+  with gravity off, whatever `minecraft:physics` says, as Mojang's bee and allay do.
 - **Looking and temptation**: looks at a player for `look_time`. Is tempted from `within_radius`.
 - **Item pickup**: walks to an item at the behaviour's own priority.
 - **Targets**: hunts and answers what `entity_types` filters name. Vanilla mobs have the families of
