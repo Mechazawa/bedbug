@@ -108,6 +108,7 @@ public final class ServerHooks {
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> state = null);
         CommandRegistrationCallback.EVENT.register(ServerHooks::registerCommands);
         WorldEvents.register();
+        WebSockets.register();
         // Both sides are asked whatever the other answers: a pack's script watches for the attempt
         // and not only for the damage that lands.
         ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> {
@@ -146,6 +147,7 @@ public final class ServerHooks {
                 PlayerHuds.forget(left);
                 PlayerInputs.forget(left);
                 PropertyOverrides.forget(left);
+                WebSockets.forget(left);
                 playerLeft(left);
             });
         });

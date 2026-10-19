@@ -42,6 +42,7 @@ import net.minecraft.world.level.gamerules.GameRules;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -2725,18 +2726,31 @@ public final class Platform {
         *///?}
     }
 
-    /** The enchantments on a stack, by name. They became data-driven holders in 1.21. */
-    public static Set<String> enchantmentsOf(net.minecraft.world.item.ItemStack stack) {
+    /** The enchantments on a stack, by name, with their levels. They became data-driven holders in 1.21. */
+    public static Map<String, Integer> enchantmentsOf(net.minecraft.world.item.ItemStack stack) {
         //? if >=1.21 {
-        return EnchantmentHelper.getEnchantmentsForCrafting(stack).keySet().stream()
-            .map(holder -> holder.unwrapKey().map(key -> idOf(key).getPath()).orElse(""))
-            .collect(Collectors.toSet());
+        net.minecraft.world.item.enchantment.ItemEnchantments enchantments =
+            EnchantmentHelper.getEnchantmentsForCrafting(stack);
+        return enchantments.keySet().stream().collect(Collectors.toMap(
+            holder -> holder.unwrapKey().map(key -> idOf(key).getPath()).orElse(""),
+            enchantments::getLevel, Math::max));
         //?} else {
-        /*return EnchantmentHelper.getEnchantments(stack).keySet().stream()
-            .map(BuiltInRegistries.ENCHANTMENT::getKey)
-            .filter(java.util.Objects::nonNull)
-            .map(Identifier::getPath)
-            .collect(Collectors.toSet());
+        /*return EnchantmentHelper.getEnchantments(stack).entrySet().stream()
+            .filter(enchantment -> BuiltInRegistries.ENCHANTMENT.getKey(enchantment.getKey()) != null)
+            .collect(Collectors.toMap(
+                enchantment -> BuiltInRegistries.ENCHANTMENT.getKey(enchantment.getKey()).getPath(),
+                Map.Entry::getValue, Math::max));
+        *///?}
+    }
+
+    /** Which chat type a message was sent as. The bound type became a holder in 1.20.5. */
+    public static ResourceKey<net.minecraft.network.chat.ChatType> chatTypeOf(
+        net.minecraft.network.chat.ChatType.Bound bound, net.minecraft.core.RegistryAccess access) {
+        //? if >=1.21 {
+        return bound.chatType().unwrapKey().orElse(null);
+        //?} else {
+        /*return access.registryOrThrow(net.minecraft.core.registries.Registries.CHAT_TYPE)
+            .getResourceKey(bound.chatType()).orElse(null);
         *///?}
     }
 

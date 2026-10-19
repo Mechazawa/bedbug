@@ -65,6 +65,8 @@ public final class McAddonClient implements ClientModInitializer {
                 case at.ioexception.mcaddon.server.PlayerControlSchemes.KIND -> PlayerControl.accept(body);
                 case at.ioexception.mcaddon.server.BedrockRules.KIND ->
                     at.ioexception.mcaddon.client.render.PlayerRules.accept(body);
+                case at.ioexception.mcaddon.server.WebSockets.CONNECT, at.ioexception.mcaddon.server.WebSockets.ANSWER,
+                    at.ioexception.mcaddon.server.WebSockets.EVENT -> WebSocketLink.accept(kind, body);
                 default -> {
                 }
             }
@@ -120,6 +122,7 @@ public final class McAddonClient implements ClientModInitializer {
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             PlayerCamera.clear();
             PlayerControl.clear();
+            WebSocketLink.joined();
         });
     }
 

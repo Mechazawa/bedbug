@@ -444,8 +444,8 @@ class FunctionsTest {
 
     @Test
     void dropsABedrockOnlyCommandAndSaysWhichOne() throws IOException {
-        assertEquals(List.of(), translate("wsserver ws://127.0.0.1:19131"));
-        assertTrue(problems.contains("command wsserver"), problems.toString());
+        assertEquals(List.of(), translate("sendshowstoreoffer @s 1234"));
+        assertTrue(problems.contains("command sendshowstoreoffer"), problems.toString());
     }
 
     /** The commands acting on a player's own view and input keep the arguments a pack writes them with. */

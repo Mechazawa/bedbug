@@ -823,6 +823,26 @@ These are the checks it runs, and what each one catches:
   stop`. A server tells a client what only it acts on through `Channels.sendInstruction`, one payload
   carrying a kind and a body, which `McAddonClient` hands to the class the kind names.
 
+  **`/bedrock wsserver` (and `connect`) is held by the client.** Bedrock opens the WebSocket from
+  the game the player runs, so it reaches what that machine reaches and outlives the world.
+  `server.WebSockets` only sends the player's client the address; `client.WebSocketLink` holds a
+  `java.net.http.WebSocket` and speaks the JSON protocol. A subscription set and each
+  `commandRequest` go back to the server through `Channels.sendRequest`, the one client-to-server
+  payload beside a form's answer; a line runs through `PackCommand.said` as the player with the
+  player's own authority, and its answer carries Bedrock's status code: 0, `-2147483648` for a line
+  that did not parse and `-2147352576` for one that failed. A failure is told from a success by
+  the red `CommandSourceStack.sendFailure` wraps it in, since both reach a source through one method.
+  `PlayerMessage` (from `ServerPlayerChatMixin`, one call per receiving player), `BlockBroken` and
+  `BlockPlaced` (`BlockItemMixin`) are raised; their bodies follow what `socket-be` records Bedrock
+  sending, and a field nothing records the values of (a player's `color`, `destructionMethod`, an
+  enchantment's `name`) is left out. The other events, `PlayerTravelled`, `ItemUsed` and the rest,
+  are not raised: their numbering (travel methods, use methods, Bedrock's numeric entity and biome
+  ids) and when each fires are known only from a few observations. Encryption is the ECDH and
+  AES-256-CFB8 exchange behind `ws:encrypt`; the old `enableencryption` command form and the
+  `cfb` mode are refused. `WebSocketClientGameTest` runs `WebSocketPeer`, an RFC 6455 server on a
+  plain socket bound to 127.0.0.1, and asserts the answers, the world change, the three events, an
+  encrypted round trip and `closewebsocket`.
+
   `CameraFadeClientGameTest` reads a fade back as the last rectangle the heads-up display filled
   across the whole screen, which the test source set's `GuiGraphicsExtractorMixin` writes into
   `Drawn` beside every line of text drawn, and a field of view off the camera a frame was drawn with.

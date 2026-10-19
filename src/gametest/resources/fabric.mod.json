@@ -51,7 +51,8 @@
       "at.ioexception.mcaddon.clientgametest.CameraClientGameTest",
       "at.ioexception.mcaddon.clientgametest.CameraPresetClientGameTest",
       "at.ioexception.mcaddon.clientgametest.ControlSchemeClientGameTest",
-      "at.ioexception.mcaddon.clientgametest.ItemAndBlockClientGameTest"
+      "at.ioexception.mcaddon.clientgametest.ItemAndBlockClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.WebSocketClientGameTest"
     ]
   },
   "mixins": [

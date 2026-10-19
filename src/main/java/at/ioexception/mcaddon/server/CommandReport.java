@@ -18,6 +18,21 @@ public interface CommandReport {
     /** A line the game read and then declined. */
     void declined(String command, String reason);
 
+    /** Lines no add-on wrote, such as a WebSocket server's, whose gaps say nothing about an add-on. */
+    CommandReport NONE = new CommandReport() {
+        @Override
+        public void untranslatable(String what) {
+        }
+
+        @Override
+        public void unreadable(String command, String reason) {
+        }
+
+        @Override
+        public void declined(String command, String reason) {
+        }
+    };
+
     /**
      * The lines `/bedrock` is given, and the ones a pack's entity events, animations, dialogue scenes
      * and blocks run.

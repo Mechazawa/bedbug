@@ -134,6 +134,7 @@ public final class BedrockCommands {
         Jigsaws.registerCommand(dispatcher);
         Structures.registerCommand(dispatcher);
         ServerAdmin.registerCommand(dispatcher);
+        WebSockets.registerCommand(dispatcher);
         BedrockRules.registerCommand(dispatcher);
 
         MobEvents.registerCommand(dispatcher);

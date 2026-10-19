@@ -16,7 +16,8 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 //?}
 
 /**
- * What the server tells one client to draw, and the one answer that comes back.
+ * What the server tells one client to draw, and what a client sends back: a form's answer, and the
+ * requests a WebSocket connection the client holds makes on its player's behalf.
  *
  * The server owns every entity property a behaviour pack declares, because a pack's script sets them
  * and scripts only run there. The client needs them to answer `q.property` while it draws, so each
@@ -38,6 +39,7 @@ public final class Channels {
     private static final Identifier INPUT = McAddon.id("input_permissions");
     private static final Identifier SEAT_TURN = McAddon.id("seat_turn");
     private static final Identifier INSTRUCTION = McAddon.id("instruction");
+    private static final Identifier REQUEST = McAddon.id("request");
 
     /**
      * The longest form description or form answer in characters.
@@ -64,6 +66,21 @@ public final class Channels {
             ByteBufCodecs.STRING_UTF8, Instruction::kind,
             ByteBufCodecs.STRING_UTF8, Instruction::body,
             Instruction::new);
+
+        @Override
+        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /** What a client asks of the server on behalf of its player, named by its kind and written out as text. */
+    private record Request(String kind, String body) implements CustomPacketPayload {
+        private static final CustomPacketPayload.Type<Request> TYPE = new CustomPacketPayload.Type<>(REQUEST);
+
+        private static final StreamCodec<FriendlyByteBuf, Request> CODEC = StreamCodec.composite(
+            ByteBufCodecs.STRING_UTF8, Request::kind,
+            ByteBufCodecs.STRING_UTF8, Request::body,
+            Request::new);
 
         @Override
         public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
@@ -412,6 +429,48 @@ public final class Channels {
         *///?}
     }
 
+    /** Whether the server this client plays on reads a request, which one without this mod does not. */
+    public static boolean canRequest() {
+        //? if >=1.21 {
+        return net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.canSend(Request.TYPE);
+        //?} else {
+        /*return net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.canSend(REQUEST);
+        *///?}
+    }
+
+    public static void sendRequest(String kind, String body) {
+        //? if >=1.21 {
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new Request(kind, body));
+        //?} else {
+        /*FriendlyByteBuf buffer = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buffer.writeUtf(kind);
+        buffer.writeUtf(body);
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(REQUEST, buffer);
+        *///?}
+    }
+
+    /** The server side of a request: who asked, what kind of thing and its body. */
+    @FunctionalInterface
+    public interface RequestHandler {
+        void request(ServerPlayer player, String kind, String body);
+    }
+
+    /** Hands every request to the handler on the server's own thread. */
+    public static void receiveRequests(RequestHandler handler) {
+        //? if >=1.21 {
+        ServerPlayNetworking.registerGlobalReceiver(Request.TYPE,
+            (payload, context) -> context.server().execute(
+                () -> handler.request(context.player(), payload.kind(), payload.body())));
+        //?} else {
+        /*ServerPlayNetworking.registerGlobalReceiver(REQUEST,
+            (server, player, network, buffer, sender) -> {
+                String kind = buffer.readUtf();
+                String body = buffer.readUtf();
+                server.execute(() -> handler.request(player, kind, body));
+            });
+        *///?}
+    }
+
     public static void sendCameraShake(ServerPlayer player, String shake) {
         //? if >=1.21 {
         ServerPlayNetworking.send(player, new Shake(shake));
@@ -530,6 +589,7 @@ public final class Channels {
         PayloadTypeRegistry.clientboundPlay().register(SeatTurn.TYPE, SeatTurn.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Instruction.TYPE, Instruction.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(FormResponse.TYPE, FormResponse.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(Request.TYPE, Request.CODEC);
         //?}
     }
 
