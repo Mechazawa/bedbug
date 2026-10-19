@@ -1,0 +1,52 @@
+name: Release
+
+# A pushed tag v<version> builds the mod for every 26.x target at that version, runs the unit and
+# server game tests, and publishes the jars as a GitHub release. Running it by hand builds and
+# tests the same way and keeps the jars as an artifact of the run.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Take the version from the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: echo "VERSION_ARG=-Pmod.version=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
+      - name: Build and test
+        run: >
+          ./gradlew --no-daemon $VERSION_ARG
+          :26.1.2:assemble :26.2:assemble
+          :26.2:checkstyleMain :26.2:test :26.2:runGameTest
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcaddon-jars
+          path: versions/26.*/build/libs/*.jar
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: versions/26.*/build/libs/*.jar
+          generate_release_notes: true
