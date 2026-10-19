@@ -30,6 +30,7 @@ import {
 } from "@minecraft/server";
 import { ActionFormData, CustomForm, ObservableBoolean, ObservableString } from "@minecraft/server-ui";
 import { register } from "@minecraft/server-gametest";
+import { weighTheProbe } from "./weigh.js";
 
 const VILLAGER = "minecraft:villager_v2";
 
@@ -146,6 +147,10 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
     if (event.id !== "tp:hut") return;
     const [x, y, z] = event.message.split(" ").map(Number);
     world.structureManager.place("tp:hut", world.getDimension("overworld"), { x, y, z });
+});
+
+system.afterEvents.scriptEventReceive.subscribe(event => {
+    if (event.id === "tp:weigh") weighTheProbe(Number(event.message));
 });
 
 // Commands written the way a pack writes them, none of which Java's parser reads as they stand: a

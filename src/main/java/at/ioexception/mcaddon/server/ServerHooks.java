@@ -6,7 +6,10 @@ import at.ioexception.mcaddon.bedrock.behaviour.PlayerDefinition;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.script.CustomCommands;
+import at.ioexception.mcaddon.script.ScriptDebugger;
+import at.ioexception.mcaddon.script.ScriptDiagnostics;
 import at.ioexception.mcaddon.script.ScriptHost;
+import at.ioexception.mcaddon.script.ScriptProfiler;
 import at.ioexception.mcaddon.state.AddonState;
 import com.mojang.brigadier.CommandDispatcher;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
@@ -54,6 +57,7 @@ public final class ServerHooks {
     public static void register() {
         ServerLifecycleEvents.SERVER_STARTED.register(ServerHooks::start);
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> stop());
+        ServerTickEvents.START_SERVER_TICK.register(server -> ScriptDiagnostics.beginTick());
         ServerTickEvents.END_SERVER_TICK.register(ServerHooks::tick);
         ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {
             if (state != null) {
@@ -298,6 +302,9 @@ public final class ServerHooks {
     }
 
     private static void stop() {
+        ScriptDebugger.closeCurrent();
+        ScriptProfiler.stop();
+        ScriptDiagnostics.stopCapture();
         if (scripts != null) {
             scripts.raiseSystemBeforeEvent("shutdown", Map.of());
             // A test area started and never cleared is holding its chunks, and a chunk held by a
@@ -320,6 +327,7 @@ public final class ServerHooks {
         AreaSchedules.tick(server);
         SelectorTags.finishAll();
         if (state != null && server.getTickCount() % 1200 == 0) state.save();
+        ScriptDiagnostics.endTick(server, scripts);
     }
 
     /**

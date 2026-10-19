@@ -164,6 +164,7 @@ public final class BedrockCommands {
         registerHud(dispatcher);
         registerInputPermission(dispatcher);
         GameTestCommand.registerCommand(dispatcher);
+        ScriptCommand.registerCommand(dispatcher);
     }
 
     /**

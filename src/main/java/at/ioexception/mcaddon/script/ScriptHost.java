@@ -2,12 +2,14 @@ package at.ioexception.mcaddon.script;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.pack.BedrockPack;
+import at.ioexception.mcaddon.pack.PackManifest;
 import at.ioexception.mcaddon.pack.PackRole;
 import at.ioexception.mcaddon.registry.ActiveAddons;
 import at.ioexception.mcaddon.state.AddonState;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
@@ -22,6 +24,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Supplier;
 
 /**
@@ -55,6 +58,7 @@ public final class ScriptHost {
 
     private final MinecraftServer server;
     private final Context context;
+    private final List<ScriptedPack> scripted = new ArrayList<>();
     private final ScriptBridge bridge;
     private final ScriptCoverage coverage;
 
@@ -63,6 +67,7 @@ public final class ScriptHost {
 
     private Value runtime;
     private int loaded;
+    private long lastTickNanos;
 
     private ScriptHost(MinecraftServer server, Context context, ScriptBridge bridge,
         ScriptCoverage coverage) {
@@ -158,6 +163,7 @@ public final class ScriptHost {
     private void load(ScriptFileSystem files, BedrockPack pack) {
         String entry = pack.manifest().scriptEntry();
         String root = "/" + pack.manifest().uuid();
+        scripted.add(new ScriptedPack(pack, root + "/scripts/"));
 
         for (Path script : pack.list("scripts", ".js")) {
             try {
@@ -171,7 +177,10 @@ public final class ScriptHost {
         String entryPath = root + "/" + entry;
         try {
             String code = Files.readString(pack.file(entry), StandardCharsets.UTF_8);
-            context.eval(Source.newBuilder("js", code, entryPath)
+            // Named by its file rather than by a string, so a debugger finds it under the same kind of
+            // name as the modules it imports, which the file system hands the engine.
+            context.eval(Source.newBuilder("js", new java.io.File(entryPath))
+                .content(code)
                 .mimeType("application/javascript+module")
                 .build());
             loaded++;
@@ -197,6 +206,7 @@ public final class ScriptHost {
             McAddon.LOGGER.error("Nothing reached the scripts {}: that came from off the server thread.", what);
             return fallback;
         }
+        ScriptDebugger.awaitConfiguration();
 
         try {
             return call.get();
@@ -207,9 +217,16 @@ public final class ScriptHost {
     }
 
     public void tick(int tick) {
+        long started = System.nanoTime();
         bridge.beginTick(TICK_BUDGET_NANOS);
         deliverQueued();
         enter("during tick " + tick, () -> runtime.invokeMember("tick", tick), null);
+        lastTickNanos = System.nanoTime() - started;
+    }
+
+    /** How long the last tick's queued events and scheduled callbacks took to run. */
+    public long lastTickNanos() {
+        return lastTickNanos;
     }
 
     /** Raises `system.beforeEvents.startup` and returns what the pack registered on it, as JSON. */
@@ -415,6 +432,33 @@ public final class ScriptHost {
 
     public ScriptCoverage coverage() {
         return coverage;
+    }
+
+    /** The engine every pack's script runs in, which a debugger or a profiler attaches to. */
+    public Engine engine() {
+        return context.getEngine();
+    }
+
+    /** The packs whose script loaded, in the order they loaded. */
+    public List<ScriptedPack> scripted() {
+        return List.copyOf(scripted);
+    }
+
+    /**
+     * A behaviour pack whose script runs here, and the folder its scripts sit in inside the guest
+     * file system. Bedrock's script tools name a script by its path inside that folder.
+     */
+    public record ScriptedPack(BedrockPack pack, String scriptsRoot) {
+        /** The name Bedrock's tools give the script at this guest path, or null when it is another pack's. */
+        public String nameOf(String guestPath) {
+            return guestPath != null && guestPath.startsWith(scriptsRoot)
+                ? guestPath.substring(scriptsRoot.length()) : null;
+        }
+
+        public UUID moduleUuid() {
+            PackManifest.Module module = pack.manifest().scriptModule();
+            return module == null ? null : module.uuid();
+        }
     }
 
     public void stop() {
