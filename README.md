@@ -423,9 +423,44 @@ Against a server without this mod a client plays with its own add-ons.
   held back and lists every file of the world with its length; `setmaxplayers` sets the limit a
   login is checked against for this session only; `packstack server` lists Java's data packs in the
   order they apply, every converted add-on among them, and `packstack client` the add-on resource
-  packs; `permission` and `ops` list Java's operators, read `ops.json` again and make a player an
-  operator or a member. Like Bedrock's, each asks for more than a function's authority, so an
+  packs; `permission` and `ops` list Java's operators and the visitors, read `ops.json` again and
+  make a player an operator, a member or a visitor. A visitor may only look round, as in Bedrock: the
+  server refuses every block it uses, places or breaks, every item that places a block or an entity,
+  an item frame, a chest minecart, a chest boat or a mount's inventory, and every hit or damage it
+  causes, whatever client it plays on. It may still trade, ride and use what it carries, and a
+  script's `playerPermissionLevel` answers `Visitor` for it. Like Bedrock's, each asks for more than a function's authority, so an
   operator types it after `/bedrock` and a pack's function cannot run it.
+- `/bedrock changesetting allow-cheats false`, which stops players typing any command Bedrock
+  marks as needing cheats, operators included, until it is turned on again or the server stops.
+  The console, command blocks, functions, scripts and an entity's own commands keep running every
+  command, as on a Bedrock server. A dedicated server starts with `allow-cheats` from its
+  `server.properties`, and with cheats on when the file does not say.
+- Bedrock's packet rate limiter, on a dedicated server whose `server.properties` holds
+  `enable-packet-rate-limiter=true` (off when the line is absent, as on Bedrock). It reads
+  `packetlimitconfig.json` from the server's directory in Bedrock's own format: each limit group's
+  `BucketPacketLimitAlgorithm` gives every connection a bucket per Bedrock packet id, and a
+  `defaultAlgorithm` one per Java packet type once the player is in the world. A packet with no room
+  in its bucket is dropped and logged as a `Packet Limit Violation`. Each Bedrock id is matched to the
+  Java packets carrying the same message, so `9` limits chat and `77` commands; an id no Java client
+  sends, such as a skin upload, is named in the log. `/bedrock reloadpacketlimitconfig` reads the file
+  again for every connected player.
+- A dedicated server's script configuration, read through `@minecraft/server-admin`. Put
+  `variables.json`, `secrets.json` and `permissions.json` in `config/default/` for every pack, or in
+  `config/<script module uuid>/` for one, whose keys win over the default's. A script reads a
+  variable's value and a secret's name only, and a pack depending on a beta script API its
+  `allowed_modules` leaves out does not load its script. `/bedrock reloadconfig`, typed by an
+  operator or the console, reads the files again for the running scripts. `opPlayer` and
+  `deopPlayer` change Java's operator list; the allow list, level storage, kicks, transfers and the
+  join event are reported as not implemented.
+- The server identity key, with `serveridentity save`, `delete` and `status` as on a Bedrock
+  dedicated server. A server starts with the unencrypted P-384 private key at
+  `keys/server_identity_key.pem` in its directory (SEC1 or PKCS#8 PEM, as
+  `openssl ecparam -name secp384r1 -genkey -noout` writes), or with a key it makes and keeps in
+  memory, so it is a new server to its clients each time it starts until a key is saved. A key file
+  that cannot be read is logged and a generated key is used. Each client running this mod keeps
+  the key a server presented by the address it joined at, in `mcaddon_trusted_servers.json`, and
+  asks the player before playing on a known address presenting another key: accepting keeps the new
+  key and refusing disconnects. A world the client hosts is not asked about.
 - `/bedrock music`, which plays a track to everyone as music rather than as a sound somewhere in the
   world: in the music category, with the game's own background music waiting until it is over,
   faded in and out over the seconds the line gives, looped when asked, turned up or down while it
@@ -917,19 +952,16 @@ description with its own scattering coefficients. `/fog` carries the `air` block
 pack pushes a fog for; Java draws its own fog for the other media and has no volumetric fog to give
 the second block to.
 
-**Six of Bedrock's commands.** `project` and `editor-allowlist` belong to
-the Bedrock Editor. `sendshowstoreoffer` speaks to the marketplace, and
-`reloadconfig`, `reloadpacketlimitconfig` and `serveridentity` to a Bedrock server's own
-configuration and identity. A function using any of them keeps its other lines and the dropped
-command is reported.
+**Three of Bedrock's commands.** `project` and `editor-allowlist` belong to the Bedrock Editor and
+`sendshowstoreoffer` speaks to the marketplace. A function using any of them keeps its other lines
+and the dropped command is reported.
 
 **One form of a command the rest of which translates.** The cameras Bedrock draws behind or round an
 entity (`minecraft:follow_orbit`, `minecraft:fixed_boom` and `minecraft:control_scheme_camera`), and
 the camera forms that follow a spline, hang the camera off an entity, turn it towards one or offset
-it from one, which would each be a camera this mod draws itself; the button prompts and the touch
-controls `hud` names, for the reasons above; a `permission` visitor, a
-level below Java's member; `changesetting allow-cheats`, because a Java server always lets an
-operator run commands; and the liquid setting `ignore_waterlogging` on 1.20.1, which waterlogs
+it from one, which would each be a camera this mod draws itself; the input hints and the touch
+controls `hud` names, which a Java client draws none of; and the liquid setting
+`ignore_waterlogging` on 1.20.1, which waterlogs
 every block a jigsaw or structure places. The line does not run and the form is named, rather than being handed to a
 parser that would refuse it over the wrong word.
 
@@ -945,7 +977,9 @@ words at the end, and `schedule clear` is spelled alike in both.
 `playanimation`, `event`, `scriptevent`, `music`, `toggledownfall`, `structure`, `mobevent`,
 `particle`, `dialogue`, `gametest`, `transfer`, `camera`, `camerashake`, `fog`, `clearspawnpoint`,
 `hud`, `inputpermission`, `ride`, `summon`, `tickingarea`, `packstack`, `setmaxplayers`,
-`permission`, `ops`, `aimassist`, `controlscheme`, `wsserver`, `connect` and `script` are registered by this mod in the tree a Bedrock line is read against,
+`permission`, `ops`, `aimassist`, `controlscheme`, `wsserver`, `connect`, `script`, `changesetting`,
+`reloadconfig`, `reloadpacketlimitconfig` and `serveridentity` are registered by this mod in the tree a
+Bedrock line is read against,
 beside Java's own commands and never in Java's tree, as are Bedrock's own forms of `place`,
 `schedule` and `gamerule`, and a line using one is written out in the form the command built there
 reads. `clearspawnpoint` takes a

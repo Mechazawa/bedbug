@@ -48,7 +48,8 @@ public record PackManifest(
 
     /**
      * `entry` and `language` are set only on a script module. `uuid` is what a script debugger names
-     * the module it attaches to, and is null where the manifest states none.
+     * the module it attaches to and the folder under `config/` holding its own variables, secrets and
+     * permissions, and is null where the manifest states none.
      */
     public record Module(ModuleType type, UUID uuid, String entry, String language) {
     }
@@ -61,8 +62,10 @@ public record PackManifest(
      * One pack requiring a script API, such as `@minecraft/server` 2.6.0.
      *
      * An optional one is a script API the pack runs without, so a game that lacks it is no problem.
+     * A beta one names a version carrying Bedrock's `beta` label, which `permissions.json` under
+     * `config/` decides whether the pack may import.
      */
-    public record ModuleDependency(String moduleName, SemVer version, boolean optional) {
+    public record ModuleDependency(String moduleName, SemVer version, boolean optional, boolean beta) {
     }
 
     /** Who wrote the pack, under what licence, and where it lives. */
@@ -289,8 +292,9 @@ public record PackManifest(
             SemVer version = SemVer.tryFrom(dependency.get("version"));
             String moduleName = Json.text(dependency, "module_name", null);
             if (moduleName != null) {
-                moduleDependencies.add(new ModuleDependency(
-                    moduleName, version, Json.bool(dependency, "optional", false)));
+                moduleDependencies.add(new ModuleDependency(moduleName, version,
+                    Json.bool(dependency, "optional", false),
+                    Json.text(dependency, "version", "").contains("beta")));
                 continue;
             }
             UUID required = uuid(dependency.get("uuid"));

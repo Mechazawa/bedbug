@@ -70,6 +70,7 @@ public final class McAddonClient implements ClientModInitializer {
                     at.ioexception.mcaddon.client.render.PlayerRules.accept(body);
                 case at.ioexception.mcaddon.server.WebSockets.CONNECT, at.ioexception.mcaddon.server.WebSockets.ANSWER,
                     at.ioexception.mcaddon.server.WebSockets.EVENT -> WebSocketLink.accept(kind, body);
+                case at.ioexception.mcaddon.server.ServerIdentity.KIND -> TrustedServers.presented(body);
                 default -> {
                 }
             }
@@ -96,6 +97,7 @@ public final class McAddonClient implements ClientModInitializer {
                 at.ioexception.mcaddon.client.render.AddonEmitters.tick();
                 at.ioexception.mcaddon.client.render.PaperDoll.tick(client);
                 PlayerMusic.tick();
+                TrustedServers.tick(client);
                 if (client.level != null) Animators.tickOffscreen(client.level);
             });
         if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
@@ -124,6 +126,7 @@ public final class McAddonClient implements ClientModInitializer {
             PlayerControl.clear();
             PlayerAimAssist.clear();
             PlayerMusic.clear();
+            TrustedServers.clear();
             at.ioexception.mcaddon.client.render.PlayerFade.clear();
             at.ioexception.mcaddon.client.render.PlayerFov.clear();
             at.ioexception.mcaddon.client.render.PlayerRules.clear();

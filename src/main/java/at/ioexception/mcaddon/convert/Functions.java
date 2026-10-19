@@ -69,7 +69,8 @@ public final class Functions {
         "playanimation", "event", "scriptevent", "music", "toggledownfall", "structure", "mobevent",
         "particle", "gametest", "dialogue", "transfer", "camera", "camerashake", "fog",
         "clearspawnpoint", "hud", "inputpermission", "ride", "summon", "tickingarea", "packstack",
-        "setmaxplayers", "permission", "ops", "controlscheme", "wsserver", "connect", "aimassist", "script");
+        "setmaxplayers", "permission", "ops", "controlscheme", "wsserver", "connect", "aimassist", "script",
+        "changesetting", "reloadpacketlimitconfig", "reloadconfig", "serveridentity");
 
     /**
      * The registered commands whose Bedrock line the command built here reads as it stands.
@@ -80,21 +81,16 @@ public final class Functions {
     static final Set<String> REGISTERED_WHOLE_LINE = Set.of("playanimation", "event",
         "toggledownfall", "transfer", "camerashake", "fog", "clearspawnpoint", "inputpermission",
         "tickingarea", "packstack", "setmaxplayers", "music", "controlscheme", "wsserver", "connect",
-        "aimassist", "script");
+        "aimassist", "script", "reloadpacketlimitconfig", "reloadconfig", "serveridentity");
 
     /**
      * Commands Bedrock has and Java has no counterpart for.
      *
-     * `editor-allowlist` and `project` belong to Bedrock's
-     * editor and `sendshowstoreoffer` to its marketplace, and Java has neither. `reloadconfig` and
-     * `reloadpacketlimitconfig` read again files only a Bedrock dedicated server has: the permissions,
-     * the script variables and secrets, and the packet limits. `serveridentity` saves, deletes and
-     * reports the key a Bedrock dedicated server identifies itself to its services with, and a Java
-     * server holds no such key.
+     * `editor-allowlist` and `project` belong to Bedrock's editor and `sendshowstoreoffer` to its
+     * marketplace, and Java has neither.
      */
     private static final Set<String> BEDROCK_ONLY = Set.of(
-        "editor-allowlist", "project", "reloadconfig",
-        "reloadpacketlimitconfig", "sendshowstoreoffer", "serveridentity");
+        "editor-allowlist", "project", "sendshowstoreoffer");
 
     /**
      * Commands whose rewrite changes the front of a line and leaves the rest as the pack wrote it.
@@ -119,15 +115,11 @@ public final class Functions {
      * A line carrying one does not run and the form is reported, rather than reaching a parser that
      * would reject it with a message about the wrong word.
      *
-     * `changesetting allow-cheats` is the reason given at `changeSetting`. `hud touch_controls` names
-     * buttons only a touch screen shows, and `hud tooltips` the button prompts whose rules Mojang
-     * publishes nowhere, as `HudElement` says. A `permission` visitor may only look,
-     * and Java has no level below a member.
+     * `hud touch_controls` names buttons only a touch screen shows, and `hud tooltips` the button
+     * prompts whose rules Mojang publishes nowhere, as `HudElement` says.
      */
     private static final Set<String> BEDROCK_ONLY_KEYWORDS = Set.of(
-        "changesetting allow-cheats", "changesetting false", "changesetting true",
-        "hud tooltips", "hud touch_controls",
-        "permission visitor");
+        "hud tooltips", "hud touch_controls");
 
     /**
      * Commands Java says the same thing with under another name, and nothing else.
@@ -431,7 +423,7 @@ public final class Functions {
             case "replaceitem" -> replaceItem(rest, unsupported);
             case "ride" -> ride(rest, unsupported);
             case "save" -> save(rest, unsupported);
-            case "permission", "ops" -> permission(name, rest, unsupported);
+            case "permission", "ops" -> name + (rest.isEmpty() ? "" : " " + rest);
             case "time" -> time(rest);
             case "changesetting" -> changeSetting(rest, unsupported);
             case "structure" -> structure(rest, unsupported);
@@ -1134,18 +1126,6 @@ public final class Functions {
         };
     }
 
-    /**
-     * `permission list|reload` and `permission set <player> <level>`, which Bedrock also spells
-     * `ops`, read by the command built here. Of Bedrock's three levels, a visitor may only look round,
-     * which no Java operator level or game mode says.
-     */
-    private static String permission(String name, String rest, Set<String> unsupported) {
-        List<String> words = words(rest);
-        if (words.size() > 2 && words.get(2).equalsIgnoreCase("visitor")) {
-            return dropped("permission", "visitor", unsupported);
-        }
-        return name + (rest.isEmpty() ? "" : " " + rest);
-    }
 
     /**
      * The line with its first argument quoted, which is how a name carrying a colon reaches Java.
@@ -1183,18 +1163,19 @@ public final class Functions {
     }
 
     /**
-     * `changesetting <setting> <value>`, of whose two settings Java has a command for one.
-     *
-     * Bedrock's `allow-cheats` decides whether an operator may run commands at all. A Java server
-     * always lets an operator run them and has no switch to stop it, and its one switch for cheats,
-     * the one a world opened to the network uses, lets every player run commands instead.
+     * `changesetting difficulty <value>`, which is Java's `difficulty`, and `changesetting
+     * allow-cheats <true|false>`, read by the command built here. Microsoft's documentation spells
+     * the second `allowcheats`.
      */
     private static String changeSetting(String rest, Set<String> unsupported) {
         String[] parts = SPACE.split(rest, 2);
-        if (parts.length < 2 || !parts[0].equalsIgnoreCase("difficulty")) {
-            return dropped("changesetting", parts[0], unsupported);
-        }
-        return "difficulty " + difficulty(parts[1]);
+        String setting = parts[0].toLowerCase(Locale.ROOT);
+        if (parts.length < 2) return dropped("changesetting", setting, unsupported);
+        return switch (setting) {
+            case "difficulty" -> "difficulty " + difficulty(parts[1]);
+            case "allow-cheats", "allowcheats" -> "changesetting allow-cheats " + parts[1];
+            default -> dropped("changesetting", setting, unsupported);
+        };
     }
 
     /**

@@ -48,7 +48,7 @@ class PackManifestTest {
             List.of(new PackManifest.PackDependency(UUID.fromString(OTHER), new SemVer(2, 0, 0))),
             manifest.packDependencies());
         assertEquals(
-            List.of(new PackManifest.ModuleDependency("@minecraft/server", new SemVer(2, 6, 0), false)),
+            List.of(new PackManifest.ModuleDependency("@minecraft/server", new SemVer(2, 6, 0), false, false)),
             manifest.moduleDependencies());
     }
 

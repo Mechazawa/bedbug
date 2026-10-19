@@ -815,7 +815,14 @@ These are the checks it runs, and what each one catches:
   spawns its template's entities. `BedrockTree.MERGED_FORMS` merges Java's short `place structure`
   lines into the node `Structures` registers. `save query`, `setmaxplayers`, `packstack` and `permission` are typed by the
   console after `/bedrock` and read back through what the console is told, because a line run the
-  way a pack runs one has a function's authority and each of these asks for more. `/gametest
+  way a pack runs one has a function's authority and each of these asks for more.
+  `PermissionGameTests` sets a mock server player to `visitor` and to `member` through `/bedrock
+  permission set` and reads back whether a door opened, a chest's menu opened, a block was placed
+  and one broken, and a pig lost health. `server.Visitors` holds the visitors in the add-on state
+  and refuses their clicks through Fabric's interaction callbacks and `ALLOW_DAMAGE`, registered
+  before `WorldEvents` so a script hears none of them; `VisitorMenuMixin` refuses a container
+  entity's and a mount's inventory, which open with no click on a block. Everything refused is the
+  wiki's list of the player permissions Bedrock's visitor preset has off. `/gametest
   create` lays out the test pack's `tp:hut_stands`, `pos` finds its area, `runthis` runs it there,
   and `runsetuntilfail` runs `tp:fails_the_second_time`, which the test pack's script registers to
   pass once and fail after, until its second round. `/mobevent` holds back the dragon the End's
@@ -831,6 +838,18 @@ These are the checks it runs, and what each one catches:
   Bedrock's words after a jigsaw's position, `save`, `setmaxplayers` and `permission` parse only for
   an operator typing `/bedrock`. Java's own `place` forms keep the level Java asks for them. A test of one of
   those types it through Java's own tree instead of through `BedrockLines`.
+
+  **`allow-cheats` refuses only what a player types.** `server.Cheats` holds the switch for the
+  session and `CommandsMixin` asks it at the head of `Commands.performCommand`, where a typed command
+  still carries the source that typed it; a command whose source is a player is refused unless
+  Bedrock's command metadata marks it `requires_cheats` false (the line after `/bedrock` is judged by
+  the Bedrock command it names, and a script's custom command by its `cheatsRequired`). Which origins
+  keep running was measured on Bedrock Dedicated Server 1.26.52 with cheats off: the console, a
+  repeating command block, `tick.json`, a scheduled function, a script's `runCommand`, an animation
+  controller's command and an entity event's `queue_command` all ran a cheat command. Bedrock refuses
+  some game rules with cheats off (`commands.gamerule.type.nocheatsenabled`) without publishing
+  which, so `gamerule` is left to run. `changesettingAllowCheatsStopsWhatAPlayerTypes` in
+  `BedrockCommandGameTests` asserts both halves.
 
   `MusicClientGameTest` plays the test pack's chime through `/bedrock music` and reads back the
   track the client plays: music heard everywhere, looping when asked, turned down by `music volume`,
@@ -878,6 +897,15 @@ These are the checks it runs, and what each one catches:
   walks the player into the column over a block under the floor and reads the dust `BorderDust` adds
   going up and down, and none once `showbordereffect` is off.
 
+  `PacketLimitClientGameTest` starts a dedicated server with `enable-packet-rate-limiter=true`,
+  writes `packetlimitconfig.json` into the run directory, sends bursts of commands that each add one
+  to a score, and reads the score back: a bucket of three that never drains lets three through, a
+  looser file nobody reloaded changes nothing, and `/bedrock reloadpacketlimitconfig` lets the next
+  burst through whole. `server.PacketLimits` holds the file as read, `BedrockPacketIds` the Java
+  packets each Bedrock id stands for, and `ConnectionPacketLimitMixin` drops a packet on the network
+  thread before any listener sees it. The switch is read off the dedicated server's own
+  `server.properties` through `SettingsAccessor`, so a single player world never limits anything.
+
   One client game test at a time: the entry point list in `src/gametest/resources/fabric.mod.json`
   is the whole selection, so cutting it down to one class runs that class alone. Put it back after.
 
@@ -924,7 +952,10 @@ These are the checks it runs, and what each one catches:
   tamed, tags whatever a player tamed, and tags a player crouching and standing up again.
   `tp:override` overrides the nearest wisp's `tp:settled` to false for the player who sent it, which
   a wisp settled a second after arriving is not, and tags that player when an override of a property
-  the wisp never declared is refused; `tp:override_clear` clears the override again.
+  the wisp never declared is refused; `tp:override_clear` clears the override again. `tp:config` tags the player with two variables and a
+  secret `config/` hands the pack, which `ScriptGameTests` writes, reads again with
+  `bedrock reloadconfig` from the console and asserts on, and `tp:operator` makes the player an
+  operator and unmakes it twice each.
 
   `cameras/presets/` holds the presets. `tp:overlook` is a free camera at 0.5 120 0.5 turned to a
   pitch of 20 and a yaw of 45 that hears from the player, and also asks for `player_effects` and
@@ -2132,6 +2163,21 @@ gives everything a priority of 1 and leaves nothing out; a target out of reach i
 acted on. Before 26 the reticle is placed with the player's own field of view, which leaves out what
 sprinting does to it.
 
+**A server's identity is a key the client remembers.** `server.ServerIdentity` takes
+`keys/server_identity_key.pem` in the game directory as the session's P-384 key when the server
+starts, or generates one and keeps it in memory, and sends the public half to every joining client as
+the `server_identity` instruction. Bedrock's own server documentation says this much and no more: the
+key identifies the server to clients, a generated key makes players re-accept server trust, and the
+server validates the key at start. It does not say what a server does with a key that fails that
+check, so a bad file is logged at `ERROR` and a generated key used. It publishes no wording for the
+client's question either, so `client.TrustedServers` asks in plain words of its own (the
+`mcaddon.server_trust.*` keys in `en_us.json`), keeps the trusted keys by the address the player
+typed in `mcaddon_trusted_servers.json` in the game directory, and asks once the world is up with no
+other screen open. The key is one per process, so a dedicated server and a client in one process
+(the client game tests) read the same `running()`. `ServerTrustClientGameTest` starts two servers on
+one port with `Worlds.server(context, port)`, because every other server test takes a free port and
+so a new address, which a client trusts without asking.
+
 **A gap and an answer are counted apart.** A command the game read and then declined, a selector that
 matched nothing, a structure holding a chest this cannot fill: those are listed after the verdict
 line rather than among the gaps, because counting them would make a pack asking an ordinary question
@@ -2213,7 +2259,15 @@ src/main/resources/assets/mcaddon/script/
   minecraft_vanilla_data.js  The @minecraft/vanilla-data tables, read from the registries
   minecraft_server_gametest.js  The @minecraft/server-gametest surface: registrations, the Test
                                 object, the sequence and the runner the server tick drives
+  minecraft_server_admin.js  The @minecraft/server-admin surface: `config/` variables and secrets,
+                             `dedicatedServer`, operators
 ```
+
+**Every pack's script shares one copy of each module**, so `minecraft_server_admin.js` tells which
+pack called by the first frame of the stack whose file sits under a pack's header uuid, which is
+the folder `ScriptHost.load` puts a pack's scripts in. `script.ScriptConfig` maps that header uuid
+to the script module uuid naming the pack's folder under `config/`. A game test server answers
+`isDedicatedServer()` with true, so `dedicatedServer` is decided by the server's class instead.
 
 `ScriptHost.MODULES` maps an import specifier to one of these files. A module is linked before any
 of it runs, so a specifier a pack imports that is not in that map, or a named export missing from

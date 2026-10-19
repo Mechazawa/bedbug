@@ -84,6 +84,7 @@ public final class McAddon implements ModInitializer {
         at.ioexception.mcaddon.server.AddonSyncTask.register();
         at.ioexception.mcaddon.server.AddonSyncLogin.register();
         at.ioexception.mcaddon.sync.ServedArchives.register();
+        at.ioexception.mcaddon.server.PacketLimits.register();
         ServerHooks.register();
         at.ioexception.mcaddon.structure.PackStructures.register();
     }

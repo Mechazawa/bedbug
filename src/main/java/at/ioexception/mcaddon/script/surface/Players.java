@@ -21,6 +21,7 @@ import at.ioexception.mcaddon.server.PlayerControlSchemes;
 import at.ioexception.mcaddon.server.PlayerHuds;
 import at.ioexception.mcaddon.server.PlayerInputs;
 import at.ioexception.mcaddon.server.PropertyOverrides;
+import at.ioexception.mcaddon.server.Visitors;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -247,9 +248,10 @@ public final class Players extends Surface {
         return 0;
     }
 
-    /** Java has operators and everyone else, which are Bedrock's `Operator` and `Member`. */
+    /** Bedrock's `Visitor`, `Member` and `Operator`, a Java operator being the last. */
     @HostAccess.Export
     public int playerPermissionLevel(String id) {
+        if (Visitors.is(player(id))) return 0;
         return commandPermissionLevel(id) >= 1 ? 2 : 1;
     }
 

@@ -28,7 +28,8 @@
     },
     { "module_name": "@minecraft/server", "version": "2.0.0" },
     { "module_name": "@minecraft/server-ui", "version": "2.0.0" },
-    { "module_name": "@minecraft/server-gametest", "version": "1.0.0-beta" }
+    { "module_name": "@minecraft/server-gametest", "version": "1.0.0-beta" },
+    { "module_name": "@minecraft/server-admin", "version": "1.0.0-beta" }
   ],
   "has_education_metadata": false,
   "metadata": {
