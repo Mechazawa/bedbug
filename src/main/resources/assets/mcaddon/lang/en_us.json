@@ -2,6 +2,7 @@
   "item.mcaddon.entity_bucket": "Bucket of %s",
   "block.mcaddon.border_block": "Border",
   "item.mcaddon.border_block": "Border",
+  "options.mcaddon.title": "Bedrock Add-ons",
   "options.mcaddon.colourGrading": "Vibrant Visuals Colour Grading",
   "options.mcaddon.colourGrading.tooltip": "Lets add-ons grade the picture per biome, the way Bedrock Edition does under Vibrant Visuals. Off by default, as in Bedrock's default graphics.",
   "options.mcaddon.paperDoll": "Paper Doll",
