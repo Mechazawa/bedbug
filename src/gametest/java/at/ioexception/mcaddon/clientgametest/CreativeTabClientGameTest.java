@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.clientgametest;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.ActiveAddons;
 import at.ioexception.mcaddon.registry.AddonItems;
 import net.fabricmc.fabric.api.client.creativetab.v1.FabricCreativeModeInventoryScreen;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -10,6 +11,7 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContex
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationUiState;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.CreativeModeTabs;
@@ -23,7 +25,8 @@ import java.util.stream.Collectors;
  * The creative inventory a player opens holds a pack's items: every one of them in the add-ons' own
  * tab, and the ones whose `menu_category` names a category in the Java tab that category stands for.
  * `tp:lamp` and `tp:totem` file themselves under construction, which is the building blocks tab, and
- * `tp:wand` under equipment, which is the combat tab.
+ * `tp:wand` under equipment, which is the combat tab. An add-on a server handed over earlier in the
+ * run stays registered and dormant, and no tab offers its items.
  */
 public final class CreativeTabClientGameTest implements FabricClientGameTest {
     @Override
@@ -34,7 +37,9 @@ public final class CreativeTabClientGameTest implements FabricClientGameTest {
             context.getInput().pressKey(options -> options.keyInventory);
             context.waitForScreen(CreativeModeInventoryScreen.class);
 
-            Set<String> declared = new TreeSet<>(AddonItems.all().keySet());
+            Set<String> declared = AddonItems.all().keySet().stream()
+                .filter(id -> !ActiveAddons.isDormant(Identifier.parse(id)))
+                .collect(Collectors.toCollection(TreeSet::new));
             Assert.that(!declared.isEmpty(), "The test add-on registered no items to look for.");
             Set<String> own = shown(context, BuiltInRegistries.CREATIVE_MODE_TAB.getValue(McAddon.id("addons")));
             Set<String> missing = new TreeSet<>(declared);
