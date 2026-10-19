@@ -194,9 +194,15 @@ public final class Platform {
 
     @FunctionalInterface
     public interface LineReader {
-        /** Null for a line with nothing in it to run. */
+        /**
+         * Null for a line with nothing in it to run.
+         *
+         * `topLevel` is whether the command is the one a chat line or a command block started, as
+         * against a line of a function. From 1.20.3 a function's lines run one frame deeper; before
+         * that nothing tells them apart and it is always false.
+         */
         ReadLine read(com.mojang.brigadier.context.CommandContext<CommandSourceStack> command,
-            CommandSourceStack source) throws com.mojang.brigadier.exceptions.CommandSyntaxException;
+            CommandSourceStack source, boolean topLevel) throws com.mojang.brigadier.exceptions.CommandSyntaxException;
     }
 
     /**
@@ -213,7 +219,7 @@ public final class Platform {
         return new RunningLine(reader);
         //?} else {
         /*return command -> {
-            ReadLine read = reader.read(command, command.getSource());
+            ReadLine read = reader.read(command, command.getSource(), false);
             if (read == null) return 0;
             try {
                 return runToEnd(read.parsed(), read.line());
@@ -240,7 +246,8 @@ public final class Platform {
             net.minecraft.commands.execution.ChainModifiers modifiers,
             net.minecraft.commands.execution.ExecutionControl<CommandSourceStack> output)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
-            ReadLine read = reader.read(step.getTopContext().copyFor(sender), sender);
+            ReadLine read = reader.read(step.getTopContext().copyFor(sender), sender,
+                output.currentFrame().depth() == 0);
             if (read == null) return;
 
             com.mojang.brigadier.context.ContextChain<CommandSourceStack> chain;

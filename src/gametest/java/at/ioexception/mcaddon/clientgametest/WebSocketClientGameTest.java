@@ -4,6 +4,9 @@ import com.google.gson.JsonObject;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import at.ioexception.mcaddon.server.CommandReport;
+import at.ioexception.mcaddon.server.PackCommand;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerPlayer;
@@ -35,6 +38,7 @@ public final class WebSocketClientGameTest implements FabricClientGameTest {
     private static final int FAILED_TO_PARSE_COMMAND = -2147483648;
     private static final int EXECUTION_FAIL = -2147352576;
     private static final int STONE_HELD = 5;
+    private static final int REFUSAL_WAIT = 40;
 
     @Override
     public void runTest(ClientGameTestContext context) {
@@ -47,8 +51,30 @@ public final class WebSocketClientGameTest implements FabricClientGameTest {
                 server.getPlayerList().getPlayers().get(0).blockPosition());
             BlockPos gold = below.offset(0, 0, 3);
 
+            String target = "127.0.0.1:" + peer.port();
+            String line = "bedrock connect " + target;
             context.runOnClient(client -> client.player.connection.sendCommand(
-                "bedrock connect 127.0.0.1:" + peer.port()));
+                "execute as @s run " + line));
+            context.runOnClient(client -> client.player.connection.sendCommand(
+                "bedrock execute as @s run connect " + target));
+            context.runOnClient(client -> client.player.connection.sendCommand(
+                "function mcaddon_gametest:connect {target:\"" + target + "\"}"));
+            world.getServer().runOnServer(server -> {
+                CommandSourceStack asPlayer = server.getPlayerList().getPlayers().get(0).createCommandSourceStack();
+                PackCommand.tryFrom(null, "wsserver " + target).run(asPlayer, CommandReport.NONE);
+                PackCommand.tryFrom(null, "connect " + target).said(asPlayer);
+                server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), line);
+            });
+            for (int tick = 0; tick < REFUSAL_WAIT; tick++) {
+                context.waitTick();
+            }
+            Assert.that(world.getServer().computeOnServer(server -> server.getPlayerList().getPlayers().get(0)
+                .entityTags().contains("ws_function_ran")), "The function that tries to connect ran.");
+            Assert.that(!peer.connected(), "Only a player typing /connect opens the connection: one run through"
+                + " execute, a Bedrock execute, a script, a Java function, a line a WebSocket server sent, or the"
+                + " console connected the client.");
+
+            context.runOnClient(client -> client.player.connection.sendCommand(line));
             waitFor(context, peer::connected, "/connect never reached the WebSocket server on port "
                 + peer.port() + ".");
             Assert.that(peer.subprotocols().contains("com.microsoft.minecraft.wsencrypt"),

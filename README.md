@@ -434,12 +434,15 @@ Against a server without this mod a client plays with its own add-ons.
   name such as `record.cat` or `cat`.
 - `/bedrock wsserver <address>` and `/bedrock connect <address>`, which connect the player's own
   client to a WebSocket server such as Code Builder or a tool written with `mcpews` or `socket-be`,
-  for an operator. The connection lasts until the server closes it, it sends `closewebsocket`,
+  for an operator who types the command in chat, as in Bedrock, where only the player typing it is
+  connected. A function (a pack's or a data pack's), a command block, a script, an entity event, a
+  timeline, a dialogue, `execute`, the console and a line a WebSocket server sent are all refused
+  with a failure message and connect nothing. The connection lasts until the server closes it, it sends `closewebsocket`,
   `/bedrock wsserver off` is typed or the game ends. The server's command lines run as the player and
   are answered with Bedrock's status codes, and it may subscribe to `PlayerMessage` (chat, `/say`,
   `/me` and `/tell`), `BlockBroken` and `BlockPlaced`; no other event is raised. A server asking for
-  encryption gets it. The setting Bedrock has to refuse unencrypted connections has no counterpart:
-  every connection is allowed.
+  encryption gets it. Bedrock's "Require Encrypted Websockets" setting, which refuses unencrypted
+  connections, has no counterpart: every connection is allowed.
 - Seven of Bedrock's game rules Java keeps no rule for, set through `/bedrock gamerule` and a
   script's `world.gameRules`, kept beside the world and acted on by this mod. `recipesunlock` off
   stops recipes unlocking as a player collects what they take, which Java does through an

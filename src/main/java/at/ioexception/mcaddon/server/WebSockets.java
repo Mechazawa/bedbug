@@ -10,6 +10,8 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.minecraft.commands.CommandSourceStack;
@@ -29,6 +31,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * The server's half of Bedrock's `/wsserver`, which `/connect` is another name for.
@@ -74,6 +78,12 @@ public final class WebSockets {
     /** An empty slot, as Bedrock reports one: no name, and room for its largest stack. */
     private static final int EMPTY_SLOT_ROOM = 255;
 
+    private static final Pattern WRITTEN = Pattern.compile("^/?(?:wsserver|connect)\\s+(.+)$");
+    private static final SimpleCommandExceptionType TYPED_ONLY = new SimpleCommandExceptionType(Component.literal(
+        "This command can only be typed by a player, not run by a function, command block, script or another command"));
+    private static final SimpleCommandExceptionType NO_PERMISSION = new SimpleCommandExceptionType(
+        Component.literal("You do not have permission to use this command"));
+
     private static final Map<UUID, Set<String>> SUBSCRIBED = new HashMap<>();
 
     /** What each player held when a break started, which the tool may not survive. */
@@ -87,13 +97,36 @@ public final class WebSockets {
             .requires(source -> Platform.allowedAt(source, 2))
             .then(Commands.argument("serverUri", StringArgumentType.greedyString())
                 .executes(command -> {
-                    Channels.sendInstruction(command.getSource().getPlayerOrException(), CONNECT,
-                        StringArgumentType.getString(command, "serverUri"));
-                    return 1;
+                    throw TYPED_ONLY.create();
                 })));
         dispatcher.register(Commands.literal("connect")
             .requires(source -> Platform.allowedAt(source, 2))
             .redirect(wsserver));
+    }
+
+    /**
+     * Connects the player's client when the player typed the line themselves, as Bedrock's
+     * `/wsserver` and `/connect` allow, and refuses it everywhere else.
+     *
+     * Bedrock keeps a command block and a function from running them and has no selector for them,
+     * so only the player who types the command is connected. `typed` says the line came straight
+     * from the player's own `/bedrock`: no function, command block, script, event, dialogue,
+     * `execute` or line a WebSocket server sent. Any of those reaches the same commands through the
+     * Bedrock tree instead, which refuses.
+     *
+     * @return whether the line was one of these two commands and has been dealt with
+     */
+    public static boolean connectTyped(CommandSourceStack source, String line, boolean typed)
+        throws CommandSyntaxException {
+        Matcher written = WRITTEN.matcher(line.strip());
+        if (!written.matches()) return false;
+        if (!(typed && source.getEntity() instanceof ServerPlayer player)) {
+            throw TYPED_ONLY.create();
+        }
+        if (!Platform.allowedAt(source, 2)) throw NO_PERMISSION.create();
+
+        Channels.sendInstruction(player, CONNECT, written.group(1));
+        return true;
     }
 
     public static void register() {

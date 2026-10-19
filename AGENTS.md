@@ -840,7 +840,13 @@ These are the checks it runs, and what each one catches:
 
   **`/bedrock wsserver` (and `connect`) is held by the client.** Bedrock opens the WebSocket from
   the game the player runs, so it reaches what that machine reaches and outlives the world.
-  `server.WebSockets` only sends the player's client the address; `client.WebSocketLink` holds a
+  `server.WebSockets` only sends the player's client the address, and only for a line the player
+  typed: the `/bedrock` command's executor calls `WebSockets.connectTyped`, which accepts a line
+  when `Platform.LineReader`'s `topLevel` is true (frame depth 0, so not a function line), the
+  Java input begins `bedrock ` (so not `execute ... run bedrock`) and the entity is a player. The
+  Bedrock tree's own `wsserver`/`connect` always refuse, which covers `PackCommand` (scripts,
+  events, timelines, dialogue, functions, WebSocket-run lines), a Bedrock `execute` and the
+  console. `client.WebSocketLink` holds a
   `java.net.http.WebSocket` and speaks the JSON protocol. A subscription set and each
   `commandRequest` go back to the server through `Channels.sendRequest`, the one client-to-server
   payload beside a form's answer; a line runs through `PackCommand.said` as the player with the
