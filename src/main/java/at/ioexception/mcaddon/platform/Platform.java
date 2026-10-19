@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.platform;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.behaviour.JavaLoot;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.commands.CommandSourceStack;
@@ -1136,16 +1137,17 @@ public final class Platform {
      * 1.21 made enchantments data-driven and renamed the function with them, from one that meant
      * looting alone to one naming whichever enchantment it counts.
      */
-    public static void lootingCount(com.google.gson.JsonObject function,
-        com.google.gson.JsonElement count, com.google.gson.JsonElement limit) {
+    public static com.google.gson.JsonObject lootingCount(com.google.gson.JsonElement count,
+        com.google.gson.JsonElement limit) {
         //? if >=1.21 {
-        function.addProperty("function", "minecraft:enchanted_count_increase");
+        com.google.gson.JsonObject function = JavaLoot.function("minecraft:enchanted_count_increase");
         function.addProperty("enchantment", "minecraft:looting");
         //?} else {
-        /*function.addProperty("function", "minecraft:looting_enchant");
+        /*com.google.gson.JsonObject function = JavaLoot.function("minecraft:looting_enchant");
         *///?}
         function.add("count", count);
         if (limit != null) function.add("limit", limit);
+        return function;
     }
 
     /**
@@ -1169,10 +1171,9 @@ public final class Platform {
      * 1.21 replaced the looting-only condition with one naming its enchantment and stating the
      * enchanted chance as a line through the level rather than as a multiplier.
      */
-    public static void lootingChance(com.google.gson.JsonObject condition, double chance,
-        double multiplier) {
+    public static com.google.gson.JsonObject lootingChance(double chance, double multiplier) {
         //? if >=1.21 {
-        condition.addProperty("condition", "minecraft:random_chance_with_enchanted_bonus");
+        com.google.gson.JsonObject condition = JavaLoot.condition("minecraft:random_chance_with_enchanted_bonus");
         condition.addProperty("enchantment", "minecraft:looting");
         condition.addProperty("unenchanted_chance", chance);
 
@@ -1182,10 +1183,11 @@ public final class Platform {
         enchanted.addProperty("per_level_above_first", multiplier);
         condition.add("enchanted_chance", enchanted);
         //?} else {
-        /*condition.addProperty("condition", "minecraft:random_chance_with_looting");
+        /*com.google.gson.JsonObject condition = JavaLoot.condition("minecraft:random_chance_with_looting");
         condition.addProperty("chance", chance);
         condition.addProperty("looting_multiplier", multiplier);
         *///?}
+        return condition;
     }
 
     /**
@@ -1253,8 +1255,7 @@ public final class Platform {
      * 1.20.5 replaced the item's whole NBT tag with components, so what was one nested compound
      * under `Trim` became the `minecraft:trim` component set beside every other one.
      */
-    public static void armorTrim(com.google.gson.JsonObject function, String material,
-        String pattern) {
+    public static com.google.gson.JsonObject armorTrim(String material, String pattern) {
         //? if >=1.21 {
         com.google.gson.JsonObject trim = new com.google.gson.JsonObject();
         trim.addProperty("material", "minecraft:" + material);
@@ -1262,13 +1263,14 @@ public final class Platform {
 
         com.google.gson.JsonObject components = new com.google.gson.JsonObject();
         components.add("minecraft:trim", trim);
-        function.addProperty("function", "minecraft:set_components");
+        com.google.gson.JsonObject function = JavaLoot.function("minecraft:set_components");
         function.add("components", components);
         //?} else {
-        /*function.addProperty("function", "minecraft:set_nbt");
+        /*com.google.gson.JsonObject function = JavaLoot.function("minecraft:set_nbt");
         function.addProperty("tag", "{Trim:{material:\"minecraft:" + material
             + "\",pattern:\"minecraft:" + pattern + "\"}}");
         *///?}
+        return function;
     }
 
     /**
@@ -3496,6 +3498,82 @@ public final class Platform {
         //?} else {
         /*biome.add("carvers", new com.google.gson.JsonObject());
         *///?}
+    }
+
+    /**
+     * How often a converted biome's chunks are stocked with creatures as they generate, and the
+     * empty spawn lists a pack's spawn rules fill.
+     *
+     * Up to 26.2 a biome carries both as fields and the lists are required. From 26.3 they are
+     * environment attributes, and a biome without the spawn attribute spawns nothing of its own.
+     */
+    public static void biomeSpawning(com.google.gson.JsonObject biome, float creatureProbability) {
+        //? if >=26.3 {
+        /*com.google.gson.JsonObject attributes = biome.has("attributes")
+            ? biome.getAsJsonObject("attributes") : new com.google.gson.JsonObject();
+        attributes.addProperty("minecraft:gameplay/creature_world_gen_spawn_probability",
+            creatureProbability);
+        biome.add("attributes", attributes);
+        *///?} else {
+        biome.add("spawners", new com.google.gson.JsonObject());
+        biome.add("spawn_costs", new com.google.gson.JsonObject());
+        biome.addProperty("creature_spawn_probability", creatureProbability);
+        //?}
+    }
+
+    /** The data pack directory a configured feature is read from. */
+    public static String featureDirectory() {
+        //? if >=26.3 {
+        /*return "worldgen/feature";
+        *///?} else {
+        return "worldgen/configured_feature";
+        //?}
+    }
+
+    /**
+     * A configured feature as the version writes one: from 26.3 the type's own fields sit beside
+     * the type name, and before that they sit under `config`.
+     */
+    public static com.google.gson.JsonObject feature(String type, com.google.gson.JsonObject config) {
+        com.google.gson.JsonObject json = new com.google.gson.JsonObject();
+        json.addProperty("type", type);
+        //? if >=26.3 {
+        /*config.entrySet().forEach(field -> json.add(field.getKey(), field.getValue()));
+        *///?} else {
+        json.add("config", config);
+        //?}
+        return json;
+    }
+
+    /**
+     * A block state as worldgen data writes one. 26.3 renamed `Name` to `id` and `Properties` to
+     * `properties`.
+     */
+    public static com.google.gson.JsonObject blockState(String block,
+        java.util.Map<String, String> properties) {
+        com.google.gson.JsonObject state = new com.google.gson.JsonObject();
+        com.google.gson.JsonObject written = new com.google.gson.JsonObject();
+        properties.forEach(written::addProperty);
+        //? if >=26.3 {
+        /*state.addProperty("id", block);
+        if (!properties.isEmpty()) state.add("properties", written);
+        *///?} else {
+        state.addProperty("Name", block);
+        if (!properties.isEmpty()) state.add("Properties", written);
+        //?}
+        return state;
+    }
+
+    /**
+     * The type name of a block state provider, given as the part both versions share: `simple` or
+     * `weighted`. Up to 26.2 each ends in `_state_provider`.
+     */
+    public static String stateProvider(String kind) {
+        //? if >=26.3 {
+        /*return "minecraft:" + kind;
+        *///?} else {
+        return "minecraft:" + kind + "_state_provider";
+        //?}
     }
 
     /**
