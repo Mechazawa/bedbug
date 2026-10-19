@@ -487,13 +487,22 @@ These are the checks it runs, and what each one catches:
   whatever moves it is the group a test switched on, and a test holding its feet sets its speed to
   nothing so that a pig standing apart from it is reached by the goal and not by a walk. Its groups
   cover the melee fields (a cooldown, a box reach, a reach multiple, the attack and kill events, fire
-  passed on), a ranged attack's interval stretched across its range, the panic causes, force and
+  passed on), a ranged attack's interval stretched across its range, its potion arrows, its charged burst and
+  swing, and its minimum range and sight time (`poisoner`, `burster`, `wary`), the panic causes, force and
   water, an escape from a block, a target and a projectile teleport, three breeding groups (what a
   child inherits, what a certain mutation and a denied variant give it), taming by item and breaking
   in by riding, listed riders, a poisoning attack, the rideable fields, an explosion heeding or
   ignoring the griefing rule and a resistance cap, a potion drunk by its conditions, the shelter
   walks, water looked for, a goal radius, a leap, an area attack's cooldown, a step taken while
-  steered, and four flocking groups. Each event that adds a group is named after it. A few traps met
+  steered, and four flocking groups. Three more flocking groups hold a brute off a wall, between two
+  heights and under the surface of a pool, the last two floating with gravity off; a water drag group
+  is launched down a channel beside a plain brute; two swimming groups and four flying ones are read
+  back through the spot the navigation heads for, the flying ones with a fly navigation of their own;
+  a follow group walks towards a pig ten blocks off, a raider group towards a brute whose group makes
+  it the captain, and three walk groups to a gold block set into the floor, raising `tp:reached` and
+  `tp:stayed`. A walk's `goal_radius` is one block there, because Java's path ends a block short of
+  its target and Bedrock's half block is never reached from there. Each event that adds a group is
+  named after it. A few traps met
   writing them: the empty structure's floor is not a block Java's random walks may end on, so a test
   needing one lays stone first; light under a new roof takes a few ticks to settle, so a test asking
   `canSeeSky` builds first and waits; the older versions place test structures close enough that a
@@ -501,7 +510,29 @@ These are the checks it runs, and what each one catches:
   where it broke a block. `GoalSoundClientGameTest` hears the panic and retreat sounds the brute's
   `sounds.json` entry names, which a sound moment no Java question reaches has to be kept for.
   `tp:spark` reflects when struck after a tenth of a second, and its brittle and dull groups are
-  removed and stopped when struck instead.
+  removed and stopped when struck instead. `tp:dart` is a slow projectile with no gravity that GoalGameTests
+  fires through pigs: plain it stops at the first, `tp:dart_piercing` hits every one and
+  `tp:dart_bouncing` bounces off an invulnerable one. `tp:brute_stalking` carries an ocelot attack and
+  `tp:brute_pouncing` a pounce whose stuck block is gravel, because a snow layer does not survive on
+  the empty structure's barrier floor. `tp:brute_hopping` jumps around its target the way a breeze does. `vaulting` leaps by `target_dist` and from the air, `soothing` hands out an ambient
+  effect on a cooldown, `ramming` runs up to a far target, `lunging` rests between aquatic charges and
+  `hauling` holds a strength over its `max`. `trampling` stomps and `winding` lands a delayed blow. `touchy` turns on what pushes it, `prickly` hurts without naming itself and `gunning` fires from
+  and at its anchors within its view. `choosy` picks its arrow from its shooter's `projectiles`. `mirrored` turns a reflected snowball by its Molang angle. Four more brute groups each blow up one
+  way (`submerged`, `gentle`, `switching`, `launching`), read back in `GoalGameTests.aBlast*`. The brute's `tp:brute_roaring` group roars,
+  pushing pigs tagged `tp_pushable` and hurting those tagged `tp_hurtable`.
+
+  `tp:idler` is a plain mob for the resting and idling goals, and `IdleGoalGameTests` reads each
+  group back through a pose or a property: timer flags, sitting, lying down, looking around and
+  sitting, napping with its detection box and exceptions, croaking, sniffing, emerging, digging,
+  holding ground, looking at the target, playing dead and sneezing. Java ticks a running goal only
+  every second tick, so a goal that counts its own `tick` calls runs its waits at double length;
+  these goals count on the game clock, and a test that reads a duration off them catches the other
+  kind. `tp:cart`, `tp:cart_keeping` and `tp:cart_checking` carry `minecraft:rail_sensor` and
+  `SensorGameTests` runs them over a rail powered by a block of redstone beside it, because a powered
+  rail set powered by hand is recomputed unpowered. `tp:gazed` carries `minecraft:looked_at` in one
+  group per field and `LookedAtGameTests` aims a player or a pig at it; a mock player made with
+  `makeMockPlayer` is not in the level's entity list, and a creative one is never a valid target, so
+  those tests use `makeMockServerPlayerInLevel` and a pig as the looker whose target is asserted.
 
   The ember's sensing group carries a `minecraft:damage_sensor` with one trigger per cause, each
   setting the enum property `tp:felt` to the cause it heard: `fall`, `entity_attack`, `projectile`,
@@ -512,11 +543,31 @@ These are the checks it runs, and what each one catches:
   The brute carries five more groups for goals that move it somewhere of its own choosing:
   `tp:brute_stomping` looks for turtle eggs every tick, `tp:brute_exploring` walks five blocks past
   the edge of a village, `tp:brute_village_bound` walks to the nearest village, `tp:brute_hiding`
-  runs to a bed when a bell rings and `tp:brute_playing` plays with a pig. `GoalGameTests` builds the
+  runs to a bed when a bell rings and `tp:brute_playing` plays with a pig. `tp:brute_stomping_near`
+  searches two blocks for eggs, `tp:brute_grazing` eats hay into dirt, `tp:brute_snacking` eats only
+  sweet berries and then waits, `tp:brute_nesting` lays on sand with nothing above it and
+  `tp:brute_flower_taking` takes a golem's flower once it is tagged. `tp:brute_admiring` admires
+  for a second and neither admires nor barters for five after being hurt, `tp:brute_cheering` and
+  `tp:brute_celebrating_survival` celebrate with no raid, and `GoalSoundClientGameTest` hears the
+  admiring, cheering and nesting groups' own sound moments. `tp:brute_dressing` puts on a helmet where
+  `tp:brute_unarmoured` cannot, and `tp:brute_hunting_alone` celebrates a kill only for the brute
+  that made it. `tp:brute_sharing` shares with whoever its `entity_types` names, written the way
+  older entity files write a filter: an `AND` group over subjects and operators given by number,
+  beside a second entry no mob in the test answers, so a list read as all of its entries or a filter
+  left wrapped in its entry hands the apple to the nearer cow. `tp:brute_caravanning` forms a
+  caravan of at most two behind a leashed pig its `entity_types` admit, so of three brutes beside
+  one, two fall in. `tp:brute_seeking_closely` walks to gold with the default `goal_radius` of half
+  a block, which Java's own block walk never reaches because its path ends a block short and it
+  measures from the middle of the block, so `MoveToMatchingBlockGoal` paths onto the spot and
+  measures from the feet. Java's own egg search can be
+  replaced by a speed mod with one over a fixed twenty-four blocks, so `StompEggGoal` searches in its
+  own `canUse`. `GoalGameTests` builds the
   village each one needs out of a bell or a bed in the empty structure, which Java registers as a
   point of interest the moment the block is set. The brute's `tp:arrived` property is set by its
   `minecraft:entity_spawned` and `minecraft:entity_born` events, which is how
   `GoalGameTests.aBredChildIsBornRatherThanSpawned` tells a bred child from a placed one.
+  The ember's `tp:ember_hatchling` grows up in a second and drops a turtle shell piece, and
+  `tp:ember_picky` takes wheat worth its whole wait only from a player tagged `tp_feeder`.
 
   Two more entities are there for what a mob walking about never reaches. One is a projectile with
   hit boxes wider than the box it collides in, which turns `isolated_physics` off the way Mojang's
@@ -2046,6 +2097,8 @@ authority of a function, because the server's context runs a line queued during 
 only once that command is done. A new path that runs a pack's commands takes the issuing add-on's
 namespace and a `CommandReport`, never a dispatcher directly, and a new Bedrock command goes into
 `BedrockCommands`, never into Java's tree.
+
+**A goal's waits are not counted in `tick()` calls.** The selector runs `canUse`, `canContinueToUse` and a running goal's `tick` only every second tick, unless the goal's `requiresUpdateEveryTick` is true. A wait a pack states in seconds is counted against `tickCount` or the game clock, or the goal asks for every tick when it also steers each one. `aGrazerEatsWhenItsTimeUntilEatIsUp` reads the first.
 
 **A gap and an answer are counted apart.** A command the game read and then declined, a selector that
 matched nothing, a structure holding a chest this cannot fill: those are listed after the verdict

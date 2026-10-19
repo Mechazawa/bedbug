@@ -124,6 +124,35 @@ REASONS = {
 
     # Fields read somewhere other than through a field helper.
     "minecraft:type_family": {"family": "Read where the families are collected."},
+    "minecraft:behavior.random_look_around": {
+        "look_distance": "Java's random look aims at a point one block away at the eye's own height, so the "
+                         "distance along that bearing changes no angle the head turns through.",
+    },
+    "minecraft:rail_sensor": {
+        "tick_command_block_on_activate": "Java's `activateMinecart` is overridden by `MinecartCommandBlock` "
+                                          "alone, and a pack's entity is not one, so it has no command block "
+                                          "to start ticking.",
+        "tick_command_block_on_deactivate": "Java's `activateMinecart` is overridden by `MinecartCommandBlock` "
+                                            "alone, and a pack's entity is not one, so it has no command block "
+                                            "to stop ticking.",
+    },
+    "minecraft:player.exhaustion": {
+        "*": "Read by `PlayerDefinition.Attribute`, which takes `value` and `max` of the five player "
+             "attributes from one helper. `value` is written into `FoodData`'s exhaustion at join and "
+             "respawn and `max` holds it under the ceiling.",
+    },
+    "minecraft:player.level": {
+        "*": "Read by `PlayerDefinition.Attribute`: `value` sets `Player.experienceLevel` and `max` holds "
+             "the level under the ceiling, which Java does not state.",
+    },
+    "minecraft:player.experience": {
+        "*": "Read by `PlayerDefinition.Attribute`: `value` sets `Player.experienceProgress` and `max` "
+             "holds it under the ceiling.",
+    },
+    "minecraft:exhaustion_values": {
+        "*": "Read by `PlayerDefinition.Action`, whose key is the field name. Each price scales the "
+             "amount Java passes to `Player.causeFoodExhaustion` at that call site.",
+    },
     "minecraft:loot": {"table": "Read by the loot table converter, which files the table under this path."},
     "minecraft:trade_table": {
         "table": "Read where the trades are loaded, while the pack is still open.",
@@ -218,6 +247,21 @@ REASONS = {
         "*": "Java's merchant screen opens on a click rather than after a mob has shown interest.",
     },
     "minecraft:behavior.trade_with_player": {"filters": "Java's merchant screen opens for whoever clicks."},
+    "minecraft:behavior.swim_wander": {
+        "look_ahead": "Java's swimming navigator plans the whole path through the water, around whatever "
+                      "is in the way, before the entity moves, so there is no distance ahead to look.",
+    },
+    "minecraft:behavior.player_ride_tamed": {
+        "priority": "The behaviour is answered as a rule on who may get on, asked whenever somebody tries, "
+                    "so there is no goal for a priority to place.",
+    },
+    "minecraft:flocking": {
+        "low_flock_limit": "Documented only as the low bound of a flock, with nothing said of what a smaller "
+                           "flock does, so a flock of any size flocks.",
+        "use_center_of_mass": "Documented only as following a flock by its centre of mass, with nothing said "
+                              "of what a flocker follows otherwise, so cohesion pulls towards the middle of "
+                              "the flock either way.",
+    },
 
     # The rest, one component at a time.
     "minecraft:home": {
@@ -232,6 +276,24 @@ REASONS = {
     "minecraft:tamemount": {
         "feed_text": "Java shows no prompt of its own for using a mob.",
         "ride_text": "Java shows no prompt of its own for using a mob.",
+    },
+    "minecraft:behavior.dragondeath": {
+        "priority": "The long death runs in LivingEntity.tickDeath, once the entity is dead and no goal "
+                    "runs, so there is no goal for a priority to order.",
+    },
+    "minecraft:projectile": {
+        "is_dangerous": "Java's one dangerous projectile is the blue wither skull, whose flag is a field of "
+                        "WitherSkull that sets its block resistance cap and its look; no goal asks any "
+                        "projectile whether it is dangerous.",
+    },
+    "minecraft:shooter": {
+        "magic": "A drink here takes no time, its effects landing the tick its conditions hold, so the "
+                 "ranged attack never runs beside a drink it would have to be kept apart from.",
+    },
+    "minecraft:area_attack": {
+        "death_message_override": "Java words a death by the msgId of the damage type that dealt it, a "
+                                  "registered type shared by every blow of that kind rather than "
+                                  "something one blow carries.",
     },
 }
 

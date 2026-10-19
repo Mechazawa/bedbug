@@ -107,11 +107,12 @@ public final class Platform {
         *///?}
     }
 
-    public static void hurt(Entity entity, ServerLevel level, DamageSource source, float amount) {
+    /** Answers whether the blow landed. */
+    public static boolean hurt(Entity entity, ServerLevel level, DamageSource source, float amount) {
         //? if >=1.21.2 {
-        entity.hurtServer(level, source, amount);
+        return entity.hurtServer(level, source, amount);
         //?} else {
-        /*entity.hurt(source, amount);
+        /*return entity.hurt(source, amount);
         *///?}
     }
 
@@ -485,19 +486,19 @@ public final class Platform {
      * registry lookup that returns one was `getHolder` until 26 renamed it to `get`.
      */
     public static boolean addEffect(LivingEntity entity, Identifier effect, int duration, int amplifier,
-        boolean particles) {
+        boolean ambient, boolean particles) {
         //? if >=26 {
         return BuiltInRegistries.MOB_EFFECT.get(effect)
-            .map(holder -> entity.addEffect(new MobEffectInstance(holder, duration, amplifier, false, particles)))
+            .map(holder -> entity.addEffect(new MobEffectInstance(holder, duration, amplifier, ambient, particles)))
             .orElse(false);
         //?} else if >=1.21 {
         /*return BuiltInRegistries.MOB_EFFECT.getHolder(effect)
-            .map(holder -> entity.addEffect(new MobEffectInstance(holder, duration, amplifier, false, particles)))
+            .map(holder -> entity.addEffect(new MobEffectInstance(holder, duration, amplifier, ambient, particles)))
             .orElse(false);
         *///?} else {
         /*net.minecraft.world.effect.MobEffect found = BuiltInRegistries.MOB_EFFECT.get(effect);
         return found != null
-            && entity.addEffect(new MobEffectInstance(found, duration, amplifier, false, particles));
+            && entity.addEffect(new MobEffectInstance(found, duration, amplifier, ambient, particles));
         *///?}
     }
 
@@ -2310,6 +2311,15 @@ public final class Platform {
         *///?}
     }
 
+    /** Whether a place lies where the mob is kept, which is anywhere for a mob kept nowhere. */
+    public static boolean withinHome(net.minecraft.world.entity.PathfinderMob mob, net.minecraft.core.BlockPos at) {
+        //? if >=26 {
+        return mob.isWithinHome(at);
+        //?} else {
+        /*return mob.isWithinRestriction(at);
+        *///?}
+    }
+
     /** Lets the mob wander again, which is what taking the component away amounts to. */
     public static void clearHome(net.minecraft.world.entity.Mob mob) {
         //? if >=26 {
@@ -2349,15 +2359,6 @@ public final class Platform {
         *///?}
     }
 
-    /** Where a mob was told it belongs, or null when it was told nothing. 26 renamed both calls. */
-    public static net.minecraft.core.BlockPos home(net.minecraft.world.entity.Mob mob) {
-        //? if >=26 {
-        return mob.hasHome() ? mob.getHomePosition() : null;
-        //?} else {
-        /*return mob.hasRestriction() ? mob.getRestrictCenter() : null;
-        *///?}
-    }
-
     /** Whether an effect is one an entity would want. What the instance carries became a holder in 1.21. */
     public static boolean beneficial(net.minecraft.world.effect.MobEffectInstance active) {
         //? if >=1.21 {
@@ -2368,38 +2369,35 @@ public final class Platform {
     }
 
     /**
-     * An iron golem near this point that is holding a flower out, or null when none is.
+     * An iron golem inside the area that is holding a flower out, or null when none is.
      *
      * A golem offering one is what `minecraft:behavior.take_flower` waits for. The class moved into
      * its own package in 26, and the offer itself is a countdown the golem exposes either way.
      */
     public static net.minecraft.world.entity.Entity offeredFlower(
-        net.minecraft.world.entity.Entity near, double range) {
-        //? if >=26 {
-        for (net.minecraft.world.entity.animal.golem.IronGolem golem : near.level().getEntitiesOfClass(
-            net.minecraft.world.entity.animal.golem.IronGolem.class,
-            near.getBoundingBox().inflate(range))) {
-            if (golem.getOfferFlowerTick() > 0) return golem;
-        }
-        //?} else {
-        /*for (net.minecraft.world.entity.animal.IronGolem golem : near.level().getEntitiesOfClass(
-            net.minecraft.world.entity.animal.IronGolem.class,
-            near.getBoundingBox().inflate(range))) {
-            if (golem.getOfferFlowerTick() > 0) return golem;
-        }
-        *///?}
-        return null;
+        net.minecraft.world.entity.Entity near, net.minecraft.world.phys.AABB area) {
+        return near.level().getEntities(near, area, Platform::offersFlower).stream().findFirst().orElse(null);
     }
 
-    /** Takes the flower back off the golem, which is what ends the offer. */
-    public static void takeFlower(net.minecraft.world.entity.Entity golem) {
+    public static boolean offersFlower(net.minecraft.world.entity.Entity golem) {
+        //? if >=26 {
+        return golem instanceof net.minecraft.world.entity.animal.golem.IronGolem holding
+            && holding.getOfferFlowerTick() > 0;
+        //?} else {
+        /*return golem instanceof net.minecraft.world.entity.animal.IronGolem holding
+            && holding.getOfferFlowerTick() > 0;
+        *///?}
+    }
+
+    /** Holds a flower out from a golem, or takes it back off the golem, which ends the offer. */
+    public static void offerFlower(net.minecraft.world.entity.Entity golem, boolean offering) {
         //? if >=26 {
         if (golem instanceof net.minecraft.world.entity.animal.golem.IronGolem holding) {
-            holding.offerFlower(false);
+            holding.offerFlower(offering);
         }
         //?} else {
         /*if (golem instanceof net.minecraft.world.entity.animal.IronGolem holding) {
-            holding.offerFlower(false);
+            holding.offerFlower(offering);
         }
         *///?}
     }
@@ -2766,6 +2764,56 @@ public final class Platform {
         return level.getGameRules().get(GameRules.MOB_GRIEFING);
         //?} else {
         /*return level.getGameRules().getBoolean(net.minecraft.world.level.GameRules.RULE_MOBGRIEFING);
+        *///?}
+    }
+
+    /**
+     * A blast drawn with gusts rather than smoke where `gust` is set, and heard as `sound`.
+     *
+     * Java chose a blast's particles and sound itself before 1.21, which is what a blast there gets.
+     * From 26 the call also takes the block debris, which the gusts of a wind charge go without.
+     */
+    public static void explode(ServerLevel level, Entity source,
+        net.minecraft.world.level.ExplosionDamageCalculator rules, net.minecraft.world.phys.Vec3 at, float power,
+        boolean fire, net.minecraft.world.level.Level.ExplosionInteraction interaction, boolean gust,
+        net.minecraft.core.Holder<net.minecraft.sounds.SoundEvent> sound) {
+        //? if >=1.21 {
+        net.minecraft.core.particles.ParticleOptions small = gust
+            ? net.minecraft.core.particles.ParticleTypes.GUST_EMITTER_SMALL
+            : net.minecraft.core.particles.ParticleTypes.EXPLOSION;
+        net.minecraft.core.particles.ParticleOptions large = gust
+            ? net.minecraft.core.particles.ParticleTypes.GUST_EMITTER_LARGE
+            : net.minecraft.core.particles.ParticleTypes.EXPLOSION_EMITTER;
+        //?}
+        //? if >=26 {
+        level.explode(source, null, rules, at.x, at.y, at.z, power, fire, interaction, small, large,
+            net.minecraft.util.random.WeightedList.of(), sound);
+        //?} else if >=1.21 {
+        /*level.explode(source, null, rules, at.x, at.y, at.z, power, fire, interaction, small, large, sound);
+        *///?} else {
+        /*level.explode(source, null, rules, at.x, at.y, at.z, power, fire, interaction);
+        *///?}
+    }
+
+    /**
+     * Spares a player thrown by a blast the fall that follows, until it lands, the way a wind charge
+     * spares whoever it throws. Nothing before 1.21 keeps track of a throw.
+     */
+    public static void spareTheFall(net.minecraft.world.entity.player.Player player) {
+        //? if >=26 {
+        player.setIgnoreFallDamageFromCurrentImpulse(true, player.position());
+        //?} else if >=1.21 {
+        /*player.currentImpulseImpactPos = player.position();
+        player.setIgnoreFallDamageFromCurrentImpulse(true);
+        *///?}
+    }
+
+    /** A blast that leaves blocks standing and works the switches among them, which 1.20.1 has not got. */
+    public static net.minecraft.world.level.Level.ExplosionInteraction toggling() {
+        //? if >=1.21 {
+        return net.minecraft.world.level.Level.ExplosionInteraction.TRIGGER;
+        //?} else {
+        /*return net.minecraft.world.level.Level.ExplosionInteraction.NONE;
         *///?}
     }
 

@@ -3,7 +3,6 @@ package at.ioexception.mcaddon.entity;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
@@ -19,23 +18,25 @@ import java.util.Set;
  *
  * Bedrock separates picking an item up from wearing it: the pickup behaviour puts it in the
  * entity's hand and this one moves it to where it belongs. Java decides the slot from the item, so
- * armour is worn and everything else is held.
+ * armour is worn and everything else is held, unless `can_wear_armor` turns armour away.
+ *
+ * `minecraft:equip_item` is the component beside this goal, read live because a pack may give one
+ * group armour and another none.
  */
 public final class EquipItemGoal extends Goal {
     /** Far enough to be worth walking to, close enough that the entity does not cross a field. */
     private static final double REACH = 8;
 
-    private final Mob mob;
-    private final Set<Item> excluded;
+    private static final Set<EquipmentSlot> ARMOUR =
+        EnumSet.of(EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET);
+
+    private final AddonEntity mob;
+    private Set<Item> excluded = Set.of();
+    private boolean wearsArmour = true;
     private ItemEntity wanted;
 
-    /**
-     * `minecraft:equip_item` is the component beside this goal, and its `excluded_items` is the list
-     * of things the entity leaves alone however well they would fit.
-     */
-    public EquipItemGoal(Mob mob, JsonObject component) {
+    public EquipItemGoal(AddonEntity mob) {
         this.mob = mob;
-        this.excluded = excluded(component);
         setFlags(EnumSet.of(Goal.Flag.MOVE));
     }
 
@@ -61,6 +62,9 @@ public final class EquipItemGoal extends Goal {
 
     @Override
     public boolean canUse() {
+        JsonObject equip = mob.liveComponent("minecraft:equip_item");
+        excluded = excluded(equip);
+        wearsArmour = Goals.flag(equip, "can_wear_armor", true);
         equipHeld();
         wanted = nearest();
         return wanted != null;
@@ -99,7 +103,7 @@ public final class EquipItemGoal extends Goal {
     private void equipHeld() {
         ItemStack held = mob.getMainHandItem();
         EquipmentSlot slot = slotFor(held);
-        if (held.isEmpty() || slot == EquipmentSlot.MAINHAND) return;
+        if (held.isEmpty() || !wearable(slot)) return;
         if (!mob.getItemBySlot(slot).isEmpty()) return;
 
         mob.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
@@ -111,12 +115,16 @@ public final class EquipItemGoal extends Goal {
         return stack.isEmpty() ? EquipmentSlot.MAINHAND : mob.getEquipmentSlotForItem(stack);
     }
 
+    private boolean wearable(EquipmentSlot slot) {
+        return slot != EquipmentSlot.MAINHAND && (wearsArmour || !ARMOUR.contains(slot));
+    }
+
     private ItemEntity nearest() {
         List<ItemEntity> dropped = mob.level().getEntitiesOfClass(ItemEntity.class,
             mob.getBoundingBox().inflate(REACH),
             item -> item.isAlive() && !item.hasPickUpDelay()
                 && !excluded.contains(item.getItem().getItem())
-                && slotFor(item.getItem()) != EquipmentSlot.MAINHAND
+                && wearable(slotFor(item.getItem()))
                 && mob.getItemBySlot(slotFor(item.getItem())).isEmpty());
         return dropped.stream().min(java.util.Comparator.comparingDouble(mob::distanceToSqr)).orElse(null);
     }

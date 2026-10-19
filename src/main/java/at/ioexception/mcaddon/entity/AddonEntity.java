@@ -20,11 +20,9 @@ import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.BreakDoorGoal;
 import net.minecraft.world.entity.ai.goal.BreathAirGoal;
-import net.minecraft.world.entity.ai.goal.EatBlockGoal;
 import net.minecraft.world.entity.ai.goal.FleeSunGoal;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.ai.goal.FollowMobGoal;
-import net.minecraft.world.entity.ai.goal.LeapAtTargetGoal;
 import net.minecraft.world.entity.ai.goal.MoveBackToVillageGoal;
 import net.minecraft.world.entity.ai.goal.MoveThroughVillageGoal;
 import net.minecraft.world.entity.ai.goal.MoveTowardsRestrictionGoal;
@@ -34,7 +32,6 @@ import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.RestrictSunGoal;
 import net.minecraft.world.entity.ai.goal.StrollThroughVillageGoal;
 import net.minecraft.world.entity.ai.goal.TryFindWaterGoal;
-import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomFlyingGoal;
 import net.minecraft.world.entity.ai.navigation.FlyingPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.ai.navigation.WallClimberNavigation;
@@ -46,6 +43,7 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.arrow.Arrow;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.trading.Merchant;
 import net.minecraft.world.item.trading.MerchantOffer;
@@ -96,6 +94,7 @@ public class AddonEntity extends PathfinderMob
     private Anger anger;
     private Genetics genetics;
     private Rails rails;
+    private final LookedAt lookedAt = new LookedAt(this);
     private Memories memories;
     private Projectiles flight;
     private net.minecraft.server.level.ServerBossEvent bossBar;
@@ -790,7 +789,8 @@ public class AddonEntity extends PathfinderMob
         if (declaresNow("minecraft:inventory")) {
             slots = Math.max(1, (int) liveNumber("minecraft:inventory", "inventory_size", 5));
         } else if (declaresNow("minecraft:strength")) {
-            slots = Math.max(1, (int) liveNumber("minecraft:strength", "value", 1) * 3);
+            slots = Math.max(1, (int) Math.min(liveNumber("minecraft:strength", "value", 1),
+                liveNumber("minecraft:strength", "max", 5)) * 3);
         }
         if (slots == 0 || (carried != null && carried.getContainerSize() == slots)) return;
 
@@ -1075,13 +1075,23 @@ public class AddonEntity extends PathfinderMob
 
     /**
      * `minecraft:variable_max_auto_step` steps as high as `controlled_value` while a player steers
-     * the entity and as high as `base_value` otherwise. Six tenths of a block is what a Java mob
-     * steps when the pack says nothing.
+     * the entity and as high as `base_value` otherwise, and as high as `jump_prevented_value` on a block
+     * that cuts a jump short whoever steers. Six tenths of a block is what a Java mob steps when the
+     * pack says nothing.
      */
     private void refreshStep() {
         double base = liveNumber("minecraft:variable_max_auto_step", "base_value", 0.6);
-        Platform.setStepHeight(this, (float) (getControllingPassenger() instanceof Player
-            ? liveNumber("minecraft:variable_max_auto_step", "controlled_value", base) : base));
+        float step = (float) (getBlockJumpFactor() < 1
+            ? liveNumber("minecraft:variable_max_auto_step", "jump_prevented_value", base)
+            : getControllingPassenger() instanceof Player
+            ? liveNumber("minecraft:variable_max_auto_step", "controlled_value", base) : base);
+        if (Platform.stepHeight(this) != step) Platform.setStepHeight(this, step);
+    }
+
+    /** Bedrock's `minecraft:water_movement` keeps `drag_factor` of the speed each tick, as Java does. */
+    @Override
+    protected float getWaterSlowDown() {
+        return (float) liveNumber("minecraft:water_movement", "drag_factor", super.getWaterSlowDown());
     }
 
     /** `on_rider_enter_event` runs on this entity, with the rider as the other, as somebody gets on. */
@@ -1982,56 +1992,22 @@ public class AddonEntity extends PathfinderMob
                 .forEach(effect -> addEffect(new net.minecraft.world.effect.MobEffectInstance(effect))));
     }
 
-    /**
-     * Taking the flower a golem is holding out, which is what `behavior.take_flower` waits for.
-     *
-     * Java's golem offers one and its own villager accepts; a pack's entity has to be walked over
-     * and made to take it, which is the whole of what the behaviour describes.
-     */
-    private void takeOfferedFlower() {
-        if (!declaresNow("minecraft:behavior.take_flower")) return;
-
-        net.minecraft.world.entity.Entity golem = Platform.offeredFlower(this, 8);
-        if (golem == null) return;
-
-        if (distanceTo(golem) > 2) {
-            getNavigation().moveTo(golem, 0.6);
-            return;
-        }
-        Platform.takeFlower(golem);
-        setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND,
-            new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.POPPY));
-    }
-
-    /** Ticks of celebrating still owed, and whether the raid underfoot was already won last tick. */
-    private int celebrateFor;
+    /** Whether the raid underfoot was already won last time the entity looked. */
     private boolean sawRaidWon;
 
     /**
-     * Celebrating a raid that has just been beaten.
+     * Raises `minecraft:start_celebrating` once a raid the entity stands in is won.
      *
-     * Bedrock gives the component a duration and the entity jumps for that long. A won raid stands
-     * for a while after it is won, so the countdown starts on the tick the win appears and not on
-     * every tick the win is still there.
+     * That is the event Bedrock's village raises on the entities around a raid it survived, and the
+     * one Mojang's own villagers add their celebrating group from. A won raid stands for a while after
+     * it is won, so the event goes out on the look that first sees the win.
      */
-    private void celebrate() {
-        if (!declaresNow("minecraft:behavior.celebrate_survive")) return;
+    private void noticeRaidWon() {
         if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
 
         boolean won = Platform.raidWon(level, blockPosition());
-        if (won && !sawRaidWon) {
-            celebrateFor = (int) (number(definition, "minecraft:behavior.celebrate_survive",
-                "duration", 30) * 20);
-        }
+        if (won && !sawRaidWon) fire("minecraft:start_celebrating");
         sawRaidWon = won;
-        if (celebrateFor <= 0) return;
-        celebrateFor--;
-
-        getNavigation().stop();
-        if (onGround()) setDeltaMovement(getDeltaMovement().add(0, 0.42, 0));
-        if (celebrateFor % 20 == 0) {
-            playSound(SoundEvents.VILLAGER_CELEBRATE, getSoundVolume(), getVoicePitch());
-        }
     }
 
     /**
@@ -2176,6 +2152,18 @@ public class AddonEntity extends PathfinderMob
     public Object value(String name) {
         return isClientSide() || ServerHooks.state() == null
             ? null : ServerHooks.state().property(getUUID(), name);
+    }
+
+    /** Whom this entity walks behind in a caravan, or null outside one. */
+    private net.minecraft.world.entity.Entity caravanHead;
+
+    public net.minecraft.world.entity.Entity caravanHead() {
+        return caravanHead;
+    }
+
+    void joinCaravan(net.minecraft.world.entity.Entity head) {
+        caravanHead = head;
+        setValue("in_caravan", head != null);
     }
 
     /** Who this entity belongs to, cached from the add-on state the taming wrote it into. */
@@ -2493,29 +2481,35 @@ public class AddonEntity extends PathfinderMob
      * Hands out the effect `minecraft:mob_effect` names to whatever comes close enough.
      *
      * Bedrock states the effect, how far it reaches and how long it lasts, and applies it to
-     * everything the component's filters allow. The entity itself is never one of them.
+     * everything the component's filters allow. The entity itself is never one of them. Once it has
+     * handed the effect out it waits `cooldown_time` seconds before the next, and under `ambient`
+     * the effect shows the faint particles of a beacon's.
      */
     private void giveEffect() {
-        if (!declares("minecraft:mob_effect")) return;
+        com.google.gson.JsonObject live = liveComponent("minecraft:mob_effect");
+        if (live == null || tickCount < effectReadyAt) return;
         if (!(level() instanceof net.minecraft.server.level.ServerLevel)) return;
 
-        String effect = liveText("minecraft:mob_effect", "mob_effect");
+        String effect = Goals.text(live, "mob_effect");
         Identifier id = effect == null ? null : Identifier.tryParse(
             effect.contains(":") ? effect : "minecraft:" + effect);
         if (id == null) return;
 
-        double range = number(definition, "minecraft:mob_effect", "effect_range", 0.2);
-        int seconds = (int) number(definition, "minecraft:mob_effect", "effect_time", 10);
-        Filter filter = Filter.parse(componentBody("minecraft:mob_effect").get("entity_filter"));
-
-        for (net.minecraft.world.entity.LivingEntity nearby : level().getEntitiesOfClass(
-            net.minecraft.world.entity.LivingEntity.class, getBoundingBox().inflate(range))) {
-            if (nearby == this) continue;
-            if (!filter.matches(new Filter.Context(this, nearby, nearby, ServerHooks.state()))) continue;
-
-            Platform.addEffect(nearby, id, seconds * 20, 0, true);
-        }
+        double range = Goals.number(live, "effect_range", 0.2);
+        int seconds = (int) Goals.number(live, "effect_time", 10);
+        Filter filter = Goals.filter(live, "entity_filter");
+        boolean ambient = Goals.flag(live, "ambient", false);
+        long given = level().getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class,
+                getBoundingBox().inflate(range),
+                nearby -> nearby != this
+                    && filter.matches(new Filter.Context(this, nearby, nearby, ServerHooks.state())))
+            .stream()
+            .filter(nearby -> Platform.addEffect(nearby, id, seconds * 20, 0, ambient, true))
+            .count();
+        if (given > 0) effectReadyAt = tickCount + Goals.ticks(live, "cooldown_time", 0);
     }
+
+    private int effectReadyAt;
 
     /**
      * Hurts whatever is standing against the entity, which is what `minecraft:area_attack` does.
@@ -2537,7 +2531,10 @@ public class AddonEntity extends PathfinderMob
                 net.minecraft.world.entity.LivingEntity.class, getBoundingBox().inflate(range),
                 nearby -> nearby != this
                     && filter.matches(new Filter.Context(this, nearby, nearby, ServerHooks.state())));
-        struck.forEach(nearby -> Platform.hurt(nearby, level, damageSources().mobAttack(this), damage));
+        net.minecraft.world.damagesource.DamageSource blow = damageSources().mobAttack(this);
+        net.minecraft.world.damagesource.DamageSource dealt = Goals.flag(attack, "use_self_as_damage_source", true)
+            ? blow : new net.minecraft.world.damagesource.DamageSource(blow.typeHolder());
+        struck.forEach(nearby -> Platform.hurt(nearby, level, dealt, damage));
         if (!struck.isEmpty()) areaAttackReadyAt = tickCount + Goals.ticks(attack, "damage_cooldown", 0);
     }
 
@@ -2606,28 +2603,6 @@ public class AddonEntity extends PathfinderMob
     private int cropCharges = -1;
 
     /**
-     * Fires the event a pack asked for while somebody is looking at the entity.
-     *
-     * `minecraft:looked_at` is what makes an enderman's stare work, and a pack uses it for anything
-     * that should react to being watched. Bedrock measures the angle rather than the distance.
-     */
-    private void noticeBeingWatched() {
-        if (!declares("minecraft:looked_at")) return;
-
-        String event = liveText("minecraft:looked_at", "looked_at_event");
-        if (event == null) return;
-
-        double reach = number(definition, "minecraft:looked_at", "search_radius", 10);
-        for (Player player : level().getEntitiesOfClass(Player.class, getBoundingBox().inflate(reach))) {
-            net.minecraft.world.phys.Vec3 towards = position().subtract(player.getEyePosition()).normalize();
-            if (player.getLookAngle().normalize().dot(towards) < 0.95) continue;
-
-            EntityEvents.trigger(this, event, player, ServerHooks.state());
-            return;
-        }
-    }
-
-    /**
      * Heals the entity back up once nothing has hurt it for a while.
      *
      * `minecraft:combat_regeneration` is Bedrock's name for a mob that recovers between fights.
@@ -2673,6 +2648,12 @@ public class AddonEntity extends PathfinderMob
 
     /** Ticks of the entity's own age at which something last hurt it, for the components that wait. */
     private int lastHurtTick = -1000;
+
+    /** Whether a live component's `cooldown_after_being_attacked` has run out since the entity was last hurt. */
+    public boolean calmSinceHurt(String component) {
+        com.google.gson.JsonObject live = liveComponent(component);
+        return tickCount - lastHurtTick >= Goals.ticks(live, "cooldown_after_being_attacked", 10);
+    }
 
     /** Health as it stood last tick, which is how being hurt is noticed without a damage hook. */
     private float healthLastTick = -1;
@@ -2748,7 +2729,7 @@ public class AddonEntity extends PathfinderMob
             ? net.minecraft.world.effect.MobEffectInstance.INFINITE_DURATION
             : Goals.ticks(attack, "effect_duration", 0);
         if (ticks == 0) return;
-        Platform.addEffect(struck, effect, ticks, (int) Goals.number(attack, "effect_amplifier", 0), true);
+        Platform.addEffect(struck, effect, ticks, (int) Goals.number(attack, "effect_amplifier", 0), false, true);
     }
 
     /**
@@ -2887,7 +2868,18 @@ public class AddonEntity extends PathfinderMob
             return;
         }
 
-        String named = liveText("minecraft:shooter", "def");
+        // The first of `projectiles` whose filters hold stands in for the shooter's own `def` and
+        // `aux_val`, and may drop the target once it is thrown, as a witch's healing potion does.
+        com.google.gson.JsonObject shooter = liveComponent("minecraft:shooter");
+        Filter.Context context = new Filter.Context(this, target, target, ServerHooks.state());
+        com.google.gson.JsonObject chosen = at.ioexception.mcaddon.util.Json.list(shooter, "projectiles").stream()
+            .filter(com.google.gson.JsonElement::isJsonObject)
+            .map(com.google.gson.JsonElement::getAsJsonObject)
+            .filter(entry -> Goals.filter(entry, "filters").matches(context))
+            .findFirst()
+            .orElse(shooter);
+        if (Goals.flag(chosen, "lose_target", false)) setTarget(null);
+        String named = Goals.text(chosen, "def");
         net.minecraft.world.entity.EntityType<?> type =
             AddonEntities.typeOf(named == null ? "minecraft:arrow" : named);
         net.minecraft.world.entity.Entity shot = type == null ? null : Platform.createMob(type, level);
@@ -2905,6 +2897,16 @@ public class AddonEntity extends PathfinderMob
         double toZ = target.getZ() - getZ();
         double flat = Math.sqrt(toX * toX + toZ * toZ);
         projectile.shoot(toX, toY + flat * 0.2, toZ, 1.6f, 6f);
+        // `aux_val` is Bedrock's potion number plus one, and a tipped arrow carries an eighth of
+        // the potion's time, in both editions.
+        if (projectile instanceof Arrow arrow) {
+            at.ioexception.mcaddon.bedrock.behaviour.BedrockPotions.numbered(
+                    (int) Goals.number(chosen, "aux_val", -1) - 1)
+                .ifPresent(potion -> potion.getEffects().forEach(effect -> arrow.addEffect(
+                    new net.minecraft.world.effect.MobEffectInstance(effect.getEffect(),
+                        Math.max(1, effect.getDuration() / 8), effect.getAmplifier(),
+                        effect.isAmbient(), effect.isVisible()))));
+        }
 
         playSound(SoundEvents.SKELETON_SHOOT, 1f, 1f / (random.nextFloat() * 0.4f + 0.8f));
         level.addFreshEntity(projectile);
@@ -2968,6 +2970,14 @@ public class AddonEntity extends PathfinderMob
             .filter(net.minecraft.world.entity.ai.goal.WrappedGoal::isRunning)
             .map(running -> running.getGoal().toString())
             .toList();
+    }
+
+    /** What the goals running at this moment hold between them, so a test can ask what stays free. */
+    public java.util.Set<net.minecraft.world.entity.ai.goal.Goal.Flag> runningControls() {
+        return goalSelector.getAvailableGoals().stream()
+            .filter(net.minecraft.world.entity.ai.goal.WrappedGoal::isRunning)
+            .flatMap(running -> running.getGoal().getFlags().stream())
+            .collect(java.util.stream.Collectors.toSet());
     }
 
     /** The priorities this entity's goals went in at, which its pack's `priority` fields state. */
@@ -3088,9 +3098,10 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.look_at_player" -> goals.add(priority, LookGoal.atPlayers(this, goal));
             case "minecraft:behavior.look_at_trading_player" ->
                 goals.add(priority, LookGoal.atTradingPlayer(this, goal));
-            case "minecraft:behavior.random_look_around",
-                 "minecraft:behavior.random_look_around_and_sit" ->
+            case "minecraft:behavior.random_look_around" ->
                 goals.add(priority, new RandomLookAroundGoal(this));
+            case "minecraft:behavior.random_look_around_and_sit" ->
+                goals.add(priority, new LookAroundAndSitGoal(this, goal));
 
             case "minecraft:behavior.look_at_entity" -> goals.add(priority, LookGoal.atEntities(this, goal));
 
@@ -3115,17 +3126,17 @@ public class AddonEntity extends PathfinderMob
                 goals.add(priority, new MoveTowardsTargetGoal(this, 0.9, 32f));
 
             case "minecraft:behavior.random_fly", "minecraft:behavior.random_hover",
-                 "minecraft:behavior.hover", "minecraft:behavior.float_wander" ->
-                goals.add(priority, new WaterAvoidingRandomFlyingGoal(this, 1.0));
-            case "minecraft:behavior.random_swim", "minecraft:behavior.swim_wander" ->
-                goals.add(priority, StrollGoal.swimming(this, goal));
+                 "minecraft:behavior.hover" -> goals.add(priority, StrollGoal.flying(this, goal));
+            case "minecraft:behavior.float_wander" -> goals.add(priority, StrollGoal.floating(this, goal));
+            case "minecraft:behavior.random_swim" -> goals.add(priority, StrollGoal.swimming(this, goal));
+            case "minecraft:behavior.swim_wander" -> goals.add(priority, StrollGoal.wandering(this, goal));
             case "minecraft:behavior.move_to_water" -> goals.add(priority, MoveToMatchingBlockGoal.water(this, goal));
             case "minecraft:behavior.move_to_liquid" -> goals.add(priority, new TryFindWaterGoal(this));
             case "minecraft:behavior.swim_up_for_breath" ->
                 goals.add(priority, new BreathAirGoal(this));
 
             case "minecraft:behavior.eat_block" ->
-                goals.add(priority, new EatBlockGoal(this));
+                goals.add(priority, new GrazeGoal(this, goal));
             // Bedrock's find_cover and flee_sun both end with the mob standing out of the light.
             case "minecraft:behavior.flee_sun", "minecraft:behavior.find_cover" ->
                 goals.add(priority, new FleeSunGoal(this, 1.0));
@@ -3136,13 +3147,10 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.break_door", "minecraft:annotation.break_door" ->
                 goals.add(priority, new BreakDoorGoal(this, difficulty -> true));
             case "minecraft:behavior.follow_mob" ->
-                goals.add(priority, new FollowMobGoal(this, 1.0, 3f, 7f));
-            // Mojang documents `yd` as a height, but every number its own entities write is the upward
-            // speed Java's goal takes for the same animal: four tenths for the wolf, the cat and the spider.
-            case "minecraft:behavior.leap_at_target" ->
-                goals.add(priority, new LeapAtTargetGoal(this, (float) Goals.number(goal, "yd", 0)));
-            case "minecraft:behavior.stalk_and_pounce_on_target" ->
-                goals.add(priority, new LeapAtTargetGoal(this, 0.4f));
+                goals.add(priority, new FollowMobGoal(this, Goals.number(goal, "speed_multiplier", 1),
+                    (float) Goals.number(goal, "stop_distance", 2), (float) Goals.number(goal, "search_range", 0)));
+            case "minecraft:behavior.leap_at_target" -> goals.add(priority, new LeapGoal(this, goal));
+            case "minecraft:behavior.stalk_and_pounce_on_target" -> goals.add(priority, new PounceGoal(this, goal));
             case "minecraft:behavior.play" -> goals.add(priority, new PlayGoal(this, goal));
             case "minecraft:behavior.stroll_towards_village" ->
                 goals.add(priority, new StrollTowardsVillageGoal(this, goal));
@@ -3178,10 +3186,14 @@ public class AddonEntity extends PathfinderMob
                 goals.add(priority,
                     new OpenDoorGoal(this, Goals.flag(goal, "close_door_after", true)));
 
-            case "minecraft:behavior.melee_box_attack" -> goals.add(priority, new MeleeGoal(this, goal, true));
-            case "minecraft:behavior.melee_attack", "minecraft:behavior.delayed_attack",
-                 "minecraft:behavior.stomp_attack" ->
-                goals.add(priority, new MeleeGoal(this, goal, false));
+            case "minecraft:behavior.melee_box_attack" ->
+                goals.add(priority, new MeleeGoal(this, goal, MeleeGoal.Kind.BOX));
+            case "minecraft:behavior.melee_attack" ->
+                goals.add(priority, new MeleeGoal(this, goal, MeleeGoal.Kind.PLAIN));
+            case "minecraft:behavior.delayed_attack" ->
+                goals.add(priority, new MeleeGoal(this, goal, MeleeGoal.Kind.DELAYED));
+            case "minecraft:behavior.stomp_attack" ->
+                goals.add(priority, new MeleeGoal(this, goal, MeleeGoal.Kind.STOMP));
             // A charge is a melee attack run at, which Java expresses as the speed the goal
             // closes the distance with.
             case "minecraft:behavior.charge_attack" ->
@@ -3191,26 +3203,14 @@ public class AddonEntity extends PathfinderMob
                  "minecraft:behavior.nearest_prioritized_attackable_target" ->
                 targets.add(priority, new HuntGoal(this, goal, TargetSelection.from(goal, Player.class,
                     Goals.number(goal, "within_radius", 0))));
-            case "minecraft:behavior.hurt_by_target", "minecraft:behavior.target_when_pushed" ->
+            case "minecraft:behavior.hurt_by_target" ->
                 targets.add(priority, new RetaliateGoal(this, goal,
                     TargetSelection.from(goal, net.minecraft.world.entity.LivingEntity.class, 0)));
+            case "minecraft:behavior.target_when_pushed" -> targets.add(priority, new PushedTargetGoal(this, goal,
+                TargetSelection.from(goal, net.minecraft.world.entity.LivingEntity.class, 0)));
 
-            // Bedrock states the gap between shots in seconds and the reach in blocks; Java's
-            // goal counts the gap in ticks, stretches it with the distance the same way, and asks
-            // the entity itself to release the projectile. `attack_interval` and `attack_range`
-            // are the current spellings of the two pairs older packs write field by field.
-            case "minecraft:behavior.ranged_attack" -> {
-                int fastest = goal.has("attack_interval") ? Goals.ticksLow(goal, "attack_interval", 1)
-                    : Goals.ticks(goal, "attack_interval_min", 1);
-                int slowest = goal.has("attack_interval") ? Goals.ticksHigh(goal, "attack_interval", 1)
-                    : Goals.ticks(goal, "attack_interval_max", 1);
-                double reach = goal.has("attack_range") ? Goals.high(goal, "attack_range", 16)
-                    : Goals.number(goal, "attack_radius", 16);
-                goals.add(priority, new net.minecraft.world.entity.ai.goal.RangedAttackGoal(this, speed,
-                    fastest, Math.max(fastest, slowest), (float) reach));
-            }
-            case "minecraft:behavior.ocelotattack" -> goals.add(priority,
-                new net.minecraft.world.entity.ai.goal.OcelotAttackGoal(this));
+            case "minecraft:behavior.ranged_attack" -> goals.add(priority, new RangedGoal(this, goal, speed));
+            case "minecraft:behavior.ocelotattack" -> goals.add(priority, new OcelotGoal(this, goal));
 
             case "minecraft:behavior.follow_parent" -> goals.add(priority,
                 FollowKinGoal.parent(this, goal));
@@ -3231,11 +3231,9 @@ public class AddonEntity extends PathfinderMob
                 MoveToMatchingBlockGoal.anywhere(this, goal));
 
             case "minecraft:behavior.equip_item" -> goals.add(priority,
-                new EquipItemGoal(this, componentBody("minecraft:equip_item")));
-            case "minecraft:behavior.hold_ground" ->
-                goals.add(priority, HoldGroundGoal.standing(this));
-            case "minecraft:behavior.look_at_target" ->
-                goals.add(priority, HoldGroundGoal.watching(this));
+                new EquipItemGoal(this));
+            case "minecraft:behavior.hold_ground" -> goals.add(priority, new HoldGroundGoal(this, goal));
+            case "minecraft:behavior.look_at_target" -> goals.add(priority, LookGoal.atTarget(this, goal));
             // Java writes door handling as two goals under one base, and opening is the half
             // Bedrock's own door interaction does.
             case "minecraft:behavior.door_interact" ->
@@ -3262,9 +3260,9 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.eat_carried_item" ->
                 goals.add(priority, new EatCarriedItemGoal(this, goal));
             case "minecraft:behavior.move_around_target" ->
-                goals.add(priority, CircleTargetGoal.walking(this, goal));
+                goals.add(priority, new CircleTargetGoal(this, goal));
             case "minecraft:behavior.jump_around_target" ->
-                goals.add(priority, CircleTargetGoal.jumping(this, goal));
+                goals.add(priority, new JumpAroundGoal(this, goal));
 
             // What the entity does because it belongs to somebody. Each of these reads back the
             // owner that taming stored, so an untamed entity carrying one simply never starts it.
@@ -3310,8 +3308,12 @@ public class AddonEntity extends PathfinderMob
                 new PlayDeadGoal(this, goal));
             case "minecraft:behavior.scared" -> goals.add(priority,
                 new ScaredGoal(this, goal));
+            case "minecraft:behavior.take_flower" -> goals.add(priority,
+                new TakeFlowerGoal(this, goal));
             case "minecraft:behavior.celebrate" -> goals.add(priority,
-                new CelebrateGoal(this, goal));
+                CelebrateGoal.winning(this, goal));
+            case "minecraft:behavior.celebrate_survive" -> goals.add(priority,
+                CelebrateGoal.surviving(this, goal));
             case "minecraft:behavior.sneeze" -> goals.add(priority,
                 new SneezeGoal(this, goal));
             case "minecraft:behavior.roll" -> goals.add(priority,
@@ -3382,11 +3384,9 @@ public class AddonEntity extends PathfinderMob
             // the same walk towards a willing partner that every other pack animal does.
             case "minecraft:behavior.make_love", "minecraft:behavior.receive_love" ->
                 goals.add(priority, new BreedGoal(this, goal));
-            // Napping is lying down, and snacking is eating what is already in hand.
-            case "minecraft:behavior.nap" -> goals.add(priority,
-                RestGoal.lyingDown(this, goal));
+            case "minecraft:behavior.nap" -> goals.add(priority, new NapGoal(this, goal));
             case "minecraft:behavior.snacking" -> goals.add(priority,
-                new EatCarriedItemGoal(this, goal));
+                new SnackGoal(this, goal));
 
             case "minecraft:behavior.admire_item" -> goals.add(priority,
                 BarterGoal.admiring(this, goal));
@@ -3575,6 +3575,9 @@ public class AddonEntity extends PathfinderMob
     @Override
     public void aiStep() {
         float facing = getYRot();
+        // Java counts a swing down only for monsters and players, and a swing never counted down
+        // leaves every later one unseen by whatever watches for the arm going up.
+        updateSwingTime();
         super.aiStep();
         if (definition == null || isClientSide() || getControllingPassenger() instanceof Player) return;
 
@@ -3628,8 +3631,7 @@ public class AddonEntity extends PathfinderMob
             rest();
             drink();
             leashChanged(isLeashed());
-            takeOfferedFlower();
-            celebrate();
+            noticeRaidWon();
             rise();
             manageAsTrader();
             despawn();
@@ -3640,7 +3642,6 @@ public class AddonEntity extends PathfinderMob
             attackAround();
             leaveTrail();
             growCrops();
-            noticeBeingWatched();
             regenerate();
             dryOut();
             showBossBar();
@@ -3649,7 +3650,6 @@ public class AddonEntity extends PathfinderMob
             countKin();
             beAngry();
             noticeKinAnger();
-            reflectProjectiles();
             drawFromHopper();
             coolDownAnger();
             rollGenes();
@@ -3719,25 +3719,34 @@ public class AddonEntity extends PathfinderMob
     /**
      * Sends back the projectiles `minecraft:reflect_projectiles` names.
      *
-     * Bedrock turns the shot by the angle the pack gives and scales what is left of its speed. A
+     * Bedrock turns the shot about the vertical by `azimuth_angle` and up by `elevation_angle`, and
+     * scales its speed by `reflection_scale`, each a Molang expression asked afresh for every shot, so
+     * the breeze's `180.0 + Math.random(-20.0, 20.0)` sends each one back on a course of its own. A
      * projectile this entity fired itself is left alone, or a reflector would return its own shots.
      */
     private void reflectProjectiles() {
-        if (!declares("minecraft:reflect_projectiles")) return;
+        com.google.gson.JsonObject reflect = liveComponent("minecraft:reflect_projectiles");
+        if (reflect == null) return;
 
         java.util.Set<String> wanted = new java.util.LinkedHashSet<>();
         for (com.google.gson.JsonElement named : at.ioexception.mcaddon.util.Json.list(
-            componentBody("minecraft:reflect_projectiles"), "reflected_projectiles")) {
+            reflect, "reflected_projectiles")) {
             if (named.isJsonPrimitive()) wanted.add(named.getAsString());
         }
 
-        double scale = number(definition, "minecraft:reflect_projectiles", "reflection_scale", 1);
+        String azimuth = at.ioexception.mcaddon.util.Json.text(reflect, "azimuth_angle", "0");
+        String elevation = at.ioexception.mcaddon.util.Json.text(reflect, "elevation_angle", "0");
+        String scale = at.ioexception.mcaddon.util.Json.text(reflect, "reflection_scale", "1");
         for (net.minecraft.world.entity.projectile.Projectile shot : level().getEntitiesOfClass(
             net.minecraft.world.entity.projectile.Projectile.class, getBoundingBox().inflate(2))) {
             if (shot.getOwner() == this || !named(shot, wanted)) continue;
 
-            shot.setDeltaMovement(shot.getDeltaMovement().scale(-scale));
+            shot.setDeltaMovement(shot.getDeltaMovement()
+                .xRot((float) -Math.toRadians(answer(elevation).asFloat()))
+                .yRot((float) Math.toRadians(answer(azimuth).asFloat()))
+                .scale(answer(scale).asFloat()));
             shot.setOwner(this);
+            makeNoise(at.ioexception.mcaddon.util.Json.text(reflect, "reflection_sound", "reflect"));
         }
     }
 
@@ -3907,7 +3916,7 @@ public class AddonEntity extends PathfinderMob
         Player nearest = level.getNearestPlayer(this, RAID_TRIGGER_RANGE);
         if (nearest == null || Platform.hasEffect(nearest, BAD_OMEN)) return;
 
-        Platform.addEffect(nearest, BAD_OMEN, BAD_OMEN_TICKS, 0, true);
+        Platform.addEffect(nearest, BAD_OMEN, BAD_OMEN_TICKS, 0, false, true);
         fire(Goals.event(componentBody("minecraft:raid_trigger"), "triggered_event"));
     }
 
@@ -4035,6 +4044,7 @@ public class AddonEntity extends PathfinderMob
         wearOffBribe();
         beatTheAir();
         faceTheGrid();
+        refreshStep();
         flock();
         beBoosted();
         faceTheVehicle();
@@ -4044,9 +4054,11 @@ public class AddonEntity extends PathfinderMob
         beat();
         hover();
         noticeTheBlockItIsIn();
+        reflectProjectiles();
         celebrateTheKill();
         publishBeingInLove();
         if (rails != null) rails.tick();
+        lookedAt.tick();
         if (flight != null) flight.tick();
         if (bossBar != null) bossBar.setProgress(getMaxHealth() <= 0 ? 0 : getHealth() / getMaxHealth());
     }
@@ -4107,41 +4119,40 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
-     * Tells the hunters nearby that something they were after has died.
+     * Lets the hunter that made a kill celebrate it, and tells the hunters around it.
      *
-     * `minecraft:celebrate_hunt` is what makes a piglin cheer over a hoglin. `broadcast` says the
-     * cheer spreads to its own kind within the radius, which is why every entity in range is asked
-     * rather than only whatever landed the kill.
+     * `minecraft:celebrate_hunt` is what makes a piglin cheer over a hoglin. The entity credited with
+     * the kill celebrates, and with `broadcast` on every other entity carrying the component within
+     * its `radius` celebrates with it.
      */
     public static void noticeHuntSucceeded(net.minecraft.world.entity.LivingEntity quarry) {
         if (quarry.level().isClientSide()
-            || !AddonEntities.anyoneDeclares("minecraft:celebrate_hunt")) {
+            || !AddonEntities.anyoneDeclares("minecraft:celebrate_hunt")
+            || !(quarry.getKillCredit() instanceof AddonEntity killer)
+            || !killer.celebrateTheHunt(quarry)) {
             return;
         }
 
-        for (AddonEntity hunter : quarry.level().getEntitiesOfClass(AddonEntity.class,
-            quarry.getBoundingBox().inflate(CELEBRATION_RANGE))) {
-            hunter.celebrateTheHunt(quarry);
-        }
+        com.google.gson.JsonObject hunt = killer.liveComponent("minecraft:celebrate_hunt");
+        if (!Goals.flag(hunt, "broadcast", true)) return;
+
+        double radius = Goals.number(hunt, "radius", 16);
+        quarry.level().getEntitiesOfClass(AddonEntity.class, killer.getBoundingBox().inflate(radius),
+                hunter -> hunter != killer && hunter.distanceToSqr(killer) <= radius * radius)
+            .forEach(hunter -> hunter.celebrateTheHunt(quarry));
     }
 
-    /** The widest radius `minecraft:celebrate_hunt` is given, which bounds the search for hunters. */
-    private static final double CELEBRATION_RANGE = 32;
+    /** Starts celebrating a kill its `celebration_targets` count, and answers whether it did. */
+    private boolean celebrateTheHunt(net.minecraft.world.entity.LivingEntity quarry) {
+        com.google.gson.JsonObject hunt = liveComponent("minecraft:celebrate_hunt");
+        if (hunt == null || quarry == this) return false;
 
-    private void celebrateTheHunt(net.minecraft.world.entity.LivingEntity quarry) {
-        if (definition == null || quarry == this || !declares("minecraft:celebrate_hunt")) return;
+        Filter celebrated = Filter.parse(hunt.get("celebration_targets"));
+        if (!celebrated.matches(new Filter.Context(this, quarry, quarry, ServerHooks.state()))) return false;
 
-        double radius = number(definition, "minecraft:celebrate_hunt", "radius", 16);
-        if (distanceToSqr(quarry) > radius * radius) return;
-
-        Filter celebrated = Filter.parse(componentBody("minecraft:celebrate_hunt")
-            .get("celebration_targets"));
-        if (!celebrated.matches(new Filter.Context(this, quarry, quarry, ServerHooks.state()))) return;
-
-        celebrateUntilTick = tickCount
-            + (int) (number(definition, "minecraft:celebrate_hunt", "duration", 4)
-                * Goals.TICKS_PER_SECOND);
+        celebrateUntilTick = tickCount + Goals.ticks(hunt, "duration", 4);
         ServerHooks.state().setProperty(getUUID(), "is_celebrating", true);
+        return true;
     }
 
     /** Cheers for as long as the hunt's celebration lasts, and stops cheering when it is over. */
@@ -4754,6 +4765,11 @@ public class AddonEntity extends PathfinderMob
     private void growUp() {
         if (age == null || !age.advance(1)) return;
 
+        age.drops().stream()
+            .map(AddonItems::named)
+            .filter(java.util.Objects::nonNull)
+            .forEach(item -> level().addFreshEntity(new net.minecraft.world.entity.item.ItemEntity(
+                level(), getX(), getY(), getZ(), new ItemStack(item))));
         setValue("is_baby", false);
         fire(age.grownEvent());
     }
@@ -5012,7 +5028,9 @@ public class AddonEntity extends PathfinderMob
     /** One of `minecraft:ageable`'s own feed items, which brings growing up forward. */
     private boolean grownByHand(Player player, InteractionHand hand) {
         ItemStack held = player.getItemInHand(hand);
-        if (age == null || !age.fed(held)) return false;
+        if (age == null || !age.fed(held, new Filter.Context(this, player, player, ServerHooks.state()))) {
+            return false;
+        }
 
         if (!player.getAbilities().instabuild) held.shrink(1);
         for (int i = 0; i < 5; i++) {
@@ -5272,44 +5290,9 @@ public class AddonEntity extends PathfinderMob
         }
     }
 
-    /**
-     * The blast itself. It breaks blocks whatever the mob griefing rule says unless
-     * `destroy_affected_by_griefing` asks for the rule, which is Java's mob blast, and lights fires
-     * the same way under `fire_affected_by_griefing`; `max_resistance` caps how much any block
-     * withstands.
-     */
     private void explode(net.minecraft.server.level.ServerLevel level) {
         com.google.gson.JsonObject explode = liveComponent("minecraft:explode");
-        if (explode == null) return;
-
-        Level.ExplosionInteraction breaking = Goals.number(explode, "breaks_blocks", 1) == 0
-            ? Level.ExplosionInteraction.NONE
-            : Goals.flag(explode, "destroy_affected_by_griefing", false)
-                ? Level.ExplosionInteraction.MOB : Level.ExplosionInteraction.BLOCK;
-        boolean burns = Goals.number(explode, "causes_fire", 0) != 0
-            && (!Goals.flag(explode, "fire_affected_by_griefing", false) || Platform.mobGriefing(level));
-        net.minecraft.world.level.ExplosionDamageCalculator capped = explode.has("max_resistance")
-            ? new ResistanceCap((float) Goals.number(explode, "max_resistance", Float.MAX_VALUE)) : null;
-        level.explode(this, null, capped, getX(), getY(), getZ(),
-            (float) Goals.number(explode, "power", 3), burns, breaking);
-    }
-
-    /** What a block withstands of a blast, never more than the cap the blast states. */
-    private static final class ResistanceCap extends net.minecraft.world.level.ExplosionDamageCalculator {
-        private final float cap;
-
-        ResistanceCap(float cap) {
-            this.cap = cap;
-        }
-
-        @Override
-        public java.util.Optional<Float> getBlockExplosionResistance(
-            net.minecraft.world.level.Explosion explosion, net.minecraft.world.level.BlockGetter level,
-            net.minecraft.core.BlockPos position, net.minecraft.world.level.block.state.BlockState block,
-            net.minecraft.world.level.material.FluidState fluid) {
-            return super.getBlockExplosionResistance(explosion, level, position, block, fluid)
-                .map(resistance -> Math.min(resistance, cap));
-        }
+        if (explode != null) new Blast(this, explode, level).goOff(level);
     }
 
     /**
@@ -5559,6 +5542,11 @@ public class AddonEntity extends PathfinderMob
      * temporaries every other expression on the server reads and writes.
      */
     public boolean holds(String condition) {
+        return answer(condition).truthy();
+    }
+
+    /** What a Molang expression a component states comes to for the entity now, the same way. */
+    public at.ioexception.mcaddon.bedrock.molang.MolangValue answer(String expression) {
         if (questions == null) {
             questions = new at.ioexception.mcaddon.bedrock.animation.AnimationPlayer(null, this);
             questions.environment().setQueries(new at.ioexception.mcaddon.bedrock.entity.EntityQueries(
@@ -5571,8 +5559,8 @@ public class AddonEntity extends PathfinderMob
         }
         questions.environment().setLifeTime(
             tickCount / (float) at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.TICKS_PER_SECOND);
-        return at.ioexception.mcaddon.bedrock.molang.MolangParser.parse(condition)
-            .evaluate(questions.environment()).truthy();
+        return at.ioexception.mcaddon.bedrock.molang.MolangParser.parse(expression)
+            .evaluate(questions.environment());
     }
 
     private at.ioexception.mcaddon.bedrock.animation.AnimationPlayer questions;
@@ -5843,6 +5831,8 @@ public class AddonEntity extends PathfinderMob
      */
     @Override
     public void push(net.minecraft.world.entity.Entity other) {
+        pushedBy = other;
+        pushedAt = tickCount;
         com.google.gson.JsonObject preset = definition == null ? null : pushPreset(other);
         if (preset == null) {
             super.push(other);
@@ -5871,6 +5861,14 @@ public class AddonEntity extends PathfinderMob
         if (!isVehicle() && isPushable()) push(-xa * self, 0, -za * self);
         if (!other.isVehicle() && other.isPushable()) other.push(xa * back, 0, za * back);
     }
+
+    /** What pushed into this entity on this tick or the one before, or null. */
+    net.minecraft.world.entity.Entity pushedBy() {
+        return tickCount - pushedAt <= 1 ? pushedBy : null;
+    }
+
+    private net.minecraft.world.entity.Entity pushedBy;
+    private int pushedAt = -2;
 
     /** `ball`: sent along the way the other entity was going, faster the faster it went. */
     private void kickedBy(net.minecraft.world.entity.Entity other, com.google.gson.JsonObject preset) {

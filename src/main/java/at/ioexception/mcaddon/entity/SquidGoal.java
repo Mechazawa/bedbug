@@ -139,6 +139,12 @@ public final class SquidGoal extends Goal {
         heading = Vec3.ZERO;
     }
 
+    /** The selector ticks a running goal every second tick unless it asks for each one. */
+    @Override
+    public boolean requiresUpdateEveryTick() {
+        return true;
+    }
+
     @Override
     public void tick() {
         ticksLeft--;

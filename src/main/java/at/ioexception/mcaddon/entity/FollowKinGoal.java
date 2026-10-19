@@ -1,6 +1,11 @@
 package at.ioexception.mcaddon.entity;
 
+import at.ioexception.mcaddon.bedrock.behaviour.Filter;
+import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.server.ServerHooks;
 import com.google.gson.JsonObject;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.goal.Goal;
 
 import java.util.EnumSet;
@@ -22,12 +27,19 @@ public final class FollowKinGoal extends Goal {
     private final double range;
     private final boolean grownOnly;
 
-    /** Whether walking in line here is a caravan, which a pack's `in_caravan` filter asks about. */
-    private final boolean caravan;
+    /**
+     * Whom a caravan may form behind, which is `entity_types`, or null for every walk other than a
+     * caravan. A caravan starts behind a leashed entity and grows at its tail, the way Java's llamas
+     * line up, and holds at most `entity_count` followers.
+     */
+    private final Filter caravan;
+    private final int caravanSize;
 
     /** Whether the one worth following is the raid captain rather than the nearest of its kind. */
     private final boolean captain;
-    private AddonEntity leader;
+    /** How near the one followed the entity stops, which only a raider's `follow_distance` states. */
+    private final double close;
+    private LivingEntity leader;
     private int untilRecheck;
 
     private FollowKinGoal(AddonEntity mob, JsonObject component, double range, boolean grownOnly,
@@ -37,8 +49,10 @@ public final class FollowKinGoal extends Goal {
         this.speed = number(component, "speed_multiplier", 1);
         this.range = captain ? number(component, "within_radius", range) : range;
         this.grownOnly = grownOnly;
-        this.caravan = caravan;
+        this.caravan = caravan ? Filter.entityTypes(component.get("entity_types")) : null;
+        this.caravanSize = (int) number(component, "entity_count", 1);
         this.captain = captain;
+        this.close = captain ? number(component, "follow_distance", COMFORTABLE) : COMFORTABLE;
         setFlags(EnumSet.of(Goal.Flag.MOVE));
     }
 
@@ -71,6 +85,8 @@ public final class FollowKinGoal extends Goal {
     @Override
     public boolean canUse() {
         if (grownOnly && !mob.isBaby()) return false;
+        // A leashed entity heads its caravan rather than joining one.
+        if (caravan != null && Platform.leashHolder(mob) != null) return false;
         if (untilRecheck-- > 0) return false;
 
         untilRecheck = 20;
@@ -80,40 +96,69 @@ public final class FollowKinGoal extends Goal {
 
     @Override
     public boolean canContinueToUse() {
-        return leader != null && leader.isAlive() && mob.distanceTo(leader) <= range;
+        return leader != null && leader.isAlive() && mob.distanceTo(leader) <= range
+            && (caravan == null || inLine(leader));
     }
 
     @Override
     public void start() {
-        if (caravan) mob.setValue("in_caravan", true);
+        if (caravan != null) mob.joinCaravan(leader);
     }
 
     @Override
     public void stop() {
         leader = null;
         mob.getNavigation().stop();
-        if (caravan) mob.setValue("in_caravan", false);
+        if (caravan != null) mob.joinCaravan(null);
     }
 
     @Override
     public void tick() {
-        if (leader == null || mob.distanceTo(leader) <= COMFORTABLE) return;
+        if (leader == null) return;
 
-        mob.getNavigation().moveTo(leader, speed);
+        if (mob.distanceTo(leader) <= close) {
+            mob.getNavigation().stop();
+        } else {
+            mob.getNavigation().moveTo(leader, speed);
+        }
     }
 
-    /** The closest one of its own kind that is not this entity, and is grown when that is asked. */
-    private AddonEntity nearest() {
-        List<AddonEntity> kin = mob.level().getEntitiesOfClass(AddonEntity.class,
+    /** The closest one worth following that is not this entity, and is grown when that is asked. */
+    private LivingEntity nearest() {
+        List<LivingEntity> kin = mob.level().getEntitiesOfClass(LivingEntity.class,
             mob.getBoundingBox().inflate(range),
             other -> other != mob && worthFollowing(other)
                 && (!grownOnly || !other.isBaby()));
         return kin.stream().min(java.util.Comparator.comparingDouble(mob::distanceToSqr)).orElse(null);
     }
 
-    private boolean worthFollowing(AddonEntity other) {
-        return captain ? Boolean.TRUE.equals(other.value("is_illager_captain"))
-            : other.getType() == mob.getType();
+    private boolean worthFollowing(LivingEntity other) {
+        if (captain) {
+            return other instanceof AddonEntity raider
+                && Boolean.TRUE.equals(raider.value("is_illager_captain"));
+        }
+        if (caravan == null) return other.getType() == mob.getType();
+
+        return caravan.matches(new Filter.Context(mob, other, other, ServerHooks.state()))
+            && inLine(other) && followersAhead(other) < caravanSize
+            && mob.level().getEntitiesOfClass(AddonEntity.class, mob.getBoundingBox().inflate(range),
+                behind -> behind != mob && behind.caravanHead() == other).isEmpty();
+    }
+
+    /** Whether a caravan can grow behind this one: it is leashed, or it follows in a caravan itself. */
+    private static boolean inLine(Entity entity) {
+        return Platform.leashHolder(entity) != null
+            || entity instanceof AddonEntity follower && follower.caravanHead() != null;
+    }
+
+    /** How many followers stand between the head of the line and the one this would walk behind. */
+    private int followersAhead(Entity last) {
+        int count = 0;
+        for (Entity at = last; at instanceof AddonEntity follower && follower.caravanHead() != null
+            && count <= caravanSize; at = follower.caravanHead()) {
+            count++;
+        }
+        return count;
     }
 
     private static double number(JsonObject component, String key, double fallback) {

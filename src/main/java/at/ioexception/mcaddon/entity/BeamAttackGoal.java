@@ -41,7 +41,7 @@ public final class BeamAttackGoal extends Goal {
     private final SoundEvent windUpSound;
     private final SoundEvent hitSound;
     private int held;
-    private int untilNext;
+    private int readyAt;
 
     private BeamAttackGoal(AddonEntity mob, JsonObject component, int windUpTicks, int durationTicks,
         int cooldownTicks, double damage, double extraOnHard, boolean addsAttackDamage,
@@ -98,8 +98,13 @@ public final class BeamAttackGoal extends Goal {
     }
 
     @Override
+    public boolean requiresUpdateEveryTick() {
+        return true;
+    }
+
+    @Override
     public boolean canUse() {
-        if (untilNext-- > 0) return false;
+        if (mob.tickCount < readyAt) return false;
 
         LivingEntity target = mob.getTarget();
         return inRange(target) && mob.getSensing().hasLineOfSight(target);
@@ -120,7 +125,7 @@ public final class BeamAttackGoal extends Goal {
 
     @Override
     public void stop() {
-        untilNext = cooldownTicks;
+        readyAt = mob.tickCount + cooldownTicks;
         mob.setValue("is_charging", false);
     }
 

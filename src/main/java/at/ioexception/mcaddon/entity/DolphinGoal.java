@@ -35,7 +35,7 @@ public final class DolphinGoal extends Goal {
     private final double stopDistance;
     private final int interval;
     private final double reach;
-    private int untilNext;
+    private int readyAt;
     private int untilSearch;
     private Player swimmer;
     private BlockPos treasure;
@@ -73,7 +73,7 @@ public final class DolphinGoal extends Goal {
         if (!mob.isInWater()) return false;
 
         return switch (kind) {
-            case BREACH -> untilNext-- <= 0 && nearTheSurface();
+            case BREACH -> mob.tickCount >= readyAt && nearTheSurface();
             case TREASURE -> {
                 // Finding a structure searches generated chunks, which is far too heavy to ask on
                 // every tick, so the goal keeps whatever it last found until it looks again.
@@ -104,7 +104,7 @@ public final class DolphinGoal extends Goal {
     public void start() {
         if (kind != Kind.BREACH) return;
 
-        untilNext = Math.max(1, interval);
+        readyAt = mob.tickCount + Math.max(1, interval);
         Vec3 moving = mob.getDeltaMovement();
         mob.setDeltaMovement(moving.x, BREACH_LIFT, moving.z);
     }

@@ -32,7 +32,7 @@ public final class SpellGoal extends Goal {
     private final List<Spell> spells = new ArrayList<>();
     private Spell casting;
     private int cast;
-    private int untilNext;
+    private int readyAt;
     private int done;
 
     private SpellGoal(AddonEntity mob, JsonObject component, boolean summons, String choicesKey) {
@@ -55,8 +55,13 @@ public final class SpellGoal extends Goal {
     }
 
     @Override
+    public boolean requiresUpdateEveryTick() {
+        return true;
+    }
+
+    @Override
     public boolean canUse() {
-        if (untilNext-- > 0 || spells.isEmpty()) return false;
+        if (mob.tickCount < readyAt || spells.isEmpty()) return false;
 
         LivingEntity target = mob.getTarget();
         if (target == null || !target.isAlive()) return false;
@@ -94,7 +99,7 @@ public final class SpellGoal extends Goal {
     @Override
     public void stop() {
         mob.setValue("is_casting", false);
-        untilNext = casting == null ? 0 : casting.cooldown;
+        readyAt = mob.tickCount + (casting == null ? 0 : casting.cooldown);
         casting = null;
     }
 
