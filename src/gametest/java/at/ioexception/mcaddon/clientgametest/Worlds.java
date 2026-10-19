@@ -15,6 +15,9 @@ import java.util.function.Supplier;
 
 /** Opening a test world, waiting on its server and reading the client's frame, which 26.2 spells differently. */
 final class Worlds {
+    /** The view and simulation distance, in chunks, of every dedicated server, matching the client's. */
+    static final String SERVER_CHUNKS = "5";
+
     private Worlds() {
     }
 
@@ -161,6 +164,8 @@ final class Worlds {
     static net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerContext server(
         ClientGameTestContext context, java.util.Properties properties) {
         properties.putIfAbsent("server-port", String.valueOf(freePort()));
+        properties.putIfAbsent("view-distance", SERVER_CHUNKS);
+        properties.putIfAbsent("simulation-distance", SERVER_CHUNKS);
         return context.worldBuilder().createServer(properties);
     }
 

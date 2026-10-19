@@ -252,6 +252,16 @@ These are the checks it runs, and what each one catches:
   committed here. Both tasks delete their world before running, because each run of the server
   tests places them somewhere new and a kept world only grows.
 
+  **Test worlds load 5 chunks in every direction.** Fabric forces the client's render distance to 5
+  and, whenever a test world opens, puts every option back to what it saw at startup, so a value a
+  test sets in code lasts for that world only. The simulation distance, which the integrated server
+  reads from the client's options, therefore comes from the `options.txt` that `runClientGameTest`
+  writes into its run directory (`simulationDistance:5`); 5 is the lowest the game accepts and a
+  lower value is silently replaced by the default of 12. Dedicated servers started through
+  `Worlds.server` get `view-distance` and `simulation-distance` 5 in their `server.properties`
+  unless a test passes its own. A test that needs more chunks raises the client's options after its
+  world has opened.
+
   What a player does with a pack's items and blocks is driven through the client's own input: the
   use, attack and inventory keys, the view turned onto a block or an entity, and container clicks
   sent the way a screen sends them. `ItemUseClientGameTest` eats, wears, throws and spawns from an
