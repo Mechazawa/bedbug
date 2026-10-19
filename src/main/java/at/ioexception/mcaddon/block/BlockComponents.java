@@ -266,15 +266,12 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
     /**
      * `minecraft:destruction_particles` asking for no particles at all, which Java has a flag for.
      *
-     * Java draws the block's own texture and takes the tint from the biome, so the texture and the
-     * tint method a pack may name alongside the count have nothing to change.
+     * The texture becomes the block model's particle texture as the pack is converted. Java takes
+     * the tint from the biome, so the tint method a pack may name has nothing to change.
      */
     private static boolean breaksWithoutParticles(JsonObject components) {
-        JsonObject particles = object(components, "minecraft:destruction_particles");
-        for (String field : List.of("texture", "tint_method")) {
-            if (particles.has(field)) {
-                AddonEntities.unsupported("minecraft:destruction_particles " + field);
-            }
+        if (object(components, "minecraft:destruction_particles").has("tint_method")) {
+            AddonEntities.unsupported("minecraft:destruction_particles tint_method");
         }
         return components.has("minecraft:destruction_particles")
             && number(components, "minecraft:destruction_particles", "particle_count", 100) == 0;

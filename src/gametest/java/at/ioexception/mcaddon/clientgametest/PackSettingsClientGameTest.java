@@ -30,7 +30,8 @@ import java.util.Set;
 
 /**
  * The add-on screen opens from the options screen Mod Menu shows and from the pause menu, lists the
- * test add-on and opens its settings, drawn from both of its manifests.
+ * test add-on with the behaviour pack's description over the resource pack's, which differs, and
+ * opens its settings, drawn from both of its manifests.
  *
  * In a single player world the player owns the world, so the behaviour pack's toggle, slider and
  * dropdown are moved there with the pointer and the pack's script reads the new values back through
@@ -43,6 +44,10 @@ import java.util.Set;
 public final class PackSettingsClientGameTest implements FabricClientGameTest {
     private static final String ADDON = "Test Add-On";
     private static final int PATIENCE = 200;
+    private static final String BEHAVIOUR_DESCRIPTION =
+        "Behaviour half of the add-on the verify harness runs against.";
+    private static final String RESOURCE_DESCRIPTION =
+        "Resource half of the add-on the verify harness runs against.";
 
     /** The heading above the column and the Done button below it. */
     private static final int VIEW_MARGIN = 32;
@@ -85,6 +90,11 @@ public final class PackSettingsClientGameTest implements FabricClientGameTest {
                 && listed.contains("Resource pack: " + ADDON + " (active)"),
             "Expected the add-on screen to list the test add-on with its version, author and both packs, and found "
                 + listed);
+        String text = String.join(" ", listed);
+        int behaviour = text.indexOf(BEHAVIOUR_DESCRIPTION);
+        Assert.that(behaviour >= 0 && text.indexOf(RESOURCE_DESCRIPTION) > behaviour,
+            "Expected the behaviour pack's description and then the resource pack's, which says something else,"
+                + " and found " + listed);
         context.runOnClient(client -> pressAfter(ADDON + " 1.0.0", "Settings"));
         context.waitForScreen(PackSettingsScreen.class);
         Worlds.waitForClient(context, client -> shown(Platform.currentScreen()).contains("Ember glows: On")

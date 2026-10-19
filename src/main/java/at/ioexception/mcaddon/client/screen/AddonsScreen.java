@@ -65,7 +65,7 @@ public final class AddonsScreen extends ColumnScreen {
         if (!addon.authors().isEmpty()) {
             text(Component.translatable("mcaddon.addons.by", String.join(", ", addon.authors())).getString());
         }
-        if (!addon.description().isBlank()) text(addon.description());
+        addon.descriptions().forEach(this::text);
         addon.packs().forEach(pack -> text(packLine(pack, addon.active())));
 
         Button settings = widget(Button.builder(Component.translatable("mcaddon.addons.settings"),

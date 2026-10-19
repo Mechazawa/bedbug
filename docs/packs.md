@@ -8,6 +8,12 @@
 - `/mcaddon packs` lists what loaded, with the authors, licence and URL from the manifest's
   `metadata`, and the subpack that loaded.
 
+## The Add-Ons screen
+
+Bedrock lists behaviour packs and resource packs apart, each with its own manifest description. The
+Add-Ons screen shows one entry per add-on, so it shows the behaviour pack's description first and
+then the resource pack's, if it says something else.
+
 ## Pack settings
 
 A pack's settings open from **Settings** on the Add-Ons screen.

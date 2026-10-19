@@ -189,7 +189,7 @@ public final class AddonBlocks {
         components.registerFlammability(block);
 
         if (!BuiltInRegistries.ITEM.containsKey(id)) {
-            Item item = Platform.buildBlockItem(block, new Item.Properties(), id);
+            Item item = Platform.buildBlockItem(block, Platform.blockItemProperties(), id);
             Registry.register(BuiltInRegistries.ITEM, id, item);
             AddonItems.all().put(definition.identifier(), item);
         }

@@ -45,10 +45,19 @@ record AddonEntry(ConvertedPack converted, boolean active) {
             .orElse(List.of());
     }
 
-    /** The description, translated through the pack's own texts, or an empty line where it states none. */
-    String description() {
-        String resolved = converted.pack().text(converted.pack().manifest().description());
-        return resolved == null ? "" : resolved;
+    /**
+     * Each pack's description translated through its own texts, the behaviour packs' first, leaving out
+     * a pack that states none or repeats one already listed.
+     *
+     * Bedrock lists the two kinds of pack apart, each under its own description, and the behaviour pack
+     * is the one that says what the add-on does.
+     */
+    List<String> descriptions() {
+        return Stream.concat(converted.behaviours().stream(), Stream.of(converted.pack()))
+            .map(pack -> pack.text(pack.manifest().description()))
+            .filter(text -> text != null && !text.isBlank())
+            .distinct()
+            .toList();
     }
 
     boolean hasSettings() {

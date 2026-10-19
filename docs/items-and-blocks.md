@@ -3,6 +3,8 @@
 ## Items
 
 - Edible and wearable items, spawn eggs, and one creative tab per add-on.
+- A spawn egg with a `base_color` and an `overlay_color` is drawn in those two colours. From 26
+  Java has no egg to paint, so Bedbug draws its own.
 - `menu_category` also puts an item or a block in a Java tab: construction is Building Blocks,
   nature is Natural Blocks, equipment is Combat, items is Ingredients.
 - Food takes as long to eat as the pack says. Before 1.21.2 Java has two eating times, so a pack time
@@ -29,7 +31,10 @@ clicking, standing on and ticking reach the pack's callback. Both forms are read
 ## Blocks
 
 - States and permutations: each combination gets its own model. Permutation conditions are Molang.
-- A block with its own geometry keeps it.
+- A block with its own geometry keeps it, in the place Bedrock draws it.
+- A block's item has the block's name.
+- A block breaks into the texture `minecraft:destruction_particles` names, or else the texture of its
+  `down` face, as in Bedrock.
 - A permutation can change the textures, rotation, collision and selection boxes, mining time and
   light of its state.
 - Placement traits add states that are set at placement: facing (turned by `y_rotation_offset`), the

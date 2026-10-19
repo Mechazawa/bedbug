@@ -21,11 +21,15 @@ import java.util.Set;
 /**
  * A Bedrock block geometry, rewritten as a Java block model.
  *
- * These two formats agree where the entity formats do not: both measure in sixteenths of a block
- * with Y running up, so a cube's corners carry across unchanged. What differs is the texture
- * coordinates, which Bedrock writes in texture pixels and Java writes in sixteenths.
+ * Both formats measure in sixteenths of a block with Y running up. Bedrock centres the block on its
+ * X and Z axes, so a full block's origin is `[-8, 0, -8]`, where Java's block runs from 0 to 16, and
+ * every corner and pivot moves by half a block on those two axes. The texture coordinates also
+ * differ: Bedrock writes them in texture pixels and Java in sixteenths.
  */
 final class BlockGeometry {
+    /** Half a block, in sixteenths: how far Bedrock's block centre is from Java's corner on X and Z. */
+    private static final float CENTRE = 8;
+
     private BlockGeometry() {
     }
 
@@ -96,7 +100,7 @@ final class BlockGeometry {
     }
 
     private static JsonObject element(BedrockCube cube, BedrockGeometry geometry, Set<String> textures) {
-        Vector3f origin = cube.origin();
+        Vector3f origin = new Vector3f(cube.origin()).add(CENTRE, 0, CENTRE);
         Vector3f size = cube.size();
         float inflate = cube.inflate();
 
@@ -107,7 +111,7 @@ final class BlockGeometry {
 
         if (cube.isRotated()) {
             JsonObject rotation = new JsonObject();
-            rotation.add("origin", triple(cube.pivot().x, cube.pivot().y, cube.pivot().z));
+            rotation.add("origin", triple(cube.pivot().x + CENTRE, cube.pivot().y, cube.pivot().z + CENTRE));
             // A Java model rotates about one axis at a time, so the largest angle is the one kept.
             float x = Math.abs(cube.rotation().x);
             float y = Math.abs(cube.rotation().y);
