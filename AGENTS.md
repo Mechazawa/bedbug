@@ -844,6 +844,15 @@ These are the checks it runs, and what each one catches:
   covers the server's two, `recipesunlock` through an advancement's reward and `respawnblocksexplode`
   through a bed used in the nether and a charged anchor used in the overworld.
 
+  `PacketLimitClientGameTest` starts a dedicated server with `enable-packet-rate-limiter=true`,
+  writes `packetlimitconfig.json` into the run directory, sends bursts of commands that each add one
+  to a score, and reads the score back: a bucket of three that never drains lets three through, a
+  looser file nobody reloaded changes nothing, and `/bedrock reloadpacketlimitconfig` lets the next
+  burst through whole. `server.PacketLimits` holds the file as read, `BedrockPacketIds` the Java
+  packets each Bedrock id stands for, and `ConnectionPacketLimitMixin` drops a packet on the network
+  thread before any listener sees it. The switch is read off the dedicated server's own
+  `server.properties` through `SettingsAccessor`, so a single player world never limits anything.
+
   One client game test at a time: the entry point list in `src/gametest/resources/fabric.mod.json`
   is the whole selection, so cutting it down to one class runs that class alone. Put it back after.
 

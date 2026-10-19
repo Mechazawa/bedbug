@@ -6,6 +6,8 @@
   "mixins": [
     "PackRepositoryMixin",
     "CommandsMixin",
+    "ConnectionPacketLimitMixin",
+    "SettingsAccessor",
     "LivingEntityMixin",
     "JumpingAccessor",
     "JigsawStructureAccessor",
