@@ -6,13 +6,12 @@ import at.ioexception.mcaddon.platform.Platform;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.minecraft.client.Screenshot;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The grade a pack gives a biome is the grade the frame is drawn with.
@@ -36,6 +35,9 @@ public final class ColourGradingClientGameTest implements FabricClientGameTest {
             Worlds.waitForChunks(world);
             Stage.build(context, world, "creative");
             world.getServer().runCommand("fill -3 120 3 3 124 3 minecraft:orange_concrete");
+            // A biome another mod adds names no grade either, so it takes the pack's whole-world one.
+            // The box covers every quarter chunk the camera's blend weighs and stays under fillbiome's limit.
+            world.getServer().runCommand("fillbiome -12 108 -12 12 136 12 minecraft:plains");
             context.runOnClient(client -> Platform.hideHud(client, true));
             context.waitTicks(5);
 
@@ -47,13 +49,19 @@ public final class ColourGradingClientGameTest implements FabricClientGameTest {
 
             Worlds.waitForClient(context, client -> ColourGrading.current().leavesFrameAlone(), PATIENCE,
                 () -> "the player stands in plains, which no pack grades, and the frame is graded.");
-            int plain = centre(context, world, "colour-grading-plains");
+            int plain = centre(context, world);
 
-            world.getServer().runCommand("fillbiome -16 100 -16 16 140 16 tp:glade");
-            Worlds.waitForClient(context, client -> Math.abs(ColourGrading.current().value(GradeUniforms.CONTRAST + 1, 0) - 1.3f) < 1e-4,
-                PATIENCE, () -> "the player stands in tp:glade and the frame's midtone contrast is "
-                    + ColourGrading.current().value(GradeUniforms.CONTRAST + 1, 0) + " where tp:glade_grade states 1.3.");
-            int graded = centre(context, world, "colour-grading-glade");
+            world.getServer().runCommand("fillbiome -12 108 -12 12 136 12 tp:glade");
+            Worlds.waitForClient(context, client -> Math.abs(midtoneContrast(ColourGrading.current()) - 1.3f) < 1e-4,
+                PATIENCE, () -> {
+                    net.minecraft.client.Minecraft client = net.minecraft.client.Minecraft.getInstance();
+                    var biome = client.level.getBiome(client.player.blockPosition());
+                    return "the player stands in tp:glade and the frame's midtone contrast is "
+                        + midtoneContrast(ColourGrading.current()) + " where tp:glade_grade states 1.3. The client has "
+                        + biome.getRegisteredName() + " there, which takes "
+                        + midtoneContrast(ColourGrading.of(biome)) + ".";
+                });
+            int graded = centre(context, world);
 
             float[] wanted = ColourGrading.current().grade((plain >> 16 & 0xFF) / 255f,
                 (plain >> 8 & 0xFF) / 255f, (plain & 0xFF) / 255f);
@@ -70,16 +78,26 @@ public final class ColourGradingClientGameTest implements FabricClientGameTest {
         }
     }
 
-    /** The pixel in the middle of a frame drawn at noon. */
-    private static int centre(ClientGameTestContext context, TestSingleplayerContext world, String name) {
+    private static float midtoneContrast(GradeUniforms grade) {
+        return grade.value(GradeUniforms.CONTRAST + 1, 0);
+    }
+
+    /**
+     * The pixel in the middle of the last frame drawn at noon, read out of the main target the way
+     * the game's own screenshot key reads it, so no frame is drawn outside the game's own loop.
+     */
+    private static int centre(ClientGameTestContext context, TestSingleplayerContext world) {
         world.getServer().runCommand("time set noon");
         context.waitTicks(2);
-        Path file = context.takeScreenshot(name);
-        try {
-            BufferedImage image = ImageIO.read(file.toFile());
-            return image.getRGB(image.getWidth() / 2, image.getHeight() / 2);
-        } catch (IOException error) {
-            throw new AssertionError("The screenshot " + file + " could not be read: " + error);
-        }
+        AtomicInteger pixel = new AtomicInteger();
+        AtomicBoolean read = new AtomicBoolean();
+        context.runOnClient(client -> Screenshot.takeScreenshot(Platform.mainRenderTarget(client), image -> {
+            try (image) {
+                pixel.set(image.getPixel(image.getWidth() / 2, image.getHeight() / 2));
+            }
+            read.set(true);
+        }));
+        context.waitFor(client -> read.get());
+        return pixel.get();
     }
 }

@@ -1567,9 +1567,12 @@ image as the number rises, while the vanilla pack grades its hot biomes at 4000 
 `highlightsMin`, so both are the average itself; and the contrast pivot is a shader constant no file
 states, taken as the average. `client/render/ColourGrading` decides which collection a biome takes,
 with `VANILLA` carrying Bedrock's own client biomes' naming onto Java's biome ids, and blends the
-grade around the camera with Java's fog colour weights. `ColourGradingClientGameTest` photographs a
-wall in plains and again in `tp:glade` and asks that the second pixel is the first through
-`tp:glade_grade`.
+grade around the camera with Java's fog colour weights. `ColourGradingClientGameTest` reads a
+wall's pixel out of the main target in plains and again in `tp:glade` and asks that the second is
+the first through `tp:glade_grade`. It reads through `Screenshot.takeScreenshot` rather than the
+test API's `takeScreenshot`, which draws a frame of its own that Sodium refuses on 26.1.2 (`Global
+terrain uniforms have not been updated`). A blend of one grade alone hands back that grade, because
+the weighted sum divided back out is not the same floats and the pass would never be skipped.
 
 `blend_transition` is acted on as well: a state declaring one is crossed out of rather than left, its
 clips staying at a falling weight while the state it moved to comes up. `blend_via_shortest_path`

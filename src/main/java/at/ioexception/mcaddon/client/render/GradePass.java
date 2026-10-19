@@ -45,7 +45,8 @@ public final class GradePass {
                 copy.close();
             }
             copy = device.createTexture(() -> LABEL, com.mojang.blaze3d.textures.GpuTexture.USAGE_COPY_DST
-                | com.mojang.blaze3d.textures.GpuTexture.USAGE_TEXTURE_BINDING, colour.getFormat(), width, height, 1, 1);
+                    | com.mojang.blaze3d.textures.GpuTexture.USAGE_TEXTURE_BINDING,
+                colour.getFormat(), width, height, 1, 1);
             copyView = device.createTextureView(copy);
         }
         if (uniforms == null) {

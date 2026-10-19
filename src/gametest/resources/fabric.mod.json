@@ -43,6 +43,7 @@
       "at.ioexception.mcaddon.clientgametest.CullingClientGameTest",
       "at.ioexception.mcaddon.clientgametest.ParticleClientGameTest",
       "at.ioexception.mcaddon.clientgametest.FogClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.ColourGradingClientGameTest",
       "at.ioexception.mcaddon.clientgametest.OrbitCameraClientGameTest",
       "at.ioexception.mcaddon.clientgametest.BoomCameraClientGameTest",
       "at.ioexception.mcaddon.clientgametest.AttachedCameraClientGameTest",

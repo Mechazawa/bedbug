@@ -45,20 +45,28 @@ public final class GradeUniforms {
         this.values = values;
     }
 
-    /** Sums grades by weight, each weight a share of one. */
+    /**
+     * Sums grades by weight, each weight a share of one. A blend of one grade alone is that grade,
+     * because dividing the weighted sum back out does not give the same floats again.
+     */
     public static final class Blend {
         private final float[] sum = new float[ROWS * 4];
         private float total;
+        private GradeUniforms only;
+        private boolean mixed;
 
         public void add(GradeUniforms grade, float weight) {
             for (int i = 0; i < sum.length; i++) {
                 sum[i] += grade.values[i] * weight;
             }
             total += weight;
+            mixed |= only != null && only != grade;
+            only = grade;
         }
 
         public GradeUniforms result() {
             if (total <= 0) return NONE;
+            if (!mixed) return only;
 
             float[] values = new float[sum.length];
             for (int i = 0; i < values.length; i++) {

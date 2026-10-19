@@ -88,10 +88,10 @@ public final class ColourGrading {
         graded = !grades.isEmpty();
         BY_BIOME.clear();
         BY_HOLDER.clear();
-        named.forEach((biome, grade) -> BY_BIOME.put(biome,
-            grades.getOrDefault(grade, ColourGrade.NONE).uniforms()));
-        unnamed = wholeWorld == null ? GradeUniforms.NONE
-            : grades.getOrDefault(wholeWorld, ColourGrade.NONE).uniforms();
+        Map<String, GradeUniforms> uniforms = new HashMap<>();
+        grades.forEach((identifier, grade) -> uniforms.put(identifier, grade.uniforms()));
+        named.forEach((biome, grade) -> BY_BIOME.put(biome, uniforms.getOrDefault(grade, GradeUniforms.NONE)));
+        unnamed = wholeWorld == null ? GradeUniforms.NONE : uniforms.getOrDefault(wholeWorld, GradeUniforms.NONE);
     }
 
     private static void readNaming(Path file, String namespace, Map<String, String> into) {
