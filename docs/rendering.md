@@ -70,12 +70,14 @@
 - An attachable can write variables into its wearer, and the layer it replaces switches off.
 - A pack's entity wears its equipment where its client definition allows (`enable_attachables`).
   `hide_armor` hides armour slots and keeps hand items.
-- A root bone with `binding` hangs on the named bone of the wearer, so a shield stays in the hand.
-  `context.item_slot` is the slot, as Mojang's `query.item_slot_to_bone_name` bindings expect.
-  On a player or a vanilla mob the bone is the Java model part of the same name, and
-  `rightItem` and `leftItem` are on the arms. A hat follows the head.
-- Java does not draw an item that an attachable draws: no item on the head, no armour piece and
-  no item in the hand.
+- A bone with `binding` hangs on the named bone of the wearer, so a shield stays in the hand. Its
+  children go with it. `context.item_slot` is the slot, as Mojang's `query.item_slot_to_bone_name`
+  bindings expect. On a player or a vanilla mob the bone is the Java model part of the same name,
+  and `rightItem` and `leftItem` are on the arms. A hat follows the head.
+- A bound root is drawn 24 pixels lower than it is modelled, as in Bedrock. A bound bone below the
+  root keeps its offset from its parent's pivot and is not lowered.
+- Java does not draw an item that an attachable draws: no item on the head, no armour piece, no
+  horse or wolf armour, llama carpet or happy ghast harness, and no item in the hand.
 - An item with no attachable is drawn at a `rightItem` or `leftItem` bone, scaled by
   `held_item_scale`, full bright under `held_item_ignores_lighting`, and hidden under
   `hide_held_items`. A model with neither bone draws no item.
