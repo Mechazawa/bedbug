@@ -35,6 +35,20 @@ public record ConvertedPack(BedrockPack pack, List<BedrockPack> behaviours, Path
     }
 
     /**
+     * The image of a Bedrock texture as the pack painted it, or null where the conversion wrote none.
+     *
+     * {@link AlphaMask} raises a faint texel to opaque in the texture itself, and the alpha it
+     * started with is kept in the tint weights form, which is written for every texture holding one.
+     */
+    public Path paintedFile(String bedrockPath) {
+        String mapped = texturePaths.get(bedrockPath);
+        if (mapped == null) return null;
+
+        Path weights = written(mapped + TintWeights.SUFFIX);
+        return weights != null ? weights : written(mapped);
+    }
+
+    /**
      * The resource id of the form of a texture Bedrock's plain alpha test draws, or null where the
      * conversion wrote none because the test would drop nothing Java keeps.
      */

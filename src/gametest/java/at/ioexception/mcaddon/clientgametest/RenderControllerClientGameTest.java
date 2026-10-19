@@ -92,6 +92,7 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
             faintTexels(context, world);
             colourMask(context, world);
             maskedTextures(context, world);
+            maskedMarkers(context, world);
             boneMaterials(context, world);
         }
     }
@@ -374,6 +375,29 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
         List<String> plain = Collections.nCopies(4, texel(TAILOR_BASE));
         Assert.that(drawn.equals(List.of(masked, masked, plain, plain, masked)), "tp:tailor's five passes should"
             + " draw the outfit's bands as " + masked + " or as " + plain + ", and drew " + drawn + ".");
+    }
+
+    /**
+     * A masked multitexture pass mixes its two textures as the pack painted them and then tests the
+     * alpha of the mix, which drops a texel a pack marked at an alpha of one in both.
+     *
+     * `tp:apprentice` draws `tp:tailor`'s two masked controllers over textures holding only clear and
+     * opaque texels besides a red marker at an alpha of one in the last texel of each. Java's cutout
+     * would keep a texel that faint, so the conversion writes each texture with the marker opaque; a
+     * mix of those forms draws a red square where Bedrock draws nothing.
+     */
+    private static void maskedMarkers(ClientGameTestContext context, TestSingleplayerContext world) {
+        world.getServer().runCommand("summon tp:apprentice ~-3 ~ ~-3");
+        AddonEntity apprentice = Entities.waitForClient(context, "tp:apprentice");
+
+        List<List<String>> drawn = context.computeOnClient(client -> ScriptClock.of(apprentice).passes().stream()
+            .map(pass -> List.of(texel(PackTextures.colourAt(pass.texture(), 8, 8)),
+                texel(PackTextures.colourAt(pass.texture(), 24, 8)),
+                texel(PackTextures.colourAt(pass.texture(), 63, 63))))
+            .toList());
+        List<String> masked = List.of(texel(TAILOR_OUTFIT), texel(TAILOR_BASE), texel(0));
+        Assert.that(drawn.equals(List.of(masked, masked)), "tp:apprentice's two masked passes should draw the"
+            + " outfit, the base and the dropped marker as " + masked + ", and drew " + drawn + ".");
     }
 
     /**

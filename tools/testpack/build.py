@@ -256,6 +256,22 @@ def tailor_outfit(x: int, y: int) -> tuple[int, int, int, int]:
     return (TAILOR_OUTFIT, (255, 255, 255, 0), TRANSPARENT, (60, 200, 60, 64))[x // 16]
 
 
+# The apprentice's textures carry a red marker at an alpha of one in their last texel, the way a
+# pack marks a skin, and otherwise hold only clear and opaque texels.
+APPRENTICE_MARKER = (255, 0, 0, 1)
+
+
+def apprentice_base(x: int, y: int) -> tuple[int, int, int, int]:
+    return APPRENTICE_MARKER if x == y == 63 else TAILOR_BASE
+
+
+def apprentice_outfit(x: int, y: int) -> tuple[int, int, int, int]:
+    """The outfit's red over its first sixteen columns and a clear white, showing the base, over the rest."""
+    if x == y == 63:
+        return APPRENTICE_MARKER
+    return TAILOR_OUTFIT if x < 16 else (255, 255, 255, 0)
+
+
 def prism_mer(x: int, y: int) -> tuple[int, int, int, int]:
     """Metalness, emissive and roughness: only the mark's patch of the sheet glows."""
     if 32 <= x < 40 and y < 8:
@@ -329,6 +345,8 @@ TEXTURES = (
     ("textures/entity/vane.png", 8, vane),
     ("textures/entity/tailor_base.png", 64, tailor_base),
     ("textures/entity/tailor_outfit.png", 64, tailor_outfit),
+    ("textures/entity/apprentice_base.png", 64, apprentice_base),
+    ("textures/entity/apprentice_outfit.png", 64, apprentice_outfit),
     ("textures/particle/particles.png", 128, particle_atlas),
 )
 
