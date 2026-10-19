@@ -276,7 +276,7 @@ public final class PackBiomeClientGameTest implements FabricClientGameTest {
             /*.filter(entry -> entry.getValue().getAttributes()
                 .applyModifier(net.minecraft.world.attribute.EnvironmentAttributes.NATURAL_MOB_SPAWNS,
                     net.minecraft.world.level.biome.MobSpawnSettings.EMPTY)
-                .getMobsInCategory(MobCategory.MONSTER).unwrap().stream()
+                .getMobsToSpawn(MobCategory.MONSTER).unwrap().stream()
             *///?} else {
             .filter(entry -> entry.getValue().getMobSettings().getMobs(MobCategory.MONSTER).unwrap().stream()
             //?}

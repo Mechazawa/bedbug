@@ -1,4 +1,6 @@
-# Bedrock add-ons on Fabric
+# Bedbug
+
+Play Bedrock add-ons on Fabric.
 
 Drop a Bedrock `.mcaddon` into your instance's `addons/` folder and play it in Java Edition.
 

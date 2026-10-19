@@ -3498,6 +3498,82 @@ public final class Platform {
     }
 
     /**
+     * How often a converted biome's chunks are stocked with creatures as they generate, and the
+     * empty spawn lists a pack's spawn rules fill.
+     *
+     * Up to 26.2 a biome carries both as fields and the lists are required. From 26.3 they are
+     * environment attributes, and a biome without the spawn attribute spawns nothing of its own.
+     */
+    public static void biomeSpawning(com.google.gson.JsonObject biome, float creatureProbability) {
+        //? if >=26.3 {
+        /*com.google.gson.JsonObject attributes = biome.has("attributes")
+            ? biome.getAsJsonObject("attributes") : new com.google.gson.JsonObject();
+        attributes.addProperty("minecraft:gameplay/creature_world_gen_spawn_probability",
+            creatureProbability);
+        biome.add("attributes", attributes);
+        *///?} else {
+        biome.add("spawners", new com.google.gson.JsonObject());
+        biome.add("spawn_costs", new com.google.gson.JsonObject());
+        biome.addProperty("creature_spawn_probability", creatureProbability);
+        //?}
+    }
+
+    /** The data pack directory a configured feature is read from. */
+    public static String featureDirectory() {
+        //? if >=26.3 {
+        /*return "worldgen/feature";
+        *///?} else {
+        return "worldgen/configured_feature";
+        //?}
+    }
+
+    /**
+     * A configured feature as the version writes one: from 26.3 the type's own fields sit beside
+     * the type name, and before that they sit under `config`.
+     */
+    public static com.google.gson.JsonObject feature(String type, com.google.gson.JsonObject config) {
+        com.google.gson.JsonObject json = new com.google.gson.JsonObject();
+        json.addProperty("type", type);
+        //? if >=26.3 {
+        /*config.entrySet().forEach(field -> json.add(field.getKey(), field.getValue()));
+        *///?} else {
+        json.add("config", config);
+        //?}
+        return json;
+    }
+
+    /**
+     * A block state as worldgen data writes one. 26.3 renamed `Name` to `id` and `Properties` to
+     * `properties`.
+     */
+    public static com.google.gson.JsonObject blockState(String block,
+        java.util.Map<String, String> properties) {
+        com.google.gson.JsonObject state = new com.google.gson.JsonObject();
+        com.google.gson.JsonObject written = new com.google.gson.JsonObject();
+        properties.forEach(written::addProperty);
+        //? if >=26.3 {
+        /*state.addProperty("id", block);
+        if (!properties.isEmpty()) state.add("properties", written);
+        *///?} else {
+        state.addProperty("Name", block);
+        if (!properties.isEmpty()) state.add("Properties", written);
+        //?}
+        return state;
+    }
+
+    /**
+     * The type name of a block state provider, given as the part both versions share: `simple` or
+     * `weighted`. Up to 26.2 each ends in `_state_provider`.
+     */
+    public static String stateProvider(String kind) {
+        //? if >=26.3 {
+        /*return "minecraft:" + kind;
+        *///?} else {
+        return "minecraft:" + kind + "_state_provider";
+        //?}
+    }
+
+    /**
      * How a converted biome looks and sounds, as the version writes it.
      *
      * Up to 1.21 a biome states its own fog, sky and water fog beside the water colour, and all
