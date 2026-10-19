@@ -224,6 +224,11 @@ val installServedPack = project.tasks.register("installServedPack") {
     }
 }
 
+// Fabric empties the client test run directory before a run, so the packs go in after it has.
+listOf(installClientTestPack, installServedPack).forEach { install ->
+    install.configure { mustRunAfter(project.tasks.matching { it.name == "deleteGameTestRunDir" }) }
+}
+
 project.tasks.matching { it.name == "runClientGameTest" }.configureEach {
     dependsOn(installClientTestPack, installServedPack)
     (this as JavaExec).systemProperty("mcaddon.served",

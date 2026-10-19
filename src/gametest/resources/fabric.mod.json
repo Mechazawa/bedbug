@@ -64,6 +64,7 @@
       "at.ioexception.mcaddon.clientgametest.CameraPresetClientGameTest",
       "at.ioexception.mcaddon.clientgametest.ControlSchemeClientGameTest",
       "at.ioexception.mcaddon.clientgametest.ItemAndBlockClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.SeatClientGameTest",
       "at.ioexception.mcaddon.clientgametest.WebSocketClientGameTest",
       "at.ioexception.mcaddon.clientgametest.AimAssistClientGameTest",
       "at.ioexception.mcaddon.clientgametest.PacketLimitClientGameTest"
