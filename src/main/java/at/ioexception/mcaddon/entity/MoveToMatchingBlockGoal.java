@@ -287,7 +287,7 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
         if (!(state.getBlock() instanceof BonemealableBlock crop)) return;
         if (!Platform.canBonemeal(crop, level, at, state)) return;
 
-        crop.performBonemeal(level, mob.getRandom(), at, state);
+        Platform.bonemeal(crop, level, mob.getRandom(), at, state);
     }
 
     /** The blocks a component lists under one key, as the question the goal asks of a state. */

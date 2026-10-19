@@ -29,8 +29,14 @@ import org.spongepowered.asm.mixin.injection.ModifyConstant;
 @Mixin(BundleItem.class)
 public abstract class BundleItemMixin {
     //? if >=1.21 {
+    //? if >=26.3 {
+    /*@ModifyExpressionValue(method = {"overrideStackedOnOther", "overrideOtherStackedOnMe"},
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/world/item/component/BundleContents;"
+            + "asMutable()Lnet/minecraft/world/item/component/BundleContents$Mutable;"))
+    *///?} else {
     @ModifyExpressionValue(method = {"overrideStackedOnOther", "overrideOtherStackedOnMe"},
         at = @At(value = "NEW", target = "Lnet/minecraft/world/item/component/BundleContents$Mutable;"))
+    //?}
     private BundleContents.Mutable mcaddon$sized(BundleContents.Mutable contents,
         @Local(argsOnly = true, ordinal = 0) ItemStack bag) {
         ((BagCapacity) contents).mcaddon$holdUpTo(AddonItems.bagLimitOf(bag.getItem()));

@@ -16,7 +16,6 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.material.PushReaction;
 
 /**
  * The fields inside an entity component that Java has a place for, read back through that place.
@@ -190,10 +189,10 @@ public final class ComponentGameTests {
             return;
         }
 
-        helper.assertTrue(ember.getPistonPushReaction() != PushReaction.IGNORE,
+        helper.assertTrue(ember.getPistonPushReaction() != Platform.IGNORED,
             EMBER + " never refused a piston and a piston leaves it where it is.");
         EntityEvents.trigger(ember, "tp:ember_fade", null, ServerHooks.state());
-        helper.assertTrue(ember.getPistonPushReaction() == PushReaction.IGNORE,
+        helper.assertTrue(ember.getPistonPushReaction() == Platform.IGNORED,
             EMBER + " gained a minecraft:pushable refusing pistons and a piston still moves it.");
         helper.succeed();
     }
@@ -352,7 +351,7 @@ public final class ComponentGameTests {
                     EMBER + " answers only the wisp's family and turned on the player who hit it.");
 
                 // Out of the moment after a blow in which Java ignores the next one.
-                ember.invulnerableTime = 0;
+                Platform.setInvulnerableTime(ember, 0);
                 Platform.hurt(ember, helper.getLevel(), ember.damageSources().mobAttack(wisp), 0.5f);
             })
             .thenWaitUntil(() -> helper.assertTrue(ember.getTarget() == wisp,

@@ -1803,7 +1803,7 @@ public final class BehaviourGameTests {
 
         blows.forEach((felt, blow) -> {
             ember.setValue("tp:felt", "nothing");
-            ember.invulnerableTime = 0;
+            Platform.setInvulnerableTime(ember, 0);
             float before = ember.getHealth();
             Platform.hurt(ember, helper.getLevel(), blow, SCRATCH);
             helper.assertTrue(felt.equals(ember.value("tp:felt")), ENTITY + " was hurt by "
@@ -1838,7 +1838,7 @@ public final class BehaviourGameTests {
         helper.assertTrue(ember.getHealth() == whole - SCRATCH,
             ENTITY + " refused a blow its sensor refuses only when fatal.");
 
-        ember.invulnerableTime = 0;
+        Platform.setInvulnerableTime(ember, 0);
         Platform.hurt(ember, helper.getLevel(), helper.getLevel().damageSources().generic(), whole);
         helper.assertTrue(Boolean.TRUE.equals(ember.value("tp:spared")),
             ENTITY + " was dealt a fatal blow and its sensor never called it fatal.");

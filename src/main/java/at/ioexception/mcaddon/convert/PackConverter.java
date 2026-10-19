@@ -16,11 +16,14 @@ import at.ioexception.mcaddon.bedrock.behaviour.LootTableDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.RecipeDefinition;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonBrewing;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -176,6 +179,10 @@ public final class PackConverter {
                 writeSpawnEggs(root, icons, eggs, sprites);
                 writeBuckets(root, bundle.behaviours());
                 writeRecipes(root, recipes);
+                if (Platform.brewingFuelAndCompostAreData()) {
+                    writeBrewing(root, recipes, items);
+                    writeFuelAndCompost(root, items);
+                }
                 writeLootTables(root, loot, namespace);
                 writeBlockData(root, blocks, loot);
                 writeItemTags(root, items);
@@ -849,6 +856,96 @@ public final class PackConverter {
         write(data.resolve(dataDirectory("advancement")).resolve("recipes")
             .resolve(id.path() + suffix + ".json"),
             unlockAdvancement(id.namespace() + ":" + id.path() + suffix, recipe.unlock()));
+    }
+
+    /**
+     * The brewing stand recipes. An item one names is the add-on's own or one the game already has,
+     * because an id the registry has not got makes the game refuse the whole recipe.
+     */
+    private static void writeBrewing(Path root, List<RecipeDefinition> recipes, List<ItemDefinition> items)
+        throws IOException {
+        Set<String> own = new HashSet<>();
+        items.forEach(item -> own.add(BedrockItemNames.java(item.identifier())));
+        for (AddonBrewing.Written written : AddonBrewing.recipes(recipes, name -> {
+            String java = BedrockItemNames.java(name);
+            Identifier id = java == null ? null : Identifier.tryParse(java);
+            return id != null && (own.contains(java) || BuiltInRegistries.ITEM.containsKey(id)) ? java : null;
+        })) {
+            writeRecipe(root, written.recipe(), written.suffix(), written.json());
+        }
+    }
+
+    /**
+     * The `context_int_provider` entries an item's fuel and composting components name, under the
+     * item's own id.
+     *
+     * A furnace entry is written the way the game writes its own, so a blast furnace and a smoker
+     * burn the item half as long. A composting entry adds a layer to an empty composter and
+     * otherwise adds one at the item's chance.
+     */
+    private static void writeFuelAndCompost(Path root, List<ItemDefinition> items) throws IOException {
+        for (ItemDefinition item : items) {
+            Names.Identifier id = Names.split(item.identifier(), "minecraft");
+            if (id.namespace().isEmpty() || id.path().isEmpty()) continue;
+
+            Path providers = root.resolve("data").resolve(id.namespace()).resolve("context_int_provider");
+            if (item.burnTicks() > 0) {
+                write(providers.resolve("cooking").resolve(id.path() + ".json"), burnTime(item.burnTicks()));
+            }
+            if (item.compostingChance() > 0f) {
+                write(providers.resolve("compostable").resolve(id.path() + ".json"),
+                    compostLayers(item.compostingChance()));
+            }
+        }
+    }
+
+    private static JsonObject burnTime(int ticks) {
+        JsonObject factor = new JsonObject();
+        factor.addProperty("type", "minecraft:conditional");
+        factor.addProperty("condition", "minecraft:block/fast_cooking");
+        factor.addProperty("on_false", "minecraft:cooking/normal_burn_time_reduction_factor");
+        factor.addProperty("on_true", "minecraft:cooking/fast_burn_time_reduction_factor");
+
+        JsonObject json = new JsonObject();
+        json.addProperty("type", "minecraft:div");
+        json.addProperty("left", ticks);
+        json.add("right", factor);
+        return json;
+    }
+
+    private static JsonObject compostLayers(float chance) {
+        JsonObject empty = new JsonObject();
+        empty.addProperty("level", "0");
+        JsonObject condition = new JsonObject();
+        condition.addProperty("type", "minecraft:match_block");
+        condition.addProperty("blocks", "minecraft:composter");
+        condition.add("state", empty);
+        JsonObject always = new JsonObject();
+        always.add("condition", condition);
+        always.addProperty("value", 1);
+        JsonArray cases = new JsonArray();
+        cases.add(always);
+
+        int percent = Math.min(100, Math.max(1, Math.round(chance * 100f)));
+        JsonArray distribution = new JsonArray();
+        distribution.add(weighted(1, percent));
+        if (percent < 100) distribution.add(weighted(0, 100 - percent));
+        JsonObject otherwise = new JsonObject();
+        otherwise.addProperty("type", "minecraft:weighted_list");
+        otherwise.add("distribution", distribution);
+
+        JsonObject json = new JsonObject();
+        json.addProperty("type", "minecraft:number_dispatcher");
+        json.add("cases", cases);
+        json.add("default", otherwise);
+        return json;
+    }
+
+    private static JsonObject weighted(int layers, int weight) {
+        JsonObject entry = new JsonObject();
+        entry.addProperty("data", layers);
+        entry.addProperty("weight", weight);
+        return entry;
     }
 
     /**
