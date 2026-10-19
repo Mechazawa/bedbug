@@ -8,6 +8,22 @@
 - `/mcaddon packs` lists what loaded, with the authors, licence and URL from the manifest's
   `metadata`, and the subpack that loaded.
 
+## Example add-ons
+
+Each release attaches two add-ons built from this repository. Both are written here from nothing and
+carry no content from any other pack. The archive is the same for every Minecraft version.
+
+- **`bedbug-showcase.mcaddon`** is the Bedbug Showcase. It has two mobs with their own models,
+  animations and render controllers, two blocks, four items, two particles, a biome with its own
+  fog and colour grade, a camera preset, a script that opens a form, and settings in both
+  manifests. Use it to see what an add-on looks like in game.
+- **`bedbug-test-addon.mcaddon`** is the add-on the mod's tests run against. It carries one of
+  nearly everything Bedbug has a reader for, such as recipes, loot, trades, entities with many
+  behaviours, particles, fogs and scripts. Use it to check that an install works.
+
+To build them, run `python3 tools/showcase/build.py` and `python3 tools/testpack/build.py`. The
+archives land in `build/showcase/` and `build/testpack/`.
+
 ## The Add-Ons screen
 
 Bedrock lists behaviour packs and resource packs apart, each with its own manifest description. The

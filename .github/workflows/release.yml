@@ -47,14 +47,35 @@ jobs:
           ./gradlew --no-daemon "Set active project to 26.3"
           ./gradlew --no-daemon $VERSION_ARG :26.3:test :26.3:runGameTest
 
+      # Both archives are the same for every Minecraft version. The --version flag only copies the
+      # file into a run directory, so one copy of each goes on the release.
+      - name: Build the example add-ons
+        run: |
+          python3 tools/showcase/build.py --out dist/bedbug-showcase.mcaddon
+          python3 tools/testpack/build.py --out dist/bedbug-test-addon.mcaddon
+
       - uses: actions/upload-artifact@v4
         with:
           name: mcaddon-jars
-          path: versions/26.*/build/libs/*.jar
+          path: |
+            versions/26.*/build/libs/*.jar
+            dist/*.mcaddon
 
       - name: Publish the release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: versions/26.*/build/libs/*.jar
+          files: |
+            versions/26.*/build/libs/*.jar
+            dist/bedbug-showcase.mcaddon
+            dist/bedbug-test-addon.mcaddon
+          body: |
+            ## Add-ons to try
+
+            - `bedbug-showcase.mcaddon` is the Bedbug Showcase. It holds two mobs, two blocks, four
+              items, a biome, a camera preset and a form, and it is the add-on the store pictures show.
+            - `bedbug-test-addon.mcaddon` is the add-on the mod's own tests run against. It has one of
+              nearly everything Bedbug reads, so it is a quick way to check an install.
+
+            Put either file in `addons/`. Both work on every Minecraft version listed in the README.
           generate_release_notes: true

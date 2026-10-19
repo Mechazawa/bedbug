@@ -28,6 +28,12 @@ Bedbug caches converted packs in `.mcaddon/`. Deleting that folder costs one slo
 
 Each version has its own jar.
 
+## Try it
+
+No add-on of your own? Each [release](https://github.com/Mechazawa/bedbug/releases) carries
+two to start with: `bedbug-showcase.mcaddon` and `bedbug-test-addon.mcaddon`. Put one in `addons/`.
+See [Example add-ons](docs/packs.md#example-add-ons).
+
 ## Servers and LAN
 
 Install Bedbug on the server and on every client. Put the add-ons in the server's `addons/` only.
