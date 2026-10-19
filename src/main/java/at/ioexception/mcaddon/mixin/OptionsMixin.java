@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.mixin;
 
+import at.ioexception.mcaddon.client.render.ColourGrading;
 import at.ioexception.mcaddon.client.render.PaperDoll;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -10,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Coerce;
 
 /**
- * Reads and writes the paper doll option in `options.txt` beside Java's own.
+ * Reads and writes the paper doll and colour grading options in `options.txt` beside Java's own.
  *
  * `Options.FieldAccess` is package private, so the option is handed to the operation that processes
  * Java's first option, which can call the interface where this class cannot name it.
@@ -24,5 +25,6 @@ public abstract class OptionsMixin {
         Operation<Void> original) {
         original.call(access, name, option);
         original.call(access, "mcaddon.paperDoll", PaperDoll.OPTION);
+        original.call(access, "mcaddon.colourGrading", ColourGrading.OPTION);
     }
 }

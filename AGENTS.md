@@ -1772,7 +1772,11 @@ and `COLOR_SECOND_TEXTURE` (a third texture layered over the first) are reported
 `scratchpad/bedrock-legacy-materials/` and `scratchpad/mcbe-shader-codebase-veka0/` hold the copies
 this was read from.
 
-**A `color_grading/` file grades the frame through a pass of this mod's own, from 26.**
+**A `color_grading/` file grades the frame through a pass of this mod's own, from 26, and only when
+the player turns on `ColourGrading.OPTION`.** The option is off by default because Bedrock grades only
+under Vibrant Visuals. `OptionsMixin` saves it as `mcaddon.colourGrading` and `VideoSettingsScreenMixin`
+lists it beside Paper Doll. With it off `ColourGrading.at` returns no grade, so `GradePass` skips the
+copy and the draw.
 `GameRendererGradeMixin` runs `client/render/GradePass` after `renderLevel`, which copies the main
 target's colour aside and draws one triangle back over it through
 `assets/mcaddon/shaders/post/colour_grade.fsh`, a pipeline registered with `RenderPipelines.register`

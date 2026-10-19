@@ -625,8 +625,8 @@ Against a server without this mod a client plays with its own add-ons.
   `color_grading/color_grading.json`. The grade blends between biomes as the camera moves, the way
   Java blends its fog colour. The `contrast`, `saturation`, `gain`, `offset` and `gamma` of each
   tonal band and the Kelvin `temperature` are applied with Bedrock's own arithmetic. Bedrock grades
-  only under Vibrant Visuals, but here a pack that grades its world is graded whatever the graphics
-  setting is.
+  only under Vibrant Visuals, so the grading is off by default, as under Bedrock's default graphics.
+  **Vibrant Visuals Colour Grading** under Options, Video Settings, turns it on.
 - Attachables: what any entity wears or holds, players and vanilla mobs included, animating on its
   own clock. A pack picks between several models for one item on a condition of its own, and what an
   attachable writes into whoever carries it reaches that entity's variables, so the layer it stands
