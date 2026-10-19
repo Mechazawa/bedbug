@@ -66,7 +66,8 @@ public final class PermissionGameTests {
     private static void tried(GameTestHelper helper, String level, Outcome outcome) {
         MinecraftServer server = helper.getLevel().getServer();
         helper.setBlock(DOOR, Blocks.OAK_DOOR.defaultBlockState());
-        helper.setBlock(DOOR.above(), Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
+        helper.setBlock(DOOR.above(),
+            Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
         helper.setBlock(CHEST, Blocks.CHEST.defaultBlockState());
         helper.setBlock(SUPPORT, Blocks.STONE.defaultBlockState());
         helper.setBlock(MINED, Blocks.STONE.defaultBlockState());
