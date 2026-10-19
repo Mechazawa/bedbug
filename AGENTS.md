@@ -380,6 +380,10 @@ These are the checks it runs, and what each one catches:
   `value` below its `max`, a goal priority that is neither the first nor the last of its goals, an
   anger duration in seconds with an event at the end of it, a teleport cube in blocks beside a
   teleport interval in seconds, and an experience reward written as Molang rather than as a number.
+  Its render controller picks its texture the way a pack's style setting does, with
+  `v.restless ? {return Texture.restless;}; return Texture.default;` over `tp:settled`. A `return`
+  inside a block has to end the whole expression, or every wisp is drawn with the default texture.
+  `ServerPlayerClientGameTest` reads the texture back while the script overrides that property.
 
   The sprite's own texture carries one thing a count cannot see. Its top four rows are written at an
   alpha of three. **What Bedrock does with such a texel depends on the material, not the texture**:

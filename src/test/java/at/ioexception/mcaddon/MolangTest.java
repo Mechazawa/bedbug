@@ -175,6 +175,19 @@ class MolangTest {
         assertEquals(6, evaluate("{v.a = 3; return v.a * 2;}"), 1e-6);
     }
 
+    /** A `return` inside a block ends the whole expression, which is how a pack picks one of several textures. */
+    @ParameterizedTest
+    @CsvSource({"0, 1", "1, 2", "2, 3"})
+    void returnsFromInsideABlock(double style, double expected) {
+        environment.setVariable("style", MolangValue.of(style));
+        assertEquals(expected, evaluate("v.style == 1 ? {return 2;}; v.style == 2 ? {return 3;}; return 1;"), 1e-6);
+    }
+
+    @Test
+    void returnsFromInsideALoop() {
+        assertEquals(3, evaluate("v.n = 0; loop(10, {v.n = v.n + 1; v.n == 3 ? {return v.n;};}); return 0;"), 1e-6);
+    }
+
     /** A broken expression is a zero and never an exception, however badly it is written. */
     @ParameterizedTest
     @CsvSource({"'((('", "'v.'", "'math.'", "'1 +'", "''", "'q.x(('", "'{'", "'loop('", "'v.x['"})
