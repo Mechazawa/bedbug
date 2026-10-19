@@ -2534,16 +2534,15 @@ public final class GoalGameTests {
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = SHELTER_TICKS)
     public void anEntityLooksAsFarForWaterAsItsPackSays(GameTestHelper helper) {
-        BlockPos.betweenClosed(BlockPos.ZERO, new BlockPos(7, 0, 7))
-            .forEach(at -> helper.setBlock(at, Blocks.STONE));
-        helper.setBlock(new BlockPos(6, 0, 4), Blocks.WATER);
-        AddonEntity brute = withGroup(helper, "tp:brute_parch", new BlockPos(1, 1, 4));
+        raisedFloor(helper);
+        helper.setBlock(new BlockPos(6, RAISED, 4), Blocks.WATER);
+        AddonEntity brute = withGroup(helper, "tp:brute_parch", new BlockPos(1, RAISED + 1, 4));
         if (brute == null) {
             helper.succeed();
             return;
         }
 
-        BlockPos pool = helper.absolutePos(new BlockPos(6, 0, 4));
+        BlockPos pool = helper.absolutePos(new BlockPos(6, RAISED, 4));
         helper.succeedWhen(() -> helper.assertTrue(
             Math.hypot(brute.getX() - pool.getX() - 0.5, brute.getZ() - pool.getZ() - 0.5) < AT_THE_POOL,
             BRUTE + " looks eight blocks for water and never reached the pool five blocks off."));
@@ -2555,15 +2554,29 @@ public final class GoalGameTests {
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
     public void aWalkToABlockArrivesWithinItsGoalRadius(GameTestHelper helper) {
-        helper.setBlock(STAND.east(2), Blocks.GOLD_BLOCK);
-        AddonEntity brute = heldInPlace(helper, "tp:brute_dig");
+        raisedFloor(helper);
+        BlockPos gold = new BlockPos(3, RAISED, 1);
+        helper.setBlock(gold, Blocks.GOLD_BLOCK);
+        AddonEntity brute = heldInPlace(helper, "tp:brute_dig", new BlockPos(1, RAISED + 1, 1));
         if (brute == null) {
             helper.succeed();
             return;
         }
 
-        helper.succeedWhen(() -> helper.assertTrue(helper.getBlockState(STAND.east(2)).isAir(),
+        helper.succeedWhen(() -> helper.assertTrue(helper.getBlockState(gold).isAir(),
             BRUTE + " counts three blocks as there and never dug the gold two blocks off."));
+    }
+
+    /**
+     * Height of a stone floor built above the structure. Java's block search looks at every height
+     * within its range, and the structures of neighbouring tests can stand right beside this one, so
+     * a search test keeps its blocks out of reach of theirs.
+     */
+    private static final int RAISED = 8;
+
+    private static void raisedFloor(GameTestHelper helper) {
+        BlockPos.betweenClosed(new BlockPos(0, RAISED, 0), new BlockPos(7, RAISED, 7))
+            .forEach(at -> helper.setBlock(at, Blocks.STONE));
     }
 
     /** Beside the pool, where a mob that walks to water stops. */

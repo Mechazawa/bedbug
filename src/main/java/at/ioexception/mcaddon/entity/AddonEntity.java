@@ -1081,11 +1081,20 @@ public class AddonEntity extends PathfinderMob
      */
     private void refreshStep() {
         double base = liveNumber("minecraft:variable_max_auto_step", "base_value", 0.6);
-        float step = (float) (getBlockJumpFactor() < 1
+        float step = (float) (onServerThread() && getBlockJumpFactor() < 1
             ? liveNumber("minecraft:variable_max_auto_step", "jump_prevented_value", base)
             : getControllingPassenger() instanceof Player
             ? liveNumber("minecraft:variable_max_auto_step", "controlled_value", base) : base);
         if (Platform.stepHeight(this) != step) Platform.setStepHeight(this, step);
+    }
+
+    /**
+     * A chunk's entity storage builds an entity, and seats its passengers, on its IO thread before it
+     * has a position. A block lookup there loads the chunk at the origin and waits on the server
+     * thread, which waits on that IO thread when the world saves. The next tick refreshes the step.
+     */
+    private boolean onServerThread() {
+        return !(level() instanceof net.minecraft.server.level.ServerLevel server) || server.getServer().isSameThread();
     }
 
     /** Bedrock's `minecraft:water_movement` keeps `drag_factor` of the speed each tick, as Java does. */
