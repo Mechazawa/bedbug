@@ -525,6 +525,16 @@ Against a server without this mod a client plays with its own add-ons.
   and the scene's opening and closing commands run either side of that. `/bedrock dialogue change`
   says which scene an NPC shows, `/bedrock dialogue open` shows one now, and interacting with an NPC
   that has been given a scene opens it.
+- A resource pack's `ui/server_form.json` and `ui/hud_screen.json`, as far as packs use them. An
+  action or message form whose title a pack's `#visible` binding routes to a layout of its own is
+  drawn in that layout: panels, stack panels, grids over the form's buttons, images, labels and
+  buttons, placed by their `size`, `offset` and anchors, with `@` inheritance, `$variables`,
+  `modifications` and binding expressions over `#title_text`, `#form_text`, `#form_button_text` and
+  `#form_button_texture`. A form the pack does not route is drawn as before. On the heads-up display,
+  controls a pack inserts into `root_panel` are drawn over the game, reading the last title and
+  subtitle and the `$actionbar_text` each action bar hands a factory, and a pack hiding Bedrock's own
+  title or action bar for some texts hides Java's for the same texts. A texture the pack ships is
+  drawn; one of the Bedrock client's own is not, since Mojang's textures are not shipped.
 - Behaviour pack scripts against `@minecraft/server`, sandboxed: a script sees its own pack's files
   and nothing else on disk. Commands a script registers on startup become commands `/bedrock` runs,
   `@minecraft/server-ui` forms become real screens (a 2.x `CustomForm` stays open while its buttons
@@ -974,17 +984,15 @@ A Bedrock biome tag with no Java biome carrying the same idea, `sulfur_caves` an
 nether tags among them, is named the same way and then left out of the filter, so the rest of the
 rule still decides.
 
-**Bedrock's own screen language.** `ui` is the Bedrock client's whole screen tree written out as
-JSON. Mojang's resource pack ships 189 of those files, declaring more than four thousand controls in
-twenty-three element types and reading 1441 distinct binding names back out of the running client.
-What a pack writes there reaches a player by replacing a control inside one of the engine's own
-screens under the name the engine gave it: nothing in a pack opens a screen of its own, because
-`_ui_defs.json` adds a file to the list and that file is drawn only where one of the engine's screens
-already points at it. A Java screen is a class rather than a named tree, so there is no
-`hud_screen.json` to patch and no control name for an override to match, and the bindings name values
-the Bedrock client holds with no published list saying what any of them is. What a pack can put in
-front of a Java player is what `@minecraft/server-ui` describes and what an NPC dialogue scene
-states, and both of those are drawn.
+**Bedrock's own screen language, outside forms and the title.** A pack's `ui/` files are read, and
+what packs do with them to a server's forms and to the title and action bar is drawn (see "What
+works"). The rest of that language changes Bedrock's own screens, the inventory, the settings, the
+chat, the pause menu and the rest, by laying keys over Mojang's definition of each screen. Java draws
+those screens with classes of its own, and Mojang's definitions are not shipped, so there is nothing
+for such a change to apply to. `/mcaddon entities` names each `ui/` file that does it, with the
+namespaces it changes. Inside the layouts that are drawn, a `scroll_view`, a toggle, a slider, a text
+box, a control's `anims`, its `font_size` and a modal form's own `custom_form` layout are named too:
+the modal form is drawn as this mod's own form.
 
 **What a camera preset says about Bedrock's own client.** A pack's `cameras/presets/` are read, and
 of what a preset states beside its identifier and its parent, the placement (`pos_x`, `pos_y`,
@@ -1018,7 +1026,7 @@ pack lists 20 of the 8039 images it ships, every one of them a file that is ther
 by `terrain_texture.json` or `item_texture.json`. The conversion walks `textures/` itself, so what it
 writes covers whatever the index names and reading the index would change nothing. It is counted and
 named all the same, because a file this mod never opens is a fact the pack's author is owed.
-`/mcaddon entities` names each of the four kinds nothing reads, `ui`, this index, `color_grading` and
+`/mcaddon entities` names each of the three kinds nothing reads, this index, `color_grading` and
 `water`, together with the reason Java has no place for it.
 
 **A dimension with a generator nobody wrote down.** Bedrock builds a dimension a pack declares as

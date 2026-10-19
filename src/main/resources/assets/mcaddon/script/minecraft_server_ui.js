@@ -226,7 +226,8 @@ class FormBuilder {
                 if (component.click !== undefined) element.stay = true;
                 return [element];
             });
-            return { description: { title: text(this.heading), elements }, observed: reading };
+            const kind = this.constructor.serverForm;
+            return { description: { title: text(this.heading), kind, elements }, observed: reading };
         } finally {
             reading = undefined;
         }
@@ -287,7 +288,7 @@ class FormBuilder {
     }
 
     body(value) {
-        return this.#add("label", () => ({ text: text(value) }));
+        return this.#add("body", () => ({ text: text(value) }));
     }
 
     header(value, options) {
@@ -521,19 +522,30 @@ function responseOf(kind, fields) {
     return response;
 }
 
+/**
+ * Which control of Bedrock's `server_form.json` draws a form of each class, which is what a pack's
+ * own `server_form.json` lays a layout of its own over. A form of a class naming none is a data driven
+ * screen, which no pack lays out.
+ */
 export class ActionFormData extends FormBuilder {
+    static serverForm = "long_form";
+
     show(player) {
         return super.show(player).then(response => responseOf(ActionFormResponse, response));
     }
 }
 
 export class MessageFormData extends FormBuilder {
+    static serverForm = "long_form";
+
     show(player) {
         return super.show(player).then(response => responseOf(MessageFormResponse, response));
     }
 }
 
 export class ModalFormData extends FormBuilder {
+    static serverForm = "custom_form";
+
     show(player) {
         return super.show(player).then(response => responseOf(ModalFormResponse, response));
     }

@@ -168,6 +168,17 @@ function openCatalogue(player) {
     catalogue.show(player).then(response => player.addTag("tp:catalogue_" + response.selection));
 }
 
+// Six tiles in an action form. A title starting with "tp_tiles:" is one the resource pack's
+// `server_form.json` lays out as a grid; `/scriptevent tp:tiles plain` sends the same tiles under a
+// title it leaves alone. The tag on the player names the tile that answered.
+function openTiles(player, message) {
+    const tiles = new ActionFormData()
+        .title(message === "plain" ? "Plain tiles" : "tp_tiles:Tiles")
+        .body("Pick a tile");
+    for (let tile = 1; tile <= 6; tile++) tiles.button("Tile " + tile, "textures/items/berry");
+    tiles.show(player).then(response => player.addTag("tp:tiles_" + response.selection));
+}
+
 // The script half of `/hud`, which hides the same pieces on the same player's client. What the
 // script reads back about the display afterwards is a tag on that player.
 function hideTheHotbar(player) {
@@ -257,6 +268,7 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
         case "tp:handbook": openHandbook(player); break;
         case "tp:catalogue": openCatalogue(player); break;
         case "tp:ledger": openLedger(player); break;
+        case "tp:tiles": openTiles(player, event.message); break;
         case "tp:commands": runBedrockCommands(player); break;
         // A pack handing out one of its own items unless the player already carries it.
         case "tp:stock_up":

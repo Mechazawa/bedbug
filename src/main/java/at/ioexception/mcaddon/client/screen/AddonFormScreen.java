@@ -1,5 +1,8 @@
 package at.ioexception.mcaddon.client.screen;
 
+import at.ioexception.mcaddon.bedrock.ui.ServerFormUi;
+import at.ioexception.mcaddon.bedrock.ui.UiControl;
+import at.ioexception.mcaddon.bedrock.ui.UiPlaced;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.util.Json;
@@ -62,6 +65,8 @@ public final class AddonFormScreen extends Screen {
     private final ScrollingColumn column = new ScrollingColumn(ROW_HEIGHT);
 
     private boolean answered;
+    private UiPlaced packLayout;
+    private final List<AbstractWidget> packWidgets = new ArrayList<>();
 
     private AddonFormScreen(int formId, JsonObject description) {
         super(heading(description));
@@ -171,6 +176,14 @@ public final class AddonFormScreen extends Screen {
     protected void init() {
         widgets.clear();
         column.clear();
+        packWidgets.clear();
+        ServerFormUi form = new ServerFormUi(PackUi.definitions(), description, font::width, font.lineHeight);
+        packLayout = form.layout(width, height);
+        if (packLayout != null) {
+            packLayout.drawn().forEach(control -> drawPackControl(form, control));
+            if (packLayout.drawn().noneMatch(control -> control.type().equals(UiControl.VANILLA_FORM))) return;
+        }
+
         int left = width / 2 - WIDGET_WIDTH / 2;
         int row = 0;
         int buttonIndex = 0;
@@ -261,6 +274,64 @@ public final class AddonFormScreen extends Screen {
         heading.setY(top - LINE_HEIGHT - HEADING_GAP);
     }
 
+    /**
+     * The layout a resource pack's `server_form.json` gave this form, or null where the form is drawn
+     * as this mod's own.
+     */
+    public UiPlaced packLayout() {
+        return packLayout;
+    }
+
+    /**
+     * One control of a pack's layout. A button is pressed through an unseen Java button over its
+     * rectangle, since what it looks like is the pack's own controls inside it, and answers with the
+     * item of `form_buttons` it was made for.
+     */
+    private void drawPackControl(ServerFormUi form, UiPlaced control) {
+        switch (control.type()) {
+            case "label" -> {
+                String text = control.text();
+                int textWidth = font.width(text);
+                addRenderableWidget(new StringWidget(control.textLeft(textWidth), control.y(), textWidth,
+                    font.lineHeight,
+                    Component.literal(text).withStyle(style -> style.withColor(control.colour())), font));
+            }
+            case "image" -> addRenderableOnly(Platform.renderable(painter -> PackUi.drawImage(painter, control)));
+            case "button" -> {
+                JsonObject element = form.element(control.index());
+                Button unseen = Button.builder(Component.empty(), button -> pressItem(element))
+                    .bounds(control.x(), control.y(), control.width(), control.height()).build();
+                unseen.setAlpha(0);
+                packWidgets.add(addRenderableWidget(unseen));
+            }
+            case UiControl.VANILLA_BUTTON -> {
+                JsonObject element = form.element(control.index());
+                Object label = control.control().variable("$button_text");
+                String text = label instanceof String binding && binding.startsWith("#")
+                    ? String.valueOf(form.item(ServerFormUi.BUTTONS, control.index(), binding)) : String.valueOf(label);
+                packWidgets.add(addRenderableWidget(Button.builder(Component.literal(text),
+                    button -> pressItem(element))
+                    .bounds(control.x(), control.y(), control.width(), control.height()).build()));
+            }
+            default -> {
+            }
+        }
+    }
+
+    /** A press lands on a pack's control wherever it is, since the pack's layout does not scroll. */
+    private boolean overPack(double x, double y) {
+        return packWidgets.stream().anyMatch(widget -> widget.isMouseOver(x, y));
+    }
+
+    /** A press on an item of `form_buttons`, answered as the button among the form's buttons it is. */
+    private void pressItem(JsonObject element) {
+        if (element == null || !Json.text(element, "type", "").equals("button")) return;
+        List<JsonObject> buttons = elements().stream()
+            .filter(candidate -> List.of("button", "submit").contains(Json.text(candidate, "type", "")))
+            .toList();
+        press(element, buttons.indexOf(element));
+    }
+
     /** Tab and the arrow keys move the focus to a widget the column may have scrolled out of sight. */
     @Override
     protected void changeFocus(ComponentPath path) {
@@ -271,7 +342,8 @@ public final class AddonFormScreen extends Screen {
     //? if >=26 {
     @Override
     public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event, boolean doubleClick) {
-        return column.grab(event.x(), event.y()) || column.shows(event.y()) && super.mouseClicked(event, doubleClick);
+        return column.grab(event.x(), event.y())
+            || (column.shows(event.y()) || overPack(event.x(), event.y())) && super.mouseClicked(event, doubleClick);
     }
 
     @Override
@@ -287,7 +359,7 @@ public final class AddonFormScreen extends Screen {
     //?} else {
     /*@Override
     public boolean mouseClicked(double x, double y, int button) {
-        return column.grab(x, y) || column.shows(y) && super.mouseClicked(x, y, button);
+        return column.grab(x, y) || (column.shows(y) || overPack(x, y)) && super.mouseClicked(x, y, button);
     }
 
     @Override

@@ -1,0 +1,81 @@
+{
+  // A title starting with "tp_banner:" is shown, without its prefix, as a green line near the top left
+  // corner in place of Bedrock's own title, and an action bar starting with "tp_tally:" as a line near
+  // the top right corner in place of Bedrock's own action bar.
+  "namespace": "hud",
+
+  "hud_title_text": {
+    "modifications": [
+      {
+        "array_name": "bindings",
+        "operation": "insert_back",
+        "value": [
+          { "binding_name": "#hud_title_text_string" },
+          {
+            "binding_type": "view",
+            "source_property_name": "((#hud_title_text_string - 'tp_banner:') = #hud_title_text_string)",
+            "target_property_name": "#visible"
+          }
+        ]
+      }
+    ]
+  },
+
+  "hud_actionbar_text": {
+    "$atext": "$actionbar_text",
+    "visible": "(($atext - 'tp_tally:') = $atext)"
+  },
+
+  "tp_banner": {
+    "type": "label",
+    "anchor_from": "top_left",
+    "anchor_to": "top_left",
+    "offset": [12, 40],
+    "color": [0.4, 1.0, 0.4],
+    "text": "#banner",
+    "bindings": [
+      { "binding_name": "#hud_title_text_string" },
+      {
+        "binding_type": "view",
+        "source_property_name": "(#hud_title_text_string - 'tp_banner:')",
+        "target_property_name": "#banner"
+      },
+      {
+        "binding_type": "view",
+        "source_property_name": "(not ((#hud_title_text_string - 'tp_banner:') = #hud_title_text_string))",
+        "target_property_name": "#visible"
+      }
+    ]
+  },
+
+  "tp_tally": {
+    "type": "label",
+    "anchor_from": "top_right",
+    "anchor_to": "top_right",
+    "offset": [-12, 40],
+    "$atext": "$actionbar_text",
+    "text": "($atext - 'tp_tally:')",
+    "visible": "(not (($atext - 'tp_tally:') = $atext))"
+  },
+
+  "tp_tally_factory": {
+    "type": "panel",
+    "factory": {
+      "name": "hud_actionbar_text_factory",
+      "control_ids": { "hud_actionbar_text": "tp_tally@hud.tp_tally" }
+    }
+  },
+
+  "root_panel": {
+    "modifications": [
+      {
+        "array_name": "controls",
+        "operation": "insert_front",
+        "value": [
+          { "tp_banner@hud.tp_banner": {} },
+          { "tp_tally_factory@hud.tp_tally_factory": {} }
+        ]
+      }
+    ]
+  }
+}

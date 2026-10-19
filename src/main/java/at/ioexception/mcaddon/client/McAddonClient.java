@@ -32,6 +32,8 @@ public final class McAddonClient implements ClientModInitializer {
     public void onInitializeClient() {
         follow();
         ActiveAddons.onActivate(set -> follow());
+        at.ioexception.mcaddon.client.screen.PackUi.read(ActiveAddons.active());
+        ActiveAddons.onActivate(at.ioexception.mcaddon.client.screen.PackUi::read);
         AddonSession.register();
         at.ioexception.mcaddon.pack.ReceivedArchives.inCache().prune();
 
@@ -72,6 +74,8 @@ public final class McAddonClient implements ClientModInitializer {
             at.ioexception.mcaddon.client.render.PlayerRules::draw);
         Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("bedrock_screen"),
             at.ioexception.mcaddon.client.render.PlayerFade::draw);
+        Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("pack_hud"),
+            at.ioexception.mcaddon.client.render.PackHudText::draw);
 
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK
             .register(client -> {
@@ -106,6 +110,7 @@ public final class McAddonClient implements ClientModInitializer {
             at.ioexception.mcaddon.client.render.PlayerFade.clear();
             at.ioexception.mcaddon.client.render.PlayerFov.clear();
             at.ioexception.mcaddon.client.render.PlayerRules.clear();
+            at.ioexception.mcaddon.client.render.PackHudText.clear();
             at.ioexception.mcaddon.client.render.AddonEmitters.clear();
         }));
         // Bedrock starts every connection with no camera set, and a world closed from the client is not
