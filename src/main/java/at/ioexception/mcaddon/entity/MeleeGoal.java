@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.entity;
 
+import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.ServerHooks;
 import com.google.gson.JsonObject;
@@ -119,7 +120,7 @@ public final class MeleeGoal extends MeleeAttackGoal {
         if (kind == Kind.STOMP && away > stomp * missMultiplier) return;
 
         readyAt = attacker.tickCount + cooldown;
-        attacker.swing(InteractionHand.MAIN_HAND);
+        Platform.swing(attacker, InteractionHand.MAIN_HAND, true);
         if (kind == Kind.STOMP && away > stomp) return;
         if (hitDelay > 0) {
             pending = target;

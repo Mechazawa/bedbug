@@ -709,10 +709,10 @@ public final class Worlds extends Surface {
 
         return state -> {
             if (state.isAir()) return false;
-            if (!state.getFluidState().isEmpty() && !state.blocksMotion()) {
+            if (!state.getFluidState().isEmpty() && !Platform.blocksMotion(state)) {
                 return liquids && allowed.test(state);
             }
-            if (!state.blocksMotion() && !passable) return false;
+            if (!Platform.blocksMotion(state) && !passable) return false;
             return allowed.test(state);
         };
     }

@@ -15,6 +15,9 @@
         "saturation_modifier": 0.5
       },
       "minecraft:use_animation": "eat",
+      "minecraft:compostable": {
+        "composting_chance": 40
+      },
       "minecraft:use_modifiers": {
         "use_duration": 0.8,
         "movement_modifier": 0.35

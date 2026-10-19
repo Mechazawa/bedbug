@@ -61,7 +61,7 @@ step "item and block id census" python3 tools/census/ids.py --strict
 
 if [ "$quick" -eq 0 ]; then
     # The packs this repository owns, rebuilt so a stale archive cannot pass for a fresh one.
-    for version in 1.20.1 1.21.1 26.1.2 26.2; do
+    for version in 1.20.1 1.21.1 26.1.2 26.2 26.3; do
         python3 tools/testpack/build.py --version "$version" >/dev/null
         python3 tools/testpack/build_modules.py --version "$version" >/dev/null
         python3 tools/testpack/build_gametests.py --version "$version" >/dev/null

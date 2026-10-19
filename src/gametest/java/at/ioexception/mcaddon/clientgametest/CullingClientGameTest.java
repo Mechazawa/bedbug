@@ -62,14 +62,22 @@ public final class CullingClientGameTest implements FabricClientGameTest {
         Frustum frustum = new Frustum(new Matrix4f().rotateY((float) Math.PI),
             new Matrix4f().perspective((float) Math.toRadians(70), 1f, 0.05f, 100f));
         frustum.prepare(camera.x, camera.y, camera.z);
+        //? if >=26.3 {
+        /*return renderer.shouldRender(entity, frustum, camera.x, camera.y, camera.z, 0f);
+        *///?} else {
         return renderer.shouldRender(entity, frustum, camera.x, camera.y, camera.z);
+        //?}
     }
 
     private static boolean drawn(AddonEntity entity) {
         Vec3 camera = cameraFor(entity);
         AddonEntityRenderer renderer = (AddonEntityRenderer) Minecraft.getInstance()
             .getEntityRenderDispatcher().getRenderer(entity);
+        //? if >=26.3 {
+        /*return renderer.shouldRender(entity, frustum(camera), camera.x, camera.y, camera.z, 0f);
+        *///?} else {
         return renderer.shouldRender(entity, frustum(camera), camera.x, camera.y, camera.z);
+        //?}
     }
 
     private static boolean boxInView(AddonEntity entity) {

@@ -169,7 +169,7 @@ public final class GoalGameTests {
             .thenExecuteAfter(SETTLE_TICKS, () -> {
                 helper.assertFalse(brute.getNavigation().isInProgress(),
                     BRUTE + " ignores every mob's blow and ran from the pig's.");
-                brute.invulnerableTime = 0;
+                Platform.setInvulnerableTime(brute, 0);
                 Platform.hurt(brute, helper.getLevel(), brute.damageSources().fall(), 1f);
             })
             .thenWaitUntil(() -> helper.assertTrue(brute.getNavigation().isInProgress(),
@@ -954,7 +954,7 @@ public final class GoalGameTests {
             if (charged[0] < 0 && Boolean.TRUE.equals(brute.value("is_charged"))) {
                 charged[0] = helper.getLevel().getGameTime();
             }
-            if (brute.swinging) swung.set(true);
+            if (Platform.isSwinging(brute)) swung.set(true);
         });
         helper.succeedWhen(() -> {
             helper.assertTrue(shots.size() >= BURST + 1, BRUTE + " shot " + shots.size() + " times.");
@@ -1062,7 +1062,11 @@ public final class GoalGameTests {
         }
 
         Mob pig = pig(helper, STAND.east(2), BLOWS_TO_KILL);
+        //? if >=26.3 {
+        /*pig.setPermanentlyInvulnerable(true);
+        *///?} else {
         pig.setInvulnerable(true);
+        //?}
         AddonEntity dart = dartEast(helper, STAND, "tp:make_bouncing");
         helper.succeedWhen(() -> helper.assertTrue(dart.getDeltaMovement().x < 0,
             "tp:dart bounces off an invulnerable pig and flies at " + dart.getDeltaMovement() + "."));
@@ -1341,7 +1345,7 @@ public final class GoalGameTests {
             if (leaps.size() > landed.size() && brute.onGround()
                 && helper.getLevel().getGameTime() > leaps.get(leaps.size() - 1) + 1) {
                 landed.add(helper.getLevel().getGameTime());
-                brute.invulnerableTime = 0;
+                Platform.setInvulnerableTime(brute, 0);
                 Platform.hurt(brute, helper.getLevel(), brute.damageSources().mobAttack(pig), 0.5f);
                 brute.setTarget(pig);
             }
@@ -1577,8 +1581,8 @@ public final class GoalGameTests {
         AtomicBoolean wasSwinging = new AtomicBoolean();
         helper.onEachTick(() -> {
             long now = helper.getLevel().getGameTime();
-            if (brute.swinging && !wasSwinging.get()) swings.add(now);
-            wasSwinging.set(brute.swinging);
+            if (Platform.isSwinging(brute) && !wasSwinging.get()) swings.add(now);
+            wasSwinging.set(Platform.isSwinging(brute));
             if (pig.getHealth() < health[0]) blows.add(now);
             health[0] = pig.getHealth();
         });
