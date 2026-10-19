@@ -2168,7 +2168,7 @@ places and Java's own hidden title and action bar back, then a plain one of each
 ## Add-ons handed over at join
 
 A client joining a server that runs this mod plays with exactly the server's add-ons for that
-visit. README's "Playing on a server" says what a player sees; this is how it is built.
+visit. `docs/servers.md` says what a player sees; this is how it is built.
 
 **The built-in registries only grow.** Nothing an add-on registered is ever removed and no raw id
 moves. `registry.RegistryEdits.adding` opens the five registries an add-on writes into (sound event,
