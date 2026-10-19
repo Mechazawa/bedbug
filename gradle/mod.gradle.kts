@@ -259,10 +259,13 @@ project.tasks.matching { it.name == "runClientGameTest" }.configureEach {
     // The integrated server reads its simulation distance from the client's options. Fabric forces
     // the render distance to 5 and puts both options back to what it saw at startup whenever a test
     // world opens, so this file is the one place the simulation distance sticks. 5 is the lowest
-    // value the game accepts; a lower one is dropped for the default of 12.
+    // value the game accepts; a lower one is dropped for the default of 12. Vsync is off because a
+    // compositor that stops sending frame callbacks to a window it thinks hidden (GNOME on Wayland)
+    // holds a vsynced buffer swap forever, which ends the run through the server watchdog; the frame
+    // rate is capped instead so the windows do not take the CPU from the game threads.
     val clientOptions = project.layout.buildDirectory.file("run/clientGameTest/options.txt")
     doFirst {
-        clientOptions.get().asFile.writeText("simulationDistance:5\n")
+        clientOptions.get().asFile.writeText("simulationDistance:5\nenableVsync:false\nmaxFps:60\n")
     }
 }
 /**
