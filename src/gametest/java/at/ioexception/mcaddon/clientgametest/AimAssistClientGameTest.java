@@ -31,8 +31,7 @@ public final class AimAssistClientGameTest implements FabricClientGameTest {
             int floor = Stage.FLOOR;
             world.getServer().runCommand("fill -8 " + floor + " -8 8 " + floor + " 8 air");
             world.getServer().runCommand("setblock 0 " + floor + " 0 stone");
-            world.getServer().runCommand("summon pig 1.355 " + (floor + 2.17) + " 2.85 0 0");
-            world.getServer().runCommand("data merge entity @e[type=pig,limit=1] {NoAI:1b,NoGravity:1b}");
+            world.getServer().runCommand("summon pig 1.355 " + (floor + 2.17) + " 2.85 {NoAI:1b,NoGravity:1b}");
             context.runOnClient(client -> client.options.setCameraType(CameraType.THIRD_PERSON_BACK));
             Worlds.waitForClient(context, client -> java.util.stream.StreamSupport.stream(
                     client.level.entitiesForRendering().spliterator(), false)
@@ -49,10 +48,8 @@ public final class AimAssistClientGameTest implements FabricClientGameTest {
                     && client.hitResult instanceof EntityHitResult),
                 "Expected the pig, within reach, to be what the player's hand acts on under aim assist.");
 
-            world.getServer().runCommand("summon cow -1.107 " + (floor + 1.92) + " 2.415 0 0");
-            world.getServer().runCommand("summon sheep 0.5 " + (floor + 2.0) + " 6.5 0 0");
-            world.getServer().runCommand("data merge entity @e[type=cow,limit=1] {NoAI:1b,NoGravity:1b}");
-            world.getServer().runCommand("data merge entity @e[type=sheep,limit=1] {NoAI:1b,NoGravity:1b}");
+            world.getServer().runCommand("summon cow -1.107 " + (floor + 1.92) + " 2.415 {NoAI:1b,NoGravity:1b}");
+            world.getServer().runCommand("summon sheep 0.5 " + (floor + 2.0) + " 6.5 {NoAI:1b,NoGravity:1b}");
             picks(context, "sheep", "the default preset, with a sheep straight ahead");
 
             world.getServer().runCommand("bedrock aimassist @a set 50 50 8 angle tp:aim");
@@ -60,20 +57,25 @@ public final class AimAssistClientGameTest implements FabricClientGameTest {
 
             world.getServer().runCommand("bedrock aimassist @a clear");
             Worlds.waitForClient(context,
-                client -> PlayerAimAssist.target() == null && client.crosshairPickEntity == null, PATIENCE, () -> "Expected /aimassist @a clear to give the player Java's own pick back, and the hand"
+                client -> PlayerAimAssist.target() == null && client.crosshairPickEntity == null, PATIENCE,
+                () -> "Expected /aimassist @a clear to give the player Java's own pick back, and the hand"
                     + " acts on " + describe(Minecraft.getInstance().hitResult) + ".");
 
             world.getServer().runCommand("bedrock aimassist @a set");
             picks(context, "sheep", "/aimassist @a set again");
             context.runOnClient(client -> client.options.setCameraType(CameraType.FIRST_PERSON));
             Worlds.waitForClient(context,
-                client -> PlayerAimAssist.target() == null && client.crosshairPickEntity == null, PATIENCE, () -> "Expected no aim assist in first person, as Bedrock has none there, and the hand"
+                client -> PlayerAimAssist.target() == null && client.crosshairPickEntity == null, PATIENCE,
+                () -> "Expected no aim assist in first person, as Bedrock has none there, and the hand"
                     + " acts on " + describe(Minecraft.getInstance().hitResult) + ".");
 
             world.getServer().runCommand("bedrock camera @a set tp:aimed");
             picks(context, "cow", "the camera preset tp:aimed, whose aim assist names tp:aim over the"
                 + " command's default preset");
             world.getServer().runCommand("bedrock camera @a clear");
+            // Clearing gives back the first person view the player had before the preset.
+            Worlds.waitForClient(context, client -> client.options.getCameraType() == CameraType.FIRST_PERSON,
+                PATIENCE, () -> "Expected /camera clear to give the player their first person view back.");
             context.runOnClient(client -> client.options.setCameraType(CameraType.THIRD_PERSON_BACK));
             picks(context, "sheep", "the command's default preset once the camera preset is cleared");
         }
