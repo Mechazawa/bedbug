@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.clientgametest;
 
 import at.ioexception.mcaddon.client.render.ScriptClock;
+import at.ioexception.mcaddon.client.screen.AddonOptionsScreen;
 import at.ioexception.mcaddon.client.screen.AddonsScreen;
 import at.ioexception.mcaddon.client.screen.PackSettingsScreen;
 import at.ioexception.mcaddon.entity.AddonEntity;
@@ -28,7 +29,8 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * The add-on screen lists the test add-on and opens its settings, drawn from both of its manifests.
+ * The add-on screen opens from the options screen Mod Menu shows and from the pause menu, lists the
+ * test add-on and opens its settings, drawn from both of its manifests.
  *
  * In a single player world the player owns the world, so the behaviour pack's toggle, slider and
  * dropdown are moved there with the pointer and the pack's script reads the new values back through
@@ -49,6 +51,13 @@ public final class PackSettingsClientGameTest implements FabricClientGameTest {
     public void runTest(ClientGameTestContext context) {
         try (TestSingleplayerContext world = context.worldBuilder().create()) {
             Worlds.waitForChunks(world);
+            context.runOnClient(client -> Platform.setScreen(new AddonOptionsScreen(null)));
+            context.waitForScreen(AddonOptionsScreen.class);
+            context.runOnClient(client -> nested(Platform.currentScreen(),
+                    net.minecraft.network.chat.Component.translatable("mcaddon.addons.open").getString())
+                .onPress(new net.minecraft.client.input.MouseButtonInfo(0, 0)));
+            context.waitForScreen(AddonsScreen.class);
+
             openFromThePauseMenu(context);
             Assert.that(shown(context).contains("How the sprite looks to you."),
                 "Expected the resource pack's label resolved through its own texts, and found " + shown(context));
@@ -183,6 +192,25 @@ public final class PackSettingsClientGameTest implements FabricClientGameTest {
     private static void waitForShown(ClientGameTestContext context, String label) {
         Worlds.waitForClient(context, client -> shown(Platform.currentScreen()).contains(label), PATIENCE,
             () -> "Expected " + label + " on the settings screen, and found " + shown(Platform.currentScreen()));
+    }
+
+    /** A button anywhere among the screen's widgets, a row of an options list included. */
+    private static Button nested(net.minecraft.client.gui.components.events.ContainerEventHandler parent,
+        String label) {
+        return everything(parent)
+            .filter(Button.class::isInstance)
+            .map(Button.class::cast)
+            .filter(button -> button.getMessage().getString().equals(label))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("No button labelled " + label + " on " + parent));
+    }
+
+    private static java.util.stream.Stream<net.minecraft.client.gui.components.events.GuiEventListener> everything(
+        net.minecraft.client.gui.components.events.ContainerEventHandler parent) {
+        return parent.children().stream().flatMap(child ->
+            child instanceof net.minecraft.client.gui.components.events.ContainerEventHandler inner
+                ? java.util.stream.Stream.concat(java.util.stream.Stream.of(child), everything(inner))
+                : java.util.stream.Stream.of(child));
     }
 
     /** Presses the first button labelled `label` that comes after the line starting with `heading`. */

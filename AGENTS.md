@@ -380,6 +380,10 @@ These are the checks it runs, and what each one catches:
   `value` below its `max`, a goal priority that is neither the first nor the last of its goals, an
   anger duration in seconds with an event at the end of it, a teleport cube in blocks beside a
   teleport interval in seconds, and an experience reward written as Molang rather than as a number.
+  Its render controller picks its texture the way a pack's style setting does, with
+  `v.restless ? {return Texture.restless;}; return Texture.default;` over `tp:settled`. A `return`
+  inside a block has to end the whole expression, or every wisp is drawn with the default texture.
+  `ServerPlayerClientGameTest` reads the texture back while the script overrides that property.
 
   The sprite's own texture carries one thing a count cannot see. Its top four rows are written at an
   alpha of three. **What Bedrock does with such a texel depends on the material, not the texture**:
@@ -629,7 +633,12 @@ These are the checks it runs, and what each one catches:
   seconds and which leaves on `1` for a state counting `v.awake`;
   `AnimationClientGameTest` runs it on a `ScriptClock` and reads a wake and a stir and no awakening
   off the first frame and the awakening off the second, which is the client controller entering its
-  first state as that frame's one move, the way `ServerAnimator` does a tick's.
+  first state as that frame's one move, the way `ServerAnimator` does a tick's. The gaze's `stride`
+  clip turns a cubeless bone 90 degrees under a blend of `q.modified_move_speed`, and its
+  `pre_animation` keeps `q.ground_speed`. `AnimationClientGameTest` teleports it a tenth of a block
+  each tick, which is how a pack walks a model it draws over a vanilla mob, and reads a walk and two
+  blocks a second back: the client is sent no velocity for an entity the server only teleports, so
+  the speed queries read how far the entity went in its last tick.
 
   `tp:pedlar` is a trader with a trade table, a look at the trading player and a stroll it starts at
   every chance, and no `minecraft:behavior.trade_with_player`.
@@ -672,6 +681,13 @@ These are the checks it runs, and what each one catches:
   Bedrock's masked multitexture shader reads no controller colour. A pattern starting with its star
   and written in other capitals than the bone
   is what Mojang's own `*leg` and a pack's careless casing look like.
+
+  `tp:apprentice` draws the tailor's two masked controllers over textures whose last texel is a red
+  marker at an alpha of one, which every villager texture of Villager News carries. Bedrock mixes
+  the two textures as painted and tests the alpha of the mix, so the marker is dropped; the mix is
+  therefore made from each texture's `_tint_weights` form, which keeps the alpha `AlphaMask` raised
+  in the texture itself, and `RenderControllerClientGameTest.maskedMarkers` reads the marker back
+  clear.
 
   `tp:perch` is a seat for a villager, written the way a pack learns a Java villager's level. Its
   seat's `rotate_rider_by` writes the rider's `query.trade_tier` and where it sits into temporaries
@@ -1065,7 +1081,13 @@ These are the checks it runs, and what each one catches:
   the wisp never declared is refused; `tp:override_clear` clears the override again. `tp:config` tags the player with two variables and a
   secret `config/` hands the pack, which `ScriptGameTests` writes, reads again with
   `bedrock reloadconfig` from the console and asserts on, and `tp:operator` makes the player an
-  operator and unmakes it twice each.
+  operator and unmakes it twice each. `tp:board` asks an empty Java boat for its
+  `minecraft:rideable` and seats a sprite through it, the way a pack dressing the game's villagers
+  moves its own model into the boat a villager boarded; `BoatSeatClientGameTest` reads the sprite
+  back in the boat's seat on the client. Bedrock's boat, minecart, ravager, spider, cave spider,
+  skeleton horse and camel husk carry that component outside every group, so the script finds it on
+  the Java mob with nobody aboard (`ScriptBridge.ALWAYS_RIDEABLE`); any other vanilla mob has it only
+  while something rides it.
 
   `cameras/presets/` holds the presets. `tp:overlook` is a free camera at 0.5 120 0.5 turned to a
   pitch of 20 and a yaw of 45 that hears from the player, and also asks for `player_effects` and
@@ -2116,6 +2138,10 @@ buttons. It sends a `tp_banner:` title and a `tp_tally:` action bar and reads th
 places and Java's own hidden title and action bar back, then a plain one of each. The pack side is
 `tools/testpack/pack/resources/ui/`.
 
+## Client options
+
+`PaperDoll.OPTION` and `ColourGrading.OPTION` are reachable three ways on 26.1.2 and 26.2, and only the first on 1.20.1 and 1.21.1. `VideoSettingsScreenMixin` lists them in Java's Video Settings. `client/integration/ModMenuIntegration` opens `client/screen/AddonOptionsScreen` from Mod Menu. `client/integration/SodiumIntegration` adds a "Bedrock Add-ons" page to Sodium's video settings, which replace Java's screen. Sodium reads that class from a `sodium:config_api_user` key under `entrypoints` (not under `custom`) in `fabric.mod.json`. Both entrypoints are written by the `settings_entrypoints` token in `gradle/mod.gradle.kts` for 26 and later only, and both classes are wrapped in a `//? if >=26` block. Sodium and Mod Menu are `compileOnly`, so the jar does not need either. `SettingsClientGameTest` presses the Mod Menu screen's buttons and asks Sodium's `ConfigManager.CONFIG` for both options; it fails when either `fabric.mod.json` key is missing.
+
 ## Add-ons handed over at join
 
 A client joining a server that runs this mod plays with exactly the server's add-ons for that
@@ -2218,8 +2244,8 @@ manifest again: `addons-reshaped` holds a later release of `sv` whose crate has 
 
 `client/screen/AddonsScreen` lists the installed and the active add-ons (`AddonEntry`, one per
 `ConvertedPack`, active when the active set holds its converted directory). `new
-AddonsScreen(parent)` is the one way in, which a Mod Menu config screen factory can hand out as
-it is; `addToPauseMenu` puts the button on the pause menu through Fabric's `ScreenEvents`, in the
+AddonsScreen(parent)` is the one way in, which `AddonOptionsScreen`, Mod Menu's config screen,
+opens from a button of its own; `addToPauseMenu` puts the button on the pause menu through Fabric's `ScreenEvents`, in the
 row of the lowest button, which it moves down a row. The three screens extend `ColumnScreen`, a
 heading, a `ScrollingColumn` and a Done button that goes back to the parent. `AddonReportScreen`
 prints `PackSet.report(pack)` for each pack and `ServerHooks.entitiesReport()` and

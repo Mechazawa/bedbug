@@ -3832,9 +3832,8 @@ function normaliseComponent(component) {
  */
 function hasComponent(entity, name) {
     if (name === "minecraft:inventory") return bridge.containers.ofEntity(entity.id) !== null;
-    return DECLARED_COMPONENTS[name] !== undefined
-        ? declaredComponents(entity).includes(name)
-        : bridge.entityHasComponent(entity.id, name);
+    return (DECLARED_COMPONENTS[name] !== undefined && declaredComponents(entity).includes(name))
+        || bridge.entityHasComponent(entity.id, name);
 }
 
 function declaredComponents(entity) {

@@ -31,8 +31,25 @@ public final class MolangParser {
         }
     }
 
+    /**
+     * A `return` inside a brace block, which ends the whole expression with its value. Packs pick a
+     * texture with `v.a ? {return Texture.a;}; return Texture.b;`, and a return that ended only its
+     * block would always answer `Texture.b`.
+     */
+    private static final class Returned extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+
+        private final transient MolangValue value;
+
+        Returned(MolangValue value) {
+            super(null, null, false, false);
+            this.value = value;
+        }
+    }
+
     private final String source;
     private int at;
+    private boolean returnsFromBlock;
 
     private MolangParser(String source) {
         this.source = source;
@@ -82,19 +99,29 @@ public final class MolangParser {
 
         skipSpace();
         if (at < source.length() || statements.isEmpty()) throw new Malformed();
-        if (statements.size() == 1) return statements.get(0);
+        MolangExpression whole = statements.get(0);
+        if (statements.size() > 1) {
+            List<MolangExpression> program = List.copyOf(statements);
+            int last = program.size() - 1;
+            boolean valueIsLast = returns;
+            whole = environment -> {
+                MolangValue result = MolangValue.ZERO;
+                for (int i = 0; i < program.size(); i++) {
+                    MolangValue value = program.get(i).evaluate(environment);
+                    if (i == last && valueIsLast) result = value;
+                }
+                return result;
+            };
+        }
+        if (!returnsFromBlock) return whole;
 
-        List<MolangExpression> program = List.copyOf(statements);
-        int last = program.size() - 1;
-        boolean valueIsLast = returns;
-
+        MolangExpression body = whole;
         return environment -> {
-            MolangValue result = MolangValue.ZERO;
-            for (int i = 0; i < program.size(); i++) {
-                MolangValue value = program.get(i).evaluate(environment);
-                if (i == last && valueIsLast) result = value;
+            try {
+                return body.evaluate(environment);
+            } catch (Returned returned) {
+                return returned.value;
             }
-            return result;
         };
     }
 
@@ -109,7 +136,15 @@ public final class MolangParser {
             if (at >= source.length() || peek() == '}') break;
 
             boolean returns = word("return");
-            statements.add(parseExpression());
+            MolangExpression statement = parseExpression();
+            if (returns) {
+                returnsFromBlock = true;
+                statements.add(environment -> {
+                    throw new Returned(statement.evaluate(environment));
+                });
+            } else {
+                statements.add(statement);
+            }
             skipSpace();
             if (peek() == ';') at += 1;
             if (returns) break;

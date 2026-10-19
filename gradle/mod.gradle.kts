@@ -39,6 +39,9 @@ graalArtifacts.forEach { artifact ->
     project.dependencies.add("include", "$artifact:${prop("deps.graaljs")}")
 }
 
+// The Mod Menu and Sodium entrypoints are written for 26 and later; Sodium has no config API before that.
+val settingsIntegrations = prop("deps.minecraft").startsWith("26")
+
 project.tasks.named<ProcessResources>("processResources") {
     val tokens = mapOf(
         "version" to project.version.toString(),
@@ -48,6 +51,10 @@ project.tasks.named<ProcessResources>("processResources") {
         "mc_range" to prop("deps.mc_range"),
         "fabric_loader" to prop("deps.fabric_loader"),
         "java" to prop("deps.java"),
+        "settings_entrypoints" to if (settingsIntegrations) {
+            "\n    \"modmenu\": [\"at.ioexception.mcaddon.client.integration.ModMenuIntegration\"]," +
+                "\n    \"sodium:config_api_user\": [\"at.ioexception.mcaddon.client.integration.SodiumIntegration\"],"
+        } else "",
     )
     inputs.properties(tokens)
     filesMatching("fabric.mod.json") { expand(tokens) }

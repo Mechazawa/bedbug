@@ -16,7 +16,7 @@
     ],
     "client": [
       "at.ioexception.mcaddon.client.McAddonClient"
-    ],
+    ],${settings_entrypoints}
     "fabric-gametest": [
       "at.ioexception.mcaddon.gametest.AddonGameTests",
       "at.ioexception.mcaddon.gametest.SurfaceGameTests",

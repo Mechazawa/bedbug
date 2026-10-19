@@ -66,6 +66,10 @@ public final class AnimationClientGameTest implements FabricClientGameTest {
 
     private static final int PATIENCE = 200;
 
+    /** How far the gaze is teleported each tick, in blocks, and for how many ticks. */
+    private static final double STRIDE_STEP = 0.1;
+    private static final int STRIDE_TICKS = 20;
+
     /** Where `tp:burst` is born, above the sprite's feet: the tip locator, then the emitter's offset. */
     private static final double BURST_HEIGHT = 17 / 16.0 + 0.2;
 
@@ -81,7 +85,34 @@ public final class AnimationClientGameTest implements FabricClientGameTest {
             molangChannels(context, world);
             timeline(context, world);
             firstState(context, world);
+            stride(context, world);
         }
+    }
+
+    /**
+     * A gaze the server only teleports, a tenth of a block each tick, which is how a pack walks a
+     * model it draws over a vanilla mob. The client is sent no velocity for it, and its walk still
+     * has to play: `q.ground_speed` reads two blocks a second and `stride`, weighted by
+     * `q.modified_move_speed`, turns its bone by that share of 90 degrees.
+     */
+    private static void stride(ClientGameTestContext context, TestSingleplayerContext world) {
+        Entities.discardAll(context, world.getServer(), "tp:gaze");
+        world.getServer().runCommand("summon tp:gaze ~-3 ~ ~6");
+        AddonEntity gaze = Entities.waitForClient(context, "tp:gaze");
+        for (int tick = 0; tick < STRIDE_TICKS; tick++) {
+            world.getServer().runCommand("execute as @e[type=tp:gaze] at @s run tp @s ~" + STRIDE_STEP + " ~ ~");
+            context.waitTick();
+        }
+
+        float[] read = context.computeOnClient(client -> {
+            ScriptClock clock = ScriptClock.of(gaze);
+            clock.tick();
+            return new float[] {clock.variable("ground_speed"), clock.pose("stride").rotation.x};
+        });
+        Assert.near(read[1], 90 * STRIDE_STEP / 0.22, 5, "the stride bone's turn, 90 degrees weighted by"
+            + " q.modified_move_speed of a gaze teleported along each tick");
+        Assert.near(read[0], STRIDE_STEP * 20, 0.2, "q.ground_speed of a gaze teleported along each tick,"
+            + " in blocks a second");
     }
 
     private static void firstState(ClientGameTestContext context, TestSingleplayerContext world) {

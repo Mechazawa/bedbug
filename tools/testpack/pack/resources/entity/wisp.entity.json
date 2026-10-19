@@ -7,12 +7,16 @@
         "default": "entity_alphatest"
       },
       "textures": {
-        "default": "textures/entity/ember"
+        "default": "textures/entity/ember",
+        "restless": "textures/entity/tailor_base"
       },
       "geometry": {
         "default": "geometry.tp.ember"
       },
-      "render_controllers": ["controller.render.tp.sprite"],
+      "scripts": {
+        "pre_animation": ["v.restless = q.has_property('tp:settled') && !q.property('tp:settled');"]
+      },
+      "render_controllers": ["controller.render.tp.wisp"],
       "spawn_egg": {
         "base_color": "#7FB3FF",
         "overlay_color": "#FFFFFF"

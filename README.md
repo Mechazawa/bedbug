@@ -87,7 +87,9 @@ Against a server without this mod a client plays with its own add-ons.
   its own, which is drawn instead, or its material removes `USE_OVERLAY`. A pass whose material
   defines `MASKED_MULTITEXTURE`, as the game's villager outfits do, draws its second texture over
   its first with the second's clear but coloured texels showing the first through, which is how a
-  villager's profession is worn over the clothes of its biome. A controller's `materials` list gives
+  villager's profession is worn over the clothes of its biome. The two are mixed as the pack
+  painted them and the mix is then alpha tested, so a marker texel a pack left nearly clear in a
+  skin's corner is dropped there as Bedrock drops it. A controller's `materials` list gives
   each bone the material of the last entry naming it, with a star standing for any run of letters,
   so a villager's hat can be drawn masked while the rest of it is not. A model reaching past the box
   the server gave the entity is culled against the extent its own geometry declares, so wings and a
@@ -317,8 +319,10 @@ Against a server without this mod a client plays with its own add-ons.
   The paper doll is drawn the way Bedrock draws it, with or without an add-on installed: the player,
   small and turned a little, in the top left corner while they sneak, swim, fly, glide or ride and
   for 15 ticks after, with the coordinates and the day count moved below it. It is on by default,
-  and **Paper Doll** under Options, Video Settings turns it off (`mcaddon.paperDoll` in
-  `options.txt`).
+  and **Paper Doll** turns it off (`mcaddon.paperDoll` in `options.txt`). The option is under
+  Options, Video Settings. With Sodium installed, which replaces that screen, find it on the
+  Bedrock Add-ons page of Sodium's video settings, or on the config screen Mod Menu opens for this
+  mod (26.1 and later).
 - `/bedrock inputpermission`, which takes one kind of input away from a player and gives it back.
   The camera, walking in each of the four directions, jumping and sneaking are let go of on that
   player's own client before the player moves by them, and getting onto a vehicle or off it is
@@ -629,7 +633,9 @@ Against a server without this mod a client plays with its own add-ons.
   Java blends its fog colour. The `contrast`, `saturation`, `gain`, `offset` and `gamma` of each
   tonal band and the Kelvin `temperature` are applied with Bedrock's own arithmetic. Bedrock grades
   only under Vibrant Visuals, so the grading is off by default, as under Bedrock's default graphics.
-  **Vibrant Visuals Colour Grading** under Options, Video Settings, turns it on.
+  **Vibrant Visuals Colour Grading** turns it on. It sits beside Paper Doll: under Options, Video
+  Settings, on the Bedrock Add-ons page of Sodium's video settings, or on the Mod Menu config
+  screen for this mod (26.1 and later).
 - Attachables: what any entity wears or holds, players and vanilla mobs included, animating on its
   own clock. A pack picks between several models for one item on a condition of its own, and what an
   attachable writes into whoever carries it reaches that entity's variables, so the layer it stands
@@ -755,8 +761,9 @@ Against a server without this mod a client plays with its own add-ons.
   `query.is_pack_setting_selected` read them. A setting nobody changed holds the `default` its
   author declared, kept inside the slider's range and step or the dropdown's options.
 
-**Add-Ons** on the pause menu opens the list of the add-ons this game has loaded: each one's name,
-version, authors and description, its behaviour and resource packs, and whether each is active,
+**Add-Ons** on the pause menu, or on this mod's options screen that Mod Menu opens, opens the list
+of the add-ons this game has loaded: each one's name, version, authors and description, its
+behaviour and resource packs, and whether each is active,
 which it is not while you visit a server that plays without it. **Settings** opens the add-on's
 settings. **What does not work** shows the lines `/mcaddon packs` prints for its packs, followed by
 what `/mcaddon entities` and `/mcaddon scripts` print, which count every add-on in the game
