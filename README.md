@@ -396,8 +396,12 @@ Against a server without this mod a client plays with its own add-ons.
   held back and lists every file of the world with its length; `setmaxplayers` sets the limit a
   login is checked against for this session only; `packstack server` lists Java's data packs in the
   order they apply, every converted add-on among them, and `packstack client` the add-on resource
-  packs; `permission` and `ops` list Java's operators, read `ops.json` again and make a player an
-  operator or a member. Like Bedrock's, each asks for more than a function's authority, so an
+  packs; `permission` and `ops` list Java's operators and the visitors, read `ops.json` again and
+  make a player an operator, a member or a visitor. A visitor may only look round, as in Bedrock: the
+  server refuses every block it uses, places or breaks, every item that places a block or an entity,
+  an item frame, a chest minecart, a chest boat or a mount's inventory, and every hit or damage it
+  causes, whatever client it plays on. It may still trade, ride and use what it carries, and a
+  script's `playerPermissionLevel` answers `Visitor` for it. Like Bedrock's, each asks for more than a function's authority, so an
   operator types it after `/bedrock` and a pack's function cannot run it.
 - `/bedrock changesetting allow-cheats false`, which stops players typing any command Bedrock
   marks as needing cheats, operators included, until it is turned on again or the server stops.
@@ -906,8 +910,8 @@ using any of them keeps its other lines and the dropped command is reported.
 entity (`minecraft:follow_orbit`, `minecraft:fixed_boom` and `minecraft:control_scheme_camera`), and
 the camera forms that follow a spline, hang the camera off an entity, turn it towards one or offset
 it from one, which would each be a camera this mod draws itself; the paper doll, the input hints
-and the touch controls `hud` names, which a Java client draws none of; a `permission` visitor, a
-level below Java's member; and the liquid setting `ignore_waterlogging` on 1.20.1, which waterlogs
+and the touch controls `hud` names, which a Java client draws none of; and the liquid setting
+`ignore_waterlogging` on 1.20.1, which waterlogs
 every block a jigsaw or structure places. The line does not run and the form is named, rather than being handed to a
 parser that would refuse it over the wrong word.
 

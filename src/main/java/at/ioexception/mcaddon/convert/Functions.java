@@ -120,12 +120,10 @@ public final class Functions {
      * A line carrying one does not run and the form is reported, rather than reaching a parser that
      * would reject it with a message about the wrong word.
      *
-     * The three `hud` pieces are drawn by nothing on a Java client, as `HudElement` says. A
-     * `permission` visitor may only look, and Java has no level below a member.
+     * The three `hud` pieces are drawn by nothing on a Java client, as `HudElement` says.
      */
     private static final Set<String> BEDROCK_ONLY_KEYWORDS = Set.of(
-        "hud paperdoll", "hud tooltips", "hud touch_controls",
-        "permission visitor");
+        "hud paperdoll", "hud tooltips", "hud touch_controls");
 
     /**
      * Commands Java says the same thing with under another name, and nothing else.
@@ -434,7 +432,7 @@ public final class Functions {
             case "replaceitem" -> replaceItem(rest, unsupported);
             case "ride" -> ride(rest, unsupported);
             case "save" -> save(rest, unsupported);
-            case "permission", "ops" -> permission(name, rest, unsupported);
+            case "permission", "ops" -> name + (rest.isEmpty() ? "" : " " + rest);
             case "time" -> time(rest);
             case "changesetting" -> changeSetting(rest, unsupported);
             case "structure" -> structure(rest, unsupported);
@@ -1137,18 +1135,6 @@ public final class Functions {
         };
     }
 
-    /**
-     * `permission list|reload` and `permission set <player> <level>`, which Bedrock also spells
-     * `ops`, read by the command built here. Of Bedrock's three levels, a visitor may only look round,
-     * which no Java operator level or game mode says.
-     */
-    private static String permission(String name, String rest, Set<String> unsupported) {
-        List<String> words = words(rest);
-        if (words.size() > 2 && words.get(2).equalsIgnoreCase("visitor")) {
-            return dropped("permission", "visitor", unsupported);
-        }
-        return name + (rest.isEmpty() ? "" : " " + rest);
-    }
 
     /**
      * The line with its first argument quoted, which is how a name carrying a colon reaches Java.

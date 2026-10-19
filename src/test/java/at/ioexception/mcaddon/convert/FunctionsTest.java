@@ -120,6 +120,7 @@ class FunctionsTest {
         "'save query', 'save query'",
         "'place featurerule tp:rule ~ ~ ~', 'place featurerule tp:rule ~ ~ ~'",
         "'ops set @p operator', 'ops set @p operator'",
+        "'permission set @p visitor', 'permission set @p visitor'",
         "'setmaxplayers 12', 'setmaxplayers 12'",
         "'packstack server verbose exclude-vanilla', 'packstack server verbose exclude-vanilla'",
         "'tickingarea add 0 0 0 32 0 32 named', 'tickingarea add 0 0 0 32 0 32 named'",
@@ -171,21 +172,6 @@ class FunctionsTest {
     })
     void rewritesTheCommandsJavaSpellsDifferently(String source, String expected) throws IOException {
         assertEquals(expected, only(source));
-    }
-
-    /**
-     * Forms of a command that does translate, which Java has no way to say.
-     *
-     * Each has to leave the line rather than be handed to Java, because a line Java's parser
-     * rejects costs the whole function.
-     */
-    @ParameterizedTest
-    @CsvSource({
-        "'permission set @p visitor', 'command permission visitor, which Java has no form of'",
-    })
-    void dropsAFormOfATranslatedCommandJavaCannotSay(String source, String reported) throws IOException {
-        assertEquals(List.of(), translate(source));
-        assertTrue(problems.contains(reported), problems.toString());
     }
 
     /** Bedrock switches fire spreading where Java from 26 measures how far a player carries it. */
