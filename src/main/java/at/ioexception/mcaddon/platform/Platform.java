@@ -2013,6 +2013,15 @@ public final class Platform {
         *///?}
     }
 
+    /** Turns a pose stack. 26.3 gave the turn a name of its own. */
+    public static void rotate(com.mojang.blaze3d.vertex.PoseStack poseStack, org.joml.Quaternionf turn) {
+        //? if >=26.3 {
+        /*poseStack.rotate(turn);
+        *///?} else {
+        poseStack.mulPose(turn);
+        //?}
+    }
+
     /** Multiplies a whole transform onto a pose stack. 1.21 renamed the matrix form of the call. */
     public static void mulPose(com.mojang.blaze3d.vertex.PoseStack poseStack, org.joml.Matrix4f matrix) {
         //? if >=1.21 {
@@ -2769,7 +2778,38 @@ public final class Platform {
         *///?}
     }
 
-    //? if >=26.2 {
+    //? if >=26.3 {
+    /*/^*
+     * A pipeline drawing one screen covering triangle from no vertices, reading one texture and one
+     * uniform block. 26.3 moved the device API into a package of its own and declares a sampler as
+     * one more uniform of its layout.
+     ^/
+    public static com.mojang.renderpearl.api.pipeline.RenderPipeline screenPipeline(Identifier location,
+        Identifier shader, String sampler, String uniformBlock) {
+        return com.mojang.renderpearl.api.pipeline.RenderPipeline.builder()
+            .withLocation(location)
+            .withVertexShader(shader)
+            .withFragmentShader(shader)
+            .withBindGroupLayout(com.mojang.renderpearl.api.pipeline.BindGroupLayout.builder()
+                .withUniform(sampler, com.mojang.renderpearl.api.pipeline.UniformType.COMBINED_IMAGE_SAMPLER)
+                .withUniform(uniformBlock, com.mojang.renderpearl.api.pipeline.UniformType.UNIFORM_BUFFER)
+                .build())
+            .withDepthStencilState(java.util.Optional.empty())
+            .withCull(false)
+            .withPrimitiveTopology(com.mojang.renderpearl.api.pipeline.PrimitiveTopology.TRIANGLES)
+            .build();
+    }
+
+    public static com.mojang.renderpearl.api.commands.RenderPass screenPass(
+        com.mojang.renderpearl.api.commands.CommandEncoder encoder, java.util.function.Supplier<String> label,
+        com.mojang.renderpearl.api.textures.GpuTextureView colour) {
+        return encoder.createRenderPass(label, colour, java.util.Optional.empty());
+    }
+
+    public static void drawScreenTriangle(com.mojang.renderpearl.api.commands.RenderPass pass) {
+        pass.draw(3, 1, 0, 0);
+    }
+    *///?} elif >=26.2 {
     /**
      * A pipeline drawing one screen covering triangle from no vertices, reading one texture and one
      * uniform block. 26.2 groups a pipeline's bindings into layouts and names its topology alone.
