@@ -682,6 +682,15 @@ public final class ScriptBridge {
         if (entity != null) at.ioexception.mcaddon.server.EntityEvents.trigger(entity, event, null, state);
     }
 
+    /**
+     * The vanilla entities whose Bedrock definition carries `minecraft:rideable` outside every
+     * component group, so a script finds the component on one with nobody aboard. Mojang's player is
+     * left out: its seats hold parrots, which Java keeps on the shoulders rather than as riders.
+     */
+    private static final Set<String> ALWAYS_RIDEABLE = Set.of("minecraft:boat", "minecraft:chest_boat",
+        "minecraft:minecart", "minecraft:ravager", "minecraft:skeleton_horse", "minecraft:spider",
+        "minecraft:cave_spider", "minecraft:camel_husk");
+
     @HostAccess.Export
     public boolean entityHasComponent(String id, String component) {
         Entity entity = entity(id);
@@ -693,7 +702,8 @@ public final class ScriptBridge {
                 entity instanceof Player;
             case "minecraft:onfire" -> entity.isOnFire();
             case "minecraft:riding" -> entity.isPassenger();
-            case "minecraft:rideable" -> !entity.getPassengers().isEmpty();
+            case "minecraft:rideable" -> !entity.getPassengers().isEmpty()
+                || ALWAYS_RIDEABLE.contains(AddonEntities.identifierOf(entity.getType()));
             case "minecraft:type_family" -> true;
             case "minecraft:is_baby" -> entity instanceof LivingEntity living && living.isBaby();
             case "minecraft:item" -> entity instanceof ItemEntity;

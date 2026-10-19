@@ -276,6 +276,21 @@ function readTheConfig(player) {
     player.addTag(`tp:secret_shown_${JSON.stringify(token)}${String(token)}${Object.getOwnPropertyNames(token)}`);
 }
 
+// `/scriptevent tp:board` seats a sprite in the empty boat nearest the player through the boat's own
+// `minecraft:rideable`, the way a pack moves a model of its own into the boat a villager boarded.
+function boardTheBoat(player) {
+    const boat = player.dimension.getEntities({ type: "minecraft:boat", location: player.location, closest: 1 })[0];
+    const seats = boat?.getComponent("minecraft:rideable");
+    if (seats === undefined) {
+        player.addTag("tp:boat_without_seats");
+        return;
+    }
+    const { x, y, z } = boat.location;
+    const sprite = player.dimension.spawnEntity("tp:sprite", { x, y: y + 2, z });
+    sprite.addTag("tp:boarded");
+    seats.addRider(sprite);
+}
+
 // Makes the player an operator twice and takes it away twice, tagging what each answered.
 function swapOperator(player) {
     const attempt = (name, call) => {
@@ -333,6 +348,7 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
         case "tp:camera_clear": player.camera.clear(); break;
         case "tp:hud_hide": hideTheHotbar(player); break;
         case "tp:hud_reset": resetTheHud(player); break;
+        case "tp:board": boardTheBoat(player); break;
         case "tp:override": overrideTheWisp(player, true); break;
         case "tp:override_clear": overrideTheWisp(player, false); break;
         case "tp:control_scheme": steer(player, event.message); break;

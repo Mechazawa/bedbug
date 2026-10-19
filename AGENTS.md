@@ -1059,7 +1059,13 @@ These are the checks it runs, and what each one catches:
   the wisp never declared is refused; `tp:override_clear` clears the override again. `tp:config` tags the player with two variables and a
   secret `config/` hands the pack, which `ScriptGameTests` writes, reads again with
   `bedrock reloadconfig` from the console and asserts on, and `tp:operator` makes the player an
-  operator and unmakes it twice each.
+  operator and unmakes it twice each. `tp:board` asks an empty Java boat for its
+  `minecraft:rideable` and seats a sprite through it, the way a pack dressing the game's villagers
+  moves its own model into the boat a villager boarded; `BoatSeatClientGameTest` reads the sprite
+  back in the boat's seat on the client. Bedrock's boat, minecart, ravager, spider, cave spider,
+  skeleton horse and camel husk carry that component outside every group, so the script finds it on
+  the Java mob with nobody aboard (`ScriptBridge.ALWAYS_RIDEABLE`); any other vanilla mob has it only
+  while something rides it.
 
   `cameras/presets/` holds the presets. `tp:overlook` is a free camera at 0.5 120 0.5 turned to a
   pitch of 20 and a yaw of 45 that hears from the player, and also asks for `player_effects` and
