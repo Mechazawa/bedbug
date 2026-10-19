@@ -21,7 +21,7 @@
       "tp:gaze_timed": {
         "minecraft:looked_at": {
           "looked_at_event": "tp:gaze_seen",
-          "search_radius": 20,
+          "search_radius": 8,
           "set_target": "never",
           "field_of_view": 60,
           "scale_fov_by_distance": false,
@@ -36,7 +36,7 @@
       "tp:gaze_scaled": {
         "minecraft:looked_at": {
           "looked_at_event": "tp:gaze_seen",
-          "search_radius": 20,
+          "search_radius": 8,
           "set_target": "never",
           "field_of_view": 20
         }
@@ -44,7 +44,7 @@
       "tp:gaze_flat": {
         "minecraft:looked_at": {
           "looked_at_event": "tp:gaze_seen",
-          "search_radius": 20,
+          "search_radius": 8,
           "set_target": "never",
           "field_of_view": 20,
           "scale_fov_by_distance": false
@@ -62,7 +62,7 @@
       "tp:gaze_targeting": {
         "minecraft:looked_at": {
           "looked_at_event": "tp:gaze_seen",
-          "search_radius": 20,
+          "search_radius": 8,
           "set_target": "once_and_stop_scanning",
           "field_of_view": 60,
           "scale_fov_by_distance": false
@@ -71,7 +71,7 @@
       "tp:gaze_passive": {
         "minecraft:looked_at": {
           "looked_at_event": "tp:gaze_seen",
-          "search_radius": 20,
+          "search_radius": 8,
           "set_target": "never",
           "field_of_view": 60,
           "scale_fov_by_distance": false
@@ -80,7 +80,7 @@
       "tp:gaze_feet": {
         "minecraft:looked_at": {
           "looked_at_event": "tp:gaze_seen",
-          "search_radius": 20,
+          "search_radius": 8,
           "set_target": "never",
           "field_of_view": 60,
           "scale_fov_by_distance": false,
@@ -92,7 +92,7 @@
       "tp:gaze_head": {
         "minecraft:looked_at": {
           "looked_at_event": "tp:gaze_seen",
-          "search_radius": 20,
+          "search_radius": 8,
           "set_target": "never",
           "field_of_view": 60,
           "scale_fov_by_distance": false,
@@ -104,7 +104,7 @@
       "tp:gaze_filtered": {
         "minecraft:looked_at": {
           "looked_at_event": "tp:gaze_seen",
-          "search_radius": 20,
+          "search_radius": 8,
           "set_target": "never",
           "field_of_view": 60,
           "scale_fov_by_distance": false,

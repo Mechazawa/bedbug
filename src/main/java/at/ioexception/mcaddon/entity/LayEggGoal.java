@@ -75,7 +75,7 @@ public final class LayEggGoal extends Goal {
     public void start() {
         laid = 0;
         mob.setValue("is_laying_egg", true);
-        mob.getNavigation().moveTo(nest.getX() + 0.5, nest.getY() + 1, nest.getZ() + 0.5, speed);
+        walk();
     }
 
     @Override
@@ -94,7 +94,7 @@ public final class LayEggGoal extends Goal {
         if (nest == null) return;
         if (mob.distanceToSqr(nest.getX() + 0.5, nest.getY() + 1, nest.getZ() + 0.5)
             > goalRadius * goalRadius + 1) {
-            mob.getNavigation().moveTo(nest.getX() + 0.5, nest.getY() + 1, nest.getZ() + 0.5, speed);
+            walk();
             return;
         }
 
@@ -106,6 +106,14 @@ public final class LayEggGoal extends Goal {
         mob.makeNoise(laySound == null ? "lay_egg" : laySound);
         if (layEvent != null) EntityEvents.trigger(mob, layEvent, null, ServerHooks.state());
         nest = null;
+    }
+
+    /**
+     * `PathNavigation.moveTo(x, y, z)` ends the path within a block of the spot on some versions and
+     * on it on others, and the laying distance must not depend on which.
+     */
+    private void walk() {
+        mob.getNavigation().moveTo(mob.getNavigation().createPath(nest.above(), 0), speed);
     }
 
     /** The nearest of the blocks the pack named with room above it for the egg. */
