@@ -380,10 +380,18 @@ public final class Platform {
         Optional<net.minecraft.world.level.levelgen.Heightmap.Types> project,
         net.minecraft.world.level.levelgen.structure.structures.JigsawStructure from, JigsawSettings settings) {
         net.minecraft.world.level.chunk.ChunkGenerator generator = level.getChunkSource().getGenerator();
+        net.minecraft.world.level.levelgen.RandomState random = level.getChunkSource().randomState();
         net.minecraft.world.level.levelgen.structure.Structure.GenerationContext context =
             new net.minecraft.world.level.levelgen.structure.Structure.GenerationContext(level.registryAccess(),
-                generator, generator.getBiomeSource(), level.getChunkSource().randomState(),
-                level.getStructureManager(), level.getSeed(),
+                //? if >=26.3 {
+                /*generator, generator.getBiomeSource(),
+                random.createClimateSampler(
+                    net.minecraft.world.level.levelgen.densityfunction.SamplerContext.EMPTY_UNCACHED),
+                random,
+                *///?} else {
+                generator, generator.getBiomeSource(), random,
+                //?}
+                structureTemplates(level.getServer()), level.getSeed(),
                 new net.minecraft.world.level.ChunkPos(start.getX() >> 4, start.getZ() >> 4), level, biome -> true);
         var fields = (at.ioexception.mcaddon.mixin.JigsawStructureAccessor) (Object) from;
         Optional<net.minecraft.world.level.levelgen.structure.Structure.GenerationStub> stub;
@@ -461,7 +469,10 @@ public final class Platform {
 
     /** Whether a bed used here blows up rather than letting anybody sleep, which 26 asks the dimension. */
     public static boolean bedExplodes(Level level, net.minecraft.core.BlockPos pos) {
-        //? if >=26 {
+        //? if >=26.3 {
+        /*return level.environmentAttributes()
+            .getValue(net.minecraft.world.attribute.EnvironmentAttributes.BED_RULE, pos).destroyOnUse();
+        *///?} elif >=26 {
         return level.environmentAttributes()
             .getValue(net.minecraft.world.attribute.EnvironmentAttributes.BED_RULE, pos).explodes();
         //?} else {
@@ -572,6 +583,18 @@ public final class Platform {
             new net.minecraft.server.packs.repository.KnownPack(McAddon.MOD_ID, knownAs, knownVersion));
         PackLocationInfo location = new PackLocationInfo(id, name, PackSource.BUILT_IN, known);
         Pack.ResourcesSupplier resources = new Pack.ResourcesSupplier() {
+            //? if >=26.3 {
+            /*@Override
+            public net.minecraft.server.packs.PackMetadataResources openMetadata(PackLocationInfo info) {
+                return new PathPackResources(info, directory);
+            }
+
+            @Override
+            public java.util.stream.Stream<PackResources> openResources(PackLocationInfo info,
+                Pack.Metadata metadata) {
+                return java.util.stream.Stream.of(new PathPackResources(info, directory));
+            }
+            *///?} else {
             @Override
             public PackResources openPrimary(PackLocationInfo info) {
                 return new PathPackResources(info, directory);
@@ -581,6 +604,7 @@ public final class Platform {
             public PackResources openFull(PackLocationInfo info, Pack.Metadata metadata) {
                 return new PathPackResources(info, directory);
             }
+            //?}
         };
         // The features a pack asks for are what the world ends up enabled for, and a world enabled
         // for anything other than the ordinary set is one the game calls experimental: every world
@@ -667,7 +691,11 @@ public final class Platform {
      */
     public static void addSpawn(net.fabricmc.fabric.api.biome.v1.BiomeModificationContext context,
         MobCategory category, EntityType<?> type, int weight, int minimum, int maximum) {
-        //? if >=26 {
+        //? if >=26.3 {
+        /*context.getMobSpawnSettings().addSpawn(category,
+            new net.minecraft.world.level.biome.MobSpawnSettings.SpawnerData(type,
+                net.minecraft.util.valueproviders.UniformInt.of(minimum, maximum)), weight);
+        *///?} elif >=26 {
         context.getMobSpawnSettings().addSpawn(category,
             new net.minecraft.world.level.biome.MobSpawnSettings.SpawnerData(type, minimum, maximum), weight);
         //?} else {
@@ -1414,7 +1442,10 @@ public final class Platform {
      */
     public static Entity lootSubject(
         net.minecraft.world.level.storage.loot.LootContext context) {
-        //? if >=26 {
+        //? if >=26.3 {
+        /*return context.getOptional(
+            net.minecraft.world.level.storage.loot.parameters.LootContextParams.THIS_ENTITY);
+        *///?} elif >=26 {
         return context.getOptionalParameter(
             net.minecraft.world.level.storage.loot.parameters.LootContextParams.THIS_ENTITY);
         //?} else {
@@ -1431,7 +1462,10 @@ public final class Platform {
      */
     public static Entity lootKiller(
         net.minecraft.world.level.storage.loot.LootContext context) {
-        //? if >=26 {
+        //? if >=26.3 {
+        /*return context.getOptional(
+            net.minecraft.world.level.storage.loot.parameters.LootContextParams.ATTACKING_ENTITY);
+        *///?} elif >=26 {
         return context.getOptionalParameter(
             net.minecraft.world.level.storage.loot.parameters.LootContextParams.ATTACKING_ENTITY);
         //?} else if >=1.21 {
@@ -1445,7 +1479,10 @@ public final class Platform {
 
     private static net.minecraft.core.BlockPos lootOrigin(
         net.minecraft.world.level.storage.loot.LootContext context) {
-        //? if >=26 {
+        //? if >=26.3 {
+        /*net.minecraft.world.phys.Vec3 origin = context.getOptional(
+            net.minecraft.world.level.storage.loot.parameters.LootContextParams.ORIGIN);
+        *///?} elif >=26 {
         net.minecraft.world.phys.Vec3 origin = context.getOptionalParameter(
             net.minecraft.world.level.storage.loot.parameters.LootContextParams.ORIGIN);
         //?} else {
@@ -2026,6 +2063,15 @@ public final class Platform {
         //?} else {
         /*return false;
         *///?}
+    }
+
+    /** Turns a pose stack. 26.3 gave the turn a name of its own. */
+    public static void rotate(com.mojang.blaze3d.vertex.PoseStack poseStack, org.joml.Quaternionf turn) {
+        //? if >=26.3 {
+        /*poseStack.rotate(turn);
+        *///?} else {
+        poseStack.mulPose(turn);
+        //?}
     }
 
     /** Multiplies a whole transform onto a pose stack. 1.21 renamed the matrix form of the call. */
@@ -2695,7 +2741,9 @@ public final class Platform {
      */
     public static boolean publishServer(net.minecraft.client.server.IntegratedServer server, int port) {
         server.setUsesAuthentication(false);
-        //? if >=26.2 {
+        //? if >=26.3 {
+        /*return server.publishServer(net.minecraft.server.MinecraftServer.MultiplayerScope.LAN, false, port);
+        *///?} elif >=26.2 {
         return server.publishServer(net.minecraft.server.MinecraftServer.MultiplayerScope.LAN,
             net.minecraft.world.level.GameType.SURVIVAL, false, port);
         //?} else {
@@ -2784,7 +2832,38 @@ public final class Platform {
         *///?}
     }
 
-    //? if >=26.2 {
+    //? if >=26.3 {
+    /*/^*
+     * A pipeline drawing one screen covering triangle from no vertices, reading one texture and one
+     * uniform block. 26.3 moved the device API into a package of its own and declares a sampler as
+     * one more uniform of its layout.
+     ^/
+    public static com.mojang.renderpearl.api.pipeline.RenderPipeline screenPipeline(Identifier location,
+        Identifier shader, String sampler, String uniformBlock) {
+        return com.mojang.renderpearl.api.pipeline.RenderPipeline.builder()
+            .withLocation(location)
+            .withVertexShader(shader)
+            .withFragmentShader(shader)
+            .withBindGroupLayout(com.mojang.renderpearl.api.pipeline.BindGroupLayout.builder()
+                .withUniform(sampler, com.mojang.renderpearl.api.pipeline.UniformType.COMBINED_IMAGE_SAMPLER)
+                .withUniform(uniformBlock, com.mojang.renderpearl.api.pipeline.UniformType.UNIFORM_BUFFER)
+                .build())
+            .withDepthStencilState(java.util.Optional.empty())
+            .withCull(false)
+            .withPrimitiveTopology(com.mojang.renderpearl.api.pipeline.PrimitiveTopology.TRIANGLES)
+            .build();
+    }
+
+    public static com.mojang.renderpearl.api.commands.RenderPass screenPass(
+        com.mojang.renderpearl.api.commands.CommandEncoder encoder, java.util.function.Supplier<String> label,
+        com.mojang.renderpearl.api.textures.GpuTextureView colour) {
+        return encoder.createRenderPass(label, colour, java.util.Optional.empty());
+    }
+
+    public static void drawScreenTriangle(com.mojang.renderpearl.api.commands.RenderPass pass) {
+        pass.draw(3, 1, 0, 0);
+    }
+    *///?} elif >=26.2 {
     /**
      * A pipeline drawing one screen covering triangle from no vertices, reading one texture and one
      * uniform block. 26.2 groups a pipeline's bindings into layouts and names its topology alone.
@@ -3204,7 +3283,10 @@ public final class Platform {
     public static boolean canBonemeal(net.minecraft.world.level.block.BonemealableBlock crop,
         ServerLevel level, net.minecraft.core.BlockPos at,
         net.minecraft.world.level.block.state.BlockState state) {
-        //? if >=1.21 {
+        //? if >=26.3 {
+        /*return crop.isValidBonemealTarget(level, at, state,
+            net.minecraft.world.level.block.BonemealSource.MOB);
+        *///?} elif >=1.21 {
         return crop.isValidBonemealTarget(level, at, state);
         //?} else {
         /*return crop.isValidBonemealTarget(level, at, state, false);
@@ -3652,6 +3734,125 @@ public final class Platform {
             attributes.addProperty("minecraft:visual/" + name + "_end_distance", location.end());
         }
     }
+    //?}
+
+    /** Grows a crop the way a mob's bone meal does. 26.3 names who is applying it. */
+    public static void bonemeal(net.minecraft.world.level.block.BonemealableBlock crop, ServerLevel level,
+        net.minecraft.util.RandomSource random, net.minecraft.core.BlockPos at,
+        net.minecraft.world.level.block.state.BlockState state) {
+        //? if >=26.3 {
+        /*crop.performBonemeal(level, random, at, state, net.minecraft.world.level.block.BonemealSource.MOB);
+        *///?} else {
+        crop.performBonemeal(level, random, at, state);
+        //?}
+    }
+
+    /** The structure templates a server saves and loads by name. */
+    public static net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager
+        structureTemplates(net.minecraft.server.MinecraftServer server) {
+        //? if >=26.3 {
+        /*return server.getStructureTemplateManager();
+        *///?} else {
+        return server.getStructureManager();
+        //?}
+    }
+
+    /** Sends an entity's new velocity to its watchers on the next tick, which a push set from outside needs. */
+    public static void syncVelocity(Entity entity) {
+        //? if >=26.3 {
+        /*entity.syncVelocity = true;
+        *///?} else {
+        entity.hurtMarked = true;
+        //?}
+    }
+
+    /** The ticks left in which an entity shrugs off another blow. */
+    public static int invulnerableTime(Entity entity) {
+        //? if >=26.3 {
+        /*return entity.getInvulnerableTime();
+        *///?} else {
+        return entity.invulnerableTime;
+        //?}
+    }
+
+    public static void setInvulnerableTime(Entity entity, int ticks) {
+        //? if >=26.3 {
+        /*entity.setInvulnerableTime(ticks);
+        *///?} else {
+        entity.invulnerableTime = ticks;
+        //?}
+    }
+
+    /**
+     * Swings an entity's arm and shows the swing to whoever watches it.
+     *
+     * From 26.3 a swing carries the animation of the item in that hand, the attack one for a blow and
+     * the interaction one otherwise.
+     */
+    public static void swing(LivingEntity entity, net.minecraft.world.InteractionHand hand, boolean attack) {
+        //? if >=26.3 {
+        /*net.minecraft.world.item.ItemStack held = entity.getItemInHand(hand);
+        entity.swing(hand, attack ? held.getAttackAnimation() : held.getInteractAnimation(), false);
+        *///?} else {
+        entity.swing(hand);
+        //?}
+    }
+
+    public static boolean isSwinging(LivingEntity entity) {
+        //? if >=26.3 {
+        /*return entity.isSwinging();
+        *///?} else {
+        return entity.swinging;
+        //?}
+    }
+
+    /**
+     * Whether a block stops an entity moving through it.
+     *
+     * 26.3 answers this from the `blocks_motion` block tag; before it from the block being solid,
+     * cobwebs and bamboo shoots aside.
+     */
+    public static boolean blocksMotion(net.minecraft.world.level.block.state.BlockState state) {
+        //? if >=26.3 {
+        /*return state.is(net.minecraft.tags.BlockTags.BLOCKS_MOTION);
+        *///?} else {
+        return state.blocksMotion();
+        //?}
+    }
+
+    /** The blocks of a box, nearest first by Manhattan distance, out to the sum of the three sizes. */
+    public static Iterable<net.minecraft.core.BlockPos> withinManhattan(net.minecraft.core.BlockPos centre,
+        int x, int y, int z) {
+        //? if >=26.3 {
+        /*return net.minecraft.core.BlockPos.withinBoxByManhattanDistance(centre, x, y, z);
+        *///?} else {
+        return net.minecraft.core.BlockPos.withinManhattan(centre, x, y, z);
+        //?}
+    }
+
+    /** Java's piston reactions, which 26.3 renamed after Bedrock's own. */
+    //? if >=26.3 {
+    /*public static final net.minecraft.world.level.material.PushReaction PUSH_PULL =
+        net.minecraft.world.level.material.PushReaction.PUSH_PULL;
+    public static final net.minecraft.world.level.material.PushReaction PUSH_ONLY =
+        net.minecraft.world.level.material.PushReaction.PUSH;
+    public static final net.minecraft.world.level.material.PushReaction POPPED =
+        net.minecraft.world.level.material.PushReaction.POPPED;
+    public static final net.minecraft.world.level.material.PushReaction IMMOVABLE =
+        net.minecraft.world.level.material.PushReaction.IMMOVEABLE;
+    public static final net.minecraft.world.level.material.PushReaction IGNORED =
+        net.minecraft.world.level.material.PushReaction.IGNORE_ENTITY;
+    *///?} else {
+    public static final net.minecraft.world.level.material.PushReaction PUSH_PULL =
+        net.minecraft.world.level.material.PushReaction.NORMAL;
+    public static final net.minecraft.world.level.material.PushReaction PUSH_ONLY =
+        net.minecraft.world.level.material.PushReaction.PUSH_ONLY;
+    public static final net.minecraft.world.level.material.PushReaction POPPED =
+        net.minecraft.world.level.material.PushReaction.DESTROY;
+    public static final net.minecraft.world.level.material.PushReaction IMMOVABLE =
+        net.minecraft.world.level.material.PushReaction.BLOCK;
+    public static final net.minecraft.world.level.material.PushReaction IGNORED =
+        net.minecraft.world.level.material.PushReaction.IGNORE;
     //?}
 
 }

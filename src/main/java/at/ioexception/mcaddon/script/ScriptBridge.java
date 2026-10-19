@@ -409,7 +409,7 @@ public final class ScriptBridge {
         entity.setDeltaMovement(x == 0 && y == 0 && z == 0
             ? Vec3.ZERO
             : entity.getDeltaMovement().add(x, y, z));
-        entity.hurtMarked = true;
+        Platform.syncVelocity(entity);
     }
 
     /**
@@ -444,7 +444,7 @@ public final class ScriptBridge {
         Entity placed = entity(id);
         if (placed == null) return true;
         placed.setDeltaMovement(flag(options, "keepVelocity") ? velocity : Vec3.ZERO);
-        placed.hurtMarked = true;
+        Platform.syncVelocity(placed);
         return true;
     }
 
@@ -1139,10 +1139,10 @@ public final class ScriptBridge {
         Identifier id = structureId(structure);
         if (level == null || id == null) return false;
 
-        StructureTemplate template = server.getStructureManager().getOrCreate(id);
+        StructureTemplate template = Platform.structureTemplates(server).getOrCreate(id);
         Platform.fillFromWorld(template, level, new BlockPos(x, y, z),
             new net.minecraft.core.Vec3i(width, height, depth), false);
-        return server.getStructureManager().save(id);
+        return Platform.structureTemplates(server).save(id);
     }
 
     /** The id a structure name a script passes means, read the way Bedrock reads it. */
@@ -1155,7 +1155,7 @@ public final class ScriptBridge {
         Identifier id = structureId(structure);
         if (id == null) return new int[] {0, 0, 0};
 
-        return server.getStructureManager().get(id)
+        return Platform.structureTemplates(server).get(id)
             .map(template -> new int[] {template.getSize().getX(), template.getSize().getY(),
                 template.getSize().getZ()})
             .orElse(new int[] {0, 0, 0});
@@ -1164,27 +1164,27 @@ public final class ScriptBridge {
     /** Every structure the world holds, whether a data pack shipped it or a script saved it. */
     @HostAccess.Export
     public String[] structureIds() {
-        return server.getStructureManager().listTemplates().map(Identifier::toString).toArray(String[]::new);
+        return Platform.structureTemplates(server).listTemplates().map(Identifier::toString).toArray(String[]::new);
     }
 
     @HostAccess.Export
     public boolean structureExists(String structure) {
         Identifier id = structureId(structure);
-        return id != null && server.getStructureManager().get(id).isPresent();
+        return id != null && Platform.structureTemplates(server).get(id).isPresent();
     }
 
     /** Writes a structure the world was holding in memory out to disk, under the id it has. */
     @HostAccess.Export
     public boolean saveStructureToWorld(String structure) {
         Identifier id = structureId(structure);
-        return id != null && server.getStructureManager().save(id);
+        return id != null && Platform.structureTemplates(server).save(id);
     }
 
     /** False when the id named nothing, which is the answer Bedrock gives for a delete that missed. */
     @HostAccess.Export
     public boolean deleteStructure(String structure) {
         if (!structureExists(structure)) return false;
-        server.getStructureManager().remove(structureId(structure));
+        Platform.structureTemplates(server).remove(structureId(structure));
         return true;
     }
 

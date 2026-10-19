@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.script.surface;
 
+import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.script.ScriptCoverage;
@@ -21,6 +22,9 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
 import net.minecraft.world.level.block.entity.SignText;
+//? if >=26.3 {
+/*import net.minecraft.world.level.block.entity.SignTextSlot;
+*///?}
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
 import net.minecraft.world.level.block.piston.PistonMovingBlockEntity;
 import net.minecraft.world.level.block.piston.PistonStructureResolver;
@@ -182,7 +186,7 @@ public final class Blocks extends Surface {
     @HostAccess.Export
     public boolean destroyedByLiquid(String typeId, String statesJson) {
         BlockState state = permutation(typeId, statesJson);
-        return state != null && !state.isAir() && !state.blocksMotion()
+        return state != null && !state.isAir() && !Platform.blocksMotion(state)
             && !state.hasProperty(BlockStateProperties.WATERLOGGED);
     }
 
@@ -190,7 +194,7 @@ public final class Blocks extends Surface {
     @HostAccess.Export
     public boolean isLiquidBlocking(String typeId, String statesJson) {
         BlockState state = permutation(typeId, statesJson);
-        return state != null && state.blocksMotion()
+        return state != null && Platform.blocksMotion(state)
             && !state.hasProperty(BlockStateProperties.WATERLOGGED);
     }
 
@@ -252,12 +256,11 @@ public final class Blocks extends Surface {
     public String movement(String dimension, int x, int y, int z) {
         BlockState state = stateAt(dimension, x, y, z);
         JsonObject component = new JsonObject();
-        component.addProperty("movementType", switch (state.getPistonPushReaction()) {
-            case NORMAL -> "PushPull";
-            case DESTROY -> "Popped";
-            case PUSH_ONLY -> "Push";
-            default -> "Immovable";
-        });
+        net.minecraft.world.level.material.PushReaction reaction = state.getPistonPushReaction();
+        component.addProperty("movementType", reaction == Platform.PUSH_PULL ? "PushPull"
+            : reaction == Platform.POPPED ? "Popped"
+            : reaction == Platform.PUSH_ONLY ? "Push"
+            : "Immovable");
         component.addProperty("stickyType", sticky(state.getBlock()) ? "Same" : "None");
         return component.toString();
     }
@@ -270,8 +273,13 @@ public final class Blocks extends Surface {
 
         JsonObject component = new JsonObject();
         component.addProperty("isWaxed", sign.isWaxed());
+        //? if >=26.3 {
+        /*component.add("front", signSide(sign.getText(SignTextSlot.FRONT)));
+        component.add("back", signSide(sign.getText(SignTextSlot.BACK)));
+        *///?} else {
         component.add("front", signSide(sign.getFrontText()));
         component.add("back", signSide(sign.getBackText()));
+        //?}
         return component.toString();
     }
 
@@ -285,7 +293,11 @@ public final class Blocks extends Surface {
         }
 
         String[] lines = (text == null ? "" : text).split("\n", -1);
+        //? if >=26.3 {
+        /*sign.updateText(existing -> written(existing, lines), front ? SignTextSlot.FRONT : SignTextSlot.BACK);
+        *///?} else {
         sign.updateText(existing -> written(existing, lines), front);
+        //?}
     }
 
     @HostAccess.Export
@@ -294,7 +306,11 @@ public final class Blocks extends Surface {
         if (sign == null) return;
 
         DyeColor dye = javaDye(colour);
+        //? if >=26.3 {
+        /*sign.updateText(text -> text.withColor(dye), front ? SignTextSlot.FRONT : SignTextSlot.BACK);
+        *///?} else {
         sign.updateText(text -> text.setColor(dye), front);
+        //?}
     }
 
     @HostAccess.Export
@@ -580,18 +596,30 @@ public final class Blocks extends Surface {
 
     /** A side's four lines as one string, with the empty ones at the end left off. */
     private static String lines(SignText text) {
+        //? if >=26.3 {
+        /*return text.getMessages(false).stream()
+        *///?} else {
         return Arrays.stream(text.getMessages(false))
+        //?}
             .map(Component::getString)
             .collect(Collectors.joining("\n"))
             .stripTrailing();
     }
 
     private static SignText written(SignText text, String[] lines) {
+        //? if >=26.3 {
+        /*SignText.Mutable written = text.asMutable();
+        for (int i = 0; i < SignText.LINES; i++) {
+            written.setLine(i, Component.literal(i < lines.length ? lines[i] : ""));
+        }
+        return written.asImmutable();
+        *///?} else {
         SignText written = text;
         for (int i = 0; i < SignText.LINES; i++) {
             written = written.setMessage(i, Component.literal(i < lines.length ? lines[i] : ""));
         }
         return written;
+        //?}
     }
 
     /** Bedrock's spelling of a dye colour, whose names run together and call light grey `Silver`. */

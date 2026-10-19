@@ -2,7 +2,28 @@ package at.ioexception.mcaddon.client.render;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.grading.GradeUniforms;
+import at.ioexception.mcaddon.platform.Platform;
 import com.mojang.blaze3d.pipeline.RenderTarget;
+//? if >=26.3 {
+/*import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.commands.RenderPass;
+import com.mojang.renderpearl.api.device.GpuDevice;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.GpuTexture;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
+*///?} elif >=26 {
+import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.systems.CommandEncoder;
+import com.mojang.blaze3d.systems.GpuDevice;
+import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.blaze3d.textures.FilterMode;
+import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.blaze3d.textures.GpuTextureView;
+//?}
+import com.mojang.blaze3d.systems.RenderSystem;
 import org.lwjgl.system.MemoryStack;
 
 /**
@@ -19,24 +40,31 @@ public final class GradePass {
     }
 
     //? if >=26 {
-    private static com.mojang.blaze3d.pipeline.RenderPipeline pipeline;
+    private static RenderPipeline pipeline;
 
-    private static com.mojang.blaze3d.buffers.GpuBuffer uniforms;
-    private static com.mojang.blaze3d.textures.GpuTexture copy;
-    private static com.mojang.blaze3d.textures.GpuTextureView copyView;
+    private static GpuBuffer uniforms;
+    private static GpuTexture copy;
+    private static GpuTextureView copyView;
 
-    /** Adds the pass's pipeline to the game's own, which the shader manager compiles as resources load. */
+    /**
+     * Builds the pass's pipeline. Before 26.3 it joins the game's own list, which the shader manager
+     * compiles as resources load; from 26.3 the game compiles a pipeline the first time it is used.
+     */
     public static void register() {
-        pipeline = net.minecraft.client.renderer.RenderPipelines.register(at.ioexception.mcaddon.platform.Platform
-            .screenPipeline(McAddon.id("pipeline/colour_grade"), McAddon.id("post/colour_grade"), "InSampler",
-                "ColourGrade"));
+        RenderPipeline built = Platform.screenPipeline(McAddon.id("pipeline/colour_grade"),
+            McAddon.id("post/colour_grade"), "InSampler", "ColourGrade");
+        //? if >=26.3 {
+        /*pipeline = built;
+        *///?} else {
+        pipeline = net.minecraft.client.renderer.RenderPipelines.register(built);
+        //?}
     }
 
     public static void draw(RenderTarget target, GradeUniforms grade) {
         if (grade.leavesFrameAlone()) return;
 
-        com.mojang.blaze3d.systems.GpuDevice device = com.mojang.blaze3d.systems.RenderSystem.getDevice();
-        com.mojang.blaze3d.textures.GpuTexture colour = target.getColorTexture();
+        GpuDevice device = RenderSystem.getDevice();
+        GpuTexture colour = target.getColorTexture();
         int width = colour.getWidth(0);
         int height = colour.getHeight(0);
         if (copy == null || copy.getWidth(0) != width || copy.getHeight(0) != height) {
@@ -44,28 +72,33 @@ public final class GradePass {
                 copyView.close();
                 copy.close();
             }
-            copy = device.createTexture(() -> LABEL, com.mojang.blaze3d.textures.GpuTexture.USAGE_COPY_DST
-                    | com.mojang.blaze3d.textures.GpuTexture.USAGE_TEXTURE_BINDING,
+            copy = device.createTexture(() -> LABEL, GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_TEXTURE_BINDING,
                 colour.getFormat(), width, height, 1, 1);
             copyView = device.createTextureView(copy);
         }
         if (uniforms == null) {
-            uniforms = device.createBuffer(() -> LABEL, com.mojang.blaze3d.buffers.GpuBuffer.USAGE_UNIFORM
-                | com.mojang.blaze3d.buffers.GpuBuffer.USAGE_COPY_DST, GradeUniforms.BYTES);
+            uniforms = device.createBuffer(() -> LABEL, GpuBuffer.USAGE_UNIFORM | GpuBuffer.USAGE_COPY_DST,
+                GradeUniforms.BYTES);
         }
 
-        com.mojang.blaze3d.systems.CommandEncoder encoder = device.createCommandEncoder();
+        CommandEncoder encoder = device.createCommandEncoder();
         try (MemoryStack stack = MemoryStack.stackPush()) {
             encoder.writeToBuffer(uniforms.slice(), grade.write(stack.malloc(GradeUniforms.BYTES)));
         }
         encoder.copyTextureToTexture(colour, copy, 0, 0, 0, 0, 0, width, height);
-        try (com.mojang.blaze3d.systems.RenderPass pass = at.ioexception.mcaddon.platform.Platform.screenPass(
-            encoder, () -> LABEL, target.getColorTextureView())) {
+        try (RenderPass pass = Platform.screenPass(encoder, () -> LABEL, target.getColorTextureView())) {
+            //? if >=26.3 {
+            /*pass.setPipeline(RenderSystem.getCompiledPipeline(pipeline));
+            *///?} else {
             pass.setPipeline(pipeline);
+            //?}
             pass.setUniform("ColourGrade", uniforms);
-            pass.bindTexture("InSampler", copyView, com.mojang.blaze3d.systems.RenderSystem.getSamplerCache()
-                .getClampToEdge(com.mojang.blaze3d.textures.FilterMode.NEAREST));
-            at.ioexception.mcaddon.platform.Platform.drawScreenTriangle(pass);
+            //? if >=26.3 {
+            /*pass.setUniform("InSampler", copyView, RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
+            *///?} else {
+            pass.bindTexture("InSampler", copyView, RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
+            //?}
+            Platform.drawScreenTriangle(pass);
         }
     }
     //?} else {
