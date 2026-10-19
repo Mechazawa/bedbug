@@ -15,10 +15,12 @@
       "animations": {
         "lean": "animation.tp.gaze.lean",
         "stir": "animation.tp.gaze.stir",
+        "stride": "animation.tp.gaze.stride",
         "wake": "controller.animation.tp.gaze.wake"
       },
       "scripts": {
-        "animate": ["lean", "wake"]
+        "pre_animation": ["v.ground_speed = q.ground_speed;"],
+        "animate": ["lean", "wake", {"stride": "q.modified_move_speed"}]
       },
       "render_controllers": ["controller.render.tp.sprite"]
     }

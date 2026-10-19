@@ -363,16 +363,19 @@ public final class EntityQueries implements MolangEnvironment.Queries {
             case "rider_head_x_rotation" -> MolangValue.of(headPitch(rider(arguments)));
             case "rider_head_y_rotation" -> MolangValue.of(headYaw(rider(arguments)));
 
-            case "ground_speed" -> MolangValue.of(horizontalSpeed());
+            // The speed queries read how far the entity went in its last tick, because a client is
+            // sent no velocity for an entity the server only teleports, which is how a pack walks a
+            // model it draws over a vanilla mob. Bedrock states both speeds in blocks a second.
+            case "ground_speed" -> MolangValue.of(moved().horizontalDistance() * 20);
             // `minecraft:walk_animation_speed` is a pack scaling how fast its own walk runs, and
             // this is the number that walk is played against.
-            case "modified_move_speed" -> MolangValue.of(Math.min(1, horizontalSpeed() / 0.22
+            case "modified_move_speed" -> MolangValue.of(Math.min(1, moved().horizontalDistance() / 0.22
                 * (properties.containsKey("walk_animation_speed")
                     ? number(properties.get("walk_animation_speed")) : 1)));
-            case "vertical_speed" -> MolangValue.of(entity.getDeltaMovement().y * 20);
+            case "vertical_speed" -> MolangValue.of(moved().y * 20);
             case "position" -> MolangValue.of(axis(entity.position(), arguments));
-            case "position_delta" -> MolangValue.of(axis(entity.getDeltaMovement(), arguments));
-            case "movement_direction" -> MolangValue.of(axis(entity.getDeltaMovement().normalize(), arguments));
+            case "position_delta" -> MolangValue.of(axis(moved(), arguments));
+            case "movement_direction" -> MolangValue.of(axis(moved().normalize(), arguments));
             case "walk_distance" -> MolangValue.of(walkedDistance());
 
             case "cardinal_facing" -> MolangValue.of(cardinalFacing(entity.getYRot(), entity.getXRot()));
@@ -1534,9 +1537,8 @@ public final class EntityQueries implements MolangEnvironment.Queries {
         return entity.getCustomName() == null ? "" : entity.getCustomName().getString();
     }
 
-    private double horizontalSpeed() {
-        Vec3 movement = entity.getDeltaMovement();
-        return Math.sqrt(movement.x * movement.x + movement.z * movement.z);
+    private Vec3 moved() {
+        return entity.position().subtract(entity.xOld, entity.yOld, entity.zOld);
     }
 
     private double distanceFromCamera() {
