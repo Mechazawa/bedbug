@@ -1,0 +1,20 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:attachable": {
+    "description": {
+      "identifier": "tp:baton",
+      "materials": {
+        "default": "entity_alphatest"
+      },
+      "textures": {
+        "default": "textures/entity/sprite"
+      },
+      "geometry": {
+        "default": "geometry.tp.baton"
+      },
+      "render_controllers": [
+        "controller.render.tp.visor"
+      ]
+    }
+  }
+}

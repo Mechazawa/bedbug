@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.client.render;
 
 import at.ioexception.mcaddon.bedrock.animation.BonePose;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.model.geom.ModelPart;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
@@ -52,6 +53,14 @@ final class JavaModelParts {
         Map.entry("frontlegl", List.of("left_front_leg")),
         Map.entry("helmet", List.of("hat")),
         Map.entry("brim", List.of("hat_rim")));
+
+    /** An item bone Bedrock hangs under an arm, in Java's axes from the arm's pivot, in pixels. */
+    private record ItemBone(String arm, Vector3f offset) {
+    }
+
+    private static final Map<String, ItemBone> ITEM_BONES = Map.of(
+        "rightitem", new ItemBone("right_arm", new Vector3f(-1, 7, 1)),
+        "leftitem", new ItemBone("left_arm", new Vector3f(1, 7, 1)));
 
     /** The bone many Bedrock models hang everything else off, which is the Java model's root. */
     private static final String ROOT = "root";
@@ -121,6 +130,25 @@ final class JavaModelParts {
             if (part != null) return part;
         }
         return ROOT.equalsIgnoreCase(bone) ? root : null;
+    }
+
+    /**
+     * The frame of the part answering to a bone, as the model is posed now, in the model's own
+     * space. Null when the model has no such part.
+     *
+     * Java's models carry no item bones, so `rightItem` and `leftItem` are found where Mojang's
+     * humanoid geometry puts them under its arms: seven pixels down the arm, one back and one
+     * outward.
+     */
+    Matrix4f anchorOf(String bone) {
+        ItemBone item = ITEM_BONES.get(bone.toLowerCase(Locale.ROOT));
+        ModelPart part = part(item == null ? bone : item.arm());
+        if (part == null) return null;
+
+        PoseStack poseStack = new PoseStack();
+        pathTo(root, part).forEach(each -> each.translateAndRotate(poseStack));
+        if (item != null) poseStack.translate(item.offset().x / 16, item.offset().y / 16, item.offset().z / 16);
+        return new Matrix4f(poseStack.last().pose());
     }
 
     /**

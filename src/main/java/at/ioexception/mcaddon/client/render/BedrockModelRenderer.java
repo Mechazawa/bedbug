@@ -162,19 +162,6 @@ public final class BedrockModelRenderer {
         return found;
     }
 
-    /**
-     * The space a model bound to that bone is drawn in.
-     *
-     * A bound bone's own pivot stops being a place in the wearer's model and becomes the point its
-     * animation turns it about, so the pivot is taken back out and the boxes, which are already
-     * stated relative to it, land on the bone. Mojang's own trident settles it: its bone pivots at
-     * 24 pixels with boxes running from 27 below that point to 4 above, which is a pole held at the
-     * grip rather than one standing over a mob's head.
-     */
-    public static Matrix4f hangFrom(Matrix4f anchor, Vector3f pivot) {
-        return new Matrix4f(anchor).translate(-pivot.x * PIXEL, -pivot.y * PIXEL, -pivot.z * PIXEL);
-    }
-
     private static Matrix4f searchBone(BakedBone bone, Quaternionf parentTurn, EntityAnimator animator,
         String name, PoseStack poseStack) {
         poseStack.pushPose();
