@@ -9,6 +9,7 @@ import at.ioexception.mcaddon.structure.McStructure;
 import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.registry.AddonItems;
+import at.ioexception.mcaddon.script.surface.Admin;
 import at.ioexception.mcaddon.script.surface.Blocks;
 import at.ioexception.mcaddon.script.surface.Containers;
 import at.ioexception.mcaddon.script.surface.EntityMembers;
@@ -122,7 +123,11 @@ public final class ScriptBridge {
     @HostAccess.Export
     public final TickingAreas tickingAreas;
 
-    ScriptBridge(MinecraftServer server, AddonState state, ScriptCoverage coverage, String namespace) {
+    @HostAccess.Export
+    public final Admin admin;
+
+    ScriptBridge(MinecraftServer server, AddonState state, ScriptCoverage coverage, ScriptConfig config,
+        String namespace) {
         this.server = server;
         this.state = state;
         this.coverage = coverage;
@@ -136,6 +141,7 @@ public final class ScriptBridge {
         this.worlds = new Worlds(server, coverage);
         this.gametests = new GameTests(server, coverage);
         this.tickingAreas = new TickingAreas(server, coverage);
+        this.admin = new Admin(server, coverage, config);
     }
 
     void beginTick(long budgetNanos) {

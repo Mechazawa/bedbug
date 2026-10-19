@@ -413,6 +413,14 @@ Against a server without this mod a client plays with its own add-ons.
   Java packets carrying the same message, so `9` limits chat and `77` commands; an id no Java client
   sends, such as a skin upload, is named in the log. `/bedrock reloadpacketlimitconfig` reads the file
   again for every connected player.
+- A dedicated server's script configuration, read through `@minecraft/server-admin`. Put
+  `variables.json`, `secrets.json` and `permissions.json` in `config/default/` for every pack, or in
+  `config/<script module uuid>/` for one, whose keys win over the default's. A script reads a
+  variable's value and a secret's name only, and a pack depending on a beta script API its
+  `allowed_modules` leaves out does not load its script. `/bedrock reloadconfig`, typed by an
+  operator or the console, reads the files again for the running scripts. `opPlayer` and
+  `deopPlayer` change Java's operator list; the allow list, level storage, kicks, transfers and the
+  join event are reported as not implemented.
 - `/bedrock music`, which plays a track to everyone as music rather than as a sound somewhere in the
   world: in the music category, with the game's own background music waiting until it is over,
   faded in and out over the seconds the line gives, looped when asked, turned up or down while it
@@ -879,12 +887,12 @@ description with its own scattering coefficients. `/fog` carries the `air` block
 pack pushes a fog for; Java draws its own fog for the other media and has no volumetric fog to give
 the second block to.
 
-**Ten of Bedrock's commands.** `aimassist` and `controlscheme` change how a Bedrock client turns
+**Nine of Bedrock's commands.** `aimassist` and `controlscheme` change how a Bedrock client turns
 a controller or a touchscreen into aim and movement, and `project` and `editor-allowlist` belong to
 the Bedrock Editor. `connect` and `wsserver` speak to a WebSocket server, `sendshowstoreoffer` to the
 marketplace, `script` to the debugger and profiler of Bedrock's own script engine, and
-`reloadconfig` and `serveridentity` to a Bedrock server's own configuration and identity. A function using any of them keeps its other lines and the dropped
-command is reported.
+`serveridentity` to a Bedrock server's own identity. A function using any of them keeps its other
+lines and the dropped command is reported.
 
 **One form of a command the rest of which translates.** The cameras Bedrock draws behind or round an
 entity (`minecraft:follow_orbit`, `minecraft:fixed_boom` and `minecraft:control_scheme_camera`), and

@@ -885,7 +885,10 @@ These are the checks it runs, and what each one catches:
   tamed, tags whatever a player tamed, and tags a player crouching and standing up again.
   `tp:override` overrides the nearest wisp's `tp:settled` to false for the player who sent it, which
   a wisp settled a second after arriving is not, and tags that player when an override of a property
-  the wisp never declared is refused; `tp:override_clear` clears the override again.
+  the wisp never declared is refused; `tp:override_clear` clears the override again. `tp:config` tags the player with two variables and a
+  secret `config/` hands the pack, which `ScriptGameTests` writes, reads again with
+  `bedrock reloadconfig` from the console and asserts on, and `tp:operator` makes the player an
+  operator and unmakes it twice each.
 
   `cameras/presets/` holds the presets. `tp:overlook` is a free camera at 0.5 120 0.5 turned to a
   pitch of 20 and a yaw of 45 that hears from the player, and also asks for `player_effects` and
@@ -2061,7 +2064,15 @@ src/main/resources/assets/mcaddon/script/
   minecraft_vanilla_data.js  The @minecraft/vanilla-data tables, read from the registries
   minecraft_server_gametest.js  The @minecraft/server-gametest surface: registrations, the Test
                                 object, the sequence and the runner the server tick drives
+  minecraft_server_admin.js  The @minecraft/server-admin surface: `config/` variables and secrets,
+                             `dedicatedServer`, operators
 ```
+
+**Every pack's script shares one copy of each module**, so `minecraft_server_admin.js` tells which
+pack called by the first frame of the stack whose file sits under a pack's header uuid, which is
+the folder `ScriptHost.load` puts a pack's scripts in. `script.ScriptConfig` maps that header uuid
+to the script module uuid naming the pack's folder under `config/`. A game test server answers
+`isDedicatedServer()` with true, so `dedicatedServer` is decided by the server's class instead.
 
 `ScriptHost.MODULES` maps an import specifier to one of these files. A module is linked before any
 of it runs, so a specifier a pack imports that is not in that map, or a named export missing from

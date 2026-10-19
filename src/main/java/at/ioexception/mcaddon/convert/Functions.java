@@ -69,7 +69,7 @@ public final class Functions {
         "playanimation", "event", "scriptevent", "music", "toggledownfall", "structure", "mobevent",
         "particle", "gametest", "dialogue", "transfer", "camera", "camerashake", "fog",
         "clearspawnpoint", "hud", "inputpermission", "ride", "summon", "tickingarea", "packstack",
-        "setmaxplayers", "permission", "ops", "changesetting", "reloadpacketlimitconfig");
+        "setmaxplayers", "permission", "ops", "changesetting", "reloadpacketlimitconfig", "reloadconfig");
 
     /**
      * The registered commands whose Bedrock line the command built here reads as it stands.
@@ -79,7 +79,7 @@ public final class Functions {
      */
     static final Set<String> REGISTERED_WHOLE_LINE = Set.of("playanimation", "event",
         "toggledownfall", "transfer", "camerashake", "fog", "clearspawnpoint", "inputpermission",
-        "tickingarea", "packstack", "setmaxplayers", "music", "reloadpacketlimitconfig");
+        "tickingarea", "packstack", "setmaxplayers", "music", "reloadpacketlimitconfig", "reloadconfig");
 
     /**
      * Commands Bedrock has and Java has no counterpart for.
@@ -88,14 +88,12 @@ public final class Functions {
      * which a Java client has no setting for. `editor-allowlist` and `project` belong to Bedrock's
      * editor and `sendshowstoreoffer` to its marketplace, and Java has neither. `connect` and
      * `wsserver` open a WebSocket to a tool such as Code Builder, a protocol Java has no part of.
-     * `reloadconfig` reads again files only a Bedrock dedicated server has: the permissions, the
-     * script variables and secrets. `script` drives
-     * the debugger, profiler and watchdog of Bedrock's own script engine through the protocol
+     * `script` drives the debugger, profiler and watchdog of Bedrock's own script engine through the protocol
      * Bedrock's tools speak. `serveridentity` saves, deletes and reports the key a Bedrock dedicated
      * server identifies itself to its services with, and a Java server holds no such key.
      */
     private static final Set<String> BEDROCK_ONLY = Set.of(
-        "aimassist", "connect", "controlscheme", "editor-allowlist", "project", "reloadconfig",
+        "aimassist", "connect", "controlscheme", "editor-allowlist", "project",
         "script", "sendshowstoreoffer", "serveridentity", "wsserver");
 
     /**

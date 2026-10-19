@@ -3,6 +3,7 @@ package at.ioexception.mcaddon.gametest;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -17,6 +18,10 @@ import net.minecraft.world.entity.npc.villager.VillagerProfession;
 import net.minecraft.world.entity.npc.villager.VillagerType;
 import net.minecraft.world.level.block.Blocks;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.function.Consumer;
 
 /**
@@ -40,6 +45,9 @@ public final class ScriptGameTests {
 
     /** Standing on the platform's floor. */
     private static final BlockPos ON_FLOOR = new BlockPos(1, FLOOR + 1, 1);
+
+    /** The test pack's script module, whose folder under `config/` is its own. */
+    private static final String SCRIPT_MODULE = "6d1f3b52-8c4e-4a7d-9e21-5b0c7f3a9d14";
 
     /** Long enough for a script event and the world events it raises to have been delivered. */
     private static final int DELIVERED = 3;
@@ -81,6 +89,54 @@ public final class ScriptGameTests {
             helper.assertBlockPresent(Blocks.DIRT, dirt.above(4));
             helper.assertBlockPresent(Blocks.AIR, stone);
             helper.assertBlockPresent(Blocks.AIR, dirt);
+        });
+    }
+
+    /**
+     * A script reads `config/` as `/reloadconfig` last left it: the default folder's variable, the
+     * module folder's variable over the default's, and a secret by its name alone.
+     *
+     * The greeting and the secret are new on every run, so a script still reading what it read as it
+     * started cannot name them.
+     */
+    @GameTest()
+    public void aScriptReadsTheConfigReloadconfigLastRead(GameTestHelper helper) {
+        if (ServerHooks.scripts() == null) {
+            helper.succeed();
+            return;
+        }
+
+        String greeting = "greeting" + System.nanoTime();
+        String token = "hidden" + System.nanoTime();
+        Path config = FabricLoader.getInstance().getGameDir().resolve("config");
+        write(config.resolve("default/variables.json"), "{\"tp_shared\": \"default\", \"tp_greeting\": \"default\"}");
+        write(config.resolve(SCRIPT_MODULE + "/variables.json"), "{\"tp_greeting\": \"" + greeting + "\"}");
+        write(config.resolve(SCRIPT_MODULE + "/secrets.json"), "{\"tp_token\": \"" + token + "\"}");
+        // Typed by the console: an owner's command does not read with a function's authority.
+        helper.getLevel().getServer().getCommands().performPrefixedCommand(
+            helper.getLevel().getServer().createCommandSourceStack().withSuppressedOutput(), "bedrock reloadconfig");
+
+        probe(helper, "tp:config", "", player -> {
+            expectTag(helper, player, "tp:config_default_" + greeting);
+            expectTag(helper, player, "tp:dedicated_false");
+            expectTag(helper, player, "tp:secret_tp_token_true");
+            helper.assertTrue(Platform.tagsOf(player).stream().anyMatch(tag -> tag.startsWith("tp:secret_shown_"))
+                    && Platform.tagsOf(player).stream().noneMatch(tag -> tag.contains(token)),
+                "The pack's script left " + Platform.tagsOf(player) + ", which should show the secret and not "
+                    + token + ".");
+        });
+    }
+
+    /** A script makes a player an operator and takes it away, and each second try is refused. */
+    @GameTest()
+    public void aScriptMakesAndUnmakesAnOperator(GameTestHelper helper) {
+        probe(helper, "tp:operator", "", player -> {
+            expectTag(helper, player, "tp:op_done");
+            expectTag(helper, player, "tp:op_again_PlayerAlreadyOpError");
+            expectTag(helper, player, "tp:deop_done");
+            expectTag(helper, player, "tp:deop_again_CannotDeopPlayerError");
+            helper.assertFalse(Platform.isOperator(helper.getLevel().getServer(), player),
+                "The player the script made an operator and unmade is an operator still.");
         });
     }
 
@@ -280,6 +336,15 @@ public final class ScriptGameTests {
             check.accept(player);
             helper.succeed();
         });
+    }
+
+    private static void write(Path file, String json) {
+        try {
+            Files.createDirectories(file.getParent());
+            Files.writeString(file, json);
+        } catch (IOException unwritable) {
+            throw new UncheckedIOException(unwritable);
+        }
     }
 
     private static void expectTag(GameTestHelper helper, Entity entity, String tag) {

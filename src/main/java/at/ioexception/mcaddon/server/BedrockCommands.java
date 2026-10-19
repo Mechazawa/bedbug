@@ -136,6 +136,7 @@ public final class BedrockCommands {
         Cheats.registerCommand(dispatcher);
 
         MobEvents.registerCommand(dispatcher);
+        ReloadConfig.registerCommand(dispatcher);
 
         // A pack's effects are emitters rather than single particles, which Java's own `/particle`
         // knows nothing of, so this answers for those and hands any other particle to Java's.

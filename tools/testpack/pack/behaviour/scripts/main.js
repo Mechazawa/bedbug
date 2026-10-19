@@ -30,6 +30,7 @@ import {
 } from "@minecraft/server";
 import { ActionFormData, CustomForm, ObservableBoolean, ObservableString } from "@minecraft/server-ui";
 import { register } from "@minecraft/server-gametest";
+import { dedicatedServer, deopPlayer, opPlayer, secrets, SecretString, variables } from "@minecraft/server-admin";
 
 const VILLAGER = "minecraft:villager_v2";
 
@@ -249,6 +250,32 @@ function playTheSpline(player) {
 world.afterEvents.playerInputPermissionCategoryChange.subscribe(({ player, category, enabled }) =>
     player.addTag("tp:input_" + category + "_" + enabled));
 
+// What `config/` hands this pack: two variables, one of them overridden by the module's own folder,
+// and a secret whose value has to stay out of everything the script can see.
+function readTheConfig(player) {
+    player.addTag(`tp:config_${variables.get("tp_shared")}_${variables.get("tp_greeting")}`);
+    player.addTag(`tp:dedicated_${dedicatedServer !== undefined}`);
+    const token = secrets.get("tp_token");
+    player.addTag(`tp:secret_${secrets.names.join("+")}_${token instanceof SecretString}`);
+    player.addTag(`tp:secret_shown_${JSON.stringify(token)}${String(token)}${Object.getOwnPropertyNames(token)}`);
+}
+
+// Makes the player an operator twice and takes it away twice, tagging what each answered.
+function swapOperator(player) {
+    const attempt = (name, call) => {
+        try {
+            call(player);
+            player.addTag(`tp:${name}_done`);
+        } catch (error) {
+            player.addTag(`tp:${name}_${error.constructor.name}`);
+        }
+    };
+    attempt("op", opPlayer);
+    attempt("op_again", opPlayer);
+    attempt("deop", deopPlayer);
+    attempt("deop_again", deopPlayer);
+}
+
 system.afterEvents.scriptEventReceive.subscribe(event => {
     const player = event.sourceEntity;
     if (player === undefined) return;
@@ -291,6 +318,9 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
         case "tp:hud_reset": resetTheHud(player); break;
         case "tp:override": overrideTheWisp(player, true); break;
         case "tp:override_clear": overrideTheWisp(player, false); break;
+        case "tp:config": readTheConfig(player); break;
+        case "tp:config_reload": dedicatedServer?.reloadScriptingConfig(); readTheConfig(player); break;
+        case "tp:operator": swapOperator(player); break;
         default: break;
     }
 });
