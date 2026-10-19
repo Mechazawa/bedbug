@@ -7,8 +7,10 @@ import com.mojang.brigadier.ParseResults;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.exceptions.DynamicCommandExceptionType;
 import net.minecraft.commands.CommandSource;
+import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.TextColor;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -83,7 +85,7 @@ public final class PackCommand {
      * nothing to whoever runs it.
      */
     public int run(CommandSourceStack source, CommandReport report) {
-        Heard heard = new Heard();
+        Heard heard = new Heard(false);
         Platform.ReadLine read;
         try {
             read = read(Platform.withFunctionPermission(source).withSource(heard), report);
@@ -101,6 +103,36 @@ public final class PackCommand {
         } finally {
             read.finish();
         }
+    }
+
+    /**
+     * What the line said back, run to its end as this source with the source's own authority.
+     *
+     * Nothing it says reaches the source, and nothing about it is reported, because the line is no
+     * add-on's.
+     */
+    public Said said(CommandSourceStack source) {
+        Heard heard = new Heard(true);
+        Platform.ReadLine read;
+        try {
+            read = read(source.withSource(heard), CommandReport.NONE);
+        } catch (CommandSyntaxException unreadable) {
+            return new Said(false, true, unreadable.getMessage());
+        }
+
+        try {
+            Platform.runToEnd(read.parsed(), read.line());
+            return heard.failure != null ? new Said(true, true, heard.failure)
+                : new Said(true, false, heard.success == null ? "" : heard.success);
+        } catch (CommandSyntaxException declined) {
+            return new Said(true, true, declined.getMessage());
+        } finally {
+            read.finish();
+        }
+    }
+
+    /** Whether a line was read, whether it failed, and its failure or else the last thing it said. */
+    public record Said(boolean read, boolean failed, String message) {
     }
 
     /**
@@ -142,18 +174,35 @@ public final class PackCommand {
         }
     }
 
-    /** Keeps the first failure a command reports and drops everything else it says. */
+    /**
+     * Keeps the first failure a command reports and, when asked to, the last success.
+     *
+     * Both reach a source through one method, and only a failure arrives coloured red, which is how
+     * `CommandSourceStack.sendFailure` marks it.
+     */
     private static final class Heard implements CommandSource {
+        private static final TextColor FAILURE = TextColor.fromLegacyFormat(ChatFormatting.RED);
+
+        private final boolean keepsSuccess;
         private String failure;
+        private String success;
+
+        private Heard(boolean keepsSuccess) {
+            this.keepsSuccess = keepsSuccess;
+        }
 
         @Override
         public void sendSystemMessage(Component message) {
-            if (failure == null) failure = message.getString();
+            if (keepsSuccess && !FAILURE.equals(message.getStyle().getColor())) {
+                success = message.getString();
+            } else if (failure == null) {
+                failure = message.getString();
+            }
         }
 
         @Override
         public boolean acceptsSuccess() {
-            return false;
+            return keepsSuccess;
         }
 
         @Override

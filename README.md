@@ -405,6 +405,14 @@ Against a server without this mod a client plays with its own add-ons.
   plays, and queued behind a track that plays once. A queue behind a looping track is refused, as
   in Bedrock. A track is a pack's own sound or one of the game's under its full name, or a Bedrock
   name such as `record.cat` or `cat`.
+- `/bedrock wsserver <address>` and `/bedrock connect <address>`, which connect the player's own
+  client to a WebSocket server such as Code Builder or a tool written with `mcpews` or `socket-be`,
+  for an operator. The connection lasts until the server closes it, it sends `closewebsocket`,
+  `/bedrock wsserver off` is typed or the game ends. The server's command lines run as the player and
+  are answered with Bedrock's status codes, and it may subscribe to `PlayerMessage` (chat, `/say`,
+  `/me` and `/tell`), `BlockBroken` and `BlockPlaced`; no other event is raised. A server asking for
+  encryption gets it. The setting Bedrock has to refuse unencrypted connections has no counterpart:
+  every connection is allowed.
 - Six of Bedrock's game rules Java keeps no rule for, set through `/bedrock gamerule` and a
   script's `world.gameRules`, kept beside the world and acted on by this mod. `recipesunlock` off
   stops recipes unlocking as a player collects what they take, which Java does through an
@@ -865,10 +873,9 @@ description with its own scattering coefficients. `/fog` carries the `air` block
 pack pushes a fog for; Java draws its own fog for the other media and has no volumetric fog to give
 the second block to.
 
-**Eleven of Bedrock's commands.** `aimassist` and `controlscheme` change how a Bedrock client turns
+**Nine of Bedrock's commands.** `aimassist` and `controlscheme` change how a Bedrock client turns
 a controller or a touchscreen into aim and movement, and `project` and `editor-allowlist` belong to
-the Bedrock Editor. `connect` and `wsserver` speak to a WebSocket server, `sendshowstoreoffer` to the
-marketplace, `script` to the debugger and profiler of Bedrock's own script engine, and
+the Bedrock Editor. `sendshowstoreoffer` speaks to the marketplace, `script` to the debugger and profiler of Bedrock's own script engine, and
 `reloadconfig`, `reloadpacketlimitconfig` and `serveridentity` to a Bedrock server's own
 configuration and identity. A function using any of them keeps its other lines and the dropped
 command is reported.
@@ -895,7 +902,7 @@ words at the end, and `schedule clear` is spelled alike in both.
 `playanimation`, `event`, `scriptevent`, `music`, `toggledownfall`, `structure`, `mobevent`,
 `particle`, `dialogue`, `gametest`, `transfer`, `camera`, `camerashake`, `fog`, `clearspawnpoint`,
 `hud`, `inputpermission`, `ride`, `summon`, `tickingarea`, `packstack`, `setmaxplayers`,
-`permission` and `ops` are registered by this mod in the tree a Bedrock line is read against,
+`permission`, `ops`, `wsserver` and `connect` are registered by this mod in the tree a Bedrock line is read against,
 beside Java's own commands and never in Java's tree, as are Bedrock's own forms of `place`,
 `schedule` and `gamerule`, and a line using one is written out in the form the command built there
 reads. `clearspawnpoint` takes a

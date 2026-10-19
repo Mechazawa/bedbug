@@ -276,7 +276,7 @@ public sealed interface Filter {
                 case "has_trade_supply" -> flag(entity instanceof Merchant merchant
                     && merchant.getOffers().stream().anyMatch(offer -> !offer.isOutOfStock()));
                 case "has_silk_touch" -> flag(entity instanceof LivingEntity living
-                    && Platform.enchantmentsOf(living.getMainHandItem()).contains("silk_touch"));
+                    && Platform.enchantmentsOf(living.getMainHandItem()).containsKey("silk_touch"));
                 case "has_item_with_component" -> carriesComponent(entity);
                 case "actor_has_item_with_enchantment_in_slot" -> enchantedSlot(entity);
                 case "has_ability" -> ability(entity);
@@ -481,7 +481,7 @@ public sealed interface Filter {
             if (!(entity instanceof LivingEntity living)) return false;
 
             return wanted.stream().anyMatch(
-                slot -> Platform.enchantmentsOf(living.getItemBySlot(slot)).contains(text()));
+                slot -> Platform.enchantmentsOf(living.getItemBySlot(slot)).containsKey(text()));
         }
 
         /** The player abilities Java carries; the ones only Bedrock has stay unanswered. */

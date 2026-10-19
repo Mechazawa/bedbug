@@ -64,6 +64,8 @@ public final class McAddonClient implements ClientModInitializer {
                     net.minecraft.client.Minecraft.getInstance().options.fov().get());
                 case at.ioexception.mcaddon.server.BedrockRules.KIND ->
                     at.ioexception.mcaddon.client.render.PlayerRules.accept(body);
+                case at.ioexception.mcaddon.server.WebSockets.CONNECT, at.ioexception.mcaddon.server.WebSockets.ANSWER,
+                    at.ioexception.mcaddon.server.WebSockets.EVENT -> WebSocketLink.accept(kind, body);
                 default -> {
                 }
             }
@@ -110,7 +112,10 @@ public final class McAddonClient implements ClientModInitializer {
         }));
         // Bedrock starts every connection with no camera set, and a world closed from the client is not
         // always seen as a dropped connection, so the camera is cleared again as the next one starts.
-        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> PlayerCamera.clear());
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+            PlayerCamera.clear();
+            WebSocketLink.joined();
+        });
     }
 
     /** What the drawing side registers once per object, so an object registered later is prepared too. */
