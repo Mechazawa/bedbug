@@ -58,6 +58,13 @@ public final class BedrockFunction implements LootItemFunction {
         this.bedrock = parsed == null ? new JsonObject() : parsed;
     }
 
+    /** The function a converted table writes, carrying the Bedrock object as the text the pack wrote. */
+    static JsonObject json(JsonObject bedrock) {
+        JsonObject json = JavaLoot.function(NAME);
+        json.addProperty("bedrock", bedrock.toString());
+        return json;
+    }
+
     private static MapCodec<BedrockFunction> mapCodec() {
         return RecordCodecBuilder.mapCodec(instance -> instance.group(
                 Codec.STRING.fieldOf("bedrock").forGetter(one -> one.bedrock.toString()))
