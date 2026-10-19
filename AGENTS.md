@@ -75,6 +75,30 @@ Two traps:
 Anything whose spelling differs between versions belongs in `platform/Platform.java`. A whole class
 that differs (the entity renderer, the network channels) carries two bodies instead.
 
+**A branch holding nothing but `//` comment lines loses the slashes in the other form.** Stonecutter
+reads such lines as commented code and uncomments them, which leaves bare prose for javac. Keep at
+least one line of code in every branch, or put the comment outside the branch.
+
+**Testing a version other than 26.2 means switching to it.** The unit, game and client game tests
+run for the active version only, so `./gradlew "Set active project to 26.3"`, run them, and
+`./gradlew "Reset active project"` before committing. While switched, the 26.3 branches are the live
+code and the 26.2 ones are commented, so an edit made then is written in that form.
+
+**What 26.3 moved**, each handled where it is used:
+
+- The GPU API left `com.mojang.blaze3d` for `com.mojang.renderpearl.api`, a pipeline is compiled
+  when first used rather than registered, and `PoseStack.mulPose(Quaternionf)` is `rotate`.
+- A player's swing starts on the server, so the swing event listens in the packet listener's
+  punch, use and interact handlers.
+- Brewing is a recipe type, and fuel and composting are item components naming entries the
+  converter writes.
+- A living entity's hurt cooldown is `damageCooldownTime`; `invulnerableTime` is a separate guard.
+- `blocksMotion` is the `minecraft:blocks_motion` block tag, the piston reactions carry Bedrock's
+  names, colour environment attributes are vectors and a biome's spawns are an environment attribute.
+- Cooking recipes must state their time, and `recipe_unlocked` names its recipes under `recipes`.
+- Java ships the cushions, the poplar wood, the shrubs, the shelf mushroom, the straw bed and the
+  wool and concrete slabs and stairs, so none of them is Bedrock's own on 26.3.
+
 ## Verifying a change
 
 `tools/checkall.sh` runs all of them in the order that fails fastest, which is what to reach for

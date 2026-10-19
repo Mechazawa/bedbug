@@ -3766,10 +3766,13 @@ public final class Platform {
         //?}
     }
 
-    /** The ticks left in which an entity shrugs off another blow. */
+    /**
+     * The ticks left in which an entity shrugs off another blow. From 26.3 a living entity counts
+     * these in a damage cooldown of its own, and the entity's invulnerable time is a separate guard.
+     */
     public static int invulnerableTime(Entity entity) {
         //? if >=26.3 {
-        /*return entity.getInvulnerableTime();
+        /*return entity instanceof LivingEntity living ? living.damageCooldownTime : entity.getInvulnerableTime();
         *///?} else {
         return entity.invulnerableTime;
         //?}
@@ -3777,7 +3780,8 @@ public final class Platform {
 
     public static void setInvulnerableTime(Entity entity, int ticks) {
         //? if >=26.3 {
-        /*entity.setInvulnerableTime(ticks);
+        /*if (entity instanceof LivingEntity living) living.damageCooldownTime = ticks;
+        else entity.setInvulnerableTime(ticks);
         *///?} else {
         entity.invulnerableTime = ticks;
         //?}
