@@ -297,8 +297,14 @@ public class AddonBlock extends Block {
     }
 
     @Override
+    //? if >=26.3 {
+    /*public void playerDestroy(net.minecraft.server.level.ServerLevel level,
+        net.minecraft.server.level.ServerPlayer player, BlockPos position, BlockState state,
+        BlockEntity blockEntity, ItemStack tool) {
+    *///?} else {
     public void playerDestroy(Level level, Player player, BlockPos position, BlockState state,
         BlockEntity blockEntity, ItemStack tool) {
+    //?}
         super.playerDestroy(level, player, position, state, blockEntity, tool);
         fire("minecraft:on_player_destroyed", level, position, player);
         scripted("onPlayerBreak", level, position, player);

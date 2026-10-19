@@ -22,7 +22,9 @@ import net.minecraft.network.protocol.game.ServerboundSetCommandBlockPacket;
 import net.minecraft.network.protocol.game.ServerboundSetCommandMinecartPacket;
 import net.minecraft.network.protocol.game.ServerboundSetCreativeModeSlotPacket;
 import net.minecraft.network.protocol.game.ServerboundSetStructureBlockPacket;
+//? if <26.3 {
 import net.minecraft.network.protocol.game.ServerboundSwingPacket;
+//?}
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
 import net.minecraft.network.protocol.handshake.ClientIntentionPacket;
@@ -72,7 +74,11 @@ final class BedrockPacketIds {
         /*Map.entry(34, List.of(net.minecraft.network.protocol.game.ServerboundPickItemPacket.class)),
         *///?}
         Map.entry(36, List.of(ServerboundPlayerActionPacket.class, ServerboundPlayerCommandPacket.class)),
+        //? if >=26.3 {
+        /*Map.entry(44, List.of(net.minecraft.network.protocol.game.ServerboundPunchPacket.class)),
+        *///?} else {
         Map.entry(44, List.of(ServerboundSwingPacket.class)),
+        //?}
         Map.entry(45, List.of(ServerboundClientCommandPacket.class)),
         Map.entry(47, List.of(ServerboundContainerClosePacket.class)),
         Map.entry(48, List.of(ServerboundSetCarriedItemPacket.class)),

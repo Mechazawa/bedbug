@@ -280,7 +280,7 @@ public final class BlockEvents {
     /** `swing` is the arm swing of whoever set the event off. */
     private static void swing(Entity actor) {
         if (actor instanceof net.minecraft.world.entity.LivingEntity living) {
-            living.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+            Platform.swing(living, net.minecraft.world.InteractionHand.MAIN_HAND, false);
         }
     }
 

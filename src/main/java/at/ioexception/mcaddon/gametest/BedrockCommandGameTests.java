@@ -202,7 +202,7 @@ public final class BedrockCommandGameTests {
         BedrockLines.run(helper, "structure save " + name + "_disk " + at(helper, source) + " "
             + at(helper, source.offset(2, 1, 1)) + " disk");
         MinecraftServer server = helper.getLevel().getServer();
-        StructureTemplateManager templates = server.getStructureManager();
+        StructureTemplateManager templates = Platform.structureTemplates(server);
         helper.assertFalse(Files.exists(Platform.savedStructureFile(templates, Platform.id("mystructure", name))),
             "a structure saved to memory was written to disk.");
         java.nio.file.Path disk = Platform.savedStructureFile(templates, Platform.id("mystructure", name + "_disk"));

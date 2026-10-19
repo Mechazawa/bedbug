@@ -181,6 +181,26 @@ public final class SurfaceGameTests {
     }
 
     /**
+     * What a composter makes of an item reads back out of a hundred, the way a pack states it, for
+     * an item of the game's own and for one a pack declares.
+     */
+    @GameTest()
+    public void anItemReportsItsCompostingChance(GameTestHelper helper) {
+        Items items = new Items(helper.getLevel().getServer(), new ScriptCoverage());
+        equal(helper, compostingChance(items, "minecraft:wheat_seeds"), 30, "the composting chance of seeds");
+        if (at.ioexception.mcaddon.registry.AddonItems.named("tp:berry") != null) {
+            equal(helper, compostingChance(items, "tp:berry"), 40, "the composting chance of tp:berry");
+        }
+        helper.succeed();
+    }
+
+    private static int compostingChance(Items items, String itemId) {
+        JsonObject body = Json.parse(items.describe(itemId)).getAsJsonObject();
+        return body.has("compostable")
+            ? body.getAsJsonObject("compostable").get("compostingChance").getAsInt() : 0;
+    }
+
+    /**
      * A tool wears out and a block does not, which is what a durability component is read for.
      *
      * This is the answer `ItemStack.getComponent("minecraft:durability")` is built on, so a zero

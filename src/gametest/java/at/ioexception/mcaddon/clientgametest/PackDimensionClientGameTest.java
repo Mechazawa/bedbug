@@ -128,7 +128,11 @@ public final class PackDimensionClientGameTest implements FabricClientGameTest {
         Set<String> uuids = McAddon.packs().packs().stream()
             .map(pack -> pack.manifest().uuid().toString()).collect(Collectors.toSet());
         Set<ResourceKey<? extends Registry<?>>> dynamic = Stream.concat(
+                //? if >=26.3 {
+                /*RegistryDataLoader.WORLD_REGISTRIES.stream(), RegistryDataLoader.DIMENSION_REGISTRIES.stream())
+                *///?} else {
                 RegistryDataLoader.WORLDGEN_REGISTRIES.stream(), RegistryDataLoader.DIMENSION_REGISTRIES.stream())
+                //?}
             .map(RegistryDataLoader.RegistryData::key).collect(Collectors.toSet());
         List<String> wrong = new ArrayList<>();
         List<String> named = new ArrayList<>();
@@ -139,7 +143,11 @@ public final class PackDimensionClientGameTest implements FabricClientGameTest {
         Assert.that(wrong.isEmpty(), "Expected every entry the test pack wrote to be stable and named by its"
             + " converted pack where it is named at all, and found " + wrong);
         for (ResourceKey<? extends Registry<?>> registry : List.of(Registries.BIOME, Registries.DIMENSION_TYPE,
+            //? if >=26.3 {
+            /*Registries.PLACED_FEATURE, Registries.FEATURE)) {
+            *///?} else {
             Registries.PLACED_FEATURE, Registries.CONFIGURED_FEATURE)) {
+            //?}
             Assert.that(named.contains(registry.identifier().toString()),
                 "No entry the test pack wrote into " + registry.identifier() + " carries its pack's name: " + named);
         }
