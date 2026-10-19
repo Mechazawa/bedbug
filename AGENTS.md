@@ -1,6 +1,6 @@
 # Working on this repository
 
-A Fabric mod that loads Bedrock `.mcaddon` files at runtime, built for four Minecraft versions from
+A Fabric mod that loads Bedrock `.mcaddon` files at runtime, built for five Minecraft versions from
 one source tree. Read `README.md` first for what the mod does; this file is about how to change it.
 
 ## Commands
@@ -9,7 +9,7 @@ one source tree. Read `README.md` first for what the mod does; this file is abou
 export JAVA_HOME=/opt/homebrew/opt/openjdk@25   # macOS; Gradle has to run on Java 25 or newer
 export JAVA_HOME=/usr/lib/jvm/java-27-openjdk   # the Linux equivalent; the tools read it too
 
-./gradlew build                 # all four versions, plus checkstyle and the tool parse gate
+./gradlew build                 # all five versions, plus checkstyle and the tool parse gate
 ./gradlew check                 # verification only
 ./gradlew :26.2:compileJava     # one version, for fast iteration
 ./gradlew :26.2:runGameTest     # the in-game tests, headless, part of check
@@ -75,6 +75,30 @@ Two traps:
 Anything whose spelling differs between versions belongs in `platform/Platform.java`. A whole class
 that differs (the entity renderer, the network channels) carries two bodies instead.
 
+**A branch holding nothing but `//` comment lines loses the slashes in the other form.** Stonecutter
+reads such lines as commented code and uncomments them, which leaves bare prose for javac. Keep at
+least one line of code in every branch, or put the comment outside the branch.
+
+**Testing a version other than 26.2 means switching to it.** The unit, game and client game tests
+run for the active version only, so `./gradlew "Set active project to 26.3"`, run them, and
+`./gradlew "Reset active project"` before committing. While switched, the 26.3 branches are the live
+code and the 26.2 ones are commented, so an edit made then is written in that form.
+
+**What 26.3 moved**, each handled where it is used:
+
+- The GPU API left `com.mojang.blaze3d` for `com.mojang.renderpearl.api`, a pipeline is compiled
+  when first used rather than registered, and `PoseStack.mulPose(Quaternionf)` is `rotate`.
+- A player's swing starts on the server, so the swing event listens in the packet listener's
+  punch, use and interact handlers.
+- Brewing is a recipe type, and fuel and composting are item components naming entries the
+  converter writes.
+- A living entity's hurt cooldown is `damageCooldownTime`; `invulnerableTime` is a separate guard.
+- `blocksMotion` is the `minecraft:blocks_motion` block tag, the piston reactions carry Bedrock's
+  names, colour environment attributes are vectors and a biome's spawns are an environment attribute.
+- Cooking recipes must state their time, and `recipe_unlocked` names its recipes under `recipes`.
+- Java ships the cushions, the poplar wood, the shrubs, the shelf mushroom, the straw bed and the
+  wool and concrete slabs and stairs, so none of them is Bedrock's own on 26.3.
+
 ## Verifying a change
 
 `tools/checkall.sh` runs all of them in the order that fails fastest, which is what to reach for
@@ -109,8 +133,8 @@ path. Run it while the main checkout is not building.
 
 These are the checks it runs, and what each one catches:
 
-- **`./gradlew build`** compiles all four versions and runs every test on each of them: the unit
-  tests for the checked-out form, and the game tests for all four. The game test task builds
+- **`./gradlew build`** compiles all five versions and runs every test on each of them: the unit
+  tests for the checked-out form, and the game tests for all five. The game test task builds
   `tools/testpack` into its own run directory first, so the tests that assert on a loaded add-on have
   one; with no pack each of those succeeds without asserting., which is what catches a call that exists on only
   one of them.
@@ -365,7 +389,9 @@ These are the checks it runs, and what each one catches:
   and a function using the commands and selector arguments that need translating.
 
   The hands-on client tests use a few things of their own. `tp:berry` is food eaten in 0.8 seconds,
-  half Java's default, and `tp:pebble` throws `tp:spark`. `tp:totem` is a block with a
+  half Java's default, and `tp:pebble` throws `tp:spark`. `tp:berry` also composts at a chance of
+  40, which `SurfaceGameTests` reads back, and `tp:wand` burns for five seconds, which
+  `PackGameTests` lights a furnace with. `tp:totem` is a block with a
   `minecraft:placement_direction` trait turned by a `y_rotation_offset`, a use counter driven by
   `minecraft:on_interact`, a script component (`tp:tapped`, registered by the pack's script) that
   tags whoever uses it, half-high boxes a permutation makes whole on the third use, and a loot
@@ -1466,7 +1492,7 @@ These are the checks it runs, and what each one catches:
 
   **The two remapped targets carry fewer of them.** Loom remaps a mod for 1.20.1 and 1.21.1 and
   drops the libraries that mod ships inside itself, so C2ME, Lithostitched and Terralith do not
-  start there and their properties are empty. 26.1.2 and 26.2 need no remapping and carry the
+  start there and their properties are empty. 26.1.2, 26.2 and 26.3 need no remapping and carry the
   whole set, so run `companions` against 26.2 to exercise all of them.
 
   **What the companions cost.** A 26.2 dev client loads 95 mods with the whole set and a 1.21.1 one
@@ -2182,7 +2208,10 @@ through it too.
 **What answers is the active set.** `registry.ActiveAddons` holds the installed set and the active
 one, each a `resource.AddonSet` (the packs, their conversions and their function names). The active
 set is what the pack repository is offered, what the creative tabs list, and what music, fogs,
-camera presets, dialogue scenes and, from 1.21, brewing are read from. An add-on registered and not
+camera presets, dialogue scenes and, from 1.21, brewing are read from. From 26.3 brewing, an item's
+burn time and its composting chance are files in the converted data pack (`minecraft:brewing`
+recipes and `context_int_provider` entries the item's components name), so they follow the active
+set by the pack being offered and change on the reload an activation runs. An add-on registered and not
 active is dormant: its entries stay registered with their last definitions and nothing offers it.
 Spawn rules, feature rules and the nether and end biome lists are registered once for the installed
 set, because they apply as a world loads and a world loads only with the installed set active.
@@ -2456,6 +2485,11 @@ so a new address, which a client trusts without asking.
 
 **A goal's waits are not counted in `tick()` calls.** The selector runs `canUse`, `canContinueToUse` and a running goal's `tick` only every second tick, unless the goal's `requiresUpdateEveryTick` is true. A wait a pack states in seconds is counted against `tickCount` or the game clock, or the goal asks for every tick when it also steers each one. `aGrazerEatsWhenItsTimeUntilEatIsUp` reads the first.
 
+**A Java loot table's functions and conditions are written through `JavaLoot`.** 26.3 names both
+types under `type`, holds functions under `modifier` and takes one `condition`, where older versions
+use `function`, `condition`, `functions` and `conditions`. A table holding the other version's keys
+loads with no error and with its functions and conditions dropped, so nothing else spells them.
+
 **A gap and an answer are counted apart.** A command the game read and then declined, a selector that
 matched nothing, a structure holding a chest this cannot fill: those are listed after the verdict
 line rather than among the gaps, because counting them would make a pack asking an ordinary question
@@ -2473,7 +2507,7 @@ are read by people who know nothing about how the change came about.
 settings.gradle.kts          Version list and vcsVersion
 stonecutter.gradle.kts       Controller. Its body does NOT execute.
 build.remap.gradle.kts       Obfuscated targets (1.20.1, 1.21.1) and the string replacements
-build.named.gradle.kts       26.2, which Mojang ships unobfuscated
+build.named.gradle.kts       The 26.x targets, which Mojang ships unobfuscated
 gradle/mod.gradle.kts        Shared build logic: toolchain, GraalJS bundling, checkstyle, checkTools
 config/checkstyle/           Lint rules and the Stonecutter suppressions
 

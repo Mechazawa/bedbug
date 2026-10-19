@@ -94,7 +94,12 @@ public final class PlayerGameTests {
             return;
         }
 
+        //? if >=26.3 {
+        /*net.minecraft.server.level.ServerPlayer player = (net.minecraft.server.level.ServerPlayer)
+            helper.makeMockServerPlayer(net.minecraft.world.level.GameType.SURVIVAL);
+        *///?} else {
         Player player = Platform.mockPlayer(helper);
+        //?}
         FoodData food = player.getFoodData();
         ((FoodDataAccessor) food).mcaddon$setExhaustion(0.0f);
 

@@ -26,7 +26,11 @@ class DamageCauseTest {
     static void bootstrap() {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
+        //? if >=26.3 {
+        /*registries = VanillaRegistries.createWorldLookup();
+        *///?} else {
         registries = VanillaRegistries.createLookup();
+        //?}
     }
 
     /** `ActorDamageCause` in Mojang's entity schemas. */

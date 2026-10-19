@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.platform;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.behaviour.JavaLoot;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.commands.CommandSourceStack;
@@ -380,10 +381,18 @@ public final class Platform {
         Optional<net.minecraft.world.level.levelgen.Heightmap.Types> project,
         net.minecraft.world.level.levelgen.structure.structures.JigsawStructure from, JigsawSettings settings) {
         net.minecraft.world.level.chunk.ChunkGenerator generator = level.getChunkSource().getGenerator();
+        net.minecraft.world.level.levelgen.RandomState random = level.getChunkSource().randomState();
         net.minecraft.world.level.levelgen.structure.Structure.GenerationContext context =
             new net.minecraft.world.level.levelgen.structure.Structure.GenerationContext(level.registryAccess(),
-                generator, generator.getBiomeSource(), level.getChunkSource().randomState(),
-                level.getStructureManager(), level.getSeed(),
+                //? if >=26.3 {
+                /*generator, generator.getBiomeSource(),
+                random.createClimateSampler(
+                    net.minecraft.world.level.levelgen.densityfunction.SamplerContext.EMPTY_UNCACHED),
+                random,
+                *///?} else {
+                generator, generator.getBiomeSource(), random,
+                //?}
+                structureTemplates(level.getServer()), level.getSeed(),
                 new net.minecraft.world.level.ChunkPos(start.getX() >> 4, start.getZ() >> 4), level, biome -> true);
         var fields = (at.ioexception.mcaddon.mixin.JigsawStructureAccessor) (Object) from;
         Optional<net.minecraft.world.level.levelgen.structure.Structure.GenerationStub> stub;
@@ -461,7 +470,10 @@ public final class Platform {
 
     /** Whether a bed used here blows up rather than letting anybody sleep, which 26 asks the dimension. */
     public static boolean bedExplodes(Level level, net.minecraft.core.BlockPos pos) {
-        //? if >=26 {
+        //? if >=26.3 {
+        /*return level.environmentAttributes()
+            .getValue(net.minecraft.world.attribute.EnvironmentAttributes.BED_RULE, pos).destroyOnUse();
+        *///?} elif >=26 {
         return level.environmentAttributes()
             .getValue(net.minecraft.world.attribute.EnvironmentAttributes.BED_RULE, pos).explodes();
         //?} else {
@@ -572,6 +584,18 @@ public final class Platform {
             new net.minecraft.server.packs.repository.KnownPack(McAddon.MOD_ID, knownAs, knownVersion));
         PackLocationInfo location = new PackLocationInfo(id, name, PackSource.BUILT_IN, known);
         Pack.ResourcesSupplier resources = new Pack.ResourcesSupplier() {
+            //? if >=26.3 {
+            /*@Override
+            public net.minecraft.server.packs.PackMetadataResources openMetadata(PackLocationInfo info) {
+                return new PathPackResources(info, directory);
+            }
+
+            @Override
+            public java.util.stream.Stream<PackResources> openResources(PackLocationInfo info,
+                Pack.Metadata metadata) {
+                return java.util.stream.Stream.of(new PathPackResources(info, directory));
+            }
+            *///?} else {
             @Override
             public PackResources openPrimary(PackLocationInfo info) {
                 return new PathPackResources(info, directory);
@@ -581,6 +605,7 @@ public final class Platform {
             public PackResources openFull(PackLocationInfo info, Pack.Metadata metadata) {
                 return new PathPackResources(info, directory);
             }
+            //?}
         };
         // The features a pack asks for are what the world ends up enabled for, and a world enabled
         // for anything other than the ordinary set is one the game calls experimental: every world
@@ -667,7 +692,11 @@ public final class Platform {
      */
     public static void addSpawn(net.fabricmc.fabric.api.biome.v1.BiomeModificationContext context,
         MobCategory category, EntityType<?> type, int weight, int minimum, int maximum) {
-        //? if >=26 {
+        //? if >=26.3 {
+        /*context.getMobSpawnSettings().addSpawn(category,
+            new net.minecraft.world.level.biome.MobSpawnSettings.SpawnerData(type,
+                net.minecraft.util.valueproviders.UniformInt.of(minimum, maximum)), weight);
+        *///?} elif >=26 {
         context.getMobSpawnSettings().addSpawn(category,
             new net.minecraft.world.level.biome.MobSpawnSettings.SpawnerData(type, minimum, maximum), weight);
         //?} else {
@@ -1002,6 +1031,21 @@ public final class Platform {
     }
 
     /**
+     * Whether brewing, furnace fuel and composting are written in a data pack.
+     *
+     * From 26.3 a brewing stand reads `minecraft:brewing` recipes, and an item burns or composts
+     * by a component naming a `context_int_provider` entry. Before that the game builds all three
+     * as lists in code.
+     */
+    public static boolean brewingFuelAndCompostAreData() {
+        //? if >=26.3 {
+        /*return true;
+        *///?} else {
+        return false;
+        //?}
+    }
+
+    /**
      * What a crafting grid one square wide makes out of these stacks, by the recipes the data packs
      * loaded, or an empty stack when no recipe takes them.
      *
@@ -1093,16 +1137,17 @@ public final class Platform {
      * 1.21 made enchantments data-driven and renamed the function with them, from one that meant
      * looting alone to one naming whichever enchantment it counts.
      */
-    public static void lootingCount(com.google.gson.JsonObject function,
-        com.google.gson.JsonElement count, com.google.gson.JsonElement limit) {
+    public static com.google.gson.JsonObject lootingCount(com.google.gson.JsonElement count,
+        com.google.gson.JsonElement limit) {
         //? if >=1.21 {
-        function.addProperty("function", "minecraft:enchanted_count_increase");
+        com.google.gson.JsonObject function = JavaLoot.function("minecraft:enchanted_count_increase");
         function.addProperty("enchantment", "minecraft:looting");
         //?} else {
-        /*function.addProperty("function", "minecraft:looting_enchant");
+        /*com.google.gson.JsonObject function = JavaLoot.function("minecraft:looting_enchant");
         *///?}
         function.add("count", count);
         if (limit != null) function.add("limit", limit);
+        return function;
     }
 
     /**
@@ -1126,10 +1171,9 @@ public final class Platform {
      * 1.21 replaced the looting-only condition with one naming its enchantment and stating the
      * enchanted chance as a line through the level rather than as a multiplier.
      */
-    public static void lootingChance(com.google.gson.JsonObject condition, double chance,
-        double multiplier) {
+    public static com.google.gson.JsonObject lootingChance(double chance, double multiplier) {
         //? if >=1.21 {
-        condition.addProperty("condition", "minecraft:random_chance_with_enchanted_bonus");
+        com.google.gson.JsonObject condition = JavaLoot.condition("minecraft:random_chance_with_enchanted_bonus");
         condition.addProperty("enchantment", "minecraft:looting");
         condition.addProperty("unenchanted_chance", chance);
 
@@ -1139,10 +1183,11 @@ public final class Platform {
         enchanted.addProperty("per_level_above_first", multiplier);
         condition.add("enchanted_chance", enchanted);
         //?} else {
-        /*condition.addProperty("condition", "minecraft:random_chance_with_looting");
+        /*com.google.gson.JsonObject condition = JavaLoot.condition("minecraft:random_chance_with_looting");
         condition.addProperty("chance", chance);
         condition.addProperty("looting_multiplier", multiplier);
         *///?}
+        return condition;
     }
 
     /**
@@ -1210,8 +1255,7 @@ public final class Platform {
      * 1.20.5 replaced the item's whole NBT tag with components, so what was one nested compound
      * under `Trim` became the `minecraft:trim` component set beside every other one.
      */
-    public static void armorTrim(com.google.gson.JsonObject function, String material,
-        String pattern) {
+    public static com.google.gson.JsonObject armorTrim(String material, String pattern) {
         //? if >=1.21 {
         com.google.gson.JsonObject trim = new com.google.gson.JsonObject();
         trim.addProperty("material", "minecraft:" + material);
@@ -1219,13 +1263,14 @@ public final class Platform {
 
         com.google.gson.JsonObject components = new com.google.gson.JsonObject();
         components.add("minecraft:trim", trim);
-        function.addProperty("function", "minecraft:set_components");
+        com.google.gson.JsonObject function = JavaLoot.function("minecraft:set_components");
         function.add("components", components);
         //?} else {
-        /*function.addProperty("function", "minecraft:set_nbt");
+        /*com.google.gson.JsonObject function = JavaLoot.function("minecraft:set_nbt");
         function.addProperty("tag", "{Trim:{material:\"minecraft:" + material
             + "\",pattern:\"minecraft:" + pattern + "\"}}");
         *///?}
+        return function;
     }
 
     /**
@@ -1399,7 +1444,10 @@ public final class Platform {
      */
     public static Entity lootSubject(
         net.minecraft.world.level.storage.loot.LootContext context) {
-        //? if >=26 {
+        //? if >=26.3 {
+        /*return context.getOptional(
+            net.minecraft.world.level.storage.loot.parameters.LootContextParams.THIS_ENTITY);
+        *///?} elif >=26 {
         return context.getOptionalParameter(
             net.minecraft.world.level.storage.loot.parameters.LootContextParams.THIS_ENTITY);
         //?} else {
@@ -1416,7 +1464,10 @@ public final class Platform {
      */
     public static Entity lootKiller(
         net.minecraft.world.level.storage.loot.LootContext context) {
-        //? if >=26 {
+        //? if >=26.3 {
+        /*return context.getOptional(
+            net.minecraft.world.level.storage.loot.parameters.LootContextParams.ATTACKING_ENTITY);
+        *///?} elif >=26 {
         return context.getOptionalParameter(
             net.minecraft.world.level.storage.loot.parameters.LootContextParams.ATTACKING_ENTITY);
         //?} else if >=1.21 {
@@ -1430,7 +1481,10 @@ public final class Platform {
 
     private static net.minecraft.core.BlockPos lootOrigin(
         net.minecraft.world.level.storage.loot.LootContext context) {
-        //? if >=26 {
+        //? if >=26.3 {
+        /*net.minecraft.world.phys.Vec3 origin = context.getOptional(
+            net.minecraft.world.level.storage.loot.parameters.LootContextParams.ORIGIN);
+        *///?} elif >=26 {
         net.minecraft.world.phys.Vec3 origin = context.getOptionalParameter(
             net.minecraft.world.level.storage.loot.parameters.LootContextParams.ORIGIN);
         //?} else {
@@ -2011,6 +2065,15 @@ public final class Platform {
         //?} else {
         /*return false;
         *///?}
+    }
+
+    /** Turns a pose stack. 26.3 gave the turn a name of its own. */
+    public static void rotate(com.mojang.blaze3d.vertex.PoseStack poseStack, org.joml.Quaternionf turn) {
+        //? if >=26.3 {
+        /*poseStack.rotate(turn);
+        *///?} else {
+        poseStack.mulPose(turn);
+        //?}
     }
 
     /** Multiplies a whole transform onto a pose stack. 1.21 renamed the matrix form of the call. */
@@ -2680,7 +2743,9 @@ public final class Platform {
      */
     public static boolean publishServer(net.minecraft.client.server.IntegratedServer server, int port) {
         server.setUsesAuthentication(false);
-        //? if >=26.2 {
+        //? if >=26.3 {
+        /*return server.publishServer(net.minecraft.server.MinecraftServer.MultiplayerScope.LAN, false, port);
+        *///?} elif >=26.2 {
         return server.publishServer(net.minecraft.server.MinecraftServer.MultiplayerScope.LAN,
             net.minecraft.world.level.GameType.SURVIVAL, false, port);
         //?} else {
@@ -2769,7 +2834,38 @@ public final class Platform {
         *///?}
     }
 
-    //? if >=26.2 {
+    //? if >=26.3 {
+    /*/^*
+     * A pipeline drawing one screen covering triangle from no vertices, reading one texture and one
+     * uniform block. 26.3 moved the device API into a package of its own and declares a sampler as
+     * one more uniform of its layout.
+     ^/
+    public static com.mojang.renderpearl.api.pipeline.RenderPipeline screenPipeline(Identifier location,
+        Identifier shader, String sampler, String uniformBlock) {
+        return com.mojang.renderpearl.api.pipeline.RenderPipeline.builder()
+            .withLocation(location)
+            .withVertexShader(shader)
+            .withFragmentShader(shader)
+            .withBindGroupLayout(com.mojang.renderpearl.api.pipeline.BindGroupLayout.builder()
+                .withUniform(sampler, com.mojang.renderpearl.api.pipeline.UniformType.COMBINED_IMAGE_SAMPLER)
+                .withUniform(uniformBlock, com.mojang.renderpearl.api.pipeline.UniformType.UNIFORM_BUFFER)
+                .build())
+            .withDepthStencilState(java.util.Optional.empty())
+            .withCull(false)
+            .withPrimitiveTopology(com.mojang.renderpearl.api.pipeline.PrimitiveTopology.TRIANGLES)
+            .build();
+    }
+
+    public static com.mojang.renderpearl.api.commands.RenderPass screenPass(
+        com.mojang.renderpearl.api.commands.CommandEncoder encoder, java.util.function.Supplier<String> label,
+        com.mojang.renderpearl.api.textures.GpuTextureView colour) {
+        return encoder.createRenderPass(label, colour, java.util.Optional.empty());
+    }
+
+    public static void drawScreenTriangle(com.mojang.renderpearl.api.commands.RenderPass pass) {
+        pass.draw(3, 1, 0, 0);
+    }
+    *///?} elif >=26.2 {
     /**
      * A pipeline drawing one screen covering triangle from no vertices, reading one texture and one
      * uniform block. 26.2 groups a pipeline's bindings into layouts and names its topology alone.
@@ -3189,7 +3285,10 @@ public final class Platform {
     public static boolean canBonemeal(net.minecraft.world.level.block.BonemealableBlock crop,
         ServerLevel level, net.minecraft.core.BlockPos at,
         net.minecraft.world.level.block.state.BlockState state) {
-        //? if >=1.21 {
+        //? if >=26.3 {
+        /*return crop.isValidBonemealTarget(level, at, state,
+            net.minecraft.world.level.block.BonemealSource.MOB);
+        *///?} elif >=1.21 {
         return crop.isValidBonemealTarget(level, at, state);
         //?} else {
         /*return crop.isValidBonemealTarget(level, at, state, false);
@@ -3398,6 +3497,82 @@ public final class Platform {
         //?} else {
         /*biome.add("carvers", new com.google.gson.JsonObject());
         *///?}
+    }
+
+    /**
+     * How often a converted biome's chunks are stocked with creatures as they generate, and the
+     * empty spawn lists a pack's spawn rules fill.
+     *
+     * Up to 26.2 a biome carries both as fields and the lists are required. From 26.3 they are
+     * environment attributes, and a biome without the spawn attribute spawns nothing of its own.
+     */
+    public static void biomeSpawning(com.google.gson.JsonObject biome, float creatureProbability) {
+        //? if >=26.3 {
+        /*com.google.gson.JsonObject attributes = biome.has("attributes")
+            ? biome.getAsJsonObject("attributes") : new com.google.gson.JsonObject();
+        attributes.addProperty("minecraft:gameplay/creature_world_gen_spawn_probability",
+            creatureProbability);
+        biome.add("attributes", attributes);
+        *///?} else {
+        biome.add("spawners", new com.google.gson.JsonObject());
+        biome.add("spawn_costs", new com.google.gson.JsonObject());
+        biome.addProperty("creature_spawn_probability", creatureProbability);
+        //?}
+    }
+
+    /** The data pack directory a configured feature is read from. */
+    public static String featureDirectory() {
+        //? if >=26.3 {
+        /*return "worldgen/feature";
+        *///?} else {
+        return "worldgen/configured_feature";
+        //?}
+    }
+
+    /**
+     * A configured feature as the version writes one: from 26.3 the type's own fields sit beside
+     * the type name, and before that they sit under `config`.
+     */
+    public static com.google.gson.JsonObject feature(String type, com.google.gson.JsonObject config) {
+        com.google.gson.JsonObject json = new com.google.gson.JsonObject();
+        json.addProperty("type", type);
+        //? if >=26.3 {
+        /*config.entrySet().forEach(field -> json.add(field.getKey(), field.getValue()));
+        *///?} else {
+        json.add("config", config);
+        //?}
+        return json;
+    }
+
+    /**
+     * A block state as worldgen data writes one. 26.3 renamed `Name` to `id` and `Properties` to
+     * `properties`.
+     */
+    public static com.google.gson.JsonObject blockState(String block,
+        java.util.Map<String, String> properties) {
+        com.google.gson.JsonObject state = new com.google.gson.JsonObject();
+        com.google.gson.JsonObject written = new com.google.gson.JsonObject();
+        properties.forEach(written::addProperty);
+        //? if >=26.3 {
+        /*state.addProperty("id", block);
+        if (!properties.isEmpty()) state.add("properties", written);
+        *///?} else {
+        state.addProperty("Name", block);
+        if (!properties.isEmpty()) state.add("Properties", written);
+        //?}
+        return state;
+    }
+
+    /**
+     * The type name of a block state provider, given as the part both versions share: `simple` or
+     * `weighted`. Up to 26.2 each ends in `_state_provider`.
+     */
+    public static String stateProvider(String kind) {
+        //? if >=26.3 {
+        /*return "minecraft:" + kind;
+        *///?} else {
+        return "minecraft:" + kind + "_state_provider";
+        //?}
     }
 
     /**
@@ -3637,6 +3812,129 @@ public final class Platform {
             attributes.addProperty("minecraft:visual/" + name + "_end_distance", location.end());
         }
     }
+    //?}
+
+    /** Grows a crop the way a mob's bone meal does. 26.3 names who is applying it. */
+    public static void bonemeal(net.minecraft.world.level.block.BonemealableBlock crop, ServerLevel level,
+        net.minecraft.util.RandomSource random, net.minecraft.core.BlockPos at,
+        net.minecraft.world.level.block.state.BlockState state) {
+        //? if >=26.3 {
+        /*crop.performBonemeal(level, random, at, state, net.minecraft.world.level.block.BonemealSource.MOB);
+        *///?} else {
+        crop.performBonemeal(level, random, at, state);
+        //?}
+    }
+
+    /** The structure templates a server saves and loads by name. */
+    public static net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager
+        structureTemplates(net.minecraft.server.MinecraftServer server) {
+        //? if >=26.3 {
+        /*return server.getStructureTemplateManager();
+        *///?} else {
+        return server.getStructureManager();
+        //?}
+    }
+
+    /** Sends an entity's new velocity to its watchers on the next tick, which a push set from outside needs. */
+    public static void syncVelocity(Entity entity) {
+        //? if >=26.3 {
+        /*entity.syncVelocity = true;
+        *///?} else {
+        entity.hurtMarked = true;
+        //?}
+    }
+
+    /**
+     * The ticks left in which an entity shrugs off another blow. From 26.3 a living entity counts
+     * these in a damage cooldown of its own, and the entity's invulnerable time is a separate guard.
+     */
+    public static int invulnerableTime(Entity entity) {
+        //? if >=26.3 {
+        /*return entity instanceof LivingEntity living ? living.damageCooldownTime : entity.getInvulnerableTime();
+        *///?} else {
+        return entity.invulnerableTime;
+        //?}
+    }
+
+    public static void setInvulnerableTime(Entity entity, int ticks) {
+        //? if >=26.3 {
+        /*if (entity instanceof LivingEntity living) living.damageCooldownTime = ticks;
+        else entity.setInvulnerableTime(ticks);
+        *///?} else {
+        entity.invulnerableTime = ticks;
+        //?}
+    }
+
+    /**
+     * Swings an entity's arm and shows the swing to whoever watches it.
+     *
+     * From 26.3 a swing carries the animation of the item in that hand, the attack one for a blow and
+     * the interaction one otherwise.
+     */
+    public static void swing(LivingEntity entity, net.minecraft.world.InteractionHand hand, boolean attack) {
+        //? if >=26.3 {
+        /*net.minecraft.world.item.ItemStack held = entity.getItemInHand(hand);
+        entity.swing(hand, attack ? held.getAttackAnimation() : held.getInteractAnimation(), false);
+        *///?} else {
+        entity.swing(hand);
+        //?}
+    }
+
+    public static boolean isSwinging(LivingEntity entity) {
+        //? if >=26.3 {
+        /*return entity.isSwinging();
+        *///?} else {
+        return entity.swinging;
+        //?}
+    }
+
+    /**
+     * Whether a block stops an entity moving through it.
+     *
+     * 26.3 answers this from the `blocks_motion` block tag; before it from the block being solid,
+     * cobwebs and bamboo shoots aside.
+     */
+    public static boolean blocksMotion(net.minecraft.world.level.block.state.BlockState state) {
+        //? if >=26.3 {
+        /*return state.is(net.minecraft.tags.BlockTags.BLOCKS_MOTION);
+        *///?} else {
+        return state.blocksMotion();
+        //?}
+    }
+
+    /** The blocks of a box, nearest first by Manhattan distance, out to the sum of the three sizes. */
+    public static Iterable<net.minecraft.core.BlockPos> withinManhattan(net.minecraft.core.BlockPos centre,
+        int x, int y, int z) {
+        //? if >=26.3 {
+        /*return net.minecraft.core.BlockPos.withinBoxByManhattanDistance(centre, x, y, z);
+        *///?} else {
+        return net.minecraft.core.BlockPos.withinManhattan(centre, x, y, z);
+        //?}
+    }
+
+    /** Java's piston reactions, which 26.3 renamed after Bedrock's own. */
+    //? if >=26.3 {
+    /*public static final net.minecraft.world.level.material.PushReaction PUSH_PULL =
+        net.minecraft.world.level.material.PushReaction.PUSH_PULL;
+    public static final net.minecraft.world.level.material.PushReaction PUSH_ONLY =
+        net.minecraft.world.level.material.PushReaction.PUSH;
+    public static final net.minecraft.world.level.material.PushReaction POPPED =
+        net.minecraft.world.level.material.PushReaction.POPPED;
+    public static final net.minecraft.world.level.material.PushReaction IMMOVABLE =
+        net.minecraft.world.level.material.PushReaction.IMMOVEABLE;
+    public static final net.minecraft.world.level.material.PushReaction IGNORED =
+        net.minecraft.world.level.material.PushReaction.IGNORE_ENTITY;
+    *///?} else {
+    public static final net.minecraft.world.level.material.PushReaction PUSH_PULL =
+        net.minecraft.world.level.material.PushReaction.NORMAL;
+    public static final net.minecraft.world.level.material.PushReaction PUSH_ONLY =
+        net.minecraft.world.level.material.PushReaction.PUSH_ONLY;
+    public static final net.minecraft.world.level.material.PushReaction POPPED =
+        net.minecraft.world.level.material.PushReaction.DESTROY;
+    public static final net.minecraft.world.level.material.PushReaction IMMOVABLE =
+        net.minecraft.world.level.material.PushReaction.BLOCK;
+    public static final net.minecraft.world.level.material.PushReaction IGNORED =
+        net.minecraft.world.level.material.PushReaction.IGNORE;
     //?}
 
 }

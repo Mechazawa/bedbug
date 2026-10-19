@@ -30,14 +30,26 @@ import java.util.Map;
  */
 public record LootTableDefinition(String path, JsonObject java) {
 
-    /** The Java structure tag each Bedrock explorer map destination points at, named without a `#`. */
+    /**
+     * The Java structure tag each Bedrock explorer map destination points at, named without a `#`.
+     *
+     * 26.3 names five of the tags after the structure they hold rather than after the map.
+     */
     private static final Map<String, String> MAP_DESTINATIONS = Map.ofEntries(
         Map.entry("buriedtreasure", "minecraft:on_treasure_maps"),
+        //? if >=26.3 {
+        /*Map.entry("mansion", "minecraft:on_woodland_mansion_maps"),
+        Map.entry("monument", "minecraft:on_ocean_monument_maps"),
+        Map.entry("jungle_temple", "minecraft:on_jungle_pyramid_maps"),
+        Map.entry("swamp_hut", "minecraft:on_swamp_hut_maps"),
+        Map.entry("trial_chambers", "minecraft:on_buried_trial_chambers_maps"),
+        *///?} else {
         Map.entry("mansion", "minecraft:on_woodland_explorer_maps"),
         Map.entry("monument", "minecraft:on_ocean_explorer_maps"),
         Map.entry("jungle_temple", "minecraft:on_jungle_explorer_maps"),
         Map.entry("swamp_hut", "minecraft:on_swamp_explorer_maps"),
         Map.entry("trial_chambers", "minecraft:on_trial_chambers_maps"),
+        //?}
         Map.entry("village_desert", "minecraft:on_desert_village_maps"),
         Map.entry("village_plains", "minecraft:on_plains_village_maps"),
         Map.entry("village_savanna", "minecraft:on_savanna_village_maps"),
@@ -113,8 +125,7 @@ public record LootTableDefinition(String path, JsonObject java) {
         }
         pool.add("entries", entries);
 
-        JsonArray conditions = conditions(bedrock);
-        if (!conditions.isEmpty()) pool.add("conditions", conditions);
+        JavaLoot.conditions(pool, conditions(bedrock));
 
         // A tier picks entries by an item's own rarity, which a Java pool has no field for.
         if (bedrock.has("tiers")) AddonEntities.unsupported("loot pool tiers");
@@ -154,10 +165,8 @@ public record LootTableDefinition(String path, JsonObject java) {
             JsonObject function = function(element.getAsJsonObject(), name);
             if (function != null) functions.add(function);
         }
-        if (!functions.isEmpty()) entry.add("functions", functions);
-
-        JsonArray conditions = conditions(bedrock);
-        if (!conditions.isEmpty()) entry.add("conditions", conditions);
+        JavaLoot.functions(entry, functions);
+        JavaLoot.conditions(entry, conditions(bedrock));
         return entry;
     }
 
@@ -169,49 +178,54 @@ public record LootTableDefinition(String path, JsonObject java) {
      */
     private static JsonObject function(JsonObject bedrock, String item) {
         String name = bare(Json.text(bedrock, "function", ""));
-        JsonObject function = new JsonObject();
+        JsonObject function;
 
         switch (name) {
             case "set_count" -> {
-                function.addProperty("function", "minecraft:set_count");
+                function = JavaLoot.function("minecraft:set_count");
                 function.add("count", range(bedrock.get("count")));
                 if (bedrock.has("add")) function.add("add", bedrock.get("add"));
             }
             case "set_damage" -> {
-                function.addProperty("function", "minecraft:set_damage");
+                function = JavaLoot.function("minecraft:set_damage");
                 function.add("damage", range(bedrock.get("damage")));
                 if (bedrock.has("add")) function.add("add", bedrock.get("add"));
             }
-            case "enchant_randomly" -> function.addProperty("function", "minecraft:enchant_randomly");
-            case "furnace_smelt" -> function.addProperty("function", "minecraft:furnace_smelt");
-            case "explosion_decay" -> function.addProperty("function", "minecraft:explosion_decay");
+            case "enchant_randomly" -> function = JavaLoot.function("minecraft:enchant_randomly");
+            case "furnace_smelt" -> function = JavaLoot.function("minecraft:furnace_smelt");
+            case "explosion_decay" -> function = JavaLoot.function("minecraft:explosion_decay");
             case "looting_enchant" ->
-                Platform.lootingCount(function, range(bedrock.get("count")), bedrock.get("limit"));
+                function = Platform.lootingCount(range(bedrock.get("count")), bedrock.get("limit"));
             case "enchant_with_levels" -> {
-                function.addProperty("function", "minecraft:enchant_with_levels");
+                function = JavaLoot.function("minecraft:enchant_with_levels");
                 function.add("levels", range(bedrock.get("levels")));
                 Platform.enchantmentChoice(function, Json.bool(bedrock, "treasure", false));
             }
             case "set_potion" -> {
-                function.addProperty("function", "minecraft:set_potion");
+                function = JavaLoot.function("minecraft:set_potion");
                 function.addProperty("id", namespaced(Json.text(bedrock, "id", "water")));
             }
             case "specific_enchants" -> {
-                function.addProperty("function", "minecraft:set_enchantments");
+                function = JavaLoot.function("minecraft:set_enchantments");
                 function.add("enchantments", enchantments(bedrock));
             }
             case "exploration_map" -> {
                 String tag = mapDestination(Json.text(bedrock, "destination", "buriedtreasure"));
                 if (tag == null) return null;
-                function.addProperty("function", "minecraft:exploration_map");
+                function = JavaLoot.function("minecraft:exploration_map");
+                // From 26.3 the destination is a set of structures, which names a tag with a `#`.
+                //? if >=26.3 {
+                /*function.addProperty("destination", "#" + tag);
+                *///?} else {
                 function.addProperty("destination", tag);
+                //?}
             }
             case "set_ominous_bottle_amplifier" -> {
                 if (!Platform.hasOminousBottle()) {
                     AddonEntities.unsupported("loot function " + name);
                     return null;
                 }
-                function.addProperty("function", "minecraft:set_ominous_bottle_amplifier");
+                function = JavaLoot.function("minecraft:set_ominous_bottle_amplifier");
                 function.add("amplifier", range(bedrock.get("amplifier")));
             }
             case "enchant_random_gear" -> {
@@ -222,7 +236,7 @@ public record LootTableDefinition(String path, JsonObject java) {
                 levels.addProperty("min", 5);
                 levels.addProperty("max", 22);
 
-                function.addProperty("function", "minecraft:enchant_with_levels");
+                function = JavaLoot.function("minecraft:enchant_with_levels");
                 function.add("levels", range(levels));
                 Platform.enchantmentChoice(function, false);
 
@@ -231,8 +245,8 @@ public record LootTableDefinition(String path, JsonObject java) {
                 chance.addProperty("max_chance", Json.number(bedrock, "chance", 1));
 
                 JsonArray conditions = new JsonArray();
-                conditions.add(answeredHere(chance));
-                function.add("conditions", conditions);
+                conditions.add(BedrockCondition.json(chance));
+                JavaLoot.conditions(function, conditions);
             }
             case "set_armor_trim" -> {
                 String material = bare(Json.text(bedrock, "material", ""));
@@ -242,24 +256,24 @@ public record LootTableDefinition(String path, JsonObject java) {
                         + material + " " + pattern);
                     return null;
                 }
-                Platform.armorTrim(function, material, pattern);
+                function = Platform.armorTrim(material, pattern);
             }
             case "set_banner_details" -> {
                 // Type 1 is the banner an illager captain carries; type 0 is a plain banner, which
                 // wants no pattern at all and so needs no function beside the entry.
                 if ((int) Json.number(bedrock, "type", 0) != 1) return null;
-                function.addProperty("function", "minecraft:set_banner_pattern");
+                function = JavaLoot.function("minecraft:set_banner_pattern");
                 function.add("patterns", ominousBanner());
                 function.addProperty("append", false);
             }
             case "set_stew_effect" -> {
                 JsonArray effects = stewEffects(bedrock);
                 if (effects.isEmpty()) return null;
-                function.addProperty("function", "minecraft:set_stew_effect");
+                function = JavaLoot.function("minecraft:set_stew_effect");
                 function.add("effects", effects);
             }
             case "enchant_book_for_trading" -> {
-                return answeredHere(bedrock, BedrockFunction.NAME, "function");
+                return BedrockFunction.json(bedrock);
             }
             case "set_data", "random_aux_value", "set_data_from_color_index" -> {
                 return dataValue(bedrock, item);
@@ -381,7 +395,7 @@ public record LootTableDefinition(String path, JsonObject java) {
         JsonObject picked = new JsonObject();
         picked.addProperty("function", name);
         picked.add("items", choices);
-        return answeredHere(picked, BedrockFunction.NAME, "function");
+        return BedrockFunction.json(picked);
     }
 
     /**
@@ -422,8 +436,7 @@ public record LootTableDefinition(String path, JsonObject java) {
             return null;
         }
 
-        JsonObject function = new JsonObject();
-        function.addProperty("function", "minecraft:set_instrument");
+        JsonObject function = JavaLoot.function("minecraft:set_instrument");
         function.addProperty("options", tag);
         return function;
     }
@@ -443,8 +456,7 @@ public record LootTableDefinition(String path, JsonObject java) {
         }
         if (effects.isEmpty()) return null;
 
-        JsonObject function = new JsonObject();
-        function.addProperty("function", "minecraft:set_stew_effect");
+        JsonObject function = JavaLoot.function("minecraft:set_stew_effect");
         function.add("effects", effects);
         return function;
     }
@@ -462,35 +474,35 @@ public record LootTableDefinition(String path, JsonObject java) {
     /** Only the conditions a Java predicate can ask the same question of are carried across. */
     private static JsonObject condition(JsonObject bedrock) {
         String name = bare(Json.text(bedrock, "condition", ""));
-        JsonObject condition = new JsonObject();
+        JsonObject condition;
 
         switch (name) {
             case "random_chance" -> {
-                condition.addProperty("condition", "minecraft:random_chance");
+                condition = JavaLoot.condition("minecraft:random_chance");
                 condition.add("chance", bedrock.has("chance")
                     ? bedrock.get("chance") : new JsonPrimitive(1));
             }
-            case "killed_by_player" -> condition.addProperty("condition", "minecraft:killed_by_player");
+            case "killed_by_player" -> condition = JavaLoot.condition("minecraft:killed_by_player");
             case "random_chance_with_looting" ->
-                Platform.lootingChance(condition, Json.number(bedrock, "chance", 0),
+                condition = Platform.lootingChance(Json.number(bedrock, "chance", 0),
                     Json.number(bedrock, "looting_multiplier", 0));
             case "is_baby" -> {
                 JsonObject flags = new JsonObject();
                 flags.addProperty("is_baby", true);
                 JsonObject predicate = new JsonObject();
                 predicate.add(Platform.entityPredicateKey("flags"), flags);
-                thisEntity(condition, predicate);
+                condition = thisEntity(predicate);
             }
             case "passenger_of_entity" -> {
                 JsonObject predicate = new JsonObject();
                 predicate.add(Platform.entityPredicateKey("vehicle"),
                     entityType(Json.text(bedrock, "entity_type", null)));
-                thisEntity(condition, predicate);
+                condition = thisEntity(predicate);
             }
             case "killed_by_entity", "damaged_by_entity" -> {
                 JsonObject predicate = new JsonObject();
                 predicate.add("source_entity", entityType(Json.text(bedrock, "entity_type", null)));
-                condition.addProperty("condition", "minecraft:damage_source_properties");
+                condition = JavaLoot.condition("minecraft:damage_source_properties");
                 condition.add("predicate", predicate);
             }
             // Each of these reads something a Java predicate has no field for: an entity's own
@@ -503,7 +515,7 @@ public record LootTableDefinition(String path, JsonObject java) {
             case "entity_properties", "has_variant", "has_mark_variant", "bool_property",
                 "random_difficulty_chance", "random_regional_difficulty_chance",
                 "killed_by_player_or_pets", "biome_has_tag", "entity_killed" -> {
-                return answeredHere(bedrock);
+                return BedrockCondition.json(bedrock);
             }
             default -> {
                 AddonEntities.unsupported("loot condition " + name);
@@ -513,28 +525,11 @@ public record LootTableDefinition(String path, JsonObject java) {
         return condition;
     }
 
-    /** A Bedrock condition kept as it stands, for the condition type this mod answers itself. */
-    private static JsonObject answeredHere(JsonObject bedrock) {
-        return answeredHere(bedrock, BedrockCondition.NAME, "condition");
-    }
-
-    /**
-     * A Bedrock object kept as it stands, for the loot type this mod answers itself.
-     *
-     * Java names the type of a condition under `condition` and the type of a function under
-     * `function`, and the object either of them carries travels as the text the pack wrote.
-     */
-    private static JsonObject answeredHere(JsonObject bedrock, String type, String key) {
-        JsonObject json = new JsonObject();
-        json.addProperty(key, type);
-        json.addProperty("bedrock", bedrock.toString());
-        return json;
-    }
-
-    private static void thisEntity(JsonObject condition, JsonObject predicate) {
-        condition.addProperty("condition", "minecraft:entity_properties");
+    private static JsonObject thisEntity(JsonObject predicate) {
+        JsonObject condition = JavaLoot.condition("minecraft:entity_properties");
         condition.addProperty("entity", "this");
         condition.add("predicate", predicate);
+        return condition;
     }
 
     private static JsonObject entityType(String type) {
