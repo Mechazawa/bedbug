@@ -738,7 +738,7 @@ public final class BedrockCommandGameTests {
         // An operator's chat, built on the console's authority because a mock player's own source
         // reads none of Java's commands.
         net.minecraft.commands.CommandSourceStack typist = server.createCommandSourceStack().withEntity(player);
-        String giveDiamond = "give " + player.getScoreboardName() + " minecraft:diamond";
+        String giveDiamond = "give @s minecraft:diamond";
         try {
             typed(helper, "changesetting allow-cheats false");
 
@@ -753,7 +753,7 @@ public final class BedrockCommandGameTests {
             helper.assertTrue(listed.stream().anyMatch(line -> line.contains("players online")),
                 "/list, which needs no cheats, did not answer: " + listed);
 
-            typed(server.createCommandSourceStack(), giveDiamond);
+            typed(server.createCommandSourceStack(), "execute as " + player.getStringUUID() + " run " + giveDiamond);
             BedrockLines.run(helper, Platform.commandSourceOf(player, helper.getLevel()), giveDiamond);
             helper.assertTrue(player.getInventory().countItem(Items.DIAMOND) == 2,
                 "the console and a pack's line did not both give a diamond while cheats were off: "
