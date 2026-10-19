@@ -35,14 +35,17 @@ fi
 
 # The script API: each package's `index.d.ts` under the name the census looks for.
 mkdir -p "$definitions"
-for module in server server-ui server-gametest common math vanilla-data; do
+for module in server server-ui server-gametest server-admin common math vanilla-data; do
     target="$definitions/$module.d.ts"
     if [ "$refresh" -eq 0 ] && [ -s "$target" ]; then
         continue
     fi
-    echo "fetching @minecraft/$module"
+    # server-admin is published only as a beta, and its `latest` tag names an old build.
+    spec="@minecraft/$module"
+    [ "$module" = "server-admin" ] && spec="$spec@beta"
+    echo "fetching $spec"
     staging=$(mktemp -d)
-    if (cd "$staging" && npm pack "@minecraft/$module" --silent >/dev/null 2>&1); then
+    if (cd "$staging" && npm pack "$spec" --silent >/dev/null 2>&1); then
         archive=$(find "$staging" -name '*.tgz' | head -1)
         tar xzf "$archive" -C "$staging" 2>/dev/null
         # vanilla-data splits its tables over many files; the rest ship one index.

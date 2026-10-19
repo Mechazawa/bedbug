@@ -9,7 +9,8 @@ This reads Mojang's own type definitions instead and compares them against the m
 The definitions are the published `@minecraft/*` packages. Fetch them once with:
 
     cd scratchpad/mcapi && npm pack @minecraft/server @minecraft/server-ui \\
-        @minecraft/server-gametest @minecraft/common @minecraft/math @minecraft/vanilla-data
+        @minecraft/server-gametest @minecraft/server-admin@beta @minecraft/common @minecraft/math \\
+        @minecraft/vanilla-data
 
 and extract each `package/index.d.ts` as `<module>.d.ts`. The directory is not tracked by git.
 
@@ -41,6 +42,7 @@ SERVED = {
     "server": "minecraft_server.js",
     "server-ui": "minecraft_server_ui.js",
     "server-gametest": "minecraft_server_gametest.js",
+    "server-admin": "minecraft_server_admin.js",
     "common": "minecraft_common.js",
     "math": "minecraft_math.js",
     "vanilla-data": "minecraft_vanilla_data.js",

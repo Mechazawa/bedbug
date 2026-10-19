@@ -399,6 +399,14 @@ Against a server without this mod a client plays with its own add-ons.
   packs; `permission` and `ops` list Java's operators, read `ops.json` again and make a player an
   operator or a member. Like Bedrock's, each asks for more than a function's authority, so an
   operator types it after `/bedrock` and a pack's function cannot run it.
+- A dedicated server's script configuration, read through `@minecraft/server-admin`. Put
+  `variables.json`, `secrets.json` and `permissions.json` in `config/default/` for every pack, or in
+  `config/<script module uuid>/` for one, whose keys win over the default's. A script reads a
+  variable's value and a secret's name only, and a pack depending on a beta script API its
+  `allowed_modules` leaves out does not load its script. `/bedrock reloadconfig`, typed by an
+  operator or the console, reads the files again for the running scripts. `opPlayer` and
+  `deopPlayer` change Java's operator list; the allow list, level storage, kicks, transfers and the
+  join event are reported as not implemented.
 - `/bedrock music`, which plays a track to everyone as music rather than as a sound somewhere in the
   world: in the music category, with the game's own background music waiting until it is over,
   faded in and out over the seconds the line gives, looped when asked, turned up or down while it

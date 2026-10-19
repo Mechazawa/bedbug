@@ -47,7 +47,8 @@ public final class ScriptHost {
         "@minecraft/common", "minecraft_common.js",
         "@minecraft/math", "minecraft_math.js",
         "@minecraft/vanilla-data", "minecraft_vanilla_data.js",
-        "@minecraft/server-gametest", "minecraft_server_gametest.js");
+        "@minecraft/server-gametest", "minecraft_server_gametest.js",
+        "@minecraft/server-admin", "minecraft_server_admin.js");
 
     public static boolean provides(String moduleName) {
         return MODULES.containsKey(moduleName);
@@ -57,6 +58,7 @@ public final class ScriptHost {
     private final Context context;
     private final ScriptBridge bridge;
     private final ScriptCoverage coverage;
+    private final ScriptConfig config;
 
     /** World events raised by a pack's own data, waiting for the next tick to be delivered. */
     private final List<Map.Entry<String, Map<String, Object>>> queued = new ArrayList<>();
@@ -65,11 +67,16 @@ public final class ScriptHost {
     private int loaded;
 
     private ScriptHost(MinecraftServer server, Context context, ScriptBridge bridge,
-        ScriptCoverage coverage) {
+        ScriptCoverage coverage, ScriptConfig config) {
         this.server = server;
         this.context = context;
         this.bridge = bridge;
         this.coverage = coverage;
+        this.config = config;
+    }
+
+    public ScriptConfig config() {
+        return config;
     }
 
     /** Null when no loaded pack ships a script, which is the common case. */
@@ -87,8 +94,11 @@ public final class ScriptHost {
         }
 
         ScriptCoverage coverage = new ScriptCoverage();
+        ScriptConfig config = new ScriptConfig(
+            net.fabricmc.loader.api.FabricLoader.getInstance().getGameDir().resolve("config"),
+            scripted.stream().map(BedrockPack::manifest).toList());
         List<String> namespaces = scripted.stream().map(ActiveAddons.installed()::namespaceOf).distinct().toList();
-        ScriptBridge bridge = new ScriptBridge(server, state, coverage,
+        ScriptBridge bridge = new ScriptBridge(server, state, coverage, config,
             namespaces.size() == 1 ? namespaces.get(0) : null);
 
         Context context = Context.newBuilder("js")
@@ -107,7 +117,7 @@ public final class ScriptHost {
         globals.putMember("__mcaddon_bridge__", bridge);
         warmUpErrorReporting(context);
 
-        ScriptHost host = new ScriptHost(server, context, bridge, coverage);
+        ScriptHost host = new ScriptHost(server, context, bridge, coverage, config);
 
         // Importing the module here rather than waiting for a pack to do it: the runtime hook has to
         // exist even for a pack whose script never imports anything.
@@ -156,6 +166,13 @@ public final class ScriptHost {
      * its siblings by relative path.
      */
     private void load(ScriptFileSystem files, BedrockPack pack) {
+        String refused = config.refusedModule(pack.manifest());
+        if (refused != null) {
+            McAddon.LOGGER.error("{} depends on {}, which the allowed_modules of its permissions.json leaves out,"
+                + " so its script is not loaded.", pack.displayName(), refused);
+            return;
+        }
+
         String entry = pack.manifest().scriptEntry();
         String root = "/" + pack.manifest().uuid();
 
