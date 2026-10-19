@@ -44,7 +44,11 @@ import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.entity.boss.wither.WitherBoss;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.ElderGuardian;
+//? if >=26.3 {
+/*import net.minecraft.world.entity.monster.Enderman;
+*///?} else {
 import net.minecraft.world.entity.monster.EnderMan;
+//?}
 import net.minecraft.world.entity.monster.Ravager;
 import net.minecraft.world.entity.monster.piglin.Piglin;
 import net.minecraft.world.entity.monster.warden.Warden;
@@ -278,8 +282,13 @@ public final class EntityQueries implements MolangEnvironment.Queries {
                 ? creeper.getSwelling(partialTick) : 0);
             case "swelling_dir" -> MolangValue.of(entity instanceof Creeper creeper
                 ? creeper.getSwellDir() : 0);
+            //? if >=26.3 {
+            /*case "is_carrying_block" -> MolangValue.of(entity instanceof Enderman enderman
+                && enderman.getCarriedBlock() != null);
+            *///?} else {
             case "is_carrying_block" -> MolangValue.of(entity instanceof EnderMan enderman
                 && enderman.getCarriedBlock() != null);
+            //?}
             case "show_bottom" -> MolangValue.of(entity instanceof EndCrystal crystal
                 && crystal.showsBottom());
             case "texture_frame_index" -> MolangValue.of(entity instanceof ExperienceOrb orb
@@ -572,7 +581,7 @@ public final class EntityQueries implements MolangEnvironment.Queries {
             case "is_grazing" -> MolangValue.of(entity.getPose() == Pose.DIGGING);
 
             case "has_collision" -> MolangValue.of(!entity.noPhysics);
-            case "invulnerable_ticks" -> MolangValue.of(entity.invulnerableTime);
+            case "invulnerable_ticks" -> MolangValue.of(Platform.invulnerableTime(entity));
             case "is_lingering" -> MolangValue.of(Platform.isLingering(entity));
             case "shake_angle" -> MolangValue.of(entity instanceof Wolf wolf
                 ? Platform.wolfShakeAngle(wolf, partialTick) : 0);

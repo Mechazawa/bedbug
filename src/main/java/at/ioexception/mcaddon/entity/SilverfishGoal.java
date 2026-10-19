@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.entity;
 
+import at.ioexception.mcaddon.platform.Platform;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -87,7 +88,7 @@ public final class SilverfishGoal extends Goal {
 
     /** The nearest infested block in shouting range, or null where none is. */
     private BlockPos infestedNearby(ServerLevel level) {
-        for (BlockPos at : BlockPos.withinManhattan(mob.blockPosition(), WAKE_RADIUS, WAKE_RADIUS,
+        for (BlockPos at : Platform.withinManhattan(mob.blockPosition(), WAKE_RADIUS, WAKE_RADIUS,
             WAKE_RADIUS)) {
             BlockState state = level.getBlockState(at);
             if (state.getBlock() instanceof InfestedBlock) return at.immutable();

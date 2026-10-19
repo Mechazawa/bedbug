@@ -99,7 +99,7 @@ public final class KnockbackRoarGoal extends Goal {
             Vec3 was = caught.getDeltaMovement().scale(0.5);
             caught.setDeltaMovement(was.x + away.x * horizontal * kept,
                 Math.min(heightCap, was.y + vertical * kept), was.z + away.z * horizontal * kept);
-            caught.hurtMarked = true;
+            Platform.syncVelocity(caught);
         }
     }
 

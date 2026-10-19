@@ -36,7 +36,7 @@ public final class PackStructures {
     }
 
     private static void install(MinecraftServer server) {
-        StructureTemplateManager templates = server.getStructureManager();
+        StructureTemplateManager templates = Platform.structureTemplates(server);
         for (BedrockPack pack : McAddon.packs().packs()) {
             if (pack.role() != PackRole.BEHAVIOUR) continue;
 
