@@ -61,7 +61,7 @@ import net.minecraft.world.level.Level;
  */
 public class AddonEntity extends PathfinderMob
     implements Merchant, net.minecraft.world.entity.monster.RangedAttackMob,
-        net.minecraft.world.entity.OwnableEntity,
+        net.minecraft.world.entity.OwnableEntity, net.minecraft.world.entity.PlayerRideableJumping,
         //? if >=26.2 {
         net.minecraft.world.entity.Bucketable {
         //?} else {
@@ -1235,6 +1235,38 @@ public class AddonEntity extends PathfinderMob
             && ((at.ioexception.mcaddon.mixin.JumpingAccessor) rider).mcaddon$jumping()
             ? liveNumber("minecraft:vertical_movement_action", "vertical_velocity", 0.5) : 0;
         return new net.minecraft.world.phys.Vec3(sideways, vertical, forward);
+    }
+
+    private final MountJump mountJump = new MountJump(this);
+
+    @Override
+    protected void tickRidden(Player rider, net.minecraft.world.phys.Vec3 input) {
+        super.tickRidden(rider, input);
+        if (definition != null) mountJump.ride(rider, input);
+    }
+
+    @Override
+    public boolean canJump() {
+        return definition != null && mountJump.canJump();
+    }
+
+    @Override
+    public void onPlayerJump(int charge) {
+        mountJump.press(charge);
+    }
+
+    @Override
+    public void handleStartJump(int charge) {
+        mountJump.heard();
+    }
+
+    @Override
+    public void handleStopJump() {
+    }
+
+    @Override
+    public int getJumpCooldown() {
+        return mountJump.cooldown();
     }
 
     /** How fast a driven mount goes, which Bedrock scales off the entity's own movement speed. */
@@ -3610,6 +3642,7 @@ public class AddonEntity extends PathfinderMob
     @Override
     public void tick() {
         super.tick();
+        mountJump.tick();
         if (definition == null || !(level() instanceof net.minecraft.server.level.ServerLevel)) return;
 
         turnRiders();
@@ -4029,8 +4062,6 @@ public class AddonEntity extends PathfinderMob
         rubAlongTheGround();
         slideTheOldWay();
         floatUpwards();
-        jumpForRider();
-        dash();
         peek();
         wearOffBribe();
         beatTheAir();
@@ -4413,21 +4444,6 @@ public class AddonEntity extends PathfinderMob
     private static final double BALLOON_LIFT = 0.05;
 
     /**
-     * Leaves the ground when the rider of a `minecraft:can_power_jump` mount asks for it.
-     *
-     * Java lets a player jump a horse and nothing else, and reads the mount's jump strength for how
-     * high. A pack's mount is neither a horse nor something a player may jump, so the rider's own
-     * jump is read and the mount jumps for them.
-     */
-    private void jumpForRider() {
-        if (!declaresNow("minecraft:can_power_jump") || !onGround()) return;
-        if (!(getControllingPassenger() instanceof Player rider)) return;
-        if (!((at.ioexception.mcaddon.mixin.JumpingAccessor) rider).mcaddon$jumping()) return;
-
-        jumpFromGround();
-    }
-
-    /**
      * How high a jump carries, which `minecraft:can_power_jump` takes off the jump strength.
      *
      * Java gives an ordinary mob a fixed jump and reads the attribute for a horse alone. A pack
@@ -4436,7 +4452,9 @@ public class AddonEntity extends PathfinderMob
     @Override
     protected float getJumpPower() {
         if (definition == null) return super.getJumpPower();
-        if (declaresNow("minecraft:can_power_jump")) return (float) getAttributeValue(Attributes.JUMP_STRENGTH);
+        if (declaresNow("minecraft:can_power_jump")) {
+            return (float) getAttributeValue(Attributes.JUMP_STRENGTH) * getBlockJumpFactor() + getJumpBoostPower();
+        }
 
         // `jump_power` is the jump's starting speed in blocks a tick, the 0.42 Java jumps every mob
         // at unless the pack says otherwise.
@@ -4447,44 +4465,6 @@ public class AddonEntity extends PathfinderMob
 
     /** The speed in blocks a tick Java starts every ordinary mob's jump at. */
     private static final double JAVA_JUMP = 0.42;
-
-    /**
-     * The lunge `minecraft:dash_action` gives a mount, on the tick its rider asks for one.
-     *
-     * Bedrock states the wait between two dashes in seconds, the forward momentum per second and the
-     * upward one per tick. How far through that wait the entity is is what a pack's own controllers
-     * draw the recovery from, so it is published while it runs down rather than only at its ends.
-     */
-    private void dash() {
-        if (!declaresNow("minecraft:dash_action")) return;
-
-        int wait = (int) (liveNumber("minecraft:dash_action", "cooldown_time", 1)
-            * Goals.TICKS_PER_SECOND);
-        if (dashReadyAt > tickCount) {
-            if (tickCount % Goals.TICKS_PER_SECOND == 0 && wait > 0) {
-                setValue("dash_cooldown_progress", (double) (wait - (dashReadyAt - tickCount)) / wait);
-            }
-            return;
-        }
-        if (!Boolean.TRUE.equals(value("can_dash"))) {
-            setValue("can_dash", true);
-            setValue("dash_cooldown_progress", 1d);
-        }
-        if (!onGround() || !(getControllingPassenger() instanceof Player rider)) return;
-        if (!((at.ioexception.mcaddon.mixin.JumpingAccessor) rider).mcaddon$jumping()) return;
-
-        double forward = liveNumber("minecraft:dash_action", "horizontal_momentum", 20)
-            / Goals.TICKS_PER_SECOND;
-        double facing = Math.toRadians(getYRot());
-        setDeltaMovement(getDeltaMovement().add(-Math.sin(facing) * forward,
-            liveNumber("minecraft:dash_action", "vertical_momentum", 0.6),
-            Math.cos(facing) * forward));
-        dashReadyAt = tickCount + wait;
-        setValue("can_dash", false);
-    }
-
-    /** The entity's own age at which it may dash again, which a spent dash pushes forward. */
-    private int dashReadyAt;
 
     /**
      * Opens and closes the way a shell does, which is what `minecraft:peek` describes.

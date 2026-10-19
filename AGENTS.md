@@ -610,6 +610,20 @@ These are the checks it runs, and what each one catches:
   `SeatClientGameTest` rides it as the player and reads the player's facing off its own client,
   which the seat's turn reaches only through the `seat_turn` payload.
 
+  `tp:steed` is a mount its rider steers, with one group holding `minecraft:can_power_jump` over a
+  jump strength of 0.9 and another holding a `minecraft:dash_action` with a six second cooldown.
+  `MountJumpClientGameTest` rides it on a dedicated server, finds no jump bar while neither group is
+  on, holds the jump key for a full charge and reads the height back, then presses it to dash and
+  reads the distance, a second press inside the cooldown doing nothing, and `can_dash` going false
+  and true again. **A ridden mount moves on its rider's client, not on the server.** From 1.21.2 the
+  server never sees a rider's jump key, and `LivingEntity.travelRidden` zeroes any motion the server
+  writes while a player steers, so `MountJump` applies the impulse in `tickRidden` on the client that
+  heard the key through `PlayerRideableJumping.onPlayerJump`, as Java's horse and camel do. The
+  server hears of the jump through the riding jump command (`handleStartJump`), keeps its own count
+  of the cooldown and publishes `can_dash` from it. A dash's `horizontal_momentum` is a multiple of
+  the mount's movement speed, which is how Mojang's camel, stating 20 over a speed of 0.09, dashes
+  about as far as Java's.
+
   The recipes cover the seven kinds and the fields that decide what each becomes: a furnace recipe
   naming four cookers and an unlock item, a shapeless one tagged for the stonecutter and unlocked by
   a context, a shaped one keyed on an item tag and carrying a `group`, a `priority` and an unlock

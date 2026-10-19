@@ -119,6 +119,12 @@ Against a server without this mod a client plays with its own add-ons.
   neither does the server: every expression it runs, a seat's, a script's, a component's condition,
   an experience reward and a block event alike, reads and writes one store of `temp.` values, which
   is how a pack learns a villager's level by seating it.
+  A player steering a mount with `minecraft:can_power_jump` holds the jump key to charge a jump as
+  high as `minecraft:horse.jump_strength` allows, as on a horse, and one with `minecraft:dash_action`
+  presses it to dash along the mount's facing or the rider's look, by `direction`, on the ground or
+  under water where `can_dash_underwater` says so. The dash waits out its `cooldown_time`, during
+  which `query.can_dash` is false and `query.has_dash_cooldown` true. A mount with neither shows no
+  jump bar.
 - The clips and controllers a behaviour pack declares, which animate what an entity is rather than
   where its bones are. A moment on a clip's timeline, and a controller state's entry and its exit,
   each raise one of the entity's own events, run a command as the entity, or assign a Molang

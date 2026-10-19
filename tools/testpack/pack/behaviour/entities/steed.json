@@ -1,0 +1,70 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:steed",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false
+    },
+    "component_groups": {
+      "tp:steed_leaping": {
+        "minecraft:can_power_jump": {}
+      },
+      "tp:steed_dashing": {
+        "minecraft:dash_action": {
+          "cooldown_time": 6,
+          "horizontal_momentum": 4,
+          "vertical_momentum": 0.3,
+          "direction": "entity",
+          "can_dash_underwater": false
+        }
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": ["tp_steed", "mob"]
+      },
+      "minecraft:health": {
+        "value": 20,
+        "max": 20
+      },
+      "minecraft:collision_box": {
+        "width": 1,
+        "height": 1
+      },
+      "minecraft:physics": {},
+      "minecraft:movement": {
+        "value": 0.2
+      },
+      "minecraft:horse.jump_strength": {
+        "value": 0.9
+      },
+      "minecraft:rideable": {
+        "seat_count": 1,
+        "family_types": ["player"],
+        "seats": [
+          {
+            "position": [0, 1, 0]
+          }
+        ]
+      },
+      "minecraft:input_ground_controlled": {}
+    },
+    "events": {
+      "tp:steed_leap": {
+        "add": {
+          "component_groups": ["tp:steed_leaping"]
+        }
+      },
+      "tp:steed_dash": {
+        "remove": {
+          "component_groups": ["tp:steed_leaping"]
+        },
+        "add": {
+          "component_groups": ["tp:steed_dashing"]
+        }
+      }
+    }
+  }
+}
