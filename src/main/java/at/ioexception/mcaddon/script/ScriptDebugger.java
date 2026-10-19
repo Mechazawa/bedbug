@@ -407,8 +407,7 @@ public final class ScriptDebugger {
     }
 
     private static String normalise(String path) {
-        String forward = path.replace('\\', '/');
-        while (forward.startsWith("./") || forward.startsWith("/")) forward = forward.substring(forward.indexOf('/') + 1);
+        String forward = path.replace('\\', '/').replaceFirst("^(\\./|/)+", "");
         return forward.startsWith("scripts/") ? forward.substring("scripts/".length()) : forward;
     }
 

@@ -103,7 +103,8 @@ public final class ScriptCommand {
     private static int startCapture(CommandContext<CommandSourceStack> command) {
         try {
             return ScriptDiagnostics.startCapture()
-                ? succeed(command, "Diagnostics capture started") : fail(command, "Diagnostics capture is already running");
+                ? succeed(command, "Diagnostics capture started")
+                : fail(command, "Diagnostics capture is already running");
         } catch (IOException failed) {
             return fail(command, "Diagnostics capture could not start: " + failed.getMessage());
         }
