@@ -450,6 +450,15 @@ public final class Platform {
         *///?}
     }
 
+    /** Whether the player is the one whose single player world this server is, cheats or none. */
+    public static boolean isHost(net.minecraft.server.MinecraftServer server, ServerPlayer player) {
+        //? if >=26 {
+        return server.isSingleplayerOwner(player.nameAndId());
+        //?} else {
+        /*return server.isSingleplayerOwner(player.getGameProfile());
+        *///?}
+    }
+
     /** Whether a bed used here blows up rather than letting anybody sleep, which 26 asks the dimension. */
     public static boolean bedExplodes(Level level, net.minecraft.core.BlockPos pos) {
         //? if >=26 {

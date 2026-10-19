@@ -16,8 +16,8 @@ import java.util.stream.Collectors;
  *
  * The registries hold every add-on this process has registered and never let go of one. The active
  * set is what the game is offered of them: the converted packs in the pack repository, the items in
- * the creative tabs, the music, fogs, camera presets, dialogue scenes and brewing a pack declares,
- * and, on a client, the models it draws with. A registered add-on outside the active set is dormant:
+ * the creative tabs, the music, fogs, camera presets, dialogue scenes, settings and brewing a pack
+ * declares, and, on a client, the models it draws with. A registered add-on outside the active set is dormant:
  * its entries stay where they are with the last definitions bound to them, and nothing offers them.
  *
  * A server's active set is always the one installed beside it. A client's is the installed set until
@@ -58,6 +58,7 @@ public final class ActiveAddons {
      */
     public static void activate(AddonSet set) {
         active = set;
+        at.ioexception.mcaddon.pack.PackSettings.read(set.packs());
         Set<net.minecraft.world.item.Item> items = AddonRegistry.ensureRegistered(set);
         activeItems = items.stream().map(BuiltInRegistries.ITEM::getKey).collect(Collectors.toUnmodifiableSet());
         AddonSounds.readMusic(set.converted());

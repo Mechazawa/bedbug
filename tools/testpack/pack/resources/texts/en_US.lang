@@ -17,3 +17,5 @@ entity.tp:sprite.name=Test Sprite
 entity.tp:ember.name=Test Ember
 item.spawn_egg.entity.tp:sprite.name=Spawn Test Sprite
 item.spawn_egg.entity.tp:ember.name=Spawn Test Ember
+tp.settings.sprite=How the sprite looks to you.
+tp.settings.sprite_lit=Sprite lit

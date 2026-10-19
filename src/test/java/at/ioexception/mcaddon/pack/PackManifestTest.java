@@ -208,7 +208,11 @@ class PackManifestTest {
             }
             """.formatted(SELF));
 
+        assertEquals("label", manifest.settings().get(0).type());
+        assertEquals("A paragraph, which names no setting", manifest.settings().get(0).text());
+
         Map<String, PackManifest.Setting> settings = manifest.settings().stream()
+            .filter(setting -> setting.name() != null)
             .collect(Collectors.toMap(PackManifest.Setting::name, setting -> setting));
 
         assertEquals(Set.of("tp:glow", "tp:heat", "tp:mood"), settings.keySet());
@@ -248,6 +252,33 @@ class PackManifestTest {
         assertEquals(1.0, numbers.get("tp:low"));
         assertEquals(4.0, numbers.get("tp:off_step"));
         assertEquals(8.0, numbers.get("tp:top"));
+    }
+
+    @Test
+    void bringsAValueSetLaterInsideTheControlAndRefusesOneOfTheWrongKind() throws IOException {
+        PackManifest manifest = manifest("""
+            {
+              "header": {"uuid": "%s", "version": [1, 0, 0]},
+              "settings": [
+                {"type": "slider", "name": "tp:heat", "text": "", "min": 0, "max": 10, "step": 4, "default": 4},
+                {"type": "toggle", "name": "tp:glow", "text": "", "default": true},
+                {"type": "dropdown", "name": "tp:mood", "text": "", "default": "calm",
+                 "options": [{"name": "calm", "text": "Calm"}, {"name": "restless", "text": "Restless"}]}
+              ]
+            }
+            """.formatted(SELF));
+        PackManifest.Setting heat = manifest.settings().get(0);
+        PackManifest.Setting glow = manifest.settings().get(1);
+        PackManifest.Setting mood = manifest.settings().get(2);
+
+        assertEquals(8.0, heat.with(new com.google.gson.JsonPrimitive(7)).number());
+        assertEquals(4.0, heat.with(new com.google.gson.JsonPrimitive("hot")).number());
+        assertFalse(glow.with(new com.google.gson.JsonPrimitive(false)).enabled());
+        assertTrue(glow.with(new com.google.gson.JsonPrimitive(0)).enabled());
+        assertTrue(mood.with(new com.google.gson.JsonPrimitive("restless")).selected("restless"));
+        assertTrue(mood.with(new com.google.gson.JsonPrimitive("furious")).selected("calm"));
+        assertEquals(List.of("Calm", "Restless"),
+            mood.options().stream().map(PackManifest.Setting.Option::text).toList());
     }
 
     @Test

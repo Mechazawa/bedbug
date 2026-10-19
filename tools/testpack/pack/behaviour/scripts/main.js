@@ -276,6 +276,20 @@ function readTheConfig(player) {
     player.addTag(`tp:secret_shown_${JSON.stringify(token)}${String(token)}${Object.getOwnPropertyNames(token)}`);
 }
 
+// Tags the player with each of the behaviour pack's own settings as `world.getPackSettings` reads
+// it, dropping the tags an earlier reading left.
+function readThePackSettings(player) {
+    player.getTags().filter(tag => tag.startsWith("tp:setting_read_")).forEach(tag => player.removeTag(tag));
+    const settings = world.getPackSettings();
+    ["tp:ember_glows", "tp:ember_heat", "tp:ember_mood"]
+        .forEach(name => player.addTag(`tp:setting_read_${name.slice(3)}_${settings[name]}`));
+}
+
+// A setting the world's owner changes reaches a running script at once.
+world.afterEvents.packSettingChange.subscribe(({ settingName, settingValue }) => {
+    world.getPlayers().forEach(player => player.addTag(`tp:setting_heard_${settingName.slice(3)}_${settingValue}`));
+});
+
 // Makes the player an operator twice and takes it away twice, tagging what each answered.
 function swapOperator(player) {
     const attempt = (name, call) => {
@@ -339,6 +353,7 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
         case "tp:config": readTheConfig(player); break;
         case "tp:config_reload": dedicatedServer?.reloadScriptingConfig(); readTheConfig(player); break;
         case "tp:operator": swapOperator(player); break;
+        case "tp:pack_settings": readThePackSettings(player); break;
         default: break;
     }
 });

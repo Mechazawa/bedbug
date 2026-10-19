@@ -36,6 +36,8 @@ public final class McAddonClient implements ClientModInitializer {
         at.ioexception.mcaddon.client.screen.PackUi.read(ActiveAddons.active());
         ActiveAddons.onActivate(at.ioexception.mcaddon.client.screen.PackUi::read);
         AddonSession.register();
+        PlayerPackSettings.load();
+        at.ioexception.mcaddon.client.screen.AddonsScreen.addToPauseMenu();
         at.ioexception.mcaddon.pack.ReceivedArchives.inCache().prune();
 
         Channels.receiveProperties((entityId, json) -> {
@@ -72,6 +74,7 @@ public final class McAddonClient implements ClientModInitializer {
                 case at.ioexception.mcaddon.server.WebSockets.CONNECT, at.ioexception.mcaddon.server.WebSockets.ANSWER,
                     at.ioexception.mcaddon.server.WebSockets.EVENT -> WebSocketLink.accept(kind, body);
                 case at.ioexception.mcaddon.server.ServerIdentity.KIND -> TrustedServers.presented(body);
+                case at.ioexception.mcaddon.server.WorldPackSettings.KIND -> PlayerPackSettings.accept(body);
                 default -> {
                 }
             }
@@ -128,6 +131,7 @@ public final class McAddonClient implements ClientModInitializer {
             PlayerAimAssist.clear();
             PlayerMusic.clear();
             TrustedServers.clear();
+            PlayerPackSettings.clear();
             at.ioexception.mcaddon.client.render.PlayerFade.clear();
             at.ioexception.mcaddon.client.render.PlayerFov.clear();
             at.ioexception.mcaddon.client.render.PlayerRules.clear();

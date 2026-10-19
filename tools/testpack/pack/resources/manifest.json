@@ -42,5 +42,36 @@
       "memory_tier": 64,
       "memory_performance_tier": 5
     }
+  ],
+  "settings": [
+    {
+      "type": "label",
+      "text": "tp.settings.sprite"
+    },
+    {
+      "type": "toggle",
+      "name": "tp:sprite_lit",
+      "text": "tp.settings.sprite_lit",
+      "default": false
+    },
+    {
+      "type": "slider",
+      "name": "tp:sprite_size",
+      "text": "Sprite size",
+      "min": 1,
+      "max": 4,
+      "step": 1,
+      "default": 2
+    },
+    {
+      "type": "dropdown",
+      "name": "tp:sprite_hue",
+      "text": "Sprite hue",
+      "options": [
+        {"name": "red", "text": "Red"},
+        {"name": "blue", "text": "Blue"}
+      ],
+      "default": "red"
+    }
   ]
 }

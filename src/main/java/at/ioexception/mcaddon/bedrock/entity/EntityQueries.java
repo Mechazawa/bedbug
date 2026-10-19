@@ -8,6 +8,7 @@ import at.ioexception.mcaddon.bedrock.behaviour.Families;
 import at.ioexception.mcaddon.bedrock.model.BedrockBone;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangValue;
+import at.ioexception.mcaddon.pack.PackManifest;
 import at.ioexception.mcaddon.pack.PackSettings;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.registry.AddonItems;
@@ -641,14 +642,13 @@ public final class EntityQueries implements MolangEnvironment.Queries {
             // each more than that, so a pack asking for one is told rather than handed a number.
             case "bone_orientation_matrix", "combine_entities" -> unanswered(name);
 
-            // Pack settings are the sliders, toggles and dropdowns Bedrock shows beside a pack on a
-            // screen of its own. With no such screen, nothing moves one off the value its author
-            // declared, and a name no installed pack declares reads as nothing set, as it does on
-            // Bedrock.
-            case "get_pack_setting" -> MolangValue.of(PackSettings.of(text(arguments, 0)).number());
-            case "is_pack_setting_enabled" -> MolangValue.of(PackSettings.of(text(arguments, 0)).enabled());
+            // A client answers with the resource pack values its player chose and the world's values
+            // the server sent; the server answers with the world's own. A name no active pack
+            // declares reads as nothing set, as it does on Bedrock.
+            case "get_pack_setting" -> MolangValue.of(packSetting(text(arguments, 0)).number());
+            case "is_pack_setting_enabled" -> MolangValue.of(packSetting(text(arguments, 0)).enabled());
             case "is_pack_setting_selected" ->
-                MolangValue.of(PackSettings.of(text(arguments, 0)).selected(text(arguments, 1)));
+                MolangValue.of(packSetting(text(arguments, 0)).selected(text(arguments, 1)));
 
             // Both count what belongs to the particle effect whose own Molang is being evaluated.
             // This answers for an entity, which belongs to no effect.
@@ -1098,6 +1098,10 @@ public final class EntityQueries implements MolangEnvironment.Queries {
     /** The effects on the entity, which anything that is not alive is under none of. */
     private java.util.Collection<net.minecraft.world.effect.MobEffectInstance> effects() {
         return entity instanceof LivingEntity living ? living.getActiveEffects() : List.of();
+    }
+
+    private PackManifest.Setting packSetting(String name) {
+        return entity.level().isClientSide() ? PackSettings.onClient(name) : PackSettings.WORLD.of(name);
     }
 
     /**

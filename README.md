@@ -742,16 +742,30 @@ Against a server without this mod a client plays with its own add-ons.
   player would see on a PC is the form you see here. Files in that folder stand in for the pack's
   own of the same path and files only it has join the pack, which is what Bedrock does with them.
   `/mcaddon packs` says which form was loaded.
-- The settings a pack offers. Bedrock puts a pack's sliders, toggles and dropdowns on a screen
-  beside it, and the pack's own Molang and its script read back whatever a player left them at. Java
-  has no such screen, so each one holds the `default` its author declared, kept inside the slider's
-  range and step or the dropdown's options:
-  `query.get_pack_setting`, `query.is_pack_setting_enabled` and `query.is_pack_setting_selected` are
-  answered with it, and so is `World.getPackSettings`. `/mcaddon packs` also says who wrote a pack,
-  under what licence and where it lives, which is what its manifest's `metadata` states.
+- The settings a pack offers, on a screen of their own as in Bedrock: its labels, toggles, sliders
+  and dropdowns in the order the manifest lists them, with each text translated through the pack's
+  own `texts/`. A slider stops on its steps and a dropdown goes to its next option with each press.
+  A behaviour pack's settings belong to the world. They are kept with it (in
+  `data/mcaddon-state.json`), only an operator or the player whose single player world it is may
+  change them, and a change applies at once: `World.getPackSettings` and the server's
+  `query.*_pack_setting*` answers read the new value, and the script hears `packSettingChange`,
+  which is how Bedrock reports a change to a running world. Everybody else sees them greyed out. A
+  resource pack's settings are each player's own, kept in `config/mcaddon-pack-settings.json`, and
+  the client's `query.get_pack_setting`, `query.is_pack_setting_enabled` and
+  `query.is_pack_setting_selected` read them. A setting nobody changed holds the `default` its
+  author declared, kept inside the slider's range and step or the dropdown's options.
 
-`/mcaddon packs` lists what loaded. `/mcaddon entities` and `/mcaddon scripts` list what a pack
-asked for that this mod does not implement yet, which answers "will my pack work" with evidence.
+**Add-Ons** on the pause menu opens the list of the add-ons this game has loaded: each one's name,
+version, authors and description, its behaviour and resource packs, and whether each is active,
+which it is not while you visit a server that plays without it. **Settings** opens the add-on's
+settings. **What does not work** shows the lines `/mcaddon packs` prints for its packs, followed by
+what `/mcaddon entities` and `/mcaddon scripts` print, which count every add-on in the game
+together. On a server the script report is the server's, so ask it with `/mcaddon scripts` there.
+
+`/mcaddon packs` lists what loaded, and also says who wrote a pack, under what licence and where it
+lives, which is what its manifest's `metadata` states. `/mcaddon entities` and `/mcaddon scripts`
+list what a pack asked for that this mod does not implement yet, which answers "will my pack work"
+with evidence.
 
 ## How much of Bedrock this is
 
@@ -825,11 +839,10 @@ does not rescue a script that imports the module, because a module is linked bef
 script runs. `product_type` decides on Bedrock whether a world keeps its achievements and whether
 the resource pack half is downloaded, and Java locks no advancement behind a pack and installs both
 halves together. The `editorExtension` capability asks for the Bedrock Editor, which Java has not
-got, and `experimental_custom_ui` asks for an HTML interface Bedrock itself dropped in 1.18.10.28. A
-setting's `text` and an option's `text` are labels on a screen Java does not have. The `pbr`,
-`raytraced` and `script_eval` capabilities are answered: the first two ask for physically based
-rendering, which the texture set conversion writes as labPBR sidecars, and the third asks for
-`eval`, which the script host evaluates with no permission of its own to grant.
+got, and `experimental_custom_ui` asks for an HTML interface Bedrock itself dropped in 1.18.10.28.
+The `pbr`, `raytraced` and `script_eval` capabilities are answered: the first two ask for
+physically based rendering, which the texture set conversion writes as labPBR sidecars, and the
+third asks for `eval`, which the script host evaluates with no permission of its own to grant.
 
 **An item's data value.** `set_data`, `random_aux_value`, `set_data_from_color_index` and
 `random_block_state` all pick one of the things a Bedrock id stands for by number: `minecraft:dye`

@@ -62,7 +62,6 @@ public final class McAddon implements ModInitializer {
         at.ioexception.mcaddon.block.BorderBlock.register();
 
         packs = PackDiscovery.scan();
-        at.ioexception.mcaddon.pack.PackSettings.read(packs);
         packs.report().forEach(LOGGER::info);
 
         ActiveAddons.install(AddonPacks.convert(packs));

@@ -16,3 +16,5 @@ entity.tp:sprite.name=Testgeest
 entity.tp:ember.name=Testsintel
 item.spawn_egg.entity.tp:sprite.name=Testgeest oproepen
 item.spawn_egg.entity.tp:ember.name=Testsintel oproepen
+tp.settings.sprite=Hoe de geest er voor jou uitziet.
+tp.settings.sprite_lit=Geest verlicht

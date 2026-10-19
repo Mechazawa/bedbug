@@ -12,6 +12,14 @@
       "geometry": {
         "default": "geometry.tp.ember"
       },
+      "scripts": {
+        "pre_animation": [
+          "v.lit = q.is_pack_setting_enabled('tp:sprite_lit');",
+          "v.size = q.get_pack_setting('tp:sprite_size');",
+          "v.blue = q.is_pack_setting_selected('tp:sprite_hue', 'blue');",
+          "v.heat = q.get_pack_setting('tp:ember_heat');"
+        ]
+      },
       "render_controllers": [
         "controller.render.tp.sprite"
       ]

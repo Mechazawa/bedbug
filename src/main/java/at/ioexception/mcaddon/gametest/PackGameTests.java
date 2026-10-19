@@ -642,33 +642,32 @@ public final class PackGameTests {
     /**
      * The settings a pack declares reach the two places that read one.
      *
-     * Bedrock lets a player move these on a screen beside the pack, so a pack's Molang and its
-     * script both read back whatever they were left at. With no such screen, the value is the
-     * `default` the manifest states, and both readers have to agree on that or a pack sees its
-     * slider through its script and its own default through its models.
+     * A world nobody changed them in holds the `default` the manifest states, and the server's
+     * Molang and its script have to agree on that or a pack sees its slider through its script and
+     * its own default through its models.
      */
     @GameTest()
     public void aPacksOwnSettingsReadBackAtTheirDeclaredValues(GameTestHelper helper) {
-        if (PackSettings.values().isEmpty()) {
+        if (PackSettings.WORLD.values().isEmpty()) {
             helper.succeed();
             return;
         }
 
-        helper.assertTrue(PackSettings.of("tp:ember_glows").enabled(),
+        helper.assertTrue(PackSettings.WORLD.of("tp:ember_glows").enabled(),
             "A toggle the pack ships switched on read back switched off.");
-        helper.assertTrue(PackSettings.of("tp:ember_heat").number() == 5.0,
+        helper.assertTrue(PackSettings.WORLD.of("tp:ember_heat").number() == 5.0,
             "A slider the pack ships at five read back at "
-                + PackSettings.of("tp:ember_heat").number() + ".");
-        helper.assertTrue(PackSettings.of("tp:ember_mood").selected("restless"),
+                + PackSettings.WORLD.of("tp:ember_heat").number() + ".");
+        helper.assertTrue(PackSettings.WORLD.of("tp:ember_mood").selected("restless"),
             "The dropdown answered with an option the pack did not ship it at.");
-        helper.assertTrue(!PackSettings.of("tp:ember_mood").selected("calm"),
+        helper.assertTrue(!PackSettings.WORLD.of("tp:ember_mood").selected("calm"),
             "The dropdown answered yes to an option it is not set to.");
-        helper.assertTrue(PackSettings.of("tp:ember_overdriven").number() == 8.0,
+        helper.assertTrue(PackSettings.WORLD.of("tp:ember_overdriven").number() == 8.0,
             "A slider shipped at 11 beside a maximum of 10 and a step of 4 read back at "
-                + PackSettings.of("tp:ember_overdriven").number() + ", not at 8.");
-        helper.assertTrue(PackSettings.of("tp:ember_drift").selected("north"),
+                + PackSettings.WORLD.of("tp:ember_overdriven").number() + ", not at 8.");
+        helper.assertTrue(PackSettings.WORLD.of("tp:ember_drift").selected("north"),
             "A dropdown shipped at an option it does not list was not set to its first one.");
-        helper.assertTrue(PackSettings.values().get("tp:ember_glows") == Boolean.TRUE,
+        helper.assertTrue(PackSettings.WORLD.values().get("tp:ember_glows") == Boolean.TRUE,
             "A script reading the pack settings is answered differently from the pack's own Molang.");
         helper.succeed();
     }

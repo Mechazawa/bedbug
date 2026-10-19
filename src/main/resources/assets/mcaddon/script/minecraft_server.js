@@ -4471,6 +4471,7 @@ function payloadsFor(group) {
         entityStartSneaking: EntityStartSneakingAfterEvent,
         entityStopSneaking: EntityStopSneakingAfterEvent,
         entityTamed: EntityTamedAfterEvent,
+        packSettingChange: PackSettingChangeAfterEvent,
     },
     worldBefore: {
         entityTamed: EntityTamedBeforeEvent,
@@ -4617,6 +4618,7 @@ export class PlayerGameModeChangeBeforeEventSignal extends EventSignal {}
 export class EntityStartSneakingAfterEventSignal extends EventSignal {}
 export class EntityStopSneakingAfterEventSignal extends EventSignal {}
 export class EntityTamedAfterEventSignal extends EventSignal {}
+export class PackSettingChangeAfterEventSignal extends EventSignal {}
 export class EntityTamedBeforeEventSignal extends EventSignal {}
 
 const RAISED = {
@@ -4666,6 +4668,7 @@ const RAISED = {
         entityStartSneaking: EntityStartSneakingAfterEventSignal,
         entityStopSneaking: EntityStopSneakingAfterEventSignal,
         entityTamed: EntityTamedAfterEventSignal,
+        packSettingChange: PackSettingChangeAfterEventSignal,
     },
     worldBefore: {
         entityTamed: EntityTamedBeforeEventSignal,
@@ -6222,6 +6225,15 @@ export class GameRuleChangeAfterEvent {
 
     get value() {
         return unsupported("GameRuleChangeAfterEvent.value");
+    }
+}
+export class PackSettingChangeAfterEvent {
+    get settingName() {
+        return unsupported("PackSettingChangeAfterEvent.settingName");
+    }
+
+    get settingValue() {
+        return unsupported("PackSettingChangeAfterEvent.settingValue");
     }
 }
 export class IsBabyCondition {}

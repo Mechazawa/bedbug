@@ -148,30 +148,6 @@ public final class AddonFormScreen extends Screen {
         column.scrollTo(scrolled);
     }
 
-    /**
-     * One line of body text per line it needs, because a form describes its text and not its layout.
-     *
-     * A pack writes a paragraph with newlines in it and expects the game to lay it out. Java draws a
-     * button's message on one line and shows a newline as a missing glyph, so the breaks a pack asked
-     * for are taken here and anything still too wide for the width is broken at a space.
-     */
-    private List<String> wrapped(String text) {
-        List<String> lines = new ArrayList<>();
-        for (String paragraph : text.split("\\r?\\n", -1)) {
-            String rest = paragraph;
-            while (font.width(rest) > WIDGET_WIDTH - TEXT_PADDING) {
-                int cut = rest.length();
-                while (cut > 1 && font.width(rest.substring(0, cut)) > WIDGET_WIDTH - TEXT_PADDING) {
-                    cut = rest.lastIndexOf(' ', cut - 1) > 0 ? rest.lastIndexOf(' ', cut - 1) : cut - 1;
-                }
-                lines.add(rest.substring(0, cut));
-                rest = rest.substring(cut).stripLeading();
-            }
-            lines.add(rest);
-        }
-        return lines;
-    }
-
     @Override
     protected void init() {
         widgets.clear();
@@ -246,7 +222,9 @@ public final class AddonFormScreen extends Screen {
                     continue;
                 }
                 default -> {
-                    for (String line : wrapped(text)) {
+                    // A form describes its text and not its layout, and a pack expects its newlines
+                    // kept, which a button's one line of message would show as a missing glyph.
+                    for (String line : ColumnScreen.wrap(font, text, WIDGET_WIDTH - TEXT_PADDING)) {
                         addRenderableWidget(column.add(new StringWidget(left, 0, WIDGET_WIDTH, LINE_HEIGHT,
                             Component.literal(line), font), row));
                         row += LINE_HEIGHT;

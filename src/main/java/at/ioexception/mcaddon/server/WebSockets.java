@@ -129,15 +129,17 @@ public final class WebSockets {
         return true;
     }
 
-    public static void register() {
-        Channels.receiveRequests((player, kind, body) -> {
-            switch (kind) {
-                case SUBSCRIPTIONS -> SUBSCRIBED.put(player.getUUID(), names(body));
-                case COMMAND -> answer(player, JsonParser.parseString(body).getAsJsonObject());
-                default -> {
-                }
+    /** A client's request about its websocket connection, which a kind of any other request is not. */
+    public static void request(ServerPlayer player, String kind, String body) {
+        switch (kind) {
+            case SUBSCRIPTIONS -> SUBSCRIBED.put(player.getUUID(), names(body));
+            case COMMAND -> answer(player, JsonParser.parseString(body).getAsJsonObject());
+            default -> {
             }
-        });
+        }
+    }
+
+    public static void register() {
         PlayerBlockBreakEvents.BEFORE.register((level, player, position, state, blockEntity) -> {
             if (listens(player, "BlockBroken")) BREAKING_WITH.put(player.getUUID(), player.getMainHandItem().copy());
             return true;

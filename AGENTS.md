@@ -807,7 +807,13 @@ These are the checks it runs, and what each one catches:
   and the pack itself painting it in a third, with the higher tier written first so a reader taking
   the last entry rather than the highest tier picks the wrong one. The behaviour pack declares one
   setting of each kind, which is what the three `query.*_pack_setting*` answers and
-  `World.getPackSettings` are asserted against. Both manifests also state the fields nothing here
+  `World.getPackSettings` are asserted against; `/bedrock scriptevent tp:pack_settings` tags the
+  player with what `getPackSettings` reads (`tp:setting_read_<name>_<value>`) and every
+  `packSettingChange` tags them `tp:setting_heard_<name>_<value>`. The resource pack declares a
+  label and a toggle written as translation keys of its own `texts/`, a slider and a dropdown, and
+  `tp:gazed`'s `pre_animation` copies the three resource settings and the behaviour pack's slider
+  into `v.lit`, `v.size`, `v.blue` and `v.heat`, which `PackSettingsClientGameTest` reads through a
+  `ScriptClock`. Both manifests also state the fields nothing here
   acts on, a capability among them, so a run says the reporting half of the manifest reader still
   works.
 
@@ -2208,6 +2214,41 @@ manifest again: `addons-reshaped` holds a later release of `sv` whose crate has 
   second set. It fails when the play phase's disconnect does not end the visit. A server needs
   `accepts-transfers=true` (that spelling) in its properties to take a transfer.
 
+## The add-on screen and pack settings
+
+`client/screen/AddonsScreen` lists the installed and the active add-ons (`AddonEntry`, one per
+`ConvertedPack`, active when the active set holds its converted directory). `new
+AddonsScreen(parent)` is the one way in, which a Mod Menu config screen factory can hand out as
+it is; `addToPauseMenu` puts the button on the pause menu through Fabric's `ScreenEvents`, in the
+row of the lowest button, which it moves down a row. The three screens extend `ColumnScreen`, a
+heading, a `ScrollingColumn` and a Done button that goes back to the parent. `AddonReportScreen`
+prints `PackSet.report(pack)` for each pack and `ServerHooks.entitiesReport()` and
+`scriptsReport()`, which are what `/mcaddon` prints; those two count every add-on together, because
+nothing records which add-on asked for a name.
+
+`pack/PackSettings` holds the declared settings of the active set and three layers of values over
+them: `WORLD` on a server, `TOLD` (what the server sent) and `CHOSEN` (the player's resource pack
+choices) on a client. The statics are shared by both sides in one process, so each side needs
+layers of its own. `PackManifest.Setting.with` brings any value inside its control, so
+a value read from a file or a request is clamped the way a default is. `EntityQueries` asks
+`PackSettings.onClient` on a client entity and `WORLD` on a server one; `World.getPackSettings`
+reads `WORLD`. `server/WorldPackSettings` keeps `WORLD` in the `packSettings` section of
+`AddonState`, takes a change through the `pack_settings` request only from an operator or the
+single player host, raises `packSettingChange` and sends every player the values and whether they
+may change them. `client/PlayerPackSettings` keeps `CHOSEN` in
+`config/mcaddon-pack-settings.json` and redraws an open `PackSettingsScreen` when the server
+answers; the screen asks again as it opens, so an operator made or unmade since the join is seen.
+
+`PackSettingsClientGameTest` reaches the screen from the pause menu, moves every control with the
+pointer (the wheel first brings it into the column's window), reads the world's values back through
+the test pack's script and the player's through the client's Molang, and on a dedicated server
+finds the world's controls greyed out for a player who is no operator and a request sent by hand
+refused. While three other client game tests ran on the same desktop, its dedicated server half
+stopped in four of its first runs with the render thread in `glfwSwapBuffers` until the server's
+watchdog ended the run, and every later run of the same code passed: that is the compositor stall
+described under the client game tests, which only a dedicated server's watchdog turns into a
+failure.
+
 ## Script developer tools
 
 `/bedrock script` is `server.ScriptCommand`, over three classes in `script/`:
@@ -2434,7 +2475,7 @@ src/main/java/at/ioexception/mcaddon/
                              add-on's own screen is opened from
   gametest/                  The Mojang game tests, reached through the fabric-gametest entrypoint
   client/render/             Renderer, attachable layer, pass resolution, what only a client answers
-  client/screen/             The screen a Bedrock form becomes
+  client/screen/             The screen a Bedrock form becomes, the add-on list and pack settings
   mixin/                     Pack repository source, the attachable layer, the camera and the fog
   platform/Platform.java     Every call whose spelling differs across versions
   network/Channels.java      Payloads, in both the 1.21+ and the older form

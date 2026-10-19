@@ -12,6 +12,7 @@
       "at.ioexception.mcaddon.clientgametest.WorldClientGameTest",
       "at.ioexception.mcaddon.clientgametest.DrawnSizeClientGameTest",
       "at.ioexception.mcaddon.clientgametest.FormClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.PackSettingsClientGameTest",
       "at.ioexception.mcaddon.clientgametest.JsonUiClientGameTest",
       "at.ioexception.mcaddon.clientgametest.GroupGoalClientGameTest",
       "at.ioexception.mcaddon.clientgametest.GoalSoundClientGameTest",

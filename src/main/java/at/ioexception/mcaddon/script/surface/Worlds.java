@@ -494,7 +494,7 @@ public final class Worlds extends Surface {
      */
     @HostAccess.Export
     public String packSettings() {
-        return Json.encode(PackSettings.values());
+        return Json.encode(PackSettings.WORLD.values());
     }
 
     @HostAccess.Export

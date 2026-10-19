@@ -115,59 +115,67 @@ public record PackManifest(
     }
 
     /**
-     * One slider, toggle or dropdown a pack offers, at the value it ships with.
+     * One entry of a pack's settings screen: a label, or a slider, toggle or dropdown at its value.
      *
-     * Bedrock shows these on a screen beside the pack and lets a player move them. Java has no such
-     * screen, so every one of them stays where its author put it, which is what `default` holds,
-     * brought inside what the control could have been set to: a slider's default lies within `min`
-     * and `max` and on a multiple of `step` from `min`, and a dropdown's default is one of its
-     * options, the first when the pack names another. `text`, the label beside a control, has
-     * nowhere to be shown.
+     * A control starts at `default`, brought inside what the control could have been set to: a
+     * slider's value lies within `min` and `max` and on a multiple of `step` from `min`, and a
+     * dropdown's value is one of its options, the first when the pack names another. A value a
+     * player sets later is brought inside the same way, through {@link #with}. A label has no name
+     * and no value, and is kept only for the screen. `text` may be a translation key.
      *
      * Each answer checks the kind it is being asked for, because the three Molang queries are three
      * names for one index: a slider read as a toggle answers no, and a toggle read as a slider
      * answers zero rather than being parsed as a number it never was.
      */
-    public record Setting(String type, String name, JsonElement value) {
+    public record Setting(String type, String name, String text, JsonElement value, double min, double max,
+        double step, List<Option> options) {
+
+        /** One choice of a dropdown: the name a query compares against and the text it is shown as. */
+        public record Option(String name, String text) {
+        }
+
         static Setting tryFrom(JsonObject setting) {
-            String name = Json.text(setting, "name", null);
-            if (name == null) return null;
-
             String type = Json.text(setting, "type", "");
-            JsonElement value = setting.get("default");
-            if (value == null || !value.isJsonPrimitive()) return new Setting(type, name, value);
+            String name = Json.text(setting, "name", null);
+            if (name == null && !"label".equals(type)) return null;
 
-            JsonElement normalised = switch (type) {
-                case "slider" -> value.getAsJsonPrimitive().isNumber() ? slider(setting, value.getAsDouble()) : value;
-                case "dropdown" -> dropdown(setting, value);
-                default -> value;
-            };
-            return new Setting(type, name, normalised);
-        }
-
-        private static JsonElement slider(JsonObject setting, double shipped) {
-            double low = Json.number(setting, "min", Double.NEGATIVE_INFINITY);
-            double high = Json.number(setting, "max", Double.POSITIVE_INFINITY);
-            double step = Json.number(setting, "step", 0);
-
-            double value = Math.max(low, Math.min(high, shipped));
-            if (step > 0 && Double.isFinite(low)) {
-                double snapped = low + Math.round((value - low) / step) * step;
-                value = snapped > high ? snapped - step : snapped;
-            }
-            return new JsonPrimitive(value);
-        }
-
-        private static JsonElement dropdown(JsonObject setting, JsonElement shipped) {
-            List<String> options = Json.list(setting, "options").stream()
+            List<Option> options = Json.list(setting, "options").stream()
                 .filter(JsonElement::isJsonObject)
                 .map(JsonElement::getAsJsonObject)
-                .map(option -> Json.text(option, "name", null))
-                .filter(name -> name != null)
+                .map(option -> new Option(Json.text(option, "name", null), Json.text(option, "text", "")))
+                .filter(option -> option.name() != null)
                 .toList();
+            JsonElement shipped = setting.get("default");
+            return new Setting(type, name, Json.text(setting, "text", ""), shipped,
+                Json.number(setting, "min", Double.NEGATIVE_INFINITY),
+                Json.number(setting, "max", Double.POSITIVE_INFINITY),
+                Json.number(setting, "step", 0), options).with(shipped);
+        }
 
-            return options.isEmpty() || options.contains(shipped.getAsString())
-                ? shipped : new JsonPrimitive(options.get(0));
+        /**
+         * This setting at `candidate`, brought inside what its control can be set to. A candidate of
+         * a kind the control cannot hold leaves the setting where it was.
+         */
+        public Setting with(JsonElement candidate) {
+            if (candidate == null || !candidate.isJsonPrimitive()) return this;
+
+            JsonPrimitive offered = candidate.getAsJsonPrimitive();
+            JsonElement accepted = switch (type) {
+                case "toggle" -> offered.isBoolean() ? offered : null;
+                case "slider" -> offered.isNumber() ? new JsonPrimitive(onSlider(offered.getAsDouble())) : null;
+                case "dropdown" -> options.isEmpty() || options.stream().anyMatch(option ->
+                    option.name().equals(offered.getAsString())) ? offered : new JsonPrimitive(options.get(0).name());
+                default -> offered;
+            };
+            return accepted == null ? this : new Setting(type, name, text, accepted, min, max, step, options);
+        }
+
+        private double onSlider(double offered) {
+            double inside = Math.max(min, Math.min(max, offered));
+            if (step <= 0 || !Double.isFinite(min)) return inside;
+
+            double snapped = min + Math.round((inside - min) / step) * step;
+            return snapped > max ? snapped - step : snapped;
         }
 
         public double number() {
@@ -245,16 +253,6 @@ public record PackManifest(
      * that wrote the pack, which nothing here has to answer for.
      */
     private static final Set<String> METADATA_DROPPED = Set.of("generated_with", "product_type");
-
-    /**
-     * The setting fields that describe the screen rather than the value.
-     *
-     * `text` is the label beside a control and an option's `text` is the label beside a choice;
-     * with no screen to show either, they name nothing a script or a query can ask for.
-     */
-    private static final Set<String> SETTING_DROPPED = Set.of("text");
-
-    private static final Set<String> SETTING_OPTIONS_DROPPED = Set.of("text");
 
     /**
      * The subpack spelling Mojang's newest schema has dropped and its documentation still carries.
@@ -418,14 +416,6 @@ public record PackManifest(
         dropped(json.getAsJsonObject("metadata"), "metadata.", METADATA_DROPPED, found);
         for (JsonElement module : Json.list(json, "modules")) {
             dropped(object(module), "module.", MODULE_DROPPED, found);
-        }
-        for (JsonElement element : Json.list(json, "settings")) {
-            JsonObject control = object(element);
-            dropped(control, "setting.", SETTING_DROPPED, found);
-            if (control == null) continue;
-            for (JsonElement option : Json.list(control, "options")) {
-                dropped(object(option), "setting.options.", SETTING_OPTIONS_DROPPED, found);
-            }
         }
         return List.copyOf(found);
     }

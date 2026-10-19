@@ -116,6 +116,13 @@ public final class ServerHooks {
         Visitors.register();
         WorldEvents.register();
         WebSockets.register();
+        Channels.receiveRequests((player, kind, body) -> {
+            if (WorldPackSettings.KIND.equals(kind)) {
+                WorldPackSettings.request(player, body);
+            } else {
+                WebSockets.request(player, kind, body);
+            }
+        });
         // Both sides are asked whatever the other answers: a pack's script watches for the attempt
         // and not only for the damage that lands.
         ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> {
@@ -144,6 +151,7 @@ public final class ServerHooks {
             startState(handler.player);
             Music.joined(handler.player);
             BedrockRules.joined(handler.player);
+            WorldPackSettings.tell(handler.player);
             ServerIdentity.joined(handler.player);
             playerJoined(handler.player);
         });
@@ -306,6 +314,7 @@ public final class ServerHooks {
         AreaSchedules.load(state);
         MobEvents.load(state, server);
         BedrockRules.load(state);
+        WorldPackSettings.load(state);
         Cheats.start(server);
         ServerIdentity.start();
         Visitors.load(state);
@@ -331,6 +340,7 @@ public final class ServerHooks {
         WorldEvents.forget();
         at.ioexception.mcaddon.structure.StructurePlacement.forget();
         Music.forget();
+        WorldPackSettings.forget();
         if (state != null) state.save();
     }
 
@@ -392,21 +402,28 @@ public final class ServerHooks {
                 return 1;
             }))
             .then(Commands.literal("entities").executes(command -> {
-                List<String> report = new java.util.ArrayList<>(AddonEntities.report());
-                if (report.isEmpty()) report.add("Every entity component the packs used is implemented.");
-                report.addAll(AddonEntities.answers());
-                report.forEach(line -> command.getSource().sendSuccess(() -> Component.literal(line), false));
+                entitiesReport().forEach(line ->
+                    command.getSource().sendSuccess(() -> Component.literal(line), false));
                 return 1;
             }))
             .then(Commands.literal("scripts").executes(command -> {
-                if (scripts == null) {
-                    command.getSource().sendSuccess(() -> Component.literal("No pack scripts are running."), false);
-                    return 0;
-                }
-                scripts.coverage().report().forEach(line ->
+                scriptsReport().forEach(line ->
                     command.getSource().sendSuccess(() -> Component.literal(line), false));
-                return 1;
+                return scripts == null ? 0 : 1;
             })));
+    }
+
+    /** What `/mcaddon entities` prints: the gaps in what the packs' data asked for, then what was declined. */
+    public static List<String> entitiesReport() {
+        List<String> report = new java.util.ArrayList<>(AddonEntities.report());
+        if (report.isEmpty()) report.add("Every entity component the packs used is implemented.");
+        report.addAll(AddonEntities.answers());
+        return report;
+    }
+
+    /** What `/mcaddon scripts` prints, for the scripts running in this process. */
+    public static List<String> scriptsReport() {
+        return scripts == null ? List.of("No pack scripts are running.") : scripts.coverage().report();
     }
 
     /**
