@@ -31,13 +31,13 @@ public final class WitherGoal extends Goal {
     private final AddonEntity mob;
     private final boolean shoots;
     private final Filter allowed;
-    private int untilShot;
+    private int searchAt;
     private LivingEntity found;
 
     private WitherGoal(AddonEntity mob, JsonObject component, boolean shoots) {
         this.mob = mob;
         this.shoots = shoots;
-        this.allowed = Goals.filter(component, "entity_types");
+        this.allowed = Filter.entityTypes(component.get("entity_types"));
         setFlags(shoots ? EnumSet.of(Goal.Flag.LOOK) : EnumSet.of(Goal.Flag.TARGET));
     }
 
@@ -54,9 +54,9 @@ public final class WitherGoal extends Goal {
     @Override
     public boolean canUse() {
         // Both halves ask a question over a wide box, so neither is asked every tick.
-        if (untilShot-- > 0) return false;
+        if (mob.tickCount < searchAt) return false;
 
-        untilShot = SHOT_INTERVAL;
+        searchAt = mob.tickCount + SHOT_INTERVAL;
         found = shoots ? somethingElseNearby() : worstAttacker();
         return found != null;
     }

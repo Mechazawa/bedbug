@@ -30,6 +30,8 @@ public final class BedrockSoundNames {
         Map.entry("ambient.weather.rain", "weather.rain"),
         Map.entry("ambient.weather.the_end_light_flash", "weather.end_flash"),
         Map.entry("ambient.weather.thunder", "entity.lightning_bolt.thunder"),
+        Map.entry("breeze_wind_charge.burst", "entity.breeze.wind_burst"),
+        Map.entry("explode", "entity.generic.explode"),
         Map.entry("music.game.basalt_deltas", "music.nether.basalt_deltas"),
         Map.entry("music.game.creative", "music.creative"),
         Map.entry("music.game.credits", "music.credits"),
@@ -57,7 +59,8 @@ public final class BedrockSoundNames {
         Map.entry("music.game_and_wild_favor_game", "music.game"),
         Map.entry("music.overworld.jungle_edge", "music.overworld.sparse_jungle"),
         Map.entry("music.overworld.mesa", "music.overworld.badlands"),
-        Map.entry("music.overworld.swamp_music", "music.overworld.swamp"));
+        Map.entry("music.overworld.swamp_music", "music.overworld.swamp"),
+        Map.entry("wind_charge.burst", "entity.wind_charge.wind_burst"));
 
     /**
      * The level sound events a swing names, against the Java sound Bedrock's own entry for each

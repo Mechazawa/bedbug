@@ -6,6 +6,7 @@ import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.util.DefaultRandomPos;
 import net.minecraft.world.entity.ai.util.LandRandomPos;
+import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.EnumSet;
@@ -29,6 +30,7 @@ final class ShelterGoal extends Goal {
     private final int cooldown;
     private int readyAt;
     private Vec3 heading;
+    private Path route;
 
     private ShelterGoal(PathfinderMob mob, JsonObject component, boolean outdoors, double speed) {
         this.mob = mob;
@@ -69,8 +71,13 @@ final class ShelterGoal extends Goal {
         for (int i = 0; i < tries; i++) {
             Vec3 spot = LandRandomPos.getPos(mob, across, upDown);
             if (spot == null) spot = DefaultRandomPos.getPos(mob, across, upDown);
-            if (spot != null && underSky(mob.level(), BlockPos.containing(spot)) == outdoors && reachable(spot)) {
+            if (spot == null || underSky(mob.level(), BlockPos.containing(spot)) != outdoors) continue;
+
+            // Accuracy 0 ends the walk on the spot; moveTo's accuracy of 1 may end a block short, under the roof.
+            Path path = mob.getNavigation().createPath(BlockPos.containing(spot), 0);
+            if (path != null && path.canReach()) {
                 heading = spot;
+                route = path;
                 return true;
             }
         }
@@ -80,7 +87,7 @@ final class ShelterGoal extends Goal {
 
     @Override
     public void start() {
-        if (!mob.getNavigation().moveTo(heading.x, heading.y, heading.z, speed)) {
+        if (!mob.getNavigation().moveTo(route, speed)) {
             readyAt = mob.tickCount + cooldown;
         }
     }
@@ -98,12 +105,6 @@ final class ShelterGoal extends Goal {
 
     private boolean there() {
         return heading != null && mob.position().distanceToSqr(heading) <= arrived * arrived;
-    }
-
-    /** A spot on a roof or behind a wall is under the sky or out of it all the same, and no use. */
-    private boolean reachable(Vec3 spot) {
-        net.minecraft.world.level.pathfinder.Path path = mob.getNavigation().createPath(BlockPos.containing(spot), 0);
-        return path != null && path.canReach();
     }
 
     /** Lit by the whole of the sky, which is what Java's own question about the open sky asks. */

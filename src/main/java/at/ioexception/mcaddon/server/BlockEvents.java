@@ -245,7 +245,7 @@ public final class BlockEvents {
 
         if (response.adding()) {
             Platform.addEffect(living, response.effect(),
-                (int) (response.seconds() * 20), response.amplifier(), true);
+                (int) (response.seconds() * 20), response.amplifier(), false, true);
         } else {
             Platform.removeEffect(living, response.effect());
         }

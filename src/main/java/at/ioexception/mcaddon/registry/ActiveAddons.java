@@ -2,10 +2,14 @@ package at.ioexception.mcaddon.registry;
 
 import at.ioexception.mcaddon.resource.AddonSet;
 import at.ioexception.mcaddon.server.Dialogues;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 /**
  * Which add-ons answer on this side now.
@@ -25,6 +29,8 @@ public final class ActiveAddons {
 
     private static AddonSet installed = AddonSet.EMPTY;
     private static AddonSet active = AddonSet.EMPTY;
+    /** Read by the resource reload's worker threads while the client thread may activate another set. */
+    private static volatile Set<Identifier> activeItems = Set.of();
 
     private ActiveAddons() {
     }
@@ -52,7 +58,8 @@ public final class ActiveAddons {
      */
     public static void activate(AddonSet set) {
         active = set;
-        java.util.Set<net.minecraft.world.item.Item> items = AddonRegistry.ensureRegistered(set);
+        Set<net.minecraft.world.item.Item> items = AddonRegistry.ensureRegistered(set);
+        activeItems = items.stream().map(BuiltInRegistries.ITEM::getKey).collect(Collectors.toUnmodifiableSet());
         AddonSounds.readMusic(set.converted());
         AddonSounds.readEvents(set.converted(), AddonItems.swingEvents());
         AddonFogs.register(set.converted());
@@ -61,6 +68,14 @@ public final class ActiveAddons {
         Dialogues.read(set);
         AddonCreativeTab.show(set.packs(), items);
         LISTENERS.forEach(listener -> listener.accept(set));
+    }
+
+    /**
+     * Whether `id` names an item an add-on registered that the active set does not carry. A block
+     * is asked about by its own identifier, which its item shares.
+     */
+    public static boolean isDormant(Identifier id) {
+        return AddonRegistry.registeredItem(id) && !activeItems.contains(id);
     }
 
     /** Runs after every activation, which is how the drawing side follows the active set. */

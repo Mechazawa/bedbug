@@ -1,11 +1,14 @@
 package at.ioexception.mcaddon.entity;
 
 import com.google.gson.JsonObject;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.IntStream;
 
 /**
  * How `minecraft:flocking` steers an entity among the others of its kind around it.
@@ -17,6 +20,12 @@ import java.util.Objects;
  * off than `innner_cohesion_threshold` and nearer than `cohesion_threshold`; and `goal_weight` scales
  * the two together. Every weight defaults to what Mojang's documentation states, and `goal_weight`
  * to nothing, so a component with an empty body schools no one.
+ *
+ * Three more pushes need no flock, and `goal_weight` scales them as well. A solid block level with
+ * the entity's middle and nearer than `block_distance` pushes it away by `block_weight`, harder the
+ * nearer it is. The height over the first solid block below is held between `min_height` and
+ * `max_height`. And an entity flocking `in_water` flocks only while in water, and is pushed back
+ * under by `breach_influence` while its eyes are out of it.
  */
 final class Flocking {
     /** How hard one tick of flocking pushes, at a weight of one. */
@@ -32,6 +41,12 @@ final class Flocking {
     private final double cohesionWeight;
     private final double goalWeight;
     private final double lonerChance;
+    private final double blockDistance;
+    private final double blockWeight;
+    private final double lowest;
+    private final double highest;
+    private final boolean inWater;
+    private final double breach;
 
     private Flocking(JsonObject component) {
         this.influence = Goals.number(component, "influence_radius", 0);
@@ -45,6 +60,12 @@ final class Flocking {
         this.cohesionWeight = Goals.number(component, "cohesion_weight", 1);
         this.goalWeight = Goals.number(component, "goal_weight", 0);
         this.lonerChance = Goals.number(component, "loner_chance", 0);
+        this.blockDistance = Goals.number(component, "block_distance", 0);
+        this.blockWeight = Goals.number(component, "block_weight", 0);
+        this.lowest = Goals.number(component, "min_height", 0);
+        this.highest = Goals.number(component, "max_height", 0);
+        this.inWater = Goals.flag(component, "in_water", false);
+        this.breach = Goals.number(component, "breach_influence", 0);
     }
 
     /** Null for an entity whose live components hold no flocking. */
@@ -59,7 +80,14 @@ final class Flocking {
 
     /** The push one tick of flocking gives the entity. */
     Vec3 steer(AddonEntity self) {
-        if (influence <= 0 || goalWeight == 0) return Vec3.ZERO;
+        if (goalWeight == 0 || inWater && !self.isInWater()) return Vec3.ZERO;
+
+        return amongTheFlock(self).add(offTheWalls(self)).add(withinHeight(self)).add(underTheSurface(self))
+            .scale(goalWeight * PUSH);
+    }
+
+    private Vec3 amongTheFlock(AddonEntity self) {
+        if (influence <= 0) return Vec3.ZERO;
 
         List<AddonEntity> flock = self.level().getEntitiesOfClass(AddonEntity.class,
                 self.getBoundingBox().inflate(influence),
@@ -84,7 +112,54 @@ final class Flocking {
         Vec3 together = off > innerCohesion && off < cohesionDistance && off > 1.0E-4
             ? towards.normalize().scale(cohesionWeight) : Vec3.ZERO;
 
-        return apart.add(together).scale(goalWeight * PUSH);
+        return apart.add(together);
+    }
+
+    private Vec3 offTheWalls(AddonEntity self) {
+        if (blockDistance <= 0 || blockWeight == 0) return Vec3.ZERO;
+
+        BlockPos middle = BlockPos.containing(self.getX(), self.getY() + self.getBbHeight() / 2, self.getZ());
+        return Direction.Plane.HORIZONTAL.stream()
+            .map(side -> IntStream.rangeClosed(1, (int) Math.ceil(blockDistance))
+                .mapToObj(step -> middle.relative(side, step))
+                .filter(at -> solid(self, at))
+                .findFirst()
+                .map(wall -> awayFrom(self, side, wall))
+                .orElse(Vec3.ZERO))
+            .reduce(Vec3.ZERO, Vec3::add)
+            .scale(blockWeight);
+    }
+
+    /** The push away from the face of `wall` nearest the entity, which lies towards `side`. */
+    private Vec3 awayFrom(AddonEntity self, Direction side, BlockPos wall) {
+        double face = side.getAxis().choose(wall.getX(), 0, wall.getZ())
+            + (side.getAxisDirection().getStep() > 0 ? 0 : 1);
+        double gap = Math.abs(face - side.getAxis().choose(self.getX(), 0, self.getZ()));
+        if (gap >= blockDistance) return Vec3.ZERO;
+
+        return new Vec3(-side.getStepX(), 0, -side.getStepZ()).scale((blockDistance - gap) / blockDistance);
+    }
+
+    private Vec3 withinHeight(AddonEntity self) {
+        if (lowest <= 0 && highest <= 0) return Vec3.ZERO;
+
+        BlockPos feet = self.blockPosition();
+        double height = IntStream.rangeClosed(0, (int) Math.ceil(Math.max(lowest, highest)) + 1)
+            .mapToObj(feet::below)
+            .filter(at -> solid(self, at))
+            .findFirst()
+            .map(ground -> self.getY() - ground.getY() - 1)
+            .orElse(Double.MAX_VALUE);
+        if (height < lowest) return new Vec3(0, 1, 0);
+        return highest > 0 && height > highest ? new Vec3(0, -1, 0) : Vec3.ZERO;
+    }
+
+    private Vec3 underTheSurface(AddonEntity self) {
+        return inWater && self.isInWater() && !self.isUnderWater() ? new Vec3(0, -breach, 0) : Vec3.ZERO;
+    }
+
+    private static boolean solid(AddonEntity self, BlockPos at) {
+        return !self.level().getBlockState(at).getCollisionShape(self.level(), at).isEmpty();
     }
 
     private static boolean looksLike(AddonEntity self, AddonEntity other) {

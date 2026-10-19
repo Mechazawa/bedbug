@@ -785,7 +785,7 @@ public final class ScriptBridge {
     public boolean addEffect(String id, String effect, int duration, int amplifier, boolean particles) {
         Identifier parsed = Identifier.tryParse(effect);
         return parsed != null && entity(id) instanceof LivingEntity living
-            && Platform.addEffect(living, parsed, duration, amplifier, particles);
+            && Platform.addEffect(living, parsed, duration, amplifier, false, particles);
     }
 
     /** Every effect the entity is under, as the JSON a script's `Effect` objects are built from. */

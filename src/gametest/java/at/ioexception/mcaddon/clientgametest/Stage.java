@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.clientgametest;
 
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
+import net.fabricmc.fabric.api.client.gametest.v1.context.TestServerConnection;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestServerContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.core.BlockPos;
@@ -25,9 +26,19 @@ final class Stage {
 
     /** Builds the floor, empties the space above it and stands a player with nothing in hand on it. */
     static void build(ClientGameTestContext context, TestSingleplayerContext world, String gameMode) {
-        TestServerContext server = world.getServer();
+        build(context, world.getServer(), () -> Worlds.waitForChunks(world), gameMode);
+    }
+
+    /** The same on a dedicated server, the client reaching it over {@code connection}. */
+    static void build(ClientGameTestContext context, TestServerContext server, TestServerConnection connection,
+        String gameMode) {
+        build(context, server, () -> Worlds.waitForChunks(connection), gameMode);
+    }
+
+    private static void build(ClientGameTestContext context, TestServerContext server, Runnable waitForChunks,
+        String gameMode) {
         server.runCommand("tp @a 0.5 " + (FLOOR + 1) + " 0.5 0 0");
-        Worlds.waitForServer(context, world.getServer(),
+        Worlds.waitForServer(context, server,
             minecraft -> player(minecraft).level().isLoaded(CENTRE.offset(HALF_WIDTH, 0, HALF_WIDTH))
                 && player(minecraft).level().isLoaded(CENTRE.offset(-HALF_WIDTH, 0, -HALF_WIDTH)),
             200, "The chunks under the stage never loaded.");
@@ -48,7 +59,7 @@ final class Stage {
         server.runCommand("gamemode " + gameMode + " @a");
         server.runCommand("clear @a");
         server.runCommand("tp @a 0.5 " + (FLOOR + 1) + " 0.5 0 0");
-        Worlds.waitForChunks(world);
+        waitForChunks.run();
         // The teleport turns the view as well, so a view set before it reaches the client is lost.
         context.waitFor(client -> client.player.blockPosition().equals(CENTRE.above())
             && client.player.getYRot() == 0 && client.player.getXRot() == 0);

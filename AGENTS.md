@@ -136,6 +136,14 @@ These are the checks it runs, and what each one catches:
   tick costs the tick rather than the server, and that a converted dimension and its dimension type
   decode through this version's own codecs, whose field lists differ on each of the four.
 
+  **Hunting a flaky game test.** The whole suite takes about forty seconds, so repeat it. A single
+  test runs with `JAVA_TOOL_OPTIONS=-Dfabric-api.gametest.filter='mcaddon:*<snake_case_name>*'` (the
+  id is the class and method in snake case, and the wildcard needs the `mcaddon:` prefix).
+  Adding `-Dfabric-api.gametest.verify=true` runs 400 copies of each match, 100 in each of four
+  rotations, at once. A test that reads absolute offsets fails in the three turned copies by
+  construction, so read only the unturned ones. Fabric's `@GameTest` allows 20 ticks unless `maxTicks`
+  says more.
+
   The run directory is `versions/<minecraft>/build/run/gameTest/`. No pack content is committed, so
   the two tests that need one succeed when none is loaded; dropping a `.mcaddon` into that
   directory's `addons/` gives them something to assert against.
@@ -196,12 +204,37 @@ These are the checks it runs, and what each one catches:
   across every checkout on the machine (`-PclientSlots=<n>` changes the count, and
   `cpu-lock --status` shows who holds them and who waits).
 
+  **A run that stops ticking ends itself.** `HangWatchdog`, the test source set's `client`
+  entrypoint, counts every tick of the client and of any server in the process. Fabric lets the
+  client tick only from a test's `waitTick`, so every wait a test makes is progress, and the longest
+  wait in these tests is a minute. Once nothing has ticked for three minutes (`-PclientHangMinutes=<n>`
+  changes that, fractions allowed), it writes a full thread dump, locked monitors and synchronizers
+  included, to `versions/<version>/build/run/clientGameTest/hang-<timestamp>.txt`, logs
+  `CLIENT GAME TEST HANG: <file> during <test class>` at `ERROR` and halts the process with exit code
+  124, so the Gradle task fails and gives back its `minecraft-client` slot. The dump's first line is
+  that same line, which `tools/checkall.sh` prints after the build, and `verify.py` reports the log
+  line as a failure of its own. The clock starts at the first tick, so a game that never finishes
+  starting is not caught. The test it names is a `*ClientGameTest` class found on a thread's
+  stack, or the last one seen when no thread carries one.
+
   A client that stops logging with a window the desktop calls not responding and almost no CPU is
   worth a `jstack <pid>` before it is killed. One such stop on 26.1.2 had the render thread parked
   in `IntegratedServer.halt` under Fabric's `deferDisconnect`, the server thread and the test thread
   both parked in Fabric's `ThreadingImpl.enterPhase`, and the test thread inside
   `TestSingleplayerContextImpl.close`: the three wait on each other while a test world closes, and
   no code of this mod is on any of the three stacks.
+  The render thread has left Fabric's phaser to run the deferred disconnect, and `IntegratedServer.halt`
+  waits for the server thread to run a task, while the server thread, already halted by its owner's
+  logout, waits at the phaser for the render thread to arrive: a race inside the API (version 6.0.2 on
+  26.2), seen with a server still busy generating chunks. Nothing in this repository's tests or mod
+  touches those phases.
+  The `gametest` source set works around it with `IntegratedServerHaltMixin`, which redirects the
+  `executeBlocking` call in `halt` to run the guest removal in place on the server thread, queue it
+  with `execute` otherwise, and drop it once the server has stopped. It is in
+  `mcaddon-gametest.mixins.json` only, so the mod jar never carries it. To reproduce the deadlock
+  on demand, add a temporary mixin sleeping 300 ms on the render thread at the head of
+  `IntegratedServer.halt` (the server thread calls `halt` too, and must not sleep) and close a world:
+  without the redirect the first close hangs.
 
   Only the 26.x targets ship that API, so the tests are a source set of their own (`gametest`, with
   its own `fabric.mod.json` listing them) that the two older targets never compile, and `check`
@@ -469,13 +502,22 @@ These are the checks it runs, and what each one catches:
   whatever moves it is the group a test switched on, and a test holding its feet sets its speed to
   nothing so that a pig standing apart from it is reached by the goal and not by a walk. Its groups
   cover the melee fields (a cooldown, a box reach, a reach multiple, the attack and kill events, fire
-  passed on), a ranged attack's interval stretched across its range, the panic causes, force and
+  passed on), a ranged attack's interval stretched across its range, its potion arrows, its charged burst and
+  swing, and its minimum range and sight time (`poisoner`, `burster`, `wary`), the panic causes, force and
   water, an escape from a block, a target and a projectile teleport, three breeding groups (what a
   child inherits, what a certain mutation and a denied variant give it), taming by item and breaking
   in by riding, listed riders, a poisoning attack, the rideable fields, an explosion heeding or
   ignoring the griefing rule and a resistance cap, a potion drunk by its conditions, the shelter
   walks, water looked for, a goal radius, a leap, an area attack's cooldown, a step taken while
-  steered, and four flocking groups. Each event that adds a group is named after it. A few traps met
+  steered, and four flocking groups. Three more flocking groups hold a brute off a wall, between two
+  heights and under the surface of a pool, the last two floating with gravity off; a water drag group
+  is launched down a channel beside a plain brute; two swimming groups and four flying ones are read
+  back through the spot the navigation heads for, the flying ones with a fly navigation of their own;
+  a follow group walks towards a pig ten blocks off, a raider group towards a brute whose group makes
+  it the captain, and three walk groups to a gold block set into the floor, raising `tp:reached` and
+  `tp:stayed`. A walk's `goal_radius` is one block there, because Java's path ends a block short of
+  its target and Bedrock's half block is never reached from there. Each event that adds a group is
+  named after it. A few traps met
   writing them: the empty structure's floor is not a block Java's random walks may end on, so a test
   needing one lays stone first; light under a new roof takes a few ticks to settle, so a test asking
   `canSeeSky` builds first and waits; the older versions place test structures close enough that a
@@ -483,7 +525,29 @@ These are the checks it runs, and what each one catches:
   where it broke a block. `GoalSoundClientGameTest` hears the panic and retreat sounds the brute's
   `sounds.json` entry names, which a sound moment no Java question reaches has to be kept for.
   `tp:spark` reflects when struck after a tenth of a second, and its brittle and dull groups are
-  removed and stopped when struck instead.
+  removed and stopped when struck instead. `tp:dart` is a slow projectile with no gravity that GoalGameTests
+  fires through pigs: plain it stops at the first, `tp:dart_piercing` hits every one and
+  `tp:dart_bouncing` bounces off an invulnerable one. `tp:brute_stalking` carries an ocelot attack and
+  `tp:brute_pouncing` a pounce whose stuck block is gravel, because a snow layer does not survive on
+  the empty structure's barrier floor. `tp:brute_hopping` jumps around its target the way a breeze does. `vaulting` leaps by `target_dist` and from the air, `soothing` hands out an ambient
+  effect on a cooldown, `ramming` runs up to a far target, `lunging` rests between aquatic charges and
+  `hauling` holds a strength over its `max`. `trampling` stomps and `winding` lands a delayed blow. `touchy` turns on what pushes it, `prickly` hurts without naming itself and `gunning` fires from
+  and at its anchors within its view. `choosy` picks its arrow from its shooter's `projectiles`. `mirrored` turns a reflected snowball by its Molang angle. Four more brute groups each blow up one
+  way (`submerged`, `gentle`, `switching`, `launching`), read back in `GoalGameTests.aBlast*`. The brute's `tp:brute_roaring` group roars,
+  pushing pigs tagged `tp_pushable` and hurting those tagged `tp_hurtable`.
+
+  `tp:idler` is a plain mob for the resting and idling goals, and `IdleGoalGameTests` reads each
+  group back through a pose or a property: timer flags, sitting, lying down, looking around and
+  sitting, napping with its detection box and exceptions, croaking, sniffing, emerging, digging,
+  holding ground, looking at the target, playing dead and sneezing. Java ticks a running goal only
+  every second tick, so a goal that counts its own `tick` calls runs its waits at double length;
+  these goals count on the game clock, and a test that reads a duration off them catches the other
+  kind. `tp:cart`, `tp:cart_keeping` and `tp:cart_checking` carry `minecraft:rail_sensor` and
+  `SensorGameTests` runs them over a rail powered by a block of redstone beside it, because a powered
+  rail set powered by hand is recomputed unpowered. `tp:gazed` carries `minecraft:looked_at` in one
+  group per field and `LookedAtGameTests` aims a player or a pig at it; a mock player made with
+  `makeMockPlayer` is not in the level's entity list, and a creative one is never a valid target, so
+  those tests use `makeMockServerPlayerInLevel` and a pig as the looker whose target is asserted.
 
   The ember's sensing group carries a `minecraft:damage_sensor` with one trigger per cause, each
   setting the enum property `tp:felt` to the cause it heard: `fall`, `entity_attack`, `projectile`,
@@ -494,11 +558,31 @@ These are the checks it runs, and what each one catches:
   The brute carries five more groups for goals that move it somewhere of its own choosing:
   `tp:brute_stomping` looks for turtle eggs every tick, `tp:brute_exploring` walks five blocks past
   the edge of a village, `tp:brute_village_bound` walks to the nearest village, `tp:brute_hiding`
-  runs to a bed when a bell rings and `tp:brute_playing` plays with a pig. `GoalGameTests` builds the
+  runs to a bed when a bell rings and `tp:brute_playing` plays with a pig. `tp:brute_stomping_near`
+  searches two blocks for eggs, `tp:brute_grazing` eats hay into dirt, `tp:brute_snacking` eats only
+  sweet berries and then waits, `tp:brute_nesting` lays on sand with nothing above it and
+  `tp:brute_flower_taking` takes a golem's flower once it is tagged. `tp:brute_admiring` admires
+  for a second and neither admires nor barters for five after being hurt, `tp:brute_cheering` and
+  `tp:brute_celebrating_survival` celebrate with no raid, and `GoalSoundClientGameTest` hears the
+  admiring, cheering and nesting groups' own sound moments. `tp:brute_dressing` puts on a helmet where
+  `tp:brute_unarmoured` cannot, and `tp:brute_hunting_alone` celebrates a kill only for the brute
+  that made it. `tp:brute_sharing` shares with whoever its `entity_types` names, written the way
+  older entity files write a filter: an `AND` group over subjects and operators given by number,
+  beside a second entry no mob in the test answers, so a list read as all of its entries or a filter
+  left wrapped in its entry hands the apple to the nearer cow. `tp:brute_caravanning` forms a
+  caravan of at most two behind a leashed pig its `entity_types` admit, so of three brutes beside
+  one, two fall in. `tp:brute_seeking_closely` walks to gold with the default `goal_radius` of half
+  a block, which Java's own block walk never reaches because its path ends a block short and it
+  measures from the middle of the block, so `MoveToMatchingBlockGoal` paths onto the spot and
+  measures from the feet. Java's own egg search can be
+  replaced by a speed mod with one over a fixed twenty-four blocks, so `StompEggGoal` searches in its
+  own `canUse`. `GoalGameTests` builds the
   village each one needs out of a bell or a bed in the empty structure, which Java registers as a
   point of interest the moment the block is set. The brute's `tp:arrived` property is set by its
   `minecraft:entity_spawned` and `minecraft:entity_born` events, which is how
   `GoalGameTests.aBredChildIsBornRatherThanSpawned` tells a bred child from a placed one.
+  The ember's `tp:ember_hatchling` grows up in a second and drops a turtle shell piece, and
+  `tp:ember_picky` takes wheat worth its whole wait only from a player tagged `tp_feeder`.
 
   Two more entities are there for what a mob walking about never reaches. One is a projectile with
   hit boxes wider than the box it collides in, which turns `isolated_physics` off the way Mojang's
@@ -611,6 +695,20 @@ These are the checks it runs, and what each one catches:
   and then a second on a bench facing west and reads where each sits and which way each faces;
   `SeatClientGameTest` rides it as the player and reads the player's facing off its own client,
   which the seat's turn reaches only through the `seat_turn` payload.
+
+  `tp:steed` is a mount its rider steers, with one group holding `minecraft:can_power_jump` over a
+  jump strength of 0.9 and another holding a `minecraft:dash_action` with a six second cooldown.
+  `MountJumpClientGameTest` rides it on a dedicated server, finds no jump bar while neither group is
+  on, holds the jump key for a full charge and reads the height back, then presses it to dash and
+  reads the distance, a second press inside the cooldown doing nothing, and `can_dash` going false
+  and true again. **A ridden mount moves on its rider's client, not on the server.** From 1.21.2 the
+  server never sees a rider's jump key, and `LivingEntity.travelRidden` zeroes any motion the server
+  writes while a player steers, so `MountJump` applies the impulse in `tickRidden` on the client that
+  heard the key through `PlayerRideableJumping.onPlayerJump`, as Java's horse and camel do. The
+  server hears of the jump through the riding jump command (`handleStartJump`), keeps its own count
+  of the cooldown and publishes `can_dash` from it. A dash's `horizontal_momentum` is a multiple of
+  the mount's movement speed, which is how Mojang's camel, stating 20 over a speed of 0.09, dashes
+  about as far as Java's.
 
   The recipes cover the seven kinds and the fields that decide what each becomes: a furnace recipe
   naming four cookers and an unlock item, a shapeless one tagged for the stonecutter and unlocked by
@@ -1054,10 +1152,12 @@ These are the checks it runs, and what each one catches:
   python3 tools/verify/verify.py join --version 26.2     # a client connected to a server
   python3 tools/verify/verify.py join --bare --version 26.2      # a second client with no add-ons takes the server's
   python3 tools/verify/verify.py join --other --reshaped --version 26.2   # other versions, and a refused one
+  python3 tools/verify/verify.py join --slow --version 1.20.1    # a login longer than every timer on it
   python3 tools/verify/verify.py lan --version 26.2      # a world opened to LAN, a second client joins it
   python3 tools/verify/verify.py lan --dormant --version 26.2   # the host also holds a dormant add-on
   python3 tools/verify/verify.py convert --source <extracted pack directory>   # no game
   python3 tools/verify/verify.py companions --version 26.2  # a server and a client beside other mods
+  python3 tools/verify/verify.py companions --bare --version 26.2  # the same, as a client taking the server's add-ons
   ```
 
   A green `run` proves the mod started, every mixin applied, the packs converted and registered, the
@@ -1244,6 +1344,19 @@ These are the checks it runs, and what each one catches:
     installed and goes dormant). `join --reshaped` gives it a copy whose `tp:lamp` has one more
     `tp:level` value, and expects `The server's copy of <add-on> cannot replace yours without a
     restart.` and no world.
+  - `join --slow` is `--bare` with the `-PslowJoin=<seconds>` property, which the join client
+    reads as `mcaddon.slowJoin` in a development run and waits for between holding every archive
+    and activating them. It waits 75 seconds, past the 600-tick login timer and the 30 second read
+    timeout before 1.21 and past the server's minute without a message, so the client reaches the
+    world only while the login heartbeat, `ServerLoginTimerMixin` and `Outgoing`'s waiting on an
+    activating client all work. It reads the login's length off the two logs' timestamps, from the
+    client's `Connecting to` to the server's login line, and fails on `Took too long to log in`,
+    `Timed out`, `ReadTimeoutException` and `stopped making progress`. Measured on 1.20.1 with each
+    part taken out, it fails each time. With no heartbeat the server ends the login with `Timed out`
+    30 seconds after the last piece. With no mixin it ends it with `Took too long to log in` 31
+    seconds after the client connected. With the minute counted from the last acknowledgement
+    whatever the client was doing, it ends it with `stopped making progress` 60 seconds after the
+    download. With all three in place the login took 80 seconds.
   - `lan` runs the first client with a saved world as host. A development-only handler,
     `client/LanRequests`, answers a `lan.request` file in the host's run directory: each line is a
     console command for the integrated server, and `publish` opens the world to the LAN through
@@ -1255,7 +1368,10 @@ These are the checks it runs, and what each one catches:
     while it hosts. `--dormant` has the host client join a dedicated server serving an add-on the
     host has not installed, leave, and only then open its world with `open`, all in one process,
     because a dormant add-on is one the process registered: a host started afresh holds none. The
-    guest is then offered it as an inactive entry. `all` runs both.
+    guest is then offered it as an inactive entry. `all` runs both. Before 26 `LanRequests` waits
+    for the resource reload's overlay to go before it acts: the leave's reload is still showing it
+    when the harness asks for `open`, and a world opened under it waits for it inside
+    `Minecraft.doWorldLoad`, which it never leaves.
   - A fresh game directory has no `options.txt`, and the game then opens its accessibility
     onboarding screen instead of the quick play it was told to run, so a client in a new worktree
     sat on the title screen until the deadline. `play` writes `onboardAccessibility:false` first.
@@ -1284,6 +1400,12 @@ These are the checks it runs, and what each one catches:
     is absent, which is what a mod's optional integration with a mod nobody installed looks like.
   - Fabric resolved the set at all. `Mod resolution failed` means the run proved nothing about
     anybody.
+
+  `companions --bare` runs `join --bare` instead of the server and the client, and reads the same
+  three things out of the join server's and the second client's logs. That client registers the
+  server's blocks, items and entity types after the freeze while every companion is loaded, so a
+  companion holding an array sized at startup from the block state list fails it on the first frame
+  after the join.
 
   The mods themselves are `companionMods()` in `build.remap.gradle.kts` and `build.named.gradle.kts`,
   each pinned by exact version in `versions/<version>/gradle.properties` and installed only for a dev
@@ -1999,6 +2121,9 @@ camera presets, dialogue scenes and, from 1.21, brewing are read from. An add-on
 active is dormant: its entries stay registered with their last definitions and nothing offers it.
 Spawn rules, feature rules and the nether and end biome lists are registered once for the installed
 set, because they apply as a world loads and a world loads only with the installed set active.
+Before 26 the model bakery asks for a model for every registered item and block, so
+`ModelBakeryMixin` and `BlockStateModelLoaderMixin` leave out what `ActiveAddons.isDormant` names;
+the miss would otherwise be logged as `Unable to load model` on every reload after a visit.
 
 **A same-id copy is checked before anything is registered.** `AddonRegistry.conflict` compares the
 shape every registered object was built from (an entity type's population and size, a block's whole
@@ -2025,8 +2150,9 @@ refusal `The server's copy of <add-on> cannot replace yours without a restart.`
 Traps met building it:
 
 - **A task queued for the client thread from a disconnect can be thrown away.** The client drops
-  its pending tasks as it disconnects, and Fabric raises the disconnect event on the network thread
-  just before, so a leave handed over with `execute` or `schedule` sometimes never ran. The leave is
+  its pending tasks as a play connection ends (`Minecraft.disconnect` calls `dropAllTasks` before
+  anything else), and Fabric raises the disconnect event before that, so a leave handed over with
+  `execute` or `schedule` never ran. The leave is
   a flag the client's own tick takes instead, and an enter takes any leave still owed first.
 - **Every client game test joining a dedicated server is handed the served add-on.** The server and
   the client share one process, so the add-on is registered from the first such test on, and a test
@@ -2036,14 +2162,41 @@ Traps met building it:
   which `ServedArchives` reads in a development run only.
 - **The client game test harness does not tick the client between tests**, so a leave owed by one
   test runs as the next one connects, while that test's server configures it.
+- **`Outgoing` tells its link how a transfer ended only once its lock is let go.** Ending a
+  connection from the network thread waits on the server thread (`executeBlocking`), and the server
+  thread takes that lock every tick in `expire`, so a refusal told under it froze the server until
+  the watchdog ended it. `AddonSyncRefusalClientGameTest` met it on 26.1.2; `OutgoingTest` holds it.
 - **A configuration that changes nothing must not reload.** A join whose set equals the active one
   answers at once.
+- **The server's minute without a message counts only while archives are on their way.** A client
+  holding every archive it asked for converts, activates and reloads, which sends nothing for as
+  long as a large set takes. `Outgoing` waits on it then, the ten minute limit still holds, and a
+  client that stops answering is dropped by the connection's read timeout, which the login's
+  heartbeat and the configuration phase's keep-alive hold off for one that answers.
 
 Tests: `RegistryGameTests` (adding after the freeze, on all four versions), `ActiveAddonsGameTests`
 (an empty set and back), `ShapeGameTests` (copies that do and do not conflict),
 `ServedArchivesGameTests` (a registered archive handed out dormant), `AddonSyncClientGameTest` (a
 join, a leave and a second join against a dedicated server), and the unit tests `AddonManifestTest`,
-`ReceivedArchivesTest`, `ArchivesTest` and `FunctionNamesTest`.
+`ReceivedArchivesTest`, `ArchivesTest` and `FunctionNamesTest`. Three more client game tests point
+the server at another set through `clientgametest/Served`, which sets `mcaddon.served` to one of
+the directories `installServedPack` writes beside `addons-served` and has the server prepare its
+manifest again: `addons-reshaped` holds a later release of `sv` whose crate has a fourth state, and
+`addons-other` the same content as the add-on `sw`.
+
+- `AddonSyncRefusalClientGameTest` joins once to register `sv`, then joins a server handing out the
+  reshaped copy and expects the disconnect screen naming the add-on, no world, and the installed set
+  active. It fails without `AddonRegistry.conflict` in `AddonSession.activate`.
+- `AddonSyncReloadClientGameTest` closes the connection from the server while the join's reload is
+  on the screen, then again with the client in the world, and expects the installed set back both
+  times. The second close fails when the leave is queued with `Platform.schedule` from the
+  disconnect event: the client drops its queued tasks as a play connection ends
+  (`Minecraft.disconnect` calls `dropAllTasks` first), so the leave never runs.
+- `AddonSyncTransferClientGameTest` has the server hand out `sw` instead of `sv` and `/transfer`
+  the client back to itself, which to the client is a second server with another set. It records
+  every activation through `ActiveAddons.onActivate` and expects the installed set once and then the
+  second set. It fails when the play phase's disconnect does not end the visit. A server needs
+  `accepts-transfers=true` (that spelling) in its properties to take a transfer.
 
 ## Script developer tools
 
@@ -2200,6 +2353,8 @@ other screen open. The key is one per process, so a dedicated server and a clien
 (the client game tests) read the same `running()`. `ServerTrustClientGameTest` starts two servers on
 one port with `Worlds.server(context, port)`, because every other server test takes a free port and
 so a new address, which a client trusts without asking.
+
+**A goal's waits are not counted in `tick()` calls.** The selector runs `canUse`, `canContinueToUse` and a running goal's `tick` only every second tick, unless the goal's `requiresUpdateEveryTick` is true. A wait a pack states in seconds is counted against `tickCount` or the game clock, or the goal asks for every tick when it also steers each one. `aGrazerEatsWhenItsTimeUntilEatIsUp` reads the first.
 
 **A gap and an answer are counted apart.** A command the game read and then declined, a selector that
 matched nothing, a structure holding a chest this cannot fill: those are listed after the verdict

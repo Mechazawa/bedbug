@@ -7,7 +7,6 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;
 import net.minecraft.world.level.pathfinder.Path;
-import net.minecraft.world.phys.Vec3;
 
 /**
  * Closes on the target and hits it, at the reach and the pace the pack's melee behaviour states.
@@ -17,11 +16,24 @@ import net.minecraft.world.phys.Vec3;
  * view the target has to be in, the events a blow and a kill raise, and the fire a burning
  * attacker passes on. `melee_box_attack` reaches as far as its own box grown sideways by
  * `horizontal_reach`; the others reach `reach_multiplier` times their width, which is the distance
- * Java's own goal used before it turned to boxes.
+ * Java's own goal used before it turned to boxes. `delayed_attack` swings for `attack_duration`
+ * seconds, which is also its wait between blows, and lands the blow `hit_delay_pct` of the way
+ * through. `stomp_attack` hurts only a target within `stomp_range_multiplier` times its width, and
+ * a stomp that falls short within `no_damage_range_multiplier` times that range still costs it its
+ * wait.
  */
 public final class MeleeGoal extends MeleeAttackGoal {
+    /** Which of Bedrock's melee behaviours this is, which decides how the blow lands. */
+    public enum Kind { PLAIN, BOX, DELAYED, STOMP }
+
     private final AddonEntity attacker;
+    private final Kind kind;
     private final int cooldown;
+    private final int hitDelay;
+    private final double stompMultiplier;
+    private final double missMultiplier;
+    private LivingEntity pending;
+    private int pendingAt;
     private final Double boxReach;
     private final double reachMultiplier;
     private final double halfFieldOfView;
@@ -34,12 +46,18 @@ public final class MeleeGoal extends MeleeAttackGoal {
     private int readyAt;
     private boolean spent;
 
-    public MeleeGoal(AddonEntity attacker, JsonObject component, boolean boxed) {
+    public MeleeGoal(AddonEntity attacker, JsonObject component, Kind kind) {
         super(attacker, Goals.number(component, "speed_multiplier", 1),
             Goals.flag(component, "track_target", false));
         this.attacker = attacker;
-        this.cooldown = Goals.ticks(component, "cooldown_time", 1);
-        this.boxReach = boxed ? Goals.number(component, "horizontal_reach", DEFAULT_BOX_REACH) : null;
+        this.kind = kind;
+        this.cooldown = kind == Kind.DELAYED ? Goals.ticks(component, "attack_duration", 0.75)
+            : Goals.ticks(component, "cooldown_time", 1);
+        this.hitDelay = kind == Kind.DELAYED
+            ? (int) Math.round(cooldown * Goals.number(component, "hit_delay_pct", 0.5)) : 0;
+        this.stompMultiplier = Goals.number(component, "stomp_range_multiplier", 2);
+        this.missMultiplier = Goals.number(component, "no_damage_range_multiplier", 2);
+        this.boxReach = kind == Kind.BOX ? Goals.number(component, "horizontal_reach", DEFAULT_BOX_REACH) : null;
         this.reachMultiplier = Goals.number(component, "reach_multiplier", 2);
         this.halfFieldOfView = Goals.number(component, "melee_fov", 90) / 2;
         this.once = Goals.flag(component, "attack_once", false);
@@ -69,6 +87,22 @@ public final class MeleeGoal extends MeleeAttackGoal {
         return super.canContinueToUse();
     }
 
+    @Override
+    public void tick() {
+        super.tick();
+        if (pending == null || attacker.tickCount < pendingAt) return;
+
+        LivingEntity struck = pending;
+        pending = null;
+        if (struck.isAlive() && inReach(struck)) land(struck);
+    }
+
+    @Override
+    public void stop() {
+        super.stop();
+        pending = null;
+    }
+
     //? if >=1.21 {
     @Override
     protected void checkAndPerformAttack(LivingEntity target) {
@@ -76,13 +110,26 @@ public final class MeleeGoal extends MeleeAttackGoal {
     /*@Override
     protected void checkAndPerformAttack(LivingEntity target, double distanceSqr) {
     *///?}
-        if (attacker.tickCount < readyAt || !inReach(target) || !inView(target)
+        if (attacker.tickCount < readyAt || !inReach(target) || !Goals.sees(attacker, target, halfFieldOfView)
             || !attacker.getSensing().hasLineOfSight(target)) {
             return;
         }
+        double stomp = attacker.getBbWidth() * stompMultiplier;
+        double away = attacker.distanceTo(target);
+        if (kind == Kind.STOMP && away > stomp * missMultiplier) return;
 
         readyAt = attacker.tickCount + cooldown;
         attacker.swing(InteractionHand.MAIN_HAND);
+        if (kind == Kind.STOMP && away > stomp) return;
+        if (hitDelay > 0) {
+            pending = target;
+            pendingAt = attacker.tickCount + hitDelay;
+            return;
+        }
+        land(target);
+    }
+
+    private void land(LivingEntity target) {
         //? if >=26 {
         boolean hit = attacker.doHurtTarget(getServerLevel(attacker), target);
         //?} else {
@@ -110,16 +157,4 @@ public final class MeleeGoal extends MeleeAttackGoal {
         return attacker.distanceToSqr(target) <= reach * reach + target.getBbWidth();
     }
 
-    /** Whether the target stands inside `melee_fov`, measured across the ground from where the head faces. */
-    private boolean inView(LivingEntity target) {
-        if (halfFieldOfView >= 180) return true;
-
-        Vec3 towards = new Vec3(target.getX() - attacker.getX(), 0, target.getZ() - attacker.getZ());
-        if (towards.lengthSqr() < 1.0E-6) return true;
-
-        double facing = Math.toRadians(attacker.getYHeadRot());
-        Vec3 ahead = new Vec3(-Math.sin(facing), 0, Math.cos(facing));
-        double cosine = ahead.dot(towards.normalize());
-        return Math.toDegrees(Math.acos(Math.max(-1, Math.min(1, cosine)))) <= halfFieldOfView;
-    }
 }

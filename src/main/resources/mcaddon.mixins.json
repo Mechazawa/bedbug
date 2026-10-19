@@ -88,6 +88,8 @@
     "AdventureTooltipMixin",
     "OptionsMixin",
     "VideoSettingsScreenMixin",
-    "AttackMissMixin"
+    "AttackMissMixin",
+    "ModelBakeryMixin",
+    "BlockStateModelLoaderMixin"
   ]
 }

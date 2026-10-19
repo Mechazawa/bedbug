@@ -33,6 +33,10 @@ downloaded add-on is kept for the next visit, so joining again downloads nothing
 asked for in a month is dropped. The same holds for a guest joining a world opened to LAN: the host
 hands out its add-ons, and the host itself never downloads or changes anything.
 
+A join can take as long as the client needs to download and convert the add-ons, up to ten
+minutes. The server disconnects a client that stops answering, or one that sends nothing for a
+minute while the add-ons download.
+
 What a client refuses, each with a message naming why:
 
 - a server running another release of this mod;
@@ -115,6 +119,12 @@ Against a server without this mod a client plays with its own add-ons.
   neither does the server: every expression it runs, a seat's, a script's, a component's condition,
   an experience reward and a block event alike, reads and writes one store of `temp.` values, which
   is how a pack learns a villager's level by seating it.
+  A player steering a mount with `minecraft:can_power_jump` holds the jump key to charge a jump as
+  high as `minecraft:horse.jump_strength` allows, as on a horse, and one with `minecraft:dash_action`
+  presses it to dash along the mount's facing or the rider's look, by `direction`, on the ground or
+  under water where `can_dash_underwater` says so. The dash waits out its `cooldown_time`, during
+  which `query.can_dash` is false and `query.has_dash_cooldown` true. A mount with neither shows no
+  jump bar.
 - The clips and controllers a behaviour pack declares, which animate what an entity is rather than
   where its bones are. A moment on a clip's timeline, and a controller state's entry and its exit,
   each raise one of the entity's own events, run a command as the entity, or assign a Molang
@@ -170,23 +180,66 @@ Against a server without this mod a client plays with its own add-ons.
   out `cooldown_time`, reaches as far as `reach_multiplier` or `horizontal_reach` say, lands only
   inside `melee_fov`, raises `on_attack` and `on_kill`, and passes a burning attacker's fire on
   under `can_spread_on_fire`; a blow also carries the ailment `minecraft:attack` names. A ranged
-  attack reloads for its `attack_interval`, stretched across its `attack_range`. A panic starts at
+  attack reloads for its `attack_interval`, stretched across its `attack_range`, holds its fire
+  inside the range's low end and closes in until it has seen its target for `target_in_sight_time`;
+  one with a `charge_shoot_trigger` charges while it sees its target, counts as charged for
+  `query.is_charged`, and fires a burst of `burst_shots`. Arrows carry the potion `minecraft:shooter`
+  names under `aux_val`, and the first of its `projectiles` whose filters hold is shot instead, letting
+  the target go under `lose_target`. An ocelot attack sneaks, sprints and walks at its
+  three speeds by its three ranges and strikes within its reach every `cooldown_time`; a pounce stalks
+  at `stalk_speed`, stays interested for `interest_time`, leaps by `leap_dist` and `leap_height`,
+  strikes within `strike_dist` and is held stuck for `stuck_time` on what `stuck_blocks` names. A leap takes off from the air
+  under `must_be_on_ground` false; a ram runs up at `run_speed` and makes its two sounds; an aquatic
+  charge rests `charge_cooldown_time`; a mob effect is handed out from a component group, as an
+  ambient one under `ambient`, and waits `cooldown_time`; a strength stops at its `max`. A delayed attack lands its blow part way through its swing, and a stomp
+  hurts only within its stomp range. An entity under `target_when_pushed` turns on what pushes into it; an
+  area attack can hurt without naming itself; a shot fired at a target leaves from and flies at the
+  anchors and offsets its behaviour names, and only at a target in its `ranged_fov`. A jump around the
+  target crouches, then leaps on an arc it can clear to a point behind the target, resting between
+  jumps for less when it was hurt lately. A panic starts at
   the causes `damage_sources` lists, can leave every mob's blow out, heads for water under
   `prefer_water` and needs no hurt under `force`; fleeing a block raises `on_escape` once clear; and
   the panic and the flight make the sound the pack names for them. A teleporter closes on a far
   target and blinks away from a projectile, a pack's own projectile is batted back, stopped or
-  removed when struck, and a blast breaks blocks whatever the griefing rule says unless the pack asks
-  for the rule, under a cap on what a block withstands. A child bred under `minecraft:offspring`
+  removed when struck, hits what its box sweeps through, stops at the first entity it hits unless
+  `multiple_targets` lets it on, and bounces back under `should_bounce`; a knockback roar throws
+  back and hurts what its two filters name, `attack_time` into the roar, and raises `on_roar_end`; and a blast breaks blocks whatever the griefing rule says unless the pack asks
+  for the rule, under a cap on what a block withstands; under
+  `allow_underwater` water does not hold it back, and from 1.21 it scales its damage and knockback,
+  toggles switches when it breaks nothing, spares a player it throws the fall, and bursts with a wind
+  charge's gusts and sound when its pack names them. A child bred under `minecraft:offspring`
   takes a tamed parent's owner, a parent's variant, mark variant, colour and listed properties
   unless a mutation keeps its own, the dye two colours make, and attributes blended the way Java
   breeds a horse, and a bred child arrives with `minecraft:entity_born` rather than
   `minecraft:entity_spawned`. A mount under `minecraft:tamemount` is broken in by riding, its temper rising with
   its food and each buck, and any rideable entity is mounted by using it, pulls in what touches it
   under `pull_in_entities` and raises its rider events. A school flocks by its separation, cohesion,
-  variant matching, flock limit and loners; an entity walks out under the sky or in under a roof,
+  variant matching, flock limit and loners, keeps off the blocks beside it, between its heights over
+  the ground and, in water, under the surface. A fish swims off at an `interval` of nought and keeps
+  under the surface unless `avoid_surface` says no, a
+  `swim_wander` takes its `interval` as a chance and gives up after its `wander_time`, a flight or a
+  hover aims `y_offset` above the spot it picked and within its `hover_height`, and a float lasts its
+  `float_duration` and picks a new spot on the way under `random_reselect`. A follower looks for a mob
+  as far as `search_range` and stops `stop_distance` short, a raider keeps `follow_distance` from its
+  captain, and a walk to a block looks every `tick_interval` at its `start_chance`, ends at its
+  `target_offset` and raises `on_reach` and `on_stay_completed`. Water slows an entity by its
+  `drag_factor`, and honey lowers its step to `jump_prevented_value`. An entity walks out under the
+  sky or in under a roof,
   looks as far for water as it says, drinks the potion its conditions pick by Bedrock's number,
   holds no more of an item than its shareables allow, leaps at its `yd`, and steps higher while a
-  player steers it. A stomper looks for turtle eggs as often as its `interval` says. A villager
+  player steers it. A stomper looks for turtle eggs as often as its `interval` says and no further
+  than its `search_range`. A grazer eats the blocks its pairs name at its own Molang chance, a
+  snacker eats only its `items` and waits out its cooldown, an egg layer lays only under the
+  materials it names, and a flower taker takes a golem's flower only while its filters hold. A
+  young entity drops its `drop_items` as it grows up and is fed only by whoever its
+  `interact_filters` allow, and a feed item's `growth` is a share of the whole wait. A won raid
+  raises `minecraft:start_celebrating` on the add-on entities standing in it, and a celebration runs
+  while its group is on: a raider jumps and makes its `celebration_sound`, a villager sends up
+  fireworks, and either raises its end event after its `duration`. An entity hurt recently neither
+  admires nor barters until its `cooldown_after_being_attacked` is over, and an admirer and an egg
+  layer make their pack's own sound. An entity whose `minecraft:equip_item` says `can_wear_armor` false
+  leaves armour lying, and a hunt is celebrated by the entity credited with the kill and, with
+  `broadcast` on, by the hunters within its `radius`. A villager
   explores past the edge of its village by `explore_dist`, a fox strolls to the nearest village, a
   child plays with the friend its `friend_types` name, and `minecraft:behavior.hide` runs to the bed
   or other place `poi_type` names when a bell rings or a raid is on. Java's village is the beds, job
@@ -811,8 +864,7 @@ Java builds that screen for its own horses, minecarts and hoppers by class; `suf
 documented as seconds with a default of -20, which no count of seconds can be, so Java's own
 drowning rhythm applies; `has_gravity` is left alone, because Mojang's fish declare it off and still
 fall when they leap out of water; a dweller holds to where it stood without joining a Java village;
-a tempt sound's gap is documented in ticks and written by Mojang in two units at once; a turtle egg
-stomper searches the twenty-four blocks Java's goal fixes, whatever its `search_range` says; and how
+a tempt sound's gap is documented in ticks and written by Mojang in two units at once; and how
 fast an entity resends itself over the network is Java's own business. Outside a damage sensor,
 `has_damage` asking whether a blow is `fatal` is reported, because only the sensor is told how hard
 the blow is; inside one it answers whether the damage, before armour, is at least the health left.

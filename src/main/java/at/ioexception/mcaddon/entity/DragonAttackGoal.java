@@ -51,7 +51,7 @@ public final class DragonAttackGoal extends Goal {
     private final int cooldownTicks;
     private int held;
     private int aimed;
-    private int untilNext;
+    private int readyAt;
     private double angle;
     private boolean clockwise;
 
@@ -92,8 +92,13 @@ public final class DragonAttackGoal extends Goal {
     }
 
     @Override
+    public boolean requiresUpdateEveryTick() {
+        return true;
+    }
+
+    @Override
     public boolean canUse() {
-        if (untilNext-- > 0) return false;
+        if (mob.tickCount < readyAt) return false;
 
         LivingEntity target = mob.getTarget();
         if (target == null || !target.isAlive()) return false;
@@ -125,7 +130,7 @@ public final class DragonAttackGoal extends Goal {
 
     @Override
     public void stop() {
-        untilNext = kind == Kind.FLAME ? cooldownTicks : 0;
+        readyAt = mob.tickCount + (kind == Kind.FLAME ? cooldownTicks : 0);
         mob.setPose(Pose.STANDING);
         mob.setValue("is_charging", false);
     }

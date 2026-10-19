@@ -28,7 +28,7 @@ public final class JumpToBlockGoal extends Goal {
     private final int searchHeight;
     private final Set<Block> preferred;
     private final Set<Block> forbidden;
-    private int untilNext;
+    private int readyAt;
     private BlockPos landing;
 
     public JumpToBlockGoal(AddonEntity mob, JsonObject component) {
@@ -46,7 +46,7 @@ public final class JumpToBlockGoal extends Goal {
 
     @Override
     public boolean canUse() {
-        if (untilNext-- > 0 || !mob.onGround()) return false;
+        if (mob.tickCount < readyAt || !mob.onGround()) return false;
 
         landing = pick();
         return landing != null;
@@ -59,7 +59,7 @@ public final class JumpToBlockGoal extends Goal {
 
     @Override
     public void start() {
-        untilNext = Goals.between(mob.getRandom(), cooldownLow, cooldownHigh);
+        readyAt = mob.tickCount + Goals.between(mob.getRandom(), cooldownLow, cooldownHigh);
         if (landing == null) return;
 
         Vec3 towards = Vec3.atCenterOf(landing).subtract(mob.position());

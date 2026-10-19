@@ -5,6 +5,9 @@
   "name": "Bedrock Add-ons client game tests",
   "environment": "client",
   "entrypoints": {
+    "client": [
+      "at.ioexception.mcaddon.clientgametest.HangWatchdog"
+    ],
     "fabric-client-gametest": [
       "at.ioexception.mcaddon.clientgametest.WorldClientGameTest",
       "at.ioexception.mcaddon.clientgametest.DrawnSizeClientGameTest",
@@ -29,11 +32,15 @@
       "at.ioexception.mcaddon.clientgametest.PackCommandClientGameTest",
       "at.ioexception.mcaddon.clientgametest.ServerRegistryClientGameTest",
       "at.ioexception.mcaddon.clientgametest.AddonSyncClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.AddonSyncRefusalClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.AddonSyncReloadClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.AddonSyncTransferClientGameTest",
       "at.ioexception.mcaddon.clientgametest.ServerEntityClientGameTest",
       "at.ioexception.mcaddon.clientgametest.ServerPlayerClientGameTest",
       "at.ioexception.mcaddon.clientgametest.HudClientGameTest",
       "at.ioexception.mcaddon.clientgametest.ServerTrustClientGameTest",
       "at.ioexception.mcaddon.clientgametest.InputPermissionClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.MountJumpClientGameTest",
       "at.ioexception.mcaddon.clientgametest.CameraShakeClientGameTest",
       "at.ioexception.mcaddon.clientgametest.MusicClientGameTest",
       "at.ioexception.mcaddon.clientgametest.CameraFadeClientGameTest",

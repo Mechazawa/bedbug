@@ -27,7 +27,10 @@ import java.util.List;
  * that rolls is thrown to whoever is standing nearest.
  *
  * The two halves meet on the entity, because one goal cannot see another. The admiring goal writes
- * down the tick its admiring ends and the bartering goal waits for it.
+ * down the tick its admiring ends and the bartering goal waits for it. Each component's
+ * `cooldown_after_being_attacked` keeps its half from starting while the entity was hurt recently,
+ * and both components are read as the goal starts, because a pack puts them in the group that makes
+ * an entity willing to trade.
  */
 public final class BarterGoal extends Goal {
     /** How far the entity looks for somebody to pay. */
@@ -39,19 +42,21 @@ public final class BarterGoal extends Goal {
 
     private final AddonEntity mob;
     private final boolean admires;
-    private final int admireTicks;
     private final String onStart;
     private final String onStop;
-    private final String table;
+    private final String sound;
+    private final int soundLow;
+    private final int soundHigh;
+    private int untilSound;
 
     private BarterGoal(AddonEntity mob, JsonObject component, boolean admires) {
         this.mob = mob;
         this.admires = admires;
-        this.admireTicks = (int) (Goals.number(mob.componentBody("minecraft:admire_item"), "duration", 8)
-            * Goals.TICKS_PER_SECOND);
         this.onStart = Goals.event(component, "on_admire_item_start");
         this.onStop = Goals.event(component, "on_admire_item_stop");
-        this.table = Goals.text(mob.componentBody("minecraft:barter"), "barter_table");
+        this.sound = Goals.text(component, "admire_item_sound");
+        this.soundLow = Goals.ticksLow(component, "sound_interval", 0);
+        this.soundHigh = Goals.ticksHigh(component, "sound_interval", 0);
         setFlags(admires ? EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK) : EnumSet.of(Goal.Flag.MOVE));
     }
 
@@ -69,7 +74,9 @@ public final class BarterGoal extends Goal {
     public boolean canUse() {
         if (mob.getMainHandItem().isEmpty()) return false;
 
-        return admires ? mob.admireUntilTick() < 0 : admiringHasEnded() && payee() != null;
+        return admires
+            ? mob.admireUntilTick() < 0 && mob.calmSinceHurt("minecraft:admire_item")
+            : admiringHasEnded() && mob.calmSinceHurt("minecraft:barter") && payee() != null;
     }
 
     @Override
@@ -81,7 +88,8 @@ public final class BarterGoal extends Goal {
     public void start() {
         if (!admires) return;
 
-        mob.setAdmireUntilTick(mob.tickCount + admireTicks);
+        mob.setAdmireUntilTick(mob.tickCount + Goals.ticks(mob.liveComponent("minecraft:admire_item"), "duration", 10));
+        untilSound = 0;
         ServerHooks.state().setProperty(mob.getUUID(), "is_admiring", true);
         mob.getNavigation().stop();
         fire(onStart);
@@ -95,10 +103,20 @@ public final class BarterGoal extends Goal {
         fire(onStop);
     }
 
+    /** The selector ticks a running goal every second tick unless it asks for each one. */
+    @Override
+    public boolean requiresUpdateEveryTick() {
+        return true;
+    }
+
     @Override
     public void tick() {
         if (admires) {
             mob.getNavigation().stop();
+            if (sound != null && untilSound-- <= 0) {
+                mob.makeNoise(sound);
+                untilSound = Goals.between(mob.getRandom(), soundLow, soundHigh);
+            }
             return;
         }
 
@@ -115,6 +133,7 @@ public final class BarterGoal extends Goal {
         if (!(mob.level() instanceof ServerLevel level)) return;
 
         mob.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+        String table = Goals.text(mob.liveComponent("minecraft:barter"), "barter_table");
         Identifier named = table == null ? null : AddonEntities.lootTable(mob.getType(), table);
         if (named == null) return;
 

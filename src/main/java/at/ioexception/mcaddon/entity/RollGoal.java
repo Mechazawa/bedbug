@@ -44,6 +44,12 @@ public final class RollGoal extends Goal {
         mob.setValue("is_rolling", true);
     }
 
+    /** The selector ticks a running goal every second tick unless it asks for each one. */
+    @Override
+    public boolean requiresUpdateEveryTick() {
+        return true;
+    }
+
     @Override
     public void tick() {
         rolled++;

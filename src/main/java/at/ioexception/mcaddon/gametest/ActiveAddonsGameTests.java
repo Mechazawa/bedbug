@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.gametest;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.registry.ActiveAddons;
+import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.registry.AddonFogs;
 import at.ioexception.mcaddon.registry.AddonItems;
@@ -9,11 +10,13 @@ import at.ioexception.mcaddon.resource.AddonSet;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.packs.repository.PackRepository;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
 
 /**
  * Switching which add-ons answer, which is what a client does as it joins a server and leaves it.
@@ -25,6 +28,7 @@ public final class ActiveAddonsGameTests {
     private static final String ITEM = "tp:dust";
     private static final String ENTITY = "tp:ember";
     private static final String FOG = "tp:dusk";
+    private static final String BLOCK = "tp:lamp";
     private static final String PACK = McAddon.MOD_ID + "/tp";
 
     /**
@@ -35,12 +39,18 @@ public final class ActiveAddonsGameTests {
     public void anEmptySetLeavesTheAddOnsRegisteredAndOffersNone(GameTestHelper helper) {
         Item dust = AddonItems.named(ITEM);
         EntityType<?> ember = AddonEntities.typeOf(ENTITY);
-        if (dust == null || ember == null) {
+        net.minecraft.world.level.block.Block lamp = AddonBlocks.named(BLOCK);
+        if (dust == null || ember == null || lamp == null) {
             helper.succeed();
             return;
         }
         ServerLevel level = helper.getLevel();
         AddonSet installed = ActiveAddons.installed();
+        Identifier dustId = BuiltInRegistries.ITEM.getKey(dust);
+        Identifier lampId = BuiltInRegistries.BLOCK.getKey(lamp);
+        Identifier stoneId = BuiltInRegistries.ITEM.getKey(Items.STONE);
+        helper.assertFalse(ActiveAddons.isDormant(dustId) || ActiveAddons.isDormant(lampId),
+            ITEM + " or " + BLOCK + " is dormant to begin with.");
         helper.assertTrue(listed(level, dust), ITEM + " is not in the add-ons' creative tab to begin with.");
         helper.assertTrue(offered(), PACK + " is not offered to a pack repository to begin with.");
         //? if >=1.21 {
@@ -53,6 +63,8 @@ public final class ActiveAddonsGameTests {
         boolean fogWhileEmpty;
         Object registeredWhileEmpty;
         Object definedWhileEmpty;
+        boolean dormantWhileEmpty;
+        boolean stoneDormantWhileEmpty;
         ActiveAddons.activate(AddonSet.EMPTY);
         try {
             listedWhileEmpty = listed(level, dust);
@@ -63,6 +75,8 @@ public final class ActiveAddonsGameTests {
             fogWhileEmpty = AddonFogs.definitionOf(FOG) != null;
             registeredWhileEmpty = BuiltInRegistries.ITEM.getOptional(BuiltInRegistries.ITEM.getKey(dust)).orElse(null);
             definedWhileEmpty = AddonEntities.definitionOf(ember);
+            dormantWhileEmpty = ActiveAddons.isDormant(dustId) && ActiveAddons.isDormant(lampId);
+            stoneDormantWhileEmpty = ActiveAddons.isDormant(stoneId);
         } finally {
             ActiveAddons.activate(installed);
         }
@@ -73,6 +87,11 @@ public final class ActiveAddonsGameTests {
         helper.assertFalse(offeredWhileEmpty, PACK + " was still offered with its add-on gone.");
         helper.assertFalse(brewsWhileEmpty, ITEM + " still brewed with its add-on gone.");
         helper.assertFalse(fogWhileEmpty, FOG + " was still described with its add-on gone.");
+        // A client's model bakery before 26 leaves out the models of what is dormant.
+        helper.assertTrue(dormantWhileEmpty, ITEM + " and " + BLOCK + " were not dormant with their add-on gone.");
+        helper.assertFalse(stoneDormantWhileEmpty, "An item of the game's own was dormant.");
+        helper.assertFalse(ActiveAddons.isDormant(dustId) || ActiveAddons.isDormant(lampId),
+            ITEM + " or " + BLOCK + " stayed dormant with its add-on back.");
 
         helper.assertTrue(AddonItems.named(ITEM) == dust && AddonEntities.typeOf(ENTITY) == ember,
             "The installed set came back with other objects than it left with.");

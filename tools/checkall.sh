@@ -40,7 +40,13 @@ step() {
 bash tools/census/fetch.sh >/dev/null 2>&1
 
 step "script modules link" python3 tools/modules/check.py
+started=$(mktemp)
 step "build, four versions" ./gradlew build --console=plain -q
+# A client game test run that stopped ticking is ended by its watchdog, whose dump starts with the
+# line naming the test.
+find versions/*/build/run/clientGameTest -maxdepth 1 -name 'hang-*.txt' -newer "$started" \
+    -exec head -n 1 {} \; 2>/dev/null
+rm -f "$started"
 step "script surface census" python3 tools/census/script.py --strict
 step "component census" python3 tools/census/components.py --strict
 step "component field census" python3 tools/census/fields.py --strict

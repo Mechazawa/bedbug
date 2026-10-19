@@ -109,6 +109,12 @@ public final class DragonFlightGoal extends Goal {
         mob.getNavigation().stop();
     }
 
+    /** The selector ticks a running goal every second tick unless it asks for each one. */
+    @Override
+    public boolean requiresUpdateEveryTick() {
+        return true;
+    }
+
     @Override
     public void tick() {
         held++;

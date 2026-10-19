@@ -10,6 +10,7 @@
     "AddonParticleAccessor",
     "GuiGraphicsExtractorMixin",
     "HudTextAccessor",
+    "IntegratedServerHaltMixin",
     "ParticleEngineMixin",
     "ParticleMotionAccessor",
     "SoundManagerMixin"

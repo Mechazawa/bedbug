@@ -132,6 +132,39 @@
           "weight": 1
         }
       ]
+    },
+    "tp:brute.admire": {
+      "category": "neutral",
+      "sounds": [
+        {
+          "name": "sounds/tp/chime",
+          "volume": 0.6,
+          "pitch": 1.2,
+          "weight": 1
+        }
+      ]
+    },
+    "tp:brute.cheer": {
+      "category": "neutral",
+      "sounds": [
+        {
+          "name": "sounds/tp/chime",
+          "volume": 0.6,
+          "pitch": 1.2,
+          "weight": 1
+        }
+      ]
+    },
+    "tp:brute.lay": {
+      "category": "neutral",
+      "sounds": [
+        {
+          "name": "sounds/tp/chime",
+          "volume": 0.6,
+          "pitch": 1.2,
+          "weight": 1
+        }
+      ]
     }
   }
 }

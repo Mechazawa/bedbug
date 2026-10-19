@@ -224,7 +224,7 @@ public final class EntityEvents {
             if (id == null) continue;
 
             Platform.addEffect(living, id, (int) (number(added, "duration", 1) * TICKS_PER_SECOND),
-                (int) number(added, "amplifier", 0), true);
+                (int) number(added, "amplifier", 0), false, true);
         }
         for (JsonElement element : at.ioexception.mcaddon.util.Json.list(values, "remove_effects")) {
             if (!element.isJsonPrimitive()) continue;
@@ -260,7 +260,7 @@ public final class EntityEvents {
 
         addon.setTarget(null);
         addon.setValue("is_hiding", true);
-        net.minecraft.core.BlockPos home = Platform.home(addon);
+        net.minecraft.core.BlockPos home = Platform.homeOf(addon);
         if (home == null) {
             addon.getNavigation().stop();
             return;
