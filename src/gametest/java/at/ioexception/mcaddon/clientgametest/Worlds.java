@@ -125,13 +125,23 @@ final class Worlds {
      */
     static net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerContext server(
         ClientGameTestContext context) {
+        return server(context, freePort());
+    }
+
+    /** A dedicated server on the given port, for a test that needs a second server at the address of the first. */
+    static net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerContext server(
+        ClientGameTestContext context, int port) {
         java.util.Properties properties = new java.util.Properties();
+        properties.setProperty("server-port", String.valueOf(port));
+        return context.worldBuilder().createServer(properties);
+    }
+
+    static int freePort() {
         try (java.net.ServerSocket probe = new java.net.ServerSocket(0, 0,
             java.net.InetAddress.getByName("127.0.0.1"))) {
-            properties.setProperty("server-port", String.valueOf(probe.getLocalPort()));
+            return probe.getLocalPort();
         } catch (java.io.IOException unavailable) {
             throw new AssertionError("No free port for a dedicated server: " + unavailable.getMessage());
         }
-        return context.worldBuilder().createServer(properties);
     }
 }

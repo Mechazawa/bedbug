@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.gametest;
 
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.server.ServerIdentity;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.commands.CommandSource;
@@ -758,6 +759,37 @@ public final class BedrockCommandGameTests {
         server.getCommands().performPrefixedCommand(server.createCommandSourceStack().withSource(console),
             "bedrock " + line);
         return heard;
+    }
+
+    /**
+     * `serveridentity save` writes the running key where a server reads it at start, `status` says
+     * whether a key is saved, and `delete` removes the saved key and leaves the running one alone.
+     */
+    @GameTest()
+    public void serverIdentitySavesReportsAndDeletesItsKey(GameTestHelper helper) {
+        String running = ServerIdentity.running().publicText();
+        typed(helper, "serveridentity delete");
+        List<String> unsaved = typed(helper, "serveridentity status");
+        helper.assertTrue(unsaved.stream().anyMatch(line -> line.startsWith("No saved")),
+            "status after delete answered " + unsaved + ".");
+
+        typed(helper, "serveridentity save");
+        helper.assertTrue(Files.isRegularFile(ServerIdentity.savedKey()), "save wrote no key file.");
+        String savedPublic;
+        try {
+            savedPublic = ServerIdentity.read(ServerIdentity.savedKey()).publicText();
+        } catch (java.io.IOException | java.security.GeneralSecurityException unreadable) {
+            throw new AssertionError("the saved key cannot be read: " + unreadable.getMessage(), unreadable);
+        }
+        helper.assertTrue(savedPublic.equals(running), "the saved key is not the running key.");
+        List<String> saved = typed(helper, "serveridentity status");
+        helper.assertTrue(saved.stream().anyMatch(line -> line.startsWith("A saved")),
+            "status after save answered " + saved + ".");
+
+        typed(helper, "serveridentity delete");
+        helper.assertTrue(!Files.exists(ServerIdentity.savedKey()), "delete left the key file in place.");
+        helper.assertTrue(ServerIdentity.running().publicText().equals(running), "delete changed the running key.");
+        helper.succeed();
     }
 
     private static int loadedCount(GameTestHelper helper) {

@@ -132,6 +132,7 @@ public final class ServerHooks {
             startState(handler.player);
             Music.joined(handler.player);
             BedrockRules.joined(handler.player);
+            ServerIdentity.joined(handler.player);
             playerJoined(handler.player);
         });
         // A connection is dropped on the thread reading it, and a script and the fog stacks belong
@@ -290,6 +291,7 @@ public final class ServerHooks {
         AreaSchedules.load(state);
         MobEvents.load(state, server);
         BedrockRules.load(state);
+        ServerIdentity.start();
         scripts = ScriptHost.start(server, McAddon.packs().packs(), state);
         if (scripts != null) {
             CustomCommands.install(server, scripts);
