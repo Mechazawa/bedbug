@@ -37,6 +37,7 @@
       "at.ioexception.mcaddon.clientgametest.ServerPlayerClientGameTest",
       "at.ioexception.mcaddon.clientgametest.HudClientGameTest",
       "at.ioexception.mcaddon.clientgametest.InputPermissionClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.MountJumpClientGameTest",
       "at.ioexception.mcaddon.clientgametest.CameraShakeClientGameTest",
       "at.ioexception.mcaddon.clientgametest.MusicClientGameTest",
       "at.ioexception.mcaddon.clientgametest.CameraFadeClientGameTest",
