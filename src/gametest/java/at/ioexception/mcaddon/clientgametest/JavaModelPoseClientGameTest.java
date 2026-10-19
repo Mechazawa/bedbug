@@ -1,12 +1,15 @@
 package at.ioexception.mcaddon.clientgametest;
 
 import at.ioexception.mcaddon.client.render.PosedParts;
+import at.ioexception.mcaddon.client.render.Submitted;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.phys.AABB;
 
+import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
 
@@ -57,7 +60,51 @@ public final class JavaModelPoseClientGameTest implements FabricClientGameTest {
             vanish(context, world, villager);
             bow(context, world, villager, own);
             stoop(context, world, villager, own);
+            vanishDressed(context, world);
         }
+    }
+
+    /** Ticks of frames a hidden villager is watched for. */
+    private static final int WATCHED_TICKS = 5;
+
+    /**
+     * A farmer from the snowy plains holding an emerald is drawn with two models: Java's villager,
+     * drawn again for its profession and its level, and a model without the hat for the clothes of
+     * its biome. Every one of them has to collapse to the point the body shrank to, and the emerald
+     * the arms hold with it, read off the frames the game draws.
+     */
+    private static void vanishDressed(ClientGameTestContext context, TestSingleplayerContext world) {
+        Stage.build(context, world, "creative");
+        Entities.discardAll(context, world.getServer(), "minecraft:villager");
+        world.getServer().runCommand("summon minecraft:villager 0.5 " + (Stage.FLOOR + 1) + " 3.5 {NoAI:1b,"
+            + "Rotation:[180f,0f],VillagerData:{profession:\"minecraft:farmer\",type:\"minecraft:snow\",level:3},"
+            + "equipment:{mainhand:{id:\"minecraft:emerald\",count:1}}}");
+        LivingEntity farmer = Entities.waitForClientLiving(context, "minecraft:villager");
+        world.getServer().runCommand("bedrock playanimation @e[type=minecraft:villager] animation.tp.vanilla.vanish"
+            + " none 0 \"return 0;\"");
+        waitForPose(context, farmer, parts -> parts.get("body").xScale() == 0f,
+            "animation.tp.vanilla.vanish was played on a dressed villager and its body was never scaled to nothing.");
+
+        context.runOnClient(client -> Submitted.watch(farmer));
+        for (int tick = 0; tick < WATCHED_TICKS; tick++) context.waitTick();
+        Submitted drawn = context.computeOnClient(client -> Submitted.watched(farmer));
+        context.runOnClient(client -> Submitted.unwatch(farmer));
+
+        long models = drawn.models().stream().distinct().count();
+        Assert.that(models >= 2 && drawn.models().size() >= 4 * WATCHED_TICKS, () -> "A dressed villager is drawn"
+            + " with its own model and a model without the hat, four times a frame, and the frames drew "
+            + drawn.models().size() + " models, " + models + " of them different.");
+        for (int index = 0; index < drawn.geometry().size(); index++) {
+            AABB box = drawn.geometry().get(index).box();
+            String model = drawn.models().get(index).getClass().getSimpleName();
+            Assert.that(box == null || box.getSize() < TOLERANCE, () -> "A villager hidden by scaling its body to"
+                + " nothing was drawn with a " + model + " reaching " + box + " in the same frame.");
+        }
+
+        List<Submitted.Item> held = context.computeOnClient(client -> Submitted.living(farmer).items());
+        Assert.that(!held.isEmpty(), "A villager holding an emerald submitted no item.");
+        held.forEach(item -> Assert.near(item.scale(), 0, TOLERANCE,
+            "the scale of the emerald a villager hidden by scaling its body to nothing holds"));
     }
 
     private static void stoop(ClientGameTestContext context, TestSingleplayerContext world, LivingEntity villager,
