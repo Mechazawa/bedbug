@@ -93,12 +93,14 @@ public final class AnimationClientGameTest implements FabricClientGameTest {
      * A gaze the server only teleports, a tenth of a block each tick, which is how a pack walks a
      * model it draws over a vanilla mob. The client is sent no velocity for it, and its walk still
      * has to play: `q.ground_speed` reads two blocks a second and `stride`, weighted by
-     * `q.modified_move_speed`, turns its bone by that share of 90 degrees.
+     * `q.modified_move_speed`, turns its bone by that share of 90 degrees. `q.modified_distance_moved`
+     * grows by the distance in Java's walking measure, six tenths of a block a block, times eight.
      */
     private static void stride(ClientGameTestContext context, TestSingleplayerContext world) {
         Entities.discardAll(context, world.getServer(), "tp:gaze");
         world.getServer().runCommand("summon tp:gaze ~-3 ~ ~6");
         AddonEntity gaze = Entities.waitForClient(context, "tp:gaze");
+        float before = context.computeOnClient(client -> distanceMoved(gaze));
         for (int tick = 0; tick < STRIDE_TICKS; tick++) {
             world.getServer().runCommand("execute as @e[type=tp:gaze] at @s run tp @s ~" + STRIDE_STEP + " ~ ~");
             context.waitTick();
@@ -113,6 +115,15 @@ public final class AnimationClientGameTest implements FabricClientGameTest {
             + " q.modified_move_speed of a gaze teleported along each tick");
         Assert.near(read[0], STRIDE_STEP * 20, 0.2, "q.ground_speed of a gaze teleported along each tick,"
             + " in blocks a second");
+        Assert.near(context.computeOnClient(client -> distanceMoved(gaze)) - before,
+            STRIDE_TICKS * STRIDE_STEP * 0.6 * 8, 2, "how far q.modified_distance_moved grew while a gaze was"
+            + " teleported two blocks, which lags the server by the ticks the client takes to follow");
+    }
+
+    private static float distanceMoved(AddonEntity gaze) {
+        ScriptClock clock = ScriptClock.of(gaze);
+        clock.tick();
+        return clock.variable("distance_moved");
     }
 
     private static void firstState(ClientGameTestContext context, TestSingleplayerContext world) {

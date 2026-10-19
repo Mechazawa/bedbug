@@ -11,6 +11,7 @@
     "GuiGraphicsExtractorMixin",
     "HudTextAccessor",
     "IntegratedServerHaltMixin",
+    "ModelDrawMixin",
     "ParticleEngineMixin",
     "ParticleMotionAccessor",
     "SoundManagerMixin"

@@ -4,16 +4,21 @@ import at.ioexception.mcaddon.entity.AddonEntity;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.model.Model;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.resources.model.geometry.BakedQuad;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.AABB;
 import org.joml.Matrix4f;
 
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * What a renderer handed the frame, kept instead of drawn.
@@ -21,6 +26,10 @@ import java.util.List;
  * The collector answers every call the game's own one does and keeps two kinds: custom geometry,
  * which is how a Bedrock model is submitted, with the render type it asked for and every vertex it
  * wrote; and items, with the pose they were hung at, their light and their tints.
+ *
+ * A Java model is drawn only once the frame's models are drawn, posed again by its own `setupAnim`
+ * there, so what a watched entity's models put into the buffer is kept from the real frame instead:
+ * `ModelDrawMixin` hands each one over as it is drawn, as one piece of geometry per model drawn.
  */
 public final class Submitted {
     /** The light and the overlay are packed the way a vertex carries them, U in the low half. */
@@ -42,7 +51,10 @@ public final class Submitted {
 
     private final List<Geometry> geometry = new ArrayList<>();
     private final List<Item> items = new ArrayList<>();
+    private final List<Model<?>> models = new ArrayList<>();
     private int light;
+
+    private static final Map<Integer, Submitted> WATCHED = new ConcurrentHashMap<>();
 
     /**
      * One frame of an add-on entity, submitted from the render state its renderer extracts.
@@ -60,6 +72,60 @@ public final class Submitted {
         submitted.light = state.lightCoords;
         renderer.submit(state, new PoseStack(), submitted.collector(), new CameraRenderState());
         return submitted;
+    }
+
+    /**
+     * One frame of a mob, submitted from the render state its renderer extracts, keeping the items
+     * its layers hang on it. Its models are drawn later in the frame, so `watch` keeps those.
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public static Submitted living(LivingEntity entity) {
+        net.minecraft.client.renderer.entity.LivingEntityRenderer renderer =
+            (net.minecraft.client.renderer.entity.LivingEntityRenderer) Minecraft.getInstance()
+                .getEntityRenderDispatcher().getRenderer(entity);
+        net.minecraft.client.renderer.entity.state.LivingEntityRenderState state =
+            (net.minecraft.client.renderer.entity.state.LivingEntityRenderState) renderer.createRenderState();
+        renderer.extractRenderState(entity, state, 0f);
+
+        Submitted submitted = new Submitted();
+        submitted.light = state.lightCoords;
+        renderer.submit(state, new PoseStack(), submitted.collector(), new CameraRenderState());
+        return submitted;
+    }
+
+    /** Starts keeping every model the frames draw for this entity, from nothing. */
+    public static void watch(Entity entity) {
+        WATCHED.put(entity.getId(), new Submitted());
+    }
+
+    /** What the frames drew for the entity since `watch`, or null when it is not watched. */
+    public static Submitted watched(Entity entity) {
+        return WATCHED.get(entity.getId());
+    }
+
+    public static void unwatch(Entity entity) {
+        WATCHED.remove(entity.getId());
+    }
+
+    /**
+     * Keeps a model the frame is about to draw for a watched entity, posed as it is handed to the
+     * buffer, measured from the model's own origin.
+     */
+    public static void drawn(Object state, Model<?> model, RenderType renderType, int light, int overlay, int colour) {
+        LivingEntity entity = RenderStates.of(state);
+        Submitted submitted = entity == null ? null : WATCHED.get(entity.getId());
+        if (submitted == null) return;
+
+        Recording recording = new Recording();
+        model.renderToBuffer(new PoseStack(), recording, light, overlay, colour);
+        recording.close();
+        submitted.geometry.add(new Geometry(renderType, recording.vertices));
+        submitted.models.add(model);
+    }
+
+    /** Every model a watched entity was drawn with, once per time it was drawn. */
+    public List<Model<?>> models() {
+        return models;
     }
 
     public List<Geometry> geometry() {
