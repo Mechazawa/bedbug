@@ -1,6 +1,6 @@
 # Working on this repository
 
-A Fabric mod that loads Bedrock `.mcaddon` files at runtime, built for four Minecraft versions from
+A Fabric mod that loads Bedrock `.mcaddon` files at runtime, built for five Minecraft versions from
 one source tree. Read `README.md` first for what the mod does; this file is about how to change it.
 
 ## Commands
@@ -9,7 +9,7 @@ one source tree. Read `README.md` first for what the mod does; this file is abou
 export JAVA_HOME=/opt/homebrew/opt/openjdk@25   # macOS; Gradle has to run on Java 25 or newer
 export JAVA_HOME=/usr/lib/jvm/java-27-openjdk   # the Linux equivalent; the tools read it too
 
-./gradlew build                 # all four versions, plus checkstyle and the tool parse gate
+./gradlew build                 # all five versions, plus checkstyle and the tool parse gate
 ./gradlew check                 # verification only
 ./gradlew :26.2:compileJava     # one version, for fast iteration
 ./gradlew :26.2:runGameTest     # the in-game tests, headless, part of check
@@ -109,8 +109,8 @@ path. Run it while the main checkout is not building.
 
 These are the checks it runs, and what each one catches:
 
-- **`./gradlew build`** compiles all four versions and runs every test on each of them: the unit
-  tests for the checked-out form, and the game tests for all four. The game test task builds
+- **`./gradlew build`** compiles all five versions and runs every test on each of them: the unit
+  tests for the checked-out form, and the game tests for all five. The game test task builds
   `tools/testpack` into its own run directory first, so the tests that assert on a loaded add-on have
   one; with no pack each of those succeeds without asserting., which is what catches a call that exists on only
   one of them.
@@ -1466,7 +1466,7 @@ These are the checks it runs, and what each one catches:
 
   **The two remapped targets carry fewer of them.** Loom remaps a mod for 1.20.1 and 1.21.1 and
   drops the libraries that mod ships inside itself, so C2ME, Lithostitched and Terralith do not
-  start there and their properties are empty. 26.1.2 and 26.2 need no remapping and carry the
+  start there and their properties are empty. 26.1.2, 26.2 and 26.3 need no remapping and carry the
   whole set, so run `companions` against 26.2 to exercise all of them.
 
   **What the companions cost.** A 26.2 dev client loads 95 mods with the whole set and a 1.21.1 one
@@ -2473,7 +2473,7 @@ are read by people who know nothing about how the change came about.
 settings.gradle.kts          Version list and vcsVersion
 stonecutter.gradle.kts       Controller. Its body does NOT execute.
 build.remap.gradle.kts       Obfuscated targets (1.20.1, 1.21.1) and the string replacements
-build.named.gradle.kts       26.2, which Mojang ships unobfuscated
+build.named.gradle.kts       The 26.x targets, which Mojang ships unobfuscated
 gradle/mod.gradle.kts        Shared build logic: toolchain, GraalJS bundling, checkstyle, checkTools
 config/checkstyle/           Lint rules and the Stonecutter suppressions
 

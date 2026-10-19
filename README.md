@@ -1297,8 +1297,9 @@ shown by `/mcaddon entities` and `/mcaddon scripts`.
 | 1.21.1 | 21 |
 | 26.1.2 | 25 |
 | 26.2 | 25 |
+| 26.3 | 25 |
 
-New features and fixes target 26.1.2 and 26.2. 1.20.1 and 1.21.1 are built from the same source,
+New features and fixes target 26.1.2, 26.2 and 26.3. 1.20.1 and 1.21.1 are built from the same source,
 but get no new features or fixes for now.
 
 Each version is a separate build. Minecraft rewrote entity rendering in 1.21.2 and again in 1.21.5,

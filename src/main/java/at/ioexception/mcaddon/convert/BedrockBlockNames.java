@@ -146,16 +146,22 @@ public final class BedrockBlockNames {
     /**
      * Blocks Bedrock has and Java has no counterpart for: the education edition's chemistry and
      * its hardened glass, the building permission blocks, Bedrock's own technical blocks and the
-     * experiments Java has not shipped. An item frame is an entity in Java rather than a block.
+     * experiments Java has not shipped. An item frame is an entity in Java rather than a block. 26.3
+     * ships the cushions, the poplar wood, the shrubs, the shelf mushroom, the straw bed and the wool
+     * and concrete slabs and stairs.
      */
     private static final List<Pattern> BEDROCK_ONLY = Stream.of(
         "allow", "deny", "camera", "unknown", "info_update2?", "reserved6",
         "client_request_placeholder_block", "netherreactor", "glowingobsidian", "frame", "glow_frame",
         "element_\\d+", "element_constructor", "chemistry_table", "chemical_heat", "compound_creator",
         "lab_table", "material_reducer", "colored_torch_\\w+", "underwater_torch", "underwater_tnt",
+        //? if >=26.3 {
+        /*"hard_(\\w+_)?(stained_)?glass(_pane)?")
+        *///?} else {
         "hard_(\\w+_)?(stained_)?glass(_pane)?", "\\w+_wool_(double_)?slab", "\\w+_wool_stairs",
         "\\w+_cushion", "(stripped_)?poplar_\\w+", "\\w+_poplar_leaves", "red_shrub", "shelf_mushroom",
         "straw_bed", "\\w+_concrete_(double_)?slab", "\\w+_concrete_stairs")
+        //?}
         .map(Pattern::compile)
         .toList();
 

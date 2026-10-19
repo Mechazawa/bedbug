@@ -168,7 +168,7 @@ public final class PackBiomeClientGameTest implements FabricClientGameTest {
      * which reaches it as a timeline the overworld's own tag was given.
      */
     private static void lighting(ClientGameTestContext context) {
-        int ambient = context.computeOnClient(client -> client.level.environmentAttributes()
+        var ambient = context.computeOnClient(client -> client.level.environmentAttributes()
             .getValue(EnvironmentAttributes.AMBIENT_LIGHT_COLOR, client.player.blockPosition()));
         colour(ambient, 0x2b3042, "ambient light in the overworld");
     }
@@ -272,7 +272,14 @@ public final class PackBiomeClientGameTest implements FabricClientGameTest {
     /** Every biome whose monster spawn list holds the type. */
     private static Set<String> offering(MinecraftServer server, EntityType<?> type) {
         return server.registryAccess().lookupOrThrow(Registries.BIOME).entrySet().stream()
+            //? if >=26.3 {
+            /*.filter(entry -> entry.getValue().getAttributes()
+                .applyModifier(net.minecraft.world.attribute.EnvironmentAttributes.NATURAL_MOB_SPAWNS,
+                    net.minecraft.world.level.biome.MobSpawnSettings.EMPTY)
+                .getMobsInCategory(MobCategory.MONSTER).unwrap().stream()
+            *///?} else {
             .filter(entry -> entry.getValue().getMobSettings().getMobs(MobCategory.MONSTER).unwrap().stream()
+            //?}
                 .anyMatch(weighted -> weighted.value().type() == type))
             .map(entry -> entry.getKey().identifier().toString())
             .collect(Collectors.toCollection(TreeSet::new));
@@ -289,6 +296,12 @@ public final class PackBiomeClientGameTest implements FabricClientGameTest {
     private static <T> T attribute(ClientGameTestContext context, EnvironmentAttribute<T> attribute, BlockPos at) {
         return context.computeOnClient(client -> client.level.environmentAttributes().getValue(attribute, at));
     }
+
+    //? if >=26.3 {
+    /*private static void colour(org.joml.Vector3fc found, int wanted, String what) {
+        colour(net.minecraft.util.ARGB.colorFromVector3f(found), wanted, what);
+    }
+    *///?}
 
     private static void colour(int found, int wanted, String what) {
         Assert.that((found & 0xFFFFFF) == wanted, "Expected the " + what + " to be #" + Integer.toHexString(wanted)

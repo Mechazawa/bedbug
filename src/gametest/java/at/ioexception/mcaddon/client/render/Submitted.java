@@ -251,6 +251,13 @@ public final class Submitted {
             return this;
         }
 
+        //? if >=26.3 {
+        /*@Override
+        public VertexConsumer setUv3(float u, float v) {
+            return this;
+        }
+        *///?}
+
         @Override
         public VertexConsumer setNormal(float x, float y, float z) {
             close();
