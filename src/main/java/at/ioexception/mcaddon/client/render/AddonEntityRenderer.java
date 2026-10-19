@@ -212,16 +212,14 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
         for (Attachables.Drawn each : state.drawing.passes()) {
             AddonModels.Pass pass = each.pass();
             EntityAnimator animator = each.animator();
-            poseStack.pushPose();
-            if (each.anchor() != null) Platform.mulPose(poseStack, each.anchor());
             collector.submitCustomGeometry(poseStack, renderTypeOf(pass),
                 (pose, buffer) -> {
                     PoseStack local = new PoseStack();
                     local.last().set(pose);
                     BedrockModelRenderer.render(pass.geometry(), animator, pass.visibility()::hides, pass::draws,
-                        pass.shift(), local, buffer, pass.light(light), pass.overlay(state.hurt), pass.colour());
+                        each.anchors(), pass.shift(), local, buffer, pass.light(light), pass.overlay(state.hurt),
+                        pass.colour());
                 });
-            poseStack.popPose();
         }
         for (int index = 0; index < state.heldModels.size(); index++) {
             HeldItems.Held held = state.drawing.held().get(index);
@@ -257,11 +255,9 @@ public class AddonEntityRenderer extends EntityRenderer<AddonEntity, AddonEntity
         for (Attachables.Drawn each : drawing.passes()) {
             AddonModels.Pass pass = each.pass();
             VertexConsumer buffer = buffers.getBuffer(renderTypeOf(pass));
-            poseStack.pushPose();
-            if (each.anchor() != null) Platform.mulPose(poseStack, each.anchor());
             BedrockModelRenderer.render(pass.geometry(), each.animator(), pass.visibility()::hides, pass::draws,
-                pass.shift(), poseStack, buffer, pass.light(light), pass.overlay(hurt(entity)), pass.colour());
-            poseStack.popPose();
+                each.anchors(), pass.shift(), poseStack, buffer, pass.light(light), pass.overlay(hurt(entity)),
+                pass.colour());
         }
         for (HeldItems.Held held : drawing.held()) {
             intoHand(poseStack, held);

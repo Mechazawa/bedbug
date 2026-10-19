@@ -614,7 +614,13 @@ These are the checks it runs, and what each one catches:
   bone binds with `q.item_slot_to_bone_name(c.item_slot)`, which is the spelling every binding Mojang
   publishes uses and the one that needs `context.item_slot` answered. `tp:topper` (a hat pivoted at
   28 pixels and modelled on top of a humanoid head) and `tp:baton` (a cube at its pivot) bind the
-  same way, and `AttachableClientGameTest` puts them on the player and a husk. The warden shares the sprite's
+  same way, and `AttachableClientGameTest` puts them on the player and a husk. `tp:scroll` binds
+  `item`, the child of an empty root, with a second cube on `sheet` below it, all about a pivot of
+  nothing, the way a pack holds a newspaper: a bone bound below the root keeps its pivot's offset
+  from its parent's and is not lowered by the 24 pixels a bound root is, so its cube sits at the
+  hand unlifted. The pack also dresses `minecraft:diamond_horse_armor`, so a horse wearing it is
+  drawn with that attachable and without Java's armour model, which the same test counts through
+  the Java models `Submitted` was handed. The warden shares the sprite's
   geometry and declares neither `enable_attachables` nor a held item scale, so a picture of the two
   side by side is the same model with and without each. The `held` scene is where they are looked at.
 

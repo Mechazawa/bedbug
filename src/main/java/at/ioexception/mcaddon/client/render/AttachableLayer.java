@@ -19,8 +19,13 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 //? if >=1.21.2 {
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.state.ArmedEntityRenderState;
+import net.minecraft.client.renderer.entity.state.EquineRenderState;
+import net.minecraft.client.renderer.entity.state.HappyGhastRenderState;
 import net.minecraft.client.renderer.entity.state.HumanoidRenderState;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
+import net.minecraft.client.renderer.entity.state.LlamaRenderState;
+import net.minecraft.client.renderer.entity.state.NautilusRenderState;
+import net.minecraft.client.renderer.entity.state.WolfRenderState;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.item.ItemStack;
@@ -108,7 +113,9 @@ public class AttachableLayer<S extends LivingEntityRenderState, M extends Entity
     /**
      * Leaves out Java's own drawing of every item an attachable draws in its place, as Bedrock does.
      *
-     * The head layer's item and skull, the armour and the wings, and the item in each hand are all
+     * The head layer's item and skull, the armour and the wings, what a mob wears on its body (a
+     * horse's or a wolf's armour, a llama's carpet, a happy ghast's harness) and the item in each
+     * hand are all
      * read from the render state by the layers after this one. This layer is added as
      * `LivingEntityRenderer`'s constructor returns, before any renderer extending it adds its own,
      * so it runs first and the state it clears is the one those layers read.
@@ -131,6 +138,7 @@ public class AttachableLayer<S extends LivingEntityRenderState, M extends Entity
                 case FEET -> {
                     if (state instanceof HumanoidRenderState humanoid) humanoid.feetEquipment = ItemStack.EMPTY;
                 }
+                case BODY -> clearBody(state);
                 case MAINHAND, OFFHAND -> {
                     if (state instanceof ArmedEntityRenderState armed) clearHand(armed, slot);
                 }
@@ -138,6 +146,19 @@ public class AttachableLayer<S extends LivingEntityRenderState, M extends Entity
                 }
             }
         });
+    }
+
+    /** Each mob wearing something in its body slot keeps it in a render state field of its own. */
+    private static void clearBody(LivingEntityRenderState state) {
+        switch (state) {
+            case EquineRenderState equine -> equine.bodyArmorItem = ItemStack.EMPTY;
+            case WolfRenderState wolf -> wolf.bodyArmorItem = ItemStack.EMPTY;
+            case LlamaRenderState llama -> llama.bodyItem = ItemStack.EMPTY;
+            case HappyGhastRenderState ghast -> ghast.bodyItem = ItemStack.EMPTY;
+            case NautilusRenderState nautilus -> nautilus.bodyArmorItem = ItemStack.EMPTY;
+            default -> {
+            }
+        }
     }
 
     private static void clearHand(ArmedEntityRenderState state, EquipmentSlot slot) {
@@ -164,16 +185,14 @@ public class AttachableLayer<S extends LivingEntityRenderState, M extends Entity
         boolean pushed = intoModelSpace(poseStack, entity, 0);
         for (Attachables.Drawn each : worn) {
             AddonModels.Pass pass = each.pass();
-            poseStack.pushPose();
-            if (each.anchor() != null) Platform.mulPose(poseStack, each.anchor());
             collector.submitCustomGeometry(poseStack, renderTypeOf(pass),
                 (pose, buffer) -> {
                     PoseStack local = new PoseStack();
                     local.last().set(pose);
                     BedrockModelRenderer.render(pass.geometry(), each.animator(), pass.visibility()::hides, pass::draws,
-                        pass.shift(), local, buffer, pass.light(light), OverlayTexture.NO_OVERLAY, pass.colour());
+                        each.anchors(), pass.shift(), local, buffer, pass.light(light), OverlayTexture.NO_OVERLAY,
+                        pass.colour());
                 });
-            poseStack.popPose();
         }
         if (pushed) poseStack.popPose();
     }
@@ -189,11 +208,9 @@ public class AttachableLayer<S extends LivingEntityRenderState, M extends Entity
         for (Attachables.Drawn each : worn) {
             AddonModels.Pass pass = each.pass();
             VertexConsumer buffer = buffers.getBuffer(renderTypeOf(pass));
-            poseStack.pushPose();
-            if (each.anchor() != null) Platform.mulPose(poseStack, each.anchor());
             BedrockModelRenderer.render(pass.geometry(), each.animator(), pass.visibility()::hides, pass::draws,
-                pass.shift(), poseStack, buffer, pass.light(light), OverlayTexture.NO_OVERLAY, pass.colour());
-            poseStack.popPose();
+                each.anchors(), pass.shift(), poseStack, buffer, pass.light(light), OverlayTexture.NO_OVERLAY,
+                pass.colour());
         }
         if (pushed) poseStack.popPose();
     }

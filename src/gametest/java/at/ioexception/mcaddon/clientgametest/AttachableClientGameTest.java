@@ -32,6 +32,12 @@ import java.util.Comparator;
  *   and hold `tp:baton`. Java draws neither item, and each attachable hangs off the part of Java's
  *   model its binding names: the topper, pivoted at 28 pixels and modelled on top of a humanoid
  *   head, sits there and turns with the head, and the baton sits in the right hand.
+ * - `tp:scroll` binds `item`, the child of an empty root, and draws a second cube on `sheet` below
+ *   it, both modelled about a pivot of nothing. A bone bound below the root is not lowered by the 24
+ *   pixels a bound root is, so held by the player and by `tp:prism`, `item`'s cube sits at the hand
+ *   where the baton's does, and `sheet` keeps its offset.
+ * - A horse in diamond horse armour, which the test pack dresses with an attachable of its own, is
+ *   drawn with that attachable and without Java's armour model.
  */
 public final class AttachableClientGameTest implements FabricClientGameTest {
     private static final double TOLERANCE = 0.01;
@@ -65,6 +71,10 @@ public final class AttachableClientGameTest implements FabricClientGameTest {
     private static final double PLAYER_HAND_REACH = Math.hypot(6, 1.212) / 16 * PLAYER_SCALE;
     private static final double HAND_TOLERANCE = 0.05;
 
+    /** How far `tp:scroll`'s sheet cube is modelled from the cube of the bone it is a child of. */
+    private static final double SCROLL_SHEET = 4 / 16.0;
+    private static final int CUBE_CORNERS = 24;
+
     private static final float LOOK_UP = 50;
     private static final float LOOK_ASIDE = 40;
     private static final double ANGLE_TOLERANCE = 2;
@@ -84,8 +94,57 @@ public final class AttachableClientGameTest implements FabricClientGameTest {
             held(context, world, sprite, warden);
             prism(context, world, prism);
             onAPlayer(context, world);
+            boundBelowTheRoot(context, world);
             onAMob(context, world);
+            onAHorse(context, world);
         }
+    }
+
+    /**
+     * A player holding `tp:scroll`, whose binding sits on `item`, the child of an empty root: `item`
+     * hangs off the right hand where the baton's root does, and `sheet`, below it, keeps its place
+     * four pixels along from it.
+     */
+    private static void boundBelowTheRoot(ClientGameTestContext context, TestSingleplayerContext world) {
+        world.getServer().runCommand("item replace entity @a armor.head with minecraft:air");
+        world.getServer().runCommand("item replace entity @a weapon.mainhand with tp:scroll");
+        Worlds.waitForClient(context, client -> carries(client.player, EquipmentSlot.MAINHAND, "tp:scroll")
+                && client.player.getItemBySlot(EquipmentSlot.HEAD).isEmpty(), 100,
+            () -> "tp:scroll never reached the client's own player's hand.");
+
+        Submitted holding = posed(context, 0, 0);
+        Assert.that(holding.geometry().size() == 1, () -> "Expected tp:scroll alone drawn on the player and found "
+            + holding.geometry().size() + " pieces of geometry.");
+
+        Vec3 hand = middle(cube(holding.geometry().get(0), 0));
+        Assert.near(hand.y, PLAYER_HAND_HEIGHT, HAND_TOLERANCE,
+            "the height of tp:scroll's bound item bone above the player's feet, hung off the right hand");
+        Assert.near(Math.hypot(hand.x, hand.z), PLAYER_HAND_REACH, HAND_TOLERANCE,
+            "how far tp:scroll's bound item bone is from the middle of the player, hung off the right hand");
+        Assert.near(middle(cube(holding.geometry().get(0), 1)).distanceTo(hand), SCROLL_SHEET * PLAYER_SCALE,
+            TOLERANCE, "how far tp:scroll's sheet is drawn from the item bone it is a child of");
+    }
+
+    /**
+     * A horse in diamond horse armour, which the test pack's `minecraft:diamond_horse_armor`
+     * attachable draws: the attachable is drawn and Java's armour model is not.
+     */
+    private static void onAHorse(ClientGameTestContext context, TestSingleplayerContext world) {
+        world.getServer().runCommand("summon minecraft:horse ~4 ~ ~-4 {NoAI:1b,PersistenceRequired:1b,Variant:0}");
+        LivingEntity horse = Entities.waitForClientLiving(context, "minecraft:horse");
+        long bare = context.computeOnClient(client -> Submitted.living(horse).models().stream().distinct().count());
+
+        world.getServer().runCommand("item replace entity @e[type=minecraft:horse] armor.body"
+            + " with minecraft:diamond_horse_armor");
+        Worlds.waitForClient(context, client -> carries(horse, EquipmentSlot.BODY, "minecraft:diamond_horse_armor"),
+            100, () -> "minecraft:diamond_horse_armor never reached the client's copy of the horse.");
+
+        Submitted armoured = context.computeOnClient(client -> Submitted.living(horse));
+        Assert.that(armoured.geometry().size() == 1, () -> "Expected the diamond horse armour's attachable drawn"
+            + " on the horse and found " + armoured.geometry().size() + " pieces of geometry.");
+        long models = armoured.models().stream().distinct().count();
+        Assert.that(models == bare, () -> "The diamond horse armour's attachable covers the body slot, and the"
+            + " horse was drawn with " + models + " Java models where it is drawn with " + bare + " bare.");
     }
 
     /**
@@ -171,6 +230,12 @@ public final class AttachableClientGameTest implements FabricClientGameTest {
             piece.vertices().stream().mapToDouble(Submitted.Vertex::z).average().orElse(0));
     }
 
+    /** One cube of a piece, by the order it was drawn in, each cube being six faces of four corners. */
+    private static Submitted.Geometry cube(Submitted.Geometry piece, int index) {
+        return new Submitted.Geometry(piece.renderType(),
+            piece.vertices().subList(index * CUBE_CORNERS, (index + 1) * CUBE_CORNERS));
+    }
+
     /** From the player's neck, which the head turns about, to the middle of a piece. */
     private static Vector3f fromHead(Submitted.Geometry piece) {
         Vec3 middle = middle(piece);
@@ -236,6 +301,16 @@ public final class AttachableClientGameTest implements FabricClientGameTest {
             "the bottom of tp:visor above tp:prism's feet, hung off its rightItem bone");
         Assert.that(holding.items().isEmpty(), "tp:visor's attachable draws the held visor, and an item was"
             + " drawn in the same hand as well.");
+
+        world.getServer().runCommand("item replace entity @e[type=tp:prism] weapon.mainhand with tp:scroll");
+        Submitted scroll = Frames.waitFor(context, prism, frame -> frame.geometry().size() == 3
+                && frame.geometry().get(2).vertices().size() == 2 * CUBE_CORNERS,
+            "tp:prism enables attachables and held tp:scroll, and the scroll was never drawn in its hand.");
+        Vec3 hand = middle(cube(scroll.geometry().get(2), 0));
+        Assert.near(hand.y, PRISM_HAND, TOLERANCE,
+            "the height of tp:scroll's bound item bone above tp:prism's feet, hung off its rightItem bone");
+        Assert.near(middle(cube(scroll.geometry().get(2), 1)).distanceTo(hand), SCROLL_SHEET, TOLERANCE,
+            "how far tp:scroll's sheet is drawn from the item bone it is a child of, in tp:prism's hand");
 
         world.getServer().runCommand("item replace entity @e[type=tp:prism] weapon.mainhand with minecraft:stick");
         Frames.waitFor(context, prism, frame -> frame.items().size() == 1,

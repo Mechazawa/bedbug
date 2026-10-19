@@ -7,6 +7,7 @@ import at.ioexception.mcaddon.bedrock.model.BakedGeometry;
 import at.ioexception.mcaddon.bedrock.model.BakedQuad;
 import at.ioexception.mcaddon.bedrock.model.BakedVertex;
 import at.ioexception.mcaddon.bedrock.model.UvShift;
+import at.ioexception.mcaddon.platform.Platform;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import org.joml.Matrix3f;
@@ -14,6 +15,7 @@ import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
+import java.util.Map;
 import java.util.function.Predicate;
 
 /**
@@ -28,11 +30,20 @@ public final class BedrockModelRenderer {
     private BedrockModelRenderer() {
     }
 
+    /**
+     * Draws the model from the pose the stack holds.
+     *
+     * `anchors` gives a frame, in the same space, for each bone hung off another model: such a bone
+     * and its children are drawn from that frame in place of its parent's, and left out where its
+     * parent would have drawn it. The bone keeps its pivot's offset from its parent's pivot, which for
+     * a root is the offset from the model's origin 24 pixels above the feet.
+     */
     public static void render(
         BakedGeometry geometry,
         EntityAnimator animator,
         Predicate<String> hidden,
         Predicate<String> drawn,
+        Map<String, Matrix4f> anchors,
         UvShift shift,
         PoseStack poseStack,
         VertexConsumer buffer,
@@ -40,39 +51,40 @@ public final class BedrockModelRenderer {
         int overlay,
         int colour
     ) {
-        for (BakedBone bone : geometry.roots()) {
-            renderBone(bone, new Quaternionf(), animator, hidden, drawn, shift, poseStack, buffer, light, overlay,
-                colour);
-        }
+        Walk walk = new Walk(animator, hidden, drawn, anchors, shift, poseStack, buffer, light, overlay, colour);
+        geometry.roots().stream().filter(root -> !anchors.containsKey(root.name()))
+            .forEach(root -> walk.bone(root, new Quaternionf()));
+        anchors.forEach((name, anchor) -> {
+            BakedBone bone = geometry.bones().get(name);
+            if (bone == null) return;
+
+            poseStack.pushPose();
+            Platform.mulPose(poseStack, anchor);
+            walk.bone(bone, new Quaternionf());
+            poseStack.popPose();
+        });
     }
 
-    private static void renderBone(
-        BakedBone bone,
-        Quaternionf parentTurn,
-        EntityAnimator animator,
-        Predicate<String> hidden,
-        Predicate<String> drawn,
-        UvShift shift,
-        PoseStack poseStack,
-        VertexConsumer buffer,
-        int light,
-        int overlay,
-        int colour
-    ) {
-        if (hidden.test(bone.name())) return;
+    /** One drawing of a model: everything each bone is drawn with but the bone and the turn above it. */
+    private record Walk(EntityAnimator animator, Predicate<String> hidden, Predicate<String> drawn,
+        Map<String, Matrix4f> anchors, UvShift shift, PoseStack poseStack, VertexConsumer buffer,
+        int light, int overlay, int colour) {
 
-        poseStack.pushPose();
-        Quaternionf turn = poseBone(bone, parentTurn, animator, poseStack);
+        void bone(BakedBone bone, Quaternionf parentTurn) {
+            if (hidden.test(bone.name())) return;
 
-        PoseStack.Pose last = poseStack.last();
-        if (drawn.test(bone.name())) {
-            for (BakedQuad quad : bone.quads()) emitQuad(quad, shift, last, buffer, light, overlay, colour);
+            poseStack.pushPose();
+            Quaternionf turn = poseBone(bone, parentTurn, animator, poseStack);
+
+            PoseStack.Pose last = poseStack.last();
+            if (drawn.test(bone.name())) {
+                for (BakedQuad quad : bone.quads()) emitQuad(quad, shift, last, buffer, light, overlay, colour);
+            }
+
+            bone.children().stream().filter(child -> !anchors.containsKey(child.name()))
+                .forEach(child -> bone(child, turn));
+            poseStack.popPose();
         }
-
-        for (BakedBone child : bone.children()) {
-            renderBone(child, turn, animator, hidden, drawn, shift, poseStack, buffer, light, overlay, colour);
-        }
-        poseStack.popPose();
     }
 
     /**

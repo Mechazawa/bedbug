@@ -25,7 +25,8 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * The collector answers every call the game's own one does and keeps two kinds: custom geometry,
  * which is how a Bedrock model is submitted, with the render type it asked for and every vertex it
- * wrote; and items, with the pose they were hung at, their light and their tints.
+ * wrote; and items, with the pose they were hung at, their light and their tints. A Java model it is
+ * handed is kept by itself, unposed, in `models`, which says which models a renderer asked for.
  *
  * A Java model is drawn only once the frame's models are drawn, posed again by its own `setupAnim`
  * there, so what a watched entity's models put into the buffer is kept from the real frame instead:
@@ -123,7 +124,7 @@ public final class Submitted {
         submitted.models.add(model);
     }
 
-    /** Every model a watched entity was drawn with, once per time it was drawn. */
+    /** Every model a watched entity was drawn with, or one frame submitted, once per time. */
     public List<Model<?>> models() {
         return models;
     }
@@ -154,6 +155,10 @@ public final class Submitted {
                 case "submitCustomGeometry" -> {
                     keepGeometry((PoseStack) arguments[0], (RenderType) arguments[1],
                         (SubmitNodeCollector.CustomGeometryRenderer) arguments[2]);
+                    yield null;
+                }
+                case "submitModel" -> {
+                    models.add((Model<?>) arguments[0]);
                     yield null;
                 }
                 case "submitItem" -> {
