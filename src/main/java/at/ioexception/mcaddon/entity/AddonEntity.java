@@ -1033,11 +1033,19 @@ public class AddonEntity extends PathfinderMob
      * in whether the entity stops in place when it has nowhere to be. A control already of the kind
      * asked for is left where it is, because a new one drops the step the entity is part way
      * through.
+     *
+     * Java's hovering control turns gravity off at the first step it is told to take and never on
+     * again, so a hovering mob falls until something gives it somewhere to go. Mojang's bee states
+     * gravity in its `minecraft:physics` and still holds its height, so gravity goes off as the
+     * hovering starts and comes back when it ends. Flying keeps Java's rule of falling between steps.
      */
     private void applyMoveControl() {
         String asked = moverKind();
         if (asked.equals(mover)) return;
 
+        if (flight == null && (asked.equals("hover") || "hover".equals(mover) || "fly".equals(mover))) {
+            setNoGravity(asked.equals("hover"));
+        }
         mover = asked;
         moveControl = switch (asked) {
             case "hover" -> new net.minecraft.world.entity.ai.control.FlyingMoveControl(this, 20, true);
@@ -1963,6 +1971,16 @@ public class AddonEntity extends PathfinderMob
             setDeltaMovement(0, getDeltaMovement().y, 0);
             lastRestedDay = Platform.dayTime(level) / 24000L;
         }
+    }
+
+    /**
+     * Java's distance rule never removes the entity, because Bedrock removes one only through
+     * `minecraft:despawn`, which {@link #despawn} answers. Java's default rule discards a mob the
+     * moment the nearest player is more than 128 blocks away.
+     */
+    @Override
+    public boolean removeWhenFarAway(double distanceSquared) {
+        return false;
     }
 
     /**
@@ -3657,6 +3675,7 @@ public class AddonEntity extends PathfinderMob
         mountJump.tick();
         if (definition == null || !(level() instanceof net.minecraft.server.level.ServerLevel)) return;
 
+        stepOutOfWalls();
         turnRiders();
         animateState();
         everyTick();
@@ -3701,6 +3720,56 @@ public class AddonEntity extends PathfinderMob
             callARaid();
             listenForVibrations();
         }
+    }
+
+    /**
+     * Moves the entity sideways out of a block its box reaches into.
+     *
+     * Java's collision skips the block the leading face of a box is already inside, so an entity
+     * wider than a block stood at a block's middle beside a wall overlaps it from the start, walks
+     * on into it and is hurt `inWall` once its eyes are inside. A pack's beetle scaled past a block
+     * wide is that shape, and Bedrock does not hurt it there. Only a sideways overlap of up to half
+     * the entity's width is undone: a floor or a ceiling is left to Java, and so is an entity
+     * whose middle is inside a block.
+     */
+    private void stepOutOfWalls() {
+        if (noPhysics || flight != null || isPassenger()) return;
+
+        net.minecraft.world.phys.AABB box = getBoundingBox().deflate(1.0E-7);
+        double reach = getBbWidth() / 2;
+        double east = 0;
+        double west = 0;
+        double south = 0;
+        double north = 0;
+        for (net.minecraft.world.phys.shapes.VoxelShape shape : level().getBlockCollisions(this, box)) {
+            for (net.minecraft.world.phys.AABB part : shape.toAabbs()) {
+                if (!part.intersects(box)) continue;
+
+                double toEast = part.maxX - box.minX;
+                double toWest = box.maxX - part.minX;
+                double toSouth = part.maxZ - box.minZ;
+                double toNorth = box.maxZ - part.minZ;
+                double sideways = Math.min(Math.min(toEast, toWest), Math.min(toSouth, toNorth));
+                double vertical = Math.min(part.maxY - box.minY, box.maxY - part.minY);
+                if (sideways > reach || vertical < sideways) continue;
+
+                if (sideways == toEast) {
+                    east = Math.max(east, toEast);
+                } else if (sideways == toWest) {
+                    west = Math.max(west, toWest);
+                } else if (sideways == toSouth) {
+                    south = Math.max(south, toSouth);
+                } else {
+                    north = Math.max(north, toNorth);
+                }
+            }
+        }
+        double dx = east > 0 && west > 0 ? 0 : east - west;
+        double dz = south > 0 && north > 0 ? 0 : south - north;
+        if (dx == 0 && dz == 0) return;
+
+        net.minecraft.world.phys.AABB clear = getBoundingBox().move(dx, 0, dz);
+        if (level().noBlockCollision(this, clear.deflate(1.0E-7))) setPos(getX() + dx, getY(), getZ() + dz);
     }
 
     /** The behaviour pack's own state machine, built the first tick an entity that has one runs. */

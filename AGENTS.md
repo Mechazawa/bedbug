@@ -661,6 +661,22 @@ These are the checks it runs, and what each one catches:
   `BehaviourGameTests.aTraderWithNoTradingGoalStandsStillWhileTrading` gives it a customer and
   asks that it stands still, then takes the customer away and asks that it walks.
 
+  `tp:mite` is a box of 0.8 by 0.5 scaled by 1.35, so 1.08 blocks wide.
+  `BehaviourGameTests.aScaledMobPressedAgainstAWallTakesNoWallDamage` stands three at the middle of
+  the blocks beside a wall, each reaching into it, and drives them at it for five seconds. Java's
+  collision skips the block a box's leading face is already inside, so without
+  `AddonEntity.stepOutOfWalls` they walk into the wall and are hurt `inWall`. `tp:hoverer` is
+  Mojang's bee pattern (`minecraft:can_fly`, `navigation.hover`, `movement.hover`, gravity left on
+  in `minecraft:physics`) with no goal, and `aHoveringMobLetGoInTheAirStaysThere` lets it go three
+  blocks up and asks that it holds its height. Java's hovering move control turns gravity off only
+  at the first step it is told to take, so `applyMoveControl` turns it off as hovering starts.
+
+  **An add-on entity ignores Java's distance despawn.** `Mob.checkDespawn` discards a mob whose
+  `removeWhenFarAway` answers true as soon as the nearest player is more than 128 blocks off, and a
+  game test's mock player counts. With the test grid laid out one way, a mock player in a far test
+  despawned `aPounceIntoGravelLeavesItStuck`'s brute part way through, which read as a pounce that
+  never came. `AddonEntity.removeWhenFarAway` answers false; `minecraft:despawn` is the only way out.
+
   `tp:fade` is the particle painted by curves: one of each of the four kinds, read off
   `variable.particle_age`, sets its alpha, its red, its green and its size, and the bezier chain
   carries a `horizontal_range` Bedrock ignores on a chain.
