@@ -5,9 +5,10 @@
   "name": "${mod_name}",
   "description": "${mod_description}",
   "authors": [
-    "Bas Bieling"
+    "Mechazawa"
   ],
   "license": "MIT",
+  "icon": "assets/mcaddon/icon.png",
   "environment": "*",
   "entrypoints": {
     "main": [

@@ -2,7 +2,9 @@ package at.ioexception.mcaddon.clientgametest;
 
 import at.ioexception.mcaddon.bedrock.fog.FogDefinition;
 import at.ioexception.mcaddon.client.render.EntityProperties;
+import at.ioexception.mcaddon.client.render.PackTextures;
 import at.ioexception.mcaddon.client.render.PlayerFog;
+import at.ioexception.mcaddon.client.render.Submitted;
 import at.ioexception.mcaddon.client.screen.AddonFormScreen;
 import at.ioexception.mcaddon.network.Channels;
 import at.ioexception.mcaddon.entity.AddonEntity;
@@ -16,6 +18,7 @@ import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.phys.Vec3;
@@ -176,6 +179,10 @@ public final class ServerPlayerClientGameTest implements FabricClientGameTest {
      * from and nothing else. A wisp settles a second after it arrives and the override shows the
      * client one that has not, while the wisp's own value stays settled and the bystander is never
      * told otherwise. Clearing the override shows the client the wisp's own value again.
+     *
+     * The wisp's render controller picks its texture the way a pack's style setting does, with a
+     * `return` inside a block that ends the whole expression, so the override is read back off the
+     * texture the client draws the wisp with as well as off the value it was told.
      */
     private static void overrides(ClientGameTestContext context, TestServerContext server, String player,
         Bystander bystander) {
@@ -184,11 +191,20 @@ public final class ServerPlayerClientGameTest implements FabricClientGameTest {
         int id = context.computeOnClient(client -> wisp.getId());
         Worlds.waitForClient(context, client -> Boolean.TRUE.equals(settled(id)), PATIENCE,
             () -> "Expected the client to be told tp:wisp settled and found " + settled(id) + ".");
+        RenderType calm = context.computeOnClient(client ->
+            Platform.renderType(PackTextures.of("tp:wisp", "textures/entity/ember"), false, false, false));
+        RenderType restless = context.computeOnClient(client ->
+            Platform.renderType(PackTextures.of("tp:wisp", "textures/entity/tailor_base"), false, false, false));
+        Frames.waitFor(context, wisp, frame -> drawnWith(frame, calm),
+            last -> "Expected a settled tp:wisp drawn with Texture.default and found " + drawn(last) + ".");
 
         server.runCommand("bedrock execute as " + player + " run scriptevent tp:override");
         Worlds.waitForClient(context, client -> Boolean.FALSE.equals(settled(id)), PATIENCE,
             () -> "Expected the override " + player + " was given to draw tp:wisp unsettled on the client and"
                 + " found " + settled(id) + ".");
+        Frames.waitFor(context, wisp, frame -> drawnWith(frame, restless),
+            last -> "Expected tp:wisp drawn unsettled to take the Texture.restless its controller returns from"
+                + " inside a block, and found " + drawn(last) + ".");
         Object own = server.computeOnServer(minecraft -> ServerHooks.state().property(wisp.getUUID(), "tp:settled"));
         Assert.that(Boolean.TRUE.equals(own), "Expected an override to leave tp:wisp's own tp:settled true and"
             + " found " + own + ".");
@@ -205,7 +221,18 @@ public final class ServerPlayerClientGameTest implements FabricClientGameTest {
         Worlds.waitForClient(context, client -> Boolean.TRUE.equals(settled(id)), PATIENCE,
             () -> "Expected clearing the override to show the client tp:wisp's own tp:settled again and found "
                 + settled(id) + ".");
+        Frames.waitFor(context, wisp, frame -> drawnWith(frame, calm),
+            last -> "Expected tp:wisp drawn with Texture.default again once the override was cleared, and found "
+                + drawn(last) + ".");
         Entities.discardAll(context, server, "tp:wisp");
+    }
+
+    private static boolean drawnWith(Submitted frame, RenderType type) {
+        return !frame.geometry().isEmpty() && frame.geometry().get(0).renderType() == type;
+    }
+
+    private static String drawn(Submitted frame) {
+        return frame.geometry().isEmpty() ? "nothing drawn" : String.valueOf(frame.geometry().get(0).renderType());
     }
 
     private static Object settled(int entityId) {
