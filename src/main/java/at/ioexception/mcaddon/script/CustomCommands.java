@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.script;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.server.BedrockTree;
+import at.ioexception.mcaddon.server.Cheats;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -84,6 +85,7 @@ public final class CustomCommands {
         if (deepest != null) literal = literal.then(deepest);
 
         BedrockTree.of(server).register(literal);
+        Cheats.declare(name, !command.has("cheatsRequired") || command.get("cheatsRequired").getAsBoolean());
         return true;
     }
 

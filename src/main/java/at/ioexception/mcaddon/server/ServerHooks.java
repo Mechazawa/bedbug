@@ -290,6 +290,7 @@ public final class ServerHooks {
         AreaSchedules.load(state);
         MobEvents.load(state, server);
         BedrockRules.load(state);
+        Cheats.start(server);
         scripts = ScriptHost.start(server, McAddon.packs().packs(), state);
         if (scripts != null) {
             CustomCommands.install(server, scripts);

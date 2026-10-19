@@ -69,7 +69,7 @@ public final class Functions {
         "playanimation", "event", "scriptevent", "music", "toggledownfall", "structure", "mobevent",
         "particle", "gametest", "dialogue", "transfer", "camera", "camerashake", "fog",
         "clearspawnpoint", "hud", "inputpermission", "ride", "summon", "tickingarea", "packstack",
-        "setmaxplayers", "permission", "ops");
+        "setmaxplayers", "permission", "ops", "changesetting");
 
     /**
      * The registered commands whose Bedrock line the command built here reads as it stands.
@@ -121,12 +121,10 @@ public final class Functions {
      * A line carrying one does not run and the form is reported, rather than reaching a parser that
      * would reject it with a message about the wrong word.
      *
-     * `changesetting allow-cheats` is the reason given at `changeSetting`. The three `hud` pieces are
-     * drawn by nothing on a Java client, as `HudElement` says. A `permission` visitor may only look,
-     * and Java has no level below a member.
+     * The three `hud` pieces are drawn by nothing on a Java client, as `HudElement` says. A
+     * `permission` visitor may only look, and Java has no level below a member.
      */
     private static final Set<String> BEDROCK_ONLY_KEYWORDS = Set.of(
-        "changesetting allow-cheats", "changesetting false", "changesetting true",
         "hud paperdoll", "hud tooltips", "hud touch_controls",
         "permission visitor");
 
@@ -1189,18 +1187,19 @@ public final class Functions {
     }
 
     /**
-     * `changesetting <setting> <value>`, of whose two settings Java has a command for one.
-     *
-     * Bedrock's `allow-cheats` decides whether an operator may run commands at all. A Java server
-     * always lets an operator run them and has no switch to stop it, and its one switch for cheats,
-     * the one a world opened to the network uses, lets every player run commands instead.
+     * `changesetting difficulty <value>`, which is Java's `difficulty`, and `changesetting
+     * allow-cheats <true|false>`, read by the command built here. Microsoft's documentation spells
+     * the second `allowcheats`.
      */
     private static String changeSetting(String rest, Set<String> unsupported) {
         String[] parts = SPACE.split(rest, 2);
-        if (parts.length < 2 || !parts[0].equalsIgnoreCase("difficulty")) {
-            return dropped("changesetting", parts[0], unsupported);
-        }
-        return "difficulty " + difficulty(parts[1]);
+        String setting = parts[0].toLowerCase(Locale.ROOT);
+        if (parts.length < 2) return dropped("changesetting", setting, unsupported);
+        return switch (setting) {
+            case "difficulty" -> "difficulty " + difficulty(parts[1]);
+            case "allow-cheats", "allowcheats" -> "changesetting allow-cheats " + parts[1];
+            default -> dropped("changesetting", setting, unsupported);
+        };
     }
 
     /**

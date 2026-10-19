@@ -723,6 +723,51 @@ public final class BedrockCommandGameTests {
             net.minecraft.world.level.block.state.properties.BedPart.HEAD), 2);
     }
 
+    /**
+     * With cheats off a player, an operator too, may type only the commands Bedrock runs without
+     * cheats, while the console and a pack's own lines still run every command.
+     *
+     * The switch is the server's, so it is turned off and on again within one tick, before any other
+     * test can type a command.
+     */
+    @GameTest()
+    public void changesettingAllowCheatsStopsWhatAPlayerTypes(GameTestHelper helper) {
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        MinecraftServer server = helper.getLevel().getServer();
+        // An operator's chat, built on the console's authority because a mock player's own source
+        // reads none of Java's commands.
+        net.minecraft.commands.CommandSourceStack typist = server.createCommandSourceStack().withEntity(player);
+        String giveDiamond = "give " + player.getScoreboardName() + " minecraft:diamond";
+        try {
+            typed(helper, "changesetting allow-cheats false");
+
+            List<String> refused = typed(typist, giveDiamond);
+            helper.assertTrue(player.getInventory().countItem(Items.DIAMOND) == 0,
+                "a player typed /give while cheats were off and got a diamond.");
+            helper.assertTrue(refused.contains("Cheats aren't enabled in this world."),
+                "a player's /give was not refused for want of cheats: " + refused);
+            helper.assertTrue(typed(typist, "bedrock summon minecraft:pig").contains(
+                "Cheats aren't enabled in this world."), "a player's /bedrock summon was not refused.");
+            List<String> listed = typed(typist, "list");
+            helper.assertTrue(listed.stream().anyMatch(line -> line.contains("players online")),
+                "/list, which needs no cheats, did not answer: " + listed);
+
+            typed(server.createCommandSourceStack(), giveDiamond);
+            BedrockLines.run(helper, Platform.commandSourceOf(player, helper.getLevel()), giveDiamond);
+            helper.assertTrue(player.getInventory().countItem(Items.DIAMOND) == 2,
+                "the console and a pack's line did not both give a diamond while cheats were off: "
+                + player.getInventory().countItem(Items.DIAMOND));
+
+            typed(helper, "changesetting allow-cheats true");
+            List<String> given = typed(typist, giveDiamond);
+            helper.assertTrue(player.getInventory().countItem(Items.DIAMOND) == 3,
+                "a player's /give did not run once cheats were back on: " + given);
+        } finally {
+            typed(helper, "changesetting allow-cheats true");
+        }
+        helper.succeed();
+    }
+
     /** A player using a block with an empty hand, the way pressing the use key reaches it. */
     private static void use(ServerPlayer player, ServerLevel level, BlockPos at) {
         player.gameMode.useItemOn(player, level, net.minecraft.world.item.ItemStack.EMPTY,
@@ -732,6 +777,11 @@ public final class BedrockCommandGameTests {
 
     /** What the console hears back from `/bedrock <line>`, typed as an operator would type it. */
     private static List<String> typed(GameTestHelper helper, String line) {
+        return typed(helper.getLevel().getServer().createCommandSourceStack(), "bedrock " + line);
+    }
+
+    /** What whoever stands behind this source hears back from typing the command. */
+    private static List<String> typed(net.minecraft.commands.CommandSourceStack typist, String command) {
         List<String> heard = new ArrayList<>();
         CommandSource console = new CommandSource() {
             @Override
@@ -754,9 +804,7 @@ public final class BedrockCommandGameTests {
                 return false;
             }
         };
-        MinecraftServer server = helper.getLevel().getServer();
-        server.getCommands().performPrefixedCommand(server.createCommandSourceStack().withSource(console),
-            "bedrock " + line);
+        typist.getServer().getCommands().performPrefixedCommand(typist.withSource(console), command);
         return heard;
     }
 

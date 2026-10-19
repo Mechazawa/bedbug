@@ -816,6 +816,18 @@ These are the checks it runs, and what each one catches:
   an operator typing `/bedrock`. Java's own `place` forms keep the level Java asks for them. A test of one of
   those types it through Java's own tree instead of through `BedrockLines`.
 
+  **`allow-cheats` refuses only what a player types.** `server.Cheats` holds the switch for the
+  session and `CommandsMixin` asks it at the head of `Commands.performCommand`, where a typed command
+  still carries the source that typed it; a command whose source is a player is refused unless
+  Bedrock's command metadata marks it `requires_cheats` false (the line after `/bedrock` is judged by
+  the Bedrock command it names, and a script's custom command by its `cheatsRequired`). Which origins
+  keep running was measured on Bedrock Dedicated Server 1.26.52 with cheats off: the console, a
+  repeating command block, `tick.json`, a scheduled function, a script's `runCommand`, an animation
+  controller's command and an entity event's `queue_command` all ran a cheat command. Bedrock refuses
+  some game rules with cheats off (`commands.gamerule.type.nocheatsenabled`) without publishing
+  which, so `gamerule` is left to run. `changesettingAllowCheatsStopsWhatAPlayerTypes` in
+  `BedrockCommandGameTests` asserts both halves.
+
   `MusicClientGameTest` plays the test pack's chime through `/bedrock music` and reads back the
   track the client plays: music heard everywhere, looping when asked, turned down by `music volume`,
   queued behind a track that plays once and not behind one that loops, and gone after `music

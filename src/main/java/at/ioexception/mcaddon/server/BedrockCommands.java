@@ -132,6 +132,7 @@ public final class BedrockCommands {
         Structures.registerCommand(dispatcher);
         ServerAdmin.registerCommand(dispatcher);
         BedrockRules.registerCommand(dispatcher);
+        Cheats.registerCommand(dispatcher);
 
         MobEvents.registerCommand(dispatcher);
 

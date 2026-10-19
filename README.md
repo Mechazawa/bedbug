@@ -399,6 +399,11 @@ Against a server without this mod a client plays with its own add-ons.
   packs; `permission` and `ops` list Java's operators, read `ops.json` again and make a player an
   operator or a member. Like Bedrock's, each asks for more than a function's authority, so an
   operator types it after `/bedrock` and a pack's function cannot run it.
+- `/bedrock changesetting allow-cheats false`, which stops players typing any command Bedrock
+  marks as needing cheats, operators included, until it is turned on again or the server stops.
+  The console, command blocks, functions, scripts and an entity's own commands keep running every
+  command, as on a Bedrock server. A dedicated server starts with `allow-cheats` from its
+  `server.properties`, and with cheats on when the file does not say.
 - `/bedrock music`, which plays a track to everyone as music rather than as a sound somewhere in the
   world: in the music category, with the game's own background music waiting until it is over,
   faded in and out over the seconds the line gives, looped when asked, turned up or down while it
@@ -878,8 +883,7 @@ entity (`minecraft:follow_orbit`, `minecraft:fixed_boom` and `minecraft:control_
 the camera forms that follow a spline, hang the camera off an entity, turn it towards one or offset
 it from one, which would each be a camera this mod draws itself; the paper doll, the input hints
 and the touch controls `hud` names, which a Java client draws none of; a `permission` visitor, a
-level below Java's member; `changesetting allow-cheats`, because a Java server always lets an
-operator run commands; and the liquid setting `ignore_waterlogging` on 1.20.1, which waterlogs
+level below Java's member; and the liquid setting `ignore_waterlogging` on 1.20.1, which waterlogs
 every block a jigsaw or structure places. The line does not run and the form is named, rather than being handed to a
 parser that would refuse it over the wrong word.
 
