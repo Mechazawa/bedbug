@@ -95,12 +95,14 @@ public final class AnimationClientGameTest implements FabricClientGameTest {
      * has to play: `q.ground_speed` reads two blocks a second and `stride`, weighted by
      * `q.modified_move_speed`, turns its bone by that share of 90 degrees. `q.modified_distance_moved`
      * grows by the distance in Java's walking measure, six tenths of a block a block, times eight.
+     *
+     * The gaze is summoned behind the player, where no frame draws it before its first tick, so the
+     * client's copy starts that tick with its old position still at the origin it was made at.
      */
     private static void stride(ClientGameTestContext context, TestSingleplayerContext world) {
         Entities.discardAll(context, world.getServer(), "tp:gaze");
-        world.getServer().runCommand("summon tp:gaze ~-3 ~ ~6");
+        world.getServer().runCommand("execute as @p at @s rotated ~ 0 run summon tp:gaze ^ ^ ^-6");
         AddonEntity gaze = Entities.waitForClient(context, "tp:gaze");
-        float before = context.computeOnClient(client -> distanceMoved(gaze));
         for (int tick = 0; tick < STRIDE_TICKS; tick++) {
             world.getServer().runCommand("execute as @e[type=tp:gaze] at @s run tp @s ~" + STRIDE_STEP + " ~ ~");
             context.waitTick();
@@ -115,9 +117,10 @@ public final class AnimationClientGameTest implements FabricClientGameTest {
             + " q.modified_move_speed of a gaze teleported along each tick");
         Assert.near(read[0], STRIDE_STEP * 20, 0.2, "q.ground_speed of a gaze teleported along each tick,"
             + " in blocks a second");
-        Assert.near(context.computeOnClient(client -> distanceMoved(gaze)) - before,
-            STRIDE_TICKS * STRIDE_STEP * 0.6 * 8, 2, "how far q.modified_distance_moved grew while a gaze was"
-            + " teleported two blocks, which lags the server by the ticks the client takes to follow");
+        Assert.near(context.computeOnClient(client -> distanceMoved(gaze)),
+            STRIDE_TICKS * STRIDE_STEP * 0.6 * 8, 2, "q.modified_distance_moved of a gaze teleported two blocks"
+            + " since it was summoned, which lags the server by the ticks the client takes to follow and counts"
+            + " nothing for the copy being placed where the server put it");
     }
 
     private static float distanceMoved(AddonEntity gaze) {
