@@ -1142,8 +1142,9 @@ blends between biomes as the camera moves, the way Java blends its fog colour. T
 `saturation`, `gain`, `offset` and `gamma` of each tonal band and the Kelvin `temperature` are
 applied with Bedrock's own arithmetic. The tonemapping `operator` is named rather than applied:
 it maps a frame of scene light into range, and Java's finished frame is in range already. Bedrock
-draws all of this only under Vibrant Visuals; a pack that grades its world is graded here
-whatever the player's graphics setting is. Before 26 each grading file is named instead.
+draws all of this only under Vibrant Visuals, so the grading here is off by default, as it is under
+Bedrock's default graphics. A player turns it on with **Vibrant Visuals Colour Grading** under
+Options, Video Settings, next to Paper Doll; with it off the pass copies and draws nothing. Before 26 each grading file is named instead.
 
 `water` has nothing either, because Bedrock itself reads it only under Vibrant Visuals. In every
 other graphics mode, which is the one Java draws like, water takes its colour from

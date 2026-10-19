@@ -8,8 +8,10 @@ import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.ActiveAddons;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonObject;
+import net.minecraft.client.OptionInstance;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.Holder;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.phys.Vec3;
 
@@ -59,6 +61,15 @@ public final class ColourGrading {
 
     /** Java's fog colour blend weights, read across a lattice point by how far the camera is past it. */
     private static final float[] KERNEL = {0, 1, 4, 6, 4, 1, 0};
+
+    /**
+     * Bedrock grades the picture only under Vibrant Visuals, so the grade is off unless the player
+     * turns it on, which matches Bedrock's default graphics.
+     */
+    public static final OptionInstance<Boolean> OPTION = OptionInstance.createBoolean(
+        "options.mcaddon.colourGrading",
+        OptionInstance.cachedConstantTooltip(Component.translatable("options.mcaddon.colourGrading.tooltip")),
+        false);
 
     private static final Map<String, GradeUniforms> BY_BIOME = new HashMap<>();
     /** The same, looked up once per biome a frame samples rather than once per sample. */
@@ -126,7 +137,7 @@ public final class ColourGrading {
 
     /** Works out the grade for a frame seen from this point. */
     public static GradeUniforms at(ClientLevel level, Vec3 camera) {
-        if (!graded) {
+        if (!graded || !OPTION.get()) {
             current = GradeUniforms.NONE;
             return current;
         }

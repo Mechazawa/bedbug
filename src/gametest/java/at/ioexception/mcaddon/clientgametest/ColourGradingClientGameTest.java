@@ -22,6 +22,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * `tp:glade`. The second frame's pixel has to be the first frame's pixel run through the glade's
  * grade, which is what reading the grade back and drawing it both have to get right.
  *
+ * The option is off by default, as Bedrock grades only under Vibrant Visuals, so the test turns it on first
+ * and turns it off again to read the ungraded wall.
+ *
  * `tp:soot_fields` names no grade, so it takes the test pack's `color_grading/color_grading.json`.
  */
 public final class ColourGradingClientGameTest implements FabricClientGameTest {
@@ -39,6 +42,7 @@ public final class ColourGradingClientGameTest implements FabricClientGameTest {
             // The box covers every quarter chunk the camera's blend weighs and stays under fillbiome's limit.
             world.getServer().runCommand("fillbiome -12 108 -12 12 136 12 minecraft:plains");
             context.runOnClient(client -> Platform.hideHud(client, true));
+            context.runOnClient(client -> ColourGrading.OPTION.set(true));
             context.waitTicks(5);
 
             GradeUniforms soot = context.computeOnClient(client -> ColourGrading.of(client.level.registryAccess()
@@ -74,8 +78,22 @@ public final class ColourGradingClientGameTest implements FabricClientGameTest {
                     + expected + " of the ungraded " + Integer.toHexString(plain & 0xFFFFFF) + ", and the frame is "
                     + Integer.toHexString(graded & 0xFFFFFF) + ".");
             }
+
+            context.runOnClient(client -> ColourGrading.OPTION.set(false));
+            Worlds.waitForClient(context, client -> ColourGrading.current().leavesFrameAlone(), PATIENCE,
+                () -> "the grading option is off and the frame is still graded.");
+            int off = centre(context, world);
+            Assert.that(channelsWithin(off, plain), () -> "with the grading option off the wall in "
+                + "tp:glade is " + Integer.toHexString(off & 0xFFFFFF) + " where the ungraded wall is "
+                + Integer.toHexString(plain & 0xFFFFFF) + ".");
             context.runOnClient(client -> Platform.hideHud(client, false));
         }
+    }
+
+    private static boolean channelsWithin(int found, int expected) {
+        return Math.abs((found >> 16 & 0xFF) - (expected >> 16 & 0xFF)) <= CHANNEL_TOLERANCE
+            && Math.abs((found >> 8 & 0xFF) - (expected >> 8 & 0xFF)) <= CHANNEL_TOLERANCE
+            && Math.abs((found & 0xFF) - (expected & 0xFF)) <= CHANNEL_TOLERANCE;
     }
 
     private static float midtoneContrast(GradeUniforms grade) {
