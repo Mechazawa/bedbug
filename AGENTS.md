@@ -633,7 +633,12 @@ These are the checks it runs, and what each one catches:
   seconds and which leaves on `1` for a state counting `v.awake`;
   `AnimationClientGameTest` runs it on a `ScriptClock` and reads a wake and a stir and no awakening
   off the first frame and the awakening off the second, which is the client controller entering its
-  first state as that frame's one move, the way `ServerAnimator` does a tick's.
+  first state as that frame's one move, the way `ServerAnimator` does a tick's. The gaze's `stride`
+  clip turns a cubeless bone 90 degrees under a blend of `q.modified_move_speed`, and its
+  `pre_animation` keeps `q.ground_speed`. `AnimationClientGameTest` teleports it a tenth of a block
+  each tick, which is how a pack walks a model it draws over a vanilla mob, and reads a walk and two
+  blocks a second back: the client is sent no velocity for an entity the server only teleports, so
+  the speed queries read how far the entity went in its last tick.
 
   `tp:pedlar` is a trader with a trade table, a look at the trading player and a stroll it starts at
   every chance, and no `minecraft:behavior.trade_with_player`.
