@@ -638,7 +638,11 @@ These are the checks it runs, and what each one catches:
   `pre_animation` keeps `q.ground_speed`. `AnimationClientGameTest` teleports it a tenth of a block
   each tick, which is how a pack walks a model it draws over a vanilla mob, and reads a walk and two
   blocks a second back: the client is sent no velocity for an entity the server only teleports, so
-  the speed queries read how far the entity went in its last tick.
+  the speed queries read how far the entity went in its last tick. Its `pre_animation` also keeps
+  `q.modified_distance_moved`, which grows across the same walk: Java counts `moveDist` only inside
+  `Entity.move`, which neither a teleported entity nor a client's copy of another entity runs, so
+  `EntityTravelMixin` counts every entity's step at `setOldPosAndRot`, the moment the level has it
+  remember where it stood before each tick, in `moveDist`'s own measure.
 
   `tp:pedlar` is a trader with a trade table, a look at the trading player and a stroll it starts at
   every chance, and no `minecraft:behavior.trade_with_player`.
@@ -1855,6 +1859,15 @@ again where it is finally drawn, so `ModelFeatureRendererMixin` lays the clip on
 A bone with no part is reported once per kind of entity. Nothing is stored on the server, so a
 player who starts watching later sees whatever the pack plays next, as on an add-on entity, and
 `next_state` is not acted on for either. `JavaModelPoseClientGameTest` reads the posed parts back.
+Every model a layer submits goes through the same `ModelFeatureRenderer.prepareModel`, a villager's
+clothes model without the hat included, so the clip reaches all of them there.
+`JavaModelPoseClientGameTest` also reads what the real frame draws: the test source set's
+`ModelDrawMixin` hands each model `prepareModel` is about to draw for an entity `Submitted.watch`
+names to `Submitted`, and a dressed villager scaled to nothing has to leave nothing but a point
+from any of them, and its held emerald a scale of nothing. With Villager News and every companion
+mod installed, a copy of a played world showed every vanilla villager in view drawn that way; the
+dressed figure Villager News draws in a villager's place is its own entity wearing the villager's
+profession textures.
 A bone a clip turns `relative_to` the entity has its part's turn kept in the entity's frame once
 every other part, and the body carrying it, has moved: `JavaModelParts.keepEntityFrame` takes the
 turn of the parts above it back off, the way `BedrockModelRenderer.poseBone` does for a pack's own

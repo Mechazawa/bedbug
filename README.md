@@ -554,7 +554,10 @@ Against a server without this mod a client plays with its own add-ons.
 - Clips on a mob Java draws with a model of its own, such as `playanimation` on a vanilla villager.
   Each Bedrock bone is found among the Java model's parts, and on a mob whose Bedrock geometry hangs
   the head, arms and legs under `body`, those parts move, turn and scale with the body, so a pack
-  that hides a villager by scaling its body to nothing hides all of it.
+  that hides a villager by scaling its body to nothing hides all of it: its clothes, its hat and
+  what it holds go with the body.
+- How far an entity has walked (`q.walk_distance`, `q.modified_distance_moved`) and how fast it goes
+  are read off where it stands each tick, so a model a pack teleports along with a vanilla mob walks.
 - `.mcfunction` files, written as Java functions whose every line is `bedrock <the line>`, with a
   `tick` function tag. Java's parser reads `/bedrock` and a string, so a file always loads, and a
   line that cannot be translated fails alone. Such a line is reported as the pack loads, whether

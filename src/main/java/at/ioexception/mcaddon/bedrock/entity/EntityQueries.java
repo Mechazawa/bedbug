@@ -687,13 +687,13 @@ public final class EntityQueries implements MolangEnvironment.Queries {
         *///?}
     }
 
-    /** How far the entity has walked, which the field was renamed for in 1.21.2. */
+    /**
+     * How far the entity has walked, counted from where it went between ticks, because Java's own
+     * count stays still for an entity it does not move itself: one the server teleports, which is
+     * how a pack walks a model it draws over a vanilla mob, and a client's copy of any other.
+     */
     private float walkedDistance() {
-        //? if >=1.21.2 {
-        return entity.moveDist;
-        //?} else {
-        /*return entity.walkDist;
-        *///?}
+        return ((at.ioexception.mcaddon.entity.Travelled) entity).mcaddon$travelled();
     }
 
     /**
