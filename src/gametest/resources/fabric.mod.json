@@ -68,7 +68,8 @@
       "at.ioexception.mcaddon.clientgametest.BoatSeatClientGameTest",
       "at.ioexception.mcaddon.clientgametest.WebSocketClientGameTest",
       "at.ioexception.mcaddon.clientgametest.AimAssistClientGameTest",
-      "at.ioexception.mcaddon.clientgametest.PacketLimitClientGameTest"
+      "at.ioexception.mcaddon.clientgametest.PacketLimitClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.SettingsClientGameTest"
     ]
   },
   "mixins": [

@@ -43,6 +43,8 @@ dependencies {
     // Optional at runtime: the Mod Menu entrypoint is only invoked when Mod Menu is installed.
     compileOnly("com.terraformersmc:modmenu:${prop("deps.modmenu")}")
     localRuntime("com.terraformersmc:modmenu:${prop("deps.modmenu")}")
+    // Optional at runtime: Sodium reads the config entrypoint only when it is installed.
+    compileOnly("maven.modrinth:sodium:${prop("deps.sodium")}")
     companionMods().forEach { localRuntime(it) }
 }
 

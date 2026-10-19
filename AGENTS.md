@@ -2132,6 +2132,10 @@ buttons. It sends a `tp_banner:` title and a `tp_tally:` action bar and reads th
 places and Java's own hidden title and action bar back, then a plain one of each. The pack side is
 `tools/testpack/pack/resources/ui/`.
 
+## Client options
+
+`PaperDoll.OPTION` and `ColourGrading.OPTION` are reachable three ways on 26.1.2 and 26.2, and only the first on 1.20.1 and 1.21.1. `VideoSettingsScreenMixin` lists them in Java's Video Settings. `client/integration/ModMenuIntegration` opens `client/screen/AddonOptionsScreen` from Mod Menu. `client/integration/SodiumIntegration` adds a "Bedrock Add-ons" page to Sodium's video settings, which replace Java's screen. Sodium reads that class from a `sodium:config_api_user` key under `entrypoints` (not under `custom`) in `fabric.mod.json`. Both entrypoints are written by the `settings_entrypoints` token in `gradle/mod.gradle.kts` for 26 and later only, and both classes are wrapped in a `//? if >=26` block. Sodium and Mod Menu are `compileOnly`, so the jar does not need either. `SettingsClientGameTest` presses the Mod Menu screen's buttons and asks Sodium's `ConfigManager.CONFIG` for both options; it fails when either `fabric.mod.json` key is missing.
+
 ## Add-ons handed over at join
 
 A client joining a server that runs this mod plays with exactly the server's add-ons for that
