@@ -743,17 +743,18 @@ These are the checks it runs, and what each one catches:
   refuses it as it stands. On `/bedrock scriptevent tp:commands` the script runs, as whatever sent it, a
   selector asking with `hasitem` about the main hand and about everything carried, a selector naming
   `villager_v2`, `function tp/relay` by its path alone (which calls `tp/relayed` the same way inside
-  the file) and `aimassist`, which nothing translates. The ember's `tp:ember_command` event tags it
-  through a Bedrock radius and asks for `aimassist` as well, and its controller's command tags it
+  the file) and `sendshowstoreoffer`, which needs Mojang's marketplace and so is never translated. The
+  ember's `tp:ember_command` event tags it through a Bedrock radius and asks for `sendshowstoreoffer`
+  as well, and its controller's command tags it
   through a Bedrock radius. `CommandGameTests` reads each of those back as a tag, and finds
-  `aimassist` among what `/mcaddon scripts` and `/mcaddon entities` say cannot be translated rather
-  than among what did not parse. No function file of the pack carries `aimassist`, because a function
+  `sendshowstoreoffer` among what `/mcaddon scripts` and `/mcaddon entities` say cannot be translated rather
+  than among what did not parse. No function file of the pack carries `sendshowstoreoffer`, because a function
   line is reported as the pack loads, which would answer the event's assertion before the event ran. The dialogue's first button runs `xp 1L`, and `/bedrock scriptevent tp:stock_up` gives the
   player `tp:dust` unless `hasitem` finds one on them; `PackCommandClientGameTest` presses the button
   and asks for the dust twice, and reads back one level gained and one dust carried.
 
-  `functions/tp/gap.mcfunction` tags whoever runs it on either side of a `controlscheme` line,
-  which nothing translates, so `CommandGameTests` can say the file loaded and both tags landed.
+  `functions/tp/gap.mcfunction` tags whoever runs it on either side of a `project` line,
+  which belongs to Bedrock's editor and is never translated, so `CommandGameTests` can say the file loaded and both tags landed.
   `functions/tp/unrun.mcfunction` is run by nothing, and its `hud @s hide touch_controls` line, a piece no
   Java client draws, has to be among what `/mcaddon entities` names all the same: that is the
   report `Functions.untranslatable` makes of every function line as the pack loads. The same class
@@ -847,7 +848,13 @@ These are the checks it runs, and what each one catches:
   the player has left the boat for longer than the 15 ticks it stays. `InputPermissionClientGameTest`
   holds the forward key and moves the mouse the way a player would, and reads back that the player
   neither walked nor turned while `/bedrock inputpermission` had taken the input away, and did both
-  once it was given back.
+  once it was given back. `ControlSchemeClientGameTest` drives each control scheme the same way and
+  reads where the player stands and faces: the right key turning the player in place under
+  `player_relative`, the mouse turning a follow orbit camera and not the player, the test pack's
+  `tp:steered` (a free camera looking west whose preset names `camera_relative`) walking the player
+  west whichever way they faced, and the pointer of `camera_relative_strafe` under a camera looking
+  straight down turning the player toward it. The script's `tp:control_scheme <scheme>` probe calls
+  `Player.setControlScheme` and tags the player with `getControlScheme()` or with the refusal.
 
   Four more things name the game's own items and blocks by Bedrock's ids, each of which Java's
   parser refuses as written and refuses whole: `loot_tables/names.json` drops `golden_rail`,
@@ -1959,7 +1966,19 @@ three bodies: `Gui` up to 26.1.2 and `Hud` from 26.2 hold the same `extract*` me
 before 26 the armour, the hunger and the air bubbles are drawn inline in `renderPlayerHealth` (the
 air bubbles alone on 1.21.1), so the drawing calls inside Mojang's own profiler section of that name
 are what is skipped there. A script's `ScreenDisplay` and `Player.inputPermissions` reach the same two
-classes, so a command and a script never disagree about one player. A script, an entity event, a timeline, a dialogue scene and a block hand their lines to
+classes, so a command and a script never disagree about one player.
+
+`/controlscheme`, a camera preset's `control_scheme` and `Player.setControlScheme` go through
+`server.PlayerControlSchemes`, which keeps the chosen `bedrock.input.ControlScheme` per player and
+works out the one in force against the camera `server.PlayerCameras` holds: the chosen scheme where
+the camera allows it, else the preset's own, else the locked one, which is Java's. A camera change
+works it out again, and the client is sent it as an instruction whenever it changes.
+`client.PlayerControl` acts on it from `KeyboardInputMixin`, which hands it each tick's movement, and
+`MouseHandlerMixin`, which hands it each mouse turn; under the schemes that turn the camera the
+camera keeps a turn of its own, which `PlayerCamera.apply` puts in place of the player's. Mojang's
+table of the schemes each camera allows leaves out `minecraft:control_scheme_camera`, which allows
+all five here, and publishes no rate for the side keys' turn under `player_relative`, which is half
+a circle a second here. A script, an entity event, a timeline, a dialogue scene and a block hand their lines to
 `PackCommand` directly, which runs each to its end in an execution context of its own with the
 authority of a function, because the server's context runs a line queued during another command
 only once that command is done. A new path that runs a pack's commands takes the issuing add-on's

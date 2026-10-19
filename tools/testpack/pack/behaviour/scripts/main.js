@@ -157,7 +157,7 @@ function runBedrockCommands(entity) {
     entity.runCommand("execute unless entity @s[hasitem={item=diamond}] run tag @s add tp_has_no_diamond");
     entity.runCommand("tag @e[type=villager_v2,r=4] add tp_selected_as_villager_v2");
     entity.runCommand("function tp/relay");
-    entity.runCommand("aimassist @s clear");
+    entity.runCommand("sendshowstoreoffer @s marketplace tp_offer");
 }
 
 const WARES = 800;
@@ -291,9 +291,22 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
         case "tp:hud_reset": resetTheHud(player); break;
         case "tp:override": overrideTheWisp(player, true); break;
         case "tp:override_clear": overrideTheWisp(player, false); break;
+        case "tp:control_scheme": steer(player, event.message); break;
         default: break;
     }
 });
+
+// `/scriptevent tp:control_scheme <scheme>` puts the player on a control scheme, or back on their
+// camera's for `clear`, and tags them with the scheme they are on, or with the refusal.
+function steer(player, scheme) {
+    player.getTags().filter(tag => tag.startsWith("tp_control_")).forEach(tag => player.removeTag(tag));
+    try {
+        player.setControlScheme(scheme === "clear" ? undefined : scheme);
+        player.addTag("tp_control_" + player.getControlScheme());
+    } catch (error) {
+        player.addTag("tp_control_refused");
+    }
+}
 
 world.afterEvents.entitySpawn.subscribe(({ entity }) => {
     if (entity.typeId === VILLAGER) entity.addTag("tp:spawn_seen");

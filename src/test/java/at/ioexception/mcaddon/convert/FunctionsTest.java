@@ -313,14 +313,14 @@ class FunctionsTest {
 
     @Test
     void dropsAnExecuteWhoseOwnCommandJavaHasNoCounterpartFor() throws IOException {
-        assertEquals(List.of(), translate("execute as @a run controlscheme @s clear"));
-        assertTrue(problems.contains("command controlscheme"), problems.toString());
+        assertEquals(List.of(), translate("execute as @a run project export world"));
+        assertTrue(problems.contains("command project"), problems.toString());
     }
 
     @Test
     void dropsACommandNeitherEditionShares() throws IOException {
-        assertEquals(List.of(), translate("aimassist @a set preset"));
-        assertTrue(problems.contains("command aimassist"), problems.toString());
+        assertEquals(List.of(), translate("sendshowstoreoffer @a marketplace offer"));
+        assertTrue(problems.contains("command sendshowstoreoffer"), problems.toString());
     }
 
     @Test
@@ -493,7 +493,7 @@ class FunctionsTest {
     @Test
     void keepsTheRestOfAFunctionThatHasOneDroppedLine() throws IOException {
         assertEquals(List.of("say before", "say after"),
-            translate("say before", "controlscheme @a clear", "say after"));
+            translate("say before", "project export world", "say after"));
     }
 
     /**
@@ -503,8 +503,8 @@ class FunctionsTest {
     @Test
     void writesEveryLineOfAFunctionForBedrockToRun() throws IOException {
         assertEquals(
-            List.of("bedrock say before", "# a note", "bedrock controlscheme @a clear", "bedrock kill @e[r=5]"),
-            converted("say before", "# a note", "", "controlscheme @a clear", "/kill @e[r=5]"));
+            List.of("bedrock say before", "# a note", "bedrock project export world", "bedrock kill @e[r=5]"),
+            converted("say before", "# a note", "", "project export world", "/kill @e[r=5]"));
         assertTrue(problems.isEmpty(), problems.toString());
     }
 

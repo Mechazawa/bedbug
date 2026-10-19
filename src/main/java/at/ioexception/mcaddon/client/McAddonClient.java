@@ -62,6 +62,7 @@ public final class McAddonClient implements ClientModInitializer {
                 case CameraView.FADE -> at.ioexception.mcaddon.client.render.PlayerFade.accept(body);
                 case CameraView.FOV -> at.ioexception.mcaddon.client.render.PlayerFov.accept(body,
                     net.minecraft.client.Minecraft.getInstance().options.fov().get());
+                case at.ioexception.mcaddon.server.PlayerControlSchemes.KIND -> PlayerControl.accept(body);
                 case at.ioexception.mcaddon.server.BedrockRules.KIND ->
                     at.ioexception.mcaddon.client.render.PlayerRules.accept(body);
                 default -> {
@@ -74,6 +75,7 @@ public final class McAddonClient implements ClientModInitializer {
             at.ioexception.mcaddon.client.render.PlayerRules::draw);
         Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("bedrock_screen"),
             at.ioexception.mcaddon.client.render.PlayerFade::draw);
+        Platform.drawOverHud(at.ioexception.mcaddon.McAddon.id("control_pointer"), PlayerControl::drawPointer);
 
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK
             .register(client -> {
@@ -105,15 +107,20 @@ public final class McAddonClient implements ClientModInitializer {
             PlayerFog.clear();
             PlayerHud.clear();
             PlayerInput.clear();
+            PlayerControl.clear();
             PlayerMusic.clear();
             at.ioexception.mcaddon.client.render.PlayerFade.clear();
             at.ioexception.mcaddon.client.render.PlayerFov.clear();
             at.ioexception.mcaddon.client.render.PlayerRules.clear();
             at.ioexception.mcaddon.client.render.AddonEmitters.clear();
         }));
-        // Bedrock starts every connection with no camera set, and a world closed from the client is not
-        // always seen as a dropped connection, so the camera is cleared again as the next one starts.
-        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> PlayerCamera.clear());
+        // Bedrock starts every connection with no camera set and on the locked control scheme, and a
+        // world closed from the client is not always seen as a dropped connection, so both are cleared
+        // again as the next one starts.
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+            PlayerCamera.clear();
+            PlayerControl.clear();
+        });
     }
 
     /** What the drawing side registers once per object, so an object registered later is prepared too. */
