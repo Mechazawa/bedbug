@@ -17,6 +17,7 @@ import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import at.ioexception.mcaddon.bedrock.molang.MolangValue;
+import at.ioexception.mcaddon.convert.AlphaMask;
 import at.ioexception.mcaddon.convert.AlphaTested;
 import at.ioexception.mcaddon.convert.ConvertedPack;
 import at.ioexception.mcaddon.platform.Platform;
@@ -489,6 +490,10 @@ public final class AddonModels {
      * The one image a masked multitexture pass draws its two textures as, null where either of them
      * was not converted. Each pair is put together once and kept, because a pass is resolved every
      * frame.
+     *
+     * Bedrock mixes the two textures as the pack painted them and then tests the alpha of the mix,
+     * so both are read with their faint texels as faint as they were shipped. The second one's alpha
+     * also decides which of the two shows.
      */
     private Identifier masked(String first, String second, boolean tested) {
         if (first == null || second == null) return null;
@@ -498,19 +503,21 @@ public final class AddonModels {
     }
 
     private Identifier compose(String first, String second, boolean tested) {
-        Path firstFile = converted.textureFile(first);
-        Path secondFile = converted.textureFile(second);
+        Path firstFile = converted.paintedFile(first);
+        Path secondFile = converted.paintedFile(second);
         if (firstFile == null || secondFile == null) return null;
 
         try {
             BufferedImage drawn = new MaskedMultitexture(ImageIO.read(firstFile.toFile()),
                 ImageIO.read(secondFile.toFile())).composed();
-            AlphaTested halved = tested ? AlphaTested.tryFrom(drawn) : null;
+            BufferedImage shown = tested
+                ? Optional.ofNullable(AlphaTested.tryFrom(drawn)).map(AlphaTested::halved).orElse(drawn)
+                : Optional.ofNullable(AlphaMask.tryFrom(drawn)).map(AlphaMask::opaque).orElse(drawn);
             String firstId = converted.texturePaths().get(first);
             String secondId = converted.texturePaths().get(second);
             Identifier texture = Platform.id(converted.namespace(), "textures/masked/"
                 + firstId.replace(':', '/') + "/" + secondId.replace(':', '/') + (tested ? AlphaTested.SUFFIX : ""));
-            register(texture, halved == null ? drawn : halved.halved());
+            register(texture, shown);
             return texture;
         } catch (IOException | RuntimeException error) {
             AddonEntities.unsupported("texture " + second + " masked over " + first + ", which could not be read");

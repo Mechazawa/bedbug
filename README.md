@@ -87,7 +87,9 @@ Against a server without this mod a client plays with its own add-ons.
   its own, which is drawn instead, or its material removes `USE_OVERLAY`. A pass whose material
   defines `MASKED_MULTITEXTURE`, as the game's villager outfits do, draws its second texture over
   its first with the second's clear but coloured texels showing the first through, which is how a
-  villager's profession is worn over the clothes of its biome. A controller's `materials` list gives
+  villager's profession is worn over the clothes of its biome. The two are mixed as the pack
+  painted them and the mix is then alpha tested, so a marker texel a pack left nearly clear in a
+  skin's corner is dropped there as Bedrock drops it. A controller's `materials` list gives
   each bone the material of the last entry naming it, with a star standing for any run of letters,
   so a villager's hat can be drawn masked while the rest of it is not. A model reaching past the box
   the server gave the entity is culled against the extent its own geometry declares, so wings and a
