@@ -1,0 +1,48 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "Bedbug Showcase",
+    "description": "Bedbugs, lumen moths and toadstools on a patchwork quilt: a small add-on made to show what Bedbug can play.",
+    "uuid": "8be86aee-28ce-4381-9137-e74bdb433b37",
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 21, 0]
+  },
+  "modules": [
+    {
+      "type": "resources",
+      "uuid": "63a138fe-4b01-4ef9-9f75-d200d7f40e8b",
+      "version": [1, 0, 0]
+    }
+  ],
+  "dependencies": [
+    {
+      "uuid": "9e73cbce-8026-4fa3-8f53-11910bdd22d4",
+      "version": [1, 0, 0]
+    }
+  ],
+  "metadata": {
+    "authors": ["The Bedbug team"],
+    "license": "MIT"
+  },
+  "settings": [
+    {
+      "type": "label",
+      "text": "How the critters look to you."
+    },
+    {
+      "type": "toggle",
+      "name": "bb:twinkles",
+      "text": "Moths leave a trail of motes",
+      "default": true
+    },
+    {
+      "type": "slider",
+      "name": "bb:flap_speed",
+      "text": "Wing beats per second",
+      "min": 1,
+      "max": 6,
+      "step": 1,
+      "default": 3
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "resource_pack_name": "bb",
+  "texture_name": "atlas.terrain",
+  "padding": 8,
+  "num_mip_levels": 4,
+  "texture_data": {
+    "bb_quilt_top": {"textures": "textures/blocks/quilt_top"},
+    "bb_quilt_side": {"textures": "textures/blocks/quilt_side"},
+    "bb_toadstool": {"textures": "textures/blocks/toadstool"}
+  }
+}

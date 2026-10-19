@@ -1,0 +1,16 @@
+{
+  "format_version": "1.21.20",
+  "minecraft:item": {
+    "description": {
+      "identifier": "bb:honey_bun",
+      "menu_category": {"category": "items"}
+    },
+    "components": {
+      "minecraft:icon": "bb_honey_bun",
+      "minecraft:max_stack_size": 16,
+      "minecraft:food": {"nutrition": 6, "saturation_modifier": 0.6},
+      "minecraft:use_animation": "eat",
+      "minecraft:use_modifiers": {"use_duration": 1.2, "movement_modifier": 0.35}
+    }
+  }
+}

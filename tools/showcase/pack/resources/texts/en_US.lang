@@ -1,0 +1,12 @@
+pack.name=Bedbug Showcase
+pack.description=Bedbugs, lumen moths and toadstools on a patchwork quilt
+entity.bb:bedbug.name=Bedbug
+entity.bb:lumen_moth.name=Lumen Moth
+item.spawn_egg.entity.bb:bedbug.name=Bedbug Spawn Egg
+item.spawn_egg.entity.bb:lumen_moth.name=Lumen Moth Spawn Egg
+item.bb:honey_bun.name=Honey Bun
+item.bb:bug_net.name=Bug Net
+item.bb:quilt_patch.name=Quilt Patch
+item.bb:lumen_jar.name=Jar of Lumens
+tile.bb:quilt.name=Patchwork Quilt
+tile.bb:toadstool.name=Toadstool

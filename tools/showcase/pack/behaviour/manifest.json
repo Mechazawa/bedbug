@@ -1,0 +1,69 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "Bedbug Showcase",
+    "description": "Bedbugs, lumen moths and toadstools on a patchwork quilt: a small add-on made to show what Bedbug can play.",
+    "uuid": "9e73cbce-8026-4fa3-8f53-11910bdd22d4",
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 21, 0]
+  },
+  "modules": [
+    {
+      "type": "data",
+      "uuid": "e9245405-dee4-4b78-af93-c8e066e5ecb1",
+      "version": [1, 0, 0]
+    },
+    {
+      "type": "script",
+      "language": "javascript",
+      "uuid": "1c0e8f6a-4b7d-4a52-9d36-2f1e7a9b5c83",
+      "version": [1, 0, 0],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    {
+      "uuid": "8be86aee-28ce-4381-9137-e74bdb433b37",
+      "version": [1, 0, 0]
+    },
+    { "module_name": "@minecraft/server", "version": "2.0.0" },
+    { "module_name": "@minecraft/server-ui", "version": "2.0.0" }
+  ],
+  "metadata": {
+    "authors": ["The Bedbug team"],
+    "license": "MIT"
+  },
+  "settings": [
+    {
+      "type": "label",
+      "text": "How the critters behave in this world."
+    },
+    {
+      "type": "slider",
+      "name": "bb:swarm_size",
+      "text": "Bedbugs per swarm",
+      "min": 1,
+      "max": 12,
+      "step": 1,
+      "default": 6
+    },
+    {
+      "type": "dropdown",
+      "name": "bb:swarm_colours",
+      "text": "Swarm colours",
+      "options": [
+        {"name": "mixed", "text": "Mixed"},
+        {"name": "chestnut", "text": "Chestnut"},
+        {"name": "rose", "text": "Rose"},
+        {"name": "plum", "text": "Plum"}
+      ],
+      "default": "mixed"
+    },
+    {
+      "type": "toggle",
+      "name": "bb:guide_on_join",
+      "text": "Open the field guide on joining",
+      "default": false
+    }
+  ]
+}

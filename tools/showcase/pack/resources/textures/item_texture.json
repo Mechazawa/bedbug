@@ -1,0 +1,10 @@
+{
+  "resource_pack_name": "bb",
+  "texture_name": "atlas.items",
+  "texture_data": {
+    "bb_honey_bun": {"textures": "textures/items/honey_bun"},
+    "bb_bug_net": {"textures": "textures/items/bug_net"},
+    "bb_quilt_patch": {"textures": "textures/items/quilt_patch"},
+    "bb_lumen_jar": {"textures": "textures/items/lumen_jar"}
+  }
+}

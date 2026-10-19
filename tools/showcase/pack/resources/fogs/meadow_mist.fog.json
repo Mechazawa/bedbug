@@ -1,0 +1,22 @@
+{
+  "format_version": "1.16.100",
+  "minecraft:fog_settings": {
+    "description": {
+      "identifier": "bb:meadow_mist"
+    },
+    "distance": {
+      "air": {
+        "fog_start": 12.0,
+        "fog_end": 72.0,
+        "fog_color": "#e8c6ec",
+        "render_distance_type": "fixed"
+      },
+      "water": {
+        "fog_start": 0.0,
+        "fog_end": 24.0,
+        "fog_color": "#4aa8c8",
+        "render_distance_type": "fixed"
+      }
+    }
+  }
+}
