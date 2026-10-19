@@ -89,6 +89,7 @@
     "AdventureTooltipMixin",
     "OptionsMixin",
     "VideoSettingsScreenMixin",
+    "PackSelectionModelMixin",
     "AttackMissMixin",
     "ModelBakeryMixin",
     "BlockStateModelLoaderMixin"
