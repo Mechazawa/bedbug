@@ -2461,6 +2461,11 @@ so a new address, which a client trusts without asking.
 
 **A goal's waits are not counted in `tick()` calls.** The selector runs `canUse`, `canContinueToUse` and a running goal's `tick` only every second tick, unless the goal's `requiresUpdateEveryTick` is true. A wait a pack states in seconds is counted against `tickCount` or the game clock, or the goal asks for every tick when it also steers each one. `aGrazerEatsWhenItsTimeUntilEatIsUp` reads the first.
 
+**A Java loot table's functions and conditions are written through `JavaLoot`.** 26.3 names both
+types under `type`, holds functions under `modifier` and takes one `condition`, where older versions
+use `function`, `condition`, `functions` and `conditions`. A table holding the other version's keys
+loads with no error and with its functions and conditions dropped, so nothing else spells them.
+
 **A gap and an answer are counted apart.** A command the game read and then declined, a selector that
 matched nothing, a structure holding a chest this cannot fill: those are listed after the verdict
 line rather than among the gaps, because counting them would make a pack asking an ordinary question

@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.platform;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.behaviour.JavaLoot;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.commands.CommandSourceStack;
@@ -1136,16 +1137,17 @@ public final class Platform {
      * 1.21 made enchantments data-driven and renamed the function with them, from one that meant
      * looting alone to one naming whichever enchantment it counts.
      */
-    public static void lootingCount(com.google.gson.JsonObject function,
-        com.google.gson.JsonElement count, com.google.gson.JsonElement limit) {
+    public static com.google.gson.JsonObject lootingCount(com.google.gson.JsonElement count,
+        com.google.gson.JsonElement limit) {
         //? if >=1.21 {
-        function.addProperty("function", "minecraft:enchanted_count_increase");
+        com.google.gson.JsonObject function = JavaLoot.function("minecraft:enchanted_count_increase");
         function.addProperty("enchantment", "minecraft:looting");
         //?} else {
-        /*function.addProperty("function", "minecraft:looting_enchant");
+        /*com.google.gson.JsonObject function = JavaLoot.function("minecraft:looting_enchant");
         *///?}
         function.add("count", count);
         if (limit != null) function.add("limit", limit);
+        return function;
     }
 
     /**
@@ -1169,10 +1171,9 @@ public final class Platform {
      * 1.21 replaced the looting-only condition with one naming its enchantment and stating the
      * enchanted chance as a line through the level rather than as a multiplier.
      */
-    public static void lootingChance(com.google.gson.JsonObject condition, double chance,
-        double multiplier) {
+    public static com.google.gson.JsonObject lootingChance(double chance, double multiplier) {
         //? if >=1.21 {
-        condition.addProperty("condition", "minecraft:random_chance_with_enchanted_bonus");
+        com.google.gson.JsonObject condition = JavaLoot.condition("minecraft:random_chance_with_enchanted_bonus");
         condition.addProperty("enchantment", "minecraft:looting");
         condition.addProperty("unenchanted_chance", chance);
 
@@ -1182,10 +1183,11 @@ public final class Platform {
         enchanted.addProperty("per_level_above_first", multiplier);
         condition.add("enchanted_chance", enchanted);
         //?} else {
-        /*condition.addProperty("condition", "minecraft:random_chance_with_looting");
+        /*com.google.gson.JsonObject condition = JavaLoot.condition("minecraft:random_chance_with_looting");
         condition.addProperty("chance", chance);
         condition.addProperty("looting_multiplier", multiplier);
         *///?}
+        return condition;
     }
 
     /**
@@ -1253,8 +1255,7 @@ public final class Platform {
      * 1.20.5 replaced the item's whole NBT tag with components, so what was one nested compound
      * under `Trim` became the `minecraft:trim` component set beside every other one.
      */
-    public static void armorTrim(com.google.gson.JsonObject function, String material,
-        String pattern) {
+    public static com.google.gson.JsonObject armorTrim(String material, String pattern) {
         //? if >=1.21 {
         com.google.gson.JsonObject trim = new com.google.gson.JsonObject();
         trim.addProperty("material", "minecraft:" + material);
@@ -1262,13 +1263,14 @@ public final class Platform {
 
         com.google.gson.JsonObject components = new com.google.gson.JsonObject();
         components.add("minecraft:trim", trim);
-        function.addProperty("function", "minecraft:set_components");
+        com.google.gson.JsonObject function = JavaLoot.function("minecraft:set_components");
         function.add("components", components);
         //?} else {
-        /*function.addProperty("function", "minecraft:set_nbt");
+        /*com.google.gson.JsonObject function = JavaLoot.function("minecraft:set_nbt");
         function.addProperty("tag", "{Trim:{material:\"minecraft:" + material
             + "\",pattern:\"minecraft:" + pattern + "\"}}");
         *///?}
+        return function;
     }
 
     /**
