@@ -282,8 +282,10 @@ public final class AddonItems {
         BUILT.add(item);
         AddonRegistry.built(declared.shape());
         BY_IDENTIFIER.put(definition.identifier(), item);
+        //? if <26.3 {
         fuel(definition, item);
         compostable(definition, item);
+        //?}
         return item;
     }
 
@@ -510,6 +512,10 @@ public final class AddonItems {
                 properties = Platform.jukeboxPlayable(properties, id);
             }
         }
+        //? if >=26.3 {
+        /*properties = fuel(definition, id, properties);
+        properties = compostable(definition, id, properties);
+        *///?}
         return weapon(definition, properties);
     }
 
@@ -906,36 +912,57 @@ public final class AddonItems {
         *///?}
     }
 
-    /**
-     * How long the item burns in a furnace. Bedrock counts it in seconds and Java in ticks.
-     *
-     * The burn list is built once per world load from 26 on, so the value is handed to the event
-     * that builds it instead of to a registry that already exists.
-     */
+    // How long the item burns in a furnace and what a composter gives back for it.
+    //? if >=26.3 {
+    /*// Both are components naming a `context_int_provider` entry the converter writes under the
+    // item's own id.
+    private static Item.Properties fuel(ItemDefinition definition, Identifier id,
+        Item.Properties properties) {
+        return definition.burnTicks() <= 0 ? properties
+            : properties.cookingFuel(provider(id, "cooking/"));
+    }
+
+    private static Item.Properties compostable(ItemDefinition definition, Identifier id,
+        Item.Properties properties) {
+        return definition.compostingChance() <= 0f ? properties
+            : properties.compostable(provider(id, "compostable/"));
+    }
+
+    private static net.minecraft.resources.ResourceKey<
+        net.minecraft.world.level.storage.loot.providers.number.ints.ContextIntProvider> provider(
+        Identifier id, String directory) {
+        return net.minecraft.resources.ResourceKey.create(
+            net.minecraft.core.registries.Registries.CONTEXT_INT_PROVIDER,
+            Platform.id(id.getNamespace(), directory + id.getPath()));
+    }
+    *///?} elif >=26 {
+    // The burn list is built once per world load, so the value is handed to the event that builds
+    // it instead of to a registry that already exists.
     private static void fuel(ItemDefinition definition, Item item) {
-        float seconds = definition.number("minecraft:fuel", "duration", 0f);
-        if (seconds <= 0f) return;
-
-        int ticks = Math.round(seconds * 20f);
-        //? if >=26 {
-        net.fabricmc.fabric.api.registry.FuelValueEvents.BUILD.register(
-            (builder, context) -> builder.add(item, ticks));
-        //?} else {
-        /*net.fabricmc.fabric.api.registry.FuelRegistry.INSTANCE.add(item, ticks);
-        *///?}
+        int ticks = definition.burnTicks();
+        if (ticks > 0) {
+            net.fabricmc.fabric.api.registry.FuelValueEvents.BUILD.register(
+                (builder, context) -> builder.add(item, ticks));
+        }
     }
 
-    /** What a composter gives back. Bedrock states the chance out of a hundred and Java out of one. */
     private static void compostable(ItemDefinition definition, Item item) {
-        float chance = definition.number("minecraft:compostable", "composting_chance", 0f);
-        if (chance <= 0f) return;
-
-        //? if >=26 {
-        net.fabricmc.fabric.api.registry.CompostableRegistry.INSTANCE.add(item, chance / 100f);
-        //?} else {
-        /*net.fabricmc.fabric.api.registry.CompostingChanceRegistry.INSTANCE.add(item, chance / 100f);
-        *///?}
+        float chance = definition.compostingChance();
+        if (chance > 0f) net.fabricmc.fabric.api.registry.CompostableRegistry.INSTANCE.add(item, chance);
     }
+    //?} else {
+    /*private static void fuel(ItemDefinition definition, Item item) {
+        int ticks = definition.burnTicks();
+        if (ticks > 0) net.fabricmc.fabric.api.registry.FuelRegistry.INSTANCE.add(item, ticks);
+    }
+
+    private static void compostable(ItemDefinition definition, Item item) {
+        float chance = definition.compostingChance();
+        if (chance > 0f) {
+            net.fabricmc.fabric.api.registry.CompostingChanceRegistry.INSTANCE.add(item, chance);
+        }
+    }
+    *///?}
 
     /**
      * The block this item places.

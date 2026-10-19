@@ -82,6 +82,17 @@ public record ItemDefinition(String identifier, String iconKey, String displayNa
         return value != null && value.isJsonPrimitive() ? value.getAsFloat() : fallback;
     }
 
+    /** How many ticks the item burns in a furnace, zero for no fuel. Bedrock states it in seconds. */
+    public int burnTicks() {
+        return Math.round(Math.max(0f, number("minecraft:fuel", "duration", 0f))
+            * BedrockUnits.TICKS_PER_SECOND);
+    }
+
+    /** The chance out of one that the item adds a composter layer. Bedrock states it out of a hundred. */
+    public float compostingChance() {
+        return Math.max(0f, number("minecraft:compostable", "composting_chance", 0f)) / 100f;
+    }
+
     /** The text `component` holds under `field`, falling back to the bare value it was written as. */
     public String text(String component, String field) {
         JsonObject declared = components.get(component);
