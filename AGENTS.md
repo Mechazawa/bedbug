@@ -1650,6 +1650,29 @@ and `COLOR_SECOND_TEXTURE` (a third texture layered over the first) are reported
 `scratchpad/bedrock-legacy-materials/` and `scratchpad/mcbe-shader-codebase-veka0/` hold the copies
 this was read from.
 
+**A `color_grading/` file grades the frame through a pass of this mod's own, from 26.**
+`GameRendererGradeMixin` runs `client/render/GradePass` after `renderLevel`, which copies the main
+target's colour aside and draws one triangle back over it through
+`assets/mcaddon/shaders/post/colour_grade.fsh`, a pipeline registered with `RenderPipelines.register`
+as the client starts so the shader manager compiles it with the game's own. `Platform.screenPipeline`,
+`screenPass` and `drawScreenTriangle` hold what 26.1.2 and 26.2 spell differently. Before 26 the pass
+draws nothing and the conversion names every grading file. The arithmetic is Bedrock's
+`ColorPostProcessing` fragment shader (veka0/mcbe-shader-codebase) with its tone mapper off and the
+average luminance at its fixed 0.18, and `bedrock.grading.GradeUniforms.grade` is the same arithmetic
+in Java, which `ColourGradeTest` checks against numbers worked out by hand. Three things the
+published material gets wrong or leaves out: the documentation says `color_temperature` warms the
+image as the number rises, while the vanilla pack grades its hot biomes at 4000 K and its cold ones at
+10000 K under that type, so the files win; no default is published for `shadowsMax` or
+`highlightsMin`, so both are the average itself; and the contrast pivot is a shader constant no file
+states, taken as the average. `client/render/ColourGrading` decides which collection a biome takes,
+with `VANILLA` carrying Bedrock's own client biomes' naming onto Java's biome ids, and blends the
+grade around the camera with Java's fog colour weights. `ColourGradingClientGameTest` reads a
+wall's pixel out of the main target in plains and again in `tp:glade` and asks that the second is
+the first through `tp:glade_grade`. It reads through `Screenshot.takeScreenshot` rather than the
+test API's `takeScreenshot`, which draws a frame of its own that Sodium refuses on 26.1.2 (`Global
+terrain uniforms have not been updated`). A blend of one grade alone hands back that grade, because
+the weighted sum divided back out is not the same floats and the pass would never be skipped.
+
 `blend_transition` is acted on as well: a state declaring one is crossed out of rather than left, its
 clips staying at a falling weight while the state it moved to comes up. `blend_via_shortest_path`
 rides on that crossing: a bone's rotation is the weighted sum of every clip reaching it, so 350 and

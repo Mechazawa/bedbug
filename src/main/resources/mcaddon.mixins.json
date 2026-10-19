@@ -73,6 +73,7 @@
     "AimAssistPickMixin",
     "CameraMixin",
     "FogRendererMixin",
+    "GameRendererGradeMixin",
     "HudMixin",
     "HudTextMixin",
     "KeyboardInputMixin",

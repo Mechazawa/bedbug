@@ -895,15 +895,12 @@ count what belongs to the particle effect whose own Molang is being evaluated, a
 while an entity is drawn belongs to no effect, so both are named by `/mcaddon entities`.
 `total_emitter_count` and `total_particle_count` count the whole world and are answered.
 
-**The water and the colour grading a resource pack writes for the deferred renderer.** A `water/`
+**The water a resource pack writes for the deferred renderer.** A `water/`
 file states the concentration of three optical particles in milligrams per litre, the texture and
 scale of the caustics, and the frequency, depth, speed and shape of the waves. Bedrock reads it
 under Vibrant Visuals alone, and how it turns the concentrations into a colour is not published;
 outside Vibrant Visuals the water colour is `minecraft:water_appearance` on the client biome, which
-is read. A `color_grading/` file states the contrast, gamma, gain, saturation and offset of the
-shadows, midtones and highlights, a colour temperature in kelvin, and which of six tonemapping
-operators maps the finished frame back into range, all of it a post-process Java has no data-driven
-form of. Each setting is counted and named by `/mcaddon entities` rather than the directory alone,
+is read. Each setting is counted and named by `/mcaddon entities` rather than the directory alone,
 so an author is told which of the ones they wrote is dropped.
 
 **The scattering terms of an atmosphere, and a sky one biome states.** `rayleigh_strength`, the two
@@ -1097,7 +1094,7 @@ it follows.
 written without their extensions, which the Bedrock client loads up front. The conversion walks
 `textures/` itself, so the list adds no texture. What it can state is a path the pack does not ship,
 which Bedrock logs as a missing texture; `/mcaddon entities` names each such path.
-`/mcaddon entities` also names each of the two kinds nothing reads, `color_grading` and `water`,
+`/mcaddon entities` also names the one kind nothing reads, `water`,
 together with the reason Java has no place for it.
 
 **A dimension with a generator nobody wrote down.** Bedrock builds a dimension a pack declares as
@@ -1111,7 +1108,8 @@ and stops a client on the screen asking the player to fix their packs.
 Visuals, its deferred pipeline, and a client biome names each through
 `minecraft:atmosphere_identifier`, `minecraft:lighting_identifier`,
 `minecraft:color_grading_identifier` and `minecraft:water_identifier`. Of their 47 published fields,
-six have a Java home and all six of those arrived in 26.
+six have a Java home and all six of those arrived in 26; the colour grading fields are drawn by this
+mod's own pass instead.
 
 That 26 answer is `EnvironmentAttributes` with the `timeline` registry beside it.
 `RegistryDataLoader` loads `Registries.TIMELINE` from a data pack, a `Timeline` is an
@@ -1135,10 +1133,17 @@ carries, which is four curves crossing into two. `ambient.illuminance` is neares
 `flash` colour and illuminance, which Java computes in its renderer with no data behind it, and
 `emissive.desaturation`, because Java has no emissive pass to desaturate.
 
-`color_grading` has nothing. Its `contrast`, `gain`, `gamma`, `offset` and `saturation` per tonal
-band, its Kelvin `temperature` and its tonemapping `operator` all describe a grade, and a Java post
-effect is `PostChainConfig`, which is internal targets and passes and no grading term at all, with
-nothing binding a chain to a biome or to a dimension.
+`color_grading` is drawn from 26 on, by a post pass of this mod's own over the finished frame of
+the world, before the heads-up display. A biome takes the collection its client biome names, a
+biome of the game's own takes the one Bedrock's own client biome names for it (so a pack shipping
+`minecraft:default_color_grading` grades the plains, the forests and the rest that name it), and
+any other biome takes the collection in the pack's `color_grading/color_grading.json`. The grade
+blends between biomes as the camera moves, the way Java blends its fog colour. The `contrast`,
+`saturation`, `gain`, `offset` and `gamma` of each tonal band and the Kelvin `temperature` are
+applied with Bedrock's own arithmetic. The tonemapping `operator` is named rather than applied:
+it maps a frame of scene light into range, and Java's finished frame is in range already. Bedrock
+draws all of this only under Vibrant Visuals; a pack that grades its world is graded here
+whatever the player's graphics setting is. Before 26 each grading file is named instead.
 
 `water` has nothing either, because Bedrock itself reads it only under Vibrant Visuals. In every
 other graphics mode, which is the one Java draws like, water takes its colour from
@@ -1171,7 +1176,7 @@ by the entry it points at in `sounds/music_definitions.json`: 26 states each as 
 1.21.1 as a field of the `effects` block. The three underwater ambient moments have no Java field on
 any version, and the music's volume multiplier and its underwater track reach 26 alone. Each of
 those is counted and named, and so are the water surface transparency and the identifiers naming a
-deferred renderer's atmosphere, lighting, water and colour grading. On 1.20.1 no biome from a pack is
+deferred renderer's atmosphere, lighting and water. On 1.20.1 no biome from a pack is
 converted at all, so every biome the resource pack paints is counted and named with the version that
 would draw it.
 

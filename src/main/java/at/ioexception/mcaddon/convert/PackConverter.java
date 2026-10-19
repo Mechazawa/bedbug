@@ -150,7 +150,8 @@ public final class PackConverter {
         Map<String, at.ioexception.mcaddon.bedrock.AtmosphereDefinition> atmospheres =
             at.ioexception.mcaddon.bedrock.AtmosphereDefinition.readAll(pack);
         at.ioexception.mcaddon.bedrock.RendererSettings.WATER.report(pack);
-        at.ioexception.mcaddon.bedrock.RendererSettings.COLOR_GRADING.report(pack);
+        at.ioexception.mcaddon.bedrock.grading.ColourGrade.readAll(pack).values()
+            .forEach(at.ioexception.mcaddon.bedrock.grading.ColourGrade::report);
         Map<String, SpawnEggAppearance> eggs = new LinkedHashMap<>();
         assets.entities().forEach((identifier, definition) -> {
             if (definition.spawnEgg() != null) eggs.put(identifier, definition.spawnEgg());

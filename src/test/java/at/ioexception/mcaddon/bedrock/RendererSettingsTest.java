@@ -19,9 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * The settings a resource pack writes for the deferred renderer that Java takes none of.
  *
  * Naming the directory would tell an author that their water settings did nothing. Naming each
- * setting tells them which of the ones they wrote did nothing, which is the question they have. A
- * grouping block is walked through rather than named, so a colour grading file answers for its four
- * groups rather than for the block holding them.
+ * setting tells them which of the ones they wrote did nothing, which is the question they have.
  */
 class RendererSettingsTest {
 
@@ -38,20 +36,6 @@ class RendererSettingsTest {
         }
         """;
 
-    private static final String COLOR_GRADING = """
-        {
-          "format_version": "1.21.90",
-          "minecraft:color_grading_settings": {
-            "description": {"identifier": "minecraft:default_color_grading"},
-            "color_grading": {
-              "midtones": {"contrast": [1.2, 1.2, 1.2]},
-              "temperature": {"enabled": true, "temperature": 5200}
-            },
-            "tone_mapping": {"operator": "hable"}
-          }
-        }
-        """;
-
     @Test
     void everyWaterSettingIsNamed(@TempDir Path root) throws IOException {
         RendererSettings.WATER.report(packHolding(root, Map.of("water/water.json", WATER)));
@@ -60,20 +44,6 @@ class RendererSettingsTest {
         assertNamed("water caustics");
         assertNamed("water waves");
         assertNamed("water biome_water_color_contribution");
-    }
-
-    /** The block grouping the four colour grading sections is walked through, not named itself. */
-    @Test
-    void aGroupingBlockGivesUpItsOwnSettings(@TempDir Path root) throws IOException {
-        RendererSettings.COLOR_GRADING.report(
-            packHolding(root, Map.of("color_grading/default.json", COLOR_GRADING)));
-
-        assertNamed("color grading midtones");
-        assertNamed("color grading temperature");
-        assertNamed("color grading tone_mapping");
-        assertTrue(AddonEntities.report().stream()
-            .noneMatch(line -> line.trim().startsWith("color grading color_grading")),
-            "The block holding the colour grading groups was named as a setting of its own.");
     }
 
     private static void assertNamed(String opening) {

@@ -16,16 +16,12 @@ import java.util.Set;
  * A kind of settings file for Bedrock's deferred renderer whose every setting is named against the
  * pack rather than converted.
  *
- * Two of the four kinds a resource pack may ship state nothing Java's renderer takes. `water/` is
- * read by Bedrock under Vibrant Visuals alone. Its engine turns the three particle concentrations
- * into the per-channel extinction and albedo its shaders take (`WaterExtinctionCoefficients`,
- * `WaterAlbedoExtinction`) by a model Mojang does not publish, its waves are surface normals only
- * its deferred lighting reads, and its default caustics texture is built into the game. Every
- * other graphics mode, which is what Java draws like, colours water by
- * `minecraft:water_appearance` on the client biome, and that is read. `color_grading/`
- * sets the contrast, gamma, gain, saturation and colour temperature of the finished frame and the
- * tonemapping operator that maps it back into range, which is a post-process Java has no
- * data-driven form of at all.
+ * `water/` is read by Bedrock under Vibrant Visuals alone. Its engine turns the three particle
+ * concentrations into the per-channel extinction and albedo its shaders take
+ * (`WaterExtinctionCoefficients`, `WaterAlbedoExtinction`) by a model Mojang does not publish, its
+ * waves are surface normals only its deferred lighting reads, and its default caustics texture is
+ * built into the game. Every other graphics mode, which is what Java draws like, colours water by
+ * `minecraft:water_appearance` on the client biome, and that is read.
  *
  * Naming the directory would say a pack shipped one of these and stop there. Naming each setting
  * says which of them the author wrote and will not see, which is what they need to know.
@@ -34,9 +30,6 @@ public record RendererSettings(String directory, String root, String label) {
 
     public static final RendererSettings WATER =
         new RendererSettings("water", "minecraft:water_settings", "water");
-
-    public static final RendererSettings COLOR_GRADING =
-        new RendererSettings("color_grading", "minecraft:color_grading_settings", "color grading");
 
     /** What every settings file carries about itself rather than about the renderer. */
     private static final Set<String> ABOUT_ITSELF = Set.of("format_version", "description");
@@ -55,9 +48,8 @@ public record RendererSettings(String directory, String root, String label) {
     /**
      * Names what one file carries, one level down through any group of settings.
      *
-     * A colour grading file puts its four groups under a `color_grading` block, so the block itself
-     * is no setting and its contents are. A block whose own values are settings rather than groups,
-     * such as the caustics of a water file, is the setting.
+     * A block holding only blocks is a group, so its contents are named and the block itself is not.
+     * A block whose own values are settings, such as the caustics of a water file, is the setting.
      */
     private void report(JsonObject body) {
         if (body == null) return;

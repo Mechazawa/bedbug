@@ -41,8 +41,6 @@ public final class PackFiles {
 
     /** The resource pack paths Bedrock defines and no reader opens, each with the reason. */
     private static final Map<String, String> RESOURCE_UNREAD = Map.ofEntries(
-        Map.entry("color_grading", "a grade of the finished frame, where a Java post effect "
-            + "carries no grading term and is bound to no biome or dimension"),
         Map.entry("water", "read by Vibrant Visuals alone, whose engine turns the three particle "
             + "concentrations into the extinction and albedo its shaders take by a model Mojang does "
             + "not publish, and whose default caustics texture is built into the game"));
@@ -50,7 +48,7 @@ public final class PackFiles {
     /** The resource pack paths a reader opens. */
     private static final Set<String> RESOURCE_READ = Set.of(
         "manifest.json", "pack_icon.png", "animations", "animation_controllers", "atmospherics",
-        "attachables", "biomes", "biomes_client.json", "blocks.json", "entity", "fogs", "font",
+        "attachables", "biomes", "biomes_client.json", "blocks.json", "color_grading", "entity", "fogs", "font",
         "lighting", "materials", "models", "particles", "render_controllers", "sounds",
         "sounds.json", "subpacks", "texts", "textures", "ui",
         "sounds/music_definitions.json", "sounds/sound_definitions.json",

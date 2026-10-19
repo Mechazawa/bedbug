@@ -2755,6 +2755,61 @@ public final class Platform {
         *///?}
     }
 
+    //? if >=26.2 {
+    /**
+     * A pipeline drawing one screen covering triangle from no vertices, reading one texture and one
+     * uniform block. 26.2 groups a pipeline's bindings into layouts and names its topology alone.
+     */
+    public static com.mojang.blaze3d.pipeline.RenderPipeline screenPipeline(Identifier location, Identifier shader,
+        String sampler, String uniformBlock) {
+        return com.mojang.blaze3d.pipeline.RenderPipeline.builder()
+            .withLocation(location)
+            .withVertexShader(shader)
+            .withFragmentShader(shader)
+            .withBindGroupLayout(com.mojang.blaze3d.pipeline.BindGroupLayout.builder()
+                .withSampler(sampler)
+                .withUniform(uniformBlock, com.mojang.blaze3d.shaders.UniformType.UNIFORM_BUFFER)
+                .build())
+            .withDepthStencilState(java.util.Optional.empty())
+            .withCull(false)
+            .withPrimitiveTopology(com.mojang.blaze3d.PrimitiveTopology.TRIANGLES)
+            .build();
+    }
+
+    public static com.mojang.blaze3d.systems.RenderPass screenPass(com.mojang.blaze3d.systems.CommandEncoder encoder,
+        java.util.function.Supplier<String> label, com.mojang.blaze3d.textures.GpuTextureView colour) {
+        return encoder.createRenderPass(label, colour, java.util.Optional.empty());
+    }
+
+    public static void drawScreenTriangle(com.mojang.blaze3d.systems.RenderPass pass) {
+        pass.draw(3, 1, 0, 0);
+    }
+    //?} elif >=26 {
+    /*public static com.mojang.blaze3d.pipeline.RenderPipeline screenPipeline(Identifier location, Identifier shader,
+        String sampler, String uniformBlock) {
+        return com.mojang.blaze3d.pipeline.RenderPipeline.builder()
+            .withLocation(location)
+            .withVertexShader(shader)
+            .withFragmentShader(shader)
+            .withSampler(sampler)
+            .withUniform(uniformBlock, com.mojang.blaze3d.shaders.UniformType.UNIFORM_BUFFER)
+            .withDepthStencilState(java.util.Optional.empty())
+            .withCull(false)
+            .withVertexFormat(com.mojang.blaze3d.vertex.DefaultVertexFormat.EMPTY,
+                com.mojang.blaze3d.vertex.VertexFormat.Mode.TRIANGLES)
+            .build();
+    }
+
+    public static com.mojang.blaze3d.systems.RenderPass screenPass(com.mojang.blaze3d.systems.CommandEncoder encoder,
+        java.util.function.Supplier<String> label, com.mojang.blaze3d.textures.GpuTextureView colour) {
+        return encoder.createRenderPass(label, colour, java.util.OptionalInt.empty());
+    }
+
+    public static void drawScreenTriangle(com.mojang.blaze3d.systems.RenderPass pass) {
+        pass.draw(0, 3);
+    }
+    *///?}
+
     /** The resource pack format this version reads, taken from the game rather than a table. */
     public static int resourcePackFormat() {
         //? if >=26 {
