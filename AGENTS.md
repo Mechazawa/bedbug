@@ -204,6 +204,19 @@ These are the checks it runs, and what each one catches:
   across every checkout on the machine (`-PclientSlots=<n>` changes the count, and
   `cpu-lock --status` shows who holds them and who waits).
 
+  **A run that stops ticking ends itself.** `HangWatchdog`, the test source set's `client`
+  entrypoint, counts every tick of the client and of any server in the process. Fabric lets the
+  client tick only from a test's `waitTick`, so every wait a test makes is progress, and the longest
+  wait in these tests is a minute. Once nothing has ticked for three minutes (`-PclientHangMinutes=<n>`
+  changes that, fractions allowed), it writes a full thread dump, locked monitors and synchronizers
+  included, to `versions/<version>/build/run/clientGameTest/hang-<timestamp>.txt`, logs
+  `CLIENT GAME TEST HANG: <file> during <test class>` at `ERROR` and halts the process with exit code
+  124, so the Gradle task fails and gives back its `minecraft-client` slot. The dump's first line is
+  that same line, which `tools/checkall.sh` prints after the build, and `verify.py` reports the log
+  line as a failure of its own. The clock starts at the first tick, so a game that never finishes
+  starting is not caught. The test it names is a `*ClientGameTest` class found on a thread's
+  stack, or the last one seen when no thread carries one.
+
   A client that stops logging with a window the desktop calls not responding and almost no CPU is
   worth a `jstack <pid>` before it is killed. One such stop on 26.1.2 had the render thread parked
   in `IntegratedServer.halt` under Fabric's `deferDisconnect`, the server thread and the test thread
