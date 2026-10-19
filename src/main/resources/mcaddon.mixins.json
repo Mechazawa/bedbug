@@ -70,6 +70,8 @@
     "MusicManagerMixin",
     "FovMixin",
     "RecipeToastMixin",
-    "AdventureTooltipMixin"
+    "AdventureTooltipMixin",
+    "OptionsMixin",
+    "VideoSettingsScreenMixin"
   ]
 }

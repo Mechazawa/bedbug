@@ -843,8 +843,12 @@ These are the checks it runs, and what each one catches:
   alone, and nothing the client is told may reach the bystander. The paper doll is this mod's own
   layer, `client.render.PaperDoll`, drawn through `Platform.Painter.entity` with the inventory's
   own helper for a mob that follows the pointer, so the mixin counts it at `GuiGraphicsExtractor.entity`:
-  the test puts the player in a boat with `/ride`, hides and resets the doll, and reads it gone once
-  the player has left the boat for longer than the 15 ticks it stays. `InputPermissionClientGameTest`
+  the test puts the player in a boat with `/ride`, hides and resets the doll, presses the doll's
+  button in the video settings off and on again and reads `options.txt` after each press, and reads
+  it gone once the player has left the boat for longer than the 15 ticks it stays. The option is
+  `PaperDoll.OPTION`: `VideoSettingsScreenMixin` adds it to the Preferences group (to the one list
+  the screen has before 26), and `OptionsMixin` saves and loads it through the operation that
+  processes Java's first option, because `Options.FieldAccess` is package private. `InputPermissionClientGameTest`
   holds the forward key and moves the mouse the way a player would, and reads back that the player
   neither walked nor turned while `/bedrock inputpermission` had taken the input away, and did both
   once it was given back.
