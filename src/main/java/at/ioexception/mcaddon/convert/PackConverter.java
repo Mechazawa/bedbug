@@ -742,7 +742,7 @@ public final class PackConverter {
      * The model and the name for each entity's spawn egg.
      *
      * A pack that gave its egg an item texture gets a flat item drawn from that texture. One that
-     * gave colours gets the vanilla egg painted with them, which on a version reading item
+     * gave colours gets a grey egg painted with them, which on a version reading item
      * definitions is two constant tints and on an older one is the colours the item itself carries.
      */
     private static void writeSpawnEggs(Path root, Map<String, String> icons,
@@ -751,7 +751,7 @@ public final class PackConverter {
             String icon = egg.iconKey() == null ? null : icons.get(egg.iconKey());
             if (icon != null) sprites.add(icon);
             JsonObject vanilla = new JsonObject();
-            vanilla.addProperty("parent", "minecraft:item/template_spawn_egg");
+            vanilla.addProperty("parent", Platform.spawnEggTemplate());
 
             writeFlatItem(root, Names.split(egg.identifier(), "minecraft"), "_spawn_egg",
                 icon == null ? vanilla : flat(icon, "minecraft:item/generated"),
@@ -1057,6 +1057,8 @@ public final class PackConverter {
             if (faces.isEmpty()) continue;
 
             sprites.addAll(faces.values());
+            String particle = destructionTexture(block.components(), textureKeys);
+            if (particle != null) sprites.add(particle);
 
             int colon = block.identifier().indexOf(':');
             String namespace = Names.sanitise(colon > 0 ? block.identifier().substring(0, colon) : "minecraft");
@@ -1064,7 +1066,7 @@ public final class PackConverter {
                 ? block.identifier().substring(colon + 1) : block.identifier());
             Path assets = root.resolve("assets").resolve(namespace);
 
-            writeCubeModel(assets, name, faces, geometryOf(block, geometries));
+            writeCubeModel(assets, name, faces, particle, geometryOf(block, geometries));
 
             JsonObject blockstate = new JsonObject();
             blockstate.add("variants",
@@ -1077,7 +1079,7 @@ public final class PackConverter {
             String drawnAs = name;
             if (held != null) {
                 drawnAs = name + "_in_hand";
-                writeCubeModel(assets, drawnAs, faces, held);
+                writeCubeModel(assets, drawnAs, faces, particle, held);
             }
 
             JsonObject item = new JsonObject();
@@ -1138,7 +1140,7 @@ public final class PackConverter {
         if (faces.isEmpty()) return;
 
         if (geometry != null) {
-            writeCubeModel(assets, "potted_" + name, faces, geometry);
+            writeCubeModel(assets, "potted_" + name, faces, null, geometry);
         } else {
             JsonObject textures = new JsonObject();
             textures.addProperty("plant", faces.values().iterator().next());
@@ -1272,11 +1274,14 @@ public final class PackConverter {
             // names is never stitched, so the ones a variant reaches are collected here too.
             Map<String, String> faces = facesFor(block, chosen, textureKeys, appearance);
             sprites.addAll(faces.values());
+            JsonObject components = block.componentsFor(chosen);
+            String particle = destructionTexture(components, textureKeys);
+            if (particle != null) sprites.add(particle);
 
             String variantName = name + "_" + combination;
-            writeCubeModel(assets, variantName, faces, geometryOf(block, geometries));
+            writeCubeModel(assets, variantName, faces, particle, geometryOf(block, geometries));
             variants.add(String.join(",", key), modelReference(namespace, variantName,
-                BlockComponents.rotation(block.componentsFor(chosen))));
+                BlockComponents.rotation(components)));
         }
         return variants;
     }
@@ -1334,6 +1339,14 @@ public final class PackConverter {
         return textures;
     }
 
+    /** The texture `minecraft:destruction_particles` names for the block to break into, or null. */
+    private static String destructionTexture(JsonObject components, Map<String, String> textureKeys) {
+        JsonElement particles = components.get("minecraft:destruction_particles");
+        String key = particles != null && particles.isJsonObject()
+            ? Json.text(particles.getAsJsonObject(), "texture", null) : null;
+        return key == null ? null : textureKeys.getOrDefault(key, vanillaTexture(key));
+    }
+
     private static Map<String, String> resolveFaces(Map<String, String> declared,
         Map<String, String> textureKeys) {
         Map<String, String> faces = new TreeMap<>();
@@ -1374,9 +1387,12 @@ public final class PackConverter {
      *
      * A pack that names a `minecraft:geometry` drew its block itself, so the cubes come across as
      * model elements; without one the block is a plain cube wearing the pack's textures.
+     *
+     * The block breaks into `particle` where it names one, and otherwise into the texture of its
+     * `down` face, which is the face Bedrock takes its breaking particles from.
      */
     private static void writeCubeModel(Path assets, String name, Map<String, String> faces,
-        BedrockGeometry geometry) throws IOException {
+        String particle, BedrockGeometry geometry) throws IOException {
         if (faces.isEmpty()) return;
 
         JsonObject textures = new JsonObject();
@@ -1391,11 +1407,11 @@ public final class PackConverter {
         if (geometry != null && !uniform) textures.addProperty("all", faces.values().iterator().next());
         JsonArray elements = geometry == null ? null
             : BlockGeometry.elements(geometry, textures.keySet());
+        textures.addProperty("particle", particle != null ? particle
+            : faces.getOrDefault("down", faces.values().iterator().next()));
         if (elements == null) {
             model.addProperty("parent", uniform ? "minecraft:block/cube_all" : "minecraft:block/cube");
         } else {
-            // A model with its own elements needs a particle texture, which `all` is.
-            textures.addProperty("particle", "#all");
             model.add("elements", elements);
             JsonObject display = BlockGeometry.display(geometry);
             if (display != null) model.add("display", display);

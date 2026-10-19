@@ -841,6 +841,31 @@ public final class Platform {
         *///?}
     }
 
+    /**
+     * Properties for the item a block places as itself, named by the block's own translation key. From
+     * 1.21.2 an item takes `item.<id>` unless asked otherwise, and before that a block item asks its
+     * block.
+     */
+    public static Item.Properties blockItemProperties() {
+        //? if >=1.21.2 {
+        return new Item.Properties().useBlockDescriptionPrefix();
+        //?} else {
+        /*return new Item.Properties();
+        *///?}
+    }
+
+    /**
+     * The model a spawn egg painted in two colours is drawn from. 1.21.5 gave each of the game's eggs
+     * a picture of its own and dropped the grey template it painted, so from then this mod ships one.
+     */
+    public static String spawnEggTemplate() {
+        //? if >=1.21.5 {
+        return "mcaddon:item/template_spawn_egg";
+        //?} else {
+        /*return "minecraft:item/template_spawn_egg";
+        *///?}
+    }
+
     public static Item buildBlockItem(Block block, Item.Properties properties, Identifier id) {
         //? if >=1.21.2 {
         return new net.minecraft.world.item.BlockItem(block,

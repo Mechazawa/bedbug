@@ -29,6 +29,9 @@
         "explosion_resistance": 2
       },
       "minecraft:light_emission": 0,
+      "minecraft:destruction_particles": {
+        "texture": "lamp_on"
+      },
       "minecraft:sound": {
         "sound": "glass"
       },

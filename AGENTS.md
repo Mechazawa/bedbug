@@ -772,6 +772,17 @@ These are the checks it runs, and what each one catches:
   `step` in its body, which the script registers and answers by tagging whoever used the item with
   that step.
 
+  **Bedrock's block geometry is centred on the block.** A full block's cube has the origin
+  `[-8, 0, -8]`, where Java's block model runs from 0 to 16, so `BlockGeometry` moves every corner
+  and pivot half a block on X and Z. The lamp's geometry is written in Bedrock's frame (its post at
+  `[-2, 0, -2]`), and `ItemAndBlockClientGameTest` reads the drawn model's extent back. The same test
+  draws `tp:ember_spawn_egg`, which states only two colours: from 1.21.5 Java has no grey egg to
+  paint, so `Platform.spawnEggTemplate` names `mcaddon:item/template_spawn_egg`, whose two textures
+  are drawn for this mod. It also reads the particle texture of the totem, which names `*` and
+  `north` and breaks into its `down` face as Bedrock does, and of the lamp, whose
+  `minecraft:destruction_particles` names `lamp_on`, and the name of the lamp's item, which from
+  1.21.2 is the block's only because `Platform.blockItemProperties` asks for the block's key.
+
   The worldgen side is three biomes, five features and two rules. The overworld biome, `tp:glade`,
   carries the components a Java biome has a field for and four it has none of, so both halves of the
   reporting path run; Java's overworld has no list a biome can be added to, so it is registered and
