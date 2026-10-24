@@ -63,6 +63,7 @@ public final class ServerHooks {
     }
 
     public static void register() {
+        at.ioexception.mcaddon.registry.RemovedAddons.register();
         ServerLifecycleEvents.SERVER_STARTED.register(ServerHooks::start);
         ServerLifecycleEvents.SERVER_STOPPING.register(ServerHooks::stop);
         ServerTickEvents.START_SERVER_TICK.register(server -> ScriptDiagnostics.beginTick());
