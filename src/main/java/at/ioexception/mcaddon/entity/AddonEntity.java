@@ -252,17 +252,19 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
-     * Whether a sensor carrying a cooldown may fire, and takes the cooldown when it may.
+     * Whether a sensor's cooldown has run out.
      *
      * Bedrock counts the cooldown per subsensor rather than per entity, so the key names which one
-     * is asking. A subsensor with no cooldown never reaches here.
+     * is asking.
      */
-    public boolean sensorReady(String key, double seconds) {
+    public boolean sensorReady(String key) {
         Integer due = sensorReady.get(key);
-        if (due != null && tickCount < due) return false;
+        return due == null || tickCount >= due;
+    }
 
+    /** Starts a sensor's cooldown, which only a sensor that fired takes. */
+    public void startSensorCooldown(String key, double seconds) {
         sensorReady.put(key, tickCount + Math.max(1, (int) (seconds * 20)));
-        return true;
     }
 
     /**

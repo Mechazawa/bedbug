@@ -423,12 +423,12 @@ public final class Sensors {
 
             String event = Json.text(subsensor, "event", null);
             if (event == null) continue;
-            if (subsensor.has("cooldown")
-                && !entity.sensorReady(key, number(subsensor, "cooldown", 0))) {
-                continue;
-            }
-            found(entity, subsensor, playersOnly, relative, state)
-                .ifPresent(other -> EntityEvents.trigger(entity, event, other, state));
+            if (!entity.sensorReady(key)) continue;
+
+            found(entity, subsensor, playersOnly, relative, state).ifPresent(other -> {
+                if (subsensor.has("cooldown")) entity.startSensorCooldown(key, number(subsensor, "cooldown", 0));
+                EntityEvents.trigger(entity, event, other, state);
+            });
         }
     }
 

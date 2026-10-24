@@ -68,7 +68,8 @@
           "values": [
             "unknown",
             "spawned",
-            "born"
+            "born",
+            "sensed"
           ],
           "default": "unknown"
         }
@@ -1222,6 +1223,23 @@
           ]
         }
       },
+      "tp:brute_sensing": {
+        "minecraft:entity_sensor": {
+          "subsensors": [
+            {
+              "range": 6,
+              "minimum_count": 1,
+              "cooldown": 100,
+              "event_filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              },
+              "event": "tp:brute_sensed"
+            }
+          ]
+        }
+      },
       "tp:brute_sharing": {
         "minecraft:behavior.share_items": {
           "priority": 1,
@@ -1999,6 +2017,18 @@
           "component_groups": [
             "tp:brute_caravanning"
           ]
+        }
+      },
+      "tp:brute_sense": {
+        "add": {
+          "component_groups": [
+            "tp:brute_sensing"
+          ]
+        }
+      },
+      "tp:brute_sensed": {
+        "set_property": {
+          "tp:arrived": "sensed"
         }
       },
       "tp:brute_share": {

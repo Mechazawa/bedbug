@@ -353,6 +353,23 @@ public final class GoalGameTests {
         });
     }
 
+    /**
+     * A sensor's cooldown starts when it fires, not when it looks and finds nothing, so a pig
+     * arriving after a long empty stretch is sensed at once.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 80)
+    public void aSensorCooldownStartsOnlyOnceItFires(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_sense");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.runAfterDelay(25, () -> standing(helper, "pig", STAND.east(2)));
+        helper.succeedWhen(() -> helper.assertTrue("sensed".equals(brute.value("tp:arrived")),
+            BRUTE + " sensed nothing after a pig came beside it and holds " + brute.value("tp:arrived") + "."));
+    }
+
     /** A chunk loading an entity again is not an arrival, so its spawn event does not run twice. */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void aReloadedEntityIsNotSpawnedAgain(GameTestHelper helper) {
