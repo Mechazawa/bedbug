@@ -197,6 +197,7 @@ public class AddonEntity extends PathfinderMob
         refreshAge();
         refreshComponents();
         publishMarkers();
+        restoreTrading();
     }
 
     /**
@@ -6216,10 +6217,88 @@ public class AddonEntity extends PathfinderMob
         offeredTiers = reached;
         offers = new MerchantOffers();
         shown = new java.util.ArrayList<>();
-        if (trades != null) {
+        if (trades != null && trades.borrowedFrom() != null) {
+            borrowOffers(trades.borrowedFrom());
+        } else if (trades != null) {
             trades.offers().stream().filter(offer -> offer.tier() < reached).forEach(this::add);
         }
+        saveTrading();
         return offers;
+    }
+
+    private void borrowOffers(net.minecraft.world.entity.EntityType<?> kind) {
+        if (!(Platform.createMob(kind, (net.minecraft.server.level.ServerLevel) level())
+            instanceof Merchant lender)) {
+            return;
+        }
+        lender.getOffers().forEach(offer -> offers.add(offer.copy()));
+    }
+
+    /**
+     * Files what a trader keeps between sessions under its uuid: the offers with their uses, the
+     * experience, the single use triggers already spent and the stock it carries.
+     */
+    public void saveTrading() {
+        if (isClientSide() || offers == null || ServerHooks.state() == null) return;
+
+        var ops = level().registryAccess().createSerializationContext(com.mojang.serialization.JsonOps.INSTANCE);
+        com.google.gson.JsonObject saved = new com.google.gson.JsonObject();
+        MerchantOffers.CODEC.encodeStart(ops, offers).result().ifPresent(json -> saved.add("offers", json));
+        saved.addProperty("experience", tradeExperience);
+
+        TradeTable trades = trades();
+        com.google.gson.JsonArray indices = new com.google.gson.JsonArray();
+        if (trades != null) shown.forEach(offer -> indices.add(trades.offers().indexOf(offer)));
+        saved.add("shown", indices);
+
+        com.google.gson.JsonArray used = new com.google.gson.JsonArray();
+        spent.forEach(used::add);
+        saved.add("spent", used);
+
+        com.google.gson.JsonArray stock = new com.google.gson.JsonArray();
+        for (int slot = 0; carried != null && slot < carried.getContainerSize(); slot++) {
+            ItemStack stack = carried.getItem(slot);
+            if (stack.isEmpty()) continue;
+            com.google.gson.JsonObject entry = new com.google.gson.JsonObject();
+            entry.addProperty("slot", slot);
+            ItemStack.CODEC.encodeStart(ops, stack).result().ifPresent(json -> entry.add("stack", json));
+            stock.add(entry);
+        }
+        saved.add("inventory", stock);
+        ServerHooks.state().setTrading(getUUID(), saved);
+    }
+
+    private void restoreTrading() {
+        com.google.gson.JsonObject saved = ServerHooks.state().trading(getUUID());
+        if (saved == null) return;
+
+        var ops = level().registryAccess().createSerializationContext(com.mojang.serialization.JsonOps.INSTANCE);
+        tradeExperience = (int) at.ioexception.mcaddon.util.Json.number(saved, "experience", 0);
+        spent.clear();
+        at.ioexception.mcaddon.util.Json.list(saved, "spent").forEach(key -> spent.add(key.getAsString()));
+
+        if (saved.has("offers")) {
+            MerchantOffers.CODEC.parse(ops, saved.get("offers")).result().ifPresent(restored -> {
+                offers = restored;
+                TradeTable trades = trades();
+                offered = trades;
+                offeredTiers = trades == null ? 0 : trades.reached(tradeExperience);
+                shown = new java.util.ArrayList<>();
+                if (trades == null) return;
+                at.ioexception.mcaddon.util.Json.list(saved, "shown").forEach(index -> {
+                    int at = index.getAsInt();
+                    if (at >= 0 && at < trades.offers().size()) shown.add(trades.offers().get(at));
+                });
+            });
+        }
+
+        for (com.google.gson.JsonElement element : at.ioexception.mcaddon.util.Json.list(saved, "inventory")) {
+            com.google.gson.JsonObject entry = element.getAsJsonObject();
+            int slot = entry.get("slot").getAsInt();
+            if (carried == null || slot >= carried.getContainerSize() || !entry.has("stack")) continue;
+            ItemStack.CODEC.parse(ops, entry.get("stack")).result().ifPresent(stack -> carried.setItem(slot, stack));
+        }
+        publishTradeTier(trades());
     }
 
     private void add(TradeTable.Offer offer) {
@@ -6251,6 +6330,7 @@ public class AddonEntity extends PathfinderMob
         tradeExperience += index >= 0 && index < shown.size()
             ? shown.get(index).experience() : offer.getXp();
         publishTradeTier(trades());
+        saveTrading();
     }
 
     @Override
