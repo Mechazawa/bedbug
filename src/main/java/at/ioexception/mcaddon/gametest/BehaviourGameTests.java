@@ -695,6 +695,31 @@ public final class BehaviourGameTests {
 
     private static final int WEATHER_HEIGHT = 20;
 
+    /** A mob with `minecraft:behavior.sleep` lies down at night, which `q.is_sleeping` reports. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 80)
+    public void aSleepingMobReportsItIsSleeping(GameTestHelper helper) {
+        AddonEntity idler = spawn(helper, "tp:idler");
+        if (idler == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(idler, "tp:idler_make_sleeping", null, ServerHooks.state());
+        idler.setNoAi(false);
+        net.minecraft.server.MinecraftServer server = helper.getLevel().getServer();
+        server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), "time set 18000");
+        at.ioexception.mcaddon.bedrock.entity.EntityQueries asked =
+            new at.ioexception.mcaddon.bedrock.entity.EntityQueries(idler,
+                new at.ioexception.mcaddon.bedrock.animation.AnimationPlayer(null, idler),
+                at.ioexception.mcaddon.bedrock.entity.EntityQueries.Drawn.NONE,
+                java.util.Map::of, false);
+        helper.succeedWhen(() -> {
+            helper.assertTrue(asked.query("is_sleeping", List.of()).truthy(),
+                "The idler lay down at night and q.is_sleeping answered no.");
+            server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), "time set day");
+        });
+    }
+
     private static boolean weatherIs(net.minecraft.world.entity.Entity entity, String weather) {
         com.google.gson.JsonObject test = new com.google.gson.JsonObject();
         test.addProperty("test", "weather_at_position");

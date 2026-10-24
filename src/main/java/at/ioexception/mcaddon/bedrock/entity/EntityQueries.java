@@ -332,7 +332,8 @@ public final class EntityQueries implements MolangEnvironment.Queries {
             case "is_leashed" -> MolangValue.of(entity instanceof Mob mob && mob.isLeashed());
             case "is_moving" -> MolangValue.of(entity.position()
                 .distanceToSqr(entity.xOld, entity.yOld, entity.zOld) > 0);
-            case "is_sleeping" -> MolangValue.of(entity instanceof LivingEntity living && living.isSleeping());
+            case "is_sleeping" -> MolangValue.of(entity instanceof LivingEntity living
+                && (living.isSleeping() || living.getPose() == net.minecraft.world.entity.Pose.SLEEPING));
             // A pack's own entity makes itself young through a component group, which only the
             // server holds, so the answer travels as a property. Java's own mobs sync their age
             // themselves and carry no such property.

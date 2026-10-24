@@ -62,6 +62,14 @@
           "random_stop_interval": 1
         }
       },
+      "tp:idler_sleeping": {
+        "minecraft:behavior.sleep": {
+          "priority": 3,
+          "sleep_collider_height": 0.3,
+          "sleep_collider_width": 1,
+          "sleep_y_offset": 0.6
+        }
+      },
       "tp:idler_bedridden": {
         "minecraft:behavior.lay_down": {
           "priority": 0,
@@ -240,6 +248,13 @@
       "minecraft:jump.static": {}
     },
     "events": {
+      "tp:idler_make_sleeping": {
+        "add": {
+          "component_groups": [
+            "tp:idler_sleeping"
+          ]
+        }
+      },
       "tp:idler_make_timing": {
         "add": {
           "component_groups": [

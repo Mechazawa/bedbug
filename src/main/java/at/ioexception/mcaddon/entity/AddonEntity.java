@@ -1963,12 +1963,16 @@ public class AddonEntity extends PathfinderMob
      * has no bed, so what carries across is the part a player sees: it stops where it is until the
      * sun is up again.
      */
+    /** The span of the day Bedrock lets a bed be slept in, in ticks. */
+    private static final long BED_OPENS = 12542L;
+    private static final long BED_CLOSES = 23460L;
+
     private void rest() {
         if (!declaresNow("minecraft:behavior.sleep")) return;
         if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
 
         long time = Platform.dayTime(level) % 24000L;
-        boolean night = time >= 13000L && time < 23000L;
+        boolean night = time >= BED_OPENS && time < BED_CLOSES;
         setPose(night ? net.minecraft.world.entity.Pose.SLEEPING : net.minecraft.world.entity.Pose.STANDING);
         if (night) {
             getNavigation().stop();
