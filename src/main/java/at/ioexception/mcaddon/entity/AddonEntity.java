@@ -6092,7 +6092,9 @@ public class AddonEntity extends PathfinderMob
     private java.util.List<SoundEvent> soundsOf(com.google.gson.JsonElement written) {
         java.util.List<String> names = new java.util.ArrayList<>();
         if (written != null && written.isJsonPrimitive()) names.add(written.getAsString());
-        if (written != null && written.isJsonArray()) written.getAsJsonArray().forEach(name -> names.add(name.getAsString()));
+        if (written != null && written.isJsonArray()) {
+            written.getAsJsonArray().forEach(name -> names.add(name.getAsString()));
+        }
         return names.stream()
             .map(at.ioexception.mcaddon.convert.BedrockSoundNames::javaForEvent)
             .filter(java.util.Objects::nonNull)

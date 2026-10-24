@@ -62,7 +62,7 @@ public final class InteractGameTests {
         helper.runAfterDelay(1, () -> Platform.interactOn(player, wooly, InteractionHand.MAIN_HAND));
         helper.runAfterDelay(3, () -> {
             helper.assertTrue(shears.getDamageValue() == 1, "The shears took " + shears.getDamageValue() + " damage.");
-            helper.assertTrue(fleece(helper) == 2, "The interaction dropped " + fleece(helper) + " stacks of its table.");
+            helper.assertTrue(fleece(helper) == 2, "It dropped " + fleece(helper) + " stacks of its table.");
             helper.assertTrue(Platform.tagsOf(wooly).contains("tp_wooly_sheared"), "Its event did not run.");
             Platform.interactOn(player, wooly, InteractionHand.MAIN_HAND);
         });
@@ -80,7 +80,7 @@ public final class InteractGameTests {
             Platform.interactOn(player, wooly, InteractionHand.MAIN_HAND);
         });
         helper.runAfterDelay(25, () -> {
-            helper.assertTrue(shears.getDamageValue() == 2, "The interaction did not run again once the cooldown was over.");
+            helper.assertTrue(shears.getDamageValue() == 2, "The cooldown never ended.");
             helper.succeed();
         });
     }
@@ -94,9 +94,9 @@ public final class InteractGameTests {
             return;
         }
 
-        helper.assertTrue(wooly.experienceWhenBred() == 0, "It paid " + wooly.experienceWhenBred() + " before its group.");
+        helper.assertTrue(wooly.experienceWhenBred() == 0, "It paid " + wooly.experienceWhenBred() + " early.");
         EntityEvents.trigger(wooly, "tp:wooly_reward", null, ServerHooks.state());
-        helper.assertTrue(wooly.experienceWhenBred() == 7, "It paid " + wooly.experienceWhenBred() + " from its group.");
+        helper.assertTrue(wooly.experienceWhenBred() == 7, "It paid " + wooly.experienceWhenBred() + " late.");
         helper.succeed();
     }
 

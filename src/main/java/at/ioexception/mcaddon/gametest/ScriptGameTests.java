@@ -541,7 +541,7 @@ public final class ScriptGameTests {
      */
     @GameTest()
     public void anEventTellsTheScriptWhichGroupsItChanged(GameTestHelper helper) {
-        net.minecraft.world.entity.EntityType<?> type = at.ioexception.mcaddon.registry.AddonEntities.typeOf("tp:ember");
+        EntityType<?> type = at.ioexception.mcaddon.registry.AddonEntities.typeOf("tp:ember");
         if (type == null || ServerHooks.scripts() == null) {
             helper.succeed();
             return;

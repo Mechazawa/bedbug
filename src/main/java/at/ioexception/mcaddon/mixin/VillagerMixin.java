@@ -28,9 +28,10 @@ public abstract class VillagerMixin {
         if (event != null) EntityEvents.raiseDataDriven(villager, event);
     }
 
-    @Inject(method = "getBreedOffspring(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/entity/AgeableMob;)"
-        + "Lnet/minecraft/world/entity/npc/villager/Villager;", at = @At("RETURN"))
-    private void mcaddon$bred(net.minecraft.server.level.ServerLevel level, net.minecraft.world.entity.AgeableMob partner,
+    @Inject(method = "getBreedOffspring(Lnet/minecraft/server/level/ServerLevel;"
+        + "Lnet/minecraft/world/entity/AgeableMob;)Lnet/minecraft/world/entity/npc/villager/Villager;",
+        at = @At("RETURN"))
+    private void mcaddon$bred(ServerLevel level, net.minecraft.world.entity.AgeableMob partner,
         org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<Villager> info) {
         if (info.getReturnValue() != null) at.ioexception.mcaddon.server.VanillaEvents.bred(info.getReturnValue());
     }
