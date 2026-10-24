@@ -5,6 +5,7 @@
   "compatibilityLevel": "JAVA_17",
   "mixins": [
     "PackRepositoryMixin",
+    "EntityVoiceMixin",
     "BlockItemMixin",
     "ServerPlayerChatMixin",
     "CommandsMixin",
@@ -89,6 +90,7 @@
     "AdventureTooltipMixin",
     "OptionsMixin",
     "VideoSettingsScreenMixin",
+    "PackSelectionModelMixin",
     "AttackMissMixin",
     "ModelBakeryMixin",
     "BlockStateModelLoaderMixin"

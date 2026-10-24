@@ -951,6 +951,27 @@ These are the checks it runs, and what each one catches:
   `ScriptGameTests.aVillagerTakingAJobTellsTheScriptWhatItBecame` makes a villager a snowy farmer and
   reads back `become_farmer`, a variant of 1 and a mark variant of 4.
 
+  **A villager's job is also one of its families.** Bedrock's `villager_v2` states a family per
+  profession in the component group that profession switches on: a jobless villager is `unskilled`
+  and `peasant`, a nitwit `nitwit` and `peasant`, a mason `stone_mason` and `artisan`. A pack such
+  as Villager News picks between greeting a trader and refusing a trade by those families, so
+  without them every jobless villager answers a click as if it had wares. `BedrockVillager.families`
+  holds them and `Families.of` adds them to a villager and a zombie villager (which states the
+  profession's family alone). `/bedrock scriptevent tp:families` tags every villager within four
+  blocks with each family the script reads, and `ScriptGameTests.aVillagersFamiliesNameItsJob`
+  reads them back off a jobless villager, a nitwit, a farmer and a jobless zombie villager.
+
+  **A pack's `sounds.json` entry for a mob of the game's own decides what it sounds like.** Villager
+  News keys `villager`, `villager_v2` and `wandering_trader` with every moment at a volume of
+  nothing, which silences them in Bedrock. `AddonSounds.readVoices` reads every active pack's
+  entries, and `EntityVoiceMixin` asks `AddonSounds.voiceOf` at the head of
+  `Entity.playSound(SoundEvent, float, float)`, which every mob voice goes through on both sides. A
+  Java sound is matched to Bedrock's moment by the last part of its id (`entity.villager.trade` is
+  `haggle`, `no` and `yes` are `haggle.no` and `haggle.yes`). A moment with an empty sound or a
+  volume of nothing is silent, one naming a sound Java has plays that instead, and one the entry
+  leaves out keeps Java's own. The test pack's `villager_v2` entry silences the idle and hurt sounds
+  and plays `tp:villager.refuse` for `haggle.no`, which `VanillaVoiceClientGameTest` hears.
+
   Every command line in the pack that runs while the game is going is written so Java's parser
   refuses it as it stands. On `/bedrock scriptevent tp:commands` the script runs, as whatever sent it, a
   selector asking with `hasitem` about the main hand and about everything carried, a selector naming
@@ -1152,7 +1173,11 @@ These are the checks it runs, and what each one catches:
   a note block plays off it and stores a value in the block's own store. Two more shake the
   player's camera and stop it, which only a client can show, so `CameraShakeClientGameTest` reads
   the shake back off the client. The script also refuses to let anything tagged `tp:untameable` be
-  tamed, tags whatever a player tamed, and tags a player crouching and standing up again.
+  tamed, tags whatever a player tamed, and tags a player crouching and standing up again. It counts
+  each first spawn in the player's `tp:visits` dynamic property, which `WorldClientGameTest` reads
+  back as two after leaving the world and opening it again. Fabric raises the join before the level
+  or the player list holds the player, so `ServerHooks.playerJoined` hands the player to
+  `ScriptBridge.remember` first, or every read and write a pack makes in `playerSpawn` is lost.
   `tp:override` overrides the nearest wisp's `tp:settled` to false for the player who sent it, which
   a wisp settled a second after arriving is not, and tags that player when an override of a property
   the wisp never declared is refused; `tp:override_clear` clears the override again. `tp:config` tags the player with two variables and a
@@ -2246,6 +2271,10 @@ buttons. It sends a `tp_banner:` title and a `tp_tally:` action bar and reads th
 places and Java's own hidden title and action bar back, then a plain one of each. The pack side is
 `tools/testpack/pack/resources/ui/`.
 
+## Hidden from Java's pack screens
+
+`PackSelectionModelMixin` filters packs whose id starts with `mcaddon/` out of the streams `getSelected` and `getUnselected` return, so the Resource Packs and Data Packs screens list none of them. The model's own lists keep them, and they are required packs, so Done leaves them selected. `PackSelectionClientGameTest` asserts both screens.
+
 ## Client options
 
 `PaperDoll.OPTION` and `ColourGrading.OPTION` are reachable three ways on 26.1.2 and 26.2, and only the first on 1.20.1 and 1.21.1. `VideoSettingsScreenMixin` lists them in Java's Video Settings. `client/integration/ModMenuIntegration` opens `client/screen/AddonOptionsScreen` from Mod Menu. `client/integration/SodiumIntegration` adds a "Bedrock Add-ons" page to Sodium's video settings, which replace Java's screen. Sodium reads that class from a `sodium:config_api_user` key under `entrypoints` (not under `custom`) in `fabric.mod.json`. Both entrypoints are written by the `settings_entrypoints` token in `gradle/mod.gradle.kts` for 26 and later only, and both classes are wrapped in a `//? if >=26` block. Sodium and Mod Menu are `compileOnly`, so the jar does not need either. `SettingsClientGameTest` presses the Mod Menu screen's buttons and asks Sodium's `ConfigManager.CONFIG` for both options; it fails when either `fabric.mod.json` key is missing.
@@ -2437,7 +2466,7 @@ there is no `exportstats` to answer.
 ## Releasing
 
 A pushed `v*` tag runs `.github/workflows/release.yml`, which builds the jars, makes the GitHub release and then runs `tools/release/modrinth.py` to publish each jar to Modrinth.
-The repository secret `MODRINTH_TOKEN` must hold a Modrinth token with the create-version and write-version scopes. `--dry-run` prints the requests without a token.
+The repository secret `MODRINTH_TOKEN` must hold a Modrinth token with the read-project, read-version, create-version and write-version scopes. The read scopes are needed while the project is a draft. `--dry-run` prints the requests without a token.
 
 ## Conventions
 
