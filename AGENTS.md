@@ -930,6 +930,10 @@ These are the checks it runs, and what each one catches:
   small window `FormClientGameTest` gives the client: the wheel has to bring the signing button into
   view where a click with the pointer reaches it, and the tally the pack redraws on a press has to
   leave the form scrolled where it was.
+  `/bedrock scriptevent tp:hints modal|message|custom` opens a form of each generation whose
+  controls carry a `tooltip` or a `description` (and a description on each dropdown item). The form
+  sends them as the element's `tooltip` and a dropdown's `descriptions`, and `AddonFormScreen` sets
+  them as the widget's Java tooltip; `FormClientGameTest` reads the tooltip off the widget.
 
   `animation.tp.wisp.lift` raises the wisp's one bone by four pixels for two seconds, which is what
   `/bedrock playanimation` on an add-on entity is measured by.

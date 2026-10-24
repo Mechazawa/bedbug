@@ -16,6 +16,7 @@ import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.StringWidget;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
@@ -197,6 +198,7 @@ public final class AddonFormScreen extends Screen {
                             int chosen = (widget.get(VALUE).getAsInt() + 1) % options.size();
                             widget.addProperty(VALUE, chosen);
                             button.setMessage(Component.literal(text + ": " + options.get(chosen)));
+                            button.setTooltip(tooltipOf(widget));
                             changed(widget);
                         }).bounds(left, 0, WIDGET_WIDTH, 20).build();
                 }
@@ -234,6 +236,7 @@ public final class AddonFormScreen extends Screen {
             }
 
             drawn.active = !Json.bool(widget, "disabled", false);
+            drawn.setTooltip(tooltipOf(widget));
             addRenderableWidget(column.add(drawn, row));
             widgets.put((int) Json.number(widget, "id", -1), drawn);
             row += ROW_HEIGHT;
@@ -426,6 +429,23 @@ public final class AddonFormScreen extends Screen {
 
         Channels.sendFormResponse(formId, response.toString());
         if (!cancelled) Platform.setScreen(null);
+    }
+
+    /**
+     * The hover text of an element: what its tooltip and description say, and for a dropdown the
+     * description of the item it shows. Null where there is none, which leaves the widget bare.
+     */
+    private static Tooltip tooltipOf(JsonObject element) {
+        List<String> lines = new ArrayList<>();
+        lines.add(Json.text(element, "tooltip", ""));
+        List<JsonElement> descriptions = Json.list(element, "descriptions");
+        if (element.has(VALUE) && element.get(VALUE).isJsonPrimitive() && !descriptions.isEmpty()) {
+            int chosen = Mth.clamp(element.get(VALUE).getAsInt(), 0, descriptions.size() - 1);
+            lines.add(descriptions.get(chosen).getAsString());
+        }
+
+        String hover = String.join("\n", lines.stream().filter(line -> !line.isEmpty()).toList());
+        return hover.isEmpty() ? null : Tooltip.create(Component.literal(hover));
     }
 
     private static String toggleLabel(JsonObject toggle) {

@@ -7,8 +7,12 @@ import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.gui.components.WidgetTooltipHolder;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 
+import java.lang.reflect.Field;
 import java.util.List;
 
 /**
@@ -19,6 +23,9 @@ import java.util.List;
  * The test add-on's ledger is a form taller than a small window. Its last buttons start out of
  * sight; the wheel has to scroll them into view where a click with the pointer lands on them, and a
  * redraw the pack sends while the form shows has to leave it scrolled where it was.
+ *
+ * The test add-on's hint forms carry tooltips and descriptions on their controls, which have to
+ * reach the Java widgets as their tooltips.
  */
 public final class FormClientGameTest implements FabricClientGameTest {
     private static final String FIRST_PAGE = "The first page tells of embers.";
@@ -65,6 +72,59 @@ public final class FormClientGameTest implements FabricClientGameTest {
             waitForTag(context, world, "tp:handbook_ClientClosed");
 
             readTheLedger(context, world);
+            readTheHints(context, world);
+        }
+    }
+
+    private static void readTheHints(ClientGameTestContext context, TestSingleplayerContext world) {
+        openHints(context, world, "modal");
+        expect(hover(context, "Lamp: off").equals("Lights the lamp"), "the toggle's tooltip", shown(context));
+        expect(hover(context, "Colour: Red").equals("Picks a colour"), "the dropdown's tooltip as a RawMessage",
+            shown(context));
+        expect(hover(context, "Volume: 0").equals("How loud"), "the slider's tooltip", shown(context));
+        expect(hover(context, "Name").equals("What to call it"), "the text field's tooltip", shown(context));
+        expect(hover(context, "Done").isEmpty(), "no tooltip on a widget with none", shown(context));
+        context.clickScreenButton("Done");
+        context.waitForScreen(null);
+
+        openHints(context, world, "message");
+        expect(hover(context, "Yes").equals("Agrees"), "the first button's tooltip", shown(context));
+        expect(hover(context, "No").equals("Declines"), "the second button's tooltip", shown(context));
+        context.clickScreenButton("No");
+        context.waitForScreen(null);
+
+        openHints(context, world, "custom");
+        expect(hover(context, "Echo: off").equals("Repeats sounds"), "the toggle's description", shown(context));
+        expect(hover(context, "Shape: Round").equals("Pick a shape\nHas no corners"),
+            "the dropdown's description and its item's", shown(context));
+        expect(hover(context, "Apply").equals("Keeps the shape"), "the button's tooltip", shown(context));
+        context.clickScreenButton("Shape: Round");
+        context.waitFor(client -> hoverOn(Platform.currentScreen(), "Shape: Square").endsWith("Has four corners"));
+        context.clickScreenButton("Close");
+        context.waitForScreen(null);
+    }
+
+    private static void openHints(ClientGameTestContext context, TestSingleplayerContext world, String kind) {
+        world.getServer().runCommand("bedrock execute as @a run scriptevent tp:hints " + kind);
+        context.waitForScreen(AddonFormScreen.class);
+    }
+
+    private static String hover(ClientGameTestContext context, String label) {
+        return context.computeOnClient(client -> hoverOn(Platform.currentScreen(), label));
+    }
+
+    /** The text of the tooltip a widget holds, read off the widget rather than off what is drawn. */
+    private static String hoverOn(Screen screen, String label) {
+        try {
+            Field holder = AbstractWidget.class.getDeclaredField("tooltip");
+            holder.setAccessible(true);
+            Tooltip tooltip = ((WidgetTooltipHolder) holder.get(widget(screen, label))).get();
+            if (tooltip == null) return "";
+            Field message = Tooltip.class.getDeclaredField("message");
+            message.setAccessible(true);
+            return ((Component) message.get(tooltip)).getString();
+        } catch (ReflectiveOperationException failure) {
+            throw new AssertionError(failure);
         }
     }
 
