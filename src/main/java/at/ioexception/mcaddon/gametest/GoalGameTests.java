@@ -279,6 +279,36 @@ public final class GoalGameTests {
     }
 
     /**
+     * A random teleport lands within a block of the first block below that stops movement, and never
+     * inside a block.
+     *
+     * The flitting group tries every tick in a box eight blocks high, so a jump that kept its height
+     * would leave the brute in the air or inside the floor.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aRandomTeleportLandsOnTheGround(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_flit", MIDDLE);
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        Vec3 start = brute.position();
+        helper.onEachTick(() -> {
+            helper.assertTrue(level.noCollision(brute), BRUTE + " teleported into a block.");
+            helper.assertFalse(level.noCollision(brute, brute.getBoundingBox().move(0, -1, 0)),
+                BRUTE + " teleported into the air at " + brute.position() + ".");
+        });
+        helper.runAfterDelay(FLIT_TICKS, () -> {
+            helper.assertTrue(brute.position().distanceTo(start) > 0, BRUTE + " never teleported.");
+            helper.succeed();
+        });
+    }
+
+    private static final int FLIT_TICKS = 40;
+
+    /**
      * An entity with `teleports_on_projectile_hit` blinks away from a projectile, which then does it
      * no harm.
      */

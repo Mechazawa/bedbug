@@ -161,6 +161,19 @@
           "teleports_on_projectile_hit": true
         }
       },
+      "tp:brute_flitting": {
+        "minecraft:teleport": {
+          "min_random_teleport_time": 0,
+          "max_random_teleport_time": 0,
+          "random_teleport_cube": [
+            2,
+            8,
+            2
+          ],
+          "light_teleport_chance": 1,
+          "dark_teleport_chance": 1
+        }
+      },
       "tp:brute_breeding": {
         "minecraft:breedable": {
           "breed_items": [
@@ -1369,6 +1382,13 @@
         "add": {
           "component_groups": [
             "tp:brute_blinking"
+          ]
+        }
+      },
+      "tp:brute_flit": {
+        "add": {
+          "component_groups": [
+            "tp:brute_flitting"
           ]
         }
       },

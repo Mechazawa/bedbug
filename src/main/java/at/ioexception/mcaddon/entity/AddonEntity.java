@@ -1517,8 +1517,7 @@ public class AddonEntity extends PathfinderMob
             if (random.nextDouble() < Goals.number(body, "target_teleport_chance", 1)) {
                 net.minecraft.world.phys.Vec3 towards =
                     target.position().subtract(position()).normalize().scale(reach);
-                Platform.placeAt(this, getX() + towards.x, getY() + towards.y, getZ() + towards.z,
-                    getYRot(), getXRot());
+                randomTeleport(getX() + towards.x, getY() + towards.y, getZ() + towards.z, true);
             }
             return;
         }
@@ -1530,8 +1529,14 @@ public class AddonEntity extends PathfinderMob
         if (random.nextDouble() <= chance) blink(body);
     }
 
-    /** One jump to somewhere in `random_teleport_cube`, which is in blocks and centred on the entity. */
-    private void blink(com.google.gson.JsonObject teleport) {
+    /**
+     * One jump to somewhere in `random_teleport_cube`, which is in blocks and centred on the entity.
+     *
+     * Like Bedrock's teleport, the jump drops to the first block below that stops movement and is
+     * given up where the entity would stand inside a block or in a liquid, which `randomTeleport`
+     * does for Java's enderman.
+     */
+    private boolean blink(com.google.gson.JsonObject teleport) {
         net.minecraft.world.phys.Vec3 cube =
             at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.blocks(
                 teleport.get("random_teleport_cube"),
@@ -1539,7 +1544,7 @@ public class AddonEntity extends PathfinderMob
         double x = getX() + (random.nextDouble() - 0.5) * cube.x;
         double y = getY() + (random.nextDouble() - 0.5) * cube.y;
         double z = getZ() + (random.nextDouble() - 0.5) * cube.z;
-        Platform.placeAt(this, x, y, z, getYRot(), getXRot());
+        return randomTeleport(x, y, z, true);
     }
 
     /**
@@ -1557,9 +1562,11 @@ public class AddonEntity extends PathfinderMob
             return false;
         }
 
-        blink(teleport);
-        return true;
+        return java.util.stream.IntStream.range(0, DODGE_TRIES).anyMatch(ignored -> blink(teleport));
     }
+
+    /** As many places as Java's enderman tries before a projectile it could not get away from lands. */
+    private static final int DODGE_TRIES = 64;
 
     private int teleportReadyAt;
 
