@@ -950,6 +950,11 @@ These are the checks it runs, and what each one catches:
   it then, which is what a pack dressing its own model of a villager does with that event.
   `ScriptGameTests.aVillagerTakingAJobTellsTheScriptWhatItBecame` makes a villager a snowy farmer and
   reads back `become_farmer`, a variant of 1 and a mark variant of 4.
+  A young vanilla mob that grows up raises the event its `minecraft:ageable` names in Mojang's
+  entity file, from `AgeableMobMixin`: `minecraft:ageable_grow_up` for all but the rabbit
+  (`grow_up`) and the dolphin (`ageable_grow_up`). A pack that draws its own model over a villager
+  makes that model young from `minecraft:is_baby` at spawn and grown only on this event.
+  `ScriptGameTests.aYoungVanillaMobGrowingUpTellsTheScript` ages a villager and a rabbit through it.
 
   **A villager's job is also one of its families.** Bedrock's `villager_v2` states a family per
   profession in the component group that profession switches on: a jobless villager is `unskilled`

@@ -9,6 +9,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.AgeableMob;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.TamableAnimal;
@@ -343,6 +344,43 @@ public final class ScriptGameTests {
         return villager.getVillagerData().setProfession(profession);
     }
     *///?}
+
+    /**
+     * A young villager and a young rabbit two ticks from grown each raise the event Bedrock's own
+     * entity file names for growing up, and the script reads each grown when it arrives.
+     */
+    @GameTest()
+    public void aYoungVanillaMobGrowingUpTellsTheScript(GameTestHelper helper) {
+        if (ServerHooks.scripts() == null) {
+            helper.succeed();
+            return;
+        }
+
+        AgeableMob villager = youngster(helper, "villager", STAND);
+        AgeableMob rabbit = youngster(helper, "rabbit", STAND.east(2));
+        helper.runAfterDelay(1, () -> {
+            helper.assertTrue(Platform.tagsOf(villager).stream().noneMatch(tag -> tag.startsWith("tp:heard_")),
+                "A young villager told the script it grew up before it had: " + Platform.tagsOf(villager));
+        });
+        helper.runAfterDelay(4 + DELIVERED, () -> {
+            expectTag(helper, villager, "tp:heard_ageable_grow_up");
+            expectTag(helper, villager, "tp:grown_when_heard");
+            expectTag(helper, rabbit, "tp:heard_grow_up");
+            helper.succeed();
+        });
+    }
+
+    private static AgeableMob youngster(GameTestHelper helper, String name, BlockPos where) {
+        EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("minecraft", name)).orElseThrow();
+        AgeableMob mob = (AgeableMob) Platform.createMob(type,
+            helper.getLevel());
+        BlockPos at = helper.absolutePos(where);
+        Platform.placeAt(mob, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        mob.setNoAi(true);
+        mob.setAge(-3);
+        helper.getLevel().addFreshEntity(mob);
+        return mob;
+    }
 
     private static VillagerData snowyFarmer(Villager villager, ServerLevel level) {
         //? if >=1.21.5 {
