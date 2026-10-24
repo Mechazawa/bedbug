@@ -24,6 +24,18 @@ carry no content from any other pack. The archive is the same for every Minecraf
 To build them, run `python3 tools/showcase/build.py` and `python3 tools/testpack/build.py`. The
 archives land in `build/showcase/` and `build/testpack/`.
 
+## Add-ons per world
+
+Each world keeps its own list of add-ons in `data/mcaddon-addons.json`:
+
+- A new world plays every installed add-on.
+- An add-on installed after the world was made is off in that world.
+- A world made before this list existed turns on every installed add-on the first time it opens.
+- A dedicated server uses the list of the world `level-name` names. It sends an add-on that is off
+  to joining players as inactive.
+
+The Add-Ons screen in the pause menu shows which add-ons the world plays. It does not change them.
+
 ## The Add-Ons screen
 
 Bedrock lists behaviour packs and resource packs apart, each with its own manifest description. The

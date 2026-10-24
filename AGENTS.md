@@ -2317,7 +2317,7 @@ recipes and `context_int_provider` entries the item's components name), so they 
 set by the pack being offered and change on the reload an activation runs. An add-on registered and not
 active is dormant: its entries stay registered with their last definitions and nothing offers it.
 Spawn rules, feature rules and the nether and end biome lists are registered once for the installed
-set, because they apply as a world loads and a world loads only with the installed set active.
+set and asked as each world loads whether their add-on is active, as the next paragraphs say.
 Before 26 the model bakery asks for a model for every registered item and block, so
 `ModelBakeryMixin` and `BlockStateModelLoaderMixin` leave out what `ActiveAddons.isDormant` names;
 the miss would otherwise be logged as `Unable to load model` on every reload after a visit.
@@ -2341,6 +2341,38 @@ it is left off when the entry is missing: from 26 every component is built again
 load, and a lookup that throws ends the load. `Platform.jukeboxPlayable` is the one such component
 today. `InactiveAddonClientGameTest` opens a world with the test pack inactive and finds none of
 its biomes, no script and no ore, then the same world settings with it active and finds all three.
+
+**A world plays the add-ons its list turns on.** `state.WorldAddonList` is
+`<world>/data/mcaddon-addons.json`; an installed add-on it does not name is off.
+`ServerPacksSourceMixin` runs at the head of `ServerPacksSource.createPackRepository(LevelStorageAccess)`,
+which a dedicated server (the world `level-name` names), a single player world and a world being
+created all call before their data packs load. It takes `WorldAddonList.open`: the world's own list,
+else `client.WorldAddons.takePending()` (the list Create World chose), else every add-on of a
+fallback on, which is the installed set for a world that has `level.dat` and the active set for one
+being created. The list is written back and `ActiveAddons.open` activates `list.resolve(installed)`
+when it differs from the active set, and keeps the list as `ActiveAddons.world()`.
+
+A client has to reload its resources before a saved world loads, so `WorldOpenFlowsMixin` cancels
+`WorldOpenFlows.openWorld` while the world's set is not the active one, or while `AddonSession`'s
+`settled` chain is still busy, and `AddonSession.holdOpen` activates the set on that chain, reloads
+and calls `openWorld` again. A join's activation and a world's never overlap that way, and the
+hook then finds the set active and changes nothing. `holdOpen` sets `visiting`, so the play
+connection's disconnect, which Fabric raises for a single player world too, puts the installed set
+back through the same `leave`. `ServedArchives` hands an installed add-on the active set leaves out
+as not active, which is the dormant path, so a LAN host serves its world's set and a dedicated
+server its world's; a development archive from `mcaddon.served` is active unless the world's list
+names one of its pack uuids off. The pause menu's Add-Ons screen reads On or Off off the active set,
+so in a world it shows the world's choice. Blocks and entities of an add-on that is off stay
+dormant in the world.
+
+`WorldAddonsClientGameTest` creates a world, reads back a list with every installed add-on on,
+writes `tp` off, opens it again and finds `tp` inactive, `tp:dust` dormant, `mcaddon/tp` selected
+by neither the server's data packs nor the client's resource packs, the script's first spawn count
+standing still and the Add-Ons row reading Off, then writes it on again and finds all of it back.
+`AddonSyncClientGameTest` sets the pending list with `sw` off before a dedicated server starts and
+finds `sw` served as not active, registered on the client and not active there. Fabric's dedicated
+test server writes `level.dat` itself and never calls the hook on the client, so the pending list is
+taken by the server.
 
 **A same-id copy is checked before anything is registered.** `AddonRegistry.conflict` compares the
 shape every registered object was built from (an entity type's population and size, a block's whole

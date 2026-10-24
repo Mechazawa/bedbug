@@ -46,8 +46,9 @@ administration.
 ## In game
 
 - **Add-Ons**, on the pause menu or on Bedbug's Mod Menu screen, lists the loaded add-ons with
-  name, version, authors, description, packs and whether each is active. An add-on is inactive while
-  you visit a server that does not have it.
+  name, version, authors, description, packs and whether each is active. Each world keeps its own
+  list of add-ons (see [Add-ons per world](docs/packs.md#add-ons-per-world)), and an add-on is
+  inactive while you visit a server that does not have it.
   - **Settings** opens the add-on's own settings. See [Pack settings](docs/packs.md#pack-settings).
   - **What does not work** shows what `/mcaddon packs`, `/mcaddon entities` and `/mcaddon scripts`
     report for it.

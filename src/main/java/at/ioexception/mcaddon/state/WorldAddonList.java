@@ -58,6 +58,22 @@ public record WorldAddonList(List<Entry> addons) {
         }
     }
 
+    /**
+     * The list a world opens with, written back into it: its own, else the one chosen for it while
+     * it was being created, else every add-on of `fallback` on.
+     */
+    public static WorldAddonList open(Path world, AddonSet fallback) {
+        WorldAddonList list = read(world).orElseGet(() -> pending().orElseGet(() -> allOn(fallback)));
+        list.write(world);
+        return list;
+    }
+
+    private static Optional<WorldAddonList> pending() {
+        boolean client = net.fabricmc.loader.api.FabricLoader.getInstance().getEnvironmentType()
+            == net.fabricmc.api.EnvType.CLIENT;
+        return client ? at.ioexception.mcaddon.client.WorldAddons.takePending() : Optional.empty();
+    }
+
     /** Every installed add-on on, for a world that has no list yet. */
     public static WorldAddonList allOn(AddonSet installed) {
         return new WorldAddonList(installed.converted().stream()
@@ -97,6 +113,11 @@ public record WorldAddonList(List<Entry> addons) {
             changed.set(index, new Entry(uuid, changed.get(index).name(), on));
         }
         return new WorldAddonList(changed);
+    }
+
+    /** Whether this list names the add-on carrying a pack of this uuid and has it off. */
+    public boolean turnsOff(UUID uuid) {
+        return addons.stream().anyMatch(entry -> entry.uuid().equals(uuid) && !entry.on());
     }
 
     /** The installed set cut down to the add-ons this list names as on. */
