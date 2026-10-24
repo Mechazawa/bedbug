@@ -285,6 +285,14 @@ function readThePackSettings(player) {
         .forEach(name => player.addTag(`tp:setting_read_${name.slice(3)}_${settings[name]}`));
 }
 
+// A player's own store, counted up on each first spawn into the world, the way a pack keeps a
+// player's choices: read and written while the player is joining.
+world.afterEvents.playerSpawn.subscribe(({ player, initialSpawn }) => {
+    if (!initialSpawn) return;
+    const visits = player.getDynamicProperty("tp:visits");
+    player.setDynamicProperty("tp:visits", (typeof visits === "number" ? visits : 0) + 1);
+});
+
 // A setting the world's owner changes reaches a running script at once.
 world.afterEvents.packSettingChange.subscribe(({ settingName, settingValue }) => {
     world.getPlayers().forEach(player => player.addTag(`tp:setting_heard_${settingName.slice(3)}_${settingValue}`));
