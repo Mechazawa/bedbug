@@ -3,6 +3,7 @@ package at.ioexception.mcaddon.bedrock.behaviour;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import net.minecraft.world.entity.Entity;
 
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -14,7 +15,8 @@ import java.util.Set;
  * the ones Mojang's behaviour pack declares for them, keyed by the Bedrock identifier, because
  * nothing on the Java side names a family: a pack's zombie hunting `villager` finds Java's
  * villager only through this table. Where Mojang states the family inside component groups alone,
- * the families every one of those groups shares are the ones listed.
+ * the families every one of those groups shares are the ones listed, and a villager adds the ones
+ * its profession's group states.
  */
 public final class Families {
     private static final Map<String, Set<String>> VANILLA = Map.ofEntries(
@@ -155,6 +157,13 @@ public final class Families {
         ServerEntityDefinition own = AddonEntities.definitionOf(entity.getType());
         if (own != null) return own.families();
 
-        return VANILLA.getOrDefault(AddonEntities.identifierOf(entity.getType()), Set.of());
+        String identifier = AddonEntities.identifierOf(entity.getType());
+        Set<String> families = VANILLA.getOrDefault(identifier, Set.of());
+        BedrockVillager villager = BedrockVillager.tryFrom(entity);
+        if (villager == null) return families;
+
+        Set<String> all = new HashSet<>(families);
+        all.addAll(villager.families(identifier.startsWith("minecraft:zombie")));
+        return all;
     }
 }

@@ -218,9 +218,14 @@ public final class ServerHooks {
         return scripts.raiseCancellable("entityHurt", fields);
     }
 
+    /**
+     * Fabric raises the join inside `placeNewPlayer`, before the player list and the level hold the
+     * player, so the script is handed the player through `remember` until they do.
+     */
     private static void playerJoined(ServerPlayer player) {
         if (scripts == null) return;
 
+        at.ioexception.mcaddon.script.ScriptBridge.remember(player);
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("player", ScriptHost.EntityHandle.of(player));
         fields.put("playerId", player.getStringUUID());

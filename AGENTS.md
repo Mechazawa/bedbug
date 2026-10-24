@@ -951,6 +951,27 @@ These are the checks it runs, and what each one catches:
   `ScriptGameTests.aVillagerTakingAJobTellsTheScriptWhatItBecame` makes a villager a snowy farmer and
   reads back `become_farmer`, a variant of 1 and a mark variant of 4.
 
+  **A villager's job is also one of its families.** Bedrock's `villager_v2` states a family per
+  profession in the component group that profession switches on: a jobless villager is `unskilled`
+  and `peasant`, a nitwit `nitwit` and `peasant`, a mason `stone_mason` and `artisan`. A pack such
+  as Villager News picks between greeting a trader and refusing a trade by those families, so
+  without them every jobless villager answers a click as if it had wares. `BedrockVillager.families`
+  holds them and `Families.of` adds them to a villager and a zombie villager (which states the
+  profession's family alone). `/bedrock scriptevent tp:families` tags every villager within four
+  blocks with each family the script reads, and `ScriptGameTests.aVillagersFamiliesNameItsJob`
+  reads them back off a jobless villager, a nitwit, a farmer and a jobless zombie villager.
+
+  **A pack's `sounds.json` entry for a mob of the game's own decides what it sounds like.** Villager
+  News keys `villager`, `villager_v2` and `wandering_trader` with every moment at a volume of
+  nothing, which silences them in Bedrock. `AddonSounds.readVoices` reads every active pack's
+  entries, and `EntityVoiceMixin` asks `AddonSounds.voiceOf` at the head of
+  `Entity.playSound(SoundEvent, float, float)`, which every mob voice goes through on both sides. A
+  Java sound is matched to Bedrock's moment by the last part of its id (`entity.villager.trade` is
+  `haggle`, `no` and `yes` are `haggle.no` and `haggle.yes`). A moment with an empty sound or a
+  volume of nothing is silent, one naming a sound Java has plays that instead, and one the entry
+  leaves out keeps Java's own. The test pack's `villager_v2` entry silences the idle and hurt sounds
+  and plays `tp:villager.refuse` for `haggle.no`, which `VanillaVoiceClientGameTest` hears.
+
   Every command line in the pack that runs while the game is going is written so Java's parser
   refuses it as it stands. On `/bedrock scriptevent tp:commands` the script runs, as whatever sent it, a
   selector asking with `hasitem` about the main hand and about everything carried, a selector naming
@@ -1152,7 +1173,11 @@ These are the checks it runs, and what each one catches:
   a note block plays off it and stores a value in the block's own store. Two more shake the
   player's camera and stop it, which only a client can show, so `CameraShakeClientGameTest` reads
   the shake back off the client. The script also refuses to let anything tagged `tp:untameable` be
-  tamed, tags whatever a player tamed, and tags a player crouching and standing up again.
+  tamed, tags whatever a player tamed, and tags a player crouching and standing up again. It counts
+  each first spawn in the player's `tp:visits` dynamic property, which `WorldClientGameTest` reads
+  back as two after leaving the world and opening it again. Fabric raises the join before the level
+  or the player list holds the player, so `ServerHooks.playerJoined` hands the player to
+  `ScriptBridge.remember` first, or every read and write a pack makes in `playerSpawn` is lost.
   `tp:override` overrides the nearest wisp's `tp:settled` to false for the player who sent it, which
   a wisp settled a second after arriving is not, and tags that player when an override of a property
   the wisp never declared is refused; `tp:override_clear` clears the override again. `tp:config` tags the player with two variables and a
