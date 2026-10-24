@@ -17,6 +17,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Predicate;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 /**
  * A render controller draws what its Molang picks, and draws something else once the entity changes.
@@ -438,13 +439,34 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
     /**
      * `tp:placard` names `textures/entity/sign_spruce`, which the pack does not ship, so the pass
      * binds the game's own spruce sign texture rather than the white placeholder.
+     *
+     * From 26.2 Java ships only the 32 by 32 sign block texture, so the texture bound has to carry
+     * that texture's board front and post in Bedrock's 64 by 32 layout: the front at 2, 2 and the
+     * post's south side at 2, 16, where the block texture has them at 0, 2 and 28, 0.
      */
     private static void vanillaSignTexture(ClientGameTestContext context, TestSingleplayerContext world) {
         world.getServer().runCommand("summon tp:placard ~3 ~ ~-3");
         AddonEntity placard = Entities.waitForClient(context, "tp:placard");
-        String bound = context.computeOnClient(client -> ScriptClock.of(placard).passes().get(0).texture().toString());
-        Assert.that(bound.contains("spruce") && bound.contains("sign"), "tp:placard names a vanilla sign texture"
-            + " and was drawn with " + bound + ".");
+        Identifier bound = context.computeOnClient(client -> ScriptClock.of(placard).passes().get(0).texture());
+        Assert.that(bound.getPath().contains("spruce") && bound.getPath().contains("sign"),
+            "tp:placard names a vanilla sign texture and was drawn with " + bound + ".");
+        //? if >=26.2 {
+        Identifier block = Platform.id("minecraft", "textures/block/spruce_sign.png");
+        Stream<SignTexel> front = IntStream.range(0, 24 * 12)
+            .mapToObj(index -> new SignTexel(2 + index % 24, 2 + index / 24, index % 24, 2 + index / 24));
+        Stream<SignTexel> post = IntStream.range(0, 2 * 14)
+            .mapToObj(index -> new SignTexel(2 + index % 2, 16 + index / 2, 28 + index % 2, index / 2));
+        List<String> moved = context.computeOnClient(client -> Stream.concat(front, post)
+            .filter(texel -> PackTextures.colourAt(bound, texel.x(), texel.y())
+                != PackTextures.colourAt(block, texel.blockX(), texel.blockY()))
+            .map(texel -> texel.x() + "," + texel.y())
+            .toList());
+        Assert.that(moved.isEmpty(), "tp:placard's sign texture " + bound + " differs from " + block
+            + " at the Bedrock texels " + moved + ".");
+        //?}
+    }
+
+    private record SignTexel(int x, int y, int blockX, int blockY) {
     }
 
     /** A texel as a reader compares it: its colour, or `clear` where nothing of it is drawn. */
