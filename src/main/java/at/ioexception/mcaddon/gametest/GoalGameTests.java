@@ -2042,6 +2042,8 @@ public final class GoalGameTests {
      * `minecraft:behavior.drink_potion` drinks the first of its `potions` whose filters hold, named
      * by Bedrock's number: the thirsty group drinks potion nineteen, water breathing, under water and
      * potion twelve, fire resistance, while burning, so a burning brute on land gains fire resistance.
+     * `minecraft:behavior.drink_milk` clears a harmful effect only while its `filters` hold: the milky
+     * group's filter asks for fire, so a weakened brute keeps the effect until it burns.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
     public void anEntityDrinksThePotionItsConditionsName(GameTestHelper helper) {
@@ -2051,28 +2053,7 @@ public final class GoalGameTests {
             return;
         }
 
-        brute.setRemainingFireTicks(BURNING);
-        helper.succeedWhen(() -> {
-            List<String> effects = brute.getActiveEffects().stream().map(Platform::effectId).toList();
-            helper.assertTrue(effects.contains("minecraft:fire_resistance"),
-                BRUTE + " drinks fire resistance while burning and holds " + effects + ".");
-            helper.assertFalse(effects.contains("minecraft:water_breathing"),
-                BRUTE + " drinks water breathing under water alone and drank it on land.");
-        });
-    }
-
-    /**
-     * `minecraft:behavior.drink_milk` clears a harmful effect only while its `filters` hold: the milky
-     * group's filter asks for fire, so a weakened brute keeps the effect until it burns.
-     */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
-    public void anEntityDrinksMilkOnlyWhereItsFiltersHold(GameTestHelper helper) {
-        AddonEntity brute = withGroup(helper, "tp:brute_make_milky");
-        if (brute == null) {
-            helper.succeed();
-            return;
-        }
-
+        EntityEvents.trigger(brute, "tp:brute_make_milky", null, ServerHooks.state());
         brute.addEffect(new net.minecraft.world.effect.MobEffectInstance(
             net.minecraft.world.effect.MobEffects.WEAKNESS, WEAK_TICKS));
         helper.startSequence()
@@ -2080,9 +2061,15 @@ public final class GoalGameTests {
                 brute.hasEffect(net.minecraft.world.effect.MobEffects.WEAKNESS),
                 BRUTE + " drank milk while not burning."))
             .thenExecute(() -> brute.setRemainingFireTicks(BURNING))
-            .thenWaitUntil(() -> helper.assertFalse(
-                brute.hasEffect(net.minecraft.world.effect.MobEffects.WEAKNESS),
-                BRUTE + " kept its weakness while burning."))
+            .thenWaitUntil(() -> {
+                List<String> effects = brute.getActiveEffects().stream().map(Platform::effectId).toList();
+                helper.assertTrue(effects.contains("minecraft:fire_resistance"),
+                    BRUTE + " drinks fire resistance while burning and holds " + effects + ".");
+                helper.assertFalse(effects.contains("minecraft:water_breathing"),
+                    BRUTE + " drinks water breathing under water alone and drank it on land.");
+                helper.assertFalse(effects.contains("minecraft:weakness"),
+                    BRUTE + " kept its weakness while burning.");
+            })
             .thenSucceed();
     }
 
