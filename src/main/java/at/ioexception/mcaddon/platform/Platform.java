@@ -2249,6 +2249,12 @@ public final class Platform {
     }
 
     //? if >=26 {
+    /** Runs a layer against the graphics a widget is handed to draw with. */
+    public static void paint(net.minecraft.client.gui.GuiGraphicsExtractor graphics,
+        java.util.function.Consumer<Painter> layer) {
+        layer.accept(painter(graphics));
+    }
+
     private static Painter painter(net.minecraft.client.gui.GuiGraphicsExtractor graphics) {
         return new Painter() {
             @Override

@@ -965,6 +965,11 @@ These are the checks it runs, and what each one catches:
   A cooldown holds the whole entity, as Bedrock's does. `VanillaLoot` answers a table path no pack ships
   with Java's own table for that mob (`entities/<mob>`, or `shearing/<mob>` for a `_shear` name).
   A Vector3 dynamic property is stored as a `PropertyVector` and handed to a script as a triple.
+  A young vanilla mob that grows up raises the event its `minecraft:ageable` names in Mojang's
+  entity file, from `AgeableMobMixin`: `minecraft:ageable_grow_up` for all but the rabbit
+  (`grow_up`) and the dolphin (`ageable_grow_up`). A pack that draws its own model over a villager
+  makes that model young from `minecraft:is_baby` at spawn and grown only on this event.
+  `ScriptGameTests.aYoungVanillaMobGrowingUpTellsTheScript` ages a villager and a rabbit through it.
 
   **A villager's job is also one of its families.** Bedrock's `villager_v2` states a family per
   profession in the component group that profession switches on: a jobless villager is `unskilled`
@@ -2248,6 +2253,15 @@ Mojang's geometry is not committed, so that list is the one place this knowledge
   1632 items and 1166 blocks resolved as written, and with the mapping 1869 items and 1408 blocks
   resolve, the 110 and 303 left being Bedrock's own and none unanswered.
 
+**A trade table path naming one of Mojang's own tables, which no pack ships, borrows Java's offers.**
+`TradeTable.read` maps `trading/economy_trades/wandering_trader_trades.json` to the wandering trader
+and `AddonEntity.getOffers` copies the offers a Java mob of that type makes for itself, so no Mojang
+data is committed. Other vanilla tables (villager professions) are still read as empty. A trader's
+offers with their uses, trade experience, spent `single_use` keys and inventory are filed in
+`AddonState.trading` under its uuid by `AddonEntity.saveTrading` and read back by `restoreTrading`
+from `restoreGroups`. `minecraft:spawn_entity` `should_leash` leashes the spawned mob to the producer.
+`tp:hawker` in the test pack names the vanilla path; `BehaviourGameTests` covers all three.
+
 ## JSON UI
 
 `bedrock/ui/` reads a resource pack's `ui/` files and lays out what packs do with them to a server's
@@ -2321,6 +2335,18 @@ set, because they apply as a world loads and a world loads only with the install
 Before 26 the model bakery asks for a model for every registered item and block, so
 `ModelBakeryMixin` and `BlockStateModelLoaderMixin` leave out what `ActiveAddons.isDormant` names;
 the miss would otherwise be logged as `Unable to load model` on every reload after a visit.
+
+**What a world runs follows the active set.** `ActiveAddons.isActive(namespace)` gates the spawn
+rule and feature rule selectors, which Fabric asks again as each server is constructed
+(`MinecraftServerMixin` calls `BiomeModificationImpl.finalizeWorldGen`). The feature rule gate is
+required, because `addFeature` throws on a placed feature the world's registries lack. The server's
+scripts (`ServerHooks.start`), the pack structures and the script gametest structure search read
+`ActiveAddons.active()`. `/mcaddon packs` and the resource pack listing of `ServerAdmin` stay on the
+installed set, since they describe what a server holds and can hand out. `ActiveAddons.isActive(set)`
+compares converted roots, so a resolved subset equals the active set whichever object carries it.
+A server started with a set that drops an add-on carrying a nether or end biome still fails with
+`Unbound values in registry ... worldgen/biome`, so `ActiveAddonsGameTests` checks the structure
+gate and the namespace check directly rather than by starting such a server.
 
 **A same-id copy is checked before anything is registered.** `AddonRegistry.conflict` compares the
 shape every registered object was built from (an entity type's population and size, a block's whole
@@ -2399,10 +2425,21 @@ manifest again: `addons-reshaped` holds a later release of `sv` whose crate has 
 
 `client/screen/AddonsScreen` lists the installed and the active add-ons (`AddonEntry`, one per
 `ConvertedPack`, active when the active set holds its converted directory). `new
-AddonsScreen(parent)` is the one way in, which `AddonOptionsScreen`, Mod Menu's config screen,
+AddonsScreen(parent)` (or `(parent, Mode)`; only `IN_WORLD` is wired, and it only shows what is on) is the one way in, which `AddonOptionsScreen`, Mod Menu's config screen,
 opens from a button of its own; `addToPauseMenu` puts the button on the pause menu through Fabric's `ScreenEvents`, in the
 row of the lowest button, which it moves down a row. The three screens extend `ColumnScreen`, a
-heading, a `ScrollingColumn` and a Done button that goes back to the parent. `AddonReportScreen`
+heading, a `ScrollingColumn` and a Done button that goes back to the parent.
+
+Each add-on is one `AddonRow` widget: the pack's `pack.png` (a `DynamicTexture` per converted root,
+loaded when first needed and released in `removed()`, with the game's `unknown_pack.png` as the
+fallback), name and version over one truncated description line, an On/Off label, and two
+`IconButton`s laid over the row's right edge (gear for `PackSettingsScreen`, disabled with a tooltip
+when no pack has settings; info for `AddonReportScreen`). A click on the row body opens it to the full
+descriptions, authors, both packs and each pack's modules with their version and description;
+the screen keeps which roots are open and rebuilds, so the column learns the new height. The row
+draws through `Platform.paint`, and the gear and info pictures are this mod's own
+`textures/gui/*.png`, since Java ships no gear. The version-specific widget API is written for 26
+and later only. `AddonReportScreen`
 prints `PackSet.report(pack)` for each pack and `ServerHooks.entitiesReport()` and
 `scriptsReport()`, which are what `/mcaddon` prints; those two count every add-on together, because
 nothing records which add-on asked for a name.

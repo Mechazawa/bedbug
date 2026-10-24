@@ -143,7 +143,7 @@ public final class Sensors {
         return ThreadLocalRandom.current().nextDouble() <= 1 / expected;
     }
 
-    private static void produce(AddonEntity entity, ServerLevel level, JsonObject spawn, AddonState state) {
+    public static void produce(AddonEntity entity, ServerLevel level, JsonObject spawn, AddonState state) {
         String sound = Json.text(spawn, "spawn_sound", null);
         if (sound != null) play(level, entity, sound);
 
@@ -168,6 +168,7 @@ public final class Sensors {
 
             Platform.placeAt(spawned, entity.getX(), entity.getY(), entity.getZ(), entity.getYRot(), 0);
             level.addFreshEntity(spawned);
+            if (flag(spawn, "should_leash", false)) Platform.leashTo(spawned, entity);
             if (event != null) EntityEvents.trigger(spawned, event, entity, state);
         }
     }

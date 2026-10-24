@@ -40,6 +40,7 @@ public final class AddonState {
     private final Map<String, Map<String, Object>> blockDynamic = new LinkedHashMap<>();
     private final Map<UUID, Map<String, Object>> dialogue = new HashMap<>();
     private final Map<String, JsonElement> sections = new LinkedHashMap<>();
+    private final Map<UUID, JsonObject> trading = new HashMap<>();
     private boolean dirty;
 
     /**
@@ -63,6 +64,17 @@ public final class AddonState {
             readEntities(root.getAsJsonObject("entityProperties"), state.entityProperties);
             readBlocks(root.getAsJsonObject("blockDynamic"), state.blockDynamic);
             readEntities(root.getAsJsonObject("dialogue"), state.dialogue);
+            JsonObject trading = root.getAsJsonObject("trading");
+            if (trading != null) {
+                trading.entrySet().stream().filter(entry -> entry.getValue().isJsonObject()).forEach(entry -> {
+                    try {
+                        state.trading.put(UUID.fromString(entry.getKey()), entry.getValue().getAsJsonObject());
+                    } catch (IllegalArgumentException ignored) {
+                        McAddon.LOGGER.warn("Dropping trade state under a key that is not a uuid: {}",
+                            entry.getKey());
+                    }
+                });
+            }
             JsonObject sections = root.getAsJsonObject("sections");
             if (sections != null) {
                 sections.entrySet().forEach(entry -> state.sections.put(entry.getKey(), entry.getValue()));
@@ -81,6 +93,9 @@ public final class AddonState {
         root.add("entityProperties", writeGroups(entityProperties));
         root.add("blockDynamic", writeGroups(blockDynamic));
         root.add("dialogue", writeGroups(dialogue));
+        JsonObject traders = new JsonObject();
+        trading.forEach((owner, saved) -> traders.add(owner.toString(), saved));
+        root.add("trading", traders);
         JsonObject written = new JsonObject();
         sections.forEach(written::add);
         root.add("sections", written);
@@ -164,11 +179,23 @@ public final class AddonState {
         dirty |= value == null ? previous != null : !value.equals(previous);
     }
 
+    /** What a trader keeps between sessions: its offers, uses, experience, spent triggers and stock. */
+    public JsonObject trading(UUID entity) {
+        JsonObject saved = trading.get(entity);
+        return saved == null ? null : saved.deepCopy();
+    }
+
+    public void setTrading(UUID entity, JsonObject saved) {
+        JsonObject previous = trading.put(entity, saved.deepCopy());
+        dirty |= !saved.equals(previous);
+    }
+
     /** Called when an entity is gone for good, so no map grows for the life of the world. */
     public void forget(UUID entity) {
         dirty |= entityDynamic.remove(entity) != null;
         dirty |= entityProperties.remove(entity) != null;
         dirty |= dialogue.remove(entity) != null;
+        dirty |= trading.remove(entity) != null;
     }
 
     /** Where one block's own store is filed: the dimension it stands in and the position it holds. */

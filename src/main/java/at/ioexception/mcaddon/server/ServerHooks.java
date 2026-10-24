@@ -63,7 +63,7 @@ public final class ServerHooks {
 
     public static void register() {
         ServerLifecycleEvents.SERVER_STARTED.register(ServerHooks::start);
-        ServerLifecycleEvents.SERVER_STOPPING.register(server -> stop());
+        ServerLifecycleEvents.SERVER_STOPPING.register(ServerHooks::stop);
         ServerTickEvents.START_SERVER_TICK.register(server -> ScriptDiagnostics.beginTick());
         ServerTickEvents.END_SERVER_TICK.register(ServerHooks::tick);
         ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {
@@ -92,7 +92,10 @@ public final class ServerHooks {
             if (state != null) EntityPropertySync.sendTo(player, entity, state);
             if (entity instanceof at.ioexception.mcaddon.entity.AddonEntity mount) mount.sendSeatTurns(player);
         });
-        ServerEntityEvents.ENTITY_UNLOAD.register((entity, level) -> entityRemoved(entity));
+        ServerEntityEvents.ENTITY_UNLOAD.register((entity, level) -> {
+            if (entity instanceof at.ioexception.mcaddon.entity.AddonEntity trader) trader.saveTrading();
+            entityRemoved(entity);
+        });
         net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents.AFTER.register(
             (level, player, broken, was, blockEntity) -> {
                 at.ioexception.mcaddon.entity.AddonEntity.noticeBlockBroken(level, broken, was);
@@ -339,7 +342,10 @@ public final class ServerHooks {
         }
     }
 
-    private static void stop() {
+    private static void stop(MinecraftServer server) {
+        server.getAllLevels().forEach(level -> level.getAllEntities().forEach(entity -> {
+            if (entity instanceof at.ioexception.mcaddon.entity.AddonEntity trader) trader.saveTrading();
+        }));
         ScriptDebugger.closeCurrent();
         ScriptProfiler.stop();
         ScriptDiagnostics.stopCapture();

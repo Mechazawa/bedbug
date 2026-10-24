@@ -457,6 +457,12 @@ world.afterEvents.dataDrivenEntityTrigger.subscribe(event => {
         for (const group of modifier.addedComponentGroups) entity.addTag("tp:modifier_added_" + group);
     }
 });
+// A young mob of the game's own raises the event its `minecraft:ageable` names as it grows up, which is
+// how a pack drawing its own model of a villager learns to draw the adult. The rabbit names `grow_up`.
+world.afterEvents.dataDrivenEntityTrigger.subscribe(({ entity, eventId }) => {
+    entity.addTag("tp:heard_" + eventId.replace("minecraft:", ""));
+    if (entity.getComponent("minecraft:is_baby") === undefined) entity.addTag("tp:grown_when_heard");
+}, { eventTypes: ["minecraft:ageable_grow_up", "grow_up"] });
 
 // Each villager the query finds once gets a sprite of this pack's own standing beside it.
 system.runInterval(() => {
