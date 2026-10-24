@@ -11,6 +11,7 @@ import at.ioexception.mcaddon.registry.ActiveAddons;
 import at.ioexception.mcaddon.registry.AddonRegistry;
 import at.ioexception.mcaddon.resource.AddonPacks;
 import at.ioexception.mcaddon.resource.AddonSet;
+import at.ioexception.mcaddon.state.WorldAddonList;
 import at.ioexception.mcaddon.sync.AddonManifest;
 import at.ioexception.mcaddon.sync.Incoming;
 import at.ioexception.mcaddon.sync.Transfer;
@@ -19,6 +20,7 @@ import net.minecraft.client.Minecraft;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -225,12 +227,12 @@ public final class AddonSession {
      * The resources have to be reloaded before the world loads, and the reload goes through the same
      * chain as a join's, so the two never overlap.
      */
-    public static boolean holdOpen(java.nio.file.Path world, Runnable open) {
+    public static boolean holdOpen(Path world, Runnable open) {
         if (reopening) return false;
         leaveIfEnded();
         AddonSet installed = ActiveAddons.installed();
-        AddonSet set = at.ioexception.mcaddon.state.WorldAddonList.read(world)
-            .orElseGet(() -> at.ioexception.mcaddon.state.WorldAddonList.allOn(installed))
+        AddonSet set = WorldAddonList.read(world)
+            .orElseGet(() -> WorldAddonList.allOn(installed))
             .resolve(installed);
         if (settled.isDone() && ActiveAddons.isActive(set)) return false;
 
