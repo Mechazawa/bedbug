@@ -32,6 +32,7 @@ public final class BedrockSoundNames {
         Map.entry("ambient.weather.thunder", "entity.lightning_bolt.thunder"),
         Map.entry("breeze_wind_charge.burst", "entity.breeze.wind_burst"),
         Map.entry("explode", "entity.generic.explode"),
+        Map.entry("mob.horse.wood", "entity.horse.step_wood"),
         Map.entry("music.game.basalt_deltas", "music.nether.basalt_deltas"),
         Map.entry("music.game.creative", "music.creative"),
         Map.entry("music.game.credits", "music.credits"),
@@ -112,7 +113,11 @@ public final class BedrockSoundNames {
         if (name.contains(":")) return null;
 
         String candidate = RENAMED.getOrDefault(name, name);
-        return BuiltInRegistries.SOUND_EVENT.containsKey(Platform.id("minecraft", candidate))
-            ? "minecraft:" + candidate : null;
+        if (!exists(candidate) && candidate.startsWith("mob.")) candidate = "entity." + candidate.substring(4);
+        return exists(candidate) ? "minecraft:" + candidate : null;
+    }
+
+    private static boolean exists(String name) {
+        return BuiltInRegistries.SOUND_EVENT.containsKey(Platform.id("minecraft", name));
     }
 }
