@@ -516,6 +516,7 @@ public final class Platform {
      */
     public static boolean addEffect(LivingEntity entity, Identifier effect, int duration, int amplifier,
         boolean ambient, boolean particles) {
+        effect = javaEffect(effect);
         //? if >=26 {
         return BuiltInRegistries.MOB_EFFECT.get(effect)
             .map(holder -> entity.addEffect(new MobEffectInstance(holder, duration, amplifier, ambient, particles)))
@@ -531,8 +532,13 @@ public final class Platform {
         *///?}
     }
 
+    private static Identifier javaEffect(Identifier effect) {
+        return id(effect.getNamespace(), at.ioexception.mcaddon.convert.BedrockEffectNames.toJava(effect.getPath()));
+    }
+
     /** Whether the entity currently has that effect. The lookup returns a holder from 1.21. */
     public static boolean hasEffect(LivingEntity entity, Identifier effect) {
+        effect = javaEffect(effect);
         //? if >=26 {
         return BuiltInRegistries.MOB_EFFECT.get(effect).map(entity::hasEffect).orElse(false);
         //?} else if >=1.21 {
@@ -544,6 +550,7 @@ public final class Platform {
     }
 
     public static boolean removeEffect(LivingEntity entity, Identifier effect) {
+        effect = javaEffect(effect);
         //? if >=26 {
         return BuiltInRegistries.MOB_EFFECT.get(effect).map(entity::removeEffect).orElse(false);
         //?} else if >=1.21 {

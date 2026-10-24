@@ -45,13 +45,15 @@ public record ControllerColour(
      * The four channels as an ARGB integer, each starting from the matching byte of `defaults`.
      *
      * A channel reads zero to one where the packed colour holds zero to 255, so the default is
-     * handed over in the Molang scale and the answer is scaled back.
+     * handed over in the Molang scale and the answer is scaled back. The channels are evaluated in
+     * the order r, g, b, a, so a temporary set in one is seen by the ones after it.
      */
     public int evaluate(MolangEnvironment environment, int defaults) {
-        return pack(channel(environment, alpha, defaults >>> 24), 24)
-            | pack(channel(environment, red, defaults >> 16 & 0xFF), 16)
-            | pack(channel(environment, green, defaults >> 8 & 0xFF), 8)
-            | pack(channel(environment, blue, defaults & 0xFF), 0);
+        float redValue = channel(environment, red, defaults >> 16 & 0xFF);
+        float greenValue = channel(environment, green, defaults >> 8 & 0xFF);
+        float blueValue = channel(environment, blue, defaults & 0xFF);
+        float alphaValue = channel(environment, alpha, defaults >>> 24);
+        return pack(alphaValue, 24) | pack(redValue, 16) | pack(greenValue, 8) | pack(blueValue, 0);
     }
 
     private static float channel(MolangEnvironment environment, MolangExpression expression, int fallback) {

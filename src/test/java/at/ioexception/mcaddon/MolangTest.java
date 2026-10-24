@@ -215,4 +215,17 @@ class MolangTest {
         assertTrue(environment.hasVariable("kept"));
         assertEquals(12, evaluate("v.kept"), 1e-6);
     }
+
+    /** Both compare the first argument against the rest, so a value in the list is what makes `any` true. */
+    @Test
+    void anyAndAllCompareAgainstTheFirstArgument() {
+        environment.setQueries((name, arguments) -> MolangValue.of(
+            name.equals("any") ? MolangValue.matchesAny(arguments) : MolangValue.matchesAll(arguments)));
+
+        assertEquals(1, evaluate("q.any(4, 0, 4, 5)"), 1e-6);
+        assertEquals(0, evaluate("q.any(4, 0, 2, 5)"), 1e-6);
+        assertEquals(0, evaluate("q.any(0, 1, 2)"), 1e-6);
+        assertEquals(1, evaluate("q.all(3, 3, 3)"), 1e-6);
+        assertEquals(0, evaluate("q.all(3, 3, 4)"), 1e-6);
+    }
 }

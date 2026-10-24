@@ -2555,6 +2555,16 @@ there is no `exportstats` to answer.
 A pushed `v*` tag runs `.github/workflows/release.yml`, which builds the jars, makes the GitHub release and then runs `tools/release/modrinth.py` to publish each jar to Modrinth.
 The repository secret `MODRINTH_TOKEN` must hold a Modrinth token with the read-project, read-version, create-version and write-version scopes. The read scopes are needed while the project is a draft. `--dry-run` prints the requests without a token.
 
+## Script and entity details worth knowing
+
+- `minecraft:entity_spawned` runs once per entity: `AddonState.firstAnnouncement` records it, and `ServerHooks.announce` raises it from the load event.
+- A sensor cooldown starts when the sensor fires (`AddonEntity.startSensorCooldown`), not when it looks and finds nothing.
+- `weather_at_position` reads `Level.precipitationAt`, which needs sky above the entity. A game test places its entity above the test box, whose ceiling shelters everything inside it.
+- A `sounds.json` moment states its own `volume` and `pitch` (`EntitySounds.momentVolume`, `momentPitch`). An empty `sound` silences the moment for add-on entities too.
+- Bedrock effect ids differ from Java's in `BedrockEffectNames`; `Platform.addEffect`, `hasEffect` and `removeEffect` translate, and a script sees Bedrock's id.
+- A script's `playSound` resolves a name through the id as written, then the pack's own definitions, then `BedrockSoundNames` (`mob.x.y` falls back to `entity.x.y`).
+- The census scripts need `scratchpad/bedrock` in the worktree and run without `python -I`, because they import each other.
+
 ## Conventions
 
 **No add-on content is committed.** No textures, sounds, models or text from any pack. Real packs

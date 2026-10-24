@@ -657,6 +657,122 @@ public final class BehaviourGameTests {
     }
 
     /**
+     * `weather_at_position` answers rain, snow and thunderstorm for the precipitation falling at
+     * the entity's own position: rain over plains, snow over a cold biome, and a storm over either.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void weatherAtPositionReadsRainAndStormOverPlains(GameTestHelper helper) {
+        net.minecraft.world.entity.Mob pig = pigAboveTheBox(helper, "minecraft:plains");
+        helper.getLevel().setRainLevel(1f);
+        helper.assertTrue(weatherIs(pig, "rain") && !weatherIs(pig, "snow") && !weatherIs(pig, "thunderstorm"),
+            "Rain over plains did not read as rain alone.");
+
+        helper.getLevel().setThunderLevel(1f);
+        helper.assertTrue(weatherIs(pig, "thunderstorm"), "A storm over plains did not read as a thunderstorm.");
+
+        helper.getLevel().setRainLevel(0f);
+        helper.getLevel().setThunderLevel(0f);
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void weatherAtPositionReadsSnowOverASnowyBiome(GameTestHelper helper) {
+        net.minecraft.world.entity.Mob pig = pigAboveTheBox(helper, "minecraft:snowy_plains");
+        helper.getLevel().setRainLevel(1f);
+        helper.assertTrue(weatherIs(pig, "snow") && !weatherIs(pig, "rain"),
+            "Precipitation over a snowy biome did not read as snow alone: "
+                + helper.getLevel().getBiome(pig.blockPosition()).unwrapKey().orElseThrow().identifier());
+
+        helper.getLevel().setRainLevel(0f);
+        helper.succeed();
+    }
+
+    /** Above the test box, whose ceiling would shelter the entity from any precipitation. */
+    private static net.minecraft.world.entity.Mob pigAboveTheBox(GameTestHelper helper, String biome) {
+        net.minecraft.world.entity.Mob pig = (net.minecraft.world.entity.Mob) Platform.createMob(
+            BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("minecraft", "pig")).orElseThrow(),
+            helper.getLevel());
+        BlockPos at = helper.absolutePos(STAND).above(WEATHER_HEIGHT);
+        Platform.placeAt(pig, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        pig.setNoAi(true);
+        pig.setNoGravity(true);
+        helper.getLevel().addFreshEntity(pig);
+
+        net.minecraft.server.MinecraftServer server = helper.getLevel().getServer();
+        server.getCommands().performPrefixedCommand(server.createCommandSourceStack(),
+            "fillbiome " + at.getX() + " " + (at.getY() - 8) + " " + at.getZ() + " " + at.getX() + " "
+                + (at.getY() + 8) + " " + at.getZ() + " " + biome);
+        return pig;
+    }
+
+    private static final int WEATHER_HEIGHT = 20;
+
+    /**
+     * A moment written with an empty sound makes none rather than Java's generic one, and a moment
+     * stating its own volume and pitch is played with them.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aSoundsJsonMomentIsSilentOrShapedByItsOwnFields(GameTestHelper helper)
+        throws ReflectiveOperationException {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        java.lang.reflect.Method hurt = AddonEntity.class.getDeclaredMethod("getHurtSound",
+            net.minecraft.world.damagesource.DamageSource.class);
+        hurt.setAccessible(true);
+        helper.assertTrue(hurt.invoke(ember, helper.getLevel().damageSources().generic()) == null,
+            ENTITY + " writes its hurt sound as empty and still makes Java's.");
+
+        java.lang.reflect.Method death = AddonEntity.class.getDeclaredMethod("getDeathSound");
+        death.setAccessible(true);
+        helper.assertTrue(death.invoke(ember) != null, ENTITY + " names a death sound and makes none.");
+        java.lang.reflect.Method volume = AddonEntity.class.getDeclaredMethod("getSoundVolume");
+        volume.setAccessible(true);
+        helper.assertTrue(Math.abs((float) volume.invoke(ember) - 0.4f) < 1e-4,
+            ENTITY + " death is half of the entry's 0.8 and plays at " + volume.invoke(ember) + ".");
+        helper.assertTrue(Math.abs(ember.getVoicePitch() - 1.5f) < 1e-4,
+            ENTITY + " death states a pitch of 1.5 and plays at " + ember.getVoicePitch() + ".");
+        helper.succeed();
+    }
+
+    /** A mob with `minecraft:behavior.sleep` lies down at night, which `q.is_sleeping` reports. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 80)
+    public void aSleepingMobReportsItIsSleeping(GameTestHelper helper) {
+        AddonEntity idler = spawn(helper, "tp:idler");
+        if (idler == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(idler, "tp:idler_make_sleeping", null, ServerHooks.state());
+        idler.setNoAi(false);
+        net.minecraft.server.MinecraftServer server = helper.getLevel().getServer();
+        server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), "time set 18000");
+        at.ioexception.mcaddon.bedrock.entity.EntityQueries asked =
+            new at.ioexception.mcaddon.bedrock.entity.EntityQueries(idler,
+                new at.ioexception.mcaddon.bedrock.animation.AnimationPlayer(null, idler),
+                at.ioexception.mcaddon.bedrock.entity.EntityQueries.Drawn.NONE,
+                java.util.Map::of, false);
+        helper.succeedWhen(() -> {
+            helper.assertTrue(asked.query("is_sleeping", List.of()).truthy(),
+                "The idler lay down at night and q.is_sleeping answered no.");
+            server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), "time set day");
+        });
+    }
+
+    private static boolean weatherIs(net.minecraft.world.entity.Entity entity, String weather) {
+        com.google.gson.JsonObject test = new com.google.gson.JsonObject();
+        test.addProperty("test", "weather_at_position");
+        test.addProperty("value", weather);
+        return at.ioexception.mcaddon.bedrock.behaviour.Filter.parse(test).matches(
+            new at.ioexception.mcaddon.bedrock.behaviour.Filter.Context(entity, entity, entity,
+                ServerHooks.state()));
+    }
+
+    /**
      * `minecraft:ageable`'s `interact_filters` decide who may feed the entity, and a feed item's
      * `growth` is a share of the whole wait, so a growth of one grows it up at once.
      */

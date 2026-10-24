@@ -75,10 +75,7 @@ public final class ServerHooks {
                 if (entity instanceof at.ioexception.mcaddon.entity.AddonEntity addon) {
                     addon.restoreGroups();
                 }
-                // Bedrock raises this on every entity as it comes into the world, and a pack's
-                // starting state is usually set from it. A bred one is born rather than spawned.
-                EntityEvents.trigger(entity, born(entity) ? "minecraft:entity_born" : "minecraft:entity_spawned",
-                    null, state);
+                announce(entity);
             }
             at.ioexception.mcaddon.registry.AddonItems.keepDropped(entity);
             raiseEntityEvent("entityLoad", entity);
@@ -384,6 +381,17 @@ public final class ServerHooks {
     private static boolean born(Entity entity) {
         return entity instanceof at.ioexception.mcaddon.entity.AddonEntity addon ? addon.born()
             : VanillaEvents.wasBred(entity);
+    }
+
+    /**
+     * Bedrock raises this once, as an entity comes into the world, and a pack's starting state is
+     * usually set from it. A chunk loading the entity again does not raise it. A bred one is born
+     * rather than spawned.
+     */
+    public static void announce(Entity entity) {
+        if (state == null || !state.firstAnnouncement(entity.getUUID())) return;
+
+        EntityEvents.trigger(entity, born(entity) ? "minecraft:entity_born" : "minecraft:entity_spawned", null, state);
     }
 
     private static void raiseEntityEvent(String event, Entity entity) {

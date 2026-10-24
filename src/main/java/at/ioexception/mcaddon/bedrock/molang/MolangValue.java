@@ -1,5 +1,7 @@
 package at.ioexception.mcaddon.bedrock.molang;
 
+import java.util.List;
+
 /**
  * A Molang value: a number, or a string.
  *
@@ -38,5 +40,15 @@ public record MolangValue(double number, String text) {
     public boolean matches(MolangValue other) {
         if (isText() || other.isText()) return isText() && other.isText() && text.equals(other.text);
         return number == other.number;
+    }
+
+    /** `q.any`: whether any argument after the first equals the first. */
+    public static boolean matchesAny(List<MolangValue> arguments) {
+        return arguments.size() > 1 && arguments.stream().skip(1).anyMatch(arguments.get(0)::matches);
+    }
+
+    /** `q.all`: whether every argument after the first equals the first. */
+    public static boolean matchesAll(List<MolangValue> arguments) {
+        return arguments.size() > 1 && arguments.stream().skip(1).allMatch(arguments.get(0)::matches);
     }
 }

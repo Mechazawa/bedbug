@@ -26,8 +26,11 @@ import java.util.Set;
  *                an empty name for a moment written to make no sound
  * @param volume  how loud, or -1 where the entry names no volume
  * @param pitch   the range a pitch is drawn from, or null where the entry names none
+ * @param momentVolumes the volume a moment states for itself, which scales the entry's
+ * @param momentPitches the pitch range a moment states for itself, which replaces the entry's
  */
-public record EntitySounds(Map<String, String> events, double volume, double[] pitch) {
+public record EntitySounds(Map<String, String> events, double volume, double[] pitch,
+    Map<String, Double> momentVolumes, Map<String, double[]> momentPitches) {
     /**
      * The moments Java asks a mob about by itself.
      *
@@ -41,6 +44,17 @@ public record EntitySounds(Map<String, String> events, double volume, double[] p
 
     public String event(String moment) {
         return events.get(moment);
+    }
+
+    /** How loud a moment is against the entry's own volume, where the moment states one. */
+    public double momentVolume(String moment) {
+        return momentVolumes.getOrDefault(moment, 1.0);
+    }
+
+    /** A pitch from the range a moment states for itself, or null where it states none. */
+    public Float momentPitch(String moment, double roll) {
+        double[] range = momentPitches.get(moment);
+        return range == null ? null : (float) (range[0] + roll * (range[1] - range[0]));
     }
 
     /** Whether the entry names this moment and makes no sound for it. */
@@ -114,9 +128,13 @@ public record EntitySounds(Map<String, String> events, double volume, double[] p
         return found != null && found.isJsonObject() ? found.getAsJsonObject() : new JsonObject();
     }
 
-    private static EntitySounds read(JsonObject body, EntitySounds defaults) {
+    static EntitySounds read(JsonObject body, EntitySounds defaults) {
         Map<String, String> events = new LinkedHashMap<>(
             defaults == null ? Map.of() : defaults.events());
+        Map<String, Double> volumes = new LinkedHashMap<>(
+            defaults == null ? Map.of() : defaults.momentVolumes());
+        Map<String, double[]> pitches = new LinkedHashMap<>(
+            defaults == null ? Map.of() : defaults.momentPitches());
 
         for (Map.Entry<String, JsonElement> entry : section(body, "events").entrySet()) {
             if (silent(entry.getValue())) {
@@ -127,13 +145,20 @@ public record EntitySounds(Map<String, String> events, double volume, double[] p
             if (named == null || named.isBlank()) continue;
             if (!ANSWERED.contains(entry.getKey())) AddonEntities.unsupported("entity sound " + entry.getKey());
             events.put(entry.getKey(), named);
+            if (entry.getValue().isJsonObject()) {
+                JsonObject moment = entry.getValue().getAsJsonObject();
+                if (moment.has("volume")) volumes.put(entry.getKey(), Json.number(moment, "volume", 1));
+                double[] range = range(moment.get("pitch"));
+                if (range != null) pitches.put(entry.getKey(), range);
+            }
         }
 
         double volume = Json.number(body, "volume",
             defaults == null ? -1 : defaults.volume());
         double[] pitch = range(body.get("pitch"));
         return new EntitySounds(Map.copyOf(events), volume,
-            pitch == null && defaults != null ? defaults.pitch() : pitch);
+            pitch == null && defaults != null ? defaults.pitch() : pitch,
+            Map.copyOf(volumes), Map.copyOf(pitches));
     }
 
     /**

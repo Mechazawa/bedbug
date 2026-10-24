@@ -332,7 +332,8 @@ public final class EntityQueries implements MolangEnvironment.Queries {
             case "is_leashed" -> MolangValue.of(entity instanceof Mob mob && mob.isLeashed());
             case "is_moving" -> MolangValue.of(entity.position()
                 .distanceToSqr(entity.xOld, entity.yOld, entity.zOld) > 0);
-            case "is_sleeping" -> MolangValue.of(entity instanceof LivingEntity living && living.isSleeping());
+            case "is_sleeping" -> MolangValue.of(entity instanceof LivingEntity living
+                && (living.isSleeping() || living.getPose() == net.minecraft.world.entity.Pose.SLEEPING));
             // A pack's own entity makes itself young through a component group, which only the
             // server holds, so the answer travels as a property. Java's own mobs sync their age
             // themselves and carry no such property.
@@ -642,9 +643,8 @@ public final class EntityQueries implements MolangEnvironment.Queries {
 
             case "noise" -> MolangValue.of(noise(arguments));
 
-            // `q.any` and `q.all` take a subject and a list of conditions the caller already resolved.
-            case "any" -> MolangValue.of(arguments.stream().skip(2).anyMatch(MolangValue::truthy));
-            case "all" -> MolangValue.of(arguments.stream().skip(2).allMatch(MolangValue::truthy));
+            case "any" -> MolangValue.of(MolangValue.matchesAny(arguments));
+            case "all" -> MolangValue.of(MolangValue.matchesAll(arguments));
             case "approx_eq" -> approximatelyEqual(arguments);
             case "count" -> MolangValue.of(arguments.size());
             case "get_actor_info_id" -> MolangValue.of(actorInfoId(arguments));

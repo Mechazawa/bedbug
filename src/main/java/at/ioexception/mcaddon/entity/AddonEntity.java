@@ -253,17 +253,19 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
-     * Whether a sensor carrying a cooldown may fire, and takes the cooldown when it may.
+     * Whether a sensor's cooldown has run out.
      *
      * Bedrock counts the cooldown per subsensor rather than per entity, so the key names which one
-     * is asking. A subsensor with no cooldown never reaches here.
+     * is asking.
      */
-    public boolean sensorReady(String key, double seconds) {
+    public boolean sensorReady(String key) {
         Integer due = sensorReady.get(key);
-        if (due != null && tickCount < due) return false;
+        return due == null || tickCount >= due;
+    }
 
+    /** Starts a sensor's cooldown, which only a sensor that fired takes. */
+    public void startSensorCooldown(String key, double seconds) {
         sensorReady.put(key, tickCount + Math.max(1, (int) (seconds * 20)));
-        return true;
     }
 
     /**
@@ -1962,12 +1964,16 @@ public class AddonEntity extends PathfinderMob
      * has no bed, so what carries across is the part a player sees: it stops where it is until the
      * sun is up again.
      */
+    /** The span of the day Bedrock lets a bed be slept in, in ticks. */
+    private static final long BED_OPENS = 12542L;
+    private static final long BED_CLOSES = 23460L;
+
     private void rest() {
         if (!declaresNow("minecraft:behavior.sleep")) return;
         if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
 
         long time = Platform.dayTime(level) % 24000L;
-        boolean night = time >= 13000L && time < 23000L;
+        boolean night = time >= BED_OPENS && time < BED_CLOSES;
         setPose(night ? net.minecraft.world.entity.Pose.SLEEPING : net.minecraft.world.entity.Pose.STANDING);
         if (night) {
             getNavigation().stop();
@@ -5558,14 +5564,28 @@ public class AddonEntity extends PathfinderMob
             return (float) number(definition, "minecraft:sound_volume", "value", 1);
         }
         at.ioexception.mcaddon.bedrock.EntitySounds noises = AddonEntities.soundsOf(getType());
-        return noises == null || noises.volume() < 0
-            ? super.getSoundVolume() : (float) noises.volume();
+        String moment = momentBeingVoiced();
+        float scale = noises == null || moment == null ? 1f : (float) noises.momentVolume(moment);
+        return scale * (noises == null || noises.volume() < 0
+            ? super.getSoundVolume() : (float) noises.volume());
     }
 
     /** The moment `sounds.json` names for this entity, or null where it names none. */
     private net.minecraft.sounds.SoundEvent noise(String moment) {
         at.ioexception.mcaddon.bedrock.EntitySounds noises = AddonEntities.soundsOf(getType());
-        return noises == null ? null : sound(noises.event(moment), null);
+        if (noises == null) return null;
+
+        voicedMoment = moment;
+        voicedAt = tickCount;
+        return sound(noises.event(moment), null);
+    }
+
+    /** The moment whose sound was last asked for, so the volume and pitch that follow are its own. */
+    private String voicedMoment;
+    private int voicedAt;
+
+    private String momentBeingVoiced() {
+        return voicedMoment != null && voicedAt == tickCount ? voicedMoment : null;
     }
 
     /** Public so a test can ask which idle sound the entity would make where it stands. */
@@ -5654,13 +5674,19 @@ public class AddonEntity extends PathfinderMob
     @Override
     protected net.minecraft.sounds.SoundEvent getHurtSound(net.minecraft.world.damagesource.DamageSource source) {
         net.minecraft.sounds.SoundEvent named = noise("hurt");
-        return named == null ? super.getHurtSound(source) : named;
+        return named == null && !silenced("hurt") ? super.getHurtSound(source) : named;
     }
 
     @Override
     protected net.minecraft.sounds.SoundEvent getDeathSound() {
         net.minecraft.sounds.SoundEvent named = noise("death");
-        return named == null ? super.getDeathSound() : named;
+        return named == null && !silenced("death") ? super.getDeathSound() : named;
+    }
+
+    /** Whether `sounds.json` writes this moment to make no sound, which is not the same as naming none. */
+    private boolean silenced(String moment) {
+        at.ioexception.mcaddon.bedrock.EntitySounds noises = AddonEntities.soundsOf(getType());
+        return noises != null && noises.silences(moment);
     }
 
     /**
@@ -5689,7 +5715,10 @@ public class AddonEntity extends PathfinderMob
     @Override
     public float getVoicePitch() {
         at.ioexception.mcaddon.bedrock.EntitySounds noises = AddonEntities.soundsOf(getType());
-        Float named = noises == null ? null : noises.voicePitch(random.nextDouble());
+        String moment = momentBeingVoiced();
+        voicedMoment = null;
+        Float stated = noises == null || moment == null ? null : noises.momentPitch(moment, random.nextDouble());
+        Float named = stated != null ? stated : noises == null ? null : noises.voicePitch(random.nextDouble());
         return named == null ? super.getVoicePitch() : named;
     }
 

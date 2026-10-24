@@ -55,6 +55,24 @@ public final class NamesGameTests {
         });
     }
 
+    /** A run cleared by another run of the same tick never fires. */
+    @GameTest()
+    public void aRunClearedDuringThePumpDoesNotFire(GameTestHelper helper) {
+        if (!packLoaded() || ServerHooks.scripts() == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.setBlock(STAND, Blocks.STONE);
+        BlockPos at = helper.absolutePos(STAND);
+        BedrockLines.run(helper, "scriptevent tp:cleared " + at.getX() + " " + at.getY() + " " + at.getZ());
+
+        helper.runAfterDelay(5, () -> {
+            helper.assertBlockPresent(Blocks.STONE, STAND);
+            helper.succeed();
+        });
+    }
+
     /**
      * A function naming items and blocks by Bedrock's ids loads and places the Java ones.
      *
