@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.entity;
 
 import com.google.gson.JsonObject;
+import at.ioexception.mcaddon.platform.Platform;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.goal.Goal;
@@ -17,7 +18,8 @@ import java.util.EnumSet;
  * `minecraft:behavior.move_outdoors` and `minecraft:behavior.move_indoors` are the two halves of a
  * Bedrock villager's day. A spot is looked for `search_count` times within `search_range` across and
  * `search_height` up or down, the walk counts as done within `goal_radius` of it, and a search or a
- * walk that fails rests the goal for `timeout_cooldown` seconds.
+ * walk that fails rests the goal for `timeout_cooldown` seconds. Going indoors runs only at night
+ * or in rain, since the villager's own definition states no schedule for it.
  */
 final class ShelterGoal extends Goal {
     private final PathfinderMob mob;
@@ -67,6 +69,7 @@ final class ShelterGoal extends Goal {
     @Override
     public boolean canUse() {
         if (mob.tickCount < readyAt || underSky(mob.level(), mob.blockPosition()) == outdoors) return false;
+        if (!outdoors && !nightOrRain(mob.level())) return false;
 
         for (int i = 0; i < tries; i++) {
             Vec3 spot = LandRandomPos.getPos(mob, across, upDown);
@@ -106,6 +109,13 @@ final class ShelterGoal extends Goal {
     private boolean there() {
         return heading != null && mob.position().distanceToSqr(heading) <= arrived * arrived;
     }
+
+    private static boolean nightOrRain(net.minecraft.world.level.Level level) {
+        return level.isRaining() || Platform.dayTime(level) % DAY_TICKS >= NIGHT_FROM;
+    }
+
+    private static final long DAY_TICKS = 24000L;
+    private static final long NIGHT_FROM = 12000L;
 
     /** Lit by the whole of the sky, which is what Java's own question about the open sky asks. */
     private static boolean underSky(net.minecraft.world.level.Level level, BlockPos at) {
