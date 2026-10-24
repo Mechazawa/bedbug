@@ -165,6 +165,17 @@
           "weight": 1
         }
       ]
+    },
+    "tp:villager.refuse": {
+      "category": "neutral",
+      "sounds": [
+        {
+          "name": "sounds/tp/chime",
+          "volume": 0.6,
+          "pitch": 0.6,
+          "weight": 1
+        }
+      ]
     }
   }
 }

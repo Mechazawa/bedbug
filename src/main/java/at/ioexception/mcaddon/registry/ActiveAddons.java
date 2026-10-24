@@ -62,6 +62,7 @@ public final class ActiveAddons {
         Set<net.minecraft.world.item.Item> items = AddonRegistry.ensureRegistered(set);
         activeItems = items.stream().map(BuiltInRegistries.ITEM::getKey).collect(Collectors.toUnmodifiableSet());
         AddonSounds.readMusic(set.converted());
+        AddonSounds.readVoices(set.converted());
         AddonSounds.readEvents(set.converted(), AddonItems.swingEvents());
         AddonFogs.register(set.converted());
         AddonAimAssist.register(set.packs());

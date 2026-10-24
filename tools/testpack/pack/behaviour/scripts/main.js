@@ -348,6 +348,15 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
             player.dimension.spawnEntity(VILLAGER, { x: x - 3, y, z }).addTag("tp:spawned_as_villager_v2");
             break;
         }
+        // A pack tells a villager's job by its families, the way Bedrock's own villager states it.
+        case "tp:families":
+            for (const villager of player.dimension.getEntities({ location: player.location, maxDistance: 4 })) {
+                if (villager.typeId !== VILLAGER && villager.typeId !== "minecraft:zombie_villager_v2") continue;
+                for (const family of villager.getComponent("minecraft:type_family").getTypeFamilies()) {
+                    villager.addTag("tp:family_" + family);
+                }
+            }
+            break;
         case "tp:fog": stackFogs(player); break;
         case "tp:clone": cloneTheRow(player, event.message); break;
         case "tp:row": measureTheRow(player); break;

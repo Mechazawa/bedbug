@@ -18,6 +18,13 @@
           "cheer": "tp:brute.cheer",
           "lay": "tp:brute.lay"
         }
+      },
+      "villager_v2": {
+        "events": {
+          "ambient": { "volume": 0 },
+          "hurt": { "sound": "" },
+          "haggle.no": "tp:villager.refuse"
+        }
       }
     }
   },
