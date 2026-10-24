@@ -700,8 +700,11 @@ public final class BehaviourGameTests {
 
         net.minecraft.server.MinecraftServer server = helper.getLevel().getServer();
         server.getCommands().performPrefixedCommand(server.createCommandSourceStack(),
-            "fillbiome " + at.getX() + " " + (at.getY() - 8) + " " + at.getZ() + " " + at.getX() + " "
-                + (at.getY() + 8) + " " + at.getZ() + " " + biome);
+            "fillbiome " + (at.getX() - 4) + " " + (at.getY() - 8) + " " + (at.getZ() - 4) + " " + (at.getX() + 4)
+                + " " + (at.getY() + 8) + " " + (at.getZ() + 4) + " " + biome);
+        String read = helper.getLevel().getBiome(pig.blockPosition()).unwrapKey().orElseThrow().identifier()
+            .toString();
+        helper.assertTrue(read.equals(biome), "fillbiome left " + read + " at the pig instead of " + biome + ".");
         return pig;
     }
 
