@@ -1517,7 +1517,7 @@ public class AddonEntity extends PathfinderMob
             if (random.nextDouble() < Goals.number(body, "target_teleport_chance", 1)) {
                 net.minecraft.world.phys.Vec3 towards =
                     target.position().subtract(position()).normalize().scale(reach);
-                randomTeleport(getX() + towards.x, getY() + towards.y, getZ() + towards.z, true);
+                Platform.randomTeleport(this, getX() + towards.x, getY() + towards.y, getZ() + towards.z);
             }
             return;
         }
@@ -1544,7 +1544,7 @@ public class AddonEntity extends PathfinderMob
         double x = getX() + (random.nextDouble() - 0.5) * cube.x;
         double y = getY() + (random.nextDouble() - 0.5) * cube.y;
         double z = getZ() + (random.nextDouble() - 0.5) * cube.z;
-        return randomTeleport(x, y, z, true);
+        return Platform.randomTeleport(this, x, y, z);
     }
 
     /**
