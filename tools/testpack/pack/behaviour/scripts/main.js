@@ -28,7 +28,9 @@ import {
     BlockPermutation, BlockVolume, CameraShakeType, CatmullRomSpline, CloneMode, EasingType, EntityAttachPoint,
     HudElement, HudVisibility, ItemStack, system, world,
 } from "@minecraft/server";
-import { ActionFormData, CustomForm, ObservableBoolean, ObservableString } from "@minecraft/server-ui";
+import {
+    ActionFormData, CustomForm, MessageFormData, ModalFormData, ObservableBoolean, ObservableNumber, ObservableString,
+} from "@minecraft/server-ui";
 import { register } from "@minecraft/server-gametest";
 import { weighTheProbe } from "./weigh.js";
 import { dedicatedServer, deopPlayer, opPlayer, secrets, SecretString, variables } from "@minecraft/server-admin";
@@ -195,6 +197,36 @@ function openTiles(player, message) {
     tiles.show(player).then(response => player.addTag("tp:tiles_" + response.selection));
 }
 
+// Forms whose controls carry hover text, written in each generation: a 1.x ModalFormData with a
+// tooltip on every input, a two-button MessageFormData with one on each button, and a 2.x CustomForm
+// with a description on its inputs, a tooltip on a button and a description on each dropdown item.
+// `/scriptevent tp:hints modal|message|custom` opens one.
+function openHints(player, kind) {
+    if (kind === "modal") {
+        new ModalFormData().title("Modal hints")
+            .toggle("Lamp", { tooltip: "Lights the lamp" })
+            .dropdown("Colour", ["Red", "Blue"], { tooltip: { rawtext: [{ text: "Picks " }, { text: "a colour" }] } })
+            .slider("Volume", 0, 10, { tooltip: "How loud" })
+            .textField("Name", "Type here", { tooltip: "What to call it" })
+            .show(player);
+    } else if (kind === "message") {
+        new MessageFormData().title("Message hints").body("Sure?")
+            .button1("Yes", "Agrees").button2("No", "Declines")
+            .show(player);
+    } else {
+        const choice = new ObservableNumber(0);
+        new CustomForm(player, "Custom hints")
+            .toggle("Echo", new ObservableBoolean(false), { description: "Repeats sounds" })
+            .dropdown("Shape", choice, [
+                { label: "Round", value: 0, description: "Has no corners" },
+                { label: "Square", value: 1, description: "Has four corners" },
+            ], { description: "Pick a shape" })
+            .button("Apply", () => {}, { tooltip: "Keeps the shape" })
+            .closeButton()
+            .show();
+    }
+}
+
 // The script half of `/hud`, which hides the same pieces on the same player's client. What the
 // script reads back about the display afterwards is a tag on that player.
 function hideTheHotbar(player) {
@@ -348,6 +380,7 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
         case "tp:catalogue": openCatalogue(player); break;
         case "tp:ledger": openLedger(player); break;
         case "tp:tiles": openTiles(player, event.message); break;
+        case "tp:hints": openHints(player, event.message); break;
         case "tp:commands": runBedrockCommands(player); break;
         // A pack handing out one of its own items unless the player already carries it.
         case "tp:stock_up":
