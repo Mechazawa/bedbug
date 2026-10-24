@@ -6059,7 +6059,7 @@ public class AddonEntity extends PathfinderMob
             ItemStack held = player.getItemInHand(hand);
             double cooldown = Goals.number(interaction, "cooldown", 0);
             if (cooldown > 0) interactReadyAt = tickCount + (long) (cooldown * 20);
-            if (Goals.flag(interaction, "swing", false)) player.swing(hand);
+            if (Goals.flag(interaction, "swing", false)) Platform.swing(player, hand, false);
             soundsOf(interaction.get("play_sounds")).forEach(sound -> playSound(sound, 1f, 1f));
             if (!player.getAbilities().instabuild) {
                 if (Goals.flag(interaction, "use_item", false)) held.shrink(1);

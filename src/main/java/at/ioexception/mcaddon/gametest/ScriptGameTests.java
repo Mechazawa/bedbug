@@ -486,7 +486,13 @@ public final class ScriptGameTests {
             wild.finalizeSpawn(level, level.getCurrentDifficultyAt(wild.blockPosition()),
                 net.minecraft.world.entity.EntitySpawnReason.NATURAL, null);
             Villager witchless = converting;
-            witchless.convertTo(net.minecraft.world.entity.EntityTypes.ZOMBIE_VILLAGER,
+            // 26.2 moved the vanilla entity types out of the class that builds them.
+            //? if >=26.2 {
+            var zombieVillager = net.minecraft.world.entity.EntityTypes.ZOMBIE_VILLAGER;
+            //?} else {
+            /*var zombieVillager = EntityType.ZOMBIE_VILLAGER;
+            *///?}
+            witchless.convertTo(zombieVillager,
                 net.minecraft.world.entity.ConversionParams.single(witchless, true, true), ignored -> { });
             raider.setCelebrating(true);
             sheep.shear(level, net.minecraft.sounds.SoundSource.PLAYERS,
