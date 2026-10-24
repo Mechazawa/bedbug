@@ -7,7 +7,9 @@
           "ambient": "tp:ember.idle",
           "ambient.in.air": "tp:ember.idle_aloft",
           "ambient.in.water": "tp:ember.idle_submerged",
-          "ambient.baby": "tp:ember.idle_young"
+          "ambient.baby": "tp:ember.idle_young",
+          "hurt": { "sound": "" },
+          "death": { "sound": "tp:ember.idle", "volume": 0.5, "pitch": [1.5, 1.5] }
         }
       },
       "tp:brute": {

@@ -46,22 +46,29 @@ public final class AddonSounds {
     private AddonSounds() {
     }
 
+    /** What plays, how loud and at what pitch. */
+    public record Played(SoundEvent sound, float volume, float pitch) {
+    }
+
     /** One pack's entry for an entity, with the names it gives read against that pack's own sounds. */
     private record Voice(EntitySounds sounds, String namespace, List<String> defined) {
         /**
          * What plays in place of `sound`, the Java sound this entity is about to make: the sound
          * itself where the entry names nothing for that moment, the entry's own sound where it names
-         * one Java has, and null where the entry makes no sound for it.
+         * one Java has, and null where the entry makes no sound for it. The moment's own volume
+         * scales `volume` and its own pitch range replaces `pitch`.
          */
-        SoundEvent replace(SoundEvent sound) {
+        Played replace(Entity entity, SoundEvent sound, float volume, float pitch) {
             Identifier id = BuiltInRegistries.SOUND_EVENT.getKey(sound);
             String path = id == null ? "" : id.getPath();
             String moment = path.startsWith("entity.") ? MOMENTS.get(path.substring(path.lastIndexOf('.') + 1)) : null;
-            if (moment == null || sounds.event(moment) == null) return sound;
+            if (moment == null || sounds.event(moment) == null) return new Played(sound, volume, pitch);
             if (sounds.silences(moment)) return null;
 
             SoundEvent named = registered(BedrockSoundNames.java(sounds.event(moment), namespace, defined));
-            return named == null ? sound : named;
+            Float ranged = sounds.momentPitch(moment, entity.getRandom().nextDouble());
+            return new Played(named == null ? sound : named,
+                (float) (volume * sounds.momentVolume(moment)), ranged == null ? pitch : ranged);
         }
     }
 
@@ -71,13 +78,15 @@ public final class AddonSounds {
      * sound where one does, and null where the pack silences it. A pack replacing the game's
      * villagers silences their idle, trade and hurt sounds this way.
      */
-    public static SoundEvent voiceOf(Entity entity, SoundEvent sound) {
-        if (voices.isEmpty() || entity instanceof at.ioexception.mcaddon.entity.AddonEntity) return sound;
+    public static Played voiceOf(Entity entity, SoundEvent sound, float volume, float pitch) {
+        if (voices.isEmpty() || entity instanceof at.ioexception.mcaddon.entity.AddonEntity) {
+            return new Played(sound, volume, pitch);
+        }
 
         String identifier = AddonEntities.identifierOf(entity.getType());
         Voice voice = voices.get(identifier);
         if (voice == null) voice = voices.get(identifier.substring(identifier.indexOf(':') + 1));
-        return voice == null ? sound : voice.replace(sound);
+        return voice == null ? new Played(sound, volume, pitch) : voice.replace(entity, sound, volume, pitch);
     }
 
     /** Replaces what each entity makes with what these packs say, a later pack overriding an earlier one. */

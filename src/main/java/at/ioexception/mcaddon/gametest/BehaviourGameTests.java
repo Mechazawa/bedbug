@@ -695,6 +695,36 @@ public final class BehaviourGameTests {
 
     private static final int WEATHER_HEIGHT = 20;
 
+    /**
+     * A moment written with an empty sound makes none rather than Java's generic one, and a moment
+     * stating its own volume and pitch is played with them.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aSoundsJsonMomentIsSilentOrShapedByItsOwnFields(GameTestHelper helper) throws ReflectiveOperationException {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        java.lang.reflect.Method hurt = AddonEntity.class.getDeclaredMethod("getHurtSound",
+            net.minecraft.world.damagesource.DamageSource.class);
+        hurt.setAccessible(true);
+        helper.assertTrue(hurt.invoke(ember, helper.getLevel().damageSources().generic()) == null,
+            ENTITY + " writes its hurt sound as empty and still makes Java's.");
+
+        java.lang.reflect.Method death = AddonEntity.class.getDeclaredMethod("getDeathSound");
+        death.setAccessible(true);
+        helper.assertTrue(death.invoke(ember) != null, ENTITY + " names a death sound and makes none.");
+        java.lang.reflect.Method volume = AddonEntity.class.getDeclaredMethod("getSoundVolume");
+        volume.setAccessible(true);
+        helper.assertTrue(Math.abs((float) volume.invoke(ember) - 0.4f) < 1e-4,
+            ENTITY + " death is half of the entry's 0.8 and plays at " + volume.invoke(ember) + ".");
+        helper.assertTrue(Math.abs(ember.getVoicePitch() - 1.5f) < 1e-4,
+            ENTITY + " death states a pitch of 1.5 and plays at " + ember.getVoicePitch() + ".");
+        helper.succeed();
+    }
+
     /** A mob with `minecraft:behavior.sleep` lies down at night, which `q.is_sleeping` reports. */
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 80)
     public void aSleepingMobReportsItIsSleeping(GameTestHelper helper) {
