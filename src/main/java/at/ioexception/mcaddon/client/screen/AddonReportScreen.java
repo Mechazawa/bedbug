@@ -13,7 +13,7 @@ import net.minecraft.network.chat.Component;
  * or a command is counted by its name wherever it was asked for. Scripts run on the server, so a
  * client playing on another machine reports none running, and `/mcaddon scripts` asks the server.
  */
-final class AddonReportScreen extends ColumnScreen {
+public final class AddonReportScreen extends ColumnScreen {
     private final AddonEntry addon;
 
     AddonReportScreen(Screen parent, AddonEntry addon) {

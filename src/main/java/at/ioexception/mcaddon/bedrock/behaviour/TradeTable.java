@@ -11,6 +11,7 @@ import com.google.gson.JsonObject;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
@@ -29,7 +30,23 @@ import java.util.concurrent.ThreadLocalRandom;
  * no tiers of its own, so each offer remembers the tier it came from and a trader shows the offers
  * of every tier its earned experience has reached.
  */
-public record TradeTable(List<Offer> offers, List<Integer> tierExperience) {
+public record TradeTable(List<Offer> offers, List<Integer> tierExperience,
+    EntityType<?> borrowedFrom) {
+
+    public TradeTable(List<Offer> offers, List<Integer> tierExperience) {
+        this(offers, tierExperience, null);
+    }
+
+    /**
+     * Mojang's own trade tables are not shipped, so a path naming one the pack lacks borrows the
+     * offers Java's mob of the same kind makes for itself.
+     */
+    private static final java.util.Map<String, EntityType<?>> VANILLA = java.util.Map.of(
+        //? if >=26.2 {
+        "trading/economy_trades/wandering_trader_trades.json", net.minecraft.world.entity.EntityTypes.WANDERING_TRADER);
+        //?} else {
+        /*"trading/economy_trades/wandering_trader_trades.json", EntityType.WANDERING_TRADER);
+        *///?}
 
     /** One trade: what it takes, what it gives back, and how often it can be used. */
     public record Offer(TradeItem cost, TradeItem secondCost, TradeItem result, int maxUses,
@@ -213,6 +230,8 @@ public record TradeTable(List<Offer> offers, List<Integer> tierExperience) {
     public static TradeTable read(BedrockPack pack, String path) {
         Path file = pack.file(path);
         if (!Files.isRegularFile(file)) {
+            EntityType<?> borrowed = VANILLA.get(path);
+            if (borrowed != null) return new TradeTable(List.of(), List.of(), borrowed);
             McAddon.LOGGER.warn("{} names a trade table it does not ship: {}", pack.displayName(), path);
             return new TradeTable(List.of(), List.of());
         }
@@ -226,11 +245,12 @@ public record TradeTable(List<Offer> offers, List<Integer> tierExperience) {
     }
 
     public int tiers() {
-        return tierExperience.size();
+        return borrowedFrom != null ? 1 : tierExperience.size();
     }
 
     /** How many tiers a trader holding this much experience has reached, and so may offer. */
     public int reached(int experience) {
+        if (borrowedFrom != null) return 1;
         int count = 0;
         for (Integer required : tierExperience) {
             if (experience >= required) count++;

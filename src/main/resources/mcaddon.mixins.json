@@ -39,6 +39,7 @@
     "PowderSnowBlockMixin",
     "TamableAnimalMixin",
     "VillagerMixin",
+    "AgeableMobMixin",
     "NameTagItemMixin",
     "AbstractHorseMixin",
     "PistonBaseBlockMixin",

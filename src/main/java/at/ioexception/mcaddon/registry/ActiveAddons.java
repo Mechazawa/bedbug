@@ -80,6 +80,20 @@ public final class ActiveAddons {
         return AddonRegistry.registeredItem(id) && !activeItems.contains(id);
     }
 
+    /** Whether `set` carries the same converted add-ons as the active set, whichever object holds them. */
+    public static boolean isActive(AddonSet set) {
+        return rootsOf(set).equals(rootsOf(active));
+    }
+
+    /** Whether the active set carries the add-on converted to `namespace`. */
+    public static boolean isActive(String namespace) {
+        return active.converted().stream().anyMatch(one -> one.namespace().equals(namespace));
+    }
+
+    private static List<java.nio.file.Path> rootsOf(AddonSet set) {
+        return set.converted().stream().map(at.ioexception.mcaddon.convert.ConvertedPack::root).toList();
+    }
+
     /** Runs after every activation, which is how the drawing side follows the active set. */
     public static void onActivate(Consumer<AddonSet> listener) {
         LISTENERS.add(listener);

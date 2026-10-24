@@ -1,0 +1,18 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "tp:hawker",
+      "materials": {
+        "default": "entity"
+      },
+      "textures": {
+        "default": "textures/entity/ember"
+      },
+      "geometry": {
+        "default": "geometry.tp.gaze"
+      },
+      "render_controllers": ["controller.render.tp.sprite"]
+    }
+  }
+}

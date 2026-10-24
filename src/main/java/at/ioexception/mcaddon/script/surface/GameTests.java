@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.script.surface;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.registry.ActiveAddons;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonBlocks;
@@ -443,7 +444,7 @@ public final class GameTests extends Surface {
 
     private McStructure search(String name) {
         String wanted = name.replace(':', '/').toLowerCase(Locale.ROOT);
-        for (BedrockPack pack : McAddon.packs().packs()) {
+        for (BedrockPack pack : ActiveAddons.active().packs().packs()) {
             for (Path file : pack.list("structures", ".mcstructure")) {
                 String relative = pack.relative(file).toString()
                     .replace('\\', '/').toLowerCase(Locale.ROOT);
