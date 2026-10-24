@@ -5,6 +5,7 @@ import at.ioexception.mcaddon.bedrock.animation.AnimationAction;
 import at.ioexception.mcaddon.bedrock.animation.AnimationController;
 import at.ioexception.mcaddon.bedrock.animation.AnimationPlayer;
 import at.ioexception.mcaddon.bedrock.animation.BonePose;
+import at.ioexception.mcaddon.bedrock.animation.PlayedAnimation;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
@@ -38,8 +39,14 @@ public final class EntityAnimator {
     private final Map<String, BedrockBone> bonesByName = new HashMap<>();
     private final Map<String, Vector3f> locators = new HashMap<>();
 
-    /** Clips started outside the animate list, which the list must not switch off again. */
-    private final Set<String> direct = new HashSet<>();
+    /**
+     * Clips started outside the animate list, which the list must not switch off again, by the
+     * controller each runs in.
+     */
+    private final Map<String, Direct> direct = new HashMap<>();
+
+    private record Direct(String clip, PlayedAnimation request) {
+    }
 
     private boolean initialised;
     private MolangEnvironment published;
@@ -147,16 +154,29 @@ public final class EntityAnimator {
         }
 
         // A clip nobody asked for this frame has been switched off, so it stops rather than lingers.
+        Set<String> started = new HashSet<>();
+        direct.values().forEach(running -> started.add(running.clip()));
         for (String playing : player.playing()) {
-            if (!wanted.contains(playing) && !direct.contains(playing)) player.stop(playing);
+            if (!wanted.contains(playing) && !started.contains(playing)) player.stop(playing);
         }
-        direct.removeIf(name -> !player.isPlaying(name));
+
+        List<PlayedAnimation> ended = direct.values().stream()
+            .filter(running -> !player.isPlaying(running.clip()))
+            .map(Direct::request)
+            .toList();
+        ended.forEach(request -> direct.remove(request.controller()));
+        ended.stream()
+            .filter(request -> assets.animation(definition.resolveAnimation(request.nextState())) != null)
+            .map(PlayedAnimation::following)
+            .forEach(this::playDirect);
         player.tick(deltaSeconds);
     }
 
     private void collect(String shortName, float deltaSeconds, float weight, boolean shortestPath,
         Set<String> wanted) {
         String resolved = definition.resolveAnimation(shortName);
+
+        if (direct.containsKey(shortName) || direct.containsKey(resolved)) return;
 
         AnimationController controller = assets.animationController(resolved);
         if (controller == null) {
@@ -267,18 +287,14 @@ public final class EntityAnimator {
         }
     }
 
-    /**
-     * Plays a clip outside the controller graph, which is how a spoken line is delivered.
-     *
-     * `/playanimation` is where the other two arguments come from: the pack says when the clip ends
-     * and how long it takes to let go.
-     */
-    public void playDirect(String animationName, String stopExpression, float blendOutSeconds) {
-        MolangExpression stop = stopExpression == null || stopExpression.isBlank()
-            ? null : MolangParser.parse(stopExpression);
-        String resolved = definition.resolveAnimation(animationName);
-        player.play(resolved, stop, blendOutSeconds);
-        direct.add(resolved);
+    /** Plays a clip outside the animate list, which is how a spoken line is delivered. */
+    public void playDirect(PlayedAnimation request) {
+        String stopExpression = request.stopExpression();
+        MolangExpression stop = stopExpression.isBlank() ? null : MolangParser.parse(stopExpression);
+        String resolved = definition.resolveAnimation(request.animation());
+        Direct replaced = direct.put(request.controller(), new Direct(resolved, request));
+        if (replaced != null && !replaced.clip().equals(resolved)) player.stop(replaced.clip());
+        player.play(resolved, stop, request.blendOutSeconds());
     }
 
     public BonePose poseOf(String bone) {

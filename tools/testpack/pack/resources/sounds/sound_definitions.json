@@ -3,6 +3,9 @@
   "sound_definitions": {
     "tp:sprite.chime": {
       "category": "neutral",
+      "subtitle": "subtitles.tp.sprite.chime",
+      "min_distance": 4.0,
+      "max_distance": 24.0,
       "sounds": [
         {
           "name": "sounds/tp/chime",

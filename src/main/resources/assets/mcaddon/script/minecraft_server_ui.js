@@ -197,19 +197,6 @@ class FormBuilder {
     }
 
     /**
-     * Reports the options a component carries that the screen has no room for. Visibility and the
-     * disabled state are read each time the form is described, because either may be an observable.
-     */
-    #options(component, options) {
-        if (options === undefined || options === null) return undefined;
-
-        const member = this.constructor.name + "." + component + " ";
-        if (options.tooltip !== undefined) unsupported(member + "tooltip");
-        if (options.description !== undefined) unsupported(member + "description");
-        return options;
-    }
-
-    /**
      * Describes every component that is visible, in the order they were added, and collects every
      * observable the description read on the way.
      */
@@ -222,6 +209,9 @@ class FormBuilder {
                 const element = { type: component.type, id, ...component.describe() };
                 const readOnlyTarget = component.target !== undefined && readOnly.has(component.target);
                 if (plain(component.options?.disabled) === true || readOnlyTarget) element.disabled = true;
+                const hover = [component.options?.tooltip, component.options?.description]
+                    .map(text).filter(line => line !== "").join("\n");
+                if (hover !== "") element.tooltip = hover;
                 if (component.target !== undefined) element.bound = true;
                 if (component.click !== undefined) element.stay = true;
                 return [element];
@@ -292,19 +282,19 @@ class FormBuilder {
     }
 
     header(value, options) {
-        return this.#add("header", () => ({ text: text(value) }), { options: this.#options("header", options) });
+        return this.#add("header", () => ({ text: text(value) }), { options });
     }
 
     label(value, options) {
-        return this.#add("label", () => ({ text: text(value) }), { options: this.#options("label", options) });
+        return this.#add("label", () => ({ text: text(value) }), { options });
     }
 
     divider(options) {
-        return this.#add("divider", () => ({}), { options: this.#options("divider", options) });
+        return this.#add("divider", () => ({}), { options });
     }
 
     spacer(options) {
-        return this.#add("spacer", () => ({}), { options: this.#options("spacer", options) });
+        return this.#add("spacer", () => ({}), { options });
     }
 
     /**
@@ -317,7 +307,7 @@ class FormBuilder {
         const icon = click === undefined ? text(onClick) : "";
         if (icon !== "") unsupported(this.constructor.name + ".button icon");
         return this.#add("button", () => ({ text: text(label), icon }),
-            { options: this.#options("button", options), click });
+            { options, click });
     }
 
     /** The way out of a form that counts as the player closing it rather than answering it. */
@@ -330,14 +320,12 @@ class FormBuilder {
     }
 
     button1(label, tooltip) {
-        if (tooltip !== undefined) unsupported(this.constructor.name + ".button1 tooltip");
-        this.#buttons[0] = label;
+        this.#buttons[0] = { label, tooltip };
         return this.#positionButtons();
     }
 
     button2(label, tooltip) {
-        if (tooltip !== undefined) unsupported(this.constructor.name + ".button2 tooltip");
-        this.#buttons[1] = label;
+        this.#buttons[1] = { label, tooltip };
         return this.#positionButtons();
     }
 
@@ -347,7 +335,8 @@ class FormBuilder {
      */
     #positionButtons() {
         this.components = this.components.filter(component => component.type !== "button");
-        this.#buttons.forEach(label => this.#add("button", () => ({ text: text(label ?? ""), icon: "" })));
+        this.#buttons.forEach(button => this.#add("button",
+            () => ({ text: text(button?.label ?? ""), icon: "" }), { options: { tooltip: button?.tooltip } }));
         return this;
     }
 
@@ -362,7 +351,7 @@ class FormBuilder {
             ? (typeof toggled === "boolean" ? toggled : plain(settings?.defaultValue))
             : plain(target)) === true;
         return this.#add("toggle", () => ({ text: text(label), value: start() }),
-            { options: this.#options("toggle", settings), target });
+            { options: settings, target });
     }
 
     /**
@@ -386,7 +375,7 @@ class FormBuilder {
                 ? plain(settings === undefined ? options : settings.defaultValue) ?? low
                 : plain(target);
             return { text: text(label), min: low, max: high, step, value: start };
-        }, { options: this.#options("slider", settings), target });
+        }, { options: settings, target });
     }
 
     /**
@@ -401,20 +390,17 @@ class FormBuilder {
         const trailing = older ? items : options;
         const settings = typeof trailing === "number" ? undefined : trailing;
 
-        if (choices.some(item => item?.description !== undefined)) {
-            unsupported(this.constructor.name + ".dropdown item description");
-        }
-
         // A 2.x item carries the number the selection stands for, so the answer is looked up rather
         // than taken as the index a 1.x item list answers with.
         const answers = target === undefined ? undefined : choices.map(item => plain(item?.value));
         return this.#add("dropdown", () => ({
             text: text(label),
             options: choices.map(item => text(item?.label === undefined ? item : item.label)),
+            descriptions: choices.map(item => text(item?.description)),
             value: target === undefined
                 ? plain(typeof trailing === "number" ? trailing : settings?.defaultValueIndex) ?? 0
                 : Math.max(0, answers.indexOf(plain(target))),
-        }), { options: this.#options("dropdown", settings), target, values: answers });
+        }), { options: settings, target, values: answers });
     }
 
     /**
@@ -429,7 +415,7 @@ class FormBuilder {
             placeholder: target === undefined ? text(value) : "",
             value: target === undefined ? text(settings === undefined ? options : settings.defaultValue)
                 : text(target),
-        }), { options: this.#options("textField", settings), target });
+        }), { options: settings, target });
     }
 
     image(source, pack, options) {

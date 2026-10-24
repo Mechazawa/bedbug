@@ -1,9 +1,14 @@
 package at.ioexception.mcaddon.server;
 
+import at.ioexception.mcaddon.bedrock.animation.PlayedAnimation;
 import at.ioexception.mcaddon.network.Channels;
 import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Predicate;
 
 /**
  * Tells every client watching an entity to run one of its pack's clips.
@@ -15,12 +20,10 @@ public final class Animations {
     private Animations() {
     }
 
-    public static void play(Entity entity, String animation, String stopExpression, float blendOut) {
-        for (ServerPlayer player : PlayerLookup.tracking(entity)) {
-            Channels.sendAnimation(player, entity.getId(), animation, stopExpression, blendOut);
-        }
-        if (entity instanceof ServerPlayer self) {
-            Channels.sendAnimation(self, entity.getId(), animation, stopExpression, blendOut);
-        }
+    /** Plays the clip for each watching player `shownTo` accepts, which a script may narrow. */
+    public static void play(Entity entity, PlayedAnimation request, Predicate<ServerPlayer> shownTo) {
+        List<ServerPlayer> viewers = new ArrayList<>(PlayerLookup.tracking(entity));
+        if (entity instanceof ServerPlayer self) viewers.add(self);
+        viewers.stream().filter(shownTo).forEach(viewer -> Channels.sendAnimation(viewer, entity.getId(), request));
     }
 }

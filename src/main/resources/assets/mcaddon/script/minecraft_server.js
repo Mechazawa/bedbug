@@ -1419,6 +1419,11 @@ export class EntityIsBabyComponent extends EntityComponent {
 
 export class EntityItemComponent extends EntityComponent {
     static componentId = "minecraft:item";
+
+    get itemStack() {
+        const item = bridge.droppedItem(this.entity.id);
+        return item === null ? undefined : itemFrom(JSON.parse(item));
+    }
 }
 
 /**
@@ -2891,8 +2896,10 @@ export class Entity {
         return new SoundInstance(soundIdOf(soundId));
     }
 
-    playAnimation(animation) {
-        bridge.playAnimation(this.id, animation);
+    playAnimation(animation, options) {
+        const players = options?.players === undefined ? null : JSON.stringify(options.players.map(player => player.id));
+        bridge.playAnimation(this.id, animation, options?.nextState ?? "", options?.blendOutTime ?? 0,
+            options?.stopExpression ?? "", options?.controller ?? "", players);
     }
 
     getProperty(name) {
@@ -4193,17 +4200,17 @@ export class DimensionTypes {
 class Subscription {
     #options;
     #types;
+    #itemTypes;
 
     constructor(callback, options, event) {
         this.callback = callback;
         this.#options = options ?? undefined;
         this.#types = options?.entityTypes?.map(type => EntityTypes.get(type)?.id ?? namespaced(type));
-        for (const name of ["itemFilter", "accessSourceFilter"]) {
-            if (options?.[name] !== undefined) bridge.unsupported(event + " options." + name);
-        }
+        this.#itemTypes = options?.itemFilter?.includeTypes?.map(namespaced);
+        if (options?.accessSourceFilter !== undefined) bridge.unsupported(event + " options.accessSourceFilter");
     }
 
-    admits(event, subjectOf) {
+    admits(event, subjectOf, itemsOf) {
         const options = this.#options;
         if (options === undefined || subjectOf === undefined) return true;
 
@@ -4216,9 +4223,17 @@ class Subscription {
             && !options.allowedDamageCauses.includes(event.damageSource?.cause)) return false;
         if (options.allowedHealCauses !== undefined
             && !options.allowedHealCauses.includes(event.healSource?.cause)) return false;
+        if (this.#itemTypes !== undefined
+            && !(itemsOf?.(event) ?? []).some(item => this.#itemTypes.includes(item?.typeId))) return false;
         return true;
     }
 }
+
+/** The item stacks an event is about, which a listener's `itemFilter` is measured against. */
+const EVENT_ITEMS = {
+    entityItemDrop: event => event.items.map(item => item.getComponent("minecraft:item")?.itemStack),
+    entityItemPickup: event => event.items ?? [event.item?.getComponent("minecraft:item")?.itemStack],
+};
 
 /**
  * The entity each event is about, which is what a listener's options are measured against. An
@@ -4262,7 +4277,7 @@ class EventSignal {
         const shaped = this.shape ? this.shape(shapeFields(event)) : shapeFields(event);
         const ready = this.payload ? asPayload(this.payload, shaped) : shaped;
         for (const listener of this.#listeners.slice()) {
-            if (!listener.admits(ready, this.subject)) continue;
+            if (!listener.admits(ready, this.subject, this.itemsOf)) continue;
             try {
                 listener.callback(ready);
             } catch (error) {
@@ -4374,6 +4389,15 @@ const EVENT_SHAPES = {
         // Bedrock hands over a list, and one throw drops one stack.
         event.items = [event.item];
         delete event.item;
+        return event;
+    },
+
+    entityItemPickup(event) {
+        // The before event names the item entity about to be taken, the after event what was taken.
+        if (event.itemStack !== undefined) {
+            event.items = [event.itemStack];
+            delete event.itemStack;
+        }
         return event;
     },
 
@@ -4540,6 +4564,7 @@ function eventGroup(raised, group) {
                 target[name] = new (build ?? EventSignal)();
                 target[name].name = name;
                 target[name].subject = EVENT_SUBJECTS[name];
+                target[name].itemsOf = EVENT_ITEMS[name];
                 target[name].shape = EVENT_SHAPES[name];
                 target[name].payload = payloadsFor(group)[name];
             }

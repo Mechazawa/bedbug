@@ -161,6 +161,19 @@
           "teleports_on_projectile_hit": true
         }
       },
+      "tp:brute_flitting": {
+        "minecraft:teleport": {
+          "min_random_teleport_time": 0,
+          "max_random_teleport_time": 0,
+          "random_teleport_cube": [
+            2,
+            8,
+            2
+          ],
+          "light_teleport_chance": 1,
+          "dark_teleport_chance": 1
+        }
+      },
       "tp:brute_breeding": {
         "minecraft:breedable": {
           "breed_items": [
@@ -696,6 +709,16 @@
           "power": 2,
           "causes_fire": true,
           "fire_affected_by_griefing": true
+        }
+      },
+      "tp:brute_milky": {
+        "minecraft:behavior.drink_milk": {
+          "priority": 0,
+          "filters": {
+            "test": "on_fire",
+            "subject": "self",
+            "value": true
+          }
         }
       },
       "tp:brute_thirsty": {
@@ -1372,6 +1395,13 @@
           ]
         }
       },
+      "tp:brute_flit": {
+        "add": {
+          "component_groups": [
+            "tp:brute_flitting"
+          ]
+        }
+      },
       "tp:brute_breed": {
         "add": {
           "component_groups": [
@@ -1641,6 +1671,13 @@
         "add": {
           "component_groups": [
             "tp:brute_smouldering"
+          ]
+        }
+      },
+      "tp:brute_make_milky": {
+        "add": {
+          "component_groups": [
+            "tp:brute_milky"
           ]
         }
       },

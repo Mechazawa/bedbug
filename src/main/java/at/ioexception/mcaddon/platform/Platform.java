@@ -127,6 +127,18 @@ public final class Platform {
         *///?}
     }
 
+    /**
+     * Java's enderman jump: drops to the first block below that stops movement and gives up inside a
+     * block or a liquid. 26.3 also takes the blocks to keep clear of, and none are kept clear of here.
+     */
+    public static boolean randomTeleport(LivingEntity entity, double x, double y, double z) {
+        //? if >=26.3 {
+        /*return entity.randomTeleport(x, y, z, true, state -> false);
+        *///?} else {
+        return entity.randomTeleport(x, y, z, true);
+        //?}
+    }
+
     public static CommandSourceStack commandSourceOf(Entity entity, ServerLevel level) {
         //? if >=26 {
         return entity.createCommandSourceStackForNameResolution(level);

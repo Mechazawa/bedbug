@@ -283,26 +283,31 @@ public final class WorldEvents {
     }
 
     /**
-     * Somebody walking over a dropped item and taking it, which a pack may refuse.
+     * Any entity taking a dropped item, which a pack may refuse.
      *
-     * Answering true leaves the item on the ground, so the before event runs first and the after
-     * event only follows once the pickup is going to happen.
+     * Bedrock raises the before event for the item about to be taken and the after event for what
+     * was taken, which is less than the stack where the taker had no room for all of it. A refusal
+     * leaves the item on the ground and runs no pickup.
      */
-    public static boolean pickupRefused(Player player, ItemEntity item) {
+    public static boolean pickUp(Entity taker, ItemEntity item, java.util.function.BooleanSupplier take) {
         ScriptHost scripts = ServerHooks.scripts();
-        if (scripts == null || !(player instanceof ServerPlayer)) return false;
+        if (scripts == null) return take.getAsBoolean();
 
-        if (scripts.raiseCancellable("entityItemPickup", pickup(player, item))) return true;
+        Map<String, Object> before = new LinkedHashMap<>();
+        before.put("entity", ScriptHost.EntityHandle.of(taker));
+        before.put("item", ScriptHost.EntityHandle.of(item));
+        if (scripts.raiseCancellable("entityItemPickup", before)) return false;
 
-        scripts.raiseWorldEvent("entityItemPickup", pickup(player, item));
-        return false;
-    }
-
-    private static Map<String, Object> pickup(Player player, ItemEntity item) {
-        Map<String, Object> fields = new LinkedHashMap<>();
-        fields.put("entity", ScriptHost.EntityHandle.of(player));
-        fields.put("itemStack", item(item.getItem()));
-        return fields;
+        ItemStack offered = item.getItem().copy();
+        boolean took = take.getAsBoolean();
+        int left = item.isRemoved() ? 0 : item.getItem().getCount();
+        if (left < offered.getCount()) {
+            Map<String, Object> after = new LinkedHashMap<>();
+            after.put("entity", ScriptHost.EntityHandle.of(taker));
+            after.put("itemStack", item(offered.copyWithCount(offered.getCount() - left)));
+            scripts.raiseWorldEvent("entityItemPickup", after);
+        }
+        return took;
     }
 
     /**

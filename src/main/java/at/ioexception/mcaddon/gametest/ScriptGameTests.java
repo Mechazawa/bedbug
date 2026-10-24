@@ -12,6 +12,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.AgeableMob;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.TamableAnimal;
 import net.minecraft.world.entity.monster.zombie.ZombieVillager;
 import net.minecraft.world.entity.npc.villager.Villager;
@@ -19,6 +20,8 @@ import net.minecraft.world.entity.npc.villager.VillagerData;
 import net.minecraft.world.entity.npc.villager.VillagerDataHolder;
 import net.minecraft.world.entity.npc.villager.VillagerProfession;
 import net.minecraft.world.entity.npc.villager.VillagerType;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 
 import java.io.IOException;
@@ -561,7 +564,8 @@ public final class ScriptGameTests {
     }
 
     /**
-     * A bred mob arrives to a pack's script as born and one placed in the world as spawned.
+     * A bred mob arrives to a pack's script as born and one placed in the world as spawned. Neither
+     * is loaded: `entityLoad` is for an entity read back from storage.
      */
     @GameTest()
     public void aBredAnimalIsBornToTheScript(GameTestHelper helper) {
@@ -581,6 +585,10 @@ public final class ScriptGameTests {
                 net.minecraft.world.entity.animal.cow.Cow.class, helper.getBounds(), calf -> calf.isBaby());
             helper.assertTrue(calves.size() == 1, "Breeding made " + calves.size() + " calves.");
             expectTag(helper, calves.get(0), "tp:cow_cause_Born");
+            helper.assertFalse(Platform.tagsOf(placed).contains("tp:cow_load_seen"),
+                "A cow placed in the world was reported to the script as loaded.");
+            helper.assertFalse(Platform.tagsOf(calves.get(0)).contains("tp:cow_load_seen"),
+                "A calf bred in the world was reported to the script as loaded.");
             helper.succeed();
         });
     }
@@ -608,6 +616,53 @@ public final class ScriptGameTests {
         });
     }
     //?}
+
+    /**
+     * A mob picking an item up raises both pickup events, each naming the item the way Bedrock does
+     * and heard only by a listener whose `itemFilter` takes it, and a refusal leaves the item lying.
+     *
+     * The script hears iron swords and refuses diamond ones, so the husk taking a golden sword is
+     * tagged by nobody.
+     */
+    @GameTest(maxTicks = PICKUP_TICKS)
+    public void aMobPickingAnItemUpIsHeardThroughTheItemFilter(GameTestHelper helper) {
+        if (ServerHooks.scripts() == null) {
+            helper.succeed();
+            return;
+        }
+
+        Mob iron = looter(helper, STAND, Items.IRON_SWORD);
+        Mob gold = looter(helper, STAND.east(3), Items.GOLDEN_SWORD);
+        Mob diamond =
+            looter(helper, STAND.south(3), Items.DIAMOND_SWORD);
+        helper.succeedWhen(() -> {
+            expectTag(helper, iron, "tp:taking_iron_sword");
+            expectTag(helper, iron, "tp:took_iron_sword_1");
+            helper.assertTrue(gold.getMainHandItem().is(Items.GOLDEN_SWORD),
+                "The husk never picked the golden sword up.");
+            helper.assertTrue(Platform.tagsOf(gold).stream().noneMatch(tag -> tag.startsWith("tp:t")),
+                "The script heard a golden sword through its filter: " + Platform.tagsOf(gold) + ".");
+            helper.assertTrue(diamond.getMainHandItem().isEmpty(), "The script refused a diamond sword it took.");
+        });
+    }
+
+    private static final int PICKUP_TICKS = 60;
+
+    /** A husk that picks loot up, standing on the item the test hands it. */
+    private static Mob looter(GameTestHelper helper, BlockPos where,
+        Item item) {
+        EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("minecraft", "husk")).orElseThrow();
+        Mob husk = (Mob) Platform.createMob(type, helper.getLevel());
+        BlockPos at = helper.absolutePos(where);
+        Platform.placeAt(husk, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        husk.setNoAi(true);
+        husk.setCanPickUpLoot(true);
+        // A mock player in a far test counts as the nearest player, which despawns a husk by distance.
+        husk.setPersistenceRequired();
+        helper.getLevel().addFreshEntity(husk);
+        helper.spawnItem(item, where);
+        return husk;
+    }
 
     private static void expectTag(GameTestHelper helper, Entity entity, String tag) {
         helper.assertTrue(Platform.tagsOf(entity).contains(tag),

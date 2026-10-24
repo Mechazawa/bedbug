@@ -28,7 +28,9 @@ import {
     BlockPermutation, BlockVolume, CameraShakeType, CatmullRomSpline, CloneMode, EasingType, EntityAttachPoint,
     HudElement, HudVisibility, ItemStack, system, world,
 } from "@minecraft/server";
-import { ActionFormData, CustomForm, ObservableBoolean, ObservableString } from "@minecraft/server-ui";
+import {
+    ActionFormData, CustomForm, MessageFormData, ModalFormData, ObservableBoolean, ObservableNumber, ObservableString,
+} from "@minecraft/server-ui";
 import { register } from "@minecraft/server-gametest";
 import { weighTheProbe } from "./weigh.js";
 import { dedicatedServer, deopPlayer, opPlayer, secrets, SecretString, variables } from "@minecraft/server-admin";
@@ -195,6 +197,36 @@ function openTiles(player, message) {
     tiles.show(player).then(response => player.addTag("tp:tiles_" + response.selection));
 }
 
+// Forms whose controls carry hover text, written in each generation: a 1.x ModalFormData with a
+// tooltip on every input, a two-button MessageFormData with one on each button, and a 2.x CustomForm
+// with a description on its inputs, a tooltip on a button and a description on each dropdown item.
+// `/scriptevent tp:hints modal|message|custom` opens one.
+function openHints(player, kind) {
+    if (kind === "modal") {
+        new ModalFormData().title("Modal hints")
+            .toggle("Lamp", { tooltip: "Lights the lamp" })
+            .dropdown("Colour", ["Red", "Blue"], { tooltip: { rawtext: [{ text: "Picks " }, { text: "a colour" }] } })
+            .slider("Volume", 0, 10, { tooltip: "How loud" })
+            .textField("Name", "Type here", { tooltip: "What to call it" })
+            .show(player);
+    } else if (kind === "message") {
+        new MessageFormData().title("Message hints").body("Sure?")
+            .button1("Yes", "Agrees").button2("No", "Declines")
+            .show(player);
+    } else {
+        const choice = new ObservableNumber(0);
+        new CustomForm(player, "Custom hints")
+            .toggle("Echo", new ObservableBoolean(false), { description: "Repeats sounds" })
+            .dropdown("Shape", choice, [
+                { label: "Round", value: 0, description: "Has no corners" },
+                { label: "Square", value: 1, description: "Has four corners" },
+            ], { description: "Pick a shape" })
+            .button("Apply", () => {}, { tooltip: "Keeps the shape" })
+            .closeButton()
+            .show();
+    }
+}
+
 // The script half of `/hud`, which hides the same pieces on the same player's client. What the
 // script reads back about the display afterwards is a tag on that player.
 function hideTheHotbar(player) {
@@ -348,6 +380,7 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
         case "tp:catalogue": openCatalogue(player); break;
         case "tp:ledger": openLedger(player); break;
         case "tp:tiles": openTiles(player, event.message); break;
+        case "tp:hints": openHints(player, event.message); break;
         case "tp:commands": runBedrockCommands(player); break;
         // A pack handing out one of its own items unless the player already carries it.
         case "tp:stock_up":
@@ -455,6 +488,10 @@ world.afterEvents.entitySpawn.subscribe(({ entity, cause }) => {
     }
 });
 
+world.afterEvents.entityLoad.subscribe(({ entity }) => {
+    if (entity.typeId === "minecraft:cow") entity.addTag("tp:cow_load_seen");
+});
+
 // Of each pair, only the listener asking for a villager may hear one being hurt.
 function tagWhenHurt(signal, tag, options) {
     signal.subscribe(({ hurtEntity }) => system.run(() => hurtEntity.addTag(tag)), options);
@@ -464,6 +501,29 @@ tagWhenHurt(world.afterEvents.entityHurt, "tp:hurt_as_zombie", { entityTypes: ["
 tagWhenHurt(world.beforeEvents.entityHurt, "tp:before_hurt_as_villager", { entityFilter: { type: VILLAGER } });
 tagWhenHurt(world.beforeEvents.entityHurt, "tp:before_hurt_as_zombie",
     { entityFilter: { type: "minecraft:zombie" } });
+
+// The lift is replaced by the hover in the same controller, which hovers for a count of frames and
+// then hands over to the lift again.
+system.afterEvents.scriptEventReceive.subscribe(({ id }) => {
+    if (id !== "tp:animate_wisp") return;
+    for (const wisp of world.getDimension("overworld").getEntities({ type: "tp:wisp", tags: ["near"] })) {
+        wisp.playAnimation("animation.tp.wisp.lift", { controller: "tp_scratch" });
+        wisp.playAnimation("animation.tp.wisp.hover", { controller: "tp_scratch", blendOutTime: 0,
+            stopExpression: "v.tp_hovered = v.tp_hovered + 1; return v.tp_hovered > 60;", nextState: "animation.tp.wisp.lift" });
+    }
+});
+
+// Only an iron sword is heard being picked up, and nobody may pick up a diamond one.
+world.beforeEvents.entityItemPickup.subscribe(({ entity, item }) => {
+    const typeId = item.getComponent("minecraft:item").itemStack.typeId;
+    system.run(() => entity.addTag("tp:taking_" + typeId.slice("minecraft:".length)));
+}, { itemFilter: { includeTypes: ["iron_sword"] } });
+world.afterEvents.entityItemPickup.subscribe(({ entity, items }) =>
+    entity.addTag("tp:took_" + items.map(stack => stack.typeId.slice("minecraft:".length) + "_" + stack.amount).join("+")),
+{ itemFilter: { includeTypes: ["minecraft:iron_sword"] } });
+world.beforeEvents.entityItemPickup.subscribe(event => {
+    event.cancel = true;
+}, { itemFilter: { includeTypes: ["minecraft:diamond_sword"] } });
 
 // A villager that takes a job raises the `minecraft:become_*` event its profession names, and a pack
 // dressing its own model for that job reads the profession, the biome and the face off it then.

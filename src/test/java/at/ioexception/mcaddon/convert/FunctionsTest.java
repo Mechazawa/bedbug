@@ -104,6 +104,10 @@ class FunctionsTest {
         "'ride @e[type=minecraft:pig] summon_rider zombie minecraft:as_baby_jockey', "
             + "'ride @e[type=minecraft:pig] summon_rider minecraft:zombie minecraft:as_baby_jockey'",
         "'ride @s summon_ride zombie_pigman skip_riders', 'ride @s summon_ride minecraft:zombified_piglin skip_riders'",
+        "'tag @s add \"xrmlws\"', 'tag @s add xrmlws'",
+        "'tag @e[type=zombie,c=1] remove \"a.b-c\"', 'tag @e[type=minecraft:zombie,limit=1] remove a.b-c'",
+        "'tag @s add plain', 'tag @s add plain'",
+        "'tag @s list', 'tag @s list'",
         "'summon pig ~ ~ ~ facing ~ ~1 ~', 'summon minecraft:pig ~ ~ ~ facing ~ ~1 ~'",
         "'summon pig ~ ~ ~ 90 0 minecraft:entity_born Bob', "
             + "'summon minecraft:pig ~ ~ ~ 90 0 minecraft:entity_born Bob'",
@@ -301,6 +305,12 @@ class FunctionsTest {
     void dropsAnExecuteWhoseOwnCommandJavaHasNoCounterpartFor() throws IOException {
         assertEquals(List.of(), translate("execute as @a run project export world"));
         assertTrue(problems.contains("command project"), problems.toString());
+    }
+
+    @Test
+    void reportsAQuotedTagNameJavaCannotWrite() throws IOException {
+        assertEquals(List.of(), translate("tag @s add \"two words\""));
+        assertTrue(problems.contains("command tag, with a name Java cannot write"), problems.toString());
     }
 
     @Test

@@ -1,6 +1,15 @@
 {
   "format_version": "1.8.0",
   "animations": {
+    "animation.tp.wisp.hover": {
+      "loop": true,
+      "animation_length": 1.0,
+      "bones": {
+        "core": {
+          "position": [0, 2, 0]
+        }
+      }
+    },
     "animation.tp.wisp.lift": {
       "animation_length": 2.0,
       "bones": {

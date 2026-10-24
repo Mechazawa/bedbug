@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.client.render;
 
 import at.ioexception.mcaddon.bedrock.animation.BonePose;
+import at.ioexception.mcaddon.bedrock.animation.PlayedAnimation;
 import at.ioexception.mcaddon.bedrock.entity.ClientEntityDefinition;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import net.minecraft.client.model.geom.ModelPart;
@@ -33,10 +34,10 @@ public final class JavaModelPoses {
     private JavaModelPoses() {
     }
 
-    static void play(Entity entity, String animation, String stopExpression, float blendOut) {
-        AddonModels models = AddonClientAssets.withAnimation(animation);
+    static void play(Entity entity, PlayedAnimation request) {
+        AddonModels models = AddonClientAssets.withAnimation(request.animation());
         if (models == null) {
-            report("animation " + animation + ", which no resource pack defines");
+            report("animation " + request.animation() + ", which no resource pack defines");
             return;
         }
 
@@ -44,7 +45,7 @@ public final class JavaModelPoses {
             .computeIfAbsent(models, pack -> Animators.Entry.of(entity,
                 new AddonClientAssets.Binding(pack, ClientEntityDefinition.drawnByJava(typeOf(entity))),
                 false, entity.tickCount))
-            .animator().playDirect(animation, stopExpression, blendOut);
+            .animator().playDirect(request);
     }
 
     /**

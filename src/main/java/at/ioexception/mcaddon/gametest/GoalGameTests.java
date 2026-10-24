@@ -279,6 +279,36 @@ public final class GoalGameTests {
     }
 
     /**
+     * A random teleport lands within a block of the first block below that stops movement, and never
+     * inside a block.
+     *
+     * The flitting group tries every tick in a box eight blocks high, so a jump that kept its height
+     * would leave the brute in the air or inside the floor.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aRandomTeleportLandsOnTheGround(GameTestHelper helper) {
+        AddonEntity brute = heldInPlace(helper, "tp:brute_flit", MIDDLE);
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        Vec3 start = brute.position();
+        helper.onEachTick(() -> {
+            helper.assertTrue(level.noCollision(brute), BRUTE + " teleported into a block.");
+            helper.assertFalse(level.noCollision(brute, brute.getBoundingBox().move(0, -1, 0)),
+                BRUTE + " teleported into the air at " + brute.position() + ".");
+        });
+        helper.runAfterDelay(FLIT_TICKS, () -> {
+            helper.assertTrue(brute.position().distanceTo(start) > 0, BRUTE + " never teleported.");
+            helper.succeed();
+        });
+    }
+
+    private static final int FLIT_TICKS = 40;
+
+    /**
      * An entity with `teleports_on_projectile_hit` blinks away from a projectile, which then does it
      * no harm.
      */
@@ -2012,6 +2042,8 @@ public final class GoalGameTests {
      * `minecraft:behavior.drink_potion` drinks the first of its `potions` whose filters hold, named
      * by Bedrock's number: the thirsty group drinks potion nineteen, water breathing, under water and
      * potion twelve, fire resistance, while burning, so a burning brute on land gains fire resistance.
+     * `minecraft:behavior.drink_milk` clears a harmful effect only while its `filters` hold: the milky
+     * group's filter asks for fire, so a weakened brute keeps the effect until it burns.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
     public void anEntityDrinksThePotionItsConditionsName(GameTestHelper helper) {
@@ -2021,15 +2053,28 @@ public final class GoalGameTests {
             return;
         }
 
-        brute.setRemainingFireTicks(BURNING);
-        helper.succeedWhen(() -> {
-            List<String> effects = brute.getActiveEffects().stream().map(Platform::effectId).toList();
-            helper.assertTrue(effects.contains("minecraft:fire_resistance"),
-                BRUTE + " drinks fire resistance while burning and holds " + effects + ".");
-            helper.assertFalse(effects.contains("minecraft:water_breathing"),
-                BRUTE + " drinks water breathing under water alone and drank it on land.");
-        });
+        EntityEvents.trigger(brute, "tp:brute_make_milky", null, ServerHooks.state());
+        brute.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+            net.minecraft.world.effect.MobEffects.WEAKNESS, WEAK_TICKS));
+        helper.startSequence()
+            .thenExecuteAfter(MILK_WAIT, () -> helper.assertTrue(
+                brute.hasEffect(net.minecraft.world.effect.MobEffects.WEAKNESS),
+                BRUTE + " drank milk while not burning."))
+            .thenExecute(() -> brute.setRemainingFireTicks(BURNING))
+            .thenWaitUntil(() -> {
+                List<String> effects = brute.getActiveEffects().stream().map(Platform::effectId).toList();
+                helper.assertTrue(effects.contains("minecraft:fire_resistance"),
+                    BRUTE + " drinks fire resistance while burning and holds " + effects + ".");
+                helper.assertFalse(effects.contains("minecraft:water_breathing"),
+                    BRUTE + " drinks water breathing under water alone and drank it on land.");
+                helper.assertFalse(effects.contains("minecraft:weakness"),
+                    BRUTE + " kept its weakness while burning.");
+            })
+            .thenSucceed();
     }
+
+    private static final int WEAK_TICKS = 2000;
+    private static final int MILK_WAIT = 40;
 
     /**
      * `minecraft:behavior.move_outdoors` walks an entity under a roof out to the open sky, within
@@ -2043,13 +2088,59 @@ public final class GoalGameTests {
     }
 
     /**
-     * `minecraft:behavior.move_indoors` walks an entity under the open sky in under a roof; Java's goal
-     * that stood in for it walks only towards a home, which the brute has none of.
+     * `minecraft:behavior.move_indoors` walks an entity under the open sky in under a roof, but only
+     * at night or in rain. Java's goal that stood in for it walks only towards a home, which the
+     * brute has none of. One test runs the three conditions in turn because the clock and the
+     * weather are shared by every test running at the same time.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = SHELTER_TICKS)
-    public void anEntityUnderTheSkyWalksInUnderARoof(GameTestHelper helper) {
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = INDOOR_TICKS)
+    public void anEntityUnderTheSkyWalksInUnderARoofOnlyAtNightOrInRain(GameTestHelper helper) {
         roof(helper, new BlockPos(3, 3, 0), new BlockPos(7, 3, 7));
-        walksTo(helper, "tp:brute_go_in", new BlockPos(1, 1, 4), false);
+        BlockPos from = new BlockPos(1, 1, 4);
+        AddonEntity[] brute = {null};
+        helper.startSequence()
+            .thenExecuteAfter(LIGHT_SETTLES, () -> {
+                setSky(helper, DAY, false);
+                brute[0] = withGroup(helper, "tp:brute_go_in", from);
+            })
+            .thenExecuteAfter(SHELTER_TICKS, () -> helper.assertTrue(brute[0] == null
+                    || helper.getLevel().canSeeSky(brute[0].blockPosition()),
+                BRUTE + " moves indoors by day in clear weather."))
+            .thenExecute(() -> discard(brute[0]))
+            .thenExecute(() -> {
+                setSky(helper, NIGHT, false);
+                brute[0] = withGroup(helper, "tp:brute_go_in", from);
+            })
+            .thenWaitUntil(() -> helper.assertTrue(brute[0] == null
+                    || !helper.getLevel().canSeeSky(brute[0].blockPosition()),
+                BRUTE + " stays outside at night."))
+            .thenExecute(() -> discard(brute[0]))
+            .thenExecute(() -> {
+                setSky(helper, DAY, true);
+                brute[0] = withGroup(helper, "tp:brute_go_in", from);
+            })
+            .thenWaitUntil(() -> helper.assertTrue(brute[0] == null
+                    || !helper.getLevel().canSeeSky(brute[0].blockPosition()),
+                BRUTE + " stays outside in rain."))
+            .thenExecute(() -> {
+                discard(brute[0]);
+                setSky(helper, DAY, false);
+            })
+            .thenSucceed();
+    }
+
+    private static void discard(AddonEntity entity) {
+        if (entity != null) entity.discard();
+    }
+
+    private static final int INDOOR_TICKS = 700;
+    private static final long DAY = 1000;
+    private static final long NIGHT = 18000;
+
+    private static void setSky(GameTestHelper helper, long time, boolean raining) {
+        net.minecraft.server.MinecraftServer server = helper.getLevel().getServer();
+        server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), "time set " + time);
+        Platform.setWeather(helper.getLevel(), raining, false, INDOOR_TICKS);
     }
 
     /** Once the light under the roof has settled, a brute put down with the group on gets to the sky or out of it. */

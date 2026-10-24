@@ -574,9 +574,13 @@ These are the checks it runs, and what each one catches:
   the empty structure's barrier floor. `tp:brute_hopping` jumps around its target the way a breeze does. `vaulting` leaps by `target_dist` and from the air, `soothing` hands out an ambient
   effect on a cooldown, `ramming` runs up to a far target, `lunging` rests between aquatic charges and
   `hauling` holds a strength over its `max`. `trampling` stomps and `winding` lands a delayed blow. `touchy` turns on what pushes it, `prickly` hurts without naming itself and `gunning` fires from
-  and at its anchors within its view. `choosy` picks its arrow from its shooter's `projectiles`. `mirrored` turns a reflected snowball by its Molang angle. Four more brute groups each blow up one
+  and at its anchors within its view. `choosy` picks its arrow from its shooter's `projectiles`. `mirrored` turns a reflected snowball by its Molang angle. `flitting` teleports every tick in a box eight blocks high, and `aRandomTeleportLandsOnTheGround` asks that every jump ends on the ground and outside any block, the check `LivingEntity.randomTeleport` makes. Four more brute groups each blow up one
   way (`submerged`, `gentle`, `switching`, `launching`), read back in `GoalGameTests.aBlast*`. The brute's `tp:brute_roaring` group roars,
   pushing pigs tagged `tp_pushable` and hurting those tagged `tp_hurtable`.
+  `tp:brute_milky` drinks milk only while it burns, which `anEntityDrinksThePotionItsConditionsName`
+  reads off a weakened brute. `tp:brute_homely` walks in under a roof only at night or in rain, and
+  `anEntityUnderTheSkyWalksInUnderARoofOnlyAtNightOrInRain` runs day, night and rain in turn in one
+  test because the clock and the weather are shared by tests running at the same time.
 
   `tp:idler` is a plain mob for the resting and idling goals, and `IdleGoalGameTests` reads each
   group back through a pose or a property: timer flags, sitting, lying down, looking around and
@@ -625,6 +629,8 @@ These are the checks it runs, and what each one catches:
   `GoalGameTests.aBredChildIsBornRatherThanSpawned` tells a bred child from a placed one.
   The ember's `tp:ember_hatchling` grows up in a second and drops a turtle shell piece, and
   `tp:ember_picky` takes wheat worth its whole wait only from a player tagged `tp_feeder`.
+  The script tags a cow `tp:cow_load_seen` from `entityLoad`, which `aBredAnimalIsBornToTheScript`
+  asks a placed cow and a bred calf not to carry.
 
   Two more entities are there for what a mob walking about never reaches. One is a projectile with
   hit boxes wider than the box it collides in, which turns `isolated_physics` off the way Mojang's
@@ -930,9 +936,19 @@ These are the checks it runs, and what each one catches:
   small window `FormClientGameTest` gives the client: the wheel has to bring the signing button into
   view where a click with the pointer reaches it, and the tally the pack redraws on a press has to
   leave the form scrolled where it was.
+  `/bedrock scriptevent tp:hints modal|message|custom` opens a form of each generation whose
+  controls carry a `tooltip` or a `description` (and a description on each dropdown item). The form
+  sends them as the element's `tooltip` and a dropdown's `descriptions`, and `AddonFormScreen` sets
+  them as the widget's Java tooltip; `FormClientGameTest` reads the tooltip off the widget.
 
   `animation.tp.wisp.lift` raises the wisp's one bone by four pixels for two seconds, which is what
-  `/bedrock playanimation` on an add-on entity is measured by.
+  `/bedrock playanimation` on an add-on entity is measured by. `/bedrock scriptevent tp:animate_wisp`
+  has the script play the lift and then `animation.tp.wisp.hover`, a looping two pixel raise, in one
+  named controller, with a stop expression counting frames and the lift as its next state;
+  `ServerEntityClientGameTest` reads the hover alone, then the lift, then neither. A clip played
+  this way is a `PlayedAnimation`: one controller runs one such clip at a time, a controller of the
+  entity's own by that name is held while it runs, and a next state naming no clip of the entity,
+  such as `none`, ends it, as the Bedrock Wiki's playanimation page describes.
 
   The same script watches the game's own villagers the way a pack replacing them does, in Bedrock's
   ids throughout: it compares `typeId` against `minecraft:villager_v2` and `minecraft:xp_orb` as
@@ -1198,7 +1214,7 @@ These are the checks it runs, and what each one catches:
   a note block plays off it and stores a value in the block's own store. Two more shake the
   player's camera and stop it, which only a client can show, so `CameraShakeClientGameTest` reads
   the shake back off the client. The script also refuses to let anything tagged `tp:untameable` be
-  tamed, tags whatever a player tamed, and tags a player crouching and standing up again. It counts
+  tamed, tags whatever a player tamed, and tags a player crouching and standing up again. It hears an iron sword being picked up by any entity, through both pickup events and an `itemFilter`, and refuses a diamond one; `aMobPickingAnItemUpIsHeardThroughTheItemFilter` hands three husks a sword each. A player's pickup is raised around `Inventory.add` in `ItemEntity.playerTouch` and a mob's around `Mob.pickUpItem` in `Mob.aiStep`, so the after event names what was taken. It counts
   each first spawn in the player's `tp:visits` dynamic property, which `WorldClientGameTest` reads
   back as two after leaving the world and opening it again. Fabric raises the join before the level
   or the player list holds the player, so `ServerHooks.playerJoined` hands the player to
@@ -2008,8 +2024,8 @@ that draw is done, because one model draws every entity of its kind. From 1.21.9
 again where it is finally drawn, so `ModelFeatureRendererMixin` lays the clip on there and
 `LivingEntityRendererMixin` lays it on for the layers; before that `render` does both in one call.
 A bone with no part is reported once per kind of entity. Nothing is stored on the server, so a
-player who starts watching later sees whatever the pack plays next, as on an add-on entity, and
-`next_state` is not acted on for either. `JavaModelPoseClientGameTest` reads the posed parts back.
+player who starts watching later sees whatever the pack plays next, as on an add-on entity.
+`JavaModelPoseClientGameTest` reads the posed parts back.
 Every model a layer submits goes through the same `ModelFeatureRenderer.prepareModel`, a villager's
 clothes model without the hat included, so the clip reaches all of them there.
 `JavaModelPoseClientGameTest` also reads what the real frame draws: the test source set's
