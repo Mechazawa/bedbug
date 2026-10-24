@@ -42,7 +42,11 @@ public record TradeTable(List<Offer> offers, List<Integer> tierExperience,
      * offers Java's mob of the same kind makes for itself.
      */
     private static final java.util.Map<String, EntityType<?>> VANILLA = java.util.Map.of(
+        //? if >=26.2 {
         "trading/economy_trades/wandering_trader_trades.json", net.minecraft.world.entity.EntityTypes.WANDERING_TRADER);
+        //?} else {
+        /*"trading/economy_trades/wandering_trader_trades.json", EntityType.WANDERING_TRADER);
+        *///?}
 
     /** One trade: what it takes, what it gives back, and how often it can be used. */
     public record Offer(TradeItem cost, TradeItem secondCost, TradeItem result, int maxUses,
