@@ -56,7 +56,7 @@ public final class Functions {
      */
     private static final Set<String> SHARED_WITH_JAVA = Set.of(
         "deop", "enchant", "function", "help", "kick", "kill", "list", "me", "msg", "op", "recipe",
-        "reload", "say", "scoreboard", "setworldspawn", "spawnpoint", "stop", "tag", "teleport",
+        "reload", "say", "scoreboard", "setworldspawn", "spawnpoint", "stop", "teleport",
         "tell", "tp", "w", "weather");
 
     /**
@@ -396,6 +396,7 @@ public final class Functions {
         Set<String> unsupported) {
         return switch (name) {
             case "summon" -> summon(rest, unsupported);
+            case "tag" -> tag(rest, unsupported);
             case "give" -> give(rest, unsupported);
             case "clear" -> clear(rest, unsupported);
             case "setblock" -> setBlock(rest, unsupported);
@@ -441,6 +442,28 @@ public final class Functions {
             }
         };
     }
+
+    /**
+     * `tag <targets> add|remove "<name>"`, which Bedrock accepts with the name quoted.
+     *
+     * Java reads the name as one unquoted word of letters, digits and `_-.+`, so a quoted name is
+     * written without its quotes. A name with any other character has no spelling in Java and is
+     * reported.
+     */
+    private static String tag(String rest, Set<String> unsupported) {
+        Matcher quoted = QUOTED_TAG.matcher(rest);
+        if (!quoted.matches()) return "tag " + rest;
+
+        if (!TAG_WORD.matcher(quoted.group(3)).matches()) {
+            unsupported.add("command tag, with a name Java cannot write");
+            return null;
+        }
+        return "tag " + quoted.group(1) + " " + quoted.group(3);
+    }
+
+    private static final Pattern QUOTED_TAG =
+        Pattern.compile("(.*\\s(?:add|remove))\\s+([\"'])(.*)\\2\\s*", Pattern.DOTALL);
+    private static final Pattern TAG_WORD = Pattern.compile("[A-Za-z0-9_.+-]+");
 
     /**
      * `summon <type> ...`, with the type named the way Java names it.
