@@ -2233,6 +2233,15 @@ Mojang's geometry is not committed, so that list is the one place this knowledge
   1632 items and 1166 blocks resolved as written, and with the mapping 1869 items and 1408 blocks
   resolve, the 110 and 303 left being Bedrock's own and none unanswered.
 
+**A trade table path naming one of Mojang's own tables, which no pack ships, borrows Java's offers.**
+`TradeTable.read` maps `trading/economy_trades/wandering_trader_trades.json` to the wandering trader
+and `AddonEntity.getOffers` copies the offers a Java mob of that type makes for itself, so no Mojang
+data is committed. Other vanilla tables (villager professions) are still read as empty. A trader's
+offers with their uses, trade experience, spent `single_use` keys and inventory are filed in
+`AddonState.trading` under its uuid by `AddonEntity.saveTrading` and read back by `restoreTrading`
+from `restoreGroups`. `minecraft:spawn_entity` `should_leash` leashes the spawned mob to the producer.
+`tp:hawker` in the test pack names the vanilla path; `BehaviourGameTests` covers all three.
+
 ## JSON UI
 
 `bedrock/ui/` reads a resource pack's `ui/` files and lays out what packs do with them to a server's
