@@ -116,6 +116,7 @@ public final class AddonModels {
     private final Map<String, Optional<String>> alphaTested = new HashMap<>();
     private final Map<String, Optional<String>> tintWeights = new HashMap<>();
     private final Map<String, Optional<Identifier>> masked = new HashMap<>();
+    private final Map<String, Optional<Identifier>> vanilla = new HashMap<>();
 
     public AddonModels(BedrockAssets assets, ConvertedPack converted) {
         this.assets = assets;
@@ -469,8 +470,9 @@ public final class AddonModels {
     Identifier textureId(String path) {
         String mapped = converted.texturePaths().get(path);
         if (mapped == null) {
-            Identifier vanilla = VanillaTextures.of(path);
-            if (vanilla != null) return vanilla;
+            Optional<Identifier> game = vanilla.computeIfAbsent(path,
+                bedrock -> Optional.ofNullable(VanillaTextures.of(bedrock)));
+            if (game.isPresent()) return game.get();
             if (REPORTED.add(path)) {
                 AddonEntities.unsupported("texture " + path + ", drawn as the placeholder");
             }

@@ -1033,16 +1033,19 @@ public final class ScriptBridge {
 
     /**
      * The sound event a script's name stands for: the id as written when the game has it, else the
-     * pack's own definition under that name, else the Java sound Bedrock's name stands for.
+     * pack's own definition under that name where one add-on alone ships a script, else the Java sound
+     * Bedrock's name stands for.
      */
     private Identifier soundId(String sound) {
         Identifier written = sound == null ? null : Identifier.tryParse(sound);
         if (written == null || BuiltInRegistries.SOUND_EVENT.containsKey(written)) return written;
 
-        at.ioexception.mcaddon.convert.Names.Identifier own =
-            at.ioexception.mcaddon.convert.Names.soundEvent(sound, namespace);
-        Identifier packs = Identifier.tryParse(own.namespace() + ":" + own.path());
-        if (packs != null && BuiltInRegistries.SOUND_EVENT.containsKey(packs)) return packs;
+        if (namespace != null) {
+            at.ioexception.mcaddon.convert.Names.Identifier own =
+                at.ioexception.mcaddon.convert.Names.soundEvent(sound, namespace);
+            Identifier packs = Identifier.tryParse(own.namespace() + ":" + own.path());
+            if (packs != null && BuiltInRegistries.SOUND_EVENT.containsKey(packs)) return packs;
+        }
 
         String java = at.ioexception.mcaddon.convert.BedrockSoundNames.java(sound);
         return java == null ? written : Identifier.tryParse(java);
