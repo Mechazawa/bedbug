@@ -661,10 +661,37 @@ public final class BehaviourGameTests {
      * the entity's own position: rain over plains, snow over a cold biome, and a storm over either.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void weatherAtPositionReadsThePrecipitationAtTheEntity(GameTestHelper helper) {
+    public void weatherAtPositionReadsRainAndStormOverPlains(GameTestHelper helper) {
+        net.minecraft.world.entity.Mob pig = pigAboveTheBox(helper, "minecraft:plains");
+        helper.getLevel().setRainLevel(1f);
+        helper.assertTrue(weatherIs(pig, "rain") && !weatherIs(pig, "snow") && !weatherIs(pig, "thunderstorm"),
+            "Rain over plains did not read as rain alone.");
+
+        helper.getLevel().setThunderLevel(1f);
+        helper.assertTrue(weatherIs(pig, "thunderstorm"), "A storm over plains did not read as a thunderstorm.");
+
+        helper.getLevel().setRainLevel(0f);
+        helper.getLevel().setThunderLevel(0f);
+        helper.succeed();
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void weatherAtPositionReadsSnowOverASnowyBiome(GameTestHelper helper) {
+        net.minecraft.world.entity.Mob pig = pigAboveTheBox(helper, "minecraft:snowy_plains");
+        helper.getLevel().setRainLevel(1f);
+        helper.assertTrue(weatherIs(pig, "snow") && !weatherIs(pig, "rain"),
+            "Precipitation over a snowy biome did not read as snow alone: "
+                + helper.getLevel().getBiome(pig.blockPosition()).unwrapKey().orElseThrow().identifier());
+
+        helper.getLevel().setRainLevel(0f);
+        helper.succeed();
+    }
+
+    /** Above the test box, whose ceiling would shelter the entity from any precipitation. */
+    private static net.minecraft.world.entity.Mob pigAboveTheBox(GameTestHelper helper, String biome) {
         net.minecraft.world.entity.Mob pig = (net.minecraft.world.entity.Mob) Platform.createMob(
-            BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("minecraft", "pig")).orElseThrow(), helper.getLevel());
-        // Above the test box, whose ceiling would shelter the entity from any precipitation.
+            BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("minecraft", "pig")).orElseThrow(),
+            helper.getLevel());
         BlockPos at = helper.absolutePos(STAND).above(WEATHER_HEIGHT);
         Platform.placeAt(pig, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
         pig.setNoAi(true);
@@ -674,23 +701,8 @@ public final class BehaviourGameTests {
         net.minecraft.server.MinecraftServer server = helper.getLevel().getServer();
         server.getCommands().performPrefixedCommand(server.createCommandSourceStack(),
             "fillbiome " + at.getX() + " " + (at.getY() - 8) + " " + at.getZ() + " " + at.getX() + " "
-                + (at.getY() + 8) + " " + at.getZ() + " minecraft:plains");
-        helper.getLevel().setRainLevel(1f);
-        helper.assertTrue(weatherIs(pig, "rain") && !weatherIs(pig, "snow") && !weatherIs(pig, "thunderstorm"),
-            "Rain over plains did not read as rain alone.");
-
-        helper.getLevel().setThunderLevel(1f);
-        helper.assertTrue(weatherIs(pig, "thunderstorm"), "A storm over plains did not read as a thunderstorm.");
-
-        server.getCommands().performPrefixedCommand(server.createCommandSourceStack(),
-            "fillbiome " + at.getX() + " " + (at.getY() - 8) + " " + at.getZ() + " " + at.getX() + " "
-                + (at.getY() + 8) + " " + at.getZ() + " minecraft:snowy_plains");
-        helper.getLevel().setThunderLevel(0f);
-        helper.assertTrue(weatherIs(pig, "snow") && !weatherIs(pig, "rain"),
-            "Precipitation over a snowy biome did not read as snow alone.");
-
-        helper.getLevel().setRainLevel(0f);
-        helper.succeed();
+                + (at.getY() + 8) + " " + at.getZ() + " " + biome);
+        return pig;
     }
 
     private static final int WEATHER_HEIGHT = 20;
@@ -700,7 +712,8 @@ public final class BehaviourGameTests {
      * stating its own volume and pitch is played with them.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void aSoundsJsonMomentIsSilentOrShapedByItsOwnFields(GameTestHelper helper) throws ReflectiveOperationException {
+    public void aSoundsJsonMomentIsSilentOrShapedByItsOwnFields(GameTestHelper helper)
+        throws ReflectiveOperationException {
         AddonEntity ember = spawn(helper, ENTITY);
         if (ember == null) {
             helper.succeed();
