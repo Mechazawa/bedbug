@@ -577,6 +577,10 @@ These are the checks it runs, and what each one catches:
   and at its anchors within its view. `choosy` picks its arrow from its shooter's `projectiles`. `mirrored` turns a reflected snowball by its Molang angle. `flitting` teleports every tick in a box eight blocks high, and `aRandomTeleportLandsOnTheGround` asks that every jump ends on the ground and outside any block, the check `LivingEntity.randomTeleport` makes. Four more brute groups each blow up one
   way (`submerged`, `gentle`, `switching`, `launching`), read back in `GoalGameTests.aBlast*`. The brute's `tp:brute_roaring` group roars,
   pushing pigs tagged `tp_pushable` and hurting those tagged `tp_hurtable`.
+  `tp:brute_milky` drinks milk only while it burns, which `anEntityDrinksMilkOnlyWhereItsFiltersHold`
+  reads off a weakened brute. `tp:brute_homely` walks in under a roof only at night or in rain, and
+  `anEntityUnderTheSkyWalksInUnderARoofOnlyAtNightOrInRain` runs day, night and rain in turn in one
+  test because the clock and the weather are shared by tests running at the same time.
 
   `tp:idler` is a plain mob for the resting and idling goals, and `IdleGoalGameTests` reads each
   group back through a pose or a property: timer flags, sitting, lying down, looking around and

@@ -2043,7 +2043,9 @@ public class AddonEntity extends PathfinderMob
      * entity takes that potion's effects, the way Java's witch takes its own.
      */
     private void drink() {
-        if (declaresNow("minecraft:behavior.drink_milk") && !getActiveEffects().isEmpty()) {
+        Filter.Context context = new Filter.Context(this, this, getTarget(), ServerHooks.state());
+        com.google.gson.JsonObject milk = liveComponent("minecraft:behavior.drink_milk");
+        if (milk != null && !getActiveEffects().isEmpty() && Goals.filter(milk, "filters").matches(context)) {
             getActiveEffects().stream()
                 .filter(effect -> !Platform.beneficial(effect))
                 .toList()
@@ -2053,7 +2055,6 @@ public class AddonEntity extends PathfinderMob
         com.google.gson.JsonObject drinking = liveComponent("minecraft:behavior.drink_potion");
         if (drinking == null) return;
 
-        Filter.Context context = new Filter.Context(this, this, getTarget(), ServerHooks.state());
         at.ioexception.mcaddon.util.Json.list(drinking, "potions").stream()
             .filter(com.google.gson.JsonElement::isJsonObject)
             .map(com.google.gson.JsonElement::getAsJsonObject)

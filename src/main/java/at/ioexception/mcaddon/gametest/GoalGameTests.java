@@ -2062,6 +2062,34 @@ public final class GoalGameTests {
     }
 
     /**
+     * `minecraft:behavior.drink_milk` clears a harmful effect only while its `filters` hold: the milky
+     * group's filter asks for fire, so a weakened brute keeps the effect until it burns.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void anEntityDrinksMilkOnlyWhereItsFiltersHold(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_make_milky");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        brute.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+            net.minecraft.world.effect.MobEffects.WEAKNESS, WEAK_TICKS));
+        helper.startSequence()
+            .thenExecuteAfter(MILK_WAIT, () -> helper.assertTrue(
+                brute.hasEffect(net.minecraft.world.effect.MobEffects.WEAKNESS),
+                BRUTE + " drank milk while not burning."))
+            .thenExecute(() -> brute.setRemainingFireTicks(BURNING))
+            .thenWaitUntil(() -> helper.assertFalse(
+                brute.hasEffect(net.minecraft.world.effect.MobEffects.WEAKNESS),
+                BRUTE + " kept its weakness while burning."))
+            .thenSucceed();
+    }
+
+    private static final int WEAK_TICKS = 2000;
+    private static final int MILK_WAIT = 40;
+
+    /**
      * `minecraft:behavior.move_outdoors` walks an entity under a roof out to the open sky, within
      * the range its group states, as soon as it is put there; a wander that happened to set off
      * would be a matter of chance over the same few seconds.

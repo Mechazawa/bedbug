@@ -235,7 +235,6 @@ REASONS = {
         "ignore_vibration": "Whether a vibration interrupts the following. Only the allay says it does, and "
                             "its note block goals sit above this one in priority, which is what interrupts it.",
     },
-    "minecraft:behavior.drink_milk": {"filters": "Drinking clears what is harmful whenever there is any."},
     "minecraft:behavior.drink_potion": {
         "speed_modifier": "The potion's effects arrive the moment it is chosen, so there is no time spent "
                           "drinking for the entity to be slowed through.",
