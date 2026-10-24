@@ -833,11 +833,12 @@ These are the checks it runs, and what each one catches:
   `minecraft:destruction_particles` names `lamp_on`, and the name of the lamp's item, which from
   1.21.2 is the block's only because `Platform.blockItemProperties` asks for the block's key.
 
-  The worldgen side is three biomes, five features and two rules. The overworld biome, `tp:glade`,
+  The worldgen side is four biomes, five features and two rules. The overworld biome, `tp:glade`,
   carries the components a Java biome has a field for and four it has none of, so both halves of the
   reporting path run; Java's overworld has no list a biome can be added to, so it is registered and
   named rather than generated. The two nether biomes, `tp:cinder_wastes` and `tp:soot_fields`, are
-  added to the list the nether searches and are the ones a player can stand in. The features cover
+  added to the list the nether searches and are the ones a player can stand in. The end biome,
+  `tp:hush`, is added to the end's highlands. The features cover
   the three kinds that convert and one of the six with nothing behind them, and one of them wraps
   another in a scatter, which is what makes the placement chain more than one link. One rule hangs
   an ore on every overworld biome and the other hangs flowers on the forests, so a fresh chunk holds
@@ -2350,9 +2351,17 @@ scripts (`ServerHooks.start`), the pack structures and the script gametest struc
 `ActiveAddons.active()`. `/mcaddon packs` and the resource pack listing of `ServerAdmin` stay on the
 installed set, since they describe what a server holds and can hand out. `ActiveAddons.isActive(set)`
 compares converted roots, so a resolved subset equals the active set whichever object carries it.
-A server started with a set that drops an add-on carrying a nether or end biome still fails with
-`Unbound values in registry ... worldgen/biome`, so `ActiveAddonsGameTests` checks the structure
-gate and the namespace check directly rather than by starting such a server.
+Fabric holds every nether and end biome `AddonWorldgen` hands it for the life of the process and
+resolves each one as a world builds its nether and end, which fails with `Unbound values in
+registry ... worldgen/biome` when the add-on's data pack is not offered. `NetherBiomeDataMixin`
+leaves such a biome out of the nether's parameter list, and `TheEndBiomeOverridesMixin` leaves it
+out of the end's biome set and resolves it as the biome it replaces, because Fabric's weighted
+pickers cannot drop an entry. Both ask `AddonWorldgen.isDormant`, which is false for a biome no
+add-on placed. An add-on item's component naming an entry of the add-on's data pack is built so
+it is left off when the entry is missing: from 26 every component is built again on each data
+load, and a lookup that throws ends the load. `Platform.jukeboxPlayable` is the one such component
+today. `InactiveAddonClientGameTest` opens a world with the test pack inactive and finds none of
+its biomes, no script and no ore, then the same world settings with it active and finds all three.
 
 **A same-id copy is checked before anything is registered.** `AddonRegistry.conflict` compares the
 shape every registered object was built from (an entity type's population and size, a block's whole
