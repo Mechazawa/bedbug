@@ -142,6 +142,16 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
     if (readAsGoldenRail) dimension.getBlock({ x, y: y + 2, z })?.setType("minecraft:gold_block");
 });
 
+// `/scriptevent "tp:cleared" <x> <y> <z>` schedules a run that gold-blocks the position and a run
+// scheduled earlier for the same tick that clears it, so the gold block means the clear was ignored.
+system.afterEvents.scriptEventReceive.subscribe(event => {
+    if (event.id !== "tp:cleared") return;
+    const [x, y, z] = event.message.split(" ").map(Number);
+    let victim = -1;
+    system.run(() => system.clearRun(victim));
+    victim = system.run(() => world.getDimension("overworld").getBlock({ x, y, z })?.setType("minecraft:gold_block"));
+});
+
 // `/scriptevent "tp:hut" <x> <y> <z>` places the pack's own structure there through the structure
 // manager, by the name its path gives it.
 system.afterEvents.scriptEventReceive.subscribe(event => {

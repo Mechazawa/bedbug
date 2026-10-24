@@ -5356,7 +5356,7 @@ export class System {
     /** Called once per server tick from Java. */
     pump(tick) {
         for (const [handle, run] of [...this.#runs]) {
-            if (run.due > tick) continue;
+            if (this.#runs.get(handle) !== run || run.due > tick) continue;
             if (run.every > 0) {
                 run.due = tick + run.every;
             } else {
@@ -5371,6 +5371,7 @@ export class System {
         }
 
         for (const [handle, job] of [...this.#jobs]) {
+            if (this.#jobs.get(handle) !== job) continue;
             try {
                 while (!bridge.outOfBudget()) {
                     if (job.next().done) {
