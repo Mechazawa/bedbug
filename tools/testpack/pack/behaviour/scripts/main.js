@@ -403,7 +403,8 @@ function steer(player, scheme) {
     }
 }
 
-world.afterEvents.entitySpawn.subscribe(({ entity }) => {
+world.afterEvents.entitySpawn.subscribe(({ entity, cause }) => {
+    if (entity.typeId === "minecraft:cow") entity.addTag("tp:cow_cause_" + cause);
     if (entity.typeId === VILLAGER) entity.addTag("tp:spawn_seen");
     if (entity.typeId === "minecraft:xp_orb") entity.addTag("tp:xp_orb_seen");
     // A companion is marked by the code that spawned it, after `spawnEntity` returned, so only an
@@ -432,6 +433,19 @@ world.afterEvents.dataDrivenEntityTrigger.subscribe(({ entity, eventId }) => {
         entity.addTag("tp:" + component + "_" + (entity.getComponent("minecraft:" + component)?.value ?? "none"));
     }
 }, { entityTypes: [VILLAGER] });
+
+// The events Mojang's own behaviour files raise on the game's mobs, and the group changes an event
+// of the pack's own made, are all heard through the same signal.
+const HEARD_EVENTS = ["spawn_from_village", "from_wandering_trader", "entity_transformed", "start_celebrating",
+    "on_sheared"];
+world.afterEvents.dataDrivenEntityTrigger.subscribe(event => {
+    const { entity, eventId } = event;
+    const name = eventId.replace("minecraft:", "");
+    if (HEARD_EVENTS.includes(name)) entity.addTag("tp:heard_" + name);
+    for (const modifier of event.getModifiers()) {
+        for (const group of modifier.addedComponentGroups) entity.addTag("tp:modifier_added_" + group);
+    }
+});
 
 // Each villager the query finds once gets a sprite of this pack's own standing beside it.
 system.runInterval(() => {

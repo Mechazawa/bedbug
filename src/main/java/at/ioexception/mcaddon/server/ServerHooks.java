@@ -366,7 +366,8 @@ public final class ServerHooks {
      * then marks it as its own has done both by the time a listener asks whether it is marked.
      */
     private static boolean born(Entity entity) {
-        return entity instanceof at.ioexception.mcaddon.entity.AddonEntity addon && addon.born();
+        return entity instanceof at.ioexception.mcaddon.entity.AddonEntity addon ? addon.born()
+            : VanillaEvents.wasBred(entity);
     }
 
     private static void raiseEntityEvent(String event, Entity entity) {

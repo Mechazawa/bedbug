@@ -4354,9 +4354,14 @@ function shapeFields(event) {
  */
 const EVENT_SHAPES = {
     dataDrivenEntityTrigger(event) {
-        // Nothing tells the mod which component groups an event changed, so a pack that asks is
-        // told none rather than being handed a method that is not there.
-        event.getModifiers = () => [];
+        const modifiers = JSON.parse(event.modifiers ?? "[]");
+        delete event.modifiers;
+        event.getModifiers = () => modifiers.map(modifier => ({
+            addedComponentGroups: [...modifier.addedComponentGroups],
+            removedComponentGroups: [...modifier.removedComponentGroups],
+            componentGroupsToAdd: [...modifier.addedComponentGroups],
+            componentGroupsToRemove: [...modifier.removedComponentGroups],
+        }));
         return event;
     },
 
