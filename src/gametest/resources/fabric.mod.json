@@ -10,6 +10,7 @@
     ],
     "fabric-client-gametest": [
       "at.ioexception.mcaddon.clientgametest.WorldClientGameTest",
+      "at.ioexception.mcaddon.clientgametest.WorldAddonsClientGameTest",
       "at.ioexception.mcaddon.clientgametest.DrawnSizeClientGameTest",
       "at.ioexception.mcaddon.clientgametest.FormClientGameTest",
       "at.ioexception.mcaddon.clientgametest.PackSettingsClientGameTest",

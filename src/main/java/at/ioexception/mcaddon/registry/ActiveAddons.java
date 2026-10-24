@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.registry;
 
 import at.ioexception.mcaddon.resource.AddonSet;
 import at.ioexception.mcaddon.server.Dialogues;
+import at.ioexception.mcaddon.state.WorldAddonList;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 
@@ -20,15 +21,16 @@ import java.util.stream.Collectors;
  * declares, and, on a client, the models it draws with. A registered add-on outside the active set is dormant:
  * its entries stay where they are with the last definitions bound to them, and nothing offers them.
  *
- * A server's active set is always the one installed beside it. A client's is the installed set until
- * it joins a server, the server's set while it plays there, and the installed set again once it
- * leaves.
+ * A server's active set is what its world's add-on list turns on of the ones installed beside it. A
+ * client's is the installed set until it opens a world or joins a server, the world's or the server's
+ * set while it plays there, and the installed set again once it leaves.
  */
 public final class ActiveAddons {
     private static final List<Consumer<AddonSet>> LISTENERS = new ArrayList<>();
 
     private static AddonSet installed = AddonSet.EMPTY;
     private static AddonSet active = AddonSet.EMPTY;
+    private static WorldAddonList world = new WorldAddonList(List.of());
     /** Read by the resource reload's worker threads while the client thread may activate another set. */
     private static volatile Set<Identifier> activeItems = Set.of();
 
@@ -42,6 +44,18 @@ public final class ActiveAddons {
 
     public static AddonSet active() {
         return active;
+    }
+
+    /** The add-on list of the world a server in this process opened last. */
+    public static WorldAddonList world() {
+        return world;
+    }
+
+    /** Plays the add-ons a world's list turns on, activating them unless they already answer. */
+    public static void open(WorldAddonList list) {
+        world = list;
+        AddonSet set = list.resolve(installed);
+        if (!isActive(set)) activate(set);
     }
 
     /** Makes the add-ons found at startup the installed set, and the active one. */

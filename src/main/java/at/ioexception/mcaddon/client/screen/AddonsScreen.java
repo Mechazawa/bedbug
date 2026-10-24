@@ -30,8 +30,8 @@ import java.util.Set;
  * and whether it is on, the way to its settings and to what this mod could not do for it, and a
  * click on the row opening it to the rest.
  *
- * Open it with `new AddonsScreen(parent)`; Done goes back to `parent`. In a world the list only
- * shows what is on; the other modes are where the player will choose.
+ * Open it with `new AddonsScreen(parent)`; Done goes back to `parent`. In a world each row reads On
+ * or Off as the world plays it and nothing switches; the other modes are where the player will choose.
  */
 public final class AddonsScreen extends ColumnScreen {
     /** Where the list is opened from, which decides whether a row can be switched. */

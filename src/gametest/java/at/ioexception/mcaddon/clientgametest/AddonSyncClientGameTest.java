@@ -1,11 +1,16 @@
 package at.ioexception.mcaddon.clientgametest;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.client.WorldAddons;
 import at.ioexception.mcaddon.client.render.AddonClientAssets;
 import at.ioexception.mcaddon.client.render.AddonEntityRenderer;
+import at.ioexception.mcaddon.pack.Archives;
+import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.McAddonPaths;
+import at.ioexception.mcaddon.pack.PackDiscovery;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.ActiveAddons;
+import at.ioexception.mcaddon.state.WorldAddonList;
 import at.ioexception.mcaddon.sync.AddonManifest;
 import at.ioexception.mcaddon.sync.ServedArchives;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -25,6 +30,10 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Properties;
+import java.util.stream.Stream;
 
 /**
  * A client joining a server is handed the add-on it lacks, plays with it, and goes back to its own
@@ -35,7 +44,8 @@ import java.nio.file.attribute.FileTime;
  * dedicated server registers it, which every other test joining one does too, so this test does not
  * depend on running first. After the join it has to be in the client's registries, drawn,
  * listed and offered as a pack; after the leave its entries stay registered and nothing offers it;
- * and a second join finds it in the cache and downloads nothing.
+ * and a second join finds it in the cache and downloads nothing. A server whose world turns an
+ * add-on off hands it out as not active, and the client registers it without playing it.
  */
 public final class AddonSyncClientGameTest implements FabricClientGameTest {
     private static final int PATIENCE = 1200;
@@ -68,6 +78,46 @@ public final class AddonSyncClientGameTest implements FabricClientGameTest {
                 Worlds.waitForClient(context, AddonSyncClientGameTest::offered, PATIENCE,
                     () -> "The second join did not offer " + PACK + " again.");
             }
+        }
+        offInTheWorld(context);
+    }
+
+    /**
+     * An add-on the server's world turns off is handed out as not active: the client registers it
+     * and plays without it.
+     */
+    private static void offInTheWorld(ClientGameTestContext context) {
+        Served.waitForInstalled(context);
+        WorldAddonList list = WorldAddonList.allOn(ActiveAddons.installed());
+        for (BedrockPack pack : other()) list = list.with(pack.manifest().uuid(), false);
+        WorldAddons.pending(list);
+        try (TestDedicatedServerContext server = Served.server(context, Served.OTHER, new Properties())) {
+            AddonManifest.Entry entry = server.computeOnServer(minecraft -> ServedArchives.manifest()).entries()
+                .stream()
+                .filter(one -> one.packs().stream().anyMatch(pack -> pack.uuid().equals(
+                    other().get(0).manifest().uuid().toString())))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("The server does not serve the sw add-on."));
+            Assert.that(!entry.active(), "The sw add-on the world turns off is served as active.");
+            try (var connection = server.connect()) {
+                Worlds.waitForChunks(connection);
+                Assert.that(!ActiveAddons.isActive("sw"), "The client plays with the sw add-on the world turns off.");
+                Assert.that(BuiltInRegistries.ITEM.containsKey(Platform.id("sw", "pellet")),
+                    "The client did not register the sw add-on the world turns off.");
+            }
+        }
+    }
+
+    /** The packs of the archive `addons-other` holds, which the server hands out as the `sw` add-on. */
+    private static List<BedrockPack> other() {
+        Path directory = Path.of(System.getProperty("mcaddon.served")).resolveSibling(Served.OTHER);
+        try (Stream<Path> files = Files.list(directory)) {
+            Path archive = files.filter(file -> file.toString().endsWith(".mcaddon")).findFirst()
+                .orElseThrow(() -> new AssertionError("No archive in " + directory + "."));
+            return PackDiscovery.readArchive(archive, Archives.sha256(archive), archive.getFileName().toString(),
+                new ArrayList<>());
+        } catch (IOException unreadable) {
+            throw new UncheckedIOException(unreadable);
         }
     }
 

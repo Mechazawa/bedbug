@@ -27,9 +27,13 @@ import java.util.stream.Stream;
  * `addons/` while the server runs cannot make it send bytes that do not match the digest it
  * promised. A pack directory is zipped into a copy whose bytes depend only on its files.
  *
+ * An installed add-on the world's list turns off is served as not active, so a client registers
+ * it and keeps it dormant for the visit.
+ *
  * A development run also serves every archive in the directory the `mcaddon.served` property
  * names, which the server never loaded, so a client test can join and be sent an add-on it lacks
- * while the server and the client share one process.
+ * while the server and the client share one process. Such an archive is active unless the world's
+ * list names it off.
  */
 public final class ServedArchives {
     private static AddonManifest manifest;
@@ -71,6 +75,8 @@ public final class ServedArchives {
     private static AddonManifest prepare() {
         Path served = McAddonPaths.cache().resolve("served");
         Map<String, List<BedrockPack>> byOrigin = new LinkedHashMap<>();
+        java.util.Set<String> active = ActiveAddons.active().packs().packs().stream()
+            .map(BedrockPack::origin).collect(java.util.stream.Collectors.toSet());
         ActiveAddons.installed().packs().packs()
             .forEach(pack -> byOrigin.computeIfAbsent(pack.origin(), origin -> new ArrayList<>()).add(pack));
 
@@ -79,7 +85,7 @@ public final class ServedArchives {
             try {
                 Files.createDirectories(served);
                 Path snapshot = snapshot(McAddonPaths.addons().resolve(origin), packs.get(0).archive(), served);
-                if (snapshot != null) entries.add(entry(snapshot, true, packs));
+                if (snapshot != null) entries.add(entry(snapshot, active.contains(origin), packs));
             } catch (IOException failure) {
                 McAddon.LOGGER.error("Could not prepare {} to hand to clients.", origin, failure);
             }
@@ -151,8 +157,10 @@ public final class ServedArchives {
             for (Path archive : files.filter(file -> file.toString().endsWith(".mcaddon")).sorted().toList()) {
                 Path snapshot = snapshot(archive, null, served);
                 String sha256 = snapshot.getFileName().toString().replace(".mcaddon", "");
-                entries.add(entry(snapshot, true,
-                    PackDiscovery.readArchive(snapshot, sha256, archive.getFileName().toString(), new ArrayList<>())));
+                List<BedrockPack> packs =
+                    PackDiscovery.readArchive(snapshot, sha256, archive.getFileName().toString(), new ArrayList<>());
+                entries.add(entry(snapshot, packs.stream()
+                    .noneMatch(pack -> ActiveAddons.world().turnsOff(pack.manifest().uuid())), packs));
             }
         } catch (IOException failure) {
             McAddon.LOGGER.error("Could not read the archives in {}.", named, failure);

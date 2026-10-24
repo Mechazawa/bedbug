@@ -11,6 +11,7 @@ import at.ioexception.mcaddon.registry.ActiveAddons;
 import at.ioexception.mcaddon.registry.AddonRegistry;
 import at.ioexception.mcaddon.resource.AddonPacks;
 import at.ioexception.mcaddon.resource.AddonSet;
+import at.ioexception.mcaddon.state.WorldAddonList;
 import at.ioexception.mcaddon.sync.AddonManifest;
 import at.ioexception.mcaddon.sync.Incoming;
 import at.ioexception.mcaddon.sync.Transfer;
@@ -19,6 +20,7 @@ import net.minecraft.client.Minecraft;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -28,8 +30,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
- * This client's visit to a server: the server's add-ons made the active set for the length of the
- * visit, and the installed set made active again once it ends.
+ * This client's visit to a server or to a saved world: its add-ons made the active set for the
+ * length of the visit, and the installed set made active again once it ends.
  *
  * Every change to the registries and the active set is chained on one future that also waits for
  * the resource reload the change asked for, so no change overlaps a reload still reading the
@@ -56,6 +58,9 @@ public final class AddonSession {
 
     /** Whether the active set is other than the installed one, which is what a leave puts back. */
     private static boolean visiting;
+
+    /** Set while a world whose add-ons are now active opens again, so its open goes ahead. */
+    private static boolean reopening;
 
     private AddonSession() {
     }
@@ -213,6 +218,42 @@ public final class AddonSession {
             McAddon.LOGGER.info("Restored the installed add-on set.");
             return Minecraft.getInstance().reloadResourcePacks();
         }).exceptionally(AddonSession::failed);
+    }
+
+    /**
+     * Holds back the opening of a saved world until its add-ons are active and the resources
+     * reloaded for them, then runs `open` again. False when the world can open as it is.
+     *
+     * The resources have to be reloaded before the world loads, and the reload goes through the same
+     * chain as a join's, so the two never overlap.
+     */
+    public static boolean holdOpen(Path world, Runnable open) {
+        if (reopening) return false;
+        leaveIfEnded();
+        AddonSet installed = ActiveAddons.installed();
+        AddonSet set = WorldAddonList.read(world)
+            .orElseGet(() -> WorldAddonList.allOn(installed))
+            .resolve(installed);
+        if (settled.isDone() && ActiveAddons.isActive(set)) return false;
+
+        settled = settled.thenCompose(ignored -> enterWorld(set)).exceptionally(AddonSession::failed);
+        settled.thenRun(() -> Platform.schedule(() -> {
+            reopening = true;
+            try {
+                open.run();
+            } finally {
+                reopening = false;
+            }
+        }));
+        return true;
+    }
+
+    private static CompletableFuture<Void> enterWorld(AddonSet set) {
+        if (ActiveAddons.isActive(set)) return CompletableFuture.completedFuture(null);
+        ActiveAddons.activate(set);
+        visiting = !ActiveAddons.isActive(ActiveAddons.installed());
+        McAddon.LOGGER.info("Activated the world's add-on set of {} add-ons.", set.converted().size());
+        return Minecraft.getInstance().reloadResourcePacks();
     }
 
     private static void enter(AddonManifest manifest, Visit visit) {
