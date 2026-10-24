@@ -806,13 +806,19 @@ public final class ScriptBridge {
 
         for (MobEffectInstance active : living.getActiveEffects()) {
             JsonObject effect = new JsonObject();
-            effect.addProperty("typeId", Platform.effectId(active));
+            effect.addProperty("typeId", bedrockEffect(Platform.effectId(active)));
             effect.addProperty("duration", active.getDuration());
             effect.addProperty("amplifier", active.getAmplifier());
             effect.addProperty("displayName", Component.translatable(active.getDescriptionId()).getString());
             effects.add(effect);
         }
         return effects.toString();
+    }
+
+    private static String bedrockEffect(String id) {
+        int colon = id.indexOf(':');
+        return id.substring(0, colon + 1)
+            + at.ioexception.mcaddon.convert.BedrockEffectNames.toBedrock(id.substring(colon + 1));
     }
 
     @HostAccess.Export
