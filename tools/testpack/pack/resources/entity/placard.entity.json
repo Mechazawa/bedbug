@@ -1,0 +1,20 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "tp:placard",
+      "materials": {
+        "default": "entity_alphatest"
+      },
+      "textures": {
+        "default": "textures/entity/sign_spruce"
+      },
+      "geometry": {
+        "default": "geometry.tp.ember"
+      },
+      "render_controllers": [
+        "controller.render.tp.sprite"
+      ]
+    }
+  }
+}

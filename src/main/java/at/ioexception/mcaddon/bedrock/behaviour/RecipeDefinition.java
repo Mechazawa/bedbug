@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.bedrock.behaviour;
 
+import at.ioexception.mcaddon.convert.BedrockItemTags;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.convert.BedrockItemNames;
 import at.ioexception.mcaddon.pack.BedrockPack;
@@ -261,7 +262,11 @@ public record RecipeDefinition(String identifier, Kind kind, List<String> patter
 
         JsonObject body = element.getAsJsonObject();
         String tag = Json.text(body, "tag", null);
-        if (tag != null) return "#" + tag;
+        if (tag != null) {
+            String java = BedrockItemTags.javaName(tag);
+            if (java == null) AddonEntities.unsupported("recipe item tag " + tag);
+            return java == null ? MISSING : "#" + java;
+        }
 
         String item = Json.text(body, "item", null);
         return item == null ? null : javaItem(item, (int) Json.number(body, "data", 0));

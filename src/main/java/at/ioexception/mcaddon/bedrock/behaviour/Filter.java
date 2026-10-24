@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.bedrock.behaviour;
 
+import at.ioexception.mcaddon.convert.BedrockItemTags;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.registry.AddonEntities;
@@ -459,8 +460,7 @@ public sealed interface Filter {
         private boolean equipmentTag(Entity entity) {
             if (!(entity instanceof LivingEntity living)) return false;
             ItemStack held = living.getItemBySlot(slot());
-            return !held.isEmpty() && BuiltInRegistries.ITEM.wrapAsHolder(held.getItem()).tags()
-                .anyMatch(tag -> tag.location().getPath().equals(text()));
+            return BedrockItemTags.has(held, text());
         }
 
         private boolean sameEquipment(Entity entity, Entity caller) {

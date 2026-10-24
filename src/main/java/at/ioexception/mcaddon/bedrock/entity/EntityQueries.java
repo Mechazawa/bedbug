@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.bedrock.entity;
 
+import at.ioexception.mcaddon.convert.BedrockItemTags;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.animation.AnimationPlayer;
 import at.ioexception.mcaddon.bedrock.animation.BonePose;
@@ -55,7 +56,6 @@ import net.minecraft.world.entity.monster.warden.Warden;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
 import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Block;
@@ -908,8 +908,7 @@ public final class EntityQueries implements MolangEnvironment.Queries {
     }
 
     private static boolean carriesTag(ItemStack stack, MolangValue tag) {
-        TagKey<Item> key = tagKey(Registries.ITEM, tag);
-        return key != null && stack.is(key);
+        return tag.isText() && BedrockItemTags.has(stack, tag.text());
     }
 
     private static boolean carriesTag(Holder<Biome> biome, MolangValue tag) {

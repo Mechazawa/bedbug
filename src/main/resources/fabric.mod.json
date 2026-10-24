@@ -33,6 +33,7 @@
       "at.ioexception.mcaddon.gametest.BedrockCommandGameTests",
       "at.ioexception.mcaddon.gametest.PermissionGameTests",
       "at.ioexception.mcaddon.gametest.NamesGameTests",
+      "at.ioexception.mcaddon.gametest.ItemTagGameTests",
       "at.ioexception.mcaddon.gametest.ScriptGameTests",
       "at.ioexception.mcaddon.gametest.ScriptToolGameTests",
       "at.ioexception.mcaddon.gametest.RegistryGameTests",

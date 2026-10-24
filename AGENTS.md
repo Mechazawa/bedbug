@@ -2271,6 +2271,12 @@ buttons. It sends a `tp_banner:` title and a `tp_tally:` action bar and reads th
 places and Java's own hidden title and action bar back, then a plain one of each. The pack side is
 `tools/testpack/pack/resources/ui/`.
 
+## Bedrock item tags and vanilla textures
+
+`convert/BedrockItemTags` answers a pack's `minecraft:sign`, `is_axe`, `is_food` and the other vanilla Bedrock item tags through the Java tag or item property that is the same set. Script `hasTag` and `getTags` (which report Bedrock's names for covered sets), `has_equipment_tag`, Molang's item tag queries and recipe `tag` keys all go through it. A tag with no entry is asked of Java as written, so a pack's own tag works. Mojang publishes no list of the vanilla item tags, so the table is built from the tags Bedrock's own behaviour pack and script bindings use; a missing tag is a one line addition. `ItemTagGameTests` and the `tp:item_tags` probe assert it.
+
+`client/render/VanillaTextures` maps a Bedrock vanilla texture path a pack names without shipping (the signs) to the game's own. 26.3 has no sign entity texture and the block texture has another layout, so the board is wrong there. `tp:placard` and `RenderControllerClientGameTest.vanillaSignTexture` assert it.
+
 ## Hidden from Java's pack screens
 
 `PackSelectionModelMixin` filters packs whose id starts with `mcaddon/` out of the streams `getSelected` and `getUnselected` return, so the Resource Packs and Data Packs screens list none of them. The model's own lists keep them, and they are required packs, so Done leaves them selected. `PackSelectionClientGameTest` asserts both screens.

@@ -26,7 +26,7 @@
 
 import {
     BlockPermutation, BlockVolume, CameraShakeType, CatmullRomSpline, CloneMode, EasingType, EntityAttachPoint,
-    HudElement, HudVisibility, system, world,
+    HudElement, HudVisibility, ItemStack, system, world,
 } from "@minecraft/server";
 import { ActionFormData, CustomForm, ObservableBoolean, ObservableString } from "@minecraft/server-ui";
 import { register } from "@minecraft/server-gametest";
@@ -386,10 +386,26 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
         case "tp:config": readTheConfig(player); break;
         case "tp:config_reload": dedicatedServer?.reloadScriptingConfig(); readTheConfig(player); break;
         case "tp:operator": swapOperator(player); break;
+        case "tp:item_tags": askItemTags(player); break;
         case "tp:pack_settings": readThePackSettings(player); break;
         default: break;
     }
 });
+
+// `/scriptevent tp:item_tags` asks stacks about Bedrock's vanilla item tags and tags the player with
+// each answer: a sign is a `minecraft:sign` and an axe a `minecraft:is_axe`, and neither is the other.
+function askItemTags(player) {
+    const sign = new ItemStack("minecraft:oak_sign");
+    const axe = new ItemStack("minecraft:iron_axe");
+    const answers = {
+        sign_is_sign: sign.hasTag("minecraft:sign"),
+        sign_is_axe: sign.hasTag("minecraft:is_axe"),
+        axe_is_axe: axe.hasTag("minecraft:is_axe"),
+        axe_is_tool: axe.hasTag("minecraft:is_tool"),
+        axe_listed: axe.getTags().includes("minecraft:is_axe"),
+    };
+    Object.entries(answers).forEach(([name, answer]) => player.addTag(`tp_itemtag_${name}_${answer}`));
+}
 
 // `/scriptevent tp:control_scheme <scheme>` puts the player on a control scheme, or back on their
 // camera's for `clear`, and tags them with the scheme they are on, or with the refusal.

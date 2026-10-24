@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.function.Consumer;
 
 /**
@@ -127,6 +128,14 @@ public final class ScriptGameTests {
                 "The pack's script left " + Platform.tagsOf(player) + ", which should show the secret and not "
                     + token + ".");
         });
+    }
+
+    /** A script asks a sign and an axe about Bedrock's item tags and reads them back by Bedrock's names. */
+    @GameTest()
+    public void aScriptAsksItemsAboutBedrocksTags(GameTestHelper helper) {
+        probe(helper, "tp:item_tags", "", player -> List.of("sign_is_sign_true", "sign_is_axe_false",
+            "axe_is_axe_true", "axe_is_tool_true", "axe_listed_true")
+            .forEach(answer -> expectTag(helper, player, "tp_itemtag_" + answer)));
     }
 
     /** A script makes a player an operator and takes it away, and each second try is refused. */

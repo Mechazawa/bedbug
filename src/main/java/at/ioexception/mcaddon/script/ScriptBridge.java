@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.script;
 
+import at.ioexception.mcaddon.convert.BedrockItemTags;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.behaviour.BedrockVillager;
 import at.ioexception.mcaddon.bedrock.behaviour.DamageCause;
@@ -1262,13 +1263,11 @@ public final class ScriptBridge {
         return item == null ? 0 : new ItemStack(item).getMaxDamage();
     }
 
-    /** The tags the item is in, under Java's names for them: a pack reading these sees `swords`. */
+    /** The tags the item is in, under the names Bedrock gives the sets it has: `minecraft:is_axe`. */
     @HostAccess.Export
     public String[] itemTags(String itemId) {
         Item item = itemId == null ? null : AddonItems.named(itemId);
-        return item == null ? new String[0] : item.builtInRegistryHolder().tags()
-            .map(tag -> tag.location().toString())
-            .toArray(String[]::new);
+        return item == null ? new String[0] : BedrockItemTags.of(item).toArray(String[]::new);
     }
 
     /**

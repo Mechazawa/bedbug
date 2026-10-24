@@ -93,6 +93,7 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
             colourMask(context, world);
             maskedTextures(context, world);
             maskedMarkers(context, world);
+            vanillaSignTexture(context, world);
             boneMaterials(context, world);
         }
     }
@@ -432,6 +433,18 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
             + Integer.toHexString(body.vertices().get(0).colour()) + ".");
         Assert.that(colours(spark, WHITE), "tp:tailor's masked pass takes no controller colour, and was drawn in "
             + Integer.toHexString(spark.vertices().get(0).colour()) + ".");
+    }
+
+    /**
+     * `tp:placard` names `textures/entity/sign_spruce`, which the pack does not ship, so the pass
+     * binds the game's own spruce sign texture rather than the white placeholder.
+     */
+    private static void vanillaSignTexture(ClientGameTestContext context, TestSingleplayerContext world) {
+        world.getServer().runCommand("summon tp:placard ~3 ~ ~-3");
+        AddonEntity placard = Entities.waitForClient(context, "tp:placard");
+        String bound = context.computeOnClient(client -> ScriptClock.of(placard).passes().get(0).texture().toString());
+        Assert.that(bound.contains("spruce") && bound.contains("sign"), "tp:placard names a vanilla sign texture"
+            + " and was drawn with " + bound + ".");
     }
 
     /** A texel as a reader compares it: its colour, or `clear` where nothing of it is drawn. */

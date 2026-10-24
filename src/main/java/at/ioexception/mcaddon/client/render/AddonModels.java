@@ -469,6 +469,8 @@ public final class AddonModels {
     Identifier textureId(String path) {
         String mapped = converted.texturePaths().get(path);
         if (mapped == null) {
+            Identifier vanilla = VanillaTextures.of(path);
+            if (vanilla != null) return vanilla;
             if (REPORTED.add(path)) {
                 AddonEntities.unsupported("texture " + path + ", drawn as the placeholder");
             }
