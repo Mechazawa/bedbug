@@ -2386,6 +2386,34 @@ names one of its pack uuids off. The pause menu's Add-Ons screen reads On or Off
 so in a world it shows the world's choice. Blocks and entities of an add-on that is off stay
 dormant in the world.
 
+**Create World and Edit World switch the list.** `CreateWorldMoreTabMixin` puts an Add-Ons button
+under Data Packs, which opens `AddonsScreen.forNewWorld`: every installed add-on on, or the choice
+`client.WorldAddons.chosen()` already holds. Done hands a changed list to `WorldAddons.choose`, which
+keeps it pending for `ServerPacksSourceMixin`, plays its set through `AddonSession.play` (activate,
+`visiting`, reload) and then has the screen load its data packs again through
+`CreateWorldScreenMixin`'s invokers (`getDataPackSelectionSettings`, then `reload` on that
+repository, then `tryApplyNewDataPacks`). Create World builds the new world from the data packs it
+loaded as it opened, so without that second load the world gets the whole set's recipes, biomes and
+dimensions. `popScreen` (Cancel, or a failed creation) calls `WorldAddons.cancel`, which forgets the
+choice and runs `AddonSession.leave`; a world that was created puts the installed set back through
+the same leave when its connection ends. Re-Create goes through `WorldListEntryMixin`, which holds
+`recreateWorld` behind `AddonSession.holdOpen` the way a saved world's open is held, so the source
+world's set is active and the resources reloaded before `recreateWorldData` loads its data packs;
+`createFromExisting` then takes `ActiveAddons.world()`, the list that load just opened, as the
+pending choice. `EditWorldScreenMixin` adds an Add-Ons button above Save and Cancel, which opens
+`AddonsScreen.forWorld`: the world's list with every installed add-on it does not name added as off
+(`WorldAddonList.naming`), each switch written into the world's file at once, nothing activated. A
+row whose add-on is off there and whose converted pack holds a dimension
+(`ConvertedPack.addsDimension`) carries a warning that the world may not open without it.
+
+`CreateWorldAddonsClientGameTest` switches `tp` off in Create World, finds the screen's data packs
+reloaded without its recipes, creates the world and finds the server without them and the world's
+list with `tp` off; then Re-Creates that world and finds `tp` inactive, the client's resources
+without it and the source list chosen; then cancels and finds the installed set back.
+`EditWorldAddonsClientGameTest` empties a saved world's list, finds `tp` Off with the dimension
+warning, switches it on and off again, reads each switch back from the file and finds the active set
+unchanged.
+
 `WorldAddonsClientGameTest` creates a world, reads back a list with every installed add-on on,
 writes `tp` off, opens it again and finds `tp` inactive, `tp:dust` dormant, `mcaddon/tp` selected
 by neither the server's data packs nor the client's resource packs, the script's first spawn count
@@ -2472,7 +2500,7 @@ manifest again: `addons-reshaped` holds a later release of `sv` whose crate has 
 
 `client/screen/AddonsScreen` lists the installed and the active add-ons (`AddonEntry`, one per
 `ConvertedPack`, active when the active set holds its converted directory). `new
-AddonsScreen(parent)` (or `(parent, Mode)`; only `IN_WORLD` is wired, and it only shows what is on) is the one way in, which `AddonOptionsScreen`, Mod Menu's config screen,
+AddonsScreen(parent)` is the one way in for a world, which only shows what is on, and `forNewWorld` and `forWorld` put an On/Off switch over each row for Create World and Edit World; `AddonOptionsScreen`, Mod Menu's config screen,
 opens from a button of its own; `addToPauseMenu` puts the button on the pause menu through Fabric's `ScreenEvents`, in the
 row of the lowest button, which it moves down a row. The three screens extend `ColumnScreen`, a
 heading, a `ScrollingColumn` and a Done button that goes back to the parent.

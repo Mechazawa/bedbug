@@ -36,6 +36,18 @@ Each world keeps its own list of add-ons in `data/mcaddon-addons.json`:
 
 The Add-Ons screen in the pause menu shows which add-ons the world plays. It does not change them.
 
+To choose the add-ons of a world:
+
+- When you create a world, open the **More** tab and press **Add-Ons**. Every installed add-on is on.
+  Press **On** or **Off** on a row to change it, then **Done**. The game loads the world's data
+  again without the add-ons that are off.
+- For a saved world, press **Edit** in the world list, then **Add-Ons**. Each change is saved in the
+  world at once and applies the next time the world opens.
+- **Re-Create** starts from the add-ons of the world it copies.
+
+An add-on that adds a dimension shows a warning when it is off in a saved world: the world may not
+open without that dimension.
+
 ## The Add-Ons screen
 
 Bedrock lists behaviour packs and resource packs apart, each with its own manifest description. The

@@ -26,6 +26,7 @@
   "mcaddon.addons.settings.none": "This add-on has no settings.",
   "mcaddon.addons.state.on": "On",
   "mcaddon.addons.state.off": "Off",
+  "mcaddon.addons.dimension_warning": "This world may not open without this add-on's dimension.",
   "mcaddon.addons.module": "Module: %s %s",
   "mcaddon.report.title": "%s: what does not work",
   "mcaddon.report.shared": "These lists count every add-on in this game together:",

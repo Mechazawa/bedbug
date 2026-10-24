@@ -29,6 +29,11 @@ record AddonEntry(ConvertedPack converted, boolean active) {
             .toList();
     }
 
+    /** What a world's add-on list names this add-on by. */
+    java.util.UUID uuid() {
+        return converted.pack().manifest().uuid();
+    }
+
     /** The resource pack first, then each behaviour pack, every pack once. */
     List<BedrockPack> packs() {
         List<BedrockPack> packs = new ArrayList<>(List.of(converted.pack()));

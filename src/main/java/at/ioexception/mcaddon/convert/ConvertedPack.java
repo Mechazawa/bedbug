@@ -28,6 +28,18 @@ public record ConvertedPack(BedrockPack pack, List<BedrockPack> behaviours, Path
         return pack.displayName();
     }
 
+    /**
+     * Whether the conversion wrote a dimension. A world that opened with it keeps the dimension in
+     * its own data, and may not open again without it.
+     */
+    public boolean addsDimension() {
+        try (java.util.stream.Stream<Path> namespaces = Files.list(root.resolve("data"))) {
+            return namespaces.anyMatch(namespace -> Files.isDirectory(namespace.resolve("dimension")));
+        } catch (java.io.IOException none) {
+            return false;
+        }
+    }
+
     /** The image the conversion wrote for a Bedrock texture path, or null where it wrote none. */
     public Path textureFile(String bedrockPath) {
         String mapped = texturePaths.get(bedrockPath);

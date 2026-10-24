@@ -115,6 +115,21 @@ public record WorldAddonList(List<Entry> addons) {
         return new WorldAddonList(changed);
     }
 
+    /** Whether this list has the add-on carrying a pack of this uuid on. */
+    public boolean plays(UUID uuid) {
+        return addons.stream().anyMatch(entry -> entry.uuid().equals(uuid) && entry.on());
+    }
+
+    /** This list with every installed add-on it does not name added as off, which is what it already means. */
+    public WorldAddonList naming(AddonSet installed) {
+        List<Entry> named = new ArrayList<>(addons);
+        installed.converted().stream()
+            .map(one -> new Entry(one.pack().manifest().uuid(), one.displayName(), false))
+            .filter(added -> addons.stream().noneMatch(entry -> entry.uuid().equals(added.uuid())))
+            .forEach(named::add);
+        return new WorldAddonList(named);
+    }
+
     /** Whether this list names the add-on carrying a pack of this uuid and has it off. */
     public boolean turnsOff(UUID uuid) {
         return addons.stream().anyMatch(entry -> entry.uuid().equals(uuid) && !entry.on());

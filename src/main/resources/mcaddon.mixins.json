@@ -101,6 +101,10 @@
     "VideoSettingsScreenMixin",
     "PackSelectionModelMixin",
     "WorldOpenFlowsMixin",
+    "CreateWorldScreenMixin",
+    "CreateWorldMoreTabMixin",
+    "EditWorldScreenMixin",
+    "WorldListEntryMixin",
     "AttackMissMixin",
     "ModelBakeryMixin",
     "BlockStateModelLoaderMixin"
