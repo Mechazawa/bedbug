@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.server;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.registry.ActiveAddons;
 import at.ioexception.mcaddon.bedrock.behaviour.DamageCause;
 import at.ioexception.mcaddon.bedrock.behaviour.PlayerDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.SwingSounds;
@@ -326,7 +327,7 @@ public final class ServerHooks {
         Cheats.start(server);
         ServerIdentity.start();
         Visitors.load(state);
-        scripts = ScriptHost.start(server, McAddon.packs().packs(), state);
+        scripts = ScriptHost.start(server, ActiveAddons.active().packs().packs(), state);
         if (scripts != null) {
             CustomCommands.install(server, scripts);
             scripts.raiseWorldEvent("worldLoad", Map.of());

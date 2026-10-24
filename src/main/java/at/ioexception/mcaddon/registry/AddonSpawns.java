@@ -4,8 +4,8 @@ import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.behaviour.SpawnRuleDefinition;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.PackRole;
-import at.ioexception.mcaddon.pack.PackSet;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.resource.AddonSet;
 import net.fabricmc.fabric.api.biome.v1.BiomeModifications;
 import net.fabricmc.fabric.api.biome.v1.BiomeSelectionContext;
 import net.fabricmc.fabric.api.biome.v1.BiomeSelectors;
@@ -37,18 +37,19 @@ public final class AddonSpawns {
         return CONDITIONS.getOrDefault(type, List.of());
     }
 
-    public static void register(PackSet packs) {
+    public static void register(AddonSet installed) {
         int added = 0;
-        for (BedrockPack pack : packs.packs()) {
+        for (BedrockPack pack : installed.packs().packs()) {
             if (pack.role() != PackRole.BEHAVIOUR) continue;
+            String namespace = installed.namespaceOf(pack);
             for (SpawnRuleDefinition rule : SpawnRuleDefinition.readAll(pack)) {
-                if (add(rule)) added++;
+                if (add(rule, namespace)) added++;
             }
         }
         if (added > 0) McAddon.LOGGER.info("Added {} natural spawns from add-ons.", added);
     }
 
-    private static boolean add(SpawnRuleDefinition rule) {
+    private static boolean add(SpawnRuleDefinition rule, String namespace) {
         EntityType<?> type = AddonEntities.typeOf(rule.identifier());
         if (type == null || rule.conditions().isEmpty()) return false;
 
@@ -56,7 +57,7 @@ public final class AddonSpawns {
         for (SpawnRuleDefinition.Condition condition : rule.conditions()) {
             BiomeModifications
                 .create(McAddon.id("spawn_" + Math.abs(rule.identifier().hashCode()) + "_" + index++))
-                .add(ModificationPhase.ADDITIONS, selector(condition), context ->
+                .add(ModificationPhase.ADDITIONS, selector(condition, namespace), context ->
                     Platform.addSpawn(context, rule.population(), type, condition.weight(),
                         condition.minimumHerd(), condition.maximumHerd()));
         }
@@ -69,15 +70,17 @@ public final class AddonSpawns {
      *
      * Java holds its three worlds apart with selectors of its own, so one of its biomes has to be in
      * the world the filter points at before its id is matched. A pack's own biome says which world
-     * it belongs to among its tags.
+     * it belongs to among its tags. None while the rule's add-on is not active, which Fabric asks
+     * again for every server.
      */
-    private static Predicate<BiomeSelectionContext> selector(SpawnRuleDefinition.Condition condition) {
+    private static Predicate<BiomeSelectionContext> selector(SpawnRuleDefinition.Condition condition,
+                                                             String namespace) {
         Predicate<BiomeSelectionContext> world = switch (condition.world()) {
             case "nether" -> BiomeSelectors.foundInTheNether();
             case "end" -> BiomeSelectors.foundInTheEnd();
             default -> BiomeSelectors.foundInOverworld();
         };
-        return context -> condition.biomes().allows(Platform.idOf(context.getBiomeKey()).toString(),
-            () -> world.test(context));
+        return context -> ActiveAddons.isActive(namespace)
+            && condition.biomes().allows(Platform.idOf(context.getBiomeKey()).toString(), () -> world.test(context));
     }
 }

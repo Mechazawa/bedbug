@@ -104,6 +104,43 @@ public final class ActiveAddonsGameTests {
         helper.succeed();
     }
 
+    /** An add-on left out of the active set reads as inactive and installs none of its structures. */
+    @GameTest()
+    public void anInactiveAddOnInstallsNoStructure(GameTestHelper helper) {
+        if (!ActiveAddons.isActive("tp")) {
+            helper.succeed();
+            return;
+        }
+        net.minecraft.server.MinecraftServer server = helper.getLevel().getServer();
+        net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager templates =
+            at.ioexception.mcaddon.platform.Platform.structureTemplates(server);
+        Identifier hut = at.ioexception.mcaddon.platform.Platform.id("tp", "hut");
+        AddonSet installed = ActiveAddons.installed();
+        java.util.function.Predicate<at.ioexception.mcaddon.convert.ConvertedPack> notTp =
+            one -> !one.namespace().equals("tp");
+
+        boolean activeWhileOff;
+        boolean sameSetWhileOff;
+        boolean hutWhileOff;
+        templates.remove(hut);
+        ActiveAddons.activate(installed.only(notTp));
+        try {
+            activeWhileOff = ActiveAddons.isActive("tp");
+            sameSetWhileOff = ActiveAddons.isActive(installed.only(notTp));
+            at.ioexception.mcaddon.structure.PackStructures.install(server);
+            hutWhileOff = templates.get(hut).isPresent();
+        } finally {
+            ActiveAddons.activate(installed);
+            at.ioexception.mcaddon.structure.PackStructures.install(server);
+        }
+
+        helper.assertFalse(activeWhileOff, "tp read as active while left out of the active set.");
+        helper.assertTrue(sameSetWhileOff, "Another object holding the same add-ons did not read as active.");
+        helper.assertFalse(hutWhileOff, "tp:hut was installed while tp was not active.");
+        helper.assertTrue(templates.get(hut).isPresent(), "tp:hut did not come back with tp active.");
+        helper.succeed();
+    }
+
     private static boolean listed(ServerLevel level, Item item) {
         CreativeModeTab tab = BuiltInRegistries.CREATIVE_MODE_TAB.getOptional(McAddon.id("addons")).orElseThrow();
         tab.buildContents(new CreativeModeTab.ItemDisplayParameters(level.enabledFeatures(), true,

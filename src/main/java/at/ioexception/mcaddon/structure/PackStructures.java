@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.structure;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.registry.ActiveAddons;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.PackRole;
 import at.ioexception.mcaddon.platform.Platform;
@@ -35,9 +36,9 @@ public final class PackStructures {
         ServerLifecycleEvents.END_DATA_PACK_RELOAD.register((server, resources, success) -> install(server));
     }
 
-    private static void install(MinecraftServer server) {
+    public static void install(MinecraftServer server) {
         StructureTemplateManager templates = Platform.structureTemplates(server);
-        for (BedrockPack pack : McAddon.packs().packs()) {
+        for (BedrockPack pack : ActiveAddons.active().packs().packs()) {
             if (pack.role() != PackRole.BEHAVIOUR) continue;
 
             for (Path file : pack.list(DIRECTORY, EXTENSION)) {
