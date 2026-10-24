@@ -388,6 +388,7 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
         case "tp:operator": swapOperator(player); break;
         case "tp:item_tags": askItemTags(player); break;
         case "tp:pack_settings": readThePackSettings(player); break;
+        case "tp:vector_property": keepAVector(player); break;
         default: break;
     }
 });
@@ -407,6 +408,16 @@ function askItemTags(player) {
     Object.entries(answers).forEach(([name, answer]) => player.addTag(`tp_itemtag_${name}_${answer}`));
 }
 
+// `/scriptevent tp:vector_property` stores a Vector3 and a string that looks like one, and tags the
+// player with what each comes back as.
+function keepAVector(player) {
+    player.setDynamicProperty("tp:vector", { x: 1, y: 2.5, z: -3 });
+    player.setDynamicProperty("tp:looks_like_one", "1,2.5,-3");
+    const vector = player.getDynamicProperty("tp:vector");
+    player.addTag(`tp:vector_${typeof vector}_${vector.x}_${vector.y}_${vector.z}`);
+    player.addTag(`tp:text_${typeof player.getDynamicProperty("tp:looks_like_one")}`);
+}
+
 // `/scriptevent tp:control_scheme <scheme>` puts the player on a control scheme, or back on their
 // camera's for `clear`, and tags them with the scheme they are on, or with the refusal.
 function steer(player, scheme) {
@@ -419,7 +430,8 @@ function steer(player, scheme) {
     }
 }
 
-world.afterEvents.entitySpawn.subscribe(({ entity }) => {
+world.afterEvents.entitySpawn.subscribe(({ entity, cause }) => {
+    if (entity.typeId === "minecraft:cow") entity.addTag("tp:cow_cause_" + cause);
     if (entity.typeId === VILLAGER) entity.addTag("tp:spawn_seen");
     if (entity.typeId === "minecraft:xp_orb") entity.addTag("tp:xp_orb_seen");
     // A companion is marked by the code that spawned it, after `spawnEntity` returned, so only an
@@ -449,6 +461,18 @@ world.afterEvents.dataDrivenEntityTrigger.subscribe(({ entity, eventId }) => {
     }
 }, { entityTypes: [VILLAGER] });
 
+// The events Mojang's own behaviour files raise on the game's mobs, and the group changes an event
+// of the pack's own made, are all heard through the same signal.
+const HEARD_EVENTS = ["spawn_from_village", "from_wandering_trader", "entity_transformed", "start_celebrating",
+    "on_sheared"];
+world.afterEvents.dataDrivenEntityTrigger.subscribe(event => {
+    const { entity, eventId } = event;
+    const name = eventId.replace("minecraft:", "");
+    if (HEARD_EVENTS.includes(name)) entity.addTag("tp:heard_" + name);
+    for (const modifier of event.getModifiers()) {
+        for (const group of modifier.addedComponentGroups) entity.addTag("tp:modifier_added_" + group);
+    }
+});
 // A young mob of the game's own raises the event its `minecraft:ageable` names as it grows up, which is
 // how a pack drawing its own model of a villager learns to draw the adult. The rabbit names `grow_up`.
 world.afterEvents.dataDrivenEntityTrigger.subscribe(({ entity, eventId }) => {

@@ -130,8 +130,7 @@ public record ServerEntityDefinition(
      * The expression the field carries asks about the kill rather than the birth, so the queries
      * answer as they would for one, and a bare number is the case the parser also covers.
      */
-    public int experienceWhenBred() {
-        JsonObject reward = components.get("minecraft:experience_reward");
+    public static int experienceWhenBred(JsonObject reward) {
         return amount(reward == null ? null : reward.get("on_bred"), 0);
     }
 

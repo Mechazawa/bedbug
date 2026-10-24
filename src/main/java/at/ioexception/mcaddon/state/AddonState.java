@@ -275,6 +275,9 @@ public final class AddonState {
     }
 
     private static Object value(JsonElement element) {
+        if (element != null && element.isJsonObject() && element.getAsJsonObject().has("z")) {
+            return GSON.fromJson(element, PropertyVector.class);
+        }
         if (element == null || !element.isJsonPrimitive()) return null;
         if (element.getAsJsonPrimitive().isBoolean()) return element.getAsBoolean();
         if (element.getAsJsonPrimitive().isNumber()) return element.getAsDouble();

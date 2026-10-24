@@ -172,6 +172,15 @@ public final class ScriptGameTests {
         });
     }
 
+    /** A Vector3 stored as a dynamic property comes back as a Vector3, and a string stays a string. */
+    @GameTest(structure = "mcaddon:platform")
+    public void aVectorDynamicPropertyComesBackAsAVector(GameTestHelper helper) {
+        probe(helper, "tp:vector_property", "", player -> {
+            expectTag(helper, player, "tp:vector_object_1_2.5_-3");
+            expectTag(helper, player, "tp:text_string");
+        });
+    }
+
     /** The pack's own lamp asks for a store, which `minecraft:dynamic_properties` writes into. */
     @GameTest(structure = "mcaddon:platform")
     public void aBlockKeepingAStoreKeepsWhatAScriptPutsInIt(GameTestHelper helper) {
@@ -449,6 +458,122 @@ public final class ScriptGameTests {
             throw new UncheckedIOException(unwritable);
         }
     }
+
+    //? if >=26 {
+    /**
+     * Mojang's own behaviour files raise events on the game's mobs, and a pack's script hears them
+     * as `dataDrivenEntityTrigger`. Each is raised where Java does the same thing: a villager made
+     * by a structure, a trader's llama, a mob converted into another, a raider celebrating and a
+     * sheep sheared. Each mob made in some other way hears nothing.
+     */
+    @GameTest()
+    public void theGamesOwnMobsRaiseTheEventsBedrocksFilesGiveThem(GameTestHelper helper) {
+        if (ServerHooks.scripts() == null) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        Villager fromVillage = villager(helper, "villager", new BlockPos(1, 2, 1));
+        Villager placed = villager(helper, "villager", new BlockPos(3, 2, 1));
+        net.minecraft.world.entity.animal.equine.TraderLlama llama = villager(helper, "trader_llama",
+            new BlockPos(5, 2, 1));
+        net.minecraft.world.entity.animal.equine.TraderLlama wild = villager(helper, "trader_llama",
+            new BlockPos(1, 2, 3));
+        Villager converting = villager(helper, "villager", new BlockPos(3, 2, 3));
+        net.minecraft.world.entity.raid.Raider raider = villager(helper, "pillager", new BlockPos(5, 2, 3));
+        net.minecraft.world.entity.animal.sheep.Sheep sheep = villager(helper, "sheep", new BlockPos(1, 2, 5));
+        net.minecraft.world.entity.animal.sheep.Sheep unsheared = villager(helper, "sheep", new BlockPos(3, 2, 5));
+
+        helper.runAfterDelay(1, () -> {
+            fromVillage.finalizeSpawn(level, level.getCurrentDifficultyAt(fromVillage.blockPosition()),
+                net.minecraft.world.entity.EntitySpawnReason.STRUCTURE, null);
+            placed.finalizeSpawn(level, level.getCurrentDifficultyAt(placed.blockPosition()),
+                net.minecraft.world.entity.EntitySpawnReason.COMMAND, null);
+            llama.finalizeSpawn(level, level.getCurrentDifficultyAt(llama.blockPosition()),
+                net.minecraft.world.entity.EntitySpawnReason.EVENT, null);
+            wild.finalizeSpawn(level, level.getCurrentDifficultyAt(wild.blockPosition()),
+                net.minecraft.world.entity.EntitySpawnReason.NATURAL, null);
+            Villager witchless = converting;
+            // 26.2 moved the vanilla entity types out of the class that builds them.
+            //? if >=26.2 {
+            var zombieVillager = net.minecraft.world.entity.EntityTypes.ZOMBIE_VILLAGER;
+            //?} else {
+            /*var zombieVillager = EntityType.ZOMBIE_VILLAGER;
+            *///?}
+            witchless.convertTo(zombieVillager,
+                net.minecraft.world.entity.ConversionParams.single(witchless, true, true), ignored -> { });
+            raider.setCelebrating(true);
+            sheep.shear(level, net.minecraft.sounds.SoundSource.PLAYERS,
+                new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.SHEARS));
+        });
+        helper.runAfterDelay(1 + DELIVERED, () -> {
+            expectTag(helper, fromVillage, "tp:heard_spawn_from_village");
+            expectTag(helper, llama, "tp:heard_from_wandering_trader");
+            expectTag(helper, raider, "tp:heard_start_celebrating");
+            expectTag(helper, sheep, "tp:heard_on_sheared");
+            helper.assertTrue(Platform.tagsOf(placed).stream().noneMatch(tag -> tag.startsWith("tp:heard_")),
+                "A villager no structure made heard " + Platform.tagsOf(placed) + ".");
+            helper.assertTrue(Platform.tagsOf(wild).stream().noneMatch(tag -> tag.startsWith("tp:heard_")),
+                "A llama no trader made heard " + Platform.tagsOf(wild) + ".");
+            helper.assertTrue(Platform.tagsOf(unsheared).stream().noneMatch(tag -> tag.startsWith("tp:heard_")),
+                "A sheep nobody sheared heard " + Platform.tagsOf(unsheared) + ".");
+            long transformed = level.getEntitiesOfClass(net.minecraft.world.entity.monster.zombie.ZombieVillager.class,
+                helper.getBounds())
+                .stream().filter(found -> Platform.tagsOf(found).contains("tp:heard_entity_transformed")).count();
+            helper.assertTrue(transformed == 1, "The mob a villager was converted into heard no transformation.");
+            helper.succeed();
+        });
+    }
+
+    /**
+     * A bred mob arrives to a pack's script as born and one placed in the world as spawned.
+     */
+    @GameTest()
+    public void aBredAnimalIsBornToTheScript(GameTestHelper helper) {
+        if (ServerHooks.scripts() == null) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        net.minecraft.world.entity.animal.cow.Cow mother = villager(helper, "cow", new BlockPos(1, 2, 1));
+        net.minecraft.world.entity.animal.cow.Cow father = villager(helper, "cow", new BlockPos(2, 2, 1));
+        net.minecraft.world.entity.animal.cow.Cow placed = villager(helper, "cow", new BlockPos(5, 2, 5));
+        helper.runAfterDelay(1, () -> mother.spawnChildFromBreeding(level, father));
+        helper.runAfterDelay(1 + DELIVERED, () -> {
+            expectTag(helper, placed, "tp:cow_cause_Spawned");
+            java.util.List<net.minecraft.world.entity.animal.cow.Cow> calves = level.getEntitiesOfClass(
+                net.minecraft.world.entity.animal.cow.Cow.class, helper.getBounds(), calf -> calf.isBaby());
+            helper.assertTrue(calves.size() == 1, "Breeding made " + calves.size() + " calves.");
+            expectTag(helper, calves.get(0), "tp:cow_cause_Born");
+            helper.succeed();
+        });
+    }
+
+    /**
+     * The groups an event of the pack's own adds reach its script as the event's modifiers.
+     */
+    @GameTest()
+    public void anEventTellsTheScriptWhichGroupsItChanged(GameTestHelper helper) {
+        EntityType<?> type = at.ioexception.mcaddon.registry.AddonEntities.typeOf("tp:ember");
+        if (type == null || ServerHooks.scripts() == null) {
+            helper.succeed();
+            return;
+        }
+
+        Entity ember = Platform.createMob(type, helper.getLevel());
+        BlockPos spot = helper.absolutePos(STAND);
+        Platform.placeAt(ember, spot.getX() + 0.5, spot.getY(), spot.getZ() + 0.5, 0f, 0f);
+        helper.getLevel().addFreshEntity(ember);
+        helper.runAfterDelay(1, () -> at.ioexception.mcaddon.server.EntityEvents.trigger(
+            ember, "tp:ember_saddle", null, ServerHooks.state()));
+        helper.runAfterDelay(1 + DELIVERED, () -> {
+            expectTag(helper, ember, "tp:modifier_added_tp:ember_saddled");
+            helper.succeed();
+        });
+    }
+    //?}
 
     private static void expectTag(GameTestHelper helper, Entity entity, String tag) {
         helper.assertTrue(Platform.tagsOf(entity).contains(tag),

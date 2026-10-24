@@ -95,12 +95,15 @@ class ComponentFieldsTest {
      */
     @Test
     void readsTheBreedingRewardOutOfTheMolangThatStatesIt() throws IOException {
-        assertEquals(7, entity("""
+        assertEquals(7, bredReward(entity("""
             "minecraft:experience_reward": {"on_bred": "query.last_hit_by_player ? 7 : 0"}
-            """).experienceWhenBred());
-        assertEquals(3, entity("\"minecraft:experience_reward\": {\"on_bred\": 3}")
-            .experienceWhenBred());
-        assertEquals(0, entity("\"minecraft:type_family\": {}").experienceWhenBred());
+            """)));
+        assertEquals(3, bredReward(entity("\"minecraft:experience_reward\": {\"on_bred\": 3}")));
+        assertEquals(0, bredReward(entity("\"minecraft:type_family\": {}")));
+    }
+
+    private static int bredReward(ServerEntityDefinition definition) {
+        return ServerEntityDefinition.experienceWhenBred(definition.components().get("minecraft:experience_reward"));
     }
 
     /** A trigger is a bare event name or the object carrying it, and both appear in the same pack. */

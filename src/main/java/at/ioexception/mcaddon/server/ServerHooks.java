@@ -44,9 +44,14 @@ import java.util.Map;
  */
 public final class ServerHooks {
     private static AddonState state;
+    private static MinecraftServer running;
     private static ScriptHost scripts;
 
     private ServerHooks() {
+    }
+
+    public static MinecraftServer server() {
+        return running;
     }
 
     public static AddonState state() {
@@ -115,7 +120,10 @@ public final class ServerHooks {
             if (scripts != null) scripts.raiseWorldEvent("entityHurt", fields);
         });
         //?}
-        ServerLifecycleEvents.SERVER_STOPPED.register(server -> state = null);
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+            state = null;
+            running = null;
+        });
         CommandRegistrationCallback.EVENT.register(ServerHooks::registerCommands);
         Visitors.register();
         WorldEvents.register();
@@ -318,6 +326,7 @@ public final class ServerHooks {
     }
 
     private static void start(MinecraftServer server) {
+        running = server;
         state = AddonState.load(server.getWorldPath(LevelResource.ROOT).resolve("data/mcaddon-state.json"));
         TickingAreas.load(state);
         AreaSchedules.load(state);
@@ -373,7 +382,8 @@ public final class ServerHooks {
      * then marks it as its own has done both by the time a listener asks whether it is marked.
      */
     private static boolean born(Entity entity) {
-        return entity instanceof at.ioexception.mcaddon.entity.AddonEntity addon && addon.born();
+        return entity instanceof at.ioexception.mcaddon.entity.AddonEntity addon ? addon.born()
+            : VanillaEvents.wasBred(entity);
     }
 
     private static void raiseEntityEvent(String event, Entity entity) {

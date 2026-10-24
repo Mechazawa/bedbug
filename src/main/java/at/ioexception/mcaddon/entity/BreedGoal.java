@@ -101,7 +101,7 @@ public final class BreedGoal extends Goal {
         }
 
         // Bedrock pays for a birth out of the same component that pays for a death.
-        int paid = mob.definition().experienceWhenBred();
+        int paid = mob.experienceWhenBred();
         if (paid > 0) {
             net.minecraft.world.entity.ExperienceOrb.award(level,
                 new net.minecraft.world.phys.Vec3(mob.getX(), mob.getY(), mob.getZ()), paid);

@@ -32,6 +32,9 @@ public final class EntityEvents {
     /** An event that triggers another, that triggers the first, would otherwise not return. */
     private static final int MAX_DEPTH = 8;
 
+    /** The group changes the running event has made so far, which a script reads as its modifiers. */
+    private static final ThreadLocal<java.util.List<Map<String, Object>>> MODIFIERS = new ThreadLocal<>();
+
     private EntityEvents() {
     }
 
@@ -47,8 +50,15 @@ public final class EntityEvents {
             if (!RAISED_ON_EVERY_ENTITY.contains(name)) AddonEntities.unsupported("event " + name);
             return false;
         }
-        run(entity, definition, event, other, state, 0);
-        raiseDataDriven(entity, name);
+        java.util.List<Map<String, Object>> outer = MODIFIERS.get();
+        java.util.List<Map<String, Object>> changes = new java.util.ArrayList<>();
+        MODIFIERS.set(changes);
+        try {
+            run(entity, definition, event, other, state, 0);
+        } finally {
+            MODIFIERS.set(outer);
+        }
+        raiseDataDriven(entity, name, changes);
         return true;
     }
 
@@ -60,11 +70,16 @@ public final class EntityEvents {
      * it until the next tick, because a listener that triggers another event is ordinary.
      */
     public static void raiseDataDriven(Entity entity, String name) {
+        raiseDataDriven(entity, name, java.util.List.of());
+    }
+
+    public static void raiseDataDriven(Entity entity, String name, java.util.List<Map<String, Object>> modifiers) {
         if (ServerHooks.scripts() == null) return;
 
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("entity", new at.ioexception.mcaddon.script.ScriptHost.EntityHandle(entity.getStringUUID()));
         fields.put("eventId", name);
+        fields.put("modifiers", new com.google.gson.Gson().toJson(modifiers));
         ServerHooks.scripts().queueWorldEvent("dataDrivenEntityTrigger", fields);
     }
 
@@ -126,6 +141,12 @@ public final class EntityEvents {
         EntityEvent.ChangeGroups change, Entity other, AddonState state) {
         if (!(entity instanceof AddonEntity addon)) return;
 
+        if (MODIFIERS.get() != null) {
+            Map<String, Object> modifier = new LinkedHashMap<>();
+            modifier.put("addedComponentGroups", change.add());
+            modifier.put("removedComponentGroups", change.remove());
+            MODIFIERS.get().add(modifier);
+        }
         addon.activeGroups().removeAll(change.remove());
         addon.activeGroups().addAll(change.add());
         // `q.had_component_group` is how a pack's render controller branches on a group, so the

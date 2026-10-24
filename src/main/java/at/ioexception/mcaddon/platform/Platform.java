@@ -3239,6 +3239,16 @@ public final class Platform {
         *///?}
     }
 
+    /** Whether the server holds a loot table of this id. */
+    public static boolean hasLootTable(net.minecraft.server.MinecraftServer server, Identifier table) {
+        //? if >=1.21 {
+        return server.reloadableRegistries().lookup()
+            .lookupOrThrow(net.minecraft.core.registries.Registries.LOOT_TABLE).get(lootTableKey(table)).isPresent();
+        //?} else {
+        /*return server.getLootData().getLootTable(table) != net.minecraft.world.level.storage.loot.LootTable.EMPTY;
+        *///?}
+    }
+
     /**
      * What a loot table hands out, rolled without anything having to die for it.
      *

@@ -950,6 +950,21 @@ These are the checks it runs, and what each one catches:
   it then, which is what a pack dressing its own model of a villager does with that event.
   `ScriptGameTests.aVillagerTakingAJobTellsTheScriptWhatItBecame` makes a villager a snowy farmer and
   reads back `become_farmer`, a variant of 1 and a mark variant of 4.
+  `server.VanillaEvents` raises the other events Mojang's behaviour files raise on the game's mobs, from
+  `MobEventsMixin` (`finalizeSpawn` by spawn reason: `spawn_from_village` for a villager made by a
+  structure and a naturally spawned cat, `from_wandering_trader` for an event-spawned trader llama; and
+  `convertTo`: `entity_transformed` on the new mob), `ShearEventMixin` (`on_sheared`), `RaiderCelebrateMixin`
+  and `VillagerCelebrateMixin` (`start_celebrating`). A mob that breeding made is marked in
+  `VanillaEvents.bred`, so its `entitySpawn` cause reads `Born`. An add-on entity's event reaches
+  `getModifiers()` as the groups it added and removed. `ScriptGameTests` reads each back through tags the
+  test pack's script writes.
+
+  `tp:wooly` carries two `minecraft:interact` interactions: a shearing one (`swing`, `hurt_item`,
+  `spawn_items`, `play_sounds`, `cooldown`, an event) and one stating `use_item`, and an `on_bred`
+  reward in a group; `InteractGameTests` reads each back. `interact_text` and `vibration` are reported.
+  A cooldown holds the whole entity, as Bedrock's does. `VanillaLoot` answers a table path no pack ships
+  with Java's own table for that mob (`entities/<mob>`, or `shearing/<mob>` for a `_shear` name).
+  A Vector3 dynamic property is stored as a `PropertyVector` and handed to a script as a triple.
   A young vanilla mob that grows up raises the event its `minecraft:ageable` names in Mojang's
   entity file, from `AgeableMobMixin`: `minecraft:ageable_grow_up` for all but the rabbit
   (`grow_up`) and the dolphin (`ageable_grow_up`). A pack that draws its own model over a villager
