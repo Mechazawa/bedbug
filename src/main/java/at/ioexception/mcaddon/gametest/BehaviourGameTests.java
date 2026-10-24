@@ -2328,6 +2328,73 @@ public final class BehaviourGameTests {
         });
     }
 
+    /** A path naming one of Mojang's own trade tables, which no pack ships, offers what Java's mob offers. */
+    @GameTest()
+    public void aVanillaTradeTablePathTheListedPackLacksBorrowsJavasOffers(GameTestHelper helper) {
+        AddonEntity hawker = spawn(helper, "tp:hawker");
+        if (hawker == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.assertTrue(!hawker.getOffers().isEmpty(),
+            "tp:hawker names wandering_trader_trades.json, which the pack lacks, and offers nothing.");
+        helper.succeed();
+    }
+
+    /** What a trader earned and spent, and what it carries, is read back by an entity of the same uuid. */
+    @GameTest()
+    public void aTradersStockUsesAndInventorySurviveBeingReadBack(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(ember, "tp:ember_load", null, ServerHooks.state());
+        net.minecraft.world.item.trading.MerchantOffer first = ember.getOffers().get(0);
+        ember.notifyTrade(first);
+        ember.notifyTrade(first);
+        ember.spend("tp:test_trigger");
+        ember.inventory().setItem(0, new ItemStack(net.minecraft.world.item.Items.GOLD_INGOT, 3));
+        ember.saveTrading();
+
+        AddonEntity copy = (AddonEntity) Platform.createMob(ember.getType(), helper.getLevel());
+        copy.setUUID(ember.getUUID());
+        copy.restoreGroups();
+
+        helper.assertTrue(copy.getOffers().size() == ember.getOffers().size()
+            && copy.getOffers().get(0).getUses() == 2, "A trader read back lost its offers or their uses.");
+        helper.assertTrue(copy.getVillagerXp() == ember.getVillagerXp() && ember.getVillagerXp() > 0,
+            "A trader read back lost its trade experience.");
+        helper.assertTrue(!copy.spend("tp:test_trigger"), "A trader read back forgot a spent single use trigger.");
+        helper.assertTrue(copy.inventory().getItem(0).getCount() == 3, "A trader read back lost its inventory.");
+        helper.succeed();
+    }
+
+    /** `should_leash` ties the spawned mob to the one that produced it. */
+    @GameTest()
+    public void aSpawnedMobIsLeashedWhenTheComponentSaysSo(GameTestHelper helper) {
+        AddonEntity trader = spawn(helper, TRADER);
+        if (trader == null) {
+            helper.succeed();
+            return;
+        }
+
+        com.google.gson.JsonObject spawn = new com.google.gson.JsonObject();
+        spawn.addProperty("spawn_entity", TRADER);
+        spawn.addProperty("should_leash", true);
+        long before = helper.getLevel().getEntitiesOfClass(AddonEntity.class,
+            trader.getBoundingBox().inflate(4)).size();
+        at.ioexception.mcaddon.server.Sensors.produce(trader, helper.getLevel(), spawn, ServerHooks.state());
+
+        var held = helper.getLevel().getEntitiesOfClass(AddonEntity.class, trader.getBoundingBox().inflate(4));
+        helper.assertTrue(held.size() == before + 1
+            && held.stream().anyMatch(other -> other != trader && Platform.leashHolder(other) == trader),
+            "The mob a spawn_entity produced with should_leash is not leashed to its producer.");
+        helper.succeed();
+    }
+
     /** Long enough that an effect which did apply is still standing on the next line. */
     private static final int IMMUNITY_TICKS = 200;
 

@@ -1,30 +1,59 @@
 package at.ioexception.mcaddon.client.screen;
 
-import at.ioexception.mcaddon.pack.BedrockPack;
-import at.ioexception.mcaddon.pack.PackRole;
 import at.ioexception.mcaddon.platform.Platform;
+import com.mojang.blaze3d.platform.NativeImage;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.client.screen.v1.Screens;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
- * Bedrock's pack list: every add-on this game has loaded, what it is made of, whether it is playing
- * now, and the way to its settings and to what this mod could not do for it.
+ * Bedrock's pack list: every add-on this game has loaded as a row with its icon, name, description
+ * and whether it is on, the way to its settings and to what this mod could not do for it, and a
+ * click on the row opening it to the rest.
  *
- * Open it with `new AddonsScreen(parent)`; Done goes back to `parent`.
+ * Open it with `new AddonsScreen(parent)`; Done goes back to `parent`. In a world the list only
+ * shows what is on; the other modes are where the player will choose.
  */
 public final class AddonsScreen extends ColumnScreen {
-    private static final int HALF = (WIDTH - 4) / 2;
+    /** Where the list is opened from, which decides whether a row can be switched. */
+    public enum Mode {
+        IN_WORLD, CREATE_WORLD, EDIT_WORLD
+    }
+
+    private static final Identifier GEAR = Platform.id("mcaddon", "textures/gui/gear.png");
+    private static final Identifier GEAR_OFF = Platform.id("mcaddon", "textures/gui/gear_off.png");
+    private static final Identifier INFO = Platform.id("mcaddon", "textures/gui/info.png");
+
+    private final Mode mode;
+    private final Set<Path> opened = new HashSet<>();
+    private final Map<Path, Identifier> icons = new HashMap<>();
 
     public AddonsScreen(Screen parent) {
+        this(parent, Mode.IN_WORLD);
+    }
+
+    public AddonsScreen(Screen parent, Mode mode) {
         super(Component.translatable("mcaddon.addons.title"), parent);
+        this.mode = mode;
     }
 
     /**
@@ -61,28 +90,48 @@ public final class AddonsScreen extends ColumnScreen {
     }
 
     private void show(AddonEntry addon) {
-        text(addon.converted().displayName() + " " + addon.converted().pack().manifest().version());
-        if (!addon.authors().isEmpty()) {
-            text(Component.translatable("mcaddon.addons.by", String.join(", ", addon.authors())).getString());
-        }
-        addon.descriptions().forEach(this::text);
-        addon.packs().forEach(pack -> text(packLine(pack, addon.active())));
+        Path root = addon.converted().root();
+        AddonRow row = widget(new AddonRow(left(), WIDTH, font, addon, iconOf(root), opened.contains(root), () -> {
+            if (!opened.remove(root)) opened.add(root);
+            rebuildWidgets();
+        }));
 
-        Button settings = widget(Button.builder(Component.translatable("mcaddon.addons.settings"),
-                button -> Platform.setScreen(new PackSettingsScreen(this, addon)))
-            .bounds(left(), 0, HALF, BUTTON_HEIGHT).build());
+        IconButton settings = widgetBelow(new IconButton(Component.translatable("mcaddon.addons.settings"), GEAR,
+            GEAR_OFF, () -> Platform.setScreen(new PackSettingsScreen(this, addon))), AddonRow.CONTROLS_TOP);
+        settings.setX(left() + row.controlsLeft());
         settings.active = addon.hasSettings();
-        widget(Button.builder(Component.translatable("mcaddon.addons.report"),
-                button -> Platform.setScreen(new AddonReportScreen(this, addon)))
-            .bounds(left() + WIDTH - HALF, 0, HALF, BUTTON_HEIGHT).build());
-        nextRow();
-        gap();
+        settings.setTooltip(Tooltip.create(Component.translatable(
+            settings.active ? "mcaddon.addons.settings" : "mcaddon.addons.settings.none")));
+
+        IconButton report = widgetBelow(new IconButton(Component.translatable("mcaddon.addons.report"), INFO, INFO,
+            () -> Platform.setScreen(new AddonReportScreen(this, addon))), AddonRow.CONTROLS_TOP);
+        report.setX(settings.getX() + IconButton.SIZE + 2);
+        report.setTooltip(Tooltip.create(Component.translatable("mcaddon.addons.report")));
+
+        skip(row.getHeight() + AddonRow.GAP);
     }
 
-    private static String packLine(BedrockPack pack, boolean active) {
-        String kind = pack.role() == PackRole.RESOURCE
-            ? "mcaddon.addons.pack.resources" : "mcaddon.addons.pack.behaviour";
-        String state = active ? "mcaddon.addons.pack.active" : "mcaddon.addons.pack.inactive";
-        return Component.translatable(state, Component.translatable(kind, pack.displayName())).getString();
+    /** The pack's own icon as a texture of this screen's, or the game's blank one where there is none. */
+    private Identifier iconOf(Path root) {
+        return icons.computeIfAbsent(root, key -> {
+            Path file = key.resolve("pack.png");
+            if (!Files.isRegularFile(file)) return AddonRow.unknownIcon();
+            Identifier id = Platform.id("mcaddon", "addon_icon/" + Integer.toHexString(key.toString().hashCode()));
+            try (InputStream stream = Files.newInputStream(file)) {
+                NativeImage image = NativeImage.read(stream);
+                Minecraft.getInstance().getTextureManager().register(id, new DynamicTexture(id::toString, image));
+                return id;
+            } catch (IOException | RuntimeException unreadable) {
+                return AddonRow.unknownIcon();
+            }
+        });
+    }
+
+    @Override
+    public void removed() {
+        icons.values().stream().filter(id -> !id.equals(AddonRow.unknownIcon()))
+            .forEach(Minecraft.getInstance().getTextureManager()::release);
+        icons.clear();
+        super.removed();
     }
 }

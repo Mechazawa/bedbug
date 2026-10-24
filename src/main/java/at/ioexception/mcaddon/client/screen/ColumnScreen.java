@@ -49,13 +49,14 @@ abstract class ColumnScreen extends Screen {
         column.clear();
         row = 0;
 
-        StringWidget heading = addRenderableWidget(new StringWidget(left(), 0, WIDTH, LINE_HEIGHT, title, font));
+        StringWidget heading = addRenderableWidget(new StringWidget(title, font));
         addRenderableOnly(column.clip());
         fill();
         addRenderableOnly(column.unclip());
 
         column.place(left(), WIDTH, TOP_MARGIN, height - FOOTER, row);
         column.scrollTo(scrolled);
+        heading.setX(width / 2 - heading.getWidth() / 2);
         heading.setY(TOP_MARGIN - LINE_HEIGHT - HEADING_GAP);
         addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, button -> onClose())
             .bounds(width / 2 - DONE_WIDTH / 2, height - FOOTER + (FOOTER - BUTTON_HEIGHT) / 2, DONE_WIDTH,
@@ -79,6 +80,17 @@ abstract class ColumnScreen extends Screen {
     <T extends AbstractWidget> T widget(T widget) {
         addRenderableWidget(column.add(widget, row));
         return widget;
+    }
+
+    /** A widget `below` pixels under the top of the row being filled, drawn over what was added before it. */
+    <T extends AbstractWidget> T widgetBelow(T widget, int below) {
+        addRenderableWidget(column.add(widget, row + below));
+        return widget;
+    }
+
+    /** Moves the next widget or line down by `pixels`. */
+    void skip(int pixels) {
+        row += pixels;
     }
 
     /** Ends a row of widgets. */
