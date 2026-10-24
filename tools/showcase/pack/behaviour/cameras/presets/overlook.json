@@ -5,7 +5,6 @@
     "inherit_from": "minecraft:free",
     "rot_x": 35,
     "rot_y": 0,
-    "listener": "player",
-    "player_effects": true
+    "listener": "player"
   }
 }

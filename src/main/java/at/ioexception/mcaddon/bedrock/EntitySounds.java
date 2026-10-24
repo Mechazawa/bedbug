@@ -22,7 +22,8 @@ import java.util.Set;
  * walking on, so those four are answered here and the rest of the moments a Bedrock mob has are
  * named instead.
  *
- * @param events  the sound event named for each moment, under Bedrock's own name for the moment
+ * @param events  the sound event named for each moment, under Bedrock's own name for the moment, and
+ *                an empty name for a moment written to make no sound
  * @param volume  how loud, or -1 where the entry names no volume
  * @param pitch   the range a pitch is drawn from, or null where the entry names none
  */
@@ -40,6 +41,11 @@ public record EntitySounds(Map<String, String> events, double volume, double[] p
 
     public String event(String moment) {
         return events.get(moment);
+    }
+
+    /** Whether the entry names this moment and makes no sound for it. */
+    public boolean silences(String moment) {
+        return "".equals(events.get(moment));
     }
 
     /**
@@ -113,6 +119,10 @@ public record EntitySounds(Map<String, String> events, double volume, double[] p
             defaults == null ? Map.of() : defaults.events());
 
         for (Map.Entry<String, JsonElement> entry : section(body, "events").entrySet()) {
+            if (silent(entry.getValue())) {
+                events.put(entry.getKey(), "");
+                continue;
+            }
             String named = named(entry.getValue());
             if (named == null || named.isBlank()) continue;
             if (!ANSWERED.contains(entry.getKey())) AddonEntities.unsupported("entity sound " + entry.getKey());
@@ -124,6 +134,18 @@ public record EntitySounds(Map<String, String> events, double volume, double[] p
         double[] pitch = range(body.get("pitch"));
         return new EntitySounds(Map.copyOf(events), volume,
             pitch == null && defaults != null ? defaults.pitch() : pitch);
+    }
+
+    /**
+     * Whether a moment is written to make no sound: an empty sound name, or a volume of nothing. A
+     * pack silences a mob of the game's own this way, its entry standing in for Mojang's.
+     */
+    private static boolean silent(JsonElement value) {
+        if (value.isJsonPrimitive()) return value.getAsString().isEmpty();
+        if (!value.isJsonObject()) return false;
+
+        JsonObject moment = value.getAsJsonObject();
+        return "".equals(Json.text(moment, "sound", null)) || Json.number(moment, "volume", 1) == 0;
     }
 
     /** Bedrock writes a moment as the event name alone or as an object naming it under `sound`. */

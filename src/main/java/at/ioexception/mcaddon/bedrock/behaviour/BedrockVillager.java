@@ -6,6 +6,8 @@ import net.minecraft.world.entity.npc.villager.VillagerData;
 import net.minecraft.world.entity.npc.villager.VillagerDataHolder;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -29,6 +31,21 @@ public record BedrockVillager(String profession, String type, int level, UUID id
 
     private static final int SKINS = 6;
 
+    /**
+     * The family Bedrock's villager states beside `villager` for each profession, from the component
+     * group that profession switches on. A profession whose family is its own name is left out.
+     */
+    private static final Map<String, String> PROFESSION_FAMILIES = Map.of("none", "unskilled",
+        "mason", "stone_mason");
+
+    /** The wider trade each profession's group adds as a family of its own, where it adds one. */
+    private static final Map<String, String> GUILDS = Map.ofEntries(
+        Map.entry("none", "peasant"), Map.entry("nitwit", "peasant"), Map.entry("farmer", "peasant"),
+        Map.entry("fisherman", "peasant"), Map.entry("fletcher", "peasant"), Map.entry("shepherd", "peasant"),
+        Map.entry("armorer", "blacksmith"), Map.entry("weaponsmith", "blacksmith"),
+        Map.entry("toolsmith", "blacksmith"), Map.entry("butcher", "artisan"),
+        Map.entry("leatherworker", "artisan"), Map.entry("mason", "artisan"), Map.entry("cleric", "priest"));
+
     /** The villager or zombie villager this entity is, null for any other entity. */
     public static BedrockVillager tryFrom(Entity entity) {
         return entity instanceof VillagerDataHolder holder ? of(holder.getVillagerData(), entity.getUUID()) : null;
@@ -50,6 +67,19 @@ public record BedrockVillager(String profession, String type, int level, UUID id
             case "skin_id" -> (int) Math.floorMod(id.getLeastSignificantBits(), (long) SKINS);
             default -> null;
         };
+    }
+
+    /**
+     * The families the profession's component group adds: `villager_v2` states the profession's own
+     * family and, for most, the trade it belongs to, and `zombie_villager_v2` states the profession's
+     * family alone. A profession another mod added adds nothing.
+     */
+    public Set<String> families(boolean zombie) {
+        if (!PROFESSIONS.contains(profession)) return Set.of();
+
+        String family = PROFESSION_FAMILIES.getOrDefault(profession, profession);
+        String guild = GUILDS.get(profession);
+        return zombie || guild == null ? Set.of(family) : Set.of(family, guild);
     }
 
     /**

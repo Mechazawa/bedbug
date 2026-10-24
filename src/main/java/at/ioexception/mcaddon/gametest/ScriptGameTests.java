@@ -12,8 +12,10 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.TamableAnimal;
+import net.minecraft.world.entity.monster.zombie.ZombieVillager;
 import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.entity.npc.villager.VillagerData;
+import net.minecraft.world.entity.npc.villager.VillagerDataHolder;
 import net.minecraft.world.entity.npc.villager.VillagerProfession;
 import net.minecraft.world.entity.npc.villager.VillagerType;
 import net.minecraft.world.level.block.Blocks;
@@ -287,6 +289,60 @@ public final class ScriptGameTests {
             helper.succeed();
         });
     }
+
+    /**
+     * A villager's job reaches a pack's script as the families Bedrock's villager states for it: a
+     * jobless one is `unskilled`, a nitwit `nitwit`, and a farmer `farmer` and `peasant`, while a
+     * jobless zombie villager is `unskilled` and no `peasant`. A pack choosing between a trade and a
+     * refusal by these families greets every jobless villager as a trader when they are missing.
+     */
+    @GameTest()
+    public void aVillagersFamiliesNameItsJob(GameTestHelper helper) {
+        Villager jobless = villager(helper, "villager", new BlockPos(3, 2, 1));
+        Villager nitwit = villager(helper, "villager", new BlockPos(1, 2, 3));
+        Villager farmer = villager(helper, "villager", new BlockPos(3, 2, 3));
+        ZombieVillager zombie = villager(helper, "zombie_villager", new BlockPos(4, 2, 2));
+        helper.runAfterDelay(1, () -> {
+            zombie.setVillagerData(withProfession(zombie, helper.getLevel(), VillagerProfession.NONE));
+            nitwit.setVillagerData(withProfession(nitwit, helper.getLevel(), VillagerProfession.NITWIT));
+            farmer.setVillagerData(withProfession(farmer, helper.getLevel(), VillagerProfession.FARMER));
+        });
+        helper.runAfterDelay(2, () -> probe(helper, "tp:families", "", player -> {
+            expectTag(helper, jobless, "tp:family_unskilled");
+            expectTag(helper, jobless, "tp:family_peasant");
+            expectTag(helper, nitwit, "tp:family_nitwit");
+            expectTag(helper, farmer, "tp:family_farmer");
+            expectTag(helper, farmer, "tp:family_peasant");
+            expectTag(helper, zombie, "tp:family_unskilled");
+            helper.assertFalse(Platform.tagsOf(farmer).contains("tp:family_unskilled"),
+                "A farmer reads as jobless: " + Platform.tagsOf(farmer));
+            helper.assertFalse(Platform.tagsOf(zombie).contains("tp:family_peasant"),
+                "A zombie villager carries the living villager's trade: " + Platform.tagsOf(zombie));
+        }));
+    }
+
+    private static <T extends Entity> T villager(GameTestHelper helper, String name, BlockPos relative) {
+        EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("minecraft", name)).orElseThrow();
+        @SuppressWarnings("unchecked")
+        T villager = (T) Platform.createMob(type, helper.getLevel());
+        BlockPos at = helper.absolutePos(relative);
+        Platform.placeAt(villager, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        ((net.minecraft.world.entity.Mob) villager).setNoAi(true);
+        helper.getLevel().addFreshEntity(villager);
+        return villager;
+    }
+
+    //? if >=1.21.5 {
+    private static VillagerData withProfession(VillagerDataHolder villager, ServerLevel level,
+        net.minecraft.resources.ResourceKey<VillagerProfession> profession) {
+        return villager.getVillagerData().withProfession(level.registryAccess(), profession);
+    }
+    //?} else {
+    /*private static VillagerData withProfession(VillagerDataHolder villager, ServerLevel level,
+        VillagerProfession profession) {
+        return villager.getVillagerData().setProfession(profession);
+    }
+    *///?}
 
     private static VillagerData snowyFarmer(Villager villager, ServerLevel level) {
         //? if >=1.21.5 {
