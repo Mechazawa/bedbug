@@ -310,6 +310,40 @@ public final class ScriptGameTests {
     }
 
     /**
+     * A villager born of a spawn egg used on another reaches a pack's script as born and young, which
+     * is all a pack drawing its own villager has to choose the young model by.
+     */
+    @GameTest()
+    public void aVillagerFromASpawnEggIsBornYoung(GameTestHelper helper) {
+        if (ServerHooks.scripts() == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityType<?> type = BuiltInRegistries.ENTITY_TYPE
+            .getOptional(Platform.id("minecraft", "villager")).orElseThrow();
+        Villager parent = (Villager) Platform.createMob(type, helper.getLevel());
+        BlockPos at = helper.absolutePos(STAND);
+        Platform.placeAt(parent, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        parent.setNoAi(true);
+        helper.getLevel().addFreshEntity(parent);
+
+        // What SpawnEggItem.spawnOffspringFromSpawnEgg does with an egg used on a villager.
+        Villager young = parent.getBreedOffspring(helper.getLevel(), parent);
+        young.setBaby(true);
+        young.setNoAi(true);
+        Platform.placeAt(young, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        helper.getLevel().addFreshEntity(young);
+
+        helper.runAfterDelay(DELIVERED, () -> {
+            expectTag(helper, young, "tp:born_young");
+            helper.assertFalse(Platform.tagsOf(parent).contains("tp:born_young"),
+                "The villager the egg was used on reached the script as born young.");
+            helper.succeed();
+        });
+    }
+
+    /**
      * A villager's job reaches a pack's script as the families Bedrock's villager states for it: a
      * jobless one is `unskilled`, a nitwit `nitwit`, and a farmer `farmer` and `peasant`, while a
      * jobless zombie villager is `unskilled` and no `peasant`. A pack choosing between a trade and a

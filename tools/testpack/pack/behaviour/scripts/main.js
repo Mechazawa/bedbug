@@ -443,6 +443,10 @@ function steer(player, scheme) {
 world.afterEvents.entitySpawn.subscribe(({ entity, cause }) => {
     if (entity.typeId === "minecraft:cow") entity.addTag("tp:cow_cause_" + cause);
     if (entity.typeId === VILLAGER) entity.addTag("tp:spawn_seen");
+    // A pack drawing its own model of a villager picks the young model here and is told only when it grows up.
+    if (entity.typeId === VILLAGER && cause === "Born" && entity.getComponent("minecraft:is_baby") !== undefined) {
+        entity.addTag("tp:born_young");
+    }
     if (entity.typeId === "minecraft:xp_orb") entity.addTag("tp:xp_orb_seen");
     // A companion is marked by the code that spawned it, after `spawnEntity` returned, so only an
     // event delivered once that code has finished finds the mark.

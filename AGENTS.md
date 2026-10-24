@@ -951,6 +951,10 @@ These are the checks it runs, and what each one catches:
   it then, which is what a pack dressing its own model of a villager does with that event.
   `ScriptGameTests.aVillagerTakingAJobTellsTheScriptWhatItBecame` makes a villager a snowy farmer and
   reads back `become_farmer`, a variant of 1 and a mark variant of 4.
+  A villager a spawn egg made of another, which Java makes through `getBreedOffspring` as it does
+  a bred one, reaches `entitySpawn` with the cause `Born` and with `minecraft:is_baby` already on
+  it, and the script tags it `tp:born_young`; `aVillagerFromASpawnEggIsBornYoung` reads that back.
+  Java's egg used on the ground makes an adult, sneaking or not.
   `server.VanillaEvents` raises the other events Mojang's behaviour files raise on the game's mobs, from
   `MobEventsMixin` (`finalizeSpawn` by spawn reason: `spawn_from_village` for a villager made by a
   structure and a naturally spawned cat, `from_wandering_trader` for an event-spawned trader llama; and
