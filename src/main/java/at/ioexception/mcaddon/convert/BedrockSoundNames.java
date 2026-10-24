@@ -71,6 +71,7 @@ public final class BedrockSoundNames {
         Map.entry("attack.critical", "entity.player.attack.crit"),
         Map.entry("attack.nodamage", "entity.player.attack.nodamage"),
         Map.entry("attack.strong", "entity.player.attack.strong"),
+        Map.entry("shear", "entity.sheep.shear"),
         Map.entry("item.spear.attack_hit", "item.spear.hit"),
         Map.entry("item.spear.attack_miss", "item.spear.attack"),
         Map.entry("item.wooden_spear.attack_hit", "item.spear_wood.hit"),

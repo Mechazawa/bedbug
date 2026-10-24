@@ -64,9 +64,12 @@ public final class AddonEntities {
      */
     public static Identifier lootTable(EntityType<?> type, String table) {
         String namespace = NAMESPACES.get(type);
-        return namespace == null ? null
-            : Platform.id(namespace, at.ioexception.mcaddon.bedrock.behaviour.LootTableDefinition
-                .javaPath(table));
+        if (namespace == null) return null;
+
+        Identifier own = Platform.id(namespace, at.ioexception.mcaddon.bedrock.behaviour.LootTableDefinition
+            .javaPath(table));
+        return at.ioexception.mcaddon.bedrock.behaviour.VanillaLoot.orJavasOwn(
+            at.ioexception.mcaddon.server.ServerHooks.server(), own, table);
     }
 
     /** The namespace of the add-on that declared the type, or null for a type no add-on did. */
@@ -419,7 +422,6 @@ public final class AddonEntities {
      * inside the component, because Bedrock nests most of them one list deep.
      */
     private static final Map<String, Set<String>> UNREAD_FIELDS = Map.of(
-        "minecraft:experience_reward", Set.of("on_bred"),
         "minecraft:block_movement_slowdown_immunity", Set.of("tags"),
         "minecraft:spawn_entity", Set.of("spawn_method", "should_leash"),
         "minecraft:drying_out_timer", Set.of("water_bottle_refill_time"),

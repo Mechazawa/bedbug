@@ -6026,10 +6026,24 @@ public class AddonEntity extends PathfinderMob
         return super.getPistonPushReaction();
     }
 
+    /** What breeding pays out, read from the groups that are on as well as from the top level. */
+    public int experienceWhenBred() {
+        return ServerEntityDefinition.experienceWhenBred(liveComponent("minecraft:experience_reward"));
+    }
+
+    /** The game tick before which `minecraft:interact` answers nobody, which an interaction's `cooldown` sets. */
+    private long interactReadyAt;
+
+    /** What an interaction states that Java has no place for. */
+    private static final java.util.List<String> INTERACT_UNREAD = java.util.List.of("interact_text", "vibration");
+
     /** True when one of the pack's interactions applied, which is what consumes the click. */
-    private boolean interact(Player player) {
+    private boolean interact(Player player, InteractionHand hand) {
         com.google.gson.JsonObject component = liveComponent("minecraft:interact");
-        if (component == null) return false;
+        if (component == null || tickCount < interactReadyAt
+            || !(level() instanceof net.minecraft.server.level.ServerLevel level)) {
+            return false;
+        }
 
         for (com.google.gson.JsonElement element
             : at.ioexception.mcaddon.util.Json.list(component, "interactions")) {
@@ -6037,17 +6051,53 @@ public class AddonEntity extends PathfinderMob
             com.google.gson.JsonObject interaction = element.getAsJsonObject();
 
             com.google.gson.JsonObject onInteract = interaction.getAsJsonObject("on_interact");
-            String event = onInteract == null
-                ? null : at.ioexception.mcaddon.util.Json.text(onInteract, "event", null);
-            if (event == null) continue;
-
-            Filter filter = Filter.parse(onInteract.get("filters"));
+            Filter filter = Filter.parse(onInteract == null ? null : onInteract.get("filters"));
             if (!filter.matches(new Filter.Context(this, player, null, ServerHooks.state()))) continue;
 
-            EntityEvents.trigger(this, event, player, ServerHooks.state());
+            AddonEntities.unsupportedFields("minecraft:interact", interaction, INTERACT_UNREAD);
+            ItemStack held = player.getItemInHand(hand);
+            double cooldown = Goals.number(interaction, "cooldown", 0);
+            if (cooldown > 0) interactReadyAt = tickCount + (long) (cooldown * 20);
+            if (Goals.flag(interaction, "swing", false)) player.swing(hand);
+            soundsOf(interaction.get("play_sounds")).forEach(sound -> playSound(sound, 1f, 1f));
+            if (!player.getAbilities().instabuild) {
+                if (Goals.flag(interaction, "use_item", false)) held.shrink(1);
+                int damage = (int) Goals.number(interaction, "hurt_item", 0);
+                if (damage > 0) {
+                    held.hurtAndBreak(damage, player, hand == InteractionHand.MAIN_HAND
+                        ? net.minecraft.world.entity.EquipmentSlot.MAINHAND
+                        : net.minecraft.world.entity.EquipmentSlot.OFFHAND);
+                }
+            }
+            String table = tableOf(interaction.get("spawn_items"));
+            Identifier named = table == null ? null : AddonEntities.lootTable(getType(), table);
+            if (named != null) {
+                Platform.rollLoot(level, named, this).forEach(stack -> level.addFreshEntity(
+                    new net.minecraft.world.entity.item.ItemEntity(level, getX(), getY(0.5), getZ(), stack)));
+            }
+            String event = onInteract == null ? null : at.ioexception.mcaddon.util.Json.text(onInteract, "event", null);
+            if (event != null) EntityEvents.trigger(this, event, player, ServerHooks.state());
             return true;
         }
         return false;
+    }
+
+    private static String tableOf(com.google.gson.JsonElement written) {
+        return written != null && written.isJsonObject()
+            ? at.ioexception.mcaddon.util.Json.text(written.getAsJsonObject(), "table", null) : null;
+    }
+
+    /** The sounds a `play_sounds` field names, which Bedrock writes as one name or a list of them. */
+    private java.util.List<SoundEvent> soundsOf(com.google.gson.JsonElement written) {
+        java.util.List<String> names = new java.util.ArrayList<>();
+        if (written != null && written.isJsonPrimitive()) names.add(written.getAsString());
+        if (written != null && written.isJsonArray()) written.getAsJsonArray().forEach(name -> names.add(name.getAsString()));
+        return names.stream()
+            .map(at.ioexception.mcaddon.convert.BedrockSoundNames::javaForEvent)
+            .filter(java.util.Objects::nonNull)
+            .map(java -> sound(java, null))
+            .filter(java.util.Objects::nonNull)
+            .toList();
     }
 
     /**
@@ -6098,7 +6148,7 @@ public class AddonEntity extends PathfinderMob
         if (!isClientSide() && equippedBy(player, hand)) return InteractionResult.SUCCESS;
         if (!isClientSide() && givenTo(player, hand)) return InteractionResult.SUCCESS;
         if (!isClientSide() && satDown(player)) return InteractionResult.SUCCESS;
-        if (!isClientSide() && interact(player)) return InteractionResult.SUCCESS;
+        if (!isClientSide() && interact(player, hand)) return InteractionResult.SUCCESS;
         if (!isClientSide() && trades() == null && mountedBy(player)) return InteractionResult.SUCCESS;
 
         if (trades() == null) return super.mobInteract(player, hand);

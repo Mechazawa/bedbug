@@ -162,6 +162,15 @@ public final class ScriptGameTests {
         });
     }
 
+    /** A Vector3 stored as a dynamic property comes back as a Vector3, and a string stays a string. */
+    @GameTest(structure = "mcaddon:platform")
+    public void aVectorDynamicPropertyComesBackAsAVector(GameTestHelper helper) {
+        probe(helper, "tp:vector_property", "", player -> {
+            expectTag(helper, player, "tp:vector_object_1_2.5_-3");
+            expectTag(helper, player, "tp:text_string");
+        });
+    }
+
     /** The pack's own lamp asks for a store, which `minecraft:dynamic_properties` writes into. */
     @GameTest(structure = "mcaddon:platform")
     public void aBlockKeepingAStoreKeepsWhatAScriptPutsInIt(GameTestHelper helper) {

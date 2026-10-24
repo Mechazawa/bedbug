@@ -281,7 +281,7 @@ public final class ScriptBridge {
 
     @HostAccess.Export
     public Object worldDynamicProperty(String name) {
-        return state.worldProperty(name);
+        return exported(state.worldProperty(name));
     }
 
     @HostAccess.Export
@@ -589,7 +589,7 @@ public final class ScriptBridge {
     @HostAccess.Export
     public Object entityDynamicProperty(String id, String name) {
         Entity entity = entity(id);
-        return entity == null ? null : state.dynamicProperty(entity.getUUID(), name);
+        return entity == null ? null : exported(state.dynamicProperty(entity.getUUID(), name));
     }
 
     @HostAccess.Export
@@ -632,7 +632,7 @@ public final class ScriptBridge {
             coverage.unsupported("Block.getDynamicProperty");
             return null;
         }
-        return state.blockProperty(store, name);
+        return exported(state.blockProperty(store, name));
     }
 
     @HostAccess.Export
@@ -1397,7 +1397,17 @@ public final class ScriptBridge {
         if (value.isBoolean()) return value.asBoolean();
         if (value.isNumber()) return value.asDouble();
         if (value.isString()) return value.asString();
+        if (value.hasMember("x") && value.hasMember("y") && value.hasMember("z")
+            && value.getMember("x").isNumber() && value.getMember("y").isNumber() && value.getMember("z").isNumber()) {
+            return new at.ioexception.mcaddon.state.PropertyVector(value.getMember("x").asDouble(),
+                value.getMember("y").asDouble(), value.getMember("z").asDouble());
+        }
         return value.toString();
+    }
+
+    /** What a stored property crosses as: a Vector3 is a triple the script turns back into one. */
+    private static Object exported(Object stored) {
+        return stored instanceof at.ioexception.mcaddon.state.PropertyVector vector ? vector.triple() : stored;
     }
 
     // Reading an option bag a script passed as JSON. A key the pack left out is absent, not null.

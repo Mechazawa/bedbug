@@ -387,9 +387,20 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
         case "tp:config_reload": dedicatedServer?.reloadScriptingConfig(); readTheConfig(player); break;
         case "tp:operator": swapOperator(player); break;
         case "tp:pack_settings": readThePackSettings(player); break;
+        case "tp:vector_property": keepAVector(player); break;
         default: break;
     }
 });
+
+// `/scriptevent tp:vector_property` stores a Vector3 and a string that looks like one, and tags the
+// player with what each comes back as.
+function keepAVector(player) {
+    player.setDynamicProperty("tp:vector", { x: 1, y: 2.5, z: -3 });
+    player.setDynamicProperty("tp:looks_like_one", "1,2.5,-3");
+    const vector = player.getDynamicProperty("tp:vector");
+    player.addTag(`tp:vector_${typeof vector}_${vector.x}_${vector.y}_${vector.z}`);
+    player.addTag(`tp:text_${typeof player.getDynamicProperty("tp:looks_like_one")}`);
+}
 
 // `/scriptevent tp:control_scheme <scheme>` puts the player on a control scheme, or back on their
 // camera's for `clear`, and tags them with the scheme they are on, or with the refusal.

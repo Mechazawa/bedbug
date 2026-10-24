@@ -22,6 +22,12 @@ export class Vector3 {
     }
 }
 
+// A dynamic property holds a boolean, a number, a string or a Vector3, which crosses as a triple.
+function storedProperty(value) {
+    if (value === null || value === undefined) return undefined;
+    return typeof value === "object" ? new Vector3(...list(value)) : value;
+}
+
 function vector(triple) {
     return { x: triple[0], y: triple[1], z: triple[2] };
 }
@@ -840,7 +846,7 @@ export class Block {
 
     getDynamicProperty(name) {
         // A property never set crosses as null, and Bedrock answers undefined.
-        return bridge.blockDynamicProperty(...blockAt(this), name) ?? undefined;
+        return storedProperty(bridge.blockDynamicProperty(...blockAt(this), name));
     }
 
     setDynamicProperty(name, value) {
@@ -1197,8 +1203,7 @@ export class BlockDynamicPropertiesComponent extends BlockComponent {
     }
 
     get(key) {
-        const value = bridge.blockDynamicProperty(...blockAt(this.block), key);
-        return value === null ? undefined : value;
+        return storedProperty(bridge.blockDynamicProperty(...blockAt(this.block), key));
     }
 
     set(key, value) {
@@ -2904,7 +2909,7 @@ export class Entity {
 
     getDynamicProperty(name) {
         // A property never set crosses as null, and Bedrock answers undefined.
-        return bridge.entityDynamicProperty(this.id, name) ?? undefined;
+        return storedProperty(bridge.entityDynamicProperty(this.id, name));
     }
 
     setDynamicProperty(name, value) {
@@ -4866,7 +4871,7 @@ export class World {
 
     getDynamicProperty(name) {
         // A property never set crosses as null, and Bedrock answers undefined.
-        return bridge.worldDynamicProperty(name) ?? undefined;
+        return storedProperty(bridge.worldDynamicProperty(name));
     }
 
     setDynamicProperty(name, value) {
