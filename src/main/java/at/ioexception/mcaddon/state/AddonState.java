@@ -30,15 +30,18 @@ import java.util.UUID;
 public final class AddonState {
     private static final Gson GSON = new Gson();
 
-    /** The one thing filed per NPC: which of its pack's scenes the next interaction opens. */
+    /** Which of its pack's scenes an NPC's next interaction opens. */
     private static final String SCENE = "scene";
+
+    /** Set once an entity has been announced to its pack as arriving in the world. */
+    private static final String ANNOUNCED = "announced";
 
     private final Path file;
     private final Map<String, Object> world = new LinkedHashMap<>();
     private final Map<UUID, Map<String, Object>> entityDynamic = new HashMap<>();
     private final Map<UUID, Map<String, Object>> entityProperties = new HashMap<>();
     private final Map<String, Map<String, Object>> blockDynamic = new LinkedHashMap<>();
-    private final Map<UUID, Map<String, Object>> dialogue = new HashMap<>();
+    private final Map<UUID, Map<String, Object>> owned = new HashMap<>();
     private final Map<String, JsonElement> sections = new LinkedHashMap<>();
     private boolean dirty;
 
@@ -62,7 +65,7 @@ public final class AddonState {
             readEntities(root.getAsJsonObject("entityDynamic"), state.entityDynamic);
             readEntities(root.getAsJsonObject("entityProperties"), state.entityProperties);
             readBlocks(root.getAsJsonObject("blockDynamic"), state.blockDynamic);
-            readEntities(root.getAsJsonObject("dialogue"), state.dialogue);
+            readEntities(root.getAsJsonObject("dialogue"), state.owned);
             JsonObject sections = root.getAsJsonObject("sections");
             if (sections != null) {
                 sections.entrySet().forEach(entry -> state.sections.put(entry.getKey(), entry.getValue()));
@@ -80,7 +83,7 @@ public final class AddonState {
         root.add("entityDynamic", writeGroups(entityDynamic));
         root.add("entityProperties", writeGroups(entityProperties));
         root.add("blockDynamic", writeGroups(blockDynamic));
-        root.add("dialogue", writeGroups(dialogue));
+        root.add("dialogue", writeGroups(owned));
         JsonObject written = new JsonObject();
         sections.forEach(written::add);
         root.add("sections", written);
@@ -137,17 +140,29 @@ public final class AddonState {
     /**
      * The scene an NPC shows whoever interacts with it, which `/dialogue change` moves.
      *
-     * It is filed here rather than among the entity's properties because it belongs to this mod
+     * It is filed in the mod's own record rather than among the entity's properties because it belongs to this mod
      * and not to the pack: a pack reading its own entity's properties back must see what it wrote
      * there and nothing else.
      */
     public String dialogueScene(UUID entity) {
-        Object scene = dialogue.getOrDefault(entity, Map.of()).get(SCENE);
+        Object scene = owned.getOrDefault(entity, Map.of()).get(SCENE);
         return scene instanceof String named ? named : null;
     }
 
     public void setDialogueScene(UUID entity, String scene) {
-        put(dialogue.computeIfAbsent(entity, key -> new LinkedHashMap<>()), SCENE, scene);
+        put(owned.computeIfAbsent(entity, key -> new LinkedHashMap<>()), SCENE, scene);
+    }
+
+    /**
+     * Whether this is the first time the entity is announced, which it is only once in its life.
+     * Bedrock raises `minecraft:entity_spawned` on arrival, not on every load of its chunk.
+     */
+    public boolean firstAnnouncement(UUID entity) {
+        Map<String, Object> mine = owned.computeIfAbsent(entity, key -> new LinkedHashMap<>());
+        if (mine.containsKey(ANNOUNCED)) return false;
+
+        put(mine, ANNOUNCED, true);
+        return true;
     }
 
     /**
@@ -168,7 +183,7 @@ public final class AddonState {
     public void forget(UUID entity) {
         dirty |= entityDynamic.remove(entity) != null;
         dirty |= entityProperties.remove(entity) != null;
-        dirty |= dialogue.remove(entity) != null;
+        dirty |= owned.remove(entity) != null;
     }
 
     /** Where one block's own store is filed: the dimension it stands in and the position it holds. */

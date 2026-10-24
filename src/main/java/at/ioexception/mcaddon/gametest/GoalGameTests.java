@@ -353,6 +353,24 @@ public final class GoalGameTests {
         });
     }
 
+    /** A chunk loading an entity again is not an arrival, so its spawn event does not run twice. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void aReloadedEntityIsNotSpawnedAgain(GameTestHelper helper) {
+        AddonEntity brute = BehaviourGameTests.spawn(helper, BRUTE, STAND);
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.assertTrue("spawned".equals(brute.value("tp:arrived")),
+            BRUTE + " arrived " + brute.value("tp:arrived") + " rather than spawned.");
+        brute.setValue("tp:arrived", "later");
+        ServerHooks.announce(brute);
+        helper.assertTrue("later".equals(brute.value("tp:arrived")),
+            BRUTE + " was announced as arriving a second time and holds " + brute.value("tp:arrived") + ".");
+        helper.succeed();
+    }
+
     /**
      * A group's `minecraft:behavior.stomp_turtle_egg` looks for an egg as often as its `interval`
      * says, here every tick.
