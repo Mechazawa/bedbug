@@ -70,7 +70,7 @@ public final class McAddon implements ModInitializer {
         // The worldgen before the spawn rules, because a spawn rule may select on a tag only a
         // pack's own biome carries.
         AddonWorldgen.register(ActiveAddons.active().converted());
-        AddonSpawns.register(packs);
+        AddonSpawns.register(ActiveAddons.installed());
         // Once the add-ons' own entities, items and blocks are registered, because a function line
         // naming one of them translates only once the name can be found.
         AddonPacks.reportFunctionLines();

@@ -154,7 +154,7 @@ public final class AddonWorldgen {
         GenerationStep.Decoration step = step(rule.decorationStep());
 
         BiomeModifications.create(McAddon.id("feature_" + id.namespace() + "_" + id.path()))
-            .add(ModificationPhase.ADDITIONS, selector(rule),
+            .add(ModificationPhase.ADDITIONS, selector(rule, namespace),
                 context -> context.getGenerationSettings().addFeature(step, feature));
     }
 
@@ -167,15 +167,17 @@ public final class AddonWorldgen {
 
     /**
      * The biomes one rule reaches: one of Java's when it lies in the world the filter names and its
-     * id matches, and a pack's own when the tags its pack gave it do.
+     * id matches, and a pack's own when the tags its pack gave it do. None while the rule's add-on is
+     * not active, because Fabric asks again for every server and a world without the add-on has no
+     * placed feature to add.
      */
-    private static Predicate<BiomeSelectionContext> selector(FeatureRuleDefinition rule) {
+    private static Predicate<BiomeSelectionContext> selector(FeatureRuleDefinition rule, String namespace) {
         Predicate<BiomeSelectionContext> world = switch (rule.world()) {
             case "nether" -> BiomeSelectors.foundInTheNether();
             case "end" -> BiomeSelectors.foundInTheEnd();
             default -> BiomeSelectors.foundInOverworld();
         };
-        return context -> rule.biomes().allows(Platform.idOf(context.getBiomeKey()).toString(),
-            () -> world.test(context));
+        return context -> ActiveAddons.isActive(namespace)
+            && rule.biomes().allows(Platform.idOf(context.getBiomeKey()).toString(), () -> world.test(context));
     }
 }

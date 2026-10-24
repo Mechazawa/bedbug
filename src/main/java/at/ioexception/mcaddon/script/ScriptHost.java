@@ -102,7 +102,7 @@ public final class ScriptHost {
         ScriptConfig config = new ScriptConfig(
             net.fabricmc.loader.api.FabricLoader.getInstance().getGameDir().resolve("config"),
             scripted.stream().map(BedrockPack::manifest).toList());
-        List<String> namespaces = scripted.stream().map(ActiveAddons.installed()::namespaceOf).distinct().toList();
+        List<String> namespaces = scripted.stream().map(ActiveAddons.active()::namespaceOf).distinct().toList();
         ScriptBridge bridge = new ScriptBridge(server, state, coverage, config,
             namespaces.size() == 1 ? namespaces.get(0) : null);
 
