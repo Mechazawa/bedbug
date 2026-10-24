@@ -2383,8 +2383,25 @@ back through the same `leave`. `ServedArchives` hands an installed add-on the ac
 as not active, which is the dormant path, so a LAN host serves its world's set and a dedicated
 server its world's; a development archive from `mcaddon.served` is active unless the world's list
 names one of its pack uuids off. The pause menu's Add-Ons screen reads On or Off off the active set,
-so in a world it shows the world's choice. Blocks and entities of an add-on that is off stay
-dormant in the world.
+so in a world it shows the world's choice.
+
+**A world removes the content of an add-on its list turns off.** `registry.RemovedAddons` is built
+per server at `SERVER_STARTING` from `ActiveAddons.world()` against the installed set: the blocks,
+entity types and items (block items and spawn eggs among them) the off add-ons declare and no on
+add-on declares, leaving out `minecraft:` ids. Nothing is built when the list turns nothing off, so
+a server playing every add-on pays nothing. The chunk and entity load events only queue (a chunk
+only when a section's palette may hold a removed block or it has a container); `END_SERVER_TICK`
+sets the blocks to air with `UPDATE_CLIENTS`, discards the entities and removed dropped stacks, and
+empties the items out of containers, player inventories, ender chests, equipment, item frames and
+`DataComponents.CONTAINER` contents. A load event runs while the chunk or entity is still being
+added, which is why the work waits for the tick. A client's visit to another server and a server
+handing an add-on out as inactive never build one, because the set comes from the list the server
+opened its own world with. Bedrock turns a block whose definition it lacks into its `unknown` block
+in some cases; Java has none, so the block becomes air.
+
+`RemovedAddonsClientGameTest` places `tp:lamp`, an idler and `tp:dust` in the player's inventory,
+ender chest, a chest and on the ground, each beside something of the game's own, writes `tp` off,
+reopens and finds none of the first and all of the second.
 
 `WorldAddonsClientGameTest` creates a world, reads back a list with every installed add-on on,
 writes `tp` off, opens it again and finds `tp` inactive, `tp:dust` dormant, `mcaddon/tp` selected

@@ -36,6 +36,12 @@ Each world keeps its own list of add-ons in `data/mcaddon-addons.json`:
 
 The Add-Ons screen in the pause menu shows which add-ons the world plays. It does not change them.
 
+Turning an add-on off in a world deletes its content from that world, as Bedrock does. When the
+world opens, the add-on's blocks become air, its mobs are removed, and its items are removed from
+player inventories, ender chests, containers, shulker boxes, item frames, mob equipment and items
+on the ground. Turning the add-on on again does not bring them back. Items in a bundle, on a
+campfire or lectern, or in a horse's inventory are kept.
+
 ## The Add-Ons screen
 
 Bedrock lists behaviour packs and resource packs apart, each with its own manifest description. The
