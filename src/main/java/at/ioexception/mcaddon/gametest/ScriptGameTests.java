@@ -383,7 +383,9 @@ public final class ScriptGameTests {
         T villager = (T) Platform.createMob(type, helper.getLevel());
         BlockPos at = helper.absolutePos(relative);
         Platform.placeAt(villager, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
-        ((net.minecraft.world.entity.Mob) villager).setNoAi(true);
+        ((Mob) villager).setNoAi(true);
+        // A mock player in a far test counts as the nearest player, which despawns a monster by distance.
+        ((Mob) villager).setPersistenceRequired();
         helper.getLevel().addFreshEntity(villager);
         return villager;
     }
@@ -649,17 +651,9 @@ public final class ScriptGameTests {
     private static final int PICKUP_TICKS = 60;
 
     /** A husk that picks loot up, standing on the item the test hands it. */
-    private static Mob looter(GameTestHelper helper, BlockPos where,
-        Item item) {
-        EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("minecraft", "husk")).orElseThrow();
-        Mob husk = (Mob) Platform.createMob(type, helper.getLevel());
-        BlockPos at = helper.absolutePos(where);
-        Platform.placeAt(husk, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
-        husk.setNoAi(true);
+    private static Mob looter(GameTestHelper helper, BlockPos where, Item item) {
+        Mob husk = villager(helper, "husk", where);
         husk.setCanPickUpLoot(true);
-        // A mock player in a far test counts as the nearest player, which despawns a husk by distance.
-        husk.setPersistenceRequired();
-        helper.getLevel().addFreshEntity(husk);
         helper.spawnItem(item, where);
         return husk;
     }
