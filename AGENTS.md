@@ -2321,6 +2321,18 @@ Before 26 the model bakery asks for a model for every registered item and block,
 `ModelBakeryMixin` and `BlockStateModelLoaderMixin` leave out what `ActiveAddons.isDormant` names;
 the miss would otherwise be logged as `Unable to load model` on every reload after a visit.
 
+**What a world runs follows the active set.** `ActiveAddons.isActive(namespace)` gates the spawn
+rule and feature rule selectors, which Fabric asks again as each server is constructed
+(`MinecraftServerMixin` calls `BiomeModificationImpl.finalizeWorldGen`). The feature rule gate is
+required, because `addFeature` throws on a placed feature the world's registries lack. The server's
+scripts (`ServerHooks.start`), the pack structures and the script gametest structure search read
+`ActiveAddons.active()`. `/mcaddon packs` and the resource pack listing of `ServerAdmin` stay on the
+installed set, since they describe what a server holds and can hand out. `ActiveAddons.isActive(set)`
+compares converted roots, so a resolved subset equals the active set whichever object carries it.
+A server started with a set that drops an add-on carrying a nether or end biome still fails with
+`Unbound values in registry ... worldgen/biome`, so `ActiveAddonsGameTests` checks the structure
+gate and the namespace check directly rather than by starting such a server.
+
 **A same-id copy is checked before anything is registered.** `AddonRegistry.conflict` compares the
 shape every registered object was built from (an entity type's population and size, a block's whole
 definition, an item's whole component map) against another set's, and names the add-on whose copy
