@@ -290,6 +290,14 @@ def vane(x: int, y: int) -> tuple[int, int, int, int]:
     return (40 * x, 40 * y, 200, 255) if (x, y) in VANE_TEXELS else TRANSPARENT
 
 
+def pack_icon(x: int, y: int) -> tuple[int, int, int, int]:
+    if ring(x, y, 64, 3):
+        return (230, 190, 70, 255)
+    if disc(x, y, 31.5, 14):
+        return (255, 226, 120, 255)
+    return (38, 52, 86, 255)
+
+
 def particle_atlas(x: int, y: int) -> tuple[int, int, int, int]:
     """A 128x128 sheet of 8x8 cells, the layout the billboard components address by texel.
 
@@ -320,6 +328,7 @@ def glyph_page(x: int, y: int) -> tuple[int, int, int, int]:
 
 
 TEXTURES = (
+    ("pack_icon.png", 64, pack_icon),
     ("font/glyph_E1.png", 128, glyph_page),
     ("textures/items/wand.png", 16, wand),
     ("textures/items/shard.png", 16, shard),

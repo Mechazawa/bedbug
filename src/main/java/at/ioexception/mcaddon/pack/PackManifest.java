@@ -47,11 +47,13 @@ public record PackManifest(
     }
 
     /**
-     * `entry` and `language` are set only on a script module. `uuid` is what a script debugger names
-     * the module it attaches to and the folder under `config/` holding its own variables, secrets and
-     * permissions, and is null where the manifest states none.
+     * `entry` and `language` are set only on a script module. `version` and `description` are what the
+     * add-on list shows under the pack; either is null where the manifest states none. `uuid` is what a
+     * script debugger names the module it attaches to and the folder under `config/` holding its own
+     * variables, secrets and permissions, and is null where the manifest states none.
      */
-    public record Module(ModuleType type, UUID uuid, String entry, String language) {
+    public record Module(ModuleType type, UUID uuid, String entry, String language, SemVer version,
+        String description) {
     }
 
     /** One pack requiring another, by the required pack's header uuid. */
@@ -237,16 +239,6 @@ public record PackManifest(
         "pack_scope", "platform_locked");
 
     /**
-     * The module fields Bedrock defines that nothing here acts on.
-     *
-     * `description` is the author's note about that half of the pack and names nothing to load.
-     * `version` identifies one module to Bedrock's content updater, and a pack is loaded here from
-     * the directory it sits in: what names one installation of an add-on to another is the header
-     * uuid and the header version.
-     */
-    private static final Set<String> MODULE_DROPPED = Set.of("description", "version");
-
-    /**
      * `product_type` marks a pack as an add-on, which on Bedrock decides whether a world keeps its
      * achievements and whether the resource pack half is downloaded with it. Java locks no
      * advancement behind a pack and installs both halves together. `generated_with` names the tool
@@ -278,7 +270,9 @@ public record PackManifest(
                 ModuleType.of(Json.text(module, "type", "").toLowerCase(Locale.ROOT)),
                 uuid(module.get("uuid")),
                 Json.text(module, "entry", null),
-                Json.text(module, "language", null)
+                Json.text(module, "language", null),
+                SemVer.tryFrom(module.get("version")),
+                Json.text(module, "description", null)
             ));
         }
 
@@ -414,9 +408,6 @@ public record PackManifest(
         dropped(json, "", MANIFEST_DROPPED, found);
         dropped(json.getAsJsonObject("header"), "header.", HEADER_DROPPED, found);
         dropped(json.getAsJsonObject("metadata"), "metadata.", METADATA_DROPPED, found);
-        for (JsonElement module : Json.list(json, "modules")) {
-            dropped(object(module), "module.", MODULE_DROPPED, found);
-        }
         return List.copyOf(found);
     }
 

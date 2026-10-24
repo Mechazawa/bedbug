@@ -2,6 +2,8 @@ package at.ioexception.mcaddon.clientgametest;
 
 import at.ioexception.mcaddon.client.render.ScriptClock;
 import at.ioexception.mcaddon.client.screen.AddonOptionsScreen;
+import at.ioexception.mcaddon.client.screen.AddonReportScreen;
+import at.ioexception.mcaddon.client.screen.AddonRow;
 import at.ioexception.mcaddon.client.screen.AddonsScreen;
 import at.ioexception.mcaddon.client.screen.PackSettingsScreen;
 import at.ioexception.mcaddon.entity.AddonEntity;
@@ -16,11 +18,13 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerCon
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestServerContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.gui.components.AbstractButton;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -84,24 +88,79 @@ public final class PackSettingsClientGameTest implements FabricClientGameTest {
         context.waitForScreen(PauseScreen.class);
         context.clickScreenButton("mcaddon.addons.button");
         context.waitForScreen(AddonsScreen.class);
-        List<String> listed = shown(context);
-        Assert.that(listed.stream().anyMatch(line -> line.startsWith(ADDON + " 1.0.0"))
-                && listed.contains("By mcaddon-fabric")
-                && listed.contains("Behaviour pack: " + ADDON + " (active)")
-                && listed.contains("Resource pack: " + ADDON + " (active)"),
-            "Expected the add-on screen to list the test add-on with its version, author and both packs, and found "
-                + listed);
-        String text = String.join(" ", listed);
-        int behaviour = text.indexOf(BEHAVIOUR_DESCRIPTION);
-        Assert.that(behaviour >= 0 && text.indexOf(RESOURCE_DESCRIPTION) > behaviour,
-            "Expected the behaviour pack's description and then the resource pack's, which says something else,"
-                + " and found " + listed);
+        collapsedRow(context);
+        expandedRow(context);
+
+        context.runOnClient(client -> pressAfter(ADDON + " 1.0.0", "What does not work"));
+        context.waitForScreen(AddonReportScreen.class);
+        context.runOnClient(client -> Platform.currentScreen().onClose());
+        context.waitForScreen(AddonsScreen.class);
+
         context.runOnClient(client -> pressAfter(ADDON + " 1.0.0", "Settings"));
         context.waitForScreen(PackSettingsScreen.class);
         Worlds.waitForClient(context, client -> shown(Platform.currentScreen()).contains("Ember glows: On")
                 && widget(Platform.currentScreen(), "Ember glows: On").active, PATIENCE,
             () -> "Expected the host's own world settings to be changeable, and found "
                 + shown(Platform.currentScreen()));
+    }
+
+    private static AddonRow addonRow() {
+        return widgets(Platform.currentScreen()).stream()
+            .filter(AddonRow.class::isInstance)
+            .map(AddonRow.class::cast)
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("No add-on row on " + Platform.currentScreen()));
+    }
+
+    private static void collapsedRow(ClientGameTestContext context) {
+        AddonRow row = context.computeOnClient(client -> addonRow());
+        List<String> listed = shown(context);
+        Assert.that(row.title().equals(ADDON + " 1.0.0") && row.state().equals("On") && !row.expanded()
+                && row.details().isEmpty(),
+            "Expected the add-on's row to show its name, version and that it is on, closed, and found " + listed);
+        Assert.that(row.summary().endsWith("...") && BEHAVIOUR_DESCRIPTION.startsWith(row.summary().substring(
+                0, row.summary().length() - 3)),
+            "Expected one line of the behaviour pack's description cut short, and found " + row.summary());
+        boolean registered = context.computeOnClient(client ->
+            client.getTextureManager().getTexture(row.icon()) instanceof DynamicTexture);
+        Assert.that(registered, "Expected the test add-on's own icon registered as a texture, and found " + row.icon());
+        Assert.that(context.computeOnClient(client -> widget(Platform.currentScreen(), "Settings").active),
+            "Expected the add-on with settings to have its settings button on.");
+        context.takeScreenshot("addons-screen");
+    }
+
+    private static void expandedRow(ClientGameTestContext context) {
+        clickRow(context);
+        Worlds.waitForClient(context, client -> addonRow().expanded(), PATIENCE,
+            () -> "Expected a click on the row to open it, and found " + shown(Platform.currentScreen()));
+        List<String> listed = context.computeOnClient(client -> addonRow().details());
+        String text = listed.stream().map(String::strip).collect(java.util.stream.Collectors.joining(" "));
+        int behaviour = text.indexOf(BEHAVIOUR_DESCRIPTION);
+        Assert.that(behaviour >= 0 && text.indexOf(RESOURCE_DESCRIPTION) > behaviour,
+            "Expected the behaviour pack's description and then the resource pack's, which says something else,"
+                + " and found " + listed);
+        Assert.that(listed.contains("By mcaddon-fabric")
+                && listed.contains("Behaviour pack: " + ADDON + " (active)")
+                && listed.contains("Resource pack: " + ADDON + " (active)")
+                && listed.contains("  Module: script 1.0.0")
+                && text.contains("Textures, models and the controllers drawing them."),
+            "Expected the open row to list the author, both packs and their modules, and found " + listed);
+        context.takeScreenshot("addons-screen-open");
+
+        clickRow(context);
+        Worlds.waitForClient(context, client -> !addonRow().expanded(), PATIENCE,
+            () -> "Expected a second click to close the row, and found " + shown(Platform.currentScreen()));
+    }
+
+    private static void clickRow(ClientGameTestContext context) {
+        double[] point = context.computeOnClient(client -> {
+            AddonRow row = addonRow();
+            int scale = client.getWindow().getGuiScale();
+            return new double[] {(row.getX() + 100) * scale, (row.getY() + 8) * scale};
+        });
+        context.getInput().setCursorPos(point[0], point[1]);
+        context.getInput().pressMouse(InputConstants.MOUSE_BUTTON_LEFT);
+        context.waitTick();
     }
 
     private static void changeTheWorlds(ClientGameTestContext context, TestServerContext server) {
@@ -231,8 +290,8 @@ public final class PackSettingsClientGameTest implements FabricClientGameTest {
             widgets.stream().map(widget -> widget.getMessage().getString())
                 .filter(text -> text.startsWith(heading)).findFirst().orElseThrow());
         widgets.stream().skip(after)
-            .filter(widget -> widget instanceof Button && widget.getMessage().getString().equals(label))
-            .map(Button.class::cast)
+            .filter(widget -> widget instanceof AbstractButton && widget.getMessage().getString().equals(label))
+            .map(AbstractButton.class::cast)
             .findFirst()
             .orElseThrow(() -> new AssertionError("No " + label + " button after " + heading))
             .onPress(new net.minecraft.client.input.MouseButtonInfo(0, 0));

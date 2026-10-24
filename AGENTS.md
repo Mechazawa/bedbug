@@ -2355,10 +2355,21 @@ manifest again: `addons-reshaped` holds a later release of `sv` whose crate has 
 
 `client/screen/AddonsScreen` lists the installed and the active add-ons (`AddonEntry`, one per
 `ConvertedPack`, active when the active set holds its converted directory). `new
-AddonsScreen(parent)` is the one way in, which `AddonOptionsScreen`, Mod Menu's config screen,
+AddonsScreen(parent)` (or `(parent, Mode)`; only `IN_WORLD` is wired, and it only shows what is on) is the one way in, which `AddonOptionsScreen`, Mod Menu's config screen,
 opens from a button of its own; `addToPauseMenu` puts the button on the pause menu through Fabric's `ScreenEvents`, in the
 row of the lowest button, which it moves down a row. The three screens extend `ColumnScreen`, a
-heading, a `ScrollingColumn` and a Done button that goes back to the parent. `AddonReportScreen`
+heading, a `ScrollingColumn` and a Done button that goes back to the parent.
+
+Each add-on is one `AddonRow` widget: the pack's `pack.png` (a `DynamicTexture` per converted root,
+loaded when first needed and released in `removed()`, with the game's `unknown_pack.png` as the
+fallback), name and version over one truncated description line, an On/Off label, and two
+`IconButton`s laid over the row's right edge (gear for `PackSettingsScreen`, disabled with a tooltip
+when no pack has settings; info for `AddonReportScreen`). A click on the row body opens it to the full
+descriptions, authors, both packs and each pack's modules with their version and description;
+the screen keeps which roots are open and rebuilds, so the column learns the new height. The row
+draws through `Platform.paint`, and the gear and info pictures are this mod's own
+`textures/gui/*.png`, since Java ships no gear. The version-specific widget API is written for 26
+and later only. `AddonReportScreen`
 prints `PackSet.report(pack)` for each pack and `ServerHooks.entitiesReport()` and
 `scriptsReport()`, which are what `/mcaddon` prints; those two count every add-on together, because
 nothing records which add-on asked for a name.
