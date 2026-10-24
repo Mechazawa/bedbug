@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.registry;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.EntitySounds;
 import at.ioexception.mcaddon.bedrock.EventSounds;
 import at.ioexception.mcaddon.bedrock.MusicDefinitions;
 import at.ioexception.mcaddon.convert.BedrockSoundNames;
@@ -11,6 +12,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.core.Holder;
 import net.minecraft.sounds.Music;
 import net.minecraft.sounds.SoundEvent;
+import net.minecraft.world.entity.Entity;
 
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -31,7 +33,61 @@ public final class AddonSounds {
     /** What each level sound event the active packs give a sound plays. */
     private static final Map<String, EventSound> EVENTS = new LinkedHashMap<>();
 
+    /** What the active packs' `sounds.json` says each entity makes, by the name it is keyed under. */
+    private static volatile Map<String, Voice> voices = Map.of();
+
+    /**
+     * The moment Bedrock files each of Java's own mob sounds under, by the last part of the Java id:
+     * `entity.villager.trade` is the villager's `haggle`.
+     */
+    private static final Map<String, String> MOMENTS = Map.of("ambient", "ambient", "hurt", "hurt",
+        "death", "death", "step", "step", "trade", "haggle", "yes", "haggle.yes", "no", "haggle.no");
+
     private AddonSounds() {
+    }
+
+    /** One pack's entry for an entity, with the names it gives read against that pack's own sounds. */
+    private record Voice(EntitySounds sounds, String namespace, List<String> defined) {
+        /**
+         * What plays in place of `sound`, the Java sound this entity is about to make: the sound
+         * itself where the entry names nothing for that moment, the entry's own sound where it names
+         * one Java has, and null where the entry makes no sound for it.
+         */
+        SoundEvent replace(SoundEvent sound) {
+            Identifier id = BuiltInRegistries.SOUND_EVENT.getKey(sound);
+            String path = id == null ? "" : id.getPath();
+            String moment = path.startsWith("entity.") ? MOMENTS.get(path.substring(path.lastIndexOf('.') + 1)) : null;
+            if (moment == null || sounds.event(moment) == null) return sound;
+            if (sounds.silences(moment)) return null;
+
+            SoundEvent named = registered(BedrockSoundNames.java(sounds.event(moment), namespace, defined));
+            return named == null ? sound : named;
+        }
+    }
+
+    /**
+     * What a mob of the game's own makes in place of `sound`, by what an active resource pack's
+     * `sounds.json` says that mob makes: the sound itself where no pack names that moment, the pack's
+     * sound where one does, and null where the pack silences it. A pack replacing the game's
+     * villagers silences their idle, trade and hurt sounds this way.
+     */
+    public static SoundEvent voiceOf(Entity entity, SoundEvent sound) {
+        if (voices.isEmpty() || entity instanceof at.ioexception.mcaddon.entity.AddonEntity) return sound;
+
+        String identifier = AddonEntities.identifierOf(entity.getType());
+        Voice voice = voices.get(identifier);
+        if (voice == null) voice = voices.get(identifier.substring(identifier.indexOf(':') + 1));
+        return voice == null ? sound : voice.replace(sound);
+    }
+
+    /** Replaces what each entity makes with what these packs say, a later pack overriding an earlier one. */
+    public static void readVoices(List<ConvertedPack> packs) {
+        Map<String, Voice> read = new LinkedHashMap<>();
+        for (ConvertedPack pack : packs) {
+            EntitySounds.readAll(pack.pack()).forEach((name, sounds) ->
+                read.put(name, new Voice(sounds, pack.namespace(), pack.soundEvents())));
+        }
+        voices = Map.copyOf(read);
     }
 
     /**
