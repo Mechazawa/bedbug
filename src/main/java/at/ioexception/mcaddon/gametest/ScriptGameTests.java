@@ -530,7 +530,8 @@ public final class ScriptGameTests {
     }
 
     /**
-     * A bred mob arrives to a pack's script as born and one placed in the world as spawned.
+     * A bred mob arrives to a pack's script as born and one placed in the world as spawned. Neither
+     * is loaded: `entityLoad` is for an entity read back from storage.
      */
     @GameTest()
     public void aBredAnimalIsBornToTheScript(GameTestHelper helper) {
@@ -550,6 +551,10 @@ public final class ScriptGameTests {
                 net.minecraft.world.entity.animal.cow.Cow.class, helper.getBounds(), calf -> calf.isBaby());
             helper.assertTrue(calves.size() == 1, "Breeding made " + calves.size() + " calves.");
             expectTag(helper, calves.get(0), "tp:cow_cause_Born");
+            helper.assertFalse(Platform.tagsOf(placed).contains("tp:cow_load_seen"),
+                "A cow placed in the world was reported to the script as loaded.");
+            helper.assertFalse(Platform.tagsOf(calves.get(0)).contains("tp:cow_load_seen"),
+                "A calf bred in the world was reported to the script as loaded.");
             helper.succeed();
         });
     }

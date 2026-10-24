@@ -629,6 +629,8 @@ These are the checks it runs, and what each one catches:
   `GoalGameTests.aBredChildIsBornRatherThanSpawned` tells a bred child from a placed one.
   The ember's `tp:ember_hatchling` grows up in a second and drops a turtle shell piece, and
   `tp:ember_picky` takes wheat worth its whole wait only from a player tagged `tp_feeder`.
+  The script tags a cow `tp:cow_load_seen` from `entityLoad`, which `aBredAnimalIsBornToTheScript`
+  asks a placed cow and a bred calf not to carry.
 
   Two more entities are there for what a mob walking about never reaches. One is a projectile with
   hit boxes wider than the box it collides in, which turns `isolated_physics` off the way Mojang's

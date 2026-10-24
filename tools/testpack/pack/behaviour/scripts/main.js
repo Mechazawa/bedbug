@@ -484,6 +484,10 @@ world.afterEvents.entitySpawn.subscribe(({ entity, cause }) => {
     }
 });
 
+world.afterEvents.entityLoad.subscribe(({ entity }) => {
+    if (entity.typeId === "minecraft:cow") entity.addTag("tp:cow_load_seen");
+});
+
 // Of each pair, only the listener asking for a villager may hear one being hurt.
 function tagWhenHurt(signal, tag, options) {
     signal.subscribe(({ hurtEntity }) => system.run(() => hurtEntity.addTag(tag)), options);

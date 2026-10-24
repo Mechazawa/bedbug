@@ -30,8 +30,9 @@ A Java villager also gives Bedrock's states:
 
 - A listener's options filter what it receives, as in Bedrock: entities, entity types, entity
   filter, event ids, damage and heal causes.
-- `entitySpawn` and `entityLoad` fire on the tick after the entity arrives. A script that spawns an
-  entity and marks it does both before a listener runs.
+- `entitySpawn` fires on the tick after an entity arrives and `entityLoad` when one is read back from
+  storage, never both for one arrival. A script that spawns an
+  entity and marks it has done both before a listener runs.
 - World events come from the game:
   - a player breaking, placing, using, picking up and swinging, moving and changing held item
   - weather and game rule changes
