@@ -936,7 +936,13 @@ These are the checks it runs, and what each one catches:
   them as the widget's Java tooltip; `FormClientGameTest` reads the tooltip off the widget.
 
   `animation.tp.wisp.lift` raises the wisp's one bone by four pixels for two seconds, which is what
-  `/bedrock playanimation` on an add-on entity is measured by.
+  `/bedrock playanimation` on an add-on entity is measured by. `/bedrock scriptevent tp:animate_wisp`
+  has the script play the lift and then `animation.tp.wisp.hover`, a looping two pixel raise, in one
+  named controller, with a stop expression counting frames and the lift as its next state;
+  `ServerEntityClientGameTest` reads the hover alone, then the lift, then neither. A clip played
+  this way is a `PlayedAnimation`: one controller runs one such clip at a time, a controller of the
+  entity's own by that name is held while it runs, and a next state naming no clip of the entity,
+  such as `none`, ends it, as the Bedrock Wiki's playanimation page describes.
 
   The same script watches the game's own villagers the way a pack replacing them does, in Bedrock's
   ids throughout: it compares `typeId` against `minecraft:villager_v2` and `minecraft:xp_orb` as
@@ -2008,8 +2014,8 @@ that draw is done, because one model draws every entity of its kind. From 1.21.9
 again where it is finally drawn, so `ModelFeatureRendererMixin` lays the clip on there and
 `LivingEntityRendererMixin` lays it on for the layers; before that `render` does both in one call.
 A bone with no part is reported once per kind of entity. Nothing is stored on the server, so a
-player who starts watching later sees whatever the pack plays next, as on an add-on entity, and
-`next_state` is not acted on for either. `JavaModelPoseClientGameTest` reads the posed parts back.
+player who starts watching later sees whatever the pack plays next, as on an add-on entity.
+`JavaModelPoseClientGameTest` reads the posed parts back.
 Every model a layer submits goes through the same `ModelFeatureRenderer.prepareModel`, a villager's
 clothes model without the hat included, so the clip reaches all of them there.
 `JavaModelPoseClientGameTest` also reads what the real frame draws: the test source set's

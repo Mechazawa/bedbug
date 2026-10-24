@@ -494,6 +494,17 @@ tagWhenHurt(world.beforeEvents.entityHurt, "tp:before_hurt_as_villager", { entit
 tagWhenHurt(world.beforeEvents.entityHurt, "tp:before_hurt_as_zombie",
     { entityFilter: { type: "minecraft:zombie" } });
 
+// The lift is replaced by the hover in the same controller, which hovers for a count of frames and
+// then hands over to the lift again.
+system.afterEvents.scriptEventReceive.subscribe(({ id }) => {
+    if (id !== "tp:animate_wisp") return;
+    for (const wisp of world.getDimension("overworld").getEntities({ type: "tp:wisp", tags: ["near"] })) {
+        wisp.playAnimation("animation.tp.wisp.lift", { controller: "tp_scratch" });
+        wisp.playAnimation("animation.tp.wisp.hover", { controller: "tp_scratch", blendOutTime: 0,
+            stopExpression: "v.tp_hovered = v.tp_hovered + 1; return v.tp_hovered > 60;", nextState: "animation.tp.wisp.lift" });
+    }
+});
+
 // Only an iron sword is heard being picked up, and nobody may pick up a diamond one.
 world.beforeEvents.entityItemPickup.subscribe(({ entity, item }) => {
     const typeId = item.getComponent("minecraft:item").itemStack.typeId;

@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.client.render;
 
 import at.ioexception.mcaddon.bedrock.entity.EntityAnimator;
+import at.ioexception.mcaddon.bedrock.animation.PlayedAnimation;
 import at.ioexception.mcaddon.bedrock.entity.EntityQueries;
 import at.ioexception.mcaddon.entity.AddonEntity;
 import net.minecraft.client.Minecraft;
@@ -107,17 +108,15 @@ public final class Animators {
      * animation is a client effect and a client that cannot see the entity has nothing to run it
      * on. An entity Java draws with a model of its own is posed through that model's parts as well.
      */
-    public static void play(int entityId, String animation, String stopExpression, float blendOut) {
+    public static void play(int entityId, PlayedAnimation request) {
         ANIMATORS.forEach((key, entry) -> {
-            if (key.startsWith(entityId + "/")) {
-                entry.animator().playDirect(animation, stopExpression, blendOut);
-            }
+            if (key.startsWith(entityId + "/")) entry.animator().playDirect(request);
         });
 
         ClientLevel level = Minecraft.getInstance().level;
         Entity entity = level == null ? null : level.getEntity(entityId);
         if (entity != null && !(entity instanceof AddonEntity)) {
-            JavaModelPoses.play(entity, animation, stopExpression, blendOut);
+            JavaModelPoses.play(entity, request);
         }
     }
 

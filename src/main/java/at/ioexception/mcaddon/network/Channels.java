@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.network;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.animation.PlayedAnimation;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.Identifier;
@@ -153,16 +154,18 @@ public final class Channels {
 
     //? if >=1.21 {
     /** A clip the server asked an entity to play, which only the client can actually run. */
-    private record Animation(int entityId, String animation, String stopExpression, float blendOut)
-        implements CustomPacketPayload {
+    private record Animation(int entityId, String animation, String nextState, float blendOut,
+        String stopExpression, String controller) implements CustomPacketPayload {
         private static final CustomPacketPayload.Type<Animation> TYPE =
             new CustomPacketPayload.Type<>(ANIMATION);
 
         private static final StreamCodec<FriendlyByteBuf, Animation> CODEC = StreamCodec.composite(
             ByteBufCodecs.VAR_INT, Animation::entityId,
             ByteBufCodecs.STRING_UTF8, Animation::animation,
-            ByteBufCodecs.STRING_UTF8, Animation::stopExpression,
+            ByteBufCodecs.STRING_UTF8, Animation::nextState,
             ByteBufCodecs.FLOAT, Animation::blendOut,
+            ByteBufCodecs.STRING_UTF8, Animation::stopExpression,
+            ByteBufCodecs.STRING_UTF8, Animation::controller,
             Animation::new);
 
         @Override
@@ -551,19 +554,21 @@ public final class Channels {
     /** What a client needs to run one clip: which entity, which animation, and how it ends. */
     @FunctionalInterface
     public interface AnimationHandler {
-        void play(int entityId, String animation, String stopExpression, float blendOut);
+        void play(int entityId, PlayedAnimation request);
     }
 
-    public static void sendAnimation(ServerPlayer player, int entityId, String animation,
-        String stopExpression, float blendOut) {
+    public static void sendAnimation(ServerPlayer player, int entityId, PlayedAnimation request) {
         //? if >=1.21 {
-        ServerPlayNetworking.send(player, new Animation(entityId, animation, stopExpression, blendOut));
+        ServerPlayNetworking.send(player, new Animation(entityId, request.animation(), request.nextState(),
+            request.blendOutSeconds(), request.stopExpression(), request.controller()));
         //?} else {
         /*FriendlyByteBuf buffer = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         buffer.writeVarInt(entityId);
-        buffer.writeUtf(animation);
-        buffer.writeUtf(stopExpression);
-        buffer.writeFloat(blendOut);
+        buffer.writeUtf(request.animation());
+        buffer.writeUtf(request.nextState());
+        buffer.writeFloat(request.blendOutSeconds());
+        buffer.writeUtf(request.stopExpression());
+        buffer.writeUtf(request.controller());
         ServerPlayNetworking.send(player, ANIMATION, buffer);
         *///?}
     }
@@ -573,17 +578,16 @@ public final class Channels {
         net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
             Animation.TYPE,
             (payload, context) -> context.client().execute(
-                () -> handler.play(payload.entityId(), payload.animation(),
-                    payload.stopExpression(), payload.blendOut())));
+                () -> handler.play(payload.entityId(), new PlayedAnimation(payload.animation(),
+                    payload.nextState(), payload.blendOut(), payload.stopExpression(), payload.controller()))));
         //?} else {
         /*net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
             ANIMATION,
             (client, network, buffer, sender) -> {
                 int entityId = buffer.readVarInt();
-                String animation = buffer.readUtf();
-                String stopExpression = buffer.readUtf();
-                float blendOut = buffer.readFloat();
-                client.execute(() -> handler.play(entityId, animation, stopExpression, blendOut));
+                PlayedAnimation request = new PlayedAnimation(buffer.readUtf(), buffer.readUtf(),
+                    buffer.readFloat(), buffer.readUtf(), buffer.readUtf());
+                client.execute(() -> handler.play(entityId, request));
             });
         *///?}
     }

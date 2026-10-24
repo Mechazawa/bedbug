@@ -2896,8 +2896,10 @@ export class Entity {
         return new SoundInstance(soundIdOf(soundId));
     }
 
-    playAnimation(animation) {
-        bridge.playAnimation(this.id, animation);
+    playAnimation(animation, options) {
+        const players = options?.players === undefined ? null : JSON.stringify(options.players.map(player => player.id));
+        bridge.playAnimation(this.id, animation, options?.nextState ?? "", options?.blendOutTime ?? 0,
+            options?.stopExpression ?? "", options?.controller ?? "", players);
     }
 
     getProperty(name) {

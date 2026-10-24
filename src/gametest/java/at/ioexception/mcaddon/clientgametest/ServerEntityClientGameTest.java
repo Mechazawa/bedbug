@@ -48,6 +48,7 @@ public final class ServerEntityClientGameTest implements FabricClientGameTest {
             int near = summon(context, server, "~ ~ ~3", "near");
             AddonEntity wisp = arrived(context, near);
             animation(context, server, wisp);
+            scriptAnimation(context, server, wisp);
             groups(context, server, wisp);
             lateTracked(context, server);
             vanillaAnimation(context, server);
@@ -79,6 +80,33 @@ public final class ServerEntityClientGameTest implements FabricClientGameTest {
         waitForDrawn(context, wisp, bounds -> Math.abs(bounds.minY) < TOLERANCE,
             "animation.tp.wisp.lift runs once for two seconds and the client's tp:wisp was still raised after it.");
     }
+
+    /**
+     * `Entity.playAnimation` runs its clip in the controller it names, ends it on its stop expression
+     * and moves on to the clip its next state names.
+     *
+     * The script plays the lift and then the hover in one controller, so only the hover's two pixels
+     * show. The hover stops once its stop expression has counted sixty frames and the lift follows.
+     * A settled wisp is drawn smaller, so each raise is measured in the model's own size.
+     */
+    private static void scriptAnimation(ClientGameTestContext context, TestServerContext server, AddonEntity wisp) {
+        server.runCommand("bedrock scriptevent tp:animate_wisp");
+        waitForDrawn(context, wisp, bounds -> Math.abs(raised(bounds) - HOVER) < TOLERANCE,
+            "The script's hover in the controller its lift ran in never raised the client's tp:wisp by "
+                + HOVER + " blocks alone.");
+        waitForDrawn(context, wisp, bounds -> Math.abs(raised(bounds) - LIFT) < TOLERANCE,
+            "The hover's stop expression held and the lift its next state names never raised the client's tp:wisp.");
+        waitForDrawn(context, wisp, bounds -> Math.abs(bounds.minY) < TOLERANCE,
+            "The lift a next state started never ended on the client's tp:wisp.");
+    }
+
+    /** How far the wisp's one cube is drawn above its feet, in blocks of the unscaled model. */
+    private static double raised(AABB bounds) {
+        return bounds.minY / bounds.getYsize() * CUBE_HEIGHT;
+    }
+
+    /** How far `animation.tp.wisp.hover` raises the wisp's one bone, in blocks. */
+    private static final double HOVER = 2 / 16.0;
 
     private static void groups(ClientGameTestContext context, TestServerContext server, AddonEntity wisp) {
         server.runCommand("bedrock event entity @e[type=tp:wisp,tag=near] tp:settle");

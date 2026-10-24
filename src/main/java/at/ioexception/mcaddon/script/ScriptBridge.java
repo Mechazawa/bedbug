@@ -672,9 +672,21 @@ public final class ScriptBridge {
      * does too.
      */
     @HostAccess.Export
-    public void playAnimation(String id, String animation) {
+    public void playAnimation(String id, String animation, String nextState, double blendOutSeconds,
+        String stopExpression, String controller, String playersJson) {
         Entity entity = entity(id);
-        if (entity != null) at.ioexception.mcaddon.server.Animations.play(entity, animation, "", 0f);
+        if (entity == null) return;
+
+        // Bedrock shows the clip to every player when the script names none.
+        Set<String> shownTo = playersJson == null ? null : new java.util.HashSet<>();
+        if (shownTo != null) {
+            com.google.gson.JsonParser.parseString(playersJson).getAsJsonArray()
+                .forEach(player -> shownTo.add(player.getAsString()));
+        }
+        at.ioexception.mcaddon.server.Animations.play(entity,
+            new at.ioexception.mcaddon.bedrock.animation.PlayedAnimation(animation, nextState,
+                (float) blendOutSeconds, stopExpression, controller),
+            viewer -> shownTo == null || shownTo.contains(viewer.getStringUUID()));
     }
 
     @HostAccess.Export

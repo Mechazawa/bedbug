@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.server;
 
+import at.ioexception.mcaddon.bedrock.animation.PlayedAnimation;
 import at.ioexception.mcaddon.bedrock.camera.CameraRequest;
 import at.ioexception.mcaddon.bedrock.camera.CameraShake;
 import at.ioexception.mcaddon.bedrock.camera.CameraView;
@@ -45,9 +46,7 @@ import java.util.function.Function;
  * a line against rather than in Java's own.
  *
  * Most are things this mod already does from script, so a `.mcfunction` or a command block gets the
- * same behaviour the pack's script half gets. What Bedrock's own form takes and this does not is
- * `/playanimation`'s `next_state` and `controller`, which name a scratch animation controller; a
- * stop expression covers what packs actually use them for.
+ * same behaviour the pack's script half gets.
  *
  * `/camera`, `/camerashake` and `/hud` act on one player's own view, which only that player's client
  * can draw, so each is decided here and sent to each named player alone.
@@ -88,16 +87,15 @@ public final class BedrockCommands {
             .requires(source -> Platform.allowedAt(source, 1))
             .then(Commands.argument("targets", EntityArgument.entities())
                 .then(Commands.argument("animation", StringArgumentType.string())
-                    .executes(command -> playAnimation(command, "", 0f))
+                    .executes(command -> playAnimation(command, 0))
                     .then(Commands.argument("next_state", StringArgumentType.string())
-                        .executes(command -> playAnimation(command, "", 0f))
+                        .executes(command -> playAnimation(command, 1))
                         .then(Commands.argument("blend_out_time", FloatArgumentType.floatArg(0))
-                            .executes(command -> playAnimation(command, "",
-                                FloatArgumentType.getFloat(command, "blend_out_time")))
+                            .executes(command -> playAnimation(command, 2))
                             .then(Commands.argument("stop_expression", StringArgumentType.string())
-                                .executes(command -> playAnimation(command,
-                                    StringArgumentType.getString(command, "stop_expression"),
-                                    FloatArgumentType.getFloat(command, "blend_out_time")))))))));
+                                .executes(command -> playAnimation(command, 3))
+                                .then(Commands.argument("controller", StringArgumentType.string())
+                                    .executes(command -> playAnimation(command, 4)))))))));
 
         Music.registerCommand(dispatcher);
 
@@ -598,12 +596,18 @@ public final class BedrockCommands {
         return 1;
     }
 
-    private static int playAnimation(CommandContext<CommandSourceStack> command, String stopExpression,
-        float blendOut) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+    /** Plays the clip with as many of the optional arguments, in their order, as the line gave. */
+    private static int playAnimation(CommandContext<CommandSourceStack> command, int given)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         Collection<? extends Entity> targets = EntityArgument.getEntities(command, "targets");
-        String animation = StringArgumentType.getString(command, "animation");
+        PlayedAnimation request = new PlayedAnimation(
+            StringArgumentType.getString(command, "animation"),
+            given >= 1 ? StringArgumentType.getString(command, "next_state") : "",
+            given >= 2 ? FloatArgumentType.getFloat(command, "blend_out_time") : 0f,
+            given >= 3 ? StringArgumentType.getString(command, "stop_expression") : "",
+            given >= 4 ? StringArgumentType.getString(command, "controller") : "");
 
-        for (Entity target : targets) Animations.play(target, animation, stopExpression, blendOut);
+        for (Entity target : targets) Animations.play(target, request, viewer -> true);
         return targets.size();
     }
 
