@@ -393,10 +393,13 @@ public sealed interface Filter {
         }
 
         private boolean weather(Entity entity) {
+            Level level = entity.level();
+            Biome.Precipitation falling = level.precipitationAt(entity.blockPosition());
             return switch (text()) {
-                case "rain" -> entity.level().isRaining();
-                case "thunder" -> entity.level().isThundering();
-                case "clear" -> !entity.level().isRaining();
+                case "rain" -> falling == Biome.Precipitation.RAIN;
+                case "snow" -> falling == Biome.Precipitation.SNOW;
+                case "thunderstorm", "thunder" -> level.isThundering() && falling != Biome.Precipitation.NONE;
+                case "clear" -> !level.isRaining();
                 default -> false;
             };
         }

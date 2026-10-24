@@ -657,6 +657,54 @@ public final class BehaviourGameTests {
     }
 
     /**
+     * `weather_at_position` answers rain, snow and thunderstorm for the precipitation falling at
+     * the entity's own position: rain over plains, snow over a cold biome, and a storm over either.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty")
+    public void weatherAtPositionReadsThePrecipitationAtTheEntity(GameTestHelper helper) {
+        net.minecraft.world.entity.Mob pig = (net.minecraft.world.entity.Mob) Platform.createMob(
+            BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("minecraft", "pig")).orElseThrow(), helper.getLevel());
+        // Above the test box, whose ceiling would shelter the entity from any precipitation.
+        BlockPos at = helper.absolutePos(STAND).above(WEATHER_HEIGHT);
+        Platform.placeAt(pig, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        pig.setNoAi(true);
+        pig.setNoGravity(true);
+        helper.getLevel().addFreshEntity(pig);
+
+        net.minecraft.server.MinecraftServer server = helper.getLevel().getServer();
+        server.getCommands().performPrefixedCommand(server.createCommandSourceStack(),
+            "fillbiome " + at.getX() + " " + (at.getY() - 8) + " " + at.getZ() + " " + at.getX() + " "
+                + (at.getY() + 8) + " " + at.getZ() + " minecraft:plains");
+        helper.getLevel().setRainLevel(1f);
+        helper.assertTrue(weatherIs(pig, "rain") && !weatherIs(pig, "snow") && !weatherIs(pig, "thunderstorm"),
+            "Rain over plains did not read as rain alone.");
+
+        helper.getLevel().setThunderLevel(1f);
+        helper.assertTrue(weatherIs(pig, "thunderstorm"), "A storm over plains did not read as a thunderstorm.");
+
+        server.getCommands().performPrefixedCommand(server.createCommandSourceStack(),
+            "fillbiome " + at.getX() + " " + (at.getY() - 8) + " " + at.getZ() + " " + at.getX() + " "
+                + (at.getY() + 8) + " " + at.getZ() + " minecraft:snowy_plains");
+        helper.getLevel().setThunderLevel(0f);
+        helper.assertTrue(weatherIs(pig, "snow") && !weatherIs(pig, "rain"),
+            "Precipitation over a snowy biome did not read as snow alone.");
+
+        helper.getLevel().setRainLevel(0f);
+        helper.succeed();
+    }
+
+    private static final int WEATHER_HEIGHT = 20;
+
+    private static boolean weatherIs(net.minecraft.world.entity.Entity entity, String weather) {
+        com.google.gson.JsonObject test = new com.google.gson.JsonObject();
+        test.addProperty("test", "weather_at_position");
+        test.addProperty("value", weather);
+        return at.ioexception.mcaddon.bedrock.behaviour.Filter.parse(test).matches(
+            new at.ioexception.mcaddon.bedrock.behaviour.Filter.Context(entity, entity, entity,
+                ServerHooks.state()));
+    }
+
+    /**
      * `minecraft:ageable`'s `interact_filters` decide who may feed the entity, and a feed item's
      * `growth` is a share of the whole wait, so a growth of one grows it up at once.
      */
