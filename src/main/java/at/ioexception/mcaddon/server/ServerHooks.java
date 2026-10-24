@@ -69,6 +69,7 @@ public final class ServerHooks {
         ServerTickEvents.START_SERVER_TICK.register(server -> ScriptDiagnostics.beginTick());
         ServerTickEvents.END_SERVER_TICK.register(ServerHooks::tick);
         ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {
+            boolean arrived = entity.tickCount == 0;
             if (state != null) {
                 EntityPropertySync.seed(entity, state);
                 // Which component groups are on is state a pack changed rather than state it
@@ -76,15 +77,17 @@ public final class ServerHooks {
                 if (entity instanceof at.ioexception.mcaddon.entity.AddonEntity addon) {
                     addon.restoreGroups();
                 }
-                announce(entity);
+                arrived = announce(entity);
             }
             at.ioexception.mcaddon.registry.AddonItems.keepDropped(entity);
-            raiseEntityEvent("entityLoad", entity);
-            // Bedrock separates the two: a chunk load raises one, coming into existence raises both.
-            if (entity.tickCount == 0) {
-                at.ioexception.mcaddon.script.ScriptBridge.remember(entity);
+            if (entity.tickCount == 0) at.ioexception.mcaddon.script.ScriptBridge.remember(entity);
+            // Bedrock raises `entityLoad` for an entity read back from storage and `entitySpawn` for one
+            // that comes into existence, never both for the same arrival.
+            if (arrived) {
                 raiseEntityEvent("entitySpawn", entity);
                 WorldEvents.spawned(entity);
+            } else {
+                raiseEntityEvent("entityLoad", entity);
             }
         });
         EntityTrackingEvents.START_TRACKING.register((entity, player) -> {
@@ -387,12 +390,13 @@ public final class ServerHooks {
     /**
      * Bedrock raises this once, as an entity comes into the world, and a pack's starting state is
      * usually set from it. A chunk loading the entity again does not raise it. A bred one is born
-     * rather than spawned.
+     * rather than spawned. The answer is whether this was the arrival.
      */
-    public static void announce(Entity entity) {
-        if (state == null || !state.firstAnnouncement(entity.getUUID())) return;
+    public static boolean announce(Entity entity) {
+        if (state == null || !state.firstAnnouncement(entity.getUUID())) return false;
 
         EntityEvents.trigger(entity, born(entity) ? "minecraft:entity_born" : "minecraft:entity_spawned", null, state);
+        return true;
     }
 
     private static void raiseEntityEvent(String event, Entity entity) {

@@ -670,11 +670,22 @@ public sealed interface Filter {
     List<String> NUMBERED_SUBJECTS = List.of("self", "other");
     List<String> NUMBERED_OPERATORS = List.of("==", "!=");
 
+    /**
+     * A definition's parsed filters, kept for as long as its JSON is alive. The key is compared by
+     * identity, so a lookup costs no walk of the JSON.
+     */
+    Map<JsonElement, Filter> PARSED = new com.google.common.collect.MapMaker().weakKeys().makeMap();
+
+    /** The same JSON element parses once and answers with the same filter ever after. */
     static Filter parse(JsonElement json) {
-        if (json == null || json.isJsonNull()) return new Always();
+        if (json == null || json.isJsonNull() || json.isJsonPrimitive()) return new Always();
+
+        return PARSED.computeIfAbsent(json, Filter::build);
+    }
+
+    private static Filter build(JsonElement json) {
         if (json.isJsonArray()) return new All(parseAll(json));
 
-        if (!json.isJsonObject()) return new Always();
         JsonObject body = json.getAsJsonObject();
 
         // An entry of a list such as `entity_types` holds its filter under `filters` beside fields of its own.

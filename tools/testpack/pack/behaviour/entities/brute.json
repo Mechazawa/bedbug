@@ -711,6 +711,16 @@
           "fire_affected_by_griefing": true
         }
       },
+      "tp:brute_milky": {
+        "minecraft:behavior.drink_milk": {
+          "priority": 0,
+          "filters": {
+            "test": "on_fire",
+            "subject": "self",
+            "value": true
+          }
+        }
+      },
       "tp:brute_thirsty": {
         "minecraft:behavior.drink_potion": {
           "priority": 0,
@@ -1661,6 +1671,13 @@
         "add": {
           "component_groups": [
             "tp:brute_smouldering"
+          ]
+        }
+      },
+      "tp:brute_make_milky": {
+        "add": {
+          "component_groups": [
+            "tp:brute_milky"
           ]
         }
       },
