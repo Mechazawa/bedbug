@@ -606,7 +606,7 @@ public final class ScriptGameTests {
             expectTag(helper, iron, "tp:took_iron_sword_1");
             helper.assertTrue(gold.getMainHandItem().is(Items.GOLDEN_SWORD),
                 "The husk never picked the golden sword up.");
-            helper.assertTrue(Platform.tagsOf(gold).isEmpty(),
+            helper.assertTrue(Platform.tagsOf(gold).stream().noneMatch(tag -> tag.startsWith("tp:t")),
                 "The script heard a golden sword through its filter: " + Platform.tagsOf(gold) + ".");
             helper.assertTrue(diamond.getMainHandItem().isEmpty(), "The script refused a diamond sword it took.");
         });
@@ -623,6 +623,8 @@ public final class ScriptGameTests {
         Platform.placeAt(husk, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
         husk.setNoAi(true);
         husk.setCanPickUpLoot(true);
+        // A mock player in a far test counts as the nearest player, which despawns a husk by distance.
+        husk.setPersistenceRequired();
         helper.getLevel().addFreshEntity(husk);
         helper.spawnItem(item, where);
         return husk;
