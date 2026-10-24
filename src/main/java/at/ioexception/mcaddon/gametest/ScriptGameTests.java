@@ -575,6 +575,52 @@ public final class ScriptGameTests {
     }
     //?}
 
+    /**
+     * A mob picking an item up raises both pickup events, each naming the item the way Bedrock does
+     * and heard only by a listener whose `itemFilter` takes it, and a refusal leaves the item lying.
+     *
+     * The script hears iron swords and refuses diamond ones, so the husk taking a golden sword is
+     * tagged by nobody.
+     */
+    @GameTest(maxTicks = PICKUP_TICKS)
+    public void aMobPickingAnItemUpIsHeardThroughTheItemFilter(GameTestHelper helper) {
+        if (ServerHooks.scripts() == null) {
+            helper.succeed();
+            return;
+        }
+
+        net.minecraft.world.entity.Mob iron = looter(helper, STAND, net.minecraft.world.item.Items.IRON_SWORD);
+        net.minecraft.world.entity.Mob gold = looter(helper, STAND.east(3), net.minecraft.world.item.Items.GOLDEN_SWORD);
+        net.minecraft.world.entity.Mob diamond =
+            looter(helper, STAND.south(3), net.minecraft.world.item.Items.DIAMOND_SWORD);
+        helper.succeedWhen(() -> {
+            expectTag(helper, iron, "tp:taking_iron_sword");
+            expectTag(helper, iron, "tp:took_iron_sword_1");
+            helper.assertTrue(gold.getMainHandItem().is(net.minecraft.world.item.Items.GOLDEN_SWORD),
+                "The husk never picked the golden sword up.");
+            helper.assertTrue(Platform.tagsOf(gold).isEmpty(),
+                "The script heard a golden sword through its filter: " + Platform.tagsOf(gold) + ".");
+            helper.assertTrue(diamond.getMainHandItem().isEmpty(), "The script refused a diamond sword it took.");
+        });
+    }
+
+    private static final int PICKUP_TICKS = 60;
+
+    /** A husk that picks loot up, standing on the item the test hands it. */
+    private static net.minecraft.world.entity.Mob looter(GameTestHelper helper, BlockPos where,
+        net.minecraft.world.item.Item item) {
+        net.minecraft.world.entity.Mob husk =
+            (net.minecraft.world.entity.Mob) Platform.createMob(
+            BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("minecraft", "husk")).orElseThrow(), helper.getLevel());
+        BlockPos at = helper.absolutePos(where);
+        Platform.placeAt(husk, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        husk.setNoAi(true);
+        husk.setCanPickUpLoot(true);
+        helper.getLevel().addFreshEntity(husk);
+        helper.spawnItem(item, where);
+        return husk;
+    }
+
     private static void expectTag(GameTestHelper helper, Entity entity, String tag) {
         helper.assertTrue(Platform.tagsOf(entity).contains(tag),
             "The pack's script left " + Platform.tagsOf(entity) + " rather than " + tag + ".");

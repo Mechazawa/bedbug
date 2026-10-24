@@ -1194,7 +1194,7 @@ These are the checks it runs, and what each one catches:
   a note block plays off it and stores a value in the block's own store. Two more shake the
   player's camera and stop it, which only a client can show, so `CameraShakeClientGameTest` reads
   the shake back off the client. The script also refuses to let anything tagged `tp:untameable` be
-  tamed, tags whatever a player tamed, and tags a player crouching and standing up again. It counts
+  tamed, tags whatever a player tamed, and tags a player crouching and standing up again. It hears an iron sword being picked up by any entity, through both pickup events and an `itemFilter`, and refuses a diamond one; `aMobPickingAnItemUpIsHeardThroughTheItemFilter` hands three husks a sword each. A player's pickup is raised around `Inventory.add` in `ItemEntity.playerTouch` and a mob's around `Mob.pickUpItem` in `Mob.aiStep`, so the after event names what was taken. It counts
   each first spawn in the player's `tp:visits` dynamic property, which `WorldClientGameTest` reads
   back as two after leaving the world and opening it again. Fabric raises the join before the level
   or the player list holds the player, so `ServerHooks.playerJoined` hands the player to

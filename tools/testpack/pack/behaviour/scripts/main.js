@@ -461,6 +461,18 @@ tagWhenHurt(world.beforeEvents.entityHurt, "tp:before_hurt_as_villager", { entit
 tagWhenHurt(world.beforeEvents.entityHurt, "tp:before_hurt_as_zombie",
     { entityFilter: { type: "minecraft:zombie" } });
 
+// Only an iron sword is heard being picked up, and nobody may pick up a diamond one.
+world.beforeEvents.entityItemPickup.subscribe(({ entity, item }) => {
+    const typeId = item.getComponent("minecraft:item").itemStack.typeId;
+    system.run(() => entity.addTag("tp:taking_" + typeId.slice("minecraft:".length)));
+}, { itemFilter: { includeTypes: ["iron_sword"] } });
+world.afterEvents.entityItemPickup.subscribe(({ entity, items }) =>
+    entity.addTag("tp:took_" + items.map(stack => stack.typeId.slice("minecraft:".length) + "_" + stack.amount).join("+")),
+{ itemFilter: { includeTypes: ["minecraft:iron_sword"] } });
+world.beforeEvents.entityItemPickup.subscribe(event => {
+    event.cancel = true;
+}, { itemFilter: { includeTypes: ["minecraft:diamond_sword"] } });
+
 // A villager that takes a job raises the `minecraft:become_*` event its profession names, and a pack
 // dressing its own model for that job reads the profession, the biome and the face off it then.
 world.afterEvents.dataDrivenEntityTrigger.subscribe(({ entity, eventId }) => {

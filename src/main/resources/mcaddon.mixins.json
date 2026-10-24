@@ -43,6 +43,7 @@
     "TamableAnimalMixin",
     "VillagerMixin",
     "MobEventsMixin",
+    "MobPickupMixin",
     "ShearEventMixin",
     "RaiderCelebrateMixin",
     "VillagerCelebrateMixin",
