@@ -382,9 +382,12 @@ public final class PackConverter {
      *
      * Bedrock paths carry no extension and are pack relative; Java's are relative to the namespace's
      * `sounds/` directory. Volume, pitch and weight carry over, which is what makes a pack's random
-     * variants pick the way its author intended.
+     * variants pick the way its author intended. `subtitle` is a translation key, which the pack's
+     * `.lang` files already provide under the same key in the namespace's language files, and
+     * `max_distance` becomes the `attenuation_distance` of every sound of the event. Java has no
+     * radius of full volume, so a positive `min_distance` is reported.
      */
-    private static final class Sounds {
+    static final class Sounds {
         private final String namespace;
 
         Sounds(String namespace) {
@@ -414,6 +417,12 @@ public final class PackConverter {
                 JsonObject converted = new JsonObject();
                 JsonObject definition = entry.getValue().getAsJsonObject();
                 converted.addProperty("category", category(Json.text(definition, "category", "neutral")));
+                String subtitle = Json.text(definition, "subtitle", null);
+                if (subtitle != null) converted.addProperty("subtitle", subtitle);
+                int attenuation = (int) Math.round(Json.number(definition, "max_distance", 0));
+                if (Json.number(definition, "min_distance", 0) > 0) {
+                    AddonEntities.unsupported("sound min_distance, " + entry.getKey());
+                }
 
                 JsonArray files = new JsonArray();
                 for (JsonElement sound : Json.list(definition, "sounds")) {
@@ -439,6 +448,7 @@ public final class PackConverter {
                     String inside = Names.sanitise(bedrockPath.startsWith("sounds/")
                         ? bedrockPath.substring("sounds/".length()) : bedrockPath);
                     reference.addProperty("name", eventNamespace + ":" + inside);
+                    if (attenuation > 0) reference.addProperty("attenuation_distance", attenuation);
                     files.add(reference);
 
                     if (write && copy(source, root.resolve("assets").resolve(eventNamespace)
