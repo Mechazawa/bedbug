@@ -19,14 +19,16 @@ import java.util.Locale;
 
 /**
  * One add-on as a row of the add-on list: its icon, its name and version over one line of its
- * description, whether it is on, and room on the right for the settings and report buttons the
- * screen puts over it. A click on the row opens it to the full descriptions, the authors and both
- * packs, and another closes it.
+ * description, whether it is on, and room on the right for the buttons the screen puts over it: an
+ * On/Off switch where the add-on can be switched, then settings and report. A warning about turning
+ * it off goes under the name. A click on the row opens it to the full descriptions, the authors and
+ * both packs, and another closes it.
  */
 public final class AddonRow extends AbstractWidget {
     static final int HEADER = 40;
     static final int GAP = 4;
     static final int CONTROLS_TOP = (HEADER - IconButton.SIZE) / 2;
+    static final int SWITCH = 36;
     private static final int PAD = 6;
     private static final int ICON = 32;
     private static final int LINE = 12;
@@ -36,12 +38,16 @@ public final class AddonRow extends AbstractWidget {
     private static final int NAME = 0xFFFFFFFF;
     private static final int QUIET = 0xFFAAAAAA;
     private static final int ON = 0xFF55FF55;
+    private static final int WARNING = 0xFFFFFF55;
     private static final Identifier UNKNOWN_ICON = Platform.id("minecraft", "textures/misc/unknown_pack.png");
 
     private final Font font;
     private final Identifier icon;
     private final boolean on;
     private final boolean expanded;
+    private final boolean switchable;
+    private final String warning;
+    private final List<String> warnings;
     private final Runnable toggle;
     private final String title;
     private final String summary;
@@ -49,22 +55,31 @@ public final class AddonRow extends AbstractWidget {
     private final String state;
     private final int textRight;
 
-    AddonRow(int left, int width, Font font, AddonEntry addon, Identifier icon, boolean expanded, Runnable toggle) {
+    /**
+     * @param switchable whether the screen puts an On/Off switch over the row, in place of the state
+     * @param warning    shown under the name, or empty
+     */
+    AddonRow(int left, int width, Font font, AddonEntry addon, Identifier icon, boolean expanded, boolean switchable,
+        String warning, Runnable toggle) {
         super(left, 0, width, HEADER, Component.empty());
         this.font = font;
         this.icon = icon;
         this.on = addon.active();
         this.expanded = expanded;
+        this.switchable = switchable;
+        this.warning = warning;
         this.toggle = toggle;
         this.title = addon.converted().displayName() + " " + addon.converted().pack().manifest().version();
         this.state = Component.translatable(on ? "mcaddon.addons.state.on" : "mcaddon.addons.state.off").getString();
-        this.textRight = controlsLeft() - PAD - font.width(state) - PAD;
+        this.textRight = controlsLeft() - PAD - (switchable ? 0 : font.width(state) + PAD);
         this.summary = addon.descriptions().stream().findFirst()
             .map(description -> shortened(description.split("\\r?\\n", 2)[0], textRight - textLeft()))
             .orElse("");
+        this.warnings = warning.isEmpty() ? List.of() : ColumnScreen.wrap(font, warning, width - textLeft() - PAD);
         this.details = expanded ? details(addon, width - textLeft() - PAD) : List.of();
         setMessage(Component.literal(title));
-        setHeight(HEADER + (details.isEmpty() ? 0 : details.size() * LINE + PAD));
+        int lines = warnings.size() + details.size();
+        setHeight(HEADER + (lines == 0 ? 0 : lines * LINE + PAD));
     }
 
     public String title() {
@@ -86,6 +101,11 @@ public final class AddonRow extends AbstractWidget {
         return state;
     }
 
+    /** What turning the add-on off may cost, or empty. */
+    public String warning() {
+        return warning;
+    }
+
     public boolean expanded() {
         return expanded;
     }
@@ -98,9 +118,14 @@ public final class AddonRow extends AbstractWidget {
         return UNKNOWN_ICON;
     }
 
-    /** Where the first of the two buttons the screen puts over the row begins, from the row's left. */
-    int controlsLeft() {
+    /** Where the settings and report buttons the screen puts over the row begin, from the row's left. */
+    int iconsLeft() {
         return getWidth() - PAD - 2 * IconButton.SIZE - 2;
+    }
+
+    /** Where the first button the screen puts over the row begins, from the row's left. */
+    int controlsLeft() {
+        return iconsLeft() - (switchable ? SWITCH + 2 : 0);
     }
 
     private int textLeft() {
@@ -161,9 +186,14 @@ public final class AddonRow extends AbstractWidget {
             painter.image(icon, left + PAD, top + (HEADER - ICON) / 2, ICON, ICON);
             painter.text(shortened(title, textRight - textLeft()), left + textLeft(), top + 10, NAME);
             painter.text(summary, left + textLeft(), top + 22, QUIET);
-            painter.text(state, left + textRight + PAD, top + (HEADER - font.lineHeight) / 2, on ? ON : QUIET);
+            if (!switchable) {
+                painter.text(state, left + textRight + PAD, top + (HEADER - font.lineHeight) / 2, on ? ON : QUIET);
+            }
+            for (int i = 0; i < warnings.size(); i++) {
+                painter.text(warnings.get(i), left + textLeft(), top + HEADER + i * LINE, WARNING);
+            }
             for (int i = 0; i < details.size(); i++) {
-                painter.text(details.get(i), left + textLeft(), top + HEADER + i * LINE, QUIET);
+                painter.text(details.get(i), left + textLeft(), top + HEADER + (warnings.size() + i) * LINE, QUIET);
             }
         });
     }

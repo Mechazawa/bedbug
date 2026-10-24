@@ -66,6 +66,15 @@ class WorldAddonListTest {
     }
 
     @Test
+    void namingAddsAnUnnamedInstalledAddonAsOff() {
+        WorldAddonList list = new WorldAddonList(List.of(new WorldAddonList.Entry(TWO, "Two", true)))
+            .naming(installed(ONE, TWO));
+        assertEquals(List.of(TWO, ONE), list.addons().stream().map(WorldAddonList.Entry::uuid).toList());
+        assertTrue(list.plays(TWO));
+        assertFalse(list.plays(ONE));
+    }
+
+    @Test
     void resolveKeepsOrderAndFunctions() {
         AddonSet installed = installed(ONE, TWO, THREE);
         AddonSet resolved = new WorldAddonList(List.of(new WorldAddonList.Entry(THREE, "", true),

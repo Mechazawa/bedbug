@@ -1,6 +1,9 @@
 package at.ioexception.mcaddon.client.screen;
 
+import at.ioexception.mcaddon.client.WorldAddons;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.ActiveAddons;
+import at.ioexception.mcaddon.state.WorldAddonList;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.client.screen.v1.Screens;
@@ -10,6 +13,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.worldselection.CreateWorldScreen;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -31,11 +35,13 @@ import java.util.Set;
  * click on the row opening it to the rest.
  *
  * Open it with `new AddonsScreen(parent)`; Done goes back to `parent`. In a world each row reads On
- * or Off as the world plays it and nothing switches; the other modes are where the player will choose.
+ * or Off as the world plays it and nothing switches. Create World and Edit World open it with a
+ * switch on each row over the world's add-on list: Create World plays the choice once Done is
+ * pressed, and Edit World writes each switch into the world's list at once and activates nothing.
  */
 public final class AddonsScreen extends ColumnScreen {
     /** Where the list is opened from, which decides whether a row can be switched. */
-    public enum Mode {
+    private enum Mode {
         IN_WORLD, CREATE_WORLD, EDIT_WORLD
     }
 
@@ -44,16 +50,36 @@ public final class AddonsScreen extends ColumnScreen {
     private static final Identifier INFO = Platform.id("mcaddon", "textures/gui/info.png");
 
     private final Mode mode;
+    /** The world whose list Edit World switches, or null. */
+    private final Path world;
+    private final WorldAddonList initial;
+    private WorldAddonList chosen;
     private final Set<Path> opened = new HashSet<>();
     private final Map<Path, Identifier> icons = new HashMap<>();
 
     public AddonsScreen(Screen parent) {
-        this(parent, Mode.IN_WORLD);
+        this(parent, Mode.IN_WORLD, null, null);
     }
 
-    public AddonsScreen(Screen parent, Mode mode) {
+    private AddonsScreen(Screen parent, Mode mode, Path world, WorldAddonList list) {
         super(Component.translatable("mcaddon.addons.title"), parent);
         this.mode = mode;
+        this.world = world;
+        this.initial = list;
+        this.chosen = list;
+    }
+
+    /** The add-ons a world being created will play, every installed one on until the player chooses. */
+    public static AddonsScreen forNewWorld(CreateWorldScreen parent) {
+        return new AddonsScreen(parent, Mode.CREATE_WORLD, null,
+            WorldAddons.chosen().orElseGet(() -> WorldAddonList.allOn(ActiveAddons.installed())));
+    }
+
+    /** The add-ons a saved world plays, switched in its own list. */
+    public static AddonsScreen forWorld(Screen parent, Path world) {
+        return new AddonsScreen(parent, Mode.EDIT_WORLD, world, WorldAddonList.read(world)
+            .map(list -> list.naming(ActiveAddons.installed()))
+            .orElseGet(() -> WorldAddonList.allOn(ActiveAddons.installed())));
     }
 
     /**
@@ -84,21 +110,34 @@ public final class AddonsScreen extends ColumnScreen {
 
     @Override
     protected void fill() {
-        List<AddonEntry> addons = AddonEntry.loaded();
+        List<AddonEntry> addons = AddonEntry.loaded().stream()
+            .map(addon -> chosen == null ? addon : new AddonEntry(addon.converted(), chosen.plays(addon.uuid())))
+            .toList();
         if (addons.isEmpty()) text(Component.translatable("mcaddon.addons.none").getString());
         addons.forEach(this::show);
     }
 
     private void show(AddonEntry addon) {
         Path root = addon.converted().root();
-        AddonRow row = widget(new AddonRow(left(), WIDTH, font, addon, iconOf(root), opened.contains(root), () -> {
-            if (!opened.remove(root)) opened.add(root);
-            rebuildWidgets();
-        }));
+        boolean switchable = chosen != null;
+        String warning = mode == Mode.EDIT_WORLD && !addon.active() && addon.converted().addsDimension()
+            ? Component.translatable("mcaddon.addons.dimension_warning").getString() : "";
+        AddonRow row = widget(new AddonRow(left(), WIDTH, font, addon, iconOf(root), opened.contains(root),
+            switchable, warning, () -> {
+                if (!opened.remove(root)) opened.add(root);
+                rebuildWidgets();
+            }));
+
+        if (switchable) {
+            Button turn = widgetBelow(Button.builder(Component.translatable(addon.active()
+                    ? "mcaddon.addons.state.on" : "mcaddon.addons.state.off"), button -> turn(addon))
+                .size(AddonRow.SWITCH, BUTTON_HEIGHT).build(), (AddonRow.HEADER - BUTTON_HEIGHT) / 2);
+            turn.setX(left() + row.controlsLeft());
+        }
 
         IconButton settings = widgetBelow(new IconButton(Component.translatable("mcaddon.addons.settings"), GEAR,
             GEAR_OFF, () -> Platform.setScreen(new PackSettingsScreen(this, addon))), AddonRow.CONTROLS_TOP);
-        settings.setX(left() + row.controlsLeft());
+        settings.setX(left() + row.iconsLeft());
         settings.active = addon.hasSettings();
         settings.setTooltip(Tooltip.create(Component.translatable(
             settings.active ? "mcaddon.addons.settings" : "mcaddon.addons.settings.none")));
@@ -109,6 +148,22 @@ public final class AddonsScreen extends ColumnScreen {
         report.setTooltip(Tooltip.create(Component.translatable("mcaddon.addons.report")));
 
         skip(row.getHeight() + AddonRow.GAP);
+    }
+
+    /** Switches one add-on in the list, which Edit World writes into the world at once. */
+    private void turn(AddonEntry addon) {
+        chosen = chosen.with(addon.uuid(), !addon.active());
+        if (mode == Mode.EDIT_WORLD) chosen.write(world);
+        rebuildWidgets();
+    }
+
+    /** Create World plays a changed choice as it is shown again. */
+    @Override
+    public void onClose() {
+        super.onClose();
+        if (mode == Mode.CREATE_WORLD && !chosen.equals(initial)) {
+            WorldAddons.choose((CreateWorldScreen) parent, chosen);
+        }
     }
 
     /** The pack's own icon as a texture of this screen's, or the game's blank one where there is none. */

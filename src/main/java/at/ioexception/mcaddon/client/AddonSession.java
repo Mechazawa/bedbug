@@ -210,7 +210,7 @@ public final class AddonSession {
     }
 
     /** Puts the installed add-ons back, once whatever change is under way has finished. */
-    private static void leave() {
+    public static void leave() {
         settled = settled.thenCompose(ignored -> {
             if (!visiting) return CompletableFuture.<Void>completedFuture(null);
             visiting = false;
@@ -236,8 +236,7 @@ public final class AddonSession {
             .resolve(installed);
         if (settled.isDone() && ActiveAddons.isActive(set)) return false;
 
-        settled = settled.thenCompose(ignored -> enterWorld(set)).exceptionally(AddonSession::failed);
-        settled.thenRun(() -> Platform.schedule(() -> {
+        play(set).thenRun(() -> Platform.schedule(() -> {
             reopening = true;
             try {
                 open.run();
@@ -246,6 +245,16 @@ public final class AddonSession {
             }
         }));
         return true;
+    }
+
+    /**
+     * Makes a world's add-ons active and reloads the resources for them, once whatever change is
+     * under way has finished. A leave puts the installed set back.
+     */
+    public static CompletableFuture<Void> play(AddonSet set) {
+        leaveIfEnded();
+        settled = settled.thenCompose(ignored -> enterWorld(set)).exceptionally(AddonSession::failed);
+        return settled;
     }
 
     private static CompletableFuture<Void> enterWorld(AddonSet set) {

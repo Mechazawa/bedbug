@@ -27,7 +27,7 @@ abstract class ColumnScreen extends Screen {
     private static final int FOOTER = 32;
     private static final int DONE_WIDTH = 200;
 
-    private final Screen parent;
+    final Screen parent;
     private final ScrollingColumn column = new ScrollingColumn(ROW_HEIGHT);
     private int row;
 
