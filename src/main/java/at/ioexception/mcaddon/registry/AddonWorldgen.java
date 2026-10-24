@@ -22,7 +22,9 @@ import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.levelgen.GenerationStep;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Predicate;
 
 /**
@@ -42,6 +44,9 @@ import java.util.function.Predicate;
 public final class AddonWorldgen {
     /** The weight an end biome is offered at, which Bedrock states nowhere. */
     private static final double END_WEIGHT = 1.0;
+
+    /** The nether and end biomes handed to Fabric, against the namespace of the add-on they came from. */
+    private static final Map<ResourceKey<Biome>, String> PLACED = new HashMap<>();
 
     private AddonWorldgen() {
     }
@@ -128,13 +133,31 @@ public final class AddonWorldgen {
         float[][] bands = biome.climate();
 
         switch (biome.world()) {
-            case "nether" -> NetherBiomes.addNetherBiome(key, Climate.parameters(
-                band(bands[0]), band(bands[1]), band(bands[2]), band(bands[3]),
-                band(bands[4]), band(bands[5]), bands[6][0]));
-            case "end" -> TheEndBiomes.addHighlandsBiome(key, END_WEIGHT);
+            case "nether" -> {
+                PLACED.put(key, namespace);
+                NetherBiomes.addNetherBiome(key, Climate.parameters(
+                    band(bands[0]), band(bands[1]), band(bands[2]), band(bands[3]),
+                    band(bands[4]), band(bands[5]), bands[6][0]));
+            }
+            case "end" -> {
+                PLACED.put(key, namespace);
+                TheEndBiomes.addHighlandsBiome(key, END_WEIGHT);
+            }
             default -> AddonEntities.unsupported(
                 "biome in the overworld, which is read and registered but never generated");
         }
+    }
+
+    /**
+     * Whether `key` is a nether or end biome of an add-on outside the active set.
+     *
+     * Fabric holds every biome handed to it for the life of the process and resolves each one as a
+     * world builds its nether and end, so a world whose data packs lack such a biome would fail to
+     * load. The mixins on Fabric's lists ask this to leave those biomes out.
+     */
+    public static boolean isDormant(ResourceKey<Biome> key) {
+        String namespace = PLACED.get(key);
+        return namespace != null && !ActiveAddons.isActive(namespace);
     }
 
     private static Climate.Parameter band(float[] bounds) {

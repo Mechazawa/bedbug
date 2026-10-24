@@ -924,12 +924,22 @@ public final class Platform {
      *
      * The song is named rather than held, so the entry it names is looked up when a jukebox needs
      * it and not while items are being registered, which is before any data pack has been read.
+     *
+     * From 26 the song is looked up as each data load builds the item's components, and a world
+     * opened without the add-on's data pack has no such song, so the record then plays nothing.
      */
     public static Item.Properties jukeboxPlayable(Item.Properties properties, Identifier song) {
         //? if >=1.21 {
-        return properties.jukeboxPlayable(ResourceKey.create(
-            net.minecraft.core.registries.Registries.JUKEBOX_SONG, song));
-        //?} else {
+        ResourceKey<net.minecraft.world.item.JukeboxSong> key =
+            ResourceKey.create(net.minecraft.core.registries.Registries.JUKEBOX_SONG, song);
+        //?}
+        //? if >=26 {
+        return properties.delayedComponent(net.minecraft.core.component.DataComponents.JUKEBOX_PLAYABLE,
+            registries -> registries.lookupOrThrow(net.minecraft.core.registries.Registries.JUKEBOX_SONG)
+                .get(key).map(net.minecraft.world.item.JukeboxPlayable::new).orElse(null));
+        //?} elif >=1.21 {
+        /*return properties.jukeboxPlayable(key);
+        *///?} else {
         /*return properties;
         *///?}
     }

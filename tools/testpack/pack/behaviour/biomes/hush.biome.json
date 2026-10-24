@@ -1,0 +1,17 @@
+{
+  "format_version": "1.21.110",
+  "minecraft:biome": {
+    "description": {
+      "identifier": "tp:hush"
+    },
+    "components": {
+      "minecraft:climate": {
+        "downfall": 0.0,
+        "temperature": 0.5
+      },
+      "minecraft:tags": {
+        "tags": ["the_end"]
+      }
+    }
+  }
+}
