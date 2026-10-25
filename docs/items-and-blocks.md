@@ -104,6 +104,8 @@ Shaped, shapeless, furnace, smithing transform, smithing trim and brewing.
 - A tier opens when the trader has the experience it asks for.
 - A group offers the number of trades it picks, by their weights.
 - A payment with several items becomes one offer per item.
+- A trade item's `filters` are asked of the trader when its trades are made. A payment that fails
+  them is not taken, and a result that fails them takes its trade away.
 - `max_uses`, `trader_exp`, `reward_exp` and `price_multiplier` reach the trade screen.
 - Enchanted and dyed results work.
 - An enchanted book trade picks the enchantment, rolls the level and charges the emeralds that level
@@ -154,8 +156,7 @@ colours. Forty families are mapped. This works for `set_data`, `random_aux_value
 - `recipe_material_reduction` (Education Edition material reducer).
 - A smithing trim works only with a template named `<pattern>_armor_trim_smithing_template`, so only
   Java's existing patterns apply. Other templates are reported.
-- A filter on a trade item is reported. A trade table's `format_version` is reported and changes
-  nothing.
+- A trade table's `format_version` is reported and changes nothing.
 - `enchant_book_for_trading` in a loot table: the book is enchanted and the four cost fields are
   reported.
 - `minecraft:support` stair shape, `minecraft:connection_rule` `only_fences` and

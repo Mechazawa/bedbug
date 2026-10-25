@@ -2496,6 +2496,41 @@ public final class BehaviourGameTests {
         helper.succeed();
     }
 
+    /**
+     * A trade item's filters are asked of the trader as its offers are built: a payment whose
+     * filters fail is not taken, and a result whose filters fail takes its trade off the counter.
+     */
+    @GameTest()
+    public void aTradeItemsFiltersDecideWhetherItIsOnOffer(GameTestHelper helper) {
+        AddonEntity plain = spawn(helper, ENTITY);
+        AddonEntity tagged = spawn(helper, ENTITY);
+        if (plain == null || tagged == null) {
+            helper.succeed();
+            return;
+        }
+
+        tagged.addTag("tp_ironmonger");
+        tagged.addTag("tp_bare_counter");
+        List<String> plainPays = paidFor(plain, "minecraft:flint");
+        List<String> taggedPays = paidFor(tagged, "minecraft:flint");
+        helper.assertTrue(plainPays.equals(List.of("minecraft:copper_ingot")),
+            ENTITY + " without tp_ironmonger takes " + plainPays + " for flint, not copper alone.");
+        helper.assertTrue(taggedPays.equals(List.of("minecraft:iron_ingot")),
+            ENTITY + " with tp_ironmonger takes " + taggedPays + " for flint, not iron alone.");
+        helper.assertTrue(sold(plain.getOffers()).contains("minecraft:leather_helmet"),
+            ENTITY + " without tp_bare_counter lost the helmet its filter allows.");
+        helper.assertTrue(!sold(tagged.getOffers()).contains("minecraft:leather_helmet"),
+            ENTITY + " with tp_bare_counter sells the helmet its filter refuses.");
+        helper.succeed();
+    }
+
+    private static List<String> paidFor(AddonEntity trader, String result) {
+        return trader.getOffers().stream()
+            .filter(offer -> BuiltInRegistries.ITEM.getKey(offer.getResult().getItem()).toString().equals(result))
+            .map(offer -> BuiltInRegistries.ITEM.getKey(offer.getBaseCostA().getItem()).toString())
+            .toList();
+    }
+
     /** The experience Bedrock's economy tables and Java's villager both ask for the second tier. */
     private static final int APPRENTICE_EXPERIENCE = 10;
 

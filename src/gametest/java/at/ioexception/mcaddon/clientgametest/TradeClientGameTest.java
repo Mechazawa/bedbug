@@ -72,7 +72,7 @@ public final class TradeClientGameTest implements FabricClientGameTest {
             Assert.that(shown.contains("2 minecraft:emerald -> 1 minecraft:lime_wool"), "Expected tp:ember's screen"
                 + " to offer its pack's lime wool for two emeralds and it offers " + shown + ".");
             Assert.that(shown.contains("3 minecraft:emerald -> 1 minecraft:leather_helmet"), "Expected tp:ember's"
-                + " screen to offer its pack's daytime leather helmet for three emeralds and it offers " + shown + ".");
+                + " screen to offer its pack's leather helmet for three emeralds and it offers " + shown + ".");
             Assert.that(shown.stream().noneMatch(offer -> offer.endsWith("minecraft:golden_sword")), "Expected"
                 + " tp:ember's second tier, which waits for ten experience, to be off the screen and it offers "
                 + shown + ".");

@@ -70,8 +70,10 @@
               "item": "minecraft:leather_helmet",
               "quantity": 1,
               "filters": {
-                "test": "is_daytime",
-                "value": true
+                "test": "has_tag",
+                "subject": "self",
+                "operator": "!=",
+                "value": "tp_bare_counter"
               },
               "functions": [
                 {
@@ -113,6 +115,33 @@
             }
           ],
           "max_uses": 2,
+          "trader_exp": 1
+        },
+        {
+          "wants": [
+            {
+              "choice": [
+                {
+                  "item": "minecraft:iron_ingot",
+                  "filters": { "test": "has_tag", "subject": "self", "value": "tp_ironmonger" }
+                },
+                {
+                  "item": "minecraft:copper_ingot",
+                  "filters": {
+                    "none_of": [{ "test": "has_tag", "subject": "self", "value": "tp_ironmonger" }]
+                  }
+                }
+              ],
+              "quantity": 3
+            }
+          ],
+          "gives": [
+            {
+              "item": "minecraft:flint",
+              "quantity": 1
+            }
+          ],
+          "max_uses": 4,
           "trader_exp": 1
         },
         {

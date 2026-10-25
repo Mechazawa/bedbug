@@ -2287,6 +2287,12 @@ offers as the trader reaches it and keeps those already on the counter. A trader
 offers with their uses, trade experience, spent `single_use` keys and inventory are filed in
 `AddonState.trading` under its uuid by `AddonEntity.saveTrading` and read back by `restoreTrading`
 from `restoreGroups`. `minecraft:spawn_entity` `should_leash` leashes the spawned mob to the producer.
+A trade item's `filters` are asked of the trader, as subject `self`, when `TradeItem.offeredBy` builds
+the offer, which is when Bedrock's fisherman picks the boat of its biome and its cartographer drops a
+map the dimension has no use for. A choice entry states its own filters or takes its side's. A failed
+payment leaves its alternative off the counter and a failed result leaves the whole trade off; the
+filters are not asked again later. `ember_trades.json` carries one of each, and
+`BehaviourGameTests.aTradeItemsFiltersDecideWhetherItIsOnOffer` reads both back by tag.
 `tp:hawker` in the test pack names the wandering trader's path, and its `tp:hawker_mason` group the
 mason's; `BehaviourGameTests` covers them.
 

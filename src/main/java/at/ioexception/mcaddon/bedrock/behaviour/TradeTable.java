@@ -5,6 +5,7 @@ import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.registry.AddonItems;
+import at.ioexception.mcaddon.server.ServerHooks;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -114,6 +115,11 @@ public record TradeTable(List<Offer> offers, List<Integer> tierExperience, Borro
          * the other side of the trade.
          */
         public Stacks build(RandomSource random, Entity trader) {
+            if (!cost.offeredBy(trader) || !result.offeredBy(trader)
+                || secondCost != null && !secondCost.offeredBy(trader)) {
+                return null;
+            }
+
             Built given = result.build(random, trader);
             if (given.stack().isEmpty()) return null;
 
@@ -144,8 +150,19 @@ public record TradeTable(List<Offer> offers, List<Integer> tierExperience, Borro
         }
     }
 
-    /** One side of a trade: which item, how many, and what is run over the stack it becomes. */
-    public record TradeItem(String item, int count, List<JsonElement> functions) {
+    /**
+     * One side of a trade: which item, how many, what is run over the stack it becomes, and the
+     * filters the trader has to pass for the item to be on offer at all.
+     */
+    public record TradeItem(String item, int count, List<JsonElement> functions, Filter filters) {
+
+        /**
+         * Asked of the trader as its offers are built, which is when Bedrock asks: a fisherman takes
+         * the boat of its own biome and a cartographer in the nether sells no map.
+         */
+        public boolean offeredBy(Entity trader) {
+            return filters.matches(new Filter.Context(trader, trader, null, ServerHooks.state()));
+        }
 
         /** The stack this describes, with every function it names run over it. */
         public Built build(RandomSource random, Entity trader) {
@@ -191,7 +208,7 @@ public record TradeTable(List<Offer> offers, List<Integer> tierExperience, Borro
      * Every field of a trade table this reads, qualified by the level carrying it.
      *
      * A field Java has no place for counts here once it is read, because reading it is what lets
-     * `/mcaddon entities` name it: a filter on a trade item is reported rather than asked.
+     * `/mcaddon entities` name it.
      */
     private static final Set<String> HANDLES = Set.of(
         "table.format_version",
@@ -434,15 +451,12 @@ public record TradeTable(List<Offer> offers, List<Integer> tierExperience, Borro
         return side.isJsonObject() ? side.getAsJsonObject() : new JsonObject();
     }
 
-    /** A choice states its own quantity where it has one, and takes the trade's where it does not. */
+    /** A choice states its own quantity and filters where it has them, and takes the trade's otherwise. */
     private static TradeItem item(JsonObject entry, JsonObject outer) {
-        // A filter decides at trade time whether the item is offered at all, out of the Bedrock
-        // filter vocabulary, which a Java offer built once and sent to the client cannot ask again.
-        if (entry.has("filters") || outer.has("filters")) AddonEntities.unsupported("trade item filters");
-
         JsonElement quantity = entry.has("quantity") ? entry.get("quantity") : outer.get("quantity");
+        JsonElement filters = entry.has("filters") ? entry.get("filters") : outer.get("filters");
         return new TradeItem(Json.text(entry, "item", null), (int) between(quantity),
-            Json.list(entry, "functions"));
+            Json.list(entry, "functions"), Filter.parse(filters));
     }
 
     /** A quantity or a level is a number or a range the trade picks from when it is offered. */
