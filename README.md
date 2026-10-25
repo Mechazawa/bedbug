@@ -96,7 +96,7 @@ The numbers do not depend on which pack is installed.
 | Trade item functions | 100% |
 | Geometry, animation and controller fields | 98% |
 | Pack file kinds | 98% |
-| Manifest fields | 77% |
+| Manifest fields | 81% |
 | Vanilla item ids Bedrock writes (less the 110 Java has nothing for) | 100% |
 | Vanilla block ids Bedrock writes (less the 303 Java has nothing for) | 100% |
 | `@minecraft/server` and the other script modules | 100% |
@@ -107,7 +107,7 @@ it is told. Run the censuses for current figures.
 ## What does not work
 
 - Overworld biomes from a pack do not generate. Nether and end biomes do.
-- 22 of Bedrock's 28 feature types, among them trees, geodes and carvers.
+- 21 of Bedrock's 28 feature types, among them trees, geodes and carvers.
 - Worldgen on 1.20.1, and pack dimensions before 26.
 - Bedrock's own screens changed through `ui/` files. Forms and the HUD title work.
 - Simulated players in game tests, primitive shapes and locator bar waypoints in scripts.
