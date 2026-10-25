@@ -2912,11 +2912,12 @@ The repository secret `MODRINTH_TOKEN` must hold a Modrinth token with the read-
 
 `tp:napper` (`NapperGameTests`) carries one group per field.
 
-- `minecraft:behavior.sleep` is `SleepGoal`, a selector goal, so its `priority` orders it against others. It holds MOVE and LOOK but not JUMP, because Java disables the JUMP flag of a mob riding a boat and a rider that may sleep (`can_sleep_while_riding`) must still start it. `speed_multiplier` and `timeout_cooldown` have no reader: the entity has no bed to walk to or fail to reach (reasons in `fields.py`). `drink_milk` runs on the sensor pass, so its `priority` has a reason too.
+- `minecraft:behavior.sleep` is `SleepGoal`, a selector goal, so its `priority` orders it against others. Mojang's documentation says it moves mobs that own a bed in a village to it and sleeps them there, so an entity with no bed does not sleep. A bed is a Java bed registered as a home point of interest (what a Java villager claims), the nearest free one within 48 blocks; the goal walks there at `speed_multiplier` and sleeps through `LivingEntity.startSleeping`, which occupies the bed and wakes the entity when it goes. No bed, no path or a walk longer than 30 seconds (decided here, nothing is published) is a failed attempt, after which `timeout_cooldown` (default 8) holds the goal back. It holds MOVE and LOOK but not JUMP, because Java disables the JUMP flag of a mob in a boat and a rider that may sleep (`can_sleep_while_riding`) must still start it. A test that needs a sleeper places a bed with `NapperGameTests.bed`, with block flag 2 because a bed half placed with neighbour updates removes itself.
+- `minecraft:behavior.drink_milk` is `DrinkMilkGoal`. It holds the controls `control_flags` names (none by default, so by default its `priority` orders nothing, as for every Bedrock goal with no flags) and the drink is over in the tick it starts.
 - `minecraft:behavior.mingle` is `MingleGoal`. Mojang publishes no search distance, so the partner is the nearest living entity of `mingle_partner_type` within 16 blocks. It walks to `mingle_distance`, faces the partner for `duration` seconds, then waits `cooldown_time`.
 - `continue_sitting_on_reload` is stored as the value `is_looking_and_sitting`, written when the goal starts and cleared when it stops. A goal that finds it set on its first check sits again when the flag is true and clears it otherwise.
 - `avoid_block` `target_selection_method` is `nearest` (default) or `random`, as Mojang's entity docs say.
-- The world clock is shared by every game test, so the sleep test holds the time on each tick of its own window.
+- The world clock is shared by every game test, so the sleep tests hold the time on each tick of their own window, and the three that do start one after another through `setupTicks`.
 
 ## Conventions
 

@@ -750,6 +750,7 @@ public final class BehaviourGameTests {
             return;
         }
 
+        NapperGameTests.bed(helper, STAND.west().south(1));
         EntityEvents.trigger(idler, "tp:idler_make_sleeping", null, ServerHooks.state());
         idler.setNoAi(false);
         net.minecraft.server.MinecraftServer server = helper.getLevel().getServer();

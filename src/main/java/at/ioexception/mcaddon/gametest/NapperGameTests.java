@@ -16,7 +16,13 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BedPart;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 
 import java.util.UUID;
 
@@ -42,6 +48,9 @@ public final class NapperGameTests {
 
     private static final int AVOID_TRIALS = 30;
 
+    /** Ticks the faster walker must lead by, well above the noise of when each goal first looks. */
+    private static final int SPEED_GAP = 20;
+
     /**
      * Sleeping follows the night and the goal's own fields: a goal at a lower priority number than a
      * sitting one lies down over it and one at a higher number is held off, a rider sleeps only with
@@ -62,6 +71,10 @@ public final class NapperGameTests {
             return;
         }
 
+        for (BlockPos spot : new BlockPos[] {STAND, STAND.east(3), STAND.south(2), STAND.south(2).east(3),
+            STAND.south(4)}) {
+            bed(helper, spot.west());
+        }
         EntityEvents.trigger(first, "tp:napper_make_sleeping_first", null, ServerHooks.state());
         EntityEvents.trigger(last, "tp:napper_make_sleeping_last", null, ServerHooks.state());
         refusing.startRiding(boat(helper, STAND.south(2)), true, false);
@@ -96,11 +109,102 @@ public final class NapperGameTests {
         });
     }
 
+    /**
+     * The tests that turn the shared clock to night start one after another, each after the one
+     * before has put it back, so their windows never overlap.
+     */
+    private static final int FIRST_WINDOW = 160;
+
+    private static final int SECOND_WINDOW = 320;
+
     private static final int NIGHT_FROM = 20;
 
     private static final int NIGHT_UNTIL = 60;
 
     private static final int SECOND_NIGHT_FROM = 80;
+
+    /** The entity walks to its bed at `speed_multiplier`, so a faster one is asleep first. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 400, setupTicks = SECOND_WINDOW)
+    public void aSleeperWalksToItsBedAtItsSpeed(GameTestHelper helper) {
+        AddonEntity slow = napper(helper, "tp:napper_make_sleeping_slow", STAND);
+        AddonEntity fast = napper(helper, "tp:napper_make_sleeping_fast", STAND.south(3));
+        if (slow == null) {
+            helper.succeed();
+            return;
+        }
+
+        for (AddonEntity walker : new AddonEntity[] {slow, fast}) {
+            walker.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(0.25);
+        }
+        bed(helper, STAND.east(5));
+        bed(helper, STAND.south(3).east(5));
+        long[] asleep = {-1, -1};
+        helper.onEachTick(() -> {
+            at(helper, NIGHT);
+            if (asleep[0] < 0 && slow.getPose() == Pose.SLEEPING) asleep[0] = helper.getTick();
+            if (asleep[1] < 0 && fast.getPose() == Pose.SLEEPING) asleep[1] = helper.getTick();
+        });
+        helper.runAtTickTime(350, () -> {
+            at(helper, DAY);
+            helper.assertTrue(asleep[0] > 0 && asleep[1] > 0,
+                NAPPER + " did not walk to its bed and sleep: " + asleep[0] + " and " + asleep[1] + ".");
+            helper.assertTrue(asleep[0] - asleep[1] >= SPEED_GAP,
+                NAPPER + " at speed 1.5 slept at tick " + asleep[1] + ", less than " + SPEED_GAP
+                    + " ticks before the one at 0.6 at " + asleep[0] + ".");
+            helper.succeed();
+        });
+    }
+
+    /** After a failed attempt (here, no bed) the goal waits `timeout_cooldown` before it looks again. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200, setupTicks = FIRST_WINDOW)
+    public void aSleeperWaitsOutItsTimeoutCooldownAfterAFailedAttempt(GameTestHelper helper) {
+        AddonEntity patient = napper(helper, "tp:napper_make_sleeping_patient", STAND);
+        if (patient == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.onEachTick(() -> at(helper, NIGHT));
+        helper.runAtTickTime(20, () -> bed(helper, STAND.south(1)));
+        helper.runAtTickTime(40, () -> helper.assertTrue(patient.getPose() != Pose.SLEEPING,
+            NAPPER + " looked for a bed again before its three second timeout_cooldown ran out."));
+        helper.runAtTickTime(130, () -> {
+            at(helper, DAY);
+            helper.assertTrue(patient.getPose() == Pose.SLEEPING,
+                NAPPER + " did not take the bed that appeared once its timeout_cooldown ran out.");
+            helper.succeed();
+        });
+    }
+
+    /**
+     * Drinking milk is a goal at its own priority: with `control_flags` naming move, one at a higher
+     * priority number waits for a sitting goal at 4 to end and one at a lower number interrupts it.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 80)
+    public void aMilkDrinkerIsOrderedByItsPriority(GameTestHelper helper) {
+        AddonEntity first = napper(helper, "tp:napper_make_sitting", STAND);
+        AddonEntity last = napper(helper, "tp:napper_make_sitting", STAND.east(3));
+        if (first == null) {
+            helper.succeed();
+            return;
+        }
+
+        EntityEvents.trigger(first, "tp:napper_make_milk_first", null, ServerHooks.state());
+        EntityEvents.trigger(last, "tp:napper_make_milk_last", null, ServerHooks.state());
+        helper.runAtTickTime(20, () -> {
+            helper.assertTrue(first.getPose() == Pose.SITTING && last.getPose() == Pose.SITTING,
+                NAPPER + " does not sit before it is made to drink.");
+            first.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, 1200));
+            last.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, 1200));
+        });
+        helper.runAtTickTime(50, () -> {
+            helper.assertTrue(first.getActiveEffects().isEmpty(),
+                NAPPER + " at priority 3 did not interrupt a sitting goal at 4 to drink.");
+            helper.assertFalse(last.getActiveEffects().isEmpty(),
+                NAPPER + " at priority 5 drank while a sitting goal at 4 held its controls.");
+            helper.succeed();
+        });
+    }
 
     /** An entity that was sitting when it was stored sits again only with `continue_sitting_on_reload`. */
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 60)
@@ -200,6 +304,14 @@ public final class NapperGameTests {
             ran[goal.fleeing().getX() < avoider.blockPosition().getX() ? 0 : 1]++;
         }
         return ran;
+    }
+
+    /** A bed with its head at `head` and its foot a block east, which Java registers as a home. */
+    static void bed(GameTestHelper helper, BlockPos head) {
+        BlockState bed = at.ioexception.mcaddon.registry.AddonBlocks.named("minecraft:red_bed")
+            .defaultBlockState().setValue(BedBlock.FACING, Direction.WEST);
+        helper.getLevel().setBlock(helper.absolutePos(head.east()), bed.setValue(BedBlock.PART, BedPart.FOOT), 2);
+        helper.getLevel().setBlock(helper.absolutePos(head), bed.setValue(BedBlock.PART, BedPart.HEAD), 2);
     }
 
     private static void at(GameTestHelper helper, String time) {

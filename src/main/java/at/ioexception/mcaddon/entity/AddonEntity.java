@@ -2020,14 +2020,8 @@ public class AddonEntity extends PathfinderMob
         }
     }
 
-    private static final double DEFAULT_MILK_COOLDOWN_SECONDS = 5;
-
-    /** The tick the goal may drink milk again, which `cooldown_seconds` holds back after each drink. */
-    private int milkReadyAt;
-
     /**
-     * Drinking milk, which clears what is harming the entity, and drinking a potion, which
-     * `minecraft:behavior.drink_potion` picks.
+     * Drinking a potion, which `minecraft:behavior.drink_potion` picks. Milk is {@link DrinkMilkGoal}.
      *
      * Each of its `potions` names a Bedrock potion by number, the conditions it is drunk under and a
      * chance a tick; the first whose conditions hold and whose chance comes up is drunk, and the
@@ -2035,17 +2029,6 @@ public class AddonEntity extends PathfinderMob
      */
     private void drink() {
         Filter.Context context = new Filter.Context(this, this, getTarget(), ServerHooks.state());
-        com.google.gson.JsonObject milk = liveComponent("minecraft:behavior.drink_milk");
-        if (milk != null && !getActiveEffects().isEmpty() && tickCount >= milkReadyAt
-            && Goals.filter(milk, "filters").matches(context)) {
-            milkReadyAt = tickCount + (int) (Goals.number(milk, "cooldown_seconds", DEFAULT_MILK_COOLDOWN_SECONDS)
-                * Goals.TICKS_PER_SECOND);
-            getActiveEffects().stream()
-                .filter(effect -> !Platform.beneficial(effect))
-                .toList()
-                .forEach(effect -> removeEffect(effect.getEffect()));
-        }
-
         com.google.gson.JsonObject drinking = liveComponent("minecraft:behavior.drink_potion");
         if (drinking == null) return;
 
@@ -3214,6 +3197,7 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.move_through_village" -> goals.add(priority, new VillagePatrolGoal(this, goal));
             case "minecraft:behavior.mingle" -> goals.add(priority, new MingleGoal(this, goal));
             case "minecraft:behavior.sleep" -> goals.add(priority, new SleepGoal(this, goal));
+            case "minecraft:behavior.drink_milk" -> goals.add(priority, new DrinkMilkGoal(this, goal));
             // `within_radius` is how near the target has to be for the walk towards it, as Java's
             // golem states the same 32 Mojang's iron golem does.
             case "minecraft:behavior.move_towards_target" ->
