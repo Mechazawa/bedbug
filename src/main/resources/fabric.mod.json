@@ -26,6 +26,7 @@
       "at.ioexception.mcaddon.gametest.GoalGameTests",
       "at.ioexception.mcaddon.gametest.IdleGoalGameTests",
       "at.ioexception.mcaddon.gametest.RoamGoalGameTests",
+      "at.ioexception.mcaddon.gametest.NapperGameTests",
       "at.ioexception.mcaddon.gametest.SensorGameTests",
       "at.ioexception.mcaddon.gametest.LookedAtGameTests",
       "at.ioexception.mcaddon.gametest.StructureGameTests",

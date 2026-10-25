@@ -19,7 +19,8 @@ import java.util.Set;
  * `minecraft:behavior.avoid_block` names the blocks and how far around the entity to look for one.
  * Java keeps no record of an entity fleeing anything, so the fact is written on the entity for
  * `q.is_avoiding_block` to read back. The entity makes `avoid_block_sound` while it flees, and once
- * the block is out of the box it searches, it has escaped and raises each of `on_escape`.
+ * the block is out of the box it searches, it has escaped and raises each of `on_escape`. The block
+ * it flees is the nearest one in the box, or with `target_selection_method` set to `random` any one of them.
  */
 public final class AvoidBlockGoal extends Goal {
     private final AddonEntity mob;
@@ -33,6 +34,7 @@ public final class AvoidBlockGoal extends Goal {
     private final int soundLow;
     private final int soundHigh;
     private final List<String> onEscape;
+    private final boolean randomBlock;
 
     private BlockPos found;
     private Vec3 towards;
@@ -55,6 +57,7 @@ public final class AvoidBlockGoal extends Goal {
             .map(trigger -> Goals.event(trigger.getAsJsonObject(), "event"))
             .filter(java.util.Objects::nonNull)
             .toList();
+        this.randomBlock = "random".equals(Goals.text(component, "target_selection_method"));
         setFlags(EnumSet.of(Goal.Flag.MOVE));
     }
 
@@ -67,7 +70,7 @@ public final class AvoidBlockGoal extends Goal {
         if (avoided.isEmpty() || mob.tickCount < nextLookAt) return false;
 
         nextLookAt = mob.tickCount + interval;
-        found = nearest();
+        found = chosen();
         if (found == null) return false;
 
         towards = DefaultRandomPos.getPosAway(mob, range + 1, height + 1, Vec3.atCenterOf(found));
@@ -116,21 +119,22 @@ public final class AvoidBlockGoal extends Goal {
             && Math.abs(block.getY() - standing.getY()) <= height;
     }
 
-    /** The closest block on the list within the box the component gave, or null while there is none. */
-    private BlockPos nearest() {
+    /** The block this goal is fleeing, or null while it is not. */
+    public BlockPos fleeing() {
+        return found;
+    }
+
+    /** The block on the list this goal flees, or null while the box holds none. */
+    private BlockPos chosen() {
         BlockPos standing = mob.blockPosition();
-        BlockPos closest = null;
-        double nearest = Double.MAX_VALUE;
+        List<BlockPos> inBox = BlockPos.betweenClosedStream(standing.offset(-range, -height, -range),
+                standing.offset(range, height, range))
+            .filter(at -> avoided.contains(mob.level().getBlockState(at).getBlock()))
+            .map(BlockPos::immutable)
+            .toList();
 
-        for (BlockPos at : BlockPos.betweenClosed(standing.offset(-range, -height, -range),
-            standing.offset(range, height, range))) {
-            if (!avoided.contains(mob.level().getBlockState(at).getBlock())) continue;
+        if (randomBlock) return inBox.isEmpty() ? null : inBox.get(mob.getRandom().nextInt(inBox.size()));
 
-            double away = at.distSqr(standing);
-            if (away >= nearest) continue;
-            nearest = away;
-            closest = at.immutable();
-        }
-        return closest;
+        return inBox.stream().min(java.util.Comparator.comparingDouble(at -> at.distSqr(standing))).orElse(null);
     }
 }

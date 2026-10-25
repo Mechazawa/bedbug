@@ -2828,6 +2828,16 @@ The repository secret `MODRINTH_TOKEN` must hold a Modrinth token with the read-
 - A script's `playSound` resolves a name through `BedrockSoundNames.played`: the id as written, then the pack's own definitions, then Bedrock's name (`mob.x.y` falls back to `entity.x.y`). While several add-ons ship a script the bridge has no namespace, so the pack's own definitions are skipped.
 - The census scripts need `scratchpad/bedrock` in the worktree and run without `python -I`, because they import each other.
 
+## Sleep, sit, mingle and avoid block goals
+
+`tp:napper` (`NapperGameTests`) carries one group per field.
+
+- `minecraft:behavior.sleep` is `SleepGoal`, a selector goal, so its `priority` orders it against others. It holds MOVE and LOOK but not JUMP, because Java disables the JUMP flag of a mob riding a boat and a rider that may sleep (`can_sleep_while_riding`) must still start it. `speed_multiplier` and `timeout_cooldown` have no reader: the entity has no bed to walk to or fail to reach (reasons in `fields.py`). `drink_milk` runs on the sensor pass, so its `priority` has a reason too.
+- `minecraft:behavior.mingle` is `MingleGoal`. Mojang publishes no search distance, so the partner is the nearest living entity of `mingle_partner_type` within 16 blocks. It walks to `mingle_distance`, faces the partner for `duration` seconds, then waits `cooldown_time`.
+- `continue_sitting_on_reload` is stored as the value `is_looking_and_sitting`, written when the goal starts and cleared when it stops. A goal that finds it set on its first check sits again when the flag is true and clears it otherwise.
+- `avoid_block` `target_selection_method` is `nearest` (default) or `random`, as Mojang's entity docs say.
+- The world clock is shared by every game test, so the sleep test holds the time on each tick of its own window.
+
 ## Conventions
 
 **No add-on content is committed.** No textures, sounds, models or text from any pack. Real packs
