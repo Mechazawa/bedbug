@@ -4,10 +4,13 @@ import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.ServerHooks;
 import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.PoiTypeTags;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.village.poi.PoiManager;
+import net.minecraft.world.entity.ai.village.poi.PoiType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ComposterBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -44,7 +47,13 @@ public final class WorkGoal extends Goal {
     private final String onArrival;
     private final String onUseBlock;
     private final int usesPerVisit;
+    private final int rainTolerance;
+    private final int cooldown;
+    private final int soundDelayMin;
+    private final int soundDelayMax;
     private BlockPos station;
+    private long coolUntil;
+    private int nextSoundAt;
     private int worked;
     private int used;
     private int untilSearch;
@@ -54,11 +63,15 @@ public final class WorkGoal extends Goal {
         this.mob = mob;
         this.composts = composts;
         this.speed = Goals.number(component, "speed_multiplier", 1);
-        this.activeTicks = Goals.ticks(component, "active_time", 10);
-        this.worksInRain = Goals.flag(component, "can_work_in_rain", true);
+        this.activeTicks = (int) Goals.number(component, "active_time", 0);
+        this.worksInRain = Goals.flag(component, "can_work_in_rain", false);
+        this.rainTolerance = (int) Goals.number(component, "work_in_rain_tolerance", -1);
+        this.cooldown = (int) Goals.number(component, "goal_cooldown", 0);
         this.onArrival = Goals.event(component, "on_arrival");
         this.onUseBlock = Goals.event(component, "on_use_block");
         this.usesPerVisit = (int) Goals.number(component, "use_block_max", 1);
+        this.soundDelayMin = composts ? 0 : (int) Goals.number(component, "sound_delay_min", 0);
+        this.soundDelayMax = composts ? 0 : (int) Goals.number(component, "sound_delay_max", 0);
         setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
     }
 
@@ -77,12 +90,11 @@ public final class WorkGoal extends Goal {
         // Searching the places index over a village's reach is not a per-tick question, so the
         // goal asks it every few seconds instead of every time the selector comes round.
         if (untilSearch-- > 0) return false;
-        if (!(mob.level() instanceof ServerLevel level)) return false;
+        if (!(mob.level() instanceof ServerLevel level) || level.getGameTime() < coolUntil) return false;
 
         untilSearch = SEARCH_INTERVAL;
-        if (!worksInRain && level.isRaining()) return false;
-
         station = nearestStation(level);
+        if (station != null && !worksInRain && rainedOn()) station = null;
         return station != null;
     }
 
@@ -90,7 +102,9 @@ public final class WorkGoal extends Goal {
     public boolean canContinueToUse() {
         // A station the entity cannot reach would otherwise hold the goal, and with it every other
         // goal that wants to move, for as long as the entity lives.
-        return station != null && worked < activeTicks && travelled < TRAVEL_LIMIT;
+        if (station == null || worked > 0 && worked >= activeTicks || travelled >= TRAVEL_LIMIT) return false;
+
+        return worksInRain || activeTicks - worked <= rainTolerance || !rainedOn();
     }
 
     @Override
@@ -104,6 +118,7 @@ public final class WorkGoal extends Goal {
     @Override
     public void stop() {
         station = null;
+        coolUntil = mob.level().getGameTime() + cooldown;
     }
 
     /** The selector ticks a running goal every second tick unless it asks for each one. */
@@ -126,9 +141,16 @@ public final class WorkGoal extends Goal {
             return;
         }
 
-        if (worked == 0) fire(onArrival);
+        if (worked == 0) {
+            fire(onArrival);
+            nextSoundAt = soundDelay();
+        }
         worked++;
         if (composts) compost();
+        if (soundDelayMax > 0 && worked >= nextSoundAt) {
+            workSound();
+            nextSoundAt = worked + soundDelay();
+        }
     }
 
     /** One handful into the composter per second of the shift, up to what the pack allows. */
@@ -145,6 +167,29 @@ public final class WorkGoal extends Goal {
             level.setBlockAndUpdate(station, state.setValue(ComposterBlock.LEVEL, filled + 1));
         }
         fire(onUseBlock);
+    }
+
+    /** Whether rain falls on the station, which is what keeps a worker that may not work in rain away. */
+    private boolean rainedOn() {
+        return mob.level().isRainingAt(station.above());
+    }
+
+    private int soundDelay() {
+        return Goals.between(mob.getRandom(), soundDelayMin, Math.max(soundDelayMin, soundDelayMax));
+    }
+
+    /**
+     * The sound Java's villager makes working at the station: that of the profession whose job site
+     * the station is. A station no profession takes makes none.
+     */
+    private void workSound() {
+        Holder<PoiType> kind = ((ServerLevel) mob.level()).getPoiManager().getType(station).orElse(null);
+        if (kind == null) return;
+
+        BuiltInRegistries.VILLAGER_PROFESSION.stream()
+            .filter(profession -> profession.acquirableJobSite().test(kind) && profession.workSound() != null)
+            .findFirst()
+            .ifPresent(profession -> mob.makeSound(profession.workSound()));
     }
 
     /** The nearest place this entity could work at, which for composting is a composter. */

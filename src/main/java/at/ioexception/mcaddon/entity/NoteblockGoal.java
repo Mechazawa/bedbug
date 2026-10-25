@@ -44,18 +44,20 @@ public final class NoteblockGoal extends Goal {
     private final int listenTicks;
     private final double throwForce;
     private final double throwRise;
+    private final String throwSound;
     private final List<String> onThrow = new ArrayList<>();
     private int untilSearch;
     private int listened;
     private BlockPos block;
 
     private NoteblockGoal(AddonEntity mob, JsonObject component, boolean delivers,
-        double searchRange, double reach) {
+        double searchRange, double reach, double speed, String throwSound) {
         this.mob = mob;
         this.delivers = delivers;
         this.searchRange = searchRange;
         this.reach = reach;
-        this.speed = delivers ? Goals.number(component, "run_speed", 1) : Goals.number(component, "speed", 1);
+        this.speed = speed;
+        this.throwSound = throwSound;
         this.listenTicks = (int) Goals.number(component, "listen_time", 600);
         this.throwForce = Goals.number(component, "throw_force", 0.2);
         this.throwRise = Goals.number(component, "vertical_throw_mul", 1.5);
@@ -71,13 +73,15 @@ public final class NoteblockGoal extends Goal {
     public static NoteblockGoal stayingNear(AddonEntity mob, JsonObject component) {
         return new NoteblockGoal(mob, component, false,
             Goals.number(component, "start_distance", DEFAULT_RANGE),
-            Goals.number(component, "stop_distance", 4));
+            Goals.number(component, "stop_distance", 4), Goals.number(component, "speed", 1), null);
     }
 
     /** `minecraft:behavior.go_and_give_items_to_noteblock`, which throws its items at one. */
     public static NoteblockGoal deliveringItems(AddonEntity mob, JsonObject component) {
+        String sound = Goals.text(component, "throw_sound");
         return new NoteblockGoal(mob, component, true, DEFAULT_RANGE,
-            Goals.number(component, "reach_block_distance", 3));
+            Goals.number(component, "reach_block_distance", 3), Goals.number(component, "run_speed", 1),
+            sound == null ? "charge" : sound);
     }
 
     @Override
@@ -143,6 +147,7 @@ public final class NoteblockGoal extends Goal {
         thrown.setDeltaMovement(towards.x * throwForce,
             towards.y * throwForce + throwForce * throwRise, towards.z * throwForce);
         level.addFreshEntity(thrown);
+        mob.makeNoise(throwSound);
         onThrow.forEach(event -> EntityEvents.trigger(mob, event, null, ServerHooks.state()));
     }
 

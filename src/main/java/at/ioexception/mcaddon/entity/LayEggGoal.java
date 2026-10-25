@@ -13,6 +13,8 @@ import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.gameevent.GameEvent;
+import net.minecraft.world.level.pathfinder.Path;
 
 import java.util.Comparator;
 import java.util.EnumSet;
@@ -29,6 +31,9 @@ import java.util.function.Predicate;
  * block it leaves, so all three are read rather than assumed.
  */
 public final class LayEggGoal extends Goal {
+    /** Ticks between two digs, Java's turtle's. */
+    private static final int DIG_INTERVAL = 5;
+
     private final AddonEntity mob;
     private final double speed;
     private final int searchRange;
@@ -40,6 +45,8 @@ public final class LayEggGoal extends Goal {
     private final Block egg;
     private final String layEvent;
     private final String laySound;
+    private final boolean fromBelow;
+    private final boolean digs;
     private BlockPos nest;
     private int laid;
 
@@ -55,6 +62,8 @@ public final class LayEggGoal extends Goal {
         this.egg = named(Goals.text(component, "egg_type"));
         this.layEvent = Goals.event(component, "on_lay");
         this.laySound = Goals.text(component, "lay_egg_sound");
+        this.fromBelow = Goals.flag(component, "allow_laying_from_below", false);
+        this.digs = Goals.flag(component, "use_default_animation", true);
         setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.JUMP));
     }
 
@@ -92,15 +101,16 @@ public final class LayEggGoal extends Goal {
     @Override
     public void tick() {
         if (nest == null) return;
-        if (mob.distanceToSqr(nest.getX() + 0.5, nest.getY() + 1, nest.getZ() + 0.5)
-            > goalRadius * goalRadius + 1) {
+        if (!within(nest.getY() + 1) && !(fromBelow && within(nest.getY() + 0.5))) {
             walk();
             return;
         }
 
         mob.getNavigation().stop();
         laid++;
-        if (laid < laySeconds || !(mob.level() instanceof ServerLevel level)) return;
+        if (!(mob.level() instanceof ServerLevel level)) return;
+        if (digs && laid % DIG_INTERVAL == 0) dig(level);
+        if (laid < laySeconds) return;
 
         level.setBlockAndUpdate(nest.above(), egg.defaultBlockState());
         mob.makeNoise(laySound == null ? "lay_egg" : laySound);
@@ -108,12 +118,30 @@ public final class LayEggGoal extends Goal {
         nest = null;
     }
 
+    /** Whether the entity stands within the goal radius of the middle of the nest's column at a height. */
+    private boolean within(double height) {
+        return mob.distanceToSqr(nest.getX() + 0.5, height, nest.getZ() + 0.5) <= goalRadius * goalRadius + 1;
+    }
+
+    /**
+     * Java's turtle digging, which is what `use_default_animation` turns on: the ground under the
+     * entity breaks up into its own particles and sound, and the entity makes a vibration.
+     */
+    private void dig(ServerLevel level) {
+        BlockPos at = mob.blockPosition();
+        level.levelEvent(2001, at, Block.getId(level.getBlockState(at.below())));
+        mob.gameEvent(GameEvent.ENTITY_ACTION);
+    }
+
     /**
      * `PathNavigation.moveTo(x, y, z)` ends the path within a block of the spot on some versions and
-     * on it on others, and the laying distance must not depend on which.
+     * on it on others, and the laying distance must not depend on which. Laying from below walks to
+     * the nest itself where the spot above it cannot be reached.
      */
     private void walk() {
-        mob.getNavigation().moveTo(mob.getNavigation().createPath(nest.above(), 0), speed);
+        Path path = mob.getNavigation().createPath(nest.above(), 0);
+        if (fromBelow && (path == null || !path.canReach())) path = mob.getNavigation().createPath(nest, 1);
+        mob.getNavigation().moveTo(path, speed);
     }
 
     /** The nearest of the blocks the pack named with room above it for the egg. */

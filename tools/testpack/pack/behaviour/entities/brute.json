@@ -1045,15 +1045,6 @@
           "innner_cohesion_threshold": 1.5
         }
       },
-      "tp:brute_digging": {
-        "minecraft:behavior.random_search_and_dig": {
-          "priority": 0,
-          "target_blocks": [
-            "minecraft:gold_block"
-          ],
-          "goal_radius": 3
-        }
-      },
       "tp:brute_stomping": {
         "minecraft:behavior.stomp_turtle_egg": {
           "priority": 1,
@@ -1924,13 +1915,6 @@
         "add": {
           "component_groups": [
             "tp:brute_flocking_near"
-          ]
-        }
-      },
-      "tp:brute_dig": {
-        "add": {
-          "component_groups": [
-            "tp:brute_digging"
           ]
         }
       },

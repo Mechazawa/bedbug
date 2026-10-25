@@ -1,0 +1,387 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:digger",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false,
+      "properties": {
+        "tp:searched": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:dug": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:found": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:succeeded": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:search_failed": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:dig_failed": {
+          "type": "bool",
+          "default": false
+        }
+      }
+    },
+    "component_groups": {
+      "tp:digger_digging": {
+        "minecraft:behavior.random_search_and_dig": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "target_blocks": [
+            "minecraft:gold_block"
+          ],
+          "search_range_xz": 3,
+          "search_range_y": 1,
+          "goal_radius": 1.5,
+          "find_valid_position_retries": 200,
+          "cooldown_range": {
+            "min": 0,
+            "max": 0
+          },
+          "digging_duration_range": {
+            "min": 1,
+            "max": 1
+          },
+          "item_table": "loot_tables/entities/digger_find.json",
+          "spawn_item_after_seconds": 0.5,
+          "spawn_item_pos_offset": 2,
+          "on_searching_start": {
+            "event": "tp:digger_searched",
+            "target": "self"
+          },
+          "on_fail_during_searching": {
+            "event": "tp:digger_search_failed",
+            "target": "self"
+          },
+          "on_digging_start": {
+            "event": "tp:digger_dug",
+            "target": "self"
+          },
+          "on_item_found": {
+            "event": "tp:digger_found",
+            "target": "self"
+          },
+          "on_fail_during_digging": {
+            "event": "tp:digger_dig_failed",
+            "target": "self"
+          },
+          "on_success": {
+            "event": "tp:digger_succeeded",
+            "target": "self"
+          }
+        }
+      },
+      "tp:digger_patient": {
+        "minecraft:behavior.random_search_and_dig": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "target_blocks": [
+            "minecraft:gold_block"
+          ],
+          "search_range_xz": 4,
+          "search_range_y": 1,
+          "goal_radius": 1.5,
+          "find_valid_position_retries": 5000,
+          "cooldown_range": {
+            "min": 0,
+            "max": 0
+          },
+          "digging_duration_range": {
+            "min": 1,
+            "max": 1
+          },
+          "item_table": "loot_tables/entities/digger_find.json",
+          "spawn_item_after_seconds": 0.5,
+          "spawn_item_pos_offset": 2,
+          "on_searching_start": {
+            "event": "tp:digger_searched",
+            "target": "self"
+          },
+          "on_fail_during_searching": {
+            "event": "tp:digger_search_failed",
+            "target": "self"
+          },
+          "on_digging_start": {
+            "event": "tp:digger_dug",
+            "target": "self"
+          },
+          "on_item_found": {
+            "event": "tp:digger_found",
+            "target": "self"
+          },
+          "on_fail_during_digging": {
+            "event": "tp:digger_dig_failed",
+            "target": "self"
+          },
+          "on_success": {
+            "event": "tp:digger_succeeded",
+            "target": "self"
+          }
+        }
+      },
+      "tp:digger_cooling": {
+        "minecraft:behavior.random_search_and_dig": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "target_blocks": [
+            "minecraft:gold_block"
+          ],
+          "search_range_xz": 3,
+          "search_range_y": 1,
+          "goal_radius": 1.5,
+          "find_valid_position_retries": 200,
+          "cooldown_range": {
+            "min": 3,
+            "max": 3
+          },
+          "digging_duration_range": {
+            "min": 0.25,
+            "max": 0.25
+          },
+          "item_table": "loot_tables/entities/digger_find.json",
+          "spawn_item_after_seconds": 0.5,
+          "spawn_item_pos_offset": 2,
+          "on_searching_start": {
+            "event": "tp:digger_searched",
+            "target": "self"
+          },
+          "on_fail_during_searching": {
+            "event": "tp:digger_search_failed",
+            "target": "self"
+          },
+          "on_digging_start": {
+            "event": "tp:digger_dug",
+            "target": "self"
+          },
+          "on_item_found": {
+            "event": "tp:digger_found",
+            "target": "self"
+          },
+          "on_fail_during_digging": {
+            "event": "tp:digger_dig_failed",
+            "target": "self"
+          },
+          "on_success": {
+            "event": "tp:digger_succeeded",
+            "target": "self"
+          }
+        }
+      },
+      "tp:digger_raiding_slow": {
+        "minecraft:behavior.raid_garden": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "blocks": [
+            "minecraft:carrots"
+          ],
+          "search_range": 5,
+          "search_height": 2,
+          "goal_radius": 0.8,
+          "initial_eat_delay": 1,
+          "eat_delay": 0,
+          "max_to_eat": 0
+        }
+      },
+      "tp:digger_raiding_few": {
+        "minecraft:behavior.raid_garden": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "blocks": [
+            "minecraft:carrots"
+          ],
+          "search_range": 5,
+          "search_height": 2,
+          "goal_radius": 0.8,
+          "initial_eat_delay": 0,
+          "eat_delay": 0,
+          "max_to_eat": 2
+        }
+      },
+      "tp:digger_raiding_full": {
+        "minecraft:behavior.raid_garden": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "blocks": [
+            "minecraft:carrots"
+          ],
+          "search_range": 5,
+          "search_height": 2,
+          "goal_radius": 0.8,
+          "initial_eat_delay": 0,
+          "eat_delay": 0,
+          "max_to_eat": 1,
+          "full_delay": 2
+        }
+      },
+      "tp:digger_raiding_paced": {
+        "minecraft:behavior.raid_garden": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "blocks": [
+            "minecraft:carrots"
+          ],
+          "search_range": 5,
+          "search_height": 2,
+          "goal_radius": 0.8,
+          "initial_eat_delay": 0,
+          "eat_delay": 5,
+          "max_to_eat": 0
+        }
+      },
+      "tp:digger_raiding_far": {
+        "minecraft:behavior.raid_garden": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "blocks": [
+            "minecraft:carrots"
+          ],
+          "search_range": 5,
+          "search_height": 2,
+          "goal_radius": 3,
+          "initial_eat_delay": 0,
+          "eat_delay": 0,
+          "max_to_eat": 0
+        }
+      },
+      "tp:digger_reading": {
+        "minecraft:behavior.inspect_bookshelf": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "search_range": 4,
+          "search_height": 1,
+          "search_count": 1,
+          "goal_radius": 0.8
+        }
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": [
+          "tp_digger",
+          "mob"
+        ]
+      },
+      "minecraft:collision_box": {
+        "width": 0.6,
+        "height": 1.0
+      },
+      "minecraft:health": {
+        "value": 20,
+        "max": 20
+      },
+      "minecraft:movement": {
+        "value": 0.25
+      },
+      "minecraft:physics": {},
+      "minecraft:movement.basic": {},
+      "minecraft:navigation.walk": {},
+      "minecraft:jump.static": {}
+    },
+    "events": {
+      "tp:digger_make_digging": {
+        "add": {
+          "component_groups": [
+            "tp:digger_digging"
+          ]
+        }
+      },
+      "tp:digger_make_patient": {
+        "add": {
+          "component_groups": [
+            "tp:digger_patient"
+          ]
+        }
+      },
+      "tp:digger_make_cooling": {
+        "add": {
+          "component_groups": [
+            "tp:digger_cooling"
+          ]
+        }
+      },
+      "tp:digger_make_raiding_slow": {
+        "add": {
+          "component_groups": [
+            "tp:digger_raiding_slow"
+          ]
+        }
+      },
+      "tp:digger_make_raiding_few": {
+        "add": {
+          "component_groups": [
+            "tp:digger_raiding_few"
+          ]
+        }
+      },
+      "tp:digger_make_raiding_full": {
+        "add": {
+          "component_groups": [
+            "tp:digger_raiding_full"
+          ]
+        }
+      },
+      "tp:digger_make_raiding_paced": {
+        "add": {
+          "component_groups": [
+            "tp:digger_raiding_paced"
+          ]
+        }
+      },
+      "tp:digger_make_raiding_far": {
+        "add": {
+          "component_groups": [
+            "tp:digger_raiding_far"
+          ]
+        }
+      },
+      "tp:digger_make_reading": {
+        "add": {
+          "component_groups": [
+            "tp:digger_reading"
+          ]
+        }
+      },
+      "tp:digger_searched": {
+        "set_property": {
+          "tp:searched": true
+        }
+      },
+      "tp:digger_dug": {
+        "set_property": {
+          "tp:dug": true
+        }
+      },
+      "tp:digger_found": {
+        "set_property": {
+          "tp:found": true
+        }
+      },
+      "tp:digger_succeeded": {
+        "set_property": {
+          "tp:succeeded": true
+        }
+      },
+      "tp:digger_search_failed": {
+        "set_property": {
+          "tp:search_failed": true
+        }
+      },
+      "tp:digger_dig_failed": {
+        "set_property": {
+          "tp:dig_failed": true
+        }
+      }
+    }
+  }
+}

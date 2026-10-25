@@ -3377,7 +3377,7 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.dig" -> goals.add(priority,
                 PoseHoldGoal.digging(this, goal));
             case "minecraft:behavior.random_search_and_dig" -> goals.add(priority,
-                MoveToMatchingBlockGoal.searchingAndDigging(this, goal));
+                new SearchAndDigGoal(this, goal));
 
             // What a Bedrock dolphin does that nothing else does.
             case "minecraft:behavior.random_breach" -> goals.add(priority,
@@ -3456,9 +3456,9 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.share_items" -> goals.add(priority,
                 ShareItemsGoal.sharing(this, goal));
             case "minecraft:behavior.transport_items" -> goals.add(priority,
-                ShareItemsGoal.transporting(this, goal));
+                new TransportItemsGoal(this, goal));
             case "minecraft:behavior.drop_item_for" -> goals.add(priority,
-                ShareItemsGoal.dropping(this, goal));
+                new DropItemForGoal(this, goal));
             case "minecraft:behavior.offer_flower" -> goals.add(priority,
                 ShareItemsGoal.offering(this, goal));
             case "minecraft:behavior.inspect_bookshelf" -> goals.add(priority,

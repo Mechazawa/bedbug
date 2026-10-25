@@ -2892,6 +2892,70 @@ publishes nothing on, decided here:
 
 **The game test world is dark.** `isBrightOutside` answered false there at a clock of 25020, so a test
 about the day runs `time set day` and a goal asks the clock.
+## Carrying blocks, laying, working and giving
+
+`tp:keeper` carries one goal per group and `KeeperGoalGameTests` reads each back off the world.
+
+- `minecraft:behavior.place_block` with `randomly_placeable_blocks` places a weighted draw among the
+  entries whose `filter` the entity passes, in the entry's states, and needs nothing carried; with
+  none it places the carried block, limited by `placeable_carried_blocks`. Mojang's copper golem
+  turns into its statue this way. A filter's `block` subject is not answered, so an entry filter is
+  asked of the entity alone.
+- `minecraft:behavior.lay_egg`: Mojang publishes no rule for what "the default lay-egg animation"
+  is, and the turtle's own clip reads `q.is_laying_egg` from the pack. Here it is Java's turtle
+  digging: every five ticks while laying, the ground under the entity breaks into its particles
+  and sound and the entity raises `ENTITY_ACTION`, which a sculk sensor hears. With
+  `allow_laying_from_below` the entity also counts as arrived within the goal radius of the target
+  block's middle, and walks to the target block itself where the spot above it cannot be reached.
+- `minecraft:behavior.work` and `work_composter` count `active_time` and `goal_cooldown` in ticks,
+  as Mojang's schema says (the villager's 250 is a twelve second shift). A shift of no ticks still
+  arrives and raises `on_arrival`. Rain counts where it falls on the station. A worker that may not
+  work in rain does not start while it falls there, and stops once it does unless no more of its
+  shift is left than `work_in_rain_tolerance`. The cooldown starts as the goal stops and runs
+  alongside the goal's own wait between station searches. The rain tests run in the mod's own
+  `mcaddon:gametest/clear_sky` test environment, which puts them in a batch of their own, so the
+  rain they set reaches no other test.
+- A worker makes the work sound of Java's villager whose profession takes the station as its job
+  site, every `sound_delay_min` to `sound_delay_max` ticks while it stands at the station. Mojang's
+  villager files name no work sound, so this sound is decided here, and a `sound_delay_max` of
+  nothing, the default, makes none.
+- `throw_sound` on the two giving goals is a moment of the entity's `sounds.json` entry, `charge`
+  where the pack names none, made as the item leaves the entity's hand.
+- The sound tests hear through a player of their own, joined over a connection whose far end is a
+  queue, and count only the sounds made within two blocks of their keeper, because the tests of a
+  batch stand side by side.
+
+## Searching, digging and garden raids
+
+`minecraft:behavior.random_search_and_dig` is `entity/SearchAndDigGoal`. Mojang publishes the
+fields and one-line descriptions. The rest is decided here:
+
+- A spot is a place to stand whose ground is a target block, with no collision where the entity
+  stands and a path that reaches it. It is drawn up to `find_valid_position_retries` times per look,
+  within `search_range_xz` blocks either way and `search_range_y` up or down. Java's sniffer searches
+  with `LandRandomPos.getPos(sniffer, 10, 7)`, the same numbers as Bedrock's defaults, so the ranges
+  are read the way Java reads those.
+- `on_searching_start` is raised when a spot is found and the walk begins. Arrival within
+  `goal_radius` starts the dig and raises `on_digging_start`. The item is rolled
+  `spawn_item_after_seconds` into the dig (no later than its end) and dropped `spawn_item_pos_offset`
+  blocks ahead along the body's yaw. `on_item_found` is raised only when the table handed out an item.
+- The search fails when the spot's ground stops being a target block or the path is lost. The dig
+  fails when its ground stops being a target block. Either also fails when another goal takes over.
+  `cooldown_range` starts when the goal ends, whatever the outcome.
+- `target_dig_position_offset` is not read: the spot itself is dug.
+
+`minecraft:behavior.raid_garden` eats one crop per visit, `initial_eat_delay` seconds after
+arriving. It looks for the next crop `eat_delay` seconds later. After `max_to_eat` crops (no limit
+when 0 or less) it waits `full_delay` seconds. It walks into the crop's own block, as Bedrock's rabbit
+does. Java's walk stops one block over the block it found, which for a crop is out of the goal
+radius. Java searches from `blockPosition()`, which on farmland is the farmland, so `tp:digger`'s raid
+groups state a `search_height` of 2 to see a crop at the feet.
+
+`minecraft:behavior.inspect_bookshelf` looks at `search_count` places a tick (every place when 0) in
+the order Java's `MoveToBlockGoal` tries them, and carries on from where it stopped on the next tick.
+
+`DigGoalGameTests` covers all three with `tp:digger`, on a floor at height 12 that no other block
+searching test reaches.
 
 ## Releasing
 
@@ -2918,6 +2982,37 @@ The repository secret `MODRINTH_TOKEN` must hold a Modrinth token with the read-
 - `continue_sitting_on_reload` is stored as the value `is_looking_and_sitting`, written when the goal starts and cleared when it stops. A goal that finds it set on its first check sits again when the flag is true and clears it otherwise.
 - `avoid_block` `target_selection_method` is `nearest` (default) or `random`, as Mojang's entity docs say.
 - The world clock is shared by every game test, so the sleep tests hold the time on each tick of their own window, and the three that do start one after another through `setupTicks`.
+## Carrying and dropping items
+
+`minecraft:behavior.transport_items` is `entity/TransportItemsGoal` and
+`minecraft:behavior.drop_item_for` is `entity/DropItemForGoal`. `ItemGoalGameTests` reads every
+field back through `tp:porter`, which carries out of barrels into chests, and `tp:offerer`, which
+leaves `loot_tables/entities/gift.json` for a pig.
+
+Java's copper golem runs `TransportItemsBetweenContainers`, a brain behaviour with the copper
+golem's numbers fixed in it (16 a stack, 10 containers, 7 seconds of rest, nearest only), so the
+goal is written here after it. Decided where Mojang publishes nothing, mostly as Java's golem does:
+what a container holds is learnt only on arriving at it; a container that gave nothing or took
+nothing is visited, and the goal rests for `idle_cooldown` and forgets its visits once it has
+visited `max_visited_containers` or finds nothing left to look at; a stack is taken whole up to
+`max_stack_size` from the first slot holding one, and put down by filling matching stacks and
+empty slots in slot order; `initial_cooldown` counts from the goal's first check. The 3 second
+`interaction_time` is not waited out. The goal starts only on the ground, because Java plans no path
+from the air and the first container would read as out of reach. A path ends a block short of the
+spot beside the container, so the last of the way is stepped straight in both goals.
+
+For `drop_item_for`: `time_of_day_range` is on the schema's own clock, where noon is 0 and dawn
+0.75 (the cat's 0.75 to 0.8 is its morning), and a range whose low end is above its high end runs
+through noon. `target_range` is a box round the entity, and a goal with no `entity_types` leaves
+nothing for anybody. The spot is the standing place within
+`search_range` across and `search_height` up or down of the target whose distance across the
+ground is nearest `offering_distance`, the one nearer the entity on a tie, and the target's own
+column counts. A spot further than `minimum_teleport_distance` is teleported to, at
+`teleport_offset` over it, once per run, so an offset larger than the distance cannot loop. On arrival
+`on_drop_attempt` is raised, the drop rolled at `drop_item_chance`, and the gift thrown along the
+look at the target, whose height is capped at `max_head_look_at_height` over the entity's feet. A
+goal naming no `loot_table` drops what the entity holds. `search_count` is not read: every block
+is checked in one tick, which is its default.
 
 ## Conventions
 

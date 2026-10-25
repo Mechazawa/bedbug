@@ -72,6 +72,12 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
     private boolean announced;
     private int stayed;
 
+    /** The bites `minecraft:behavior.raid_garden` counts and waits between. */
+    private Raid raid;
+
+    /** The search `minecraft:behavior.inspect_bookshelf` spreads over ticks by its `search_count`. */
+    private Scan scan;
+
     private MoveToMatchingBlockGoal(PathfinderMob mob, JsonObject component,
         Predicate<BlockState> wanted, BiConsumer<ServerLevel, BlockPos> arrival) {
         this(mob, component, wanted, arrival, null, null);
@@ -107,6 +113,7 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
     public void stop() {
         super.stop();
         publish(false);
+        if (raid != null) raid.left();
         if (settled != null) mob.setPose(Pose.STANDING);
     }
 
@@ -144,7 +151,7 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
 
     @Override
     protected int nextStartTick(PathfinderMob mob) {
-        if (samples > 0) return 0;
+        if (samples > 0 || raid != null) return 0;
 
         return visit == null ? super.nextStartTick(mob) : reducedTickDelay(Math.max(1, visit.interval()));
     }
@@ -194,6 +201,8 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
     @Override
     public boolean canUse() {
         if (onLandOnly && (mob.isInLiquid() || !mob.onGround())) return false;
+        if (raid != null && !raid.ready(mob.level().getGameTime())) return false;
+        if (scan != null) return scan.found();
 
         return super.canUse() && (visit == null || mob.getRandom().nextDouble() < visit.chance());
     }
@@ -203,8 +212,11 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
         return super.canContinueToUse() && (visit == null || visit.onStayed() == null || stayed < visit.stay());
     }
 
+    /** A raid walks into the crop itself, where Java's walk stops on top of the block it found. */
     @Override
     protected BlockPos getMoveToTarget() {
+        if (raid != null) return blockPos;
+
         return visit == null ? super.getMoveToTarget() : super.getMoveToTarget().offset(visit.offset());
     }
 
@@ -256,27 +268,119 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
     private static final int DEFAULT_SAMPLES = 10;
 
     /**
-     * `minecraft:behavior.random_search_and_dig`, which turns over the ground it walked to.
+     * `minecraft:behavior.inspect_bookshelf`, which is a walk over to a shelf and a look at it.
      *
-     * Bedrock lists what may be dug and what comes out of it, and whether anything comes out is the
-     * pack's own loot table rather than the block's, so the digging here only breaks the ground.
+     * It looks at `search_count` places a tick, every place in range when that is 0, in the order
+     * Java's own search tries them, and carries on from where it stopped.
      */
-    public static MoveToMatchingBlockGoal searchingAndDigging(PathfinderMob mob, JsonObject component) {
-        return new MoveToMatchingBlockGoal(mob, component, among(component, "target_blocks"),
-            (level, at) -> level.destroyBlock(at, true, mob), "is_searching");
-    }
-
-    /** `minecraft:behavior.inspect_bookshelf`, which is a walk over to a shelf and a look at it. */
     public static MoveToMatchingBlockGoal bookshelf(PathfinderMob mob, JsonObject component) {
-        return new MoveToMatchingBlockGoal(mob, component,
+        MoveToMatchingBlockGoal goal = new MoveToMatchingBlockGoal(mob, component,
             state -> state.is(net.minecraft.world.level.block.Blocks.BOOKSHELF)
                 || state.is(net.minecraft.world.level.block.Blocks.CHISELED_BOOKSHELF), null);
+        goal.scan = goal.new Scan((int) number(component, "search_count", 10),
+            order(range(component), height(component), goal.verticalSearchStart));
+        return goal;
     }
 
-    /** `minecraft:behavior.raid_garden`, which eats the blocks a pack listed rather than leaving them. */
+    /**
+     * `minecraft:behavior.raid_garden`, which eats the blocks a pack listed rather than leaving them.
+     *
+     * It eats one crop a visit, `initial_eat_delay` seconds after it arrives, looks for the next one
+     * `eat_delay` seconds later, and once it has eaten `max_to_eat` waits `full_delay` seconds.
+     */
     public static MoveToMatchingBlockGoal raid(PathfinderMob mob, JsonObject component) {
-        return new MoveToMatchingBlockGoal(mob, component, among(component, "blocks"),
+        MoveToMatchingBlockGoal goal = new MoveToMatchingBlockGoal(mob, component, among(component, "blocks"),
             (level, at) -> level.destroyBlock(at, false, mob));
+        goal.raid = new Raid(Goals.ticks(component, "initial_eat_delay", 0), Goals.ticks(component, "eat_delay", 2),
+            Goals.ticks(component, "full_delay", 100), (int) number(component, "max_to_eat", 6));
+        return goal;
+    }
+
+    private static final class Raid {
+        private final int firstBite;
+        private final int betweenBites;
+        private final int whenFull;
+        private final int most;
+        private int eaten;
+        private long readyAt;
+        private long arrivedAt = -1;
+
+        Raid(int firstBite, int betweenBites, int whenFull, int most) {
+            this.firstBite = firstBite;
+            this.betweenBites = betweenBites;
+            this.whenFull = whenFull;
+            this.most = most;
+        }
+
+        boolean ready(long now) {
+            return now >= readyAt;
+        }
+
+        /** Whether the entity standing at its crop since `now` or earlier has waited long enough. */
+        boolean bites(long now) {
+            if (arrivedAt < 0) arrivedAt = now;
+            return now - arrivedAt >= firstBite;
+        }
+
+        void bitten(long now) {
+            arrivedAt = -1;
+            if (most > 0 && ++eaten >= most) {
+                eaten = 0;
+                readyAt = now + whenFull;
+            } else {
+                readyAt = now + betweenBites;
+            }
+        }
+
+        void left() {
+            arrivedAt = -1;
+        }
+    }
+
+    private final class Scan {
+        private final int perTick;
+        private final List<Vec3i> order;
+        private int cursor;
+        private long scannedAt = -1;
+
+        Scan(int perTick, List<Vec3i> order) {
+            this.perTick = perTick;
+            this.order = order;
+        }
+
+        /** Looks on from the cursor for as many places as the ticks since the last look allow. */
+        boolean found() {
+            long now = mob.level().getGameTime();
+            long ticks = scannedAt < 0 ? 1 : Math.max(1, now - scannedAt);
+            scannedAt = now;
+            long looks = perTick <= 0 ? order.size() : Math.min(order.size(), perTick * ticks);
+            BlockPos from = mob.blockPosition();
+            for (long i = 0; i < looks; i++) {
+                BlockPos at = from.offset(order.get(cursor));
+                cursor = (cursor + 1) % order.size();
+                if (Platform.withinHome(mob, at) && isValidTarget(mob.level(), at)) {
+                    blockPos = at;
+                    cursor = 0;
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
+    /** Rings outwards from the feet, nearest first, at each height in the order Java's goal tries them. */
+    private static List<Vec3i> order(int range, int height, int start) {
+        List<Vec3i> order = new java.util.ArrayList<>();
+        for (int dy = start; dy <= height; dy = dy > 0 ? -dy : 1 - dy) {
+            for (int ring = 0; ring < range; ring++) {
+                for (int dx = 0; dx <= ring; dx = dx > 0 ? -dx : 1 - dx) {
+                    for (int dz = dx < ring && dx > -ring ? ring : 0; dz <= ring; dz = dz > 0 ? -dz : 1 - dz) {
+                        order.add(new Vec3i(dx, dy - 1, dz));
+                    }
+                }
+            }
+        }
+        return order.isEmpty() ? List.of(Vec3i.ZERO) : order;
     }
 
     /**
@@ -342,8 +446,10 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
         if (settled != null) mob.setPose(settled);
         if (visit != null && mob instanceof AddonEntity addon) arrive(addon);
         if (arrival == null || !(mob.level() instanceof ServerLevel level)) return;
+        if (raid != null && (!isValidTarget(level, blockPos) || !raid.bites(level.getGameTime()))) return;
 
         arrival.accept(level, blockPos);
+        if (raid != null) raid.bitten(level.getGameTime());
     }
 
     private void arrive(AddonEntity addon) {
