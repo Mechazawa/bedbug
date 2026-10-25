@@ -77,7 +77,7 @@ The numbers do not depend on which pack is installed.
 | Entity components | 100% |
 | Entity AI goals | 100% |
 | Entity filters | 100% |
-| Entity component fields | 77% |
+| Entity component fields | 86% |
 | Molang queries | 100% |
 | Molang maths | 100% |
 | Block components | 100% |
