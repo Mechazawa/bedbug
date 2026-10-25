@@ -5,7 +5,17 @@
       "identifier": "tp:roamer",
       "is_spawnable": false,
       "is_summonable": true,
-      "is_experimental": false
+      "is_experimental": false,
+      "properties": {
+        "tp:home_reached": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:home_lost": {
+          "type": "bool",
+          "default": false
+        }
+      }
     },
     "component_groups": {
       "tp:roamer_toward": {
@@ -127,6 +137,45 @@
           "goal_radius": 4,
           "cooldown_time": 0
         }
+      },
+      "tp:roamer_homing": {
+        "minecraft:home": {},
+        "minecraft:behavior.go_home": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "interval": 1,
+          "goal_radius": 2,
+          "on_home": [
+            {
+              "event": "tp:roamer_got_home",
+              "target": "self"
+            }
+          ]
+        }
+      },
+      "tp:roamer_lost": {
+        "minecraft:home": {},
+        "minecraft:behavior.go_home": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "interval": 1,
+          "goal_radius": 0.5,
+          "on_failed": [
+            {
+              "event": "tp:roamer_gave_up",
+              "target": "self"
+            }
+          ]
+        }
+      },
+      "tp:roamer_homebody": {
+        "minecraft:home": {},
+        "minecraft:behavior.go_home": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "interval": 100000,
+          "goal_radius": 2
+        }
       }
     },
     "components": {
@@ -242,6 +291,37 @@
           "component_groups": [
             "tp:roamer_visiting"
           ]
+        }
+      },
+      "tp:roamer_homing": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_homing"
+          ]
+        }
+      },
+      "tp:roamer_lost": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_lost"
+          ]
+        }
+      },
+      "tp:roamer_homebody": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_homebody"
+          ]
+        }
+      },
+      "tp:roamer_got_home": {
+        "set_property": {
+          "tp:home_reached": true
+        }
+      },
+      "tp:roamer_gave_up": {
+        "set_property": {
+          "tp:home_lost": true
         }
       }
     }

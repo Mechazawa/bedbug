@@ -755,6 +755,11 @@ public class AddonEntity extends PathfinderMob
         // The entity is built before it is put anywhere, and a centre taken then is the world's origin.
         if (!placed) return;
 
+        if (declaresNow("minecraft:home") && homePosition() == null) {
+            net.minecraft.core.BlockPos at = blockPosition();
+            setValue(HOME, new at.ioexception.mcaddon.state.PropertyVector(at.getX(), at.getY(), at.getZ()));
+        }
+
         String component = declaresNow("minecraft:home") ? "minecraft:home"
             : declaresNow("minecraft:dweller") ? "minecraft:dweller" : null;
         // `restriction_type` is `none` unless the pack says otherwise, which keeps a home without
@@ -773,6 +778,18 @@ public class AddonEntity extends PathfinderMob
 
         Platform.setHome(this, blockPosition(),
             Math.max(1, (int) liveNumber(component, "restriction_radius", 16)));
+    }
+
+    /** The value the home `minecraft:home` saves is kept under, which a chunk written out keeps. */
+    private static final String HOME = "home_position";
+
+    /**
+     * Where `minecraft:home` saved the entity's home: where it stood as the component arrived, which
+     * is where it was spawned when the component is there from the start. Null with no home saved.
+     */
+    public net.minecraft.core.BlockPos homePosition() {
+        return value(HOME) instanceof at.ioexception.mcaddon.state.PropertyVector at
+            ? net.minecraft.core.BlockPos.containing(at.x(), at.y(), at.z()) : null;
     }
 
     /**
@@ -3187,9 +3204,9 @@ public class AddonEntity extends PathfinderMob
             // Bedrock names the kind of wandering; Java has one stroll goal and a speed.
             case "minecraft:behavior.move_towards_dwelling_restriction",
                  "minecraft:behavior.move_towards_home_restriction",
-                 "minecraft:behavior.move_towards_restriction",
-                 "minecraft:behavior.go_home" ->
+                 "minecraft:behavior.move_towards_restriction" ->
                 goals.add(priority, new MoveTowardsRestrictionGoal(this, speed));
+            case "minecraft:behavior.go_home" -> goals.add(priority, new GoHomeGoal(this, goal));
 
             case "minecraft:behavior.move_to_village" ->
                 goals.add(priority, StrollTowardsVillageGoal.intoVillage(this, goal));

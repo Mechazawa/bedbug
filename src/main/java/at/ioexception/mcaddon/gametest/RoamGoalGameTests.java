@@ -373,6 +373,64 @@ public final class RoamGoalGameTests {
 
     private static final double VILLAGE_RADIUS = 4;
 
+    /**
+     * `minecraft:behavior.go_home` walks back to where `minecraft:home` saved the roamer's home,
+     * raises `on_home` within its `goal_radius` of two blocks, and with an `interval` of a hundred
+     * thousand starts so seldom that a roamer carrying it stays where it was put.
+     */
+    @GameTest(structure = EMPTY, maxTicks = WALK_TICKS)
+    public void aWalkHomeRaisesItsEventWithinItsRadiusAndStartsAtItsInterval(GameTestHelper helper) {
+        floor(helper);
+        AddonEntity homing = roamer(helper, "tp:roamer_homing", new BlockPos(1, 1, 1));
+        AddonEntity homebody = roamer(helper, "tp:roamer_homebody", new BlockPos(1, 1, 6));
+        if (homing == null || homebody == null) {
+            helper.succeed();
+            return;
+        }
+
+        Vec3 home = homing.position();
+        moveTo(helper, homing, new BlockPos(7, 1, 1));
+        moveTo(helper, homebody, new BlockPos(7, 1, 6));
+        Vec3 away = homebody.position();
+        double[] arrivedAt = {-1};
+        helper.onEachTick(() -> {
+            if (arrivedAt[0] < 0 && Boolean.TRUE.equals(homing.value("tp:home_reached"))) {
+                arrivedAt[0] = homing.position().distanceTo(home);
+            }
+            helper.assertTrue(homebody.position().distanceTo(away) < STILL,
+                ROAMER + " starts for home once in a hundred thousand ticks and set off at once.");
+        });
+        helper.runAfterDelay(WALK_TICKS - 10, () -> {
+            helper.assertTrue(arrivedAt[0] >= 0, ROAMER + " walks home and never raised on_home.");
+            helper.assertTrue(arrivedAt[0] > 1 && arrivedAt[0] <= 2.5,
+                ROAMER + " is home within two blocks and raised on_home " + arrivedAt[0] + " from it.");
+            helper.succeed();
+        });
+    }
+
+    /**
+     * `minecraft:behavior.go_home` raises `on_failed` when no path reaches home: the roamer's home is
+     * walled in after it has been carried out.
+     */
+    @GameTest(structure = EMPTY, maxTicks = WALK_TICKS)
+    public void aWalkHomeThatCannotArriveRaisesItsFailure(GameTestHelper helper) {
+        floor(helper);
+        BlockPos home = new BlockPos(2, 1, 4);
+        AddonEntity roamer = roamer(helper, "tp:roamer_lost", home);
+        if (roamer == null) {
+            helper.succeed();
+            return;
+        }
+
+        moveTo(helper, roamer, new BlockPos(6, 1, 4));
+        BlockPos.betweenClosed(home.offset(-1, 0, -1), home.offset(1, 2, 1))
+            .forEach(at -> {
+                if (!at.equals(home) && !at.equals(home.above())) helper.setBlock(at, Blocks.STONE);
+            });
+        helper.succeedWhen(() -> helper.assertTrue(Boolean.TRUE.equals(roamer.value("tp:home_lost")),
+            ROAMER + " cannot reach its walled-in home and never raised on_failed."));
+    }
+
     /** A roamer with one group on and its goals running. */
     private static AddonEntity roamer(GameTestHelper helper, String event, BlockPos where) {
         AddonEntity roamer = BehaviourGameTests.spawn(helper, ROAMER, where);
@@ -381,6 +439,11 @@ public final class RoamGoalGameTests {
         EntityEvents.trigger(roamer, event, null, ServerHooks.state());
         roamer.setNoAi(false);
         return roamer;
+    }
+
+    private static void moveTo(GameTestHelper helper, Entity entity, BlockPos where) {
+        BlockPos at = helper.absolutePos(where);
+        entity.teleportTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5);
     }
 
     private static boolean runs(AddonEntity roamer, String goal) {
