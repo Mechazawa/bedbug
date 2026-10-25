@@ -27,7 +27,8 @@ import java.util.Set;
  */
 public record RecipeDefinition(String identifier, Kind kind, List<String> pattern,
     Map<String, String> key, List<Ingredient> ingredients, String result, int resultCount,
-    String group, List<String> tags, Smithing smithing, List<String> unlock, Brewing brewing) {
+    String group, List<String> tags, Smithing smithing, List<String> unlock, boolean alwaysUnlocked,
+    int priority, Brewing brewing) {
 
     public enum Kind {
         SHAPED, SHAPELESS, FURNACE, SMITHING_TRANSFORM, SMITHING_TRIM,
@@ -64,8 +65,8 @@ public record RecipeDefinition(String identifier, Kind kind, List<String> patter
      * Every field of a recipe body this reads, qualified by the kind carrying it.
      *
      * A field Java has no place for counts here once it is read, because reading it is what lets
-     * `/mcaddon entities` name it: `priority`, `assume_symmetry`, an unlock stated as a context and
-     * every data value beside an item are each reported rather than converted.
+     * `/mcaddon entities` name it: `assume_symmetry`, an unlock stated as a context other than
+     * `AlwaysUnlocked` and every data value beside an item are each reported rather than converted.
      */
     private static final Set<String> HANDLES = Set.of(
         "shaped.description", "shaped.description.identifier", "shaped.pattern", "shaped.key",
@@ -97,7 +98,9 @@ public record RecipeDefinition(String identifier, Kind kind, List<String> patter
         "brewing_container.tags");
 
     /** The fields Java's own recipe has no place for, each reported once a pack writes one. */
-    private static final List<String> REPORTED = List.of("priority", "assume_symmetry");
+    private static final List<String> REPORTED = List.of("assume_symmetry");
+
+    private static final String ALWAYS_UNLOCKED = "AlwaysUnlocked";
 
     private static final Map<Kind, String> SECTIONS = Map.of(
         Kind.SHAPED, "minecraft:recipe_shaped",
@@ -140,8 +143,7 @@ public record RecipeDefinition(String identifier, Kind kind, List<String> patter
             String identifier = description == null ? null : Json.text(description, "identifier", null);
             if (identifier == null) return null;
 
-            // Java offers every recipe that matches rather than the one with the highest priority,
-            // and mirrors a shaped pattern whatever the recipe says about its symmetry.
+            // Java mirrors a shaped pattern whatever the recipe says about its symmetry.
             String name = section.substring("minecraft:recipe_".length());
             REPORTED.stream().filter(body::has)
                 .forEach(field -> AddonEntities.unsupported("recipe field " + name + "." + field));
@@ -158,7 +160,7 @@ public record RecipeDefinition(String identifier, Kind kind, List<String> patter
         }
         if (kind.brews()) {
             return new RecipeDefinition(identifier, kind, List.of(), Map.of(), List.of(), null, 1,
-                null, tags, null, List.of(), new Brewing(Json.text(body, "input", null),
+                null, tags, null, List.of(), false, 0, new Brewing(Json.text(body, "input", null),
                     Json.text(body, "reagent", null), Json.text(body, "output", null)));
         }
 
@@ -201,7 +203,8 @@ public record RecipeDefinition(String identifier, Kind kind, List<String> patter
         if (result == null && kind != Kind.SMITHING_TRIM) return null;
 
         RecipeDefinition recipe = new RecipeDefinition(identifier, kind, pattern, key, ingredients, result,
-            count(output), Json.text(body, "group", null), tags, smithing, unlock(body), null);
+            count(output), Json.text(body, "group", null), tags, smithing, unlock(body),
+            alwaysUnlocked(body), (int) Json.number(body, "priority", 0), null);
         return recipe.complete() ? recipe : null;
     }
 
@@ -226,7 +229,8 @@ public record RecipeDefinition(String identifier, Kind kind, List<String> patter
      *
      * Java keeps the same idea in an advancement rewarding the recipe, which is what a converted
      * one is written alongside. A context names a Bedrock game event instead of a thing to hold, and
-     * an advancement trigger waits on none of them, so a context is reported and the list is empty.
+     * an advancement trigger waits on none of them, so a context is reported and the list is empty,
+     * except `AlwaysUnlocked`, which {@link #alwaysUnlocked} answers.
      */
     private static List<String> unlock(JsonObject body) {
         List<String> items = new ArrayList<>();
@@ -236,6 +240,8 @@ public record RecipeDefinition(String identifier, Kind kind, List<String> patter
             JsonObject entry = element.getAsJsonObject();
             String context = Json.text(entry, "context", null);
             if (context != null) {
+                if (context.equals(ALWAYS_UNLOCKED)) continue;
+
                 AddonEntities.unsupported("recipe unlock context " + context);
                 continue;
             }
@@ -244,6 +250,12 @@ public record RecipeDefinition(String identifier, Kind kind, List<String> patter
             if (item != null && !item.equals(MISSING)) items.add(item);
         }
         return items;
+    }
+
+    /** Whether an `unlock` entry names the context that gives the recipe to every player. */
+    private static boolean alwaysUnlocked(JsonObject body) {
+        return Json.list(body, "unlock").stream().anyMatch(element -> element.isJsonObject()
+            && ALWAYS_UNLOCKED.equals(Json.text(element.getAsJsonObject(), "context", null)));
     }
 
     /**

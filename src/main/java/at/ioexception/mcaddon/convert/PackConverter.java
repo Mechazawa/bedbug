@@ -19,6 +19,7 @@ import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonBrewing;
 import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.registry.RecipePriorities;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -834,39 +835,50 @@ public final class PackConverter {
      * the one block it belongs to.
      */
     private static void writeRecipes(Path root, List<RecipeDefinition> recipes) throws IOException {
+        JsonObject priorities = new JsonObject();
         for (RecipeDefinition recipe : recipes) {
             switch (recipe.kind()) {
-                case SHAPED -> writeRecipe(root, recipe, "", shaped(recipe));
+                case SHAPED -> writeRecipe(root, recipe, "", shaped(recipe), priorities);
                 case SHAPELESS -> writeRecipe(root, recipe, "",
-                    recipe.tags().contains("stonecutter") ? stonecutting(recipe) : shapeless(recipe));
+                    recipe.tags().contains("stonecutter") ? stonecutting(recipe) : shapeless(recipe),
+                    priorities);
                 case FURNACE -> {
                     for (Map.Entry<String, String> cooker : cookers(recipe).entrySet()) {
-                        writeRecipe(root, recipe, cooker.getKey(), cooking(recipe, cooker.getValue()));
+                        writeRecipe(root, recipe, cooker.getKey(), cooking(recipe, cooker.getValue()),
+                            priorities);
                     }
                 }
-                case SMITHING_TRANSFORM -> writeRecipe(root, recipe, "", smithingTransform(recipe));
+                case SMITHING_TRANSFORM -> writeRecipe(root, recipe, "", smithingTransform(recipe),
+                    priorities);
                 case SMITHING_TRIM -> {
                     JsonObject json = smithingTrim(recipe);
-                    if (json != null) writeRecipe(root, recipe, "", json);
+                    if (json != null) writeRecipe(root, recipe, "", json, priorities);
                 }
                 default -> { }
             }
             reportStations(recipe);
         }
+        if (!priorities.isEmpty()) write(root.resolve(RecipePriorities.FILE), priorities);
     }
 
-    private static void writeRecipe(Path root, RecipeDefinition recipe, String suffix, JsonObject json)
-        throws IOException {
+    private static void writeRecipe(Path root, RecipeDefinition recipe, String suffix, JsonObject json,
+        JsonObject priorities) throws IOException {
         if (recipe.group() != null) json.addProperty("group", recipe.group());
+        if (recipe.alwaysUnlocked()) json.addProperty("show_notification", false);
 
         Names.Identifier id = Names.split(recipe.identifier(), "minecraft");
         Path data = root.resolve("data").resolve(id.namespace());
         write(data.resolve(dataDirectory("recipe")).resolve(id.path() + suffix + ".json"), json);
 
-        if (recipe.unlock().isEmpty()) return;
+        if (recipe.priority() != 0) {
+            priorities.addProperty(id.namespace() + ":" + id.path() + suffix, recipe.priority());
+        }
+
+        if (recipe.unlock().isEmpty() && !recipe.alwaysUnlocked()) return;
         write(data.resolve(dataDirectory("advancement")).resolve("recipes")
             .resolve(id.path() + suffix + ".json"),
-            unlockAdvancement(id.namespace() + ":" + id.path() + suffix, recipe.unlock()));
+            unlockAdvancement(id.namespace() + ":" + id.path() + suffix, recipe.unlock(),
+                recipe.alwaysUnlocked()));
     }
 
     /**
@@ -882,7 +894,7 @@ public final class PackConverter {
             Identifier id = java == null ? null : Identifier.tryParse(java);
             return id != null && (own.contains(java) || BuiltInRegistries.ITEM.containsKey(id)) ? java : null;
         })) {
-            writeRecipe(root, written.recipe(), written.suffix(), written.json());
+            writeRecipe(root, written.recipe(), written.suffix(), written.json(), new JsonObject());
         }
     }
 
@@ -965,9 +977,12 @@ public final class PackConverter {
      * Java keeps a recipe out of the book until an advancement rewards it, so a Bedrock `unlock`
      * list becomes one criterion per item named and holding any of them is enough. The recipe
      * itself is a criterion too, which is what gives the book entry to a player handed the recipe
-     * by a command. The advancement carries no display, so nothing is shown when it is met.
+     * by a command. The `AlwaysUnlocked` context adds a criterion on the tick trigger, which every
+     * player meets on the first tick after joining. The advancement carries no display, so nothing
+     * is shown when it is met. Such a recipe also asks for no unlock toast, because it was never
+     * locked.
      */
-    private static JsonObject unlockAdvancement(String recipe, List<String> unlock) {
+    private static JsonObject unlockAdvancement(String recipe, List<String> unlock, boolean always) {
         JsonObject criteria = new JsonObject();
         JsonArray names = new JsonArray();
 
@@ -979,6 +994,11 @@ public final class PackConverter {
         //?}
         criteria.add("has_the_recipe", trigger("minecraft:recipe_unlocked", recipeConditions));
         names.add("has_the_recipe");
+
+        if (always) {
+            criteria.add("always", trigger("minecraft:tick", new JsonObject()));
+            names.add("always");
+        }
 
         for (int i = 0; i < unlock.size(); i++) {
             JsonArray items = new JsonArray();

@@ -2674,6 +2674,24 @@ clock milliseconds), a capture of one `StatEvent2` a tick under its header, and 
 that stops on the marked line of the test pack's `scripts/weigh.js` and reads the stack. Bedrock's command metadata lists no `watchdog` form, so
 there is no `exportstats` to answer.
 
+## Connection rule sides
+
+`enabled_directions` names the side of the block a fence, wall or pane reaches it on (Mojang does
+not say which frame; this reading is decided here). `FenceConnectionMixin` answers it in
+`connectsTo`, which gets the direction from the fence to the neighbour. `BarsConnectionMixin`
+redirects the neighbour's `isFaceSturdy(side)` call inside a pane's `getStateForPlacement` and
+`updateShape`, the only place a pane knows the side. `tp:pillar` carries the rule and
+`aConnectionRuleNamesTheSidesNeighboursReach` reads fence, bars and wall back.
+
+## Recipe unlock context and priority
+
+`AlwaysUnlocked` adds a `minecraft:tick` criterion to the recipe's unlock advancement, which grants
+the recipe on a player's first tick. Mojang publishes nothing on `priority`: the rule used is that a
+lower number wins and a missing one is 0. The converter writes the non-zero ones to
+`mcaddon_recipe_priorities.json` in the converted root, `RecipePriorities` reads those of the active
+set, and `RecipePriorityMixin` stable-sorts `RecipeMap.getRecipesFor` (the one call every version's
+recipe lookup goes through) by them, so only recipes that already match are reordered.
+
 ## Releasing
 
 A pushed `v*` tag runs `.github/workflows/release.yml`, which builds the jars, makes the GitHub release and then runs `tools/release/modrinth.py` to publish each jar to Modrinth.

@@ -15,14 +15,34 @@ import at.ioexception.mcaddon.registry.AddonParticles;
 import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
+//? if >=26.2 {
+import net.minecraft.advancements.triggers.CriteriaTriggers;
+//?} else {
+/*import net.minecraft.advancements.CriteriaTriggers;
+*///?}
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.CraftingInput;
+import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeType;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
+import net.minecraft.world.level.block.state.properties.EnumProperty;
+import net.minecraft.world.level.block.state.properties.WallSide;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.block.state.properties.Property;
 
@@ -31,6 +51,8 @@ import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
 
 /**
  * What an add-on does once it is loaded into a world.
@@ -50,6 +72,13 @@ public final class PackGameTests {
     private static final String HURT_ENTITY = "tp:wisp";
     private static final String BLOCK = "tp:lamp";
     private static final String FOG = "tp:dusk";
+
+    private static final Map<Direction, BooleanProperty> ARMS = Map.of(Direction.NORTH, BlockStateProperties.NORTH,
+        Direction.SOUTH, BlockStateProperties.SOUTH, Direction.EAST, BlockStateProperties.EAST,
+        Direction.WEST, BlockStateProperties.WEST);
+    private static final Map<Direction, EnumProperty<WallSide>> WALL_SIDES = Map.of(
+        Direction.NORTH, BlockStateProperties.NORTH_WALL, Direction.SOUTH, BlockStateProperties.SOUTH_WALL,
+        Direction.EAST, BlockStateProperties.EAST_WALL, Direction.WEST, BlockStateProperties.WEST_WALL);
 
     /** The two the pack declares for the components a plain mob has no occasion to use. */
     private static final String PROJECTILE = "tp:spark";
@@ -544,6 +573,93 @@ public final class PackGameTests {
         helper.getLevel().setBlockAndUpdate(at, block.defaultBlockState().setValue(lit, false));
         helper.succeedWhen(() -> helper.assertTrue(helper.getBlockState(STAND).getValue(lit),
             BLOCK + " never ran the event its clock schedules."));
+    }
+
+    /**
+     * Of the recipes matching one grid, the one with the lowest priority number crafts.
+     *
+     * Two planks recipes of the pack share the grid with the game's crafting table recipe, whose
+     * priority is 0. The pack's is the one stating -1 and the other states 1, so the first of the
+     * three in load order is not the answer.
+     */
+    @GameTest()
+    public void theLowestRecipePriorityCrafts(GameTestHelper helper) {
+        if (BuiltInRegistries.ITEM.getOptional(Platform.id("tp", "dust")).isEmpty()) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        CraftingInput grid = CraftingInput.of(2, 2, List.of(new ItemStack(Items.OAK_PLANKS),
+            new ItemStack(Items.OAK_PLANKS), new ItemStack(Items.OAK_PLANKS), new ItemStack(Items.OAK_PLANKS)));
+        var crafted = level.getServer().getRecipeManager().getRecipeFor(RecipeType.CRAFTING, grid, level);
+        helper.assertTrue(crafted.isPresent(), "Four planks crafted nothing.");
+        String id = Platform.idOf(crafted.get().id()).toString();
+        helper.assertTrue(id.equals("tp:dust_from_planks_first"), "Four planks crafted " + id + ".");
+        helper.succeed();
+    }
+
+    /**
+     * A recipe unlocked by the `AlwaysUnlocked` context is in every player's book from the start.
+     *
+     * The converted advancement waits on the tick trigger, so one tick of a player is all it takes,
+     * and the recipe asks for no unlock toast.
+     */
+    @GameTest()
+    public void anAlwaysUnlockedRecipeIsKnownToEveryPlayer(GameTestHelper helper) {
+        if (BuiltInRegistries.ITEM.getOptional(Platform.id("tp", "dust")).isEmpty()) {
+            helper.succeed();
+            return;
+        }
+
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ResourceKey<Recipe<?>> recipe = ResourceKey.create(Registries.RECIPE, Platform.id("tp", "shard_cut"));
+        helper.assertFalse(player.getRecipeBook().contains(recipe), "A new player already knew the recipe.");
+        CriteriaTriggers.TICK.trigger(player);
+        helper.assertTrue(player.getRecipeBook().contains(recipe), "The recipe stayed locked after a tick.");
+        helper.assertFalse(helper.getLevel().getServer().getRecipeManager().byKey(recipe).orElseThrow()
+            .value().showNotification(), "The recipe asks for an unlock toast it never earns.");
+        helper.succeed();
+    }
+
+    /**
+     * A fence, a bar and a wall reach a block only on the sides its connection rule enables.
+     *
+     * The pillar enables north and south, so a neighbour on either of those joins it and one to the
+     * east or the west keeps its arm on that side down.
+     */
+    @GameTest()
+    public void aConnectionRuleNamesTheSidesNeighboursReach(GameTestHelper helper) {
+        Block pillar = BuiltInRegistries.BLOCK.getOptional(Platform.id("tp", "pillar")).orElse(null);
+        if (pillar == null) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        BlockPos middle = helper.absolutePos(STAND);
+        for (Block reaching : List.of(Blocks.OAK_FENCE, Blocks.IRON_BARS, Blocks.COBBLESTONE_WALL)) {
+            for (Direction side : Direction.Plane.HORIZONTAL) {
+                level.setBlockAndUpdate(middle.relative(side), reaching.defaultBlockState());
+            }
+            level.setBlockAndUpdate(middle, pillar.defaultBlockState());
+
+            for (Direction side : Direction.Plane.HORIZONTAL) {
+                BlockState neighbour = level.getBlockState(middle.relative(side));
+                boolean reached = reaching == Blocks.COBBLESTONE_WALL
+                    ? neighbour.getValue(WALL_SIDES.get(side.getOpposite())) != WallSide.NONE
+                    : neighbour.getValue(ARMS.get(side.getOpposite()));
+                helper.assertTrue(reached == (side.getAxis() == Direction.Axis.Z),
+                    "A " + reaching.getName().getString() + " to the " + side.getName()
+                        + (reached ? " joined" : " stayed away from") + " tp:pillar.");
+            }
+
+            for (Direction side : Direction.Plane.HORIZONTAL) {
+                level.setBlockAndUpdate(middle.relative(side), Blocks.AIR.defaultBlockState());
+            }
+            level.setBlockAndUpdate(middle, Blocks.AIR.defaultBlockState());
+        }
+        helper.succeed();
     }
 
     /**

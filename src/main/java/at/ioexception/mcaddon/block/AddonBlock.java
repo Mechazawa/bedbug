@@ -215,6 +215,16 @@ public class AddonBlock extends Block {
     }
 
     /**
+     * Whether a fence, a wall or a pane may reach across to this block on the given side of it.
+     *
+     * `minecraft:connection_rule` narrows the four horizontal sides; the vertical ones are never
+     * narrowed.
+     */
+    public boolean connectsOnSide(Direction side) {
+        return components == null || side.getAxis().isVertical() || components.connectionSides().contains(side);
+    }
+
+    /**
      * Whether a chest may open in the space below a block of this kind.
      *
      * Java asks this of every block above a chest and answers it from redstone conductivity, which
