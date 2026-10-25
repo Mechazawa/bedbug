@@ -864,6 +864,7 @@ public final class PackConverter {
     private static void writeRecipe(Path root, RecipeDefinition recipe, String suffix, JsonObject json,
         JsonObject priorities) throws IOException {
         if (recipe.group() != null) json.addProperty("group", recipe.group());
+        if (recipe.alwaysUnlocked()) json.addProperty("show_notification", false);
 
         Names.Identifier id = Names.split(recipe.identifier(), "minecraft");
         Path data = root.resolve("data").resolve(id.namespace());
@@ -978,7 +979,8 @@ public final class PackConverter {
      * itself is a criterion too, which is what gives the book entry to a player handed the recipe
      * by a command. The `AlwaysUnlocked` context adds a criterion on the tick trigger, which every
      * player meets on the first tick after joining. The advancement carries no display, so nothing
-     * is shown when it is met.
+     * is shown when it is met. Such a recipe also asks for no unlock toast, because it was never
+     * locked.
      */
     private static JsonObject unlockAdvancement(String recipe, List<String> unlock, boolean always) {
         JsonObject criteria = new JsonObject();

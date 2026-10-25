@@ -598,7 +598,8 @@ public final class PackGameTests {
     /**
      * A recipe unlocked by the `AlwaysUnlocked` context is in every player's book from the start.
      *
-     * The converted advancement waits on the tick trigger, so one tick of a player is all it takes.
+     * The converted advancement waits on the tick trigger, so one tick of a player is all it takes,
+     * and the recipe asks for no unlock toast.
      */
     @GameTest()
     public void anAlwaysUnlockedRecipeIsKnownToEveryPlayer(GameTestHelper helper) {
@@ -612,6 +613,8 @@ public final class PackGameTests {
         helper.assertFalse(player.getRecipeBook().contains(recipe), "A new player already knew the recipe.");
         CriteriaTriggers.TICK.trigger(player);
         helper.assertTrue(player.getRecipeBook().contains(recipe), "The recipe stayed locked after a tick.");
+        helper.assertFalse(helper.getLevel().getServer().getRecipeManager().byKey(recipe).orElseThrow()
+            .value().showNotification(), "The recipe asks for an unlock toast it never earns.");
         helper.succeed();
     }
 
