@@ -161,17 +161,6 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
         return new MoveToMatchingBlockGoal(mob, component, state -> !state.isAir(), null);
     }
 
-    /**
-     * `minecraft:behavior.random_search_and_dig`, which turns over the ground it walked to.
-     *
-     * Bedrock lists what may be dug and what comes out of it, and whether anything comes out is the
-     * pack's own loot table rather than the block's, so the digging here only breaks the ground.
-     */
-    public static MoveToMatchingBlockGoal searchingAndDigging(PathfinderMob mob, JsonObject component) {
-        return new MoveToMatchingBlockGoal(mob, component, among(component, "target_blocks"),
-            (level, at) -> level.destroyBlock(at, true, mob), "is_searching");
-    }
-
     /** `minecraft:behavior.inspect_bookshelf`, which is a walk over to a shelf and a look at it. */
     public static MoveToMatchingBlockGoal bookshelf(PathfinderMob mob, JsonObject component) {
         return new MoveToMatchingBlockGoal(mob, component,

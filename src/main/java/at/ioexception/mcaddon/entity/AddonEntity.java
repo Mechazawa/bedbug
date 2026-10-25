@@ -3383,7 +3383,7 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.dig" -> goals.add(priority,
                 PoseHoldGoal.digging(this, goal));
             case "minecraft:behavior.random_search_and_dig" -> goals.add(priority,
-                MoveToMatchingBlockGoal.searchingAndDigging(this, goal));
+                new SearchAndDigGoal(this, goal));
 
             // What a Bedrock dolphin does that nothing else does.
             case "minecraft:behavior.random_breach" -> goals.add(priority,
