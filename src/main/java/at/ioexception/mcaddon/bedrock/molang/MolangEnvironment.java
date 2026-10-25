@@ -19,7 +19,7 @@ public class MolangEnvironment {
     private Map<String, MolangValue> temporaries = new HashMap<>();
     private Map<String, List<MolangValue>> arrays = Map.of();
 
-    private final Map<String, MolangEnvironment> links = new HashMap<>();
+    private final Map<String, MolangValue> contexts = new HashMap<>();
 
     private Queries queries = (name, arguments) -> MolangValue.ZERO;
     private MolangValue self = MolangValue.ZERO;
@@ -51,24 +51,24 @@ public class MolangEnvironment {
     }
 
     /**
-     * Another entity's environment, reached through `c.owning_entity->v.name`.
+     * `c.name`: what the game set for the place the expression runs in, else the query of that name.
      *
-     * An attachable reads the variables of whoever is holding it, and a rider reads its mount's.
-     * Null when nothing has been linked under that name, which reads as zero.
+     * An attachable is handed whoever carries it as `c.owning_entity`.
      */
-    public MolangEnvironment link(String name) {
-        return links.get(name);
+    public MolangValue context(String name, List<MolangValue> arguments) {
+        MolangValue set = contexts.get(name);
+        return set != null ? set : query(name, arguments);
     }
 
-    public void setLink(String name, MolangEnvironment environment) {
-        links.put(name, environment);
+    public void setContext(String name, MolangValue value) {
+        contexts.put(name, value);
     }
 
     /**
      * This environment as another entity may read it: the named variables, and the queries.
      *
-     * An attachable reaches whoever carries it through `c.owning_entity->v.name`, and Bedrock
-     * answers zero for a variable that entity's `scripts.variables` does not name.
+     * Another entity reaches it through `->`, and Bedrock answers zero for a variable this entity's
+     * `scripts.variables` does not name `public`. A variable written through `->` is written here.
      */
     public MolangEnvironment publishedAs(Set<String> published) {
         MolangEnvironment owner = this;
@@ -81,6 +81,11 @@ public class MolangEnvironment {
             @Override
             public boolean hasVariable(String name) {
                 return published.contains(name) && owner.hasVariable(name);
+            }
+
+            @Override
+            public void setVariable(String name, MolangValue value) {
+                owner.setVariable(name, value);
             }
 
             @Override

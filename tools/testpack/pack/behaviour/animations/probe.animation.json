@@ -14,6 +14,20 @@
       "timeline": {
         "0.0": "/tag @s add tp_perch_journeyman"
       }
+    },
+    "animation.tp.herald.heard": {
+      "loop": true,
+      "animation_length": 0.05,
+      "timeline": {
+        "0.0": "/tag @s add tp_herald_heard"
+      }
+    },
+    "animation.tp.herald.counted": {
+      "loop": true,
+      "animation_length": 0.05,
+      "timeline": {
+        "0.0": "/tag @s add tp_herald_counted"
+      }
     }
   }
 }

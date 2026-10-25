@@ -54,6 +54,10 @@ public final class ServerAnimator {
         if (ServerHooks.state() != null) player.environment().shareTemporaries(ServerHooks.state().temporaries());
     }
 
+    public MolangEnvironment environment() {
+        return player.environment();
+    }
+
     public void tick() {
         MolangEnvironment environment = player.environment();
         environment.setLifeTime(entity.tickCount * SECONDS_PER_TICK);

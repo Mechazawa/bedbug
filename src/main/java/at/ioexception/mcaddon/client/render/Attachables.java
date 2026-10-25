@@ -2,8 +2,10 @@ package at.ioexception.mcaddon.client.render;
 
 import at.ioexception.mcaddon.bedrock.entity.ClientEntityDefinition;
 import at.ioexception.mcaddon.bedrock.entity.EntityAnimator;
+import at.ioexception.mcaddon.bedrock.entity.EntityReference;
 import at.ioexception.mcaddon.bedrock.model.BakedGeometry;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
+import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.registry.AddonItems;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -112,7 +114,7 @@ public final class Attachables {
             if (held.isEmpty()) continue;
 
             String item = AddonItems.identifierOf(held.getItem());
-            Chosen chosen = choose(entity, wearer, item, slotName(slot), partialTick);
+            Chosen chosen = choose(entity, item, slotName(slot), partialTick);
             if (chosen == null) continue;
 
             parentSetup(chosen.binding(), wearer);
@@ -148,10 +150,10 @@ public final class Attachables {
      * entity carrying it, which is how a pack dresses a player in one model and everything else in
      * another. An attachable naming the item without a condition always applies.
      */
-    private static Chosen choose(LivingEntity entity, EntityAnimator wearer, String item,
+    private static Chosen choose(LivingEntity entity, String item,
         String itemSlot, float partialTick) {
         for (AddonClientAssets.Binding binding : AddonClientAssets.attachablesFor(item)) {
-            EntityAnimator animator = animatorOf(entity, wearer, binding, item, itemSlot, partialTick);
+            EntityAnimator animator = animatorOf(entity, binding, item, itemSlot, partialTick);
             if (animator == null) continue;
 
             MolangExpression condition = binding.definition().items().get(item);
@@ -168,14 +170,14 @@ public final class Attachables {
      * Keyed by the attachable's own identifier beside the item, because two packs may both dress
      * the same item and each needs a clock and a set of variables of its own.
      */
-    private static EntityAnimator animatorOf(LivingEntity entity, EntityAnimator wearer,
+    private static EntityAnimator animatorOf(LivingEntity entity,
         AddonClientAssets.Binding binding, String item, String itemSlot, float partialTick) {
         EntityAnimator animator = Animators.of(entity, binding,
             item + "#" + binding.definition().identifier(), itemSlot, partialTick,
             entity.tickCount + partialTick);
         if (animator == null) return null;
 
-        animator.environment().setLink("owning_entity", wearer == null ? null : wearer.published());
+        animator.environment().setContext("owning_entity", MolangValue.of(new EntityReference(entity)));
         return animator;
     }
 

@@ -158,7 +158,8 @@ From 26, a resource pack's colour grading is drawn over the world, before the HU
   On 1.20.1 the four direction modes also face the camera.
 - `effect_emitter_count` and `effect_particle_count` during entity drawing are reported. The
   `total_` counts work.
-- `bone_orientation_matrix` and `combine_entities` return a matrix and an array. Both are reported.
+- `bone_orientation_matrix` returns a matrix, which is reported. Mojang does not say what its
+  members are called.
   A query with several numbers works one member at a time (`q.bone_aabb('leg1a').max.y`). Storing
   the whole value in a variable is reported.
 - A `parent_setup` on a player or a vanilla mob is reported. A `binding` to a bone the Java model

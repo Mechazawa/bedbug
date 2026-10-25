@@ -181,11 +181,110 @@ class MolangTest {
         wearer.setVariable("secret", MolangValue.of(7));
 
         MolangEnvironment attachable = new MolangEnvironment();
-        attachable.setLink("owning_entity", wearer.publishedAs(Set.of("attack_time")));
+        MolangEnvironment published = wearer.publishedAs(Set.of("attack_time"));
+        attachable.setContext("owning_entity", MolangValue.of(() -> published));
 
         assertEquals(3, MolangParser.parse("c.owning_entity->v.attack_time")
             .asFloat(attachable), 1e-6);
         assertEquals(0, MolangParser.parse("c.owning_entity->v.secret").asFloat(attachable), 1e-6);
+    }
+
+    /** Mojang's own struct examples, each of which answers 1.23 after the same two statements. */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+        "return v.cowcow.friend->v.test.a.b.c;",
+        "v.moo = v.cowcow.friend->v.test; return v.moo.a.b.c;",
+        "v.moo = v.cowcow.friend->v.test.a; return v.moo.b.c;",
+        "v.moo = v.cowcow.friend->v.test.a.b; return v.moo.c;",
+        "v.moo = v.cowcow.friend->v.test.a.b.c; return v.moo;",
+    })
+    void readsAndWritesThroughAnEntityAStructMemberHolds(String ending) {
+        Entity pig = new Entity("minecraft:pig");
+        environment.setVariable("pigpig", MolangValue.of(pig));
+        String source = "v.cowcow.friend = v.pigpig; v.pigpig->v.test.a.b.c = 1.23; " + ending;
+        assertEquals(1.23, evaluate(source), 1e-6, source);
+        assertEquals(1.23, pig.scope.variable("test").member(List.of("a", "b", "c")).number(), 1e-6);
+    }
+
+    /** The arrow asks the entity on its left, so the same query answers for whoever is named there. */
+    @Test
+    void asksTheEntityOnTheLeftOfAnArrow() {
+        Entity pig = new Entity("minecraft:pig");
+        pig.scope.setQueries((name, arguments) -> MolangValue.of(name.equals("is_baby") ? 1 : 0));
+        environment.setVariable("pig", MolangValue.of(pig));
+        assertEquals(1, evaluate("v.pig->q.is_baby"), 1e-6);
+        assertEquals(0, evaluate("q.is_baby"), 1e-6);
+        assertEquals(3, evaluate("1 + 2 * v.pig->q.is_baby"), 1e-6);
+    }
+
+    @Test
+    void answersZeroThroughAnEntityThatIsGone() {
+        Entity pig = new Entity("minecraft:pig");
+        pig.scope.setVariable("x", MolangValue.of(5));
+        environment.setVariable("pig", MolangValue.of(pig));
+        assertEquals(5, evaluate("v.pig->v.x"), 1e-6);
+
+        pig.gone = true;
+        assertEquals(0, evaluate("v.pig->v.x"), 1e-6);
+        assertEquals(0, evaluate("v.pig ? 1 : 0"), 1e-6);
+        assertEquals(1.2, evaluate("v.pig ?? 1.2"), 1e-6);
+    }
+
+    /** Mojang's own example: count the pigs near, and add up what each of them answers. */
+    @Test
+    void runsABlockOncePerEntityOfAnArray() {
+        List<Entity> pigs = List.of(new Entity("minecraft:pig"), new Entity("minecraft:pig"),
+            new Entity("minecraft:pig"));
+        for (int i = 0; i < pigs.size(); i++) {
+            double flammable = i == 1 ? 0 : 1;
+            pigs.get(i).scope.setQueries((name, arguments) -> MolangValue.of(flammable));
+        }
+        environment.setQueries((name, arguments) -> name.equals("get_nearby_entities")
+            ? MolangValue.of(pigs) : MolangValue.ZERO);
+
+        assertEquals(3, evaluate("v.x = 0; for_each(t.pig, query.get_nearby_entities(4, 'minecraft:pig'), {"
+            + " v.x = v.x + 1; }); return v.x;"), 1e-6);
+        assertEquals(2, evaluate("v.x = 0; for_each(v.pig, query.get_nearby_entities(4, 'minecraft:pig'), {"
+            + " v.x = v.x + v.pig->query.get_relative_block_state(0, 1, 0, 'flammable'); }); return v.x;"), 1e-6);
+    }
+
+    @Test
+    void combinesAndCountsEntities() {
+        Entity cow = new Entity("minecraft:cow");
+        Entity pig = new Entity("minecraft:pig");
+        Entity gone = new Entity("minecraft:sheep");
+        gone.gone = true;
+        environment.setVariable("cow", MolangValue.of(cow));
+        environment.setVariable("both", MolangValue.of(List.of(cow, pig)));
+        environment.setVariable("gone", MolangValue.of(gone));
+
+        List<MolangValue> combined = List.of(environment.variable("both"), environment.variable("cow"),
+            environment.variable("gone"));
+        MolangValue array = MolangValue.combined(combined);
+        assertEquals(List.of(cow, pig), array.entities());
+        assertEquals(2, MolangValue.count(List.of(array)));
+        assertEquals(4, MolangValue.count(List.of(array, MolangValue.of(7), MolangValue.of(cow))));
+    }
+
+    /** A stand-in for an entity: a scope of its own, and a switch that makes it gone. */
+    private static final class Entity implements MolangValue.Reference {
+        private final MolangEnvironment scope = new MolangEnvironment();
+        private final String identifier;
+        private boolean gone;
+
+        Entity(String identifier) {
+            this.identifier = identifier;
+        }
+
+        @Override
+        public MolangEnvironment scope() {
+            return gone ? null : scope;
+        }
+
+        @Override
+        public String toString() {
+            return identifier;
+        }
     }
 
     @Test

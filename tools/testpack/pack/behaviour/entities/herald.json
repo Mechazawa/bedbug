@@ -1,0 +1,38 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:herald",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false,
+      "animations": {
+        "heard": "animation.tp.herald.heard",
+        "counted": "animation.tp.herald.counted"
+      },
+      "scripts": {
+        "animate": [
+          {
+            "heard": "v.settled_wisps = 0; for_each(t.wisp, q.get_nearby_entities_except_self(3, 'tp:wisp'), { v.settled_wisps = v.settled_wisps + t.wisp->q.property('tp:settled'); }); return v.settled_wisps == 1;"
+          },
+          {
+            "counted": "q.count(q.combine_entities(q.get_nearby_entities(3, 'tp:wisp'), q.get_nearby_entities_except_self(3, 'tp:wisp'), q.get_nearby_entities(3, 'tp:herald'))) == 3"
+          }
+        ]
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": ["tp_herald", "inanimate"]
+      },
+      "minecraft:collision_box": {
+        "width": 0.5,
+        "height": 0.5
+      },
+      "minecraft:physics": {
+        "has_collision": false,
+        "has_gravity": false
+      }
+    }
+  }
+}

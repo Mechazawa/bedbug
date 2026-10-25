@@ -3,6 +3,8 @@ package at.ioexception.mcaddon.client.render;
 import at.ioexception.mcaddon.bedrock.entity.EntityAnimator;
 import at.ioexception.mcaddon.bedrock.animation.PlayedAnimation;
 import at.ioexception.mcaddon.bedrock.entity.EntityQueries;
+import at.ioexception.mcaddon.bedrock.entity.EntityReference;
+import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.entity.AddonEntity;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -134,6 +136,16 @@ public final class Animators {
             .map(Entry::animator)
             .findFirst()
             .orElse(null);
+    }
+
+    /**
+     * What `->` reads of an entity on the client: the published scope of the animator drawing it,
+     * else a scope answering its queries.
+     */
+    public static MolangEnvironment scopeOf(Entity entity) {
+        EntityAnimator drawing = rootOf(entity.getId());
+        return drawing != null ? drawing.published()
+            : EntityReference.questions(entity, () -> EntityProperties.of(entity.getId()));
     }
 
     public static void forget(int entityId) {

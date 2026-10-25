@@ -382,15 +382,16 @@ public final class MolangParser {
 
         return arrow(switch (head) {
             case "math" -> parseCall(arguments -> MolangMath.call(insensitive, arguments));
-            case "query", "q", "context", "c" -> {
+            case "query", "q" -> {
                 List<MolangExpression> arguments = readArguments();
                 // A query taking arguments names the member it wants after the call.
                 members.addAll(trailingMembers());
                 List<String> member = List.copyOf(members);
                 yield environment -> environment.query(root, evaluateAll(arguments, environment)).member(member);
             }
-            case "variable", "v" -> parseVariable(root, List.copyOf(members), false);
-            case "temp", "t" -> parseVariable(root, List.copyOf(members), true);
+            case "context", "c" -> parseContext(root, List.copyOf(members));
+            case "variable", "v" -> parseVariable(new Variable(false, root, List.copyOf(members)));
+            case "temp", "t" -> parseVariable(new Variable(true, root, List.copyOf(members)));
             // A render controller names its textures, geometries and materials rather than computing them.
             case "texture", "geometry", "material" -> {
                 MolangValue key = MolangValue.of(name);
@@ -398,16 +399,17 @@ public final class MolangParser {
             }
             case "array" -> parseArrayIndex(name);
             default -> throw new Malformed();
-        }, name);
+        });
     }
 
     /**
-     * `c.owning_entity->v.name` reads a variable out of another entity's environment.
+     * `left->right` evaluates `right` as the entity `left` refers to, so `v.friend->v.location` reads
+     * the friend's variable and `t.pig->q.is_baby` asks the pig.
      *
-     * The left side names the link; what follows is parsed as an ordinary path and evaluated against
-     * whatever was linked under that name. Nothing linked reads as zero, the same as an unknown query.
+     * A left side that refers to no entity, or to one that is gone, answers zero without evaluating
+     * the right side.
      */
-    private MolangExpression arrow(MolangExpression left, String name) {
+    private MolangExpression arrow(MolangExpression left) {
         skipSpace();
         if (peek() != '-' || peekAt(1) != '>') return left;
 
@@ -415,8 +417,27 @@ public final class MolangParser {
         skipSpace();
         MolangExpression right = parsePrimary();
         return environment -> {
-            MolangEnvironment linked = environment.link(name);
-            return linked == null ? MolangValue.ZERO : right.evaluate(linked);
+            MolangEnvironment scope = left.evaluate(environment).scope();
+            return scope == null ? MolangValue.ZERO : right.evaluate(scope);
+        };
+    }
+
+    /** `c.name`, which `??` falls through on where it holds an entity that is gone. */
+    private MolangExpression parseContext(String name, List<String> members) {
+        List<MolangExpression> arguments = readArguments();
+        List<String> member = new ArrayList<>(members);
+        member.addAll(trailingMembers());
+        List<String> path = List.copyOf(member);
+        return new MolangExpression.Maybe() {
+            @Override
+            public MolangValue evaluate(MolangEnvironment environment) {
+                return environment.context(name, evaluateAll(arguments, environment)).member(path);
+            }
+
+            @Override
+            public boolean isPresent(MolangEnvironment environment) {
+                return evaluate(environment).resolves();
+            }
         };
     }
 
@@ -439,14 +460,68 @@ public final class MolangParser {
         };
     }
 
-    /** `for_each(v.name, array, {statements})` runs its block once per element, binding each in turn. */
+    /**
+     * `for_each(t.name, array, {statements})` runs its block once per entity the array holds, with
+     * the variable holding that entity.
+     */
     private MolangExpression parseForEach() {
-        List<MolangExpression> arguments = readArguments();
-        if (arguments.size() < 3) throw new Malformed();
-        return arguments.get(2);
+        skipSpace();
+        if (peek() != '(') throw new Malformed();
+        at += 1;
+        Variable each = readVariable();
+        MolangExpression array = nextArgument();
+        MolangExpression body = nextArgument();
+        skipSpace();
+        if (peek() != ')') throw new Malformed();
+        at += 1;
+
+        return environment -> {
+            MolangValue result = MolangValue.ZERO;
+            for (MolangValue.Reference entity : array.evaluate(environment).references().toList()) {
+                each.assign(environment, MolangValue.of(entity));
+                result = body.evaluate(environment);
+            }
+            return result;
+        };
     }
 
-    private MolangExpression parseVariable(String name, List<String> members, boolean temporary) {
+    private MolangExpression nextArgument() {
+        skipSpace();
+        if (peek() != ',') throw new Malformed();
+        at += 1;
+        return parseExpression();
+    }
+
+    /** The `v.name` or `t.name` a statement assigns to, members included. */
+    private Variable readVariable() {
+        skipSpace();
+        String head = readName().toLowerCase(Locale.ROOT);
+        boolean temporary = head.equals("temp") || head.equals("t");
+        if (!temporary && !head.equals("variable") && !head.equals("v")) throw new Malformed();
+        if (peek() != '.') throw new Malformed();
+        at += 1;
+        String name = readName().toLowerCase(Locale.ROOT);
+        return new Variable(temporary, name, trailingMembers());
+    }
+
+    /** A `v.` or `t.` variable, and the path of members into the struct it holds. */
+    private record Variable(boolean temporary, String name, List<String> members) {
+        MolangValue read(MolangEnvironment environment) {
+            return (temporary ? environment.temporary(name) : environment.variable(name)).member(members);
+        }
+
+        boolean isSet(MolangEnvironment environment) {
+            boolean held = temporary ? environment.hasTemporary(name) : environment.hasVariable(name);
+            return held && (temporary ? environment.temporary(name) : environment.variable(name)).hasMember(members);
+        }
+
+        void assign(MolangEnvironment environment, MolangValue value) {
+            if (temporary) environment.setTemporary(name, environment.temporary(name).with(members, value));
+            else environment.setVariable(name, environment.variable(name).with(members, value));
+        }
+    }
+
+    private MolangExpression parseVariable(Variable variable) {
         skipSpace();
         // An assignment is a statement in its own right and evaluates to the value it stored.
         if (peek() == '=' && peekAt(1) != '=') {
@@ -454,21 +529,19 @@ public final class MolangParser {
             MolangExpression value = parseExpression();
             return environment -> {
                 MolangValue result = value.evaluate(environment);
-                if (temporary) environment.setTemporary(name, environment.temporary(name).with(members, result));
-                else environment.setVariable(name, environment.variable(name).with(members, result));
+                variable.assign(environment, result);
                 return result;
             };
         }
         return new MolangExpression.Maybe() {
             @Override
             public MolangValue evaluate(MolangEnvironment environment) {
-                return (temporary ? environment.temporary(name) : environment.variable(name)).member(members);
+                return variable.read(environment);
             }
 
             @Override
             public boolean isPresent(MolangEnvironment environment) {
-                if (temporary) return environment.hasTemporary(name) && environment.temporary(name).hasMember(members);
-                return environment.hasVariable(name) && environment.variable(name).hasMember(members);
+                return variable.isSet(environment) && variable.read(environment).resolves();
             }
         };
     }

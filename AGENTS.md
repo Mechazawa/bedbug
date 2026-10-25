@@ -2327,8 +2327,7 @@ member set, making a struct of any step that held a number, which is how a pack 
 (`v.pose = 0; v.pose.t = 0; v.pose.t.x = 0;`). A missing member reads as zero and a struct read as a
 number is zero, as Mojang's Molang documentation says of errors. A query is asked by its own name and
 answers a struct whole; the parser reads the member a pack names after the name or after the call
-off it, so `v.c = q.spellcolor; return v.c.r;` works. Entity references are not values here, so the
-documentation's `v.cowcow.friend->v.test` examples have no answer.
+off it, so `v.c = q.spellcolor; return v.c.r;` works.
 
 `query.bone_orientation_trs(bone)` answers `BoneOrientation.ofDrawn` of the bone's matrix in the
 queryable geometry, posed by `BedrockModelRenderer.anchorOf` the way the frame draws it, read back
@@ -2347,6 +2346,40 @@ the field in no schema and no document beyond the phrase "the queryable geometry
 definition naming none, or naming a key it lacks, answers from `default`, else from the first entry.
 `tp:gaze` names `geometry.tp.gaze_tall`, a geometry it never draws whose head pivots four pixels
 higher, so `AnimationClientGameTest.orientation` reads a pivot the drawn model has not got.
+
+## Molang entity references
+
+A `MolangValue` may also hold an entity (`MolangValue.Reference`) or an array of them, which a
+variable, a temporary, a struct member or a context holds like any other value. `left->right`
+evaluates `right` against `left`'s `scope()`, and answers zero without evaluating it when `left`
+refers to no entity or to one that is gone; an assignment on the right writes into that scope, which
+is what Mojang's `v.pigpig->v.test.a.b.c = 1.23` examples need. A reference to an entity that is gone
+is false and `??` falls through on it. `for_each(t.x, array, {...})` binds each entity that is still
+there in turn. `q.combine_entities` keeps each entity once, in order of first mention, and
+`q.count` counts an array as its elements and anything else as one.
+
+`bedrock.entity.EntityReference` is the reference to a Java entity, and the side reading it decides
+the scope. A client reads `Animators.rootOf`'s animator through `published()`, so only the variables
+its client definition names `public` are seen, as Mojang's syntax guide says. A server reads the
+entity's `ServerAnimator`, or `AddonEntity.scope()`'s scope of queries alone when it runs no script.
+A behaviour pack has no `public` setting, so every variable of a server script is readable. Anything
+with no script of its own on that side gets `EntityReference.questions`, a scope that answers its
+queries and holds no variables. An attachable's `c.owning_entity` is a reference to the entity
+wearing it, so a wearer Java draws with a model of its own answers its queries through it as well.
+
+Which queries answer an entity, decided from the published material: Mojang's query list
+(`mojang-molang-queries.json`) types one query as an array of entities, `combine_entities`, and none
+as a single entity. `query.get_nearby_entities(distance, identifier)` is absent from that list and
+from the experimental list in `documentation/Molang.html`, which is empty, yet Mojang's own Molang
+documentation uses it in its `->` and `for_each` examples, so it is answered: the entities whose feet
+stand within the distance, itself included, of the type named where one is. `get_nearby_entities_except_self`
+is the same without the entity asking, a name found in no Mojang material today. Both are listed in
+`EntityQueries.EXPERIMENTAL`, which `components.py` reads as answered on purpose. `q.get_ride`,
+`q.target` and `context.player` appear in no Mojang material and are not answered. `context.other`
+is the repair target of an item's `repair_amount`, which nothing here evaluates.
+`BehaviourGameTests.anEntityReadsThePropertiesOfTheEntitiesNearItThroughAnArrow` has `tp:herald` add
+up `tp:settled` over two wisps through `->` inside `for_each` and count them through
+`combine_entities`; `MolangTest` runs Mojang's struct examples against stub entities.
 
 ## Bedrock features
 

@@ -5659,23 +5659,28 @@ public class AddonEntity extends PathfinderMob
 
     /** What a Molang expression a component states comes to for the entity now, the same way. */
     public at.ioexception.mcaddon.bedrock.molang.MolangValue answer(String expression) {
-        if (questions == null) {
-            questions = new at.ioexception.mcaddon.bedrock.animation.AnimationPlayer(null, this);
-            questions.environment().setQueries(new at.ioexception.mcaddon.bedrock.entity.EntityQueries(
-                this, questions, at.ioexception.mcaddon.bedrock.entity.EntityQueries.Drawn.NONE,
-                () -> ServerHooks.state() == null
-                    ? java.util.Map.of() : ServerHooks.state().properties(getUUID()), false));
-            if (ServerHooks.state() != null) {
-                questions.environment().shareTemporaries(ServerHooks.state().temporaries());
-            }
-        }
-        questions.environment().setLifeTime(
-            tickCount / (float) at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.TICKS_PER_SECOND);
-        return at.ioexception.mcaddon.bedrock.molang.MolangParser.parse(expression)
-            .evaluate(questions.environment());
+        return at.ioexception.mcaddon.bedrock.molang.MolangParser.parse(expression).evaluate(questions());
     }
 
-    private at.ioexception.mcaddon.bedrock.animation.AnimationPlayer questions;
+    private at.ioexception.mcaddon.bedrock.molang.MolangEnvironment questions() {
+        if (questions == null) {
+            questions = at.ioexception.mcaddon.bedrock.entity.EntityReference.questions(this,
+                () -> ServerHooks.state() == null ? java.util.Map.of() : ServerHooks.state().properties(getUUID()));
+        }
+        questions.setLifeTime(
+            tickCount / (float) at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.TICKS_PER_SECOND);
+        return questions;
+    }
+
+    private at.ioexception.mcaddon.bedrock.molang.MolangEnvironment questions;
+
+    /**
+     * What another server expression reads through `->`: the scope of this entity's behaviour pack
+     * script while it runs one, else a scope answering its queries.
+     */
+    public at.ioexception.mcaddon.bedrock.molang.MolangEnvironment scope() {
+        return animator != null ? animator.environment() : questions();
+    }
 
     /**
      * Which of its idle sounds the entity makes, which `minecraft:uses_legacy_ambient_sounds` picks

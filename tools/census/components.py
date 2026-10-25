@@ -329,7 +329,8 @@ def surfaces(samples):
         {query["name"].split(".", 1)[1]
          for query in json.loads(text(metadata / "molang_modules/mojang-molang-queries.json"))["queries"]},
         case_labels(queries, "MolangValue query(") - literal_set(queries, "CONTEXT = Set.of"),
-        "the engine's molang query list"))
+        "the engine's molang query list",
+        literal_set(queries, "EXPERIMENTAL = Set.of")))
     found.append(Surface(
         "molang math",
         {function["name"].split(".", 1)[1]

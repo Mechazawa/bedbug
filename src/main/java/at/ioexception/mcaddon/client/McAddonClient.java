@@ -31,6 +31,7 @@ public final class McAddonClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         at.ioexception.mcaddon.client.render.GradePass.register();
+        at.ioexception.mcaddon.bedrock.entity.EntityReference.readOnClientWith(Animators::scopeOf);
         follow();
         ActiveAddons.onActivate(set -> follow());
         at.ioexception.mcaddon.client.screen.PackUi.read(ActiveAddons.active());

@@ -1812,6 +1812,37 @@ public final class BehaviourGameTests {
             + rider.getYRot() + " where its seat turns it to " + Mth.wrapDegrees(facing) + ".");
     }
 
+    /**
+     * `tp:herald` adds up `tp:settled` over the wisps near it, reading each wisp's property through
+     * `->` from inside `for_each`, and counts the entities near it once each through
+     * `q.combine_entities`. Each answer it reaches plays a clip that tags it.
+     */
+    @GameTest()
+    public void anEntityReadsThePropertiesOfTheEntitiesNearItThroughAnArrow(GameTestHelper helper) {
+        AddonEntity herald = spawn(helper, HERALD);
+        AddonEntity settled = spawn(helper, WISP, STAND.east());
+        AddonEntity restless = spawn(helper, WISP, STAND.west());
+        if (herald == null || settled == null || restless == null) {
+            helper.succeed();
+            return;
+        }
+        EntityEvents.trigger(settled, "tp:settle", null, ServerHooks.state());
+
+        helper.runAfterDelay(HERALD_TICKS, () -> {
+            helper.assertTrue(Platform.tagsOf(herald).contains("tp_herald_heard"),
+                HERALD + " did not read one settled wisp out of two through ->: " + Platform.tagsOf(herald));
+            helper.assertTrue(Platform.tagsOf(herald).contains("tp_herald_counted"),
+                HERALD + " did not count two wisps and itself once each: " + Platform.tagsOf(herald));
+            helper.succeed();
+        });
+    }
+
+    private static final String HERALD = "tp:herald";
+    private static final String WISP = "tp:wisp";
+
+    /** Before a wisp's first random teleport, which comes two seconds after it spawns at the soonest. */
+    private static final int HERALD_TICKS = 5;
+
     private static final String BENCH = "tp:bench";
     private static final float BENCH_FACING = 90f;
 

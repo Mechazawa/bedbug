@@ -94,6 +94,15 @@ public final class EntityQueries implements MolangEnvironment.Queries {
     public static final Set<String> CONTEXT = Set.of("owning_entity", "item_slot");
 
     /**
+     * Queries Bedrock shipped behind its experimental Molang toggle, which its query list leaves out.
+     *
+     * Mojang's own Molang documentation still writes `query.get_nearby_entities` in its examples of
+     * `->` and `for_each`, the only way a pack reaches an array of entities. `tools/census/components.py`
+     * reads this declaration as the names it answers on purpose without a published entry.
+     */
+    public static final Set<String> EXPERIMENTAL = Set.of("get_nearby_entities", "get_nearby_entities_except_self");
+
+    /**
      * What only somebody drawing the entity can answer.
      *
      * A posed bone, the camera, the player at the keyboard and the client's own settings all belong
@@ -642,13 +651,16 @@ public final class EntityQueries implements MolangEnvironment.Queries {
             case "any" -> MolangValue.of(MolangValue.matchesAny(arguments));
             case "all" -> MolangValue.of(MolangValue.matchesAll(arguments));
             case "approx_eq" -> approximatelyEqual(arguments);
-            case "count" -> MolangValue.of(arguments.size());
+            case "count" -> MolangValue.of(MolangValue.count(arguments));
+            case "combine_entities" -> MolangValue.combined(arguments);
+            case "get_nearby_entities" -> nearby(arguments, true);
+            case "get_nearby_entities_except_self" -> nearby(arguments, false);
             case "get_actor_info_id" -> MolangValue.of(actorInfoId(arguments));
             case "log", "debug_output" -> logged(arguments);
 
-            // A Molang value here is a number or a string. A matrix and an array of entities are
-            // each more than that, so a pack asking for one is told rather than handed a number.
-            case "bone_orientation_matrix", "combine_entities" -> unanswered(name);
+            // Mojang publishes no member names for the matrix, so a pack asking for one is told
+            // rather than handed a struct whose members it could not have known.
+            case "bone_orientation_matrix" -> unanswered(name);
 
             // A client answers with the resource pack values its player chose and the world's values
             // the server sent; the server answers with the world's own. A name no active pack
@@ -778,6 +790,22 @@ public final class EntityQueries implements MolangEnvironment.Queries {
     }
 
     /** Whether an entity is one of the types named, each spelled the way a behaviour pack spells it. */
+    /**
+     * The entities whose feet stand within the distance of this one's, of the type the second
+     * argument names where it names one.
+     */
+    private MolangValue nearby(List<MolangValue> arguments, boolean withSelf) {
+        double distance = arguments.isEmpty() ? 0 : arguments.get(0).number();
+        List<MolangValue> named = arguments.size() > 1 ? arguments.subList(1, 2) : List.of();
+        return MolangValue.of(entity.level().getEntities(withSelf ? null : entity,
+                entity.getBoundingBox().inflate(distance),
+                other -> other.position().distanceToSqr(entity.position()) <= distance * distance
+                    && (named.isEmpty() || isAnyType(other, named)))
+            .stream()
+            .map(EntityReference::new)
+            .toList());
+    }
+
     private static boolean isAnyType(Entity subject, List<MolangValue> arguments) {
         return arguments.stream().anyMatch(value -> value.isText()
             && subject.getType() == AddonEntities.typeOf(value.text()));
