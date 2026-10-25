@@ -141,7 +141,7 @@ public sealed interface Filter {
             if (entity == null) return false;
 
             Boolean outcome = "block".equals(subject) && context.block() != null
-                ? evaluateBlock(entity.level().getBlockState(context.block()))
+                ? answerForBlock(entity.level().getBlockState(context.block()))
                 : evaluate(entity, context);
             if (outcome == null) {
                 AddonEntities.unsupported("filter " + name);
@@ -151,7 +151,7 @@ public sealed interface Filter {
         }
 
         /** The tests Mojang asks of a block subject, or null for one not implemented on a block. */
-        private Boolean evaluateBlock(net.minecraft.world.level.block.state.BlockState state) {
+        private Boolean answerForBlock(net.minecraft.world.level.block.state.BlockState state) {
             return switch (name) {
                 case "is_block" -> AddonBlocks.identifierOf(state).equals(AddonBlocks.identifierOf(text()));
                 case "is_waterlogged" -> flag(waterlogged(state));
