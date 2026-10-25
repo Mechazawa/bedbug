@@ -22,7 +22,6 @@ import net.minecraft.world.entity.ai.goal.BreakDoorGoal;
 import net.minecraft.world.entity.ai.goal.BreathAirGoal;
 import net.minecraft.world.entity.ai.goal.FleeSunGoal;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
-import net.minecraft.world.entity.ai.goal.FollowMobGoal;
 import net.minecraft.world.entity.ai.goal.MoveTowardsRestrictionGoal;
 import net.minecraft.world.entity.ai.goal.MoveTowardsTargetGoal;
 import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
@@ -3240,9 +3239,7 @@ public class AddonEntity extends PathfinderMob
             // once and leaves the difficulty out of it.
             case "minecraft:behavior.break_door", "minecraft:annotation.break_door" ->
                 goals.add(priority, new BreakDoorGoal(this, difficulty -> true));
-            case "minecraft:behavior.follow_mob" ->
-                goals.add(priority, new FollowMobGoal(this, Goals.number(goal, "speed_multiplier", 1),
-                    (float) Goals.number(goal, "stop_distance", 2), (float) Goals.number(goal, "search_range", 0)));
+            case "minecraft:behavior.follow_mob" -> goals.add(priority, new FollowAnyMobGoal(this, goal));
             case "minecraft:behavior.leap_at_target" -> goals.add(priority, new LeapGoal(this, goal));
             case "minecraft:behavior.stalk_and_pounce_on_target" -> goals.add(priority, new PounceGoal(this, goal));
             case "minecraft:behavior.play" -> goals.add(priority, new PlayGoal(this, goal));

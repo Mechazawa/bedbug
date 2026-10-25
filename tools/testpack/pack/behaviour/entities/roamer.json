@@ -199,6 +199,37 @@
           },
           "height_difference_limit": 0
         }
+      },
+      "tp:roamer_herding": {
+        "minecraft:behavior.follow_mob": {
+          "priority": 0,
+          "search_range": 10,
+          "stop_distance": 1.5,
+          "preferred_actor_type": "cow"
+        }
+      },
+      "tp:roamer_homebound": {
+        "minecraft:home": {
+          "restriction_radius": 3,
+          "restriction_type": "random_movement"
+        },
+        "minecraft:behavior.follow_mob": {
+          "priority": 0,
+          "search_range": 10,
+          "stop_distance": 1.5
+        }
+      },
+      "tp:roamer_straying": {
+        "minecraft:home": {
+          "restriction_radius": 3,
+          "restriction_type": "random_movement"
+        },
+        "minecraft:behavior.follow_mob": {
+          "priority": 0,
+          "search_range": 10,
+          "stop_distance": 1.5,
+          "use_home_position_restriction": false
+        }
       }
     },
     "components": {
@@ -348,6 +379,27 @@
         "add": {
           "component_groups": [
             "tp:roamer_level"
+          ]
+        }
+      },
+      "tp:roamer_herding": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_herding"
+          ]
+        }
+      },
+      "tp:roamer_homebound": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_homebound"
+          ]
+        }
+      },
+      "tp:roamer_straying": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_straying"
           ]
         }
       },

@@ -492,6 +492,52 @@ public final class RoamGoalGameTests {
         helper.runAfterDelay(WALK_TICKS / 2, helper::succeed);
     }
 
+    /**
+     * `minecraft:behavior.follow_mob` follows the kind `preferred_actor_type` names where one is in
+     * range: three pigs and then a cow are put down at the far side of the floor, the pigs nearer.
+     */
+    @GameTest(structure = EMPTY, maxTicks = WALK_TICKS)
+    public void aFollowerPicksThePreferredKind(GameTestHelper helper) {
+        floor(helper);
+        AddonEntity roamer = roamer(helper, "tp:roamer_herding", new BlockPos(4, 1, 2));
+        if (roamer == null) {
+            helper.succeed();
+            return;
+        }
+
+        for (int x = 1; x <= 3; x++) standing(helper, "pig", new BlockPos(x, 1, 7));
+        Mob cow = standing(helper, "cow", new BlockPos(7, 1, 7));
+        helper.succeedWhen(() -> helper.assertTrue(roamer.distanceTo(cow) < 2.5,
+            ROAMER + " prefers cows and stands " + roamer.distanceTo(cow) + " from the cow."));
+    }
+
+    /**
+     * `minecraft:behavior.follow_mob` follows nothing outside the home it is kept to, unless
+     * `use_home_position_restriction` says otherwise. The pig stands six blocks from either roamer's
+     * home, past its restriction radius of three.
+     */
+    @GameTest(structure = EMPTY, maxTicks = WALK_TICKS)
+    public void aFollowerKeptHomeFollowsNothingOutsideIt(GameTestHelper helper) {
+        floor(helper);
+        AddonEntity kept = roamer(helper, "tp:roamer_homebound", new BlockPos(1, 1, 1));
+        AddonEntity free = roamer(helper, "tp:roamer_straying", new BlockPos(1, 1, 6));
+        if (kept == null || free == null) {
+            helper.succeed();
+            return;
+        }
+
+        standing(helper, "pig", new BlockPos(7, 1, 4));
+        Vec3 from = kept.position();
+        Vec3 freeFrom = free.position();
+        helper.onEachTick(() -> helper.assertTrue(kept.position().distanceTo(from) < STILL,
+            ROAMER + " follows nothing outside its home and set off after the pig."));
+        helper.runAfterDelay(WALK_TICKS - 10, () -> {
+            helper.assertTrue(free.position().distanceTo(freeFrom) > 2,
+                ROAMER + " follows past its home when told to and never set off after the pig.");
+            helper.succeed();
+        });
+    }
+
     /** A roamer with one group on and its goals running. */
     private static AddonEntity roamer(GameTestHelper helper, String event, BlockPos where) {
         AddonEntity roamer = BehaviourGameTests.spawn(helper, ROAMER, where);
