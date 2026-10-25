@@ -3,6 +3,7 @@ package at.ioexception.mcaddon.entity;
 import at.ioexception.mcaddon.bedrock.behaviour.TargetSelection;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
+import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonObject;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.resources.Identifier;
@@ -44,7 +45,8 @@ public final class SneezeGoal extends Goal {
         this.cooldown = Goals.ticks(component, "cooldown_time", 0);
         this.dropChance = Goals.number(component, "drop_item_chance", 1);
         this.withinRadius = Goals.number(component, "within_radius", 0);
-        this.startled = TargetSelection.from(component, LivingEntity.class, withinRadius);
+        this.startled = TargetSelection.fromEntries(Json.list(component, "entity_types"), LivingEntity.class,
+            withinRadius);
         this.lootTable = Goals.text(component, "loot_table");
         this.prepareSound = sound(Goals.text(component, "prepare_sound"),
             SoundEvents.PANDA_PRE_SNEEZE);

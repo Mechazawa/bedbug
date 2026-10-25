@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.entity.player.Player;
 
 import java.util.Comparator;
 import java.util.EnumSet;
@@ -29,12 +30,22 @@ public final class PoseHoldGoal extends Goal {
     private final boolean needsTarget;
     private final String onStart;
     private final String onDone;
+    private final double suspicionHorizontal;
+    private final double suspicionVertical;
+    private final boolean vibrationsDisturb;
+    private final boolean suspicionDisturbs;
     private long endsAt;
     private long readyAt = -1;
     private LivingEntity answered;
 
     private PoseHoldGoal(AddonEntity mob, JsonObject component, Pose pose, Goals.Span duration,
         Goals.Span wait, boolean waitsFirst, double noticeRadius, boolean needsTarget) {
+        this(mob, component, pose, duration, wait, waitsFirst, noticeRadius, needsTarget, 0, 0);
+    }
+
+    private PoseHoldGoal(AddonEntity mob, JsonObject component, Pose pose, Goals.Span duration,
+        Goals.Span wait, boolean waitsFirst, double noticeRadius, boolean needsTarget,
+        double suspicionHorizontal, double suspicionVertical) {
         this.mob = mob;
         this.pose = pose;
         this.duration = duration;
@@ -45,6 +56,10 @@ public final class PoseHoldGoal extends Goal {
         this.needsTarget = needsTarget;
         this.onStart = Goals.event(component, "on_start");
         this.onDone = Goals.event(component, "on_done");
+        this.suspicionHorizontal = suspicionHorizontal;
+        this.suspicionVertical = suspicionVertical;
+        this.vibrationsDisturb = Goals.flag(component, "vibration_is_disturbance", false);
+        this.suspicionDisturbs = Goals.flag(component, "suspicion_is_disturbance", false);
         setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
     }
 
@@ -64,7 +79,9 @@ public final class PoseHoldGoal extends Goal {
     public static PoseHoldGoal sniffing(AddonEntity mob, JsonObject component) {
         return new PoseHoldGoal(mob, component, Pose.SNIFFING, Goals.span(component, "duration", 1, 1),
             Goals.span(component, "cooldown_range", 3, 10), false,
-            Goals.number(component, "sniffing_radius", 5), false);
+            Goals.number(component, "sniffing_radius", 5), false,
+            Goals.number(component, "suspicion_radius_horizontal", 3),
+            Goals.number(component, "suspicion_radius_vertical", 3));
     }
 
     /** `minecraft:behavior.emerge`, which a pack gives to something that arrives out of the ground. */
@@ -77,7 +94,9 @@ public final class PoseHoldGoal extends Goal {
      * `minecraft:behavior.dig`, which is the same thing the other way round.
      *
      * `idle_time` is how long the entity has to have had nothing to do before it goes under, so it
-     * waits that long before its first dig as well as between digs.
+     * waits that long before its first dig as well as between digs. With `vibration_is_disturbance`
+     * or `suspicion_is_disturbance` set, a vibration heard or a place found suspicious within that
+     * time delays the dig as well.
      */
     public static PoseHoldGoal digging(AddonEntity mob, JsonObject component) {
         return new PoseHoldGoal(mob, component, Pose.DIGGING, Goals.span(component, "duration", 0, 0),
@@ -90,9 +109,15 @@ public final class PoseHoldGoal extends Goal {
         if (readyAt < 0) readyAt = waitsFirst ? now + wait.roll(mob.getRandom()) : 0;
         if (now < readyAt) return false;
         if (needsTarget && (mob.getTarget() == null || mob.getTarget() == answered)) return false;
-        if (mob.getPose() != Pose.STANDING) return false;
+        if (mob.getPose() != Pose.STANDING || disturbed()) return false;
 
         return conditions.matches(new Filter.Context(mob, mob, mob.getTarget(), ServerHooks.state()));
+    }
+
+    /** Whether something the pack counts as a disturbance happened inside the idle time. */
+    private boolean disturbed() {
+        return (vibrationsDisturb && mob.sinceVibration() < wait.low())
+            || (suspicionDisturbs && mob.sinceSuspicion() < wait.low());
     }
 
     @Override
@@ -119,6 +144,7 @@ public final class PoseHoldGoal extends Goal {
         mob.setPose(Pose.STANDING);
         readyAt = mob.level().getGameTime() + wait.roll(mob.getRandom());
         fire(onDone);
+        suspect();
         if (noticeRadius <= 0) return;
 
         mob.level().getEntitiesOfClass(LivingEntity.class, mob.getBoundingBox().inflate(noticeRadius))
@@ -126,6 +152,17 @@ public final class PoseHoldGoal extends Goal {
             .filter(nearby -> nearby != mob)
             .min(Comparator.comparingDouble(mob::distanceToSqr))
             .ifPresent(nearby -> mob.getLookControl().setLookAt(nearby, 30f, 30f));
+    }
+
+    /** Whoever stands inside the suspicion box when a sniff ends makes the entity angrier. */
+    private void suspect() {
+        if (suspicionHorizontal <= 0 && suspicionVertical <= 0) return;
+
+        mob.level().getEntitiesOfClass(Player.class, mob.getBoundingBox().inflate(
+                suspicionHorizontal, suspicionVertical, suspicionHorizontal)).stream()
+            .filter(player -> mob.distanceToSqr(player.getX(), mob.getY(), player.getZ())
+                <= suspicionHorizontal * suspicionHorizontal)
+            .forEach(mob::annoy);
     }
 
     private void fire(String event) {

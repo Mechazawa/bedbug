@@ -1,5 +1,7 @@
 package at.ioexception.mcaddon.mixin;
 
+import at.ioexception.mcaddon.entity.AddonEntity;
+import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.server.WorldEvents;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.phys.HitResult;
@@ -17,5 +19,6 @@ public abstract class ProjectileMixin {
         if (self.level().isClientSide()) return;
 
         WorldEvents.projectileHit(self, self.getOwner(), hit);
+        if (Platform.isSplashWater(self)) AddonEntity.refillAround(self);
     }
 }

@@ -2724,6 +2724,18 @@ public final class Platform {
     }
     *///?}
 
+    /** Whether the projectile is a thrown splash water bottle, which older versions never ask. */
+    public static boolean isSplashWater(Entity projectile) {
+        //? if >=26 {
+        return projectile instanceof net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownSplashPotion
+            splash && splash.getItem().getOrDefault(net.minecraft.core.component.DataComponents.POTION_CONTENTS,
+                net.minecraft.world.item.alchemy.PotionContents.EMPTY)
+                .is(net.minecraft.world.item.alchemy.Potions.WATER);
+        //?} else {
+        /*return false;
+        *///?}
+    }
+
     /**
      * The reason a chunk stays loaded and ticking while this mod is holding it.
      *

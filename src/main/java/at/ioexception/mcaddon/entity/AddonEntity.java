@@ -18,7 +18,6 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.entity.ai.goal.BreakDoorGoal;
 import net.minecraft.world.entity.ai.goal.BreathAirGoal;
 import net.minecraft.world.entity.ai.goal.FleeSunGoal;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
@@ -2717,31 +2716,40 @@ public class AddonEntity extends PathfinderMob
     private float healthLastTick = -1;
 
     /**
-     * Hurts the entity while it is out of the liquid it belongs in.
-     *
-     * `minecraft:drying_out_timer` gives a pack's fish a while on land before it suffers, and names
-     * the events fired as it dries out and as it is put back.
+     * Hurts the entity once it has been out of the liquid it belongs in for the whole of
+     * `minecraft:drying_out_timer`'s `total_time`, which `Sensors` counts and raises the events of.
      */
     private void dryOut() {
-        if (!declares("minecraft:drying_out_timer")) return;
+        if (!declaresNow("minecraft:drying_out_timer") || isInWaterOrRain()) return;
         if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
 
-        if (isInWater()) {
-            if (dryingFor > 0) fire(liveText("minecraft:drying_out_timer", "stopped_drying_out_event"));
-            dryingFor = 0;
-            return;
-        }
-
-        int allowed = (int) (number(definition, "minecraft:drying_out_timer", "total_time", 60) * 20);
-        if (dryingFor == 0) fire(liveText("minecraft:drying_out_timer", "dried_out_event"));
-
-        dryingFor += Sensors.INTERVAL_TICKS;
-        if (dryingFor < allowed) return;
+        int allowed = Goals.ticks(liveComponent("minecraft:drying_out_timer"), "total_time", 0);
+        if (dryTicks < allowed) return;
 
         Platform.hurt(this, level, damageSources().dryOut(), 1);
     }
 
-    private int dryingFor;
+    /** Java's own reach for a splash that lands: four blocks across and two up, then four in a sphere. */
+    public static void refillAround(net.minecraft.world.entity.Entity bottle) {
+        bottle.level().getEntitiesOfClass(AddonEntity.class, bottle.getBoundingBox().inflate(4, 2, 4)).stream()
+            .filter(drying -> drying.distanceToSqr(bottle) < 16)
+            .forEach(AddonEntity::refillFromBottle);
+    }
+
+    /**
+     * Takes `water_bottle_refill_time` off the drying count, as a splash water bottle that lands on
+     * the entity does, and raises `recover_after_dried_out_event` when that ends a finished drying.
+     */
+    public void refillFromBottle() {
+        com.google.gson.JsonObject timer = liveComponent("minecraft:drying_out_timer");
+        if (timer == null) return;
+
+        boolean wasDry = dryTicks >= Goals.ticks(timer, "total_time", 0);
+        dryTicks = Math.max(0, dryTicks - Goals.ticks(timer, "water_bottle_refill_time", 0));
+        if (wasDry && dryTicks < Goals.ticks(timer, "total_time", 0)) {
+            fire(Goals.event(timer, "recover_after_dried_out_event"));
+        }
+    }
 
     /** Runs one of a component's named events, and does nothing when the pack named none. */
     private void fire(String event) {
@@ -3103,6 +3111,24 @@ public class AddonEntity extends PathfinderMob
         void add(int priority, net.minecraft.world.entity.ai.goal.Goal goal);
     }
 
+    /** Whether the top level, or the named group where there is one, carries the component. */
+    private boolean has(String group, String component) {
+        if (group == null) return definition.components().containsKey(component);
+
+        com.google.gson.JsonObject site = definition.componentGroups().get(group);
+        return site != null && site.has(component);
+    }
+
+    /** The body a component has beside the one being read, in the same group or at the top, else an empty one. */
+    private com.google.gson.JsonObject beside(String group, String component) {
+        if (group != null && has(group, component)) {
+            com.google.gson.JsonElement own = definition.componentGroups().get(group).get(component);
+            if (own.isJsonObject()) return own.getAsJsonObject();
+        }
+        com.google.gson.JsonObject top = definition.components().get(component);
+        return top == null ? new com.google.gson.JsonObject() : top;
+    }
+
     /**
      * Adds the goal one declaration of a behaviour asks for, read from that declaration's own body,
      * and answers the priority it went in at. One that states none goes in at its place in the order.
@@ -3205,10 +3231,15 @@ public class AddonEntity extends PathfinderMob
                 goals.add(priority, new FleeSunGoal(this, 1.0));
             case "minecraft:behavior.restrict_sun" ->
                 goals.add(priority, new RestrictSunGoal(this));
-            // Java asks per difficulty whether a door may be broken; Bedrock states the ability
-            // once and leaves the difficulty out of it.
-            case "minecraft:behavior.break_door", "minecraft:annotation.break_door" ->
-                goals.add(priority, new BreakDoorGoal(this, difficulty -> true));
+            case "minecraft:behavior.break_door" -> goals.add(priority, new DoorBreakingGoal(this,
+                beside(group, "minecraft:annotation.break_door")));
+            // The annotation carries the numbers and the behaviour the goal, so one alone is enough
+            // and both together are one goal.
+            case "minecraft:annotation.break_door" -> {
+                if (!has(group, "minecraft:behavior.break_door")) {
+                    goals.add(priority, new DoorBreakingGoal(this, goal));
+                }
+            }
             case "minecraft:behavior.follow_mob" ->
                 goals.add(priority, new FollowMobGoal(this, Goals.number(goal, "speed_multiplier", 1),
                     (float) Goals.number(goal, "stop_distance", 2), (float) Goals.number(goal, "search_range", 0)));
@@ -3701,6 +3732,7 @@ public class AddonEntity extends PathfinderMob
             rise();
             manageAsTrader();
             despawn();
+            expireSummons();
             burnInDaylight();
             hurtOverTime();
             breakBlocks();
@@ -3908,6 +3940,7 @@ public class AddonEntity extends PathfinderMob
 
         setValue("anger_level", (double) anger.level());
         setValue("is_angry", anger.angry());
+        if (anger.crossedDown() && anger.removesTargets()) setTarget(null);
     }
 
     /** A pack's first generation has no parents to take an allele from, so it rolls its own. */
@@ -4058,8 +4091,8 @@ public class AddonEntity extends PathfinderMob
      * `minecraft:vibration_listener` publishes how long ago it was for the pack to draw.
      */
     private void listenForVibrations() {
-        boolean listens = declares("minecraft:vibration_listener");
-        boolean remembers = declares("minecraft:suspect_tracking");
+        boolean listens = declaresNow("minecraft:vibration_listener");
+        boolean remembers = declaresNow("minecraft:suspect_tracking");
         if (!listens && !remembers) return;
 
         net.minecraft.world.entity.LivingEntity heard = level().getEntitiesOfClass(
@@ -4071,7 +4104,10 @@ public class AddonEntity extends PathfinderMob
             .orElse(null);
         if (heard != null) {
             heardAt = tickCount;
-            if (remembers) disturbance = heard.blockPosition();
+            if (remembers) {
+                disturbance = heard.blockPosition();
+                suspectedAt = tickCount;
+            }
         }
         if (!listens || heardAt < 0) return;
 
@@ -4126,6 +4162,40 @@ public class AddonEntity extends PathfinderMob
 
     /** The entity's own age at which it last heard something, or negative while it has heard nothing. */
     private int heardAt = -1;
+
+    /** The tick a place last became suspicious, which `behavior.dig` may count as a disturbance. */
+    private int suspectedAt = -1;
+
+    /** What this entity summoned with a lifespan, and the tick each one goes away on. */
+    private final java.util.Map<net.minecraft.world.entity.Entity, Integer> mortal =
+        new java.util.LinkedHashMap<>();
+
+    /** Removes the entity once the given ticks have passed, unless it has gone already. */
+    public void expire(net.minecraft.world.entity.Entity summoned, int afterTicks) {
+        mortal.put(summoned, tickCount + afterTicks);
+    }
+
+    private void expireSummons() {
+        if (mortal.isEmpty()) return;
+
+        mortal.entrySet().removeIf(entry -> {
+            if (!entry.getKey().isAlive()) return true;
+            if (tickCount < entry.getValue()) return false;
+
+            entry.getKey().discard();
+            return true;
+        });
+    }
+
+    /** Ticks since a vibration was last heard, or a huge number while none has been. */
+    public int sinceVibration() {
+        return heardAt < 0 ? Integer.MAX_VALUE : tickCount - heardAt;
+    }
+
+    /** Ticks since a suspicious place was last found, or a huge number while none has been. */
+    public int sinceSuspicion() {
+        return suspectedAt < 0 ? Integer.MAX_VALUE : tickCount - suspectedAt;
+    }
 
     /** How far a listener hears, which is the range Java gives its own sculk sensor. */
     private static final double VIBRATION_RANGE = 8;
@@ -4399,6 +4469,9 @@ public class AddonEntity extends PathfinderMob
             case "slot.armor.chest", "slot.armor.torso" -> net.minecraft.world.entity.EquipmentSlot.CHEST;
             case "slot.armor.legs" -> net.minecraft.world.entity.EquipmentSlot.LEGS;
             case "slot.armor.feet" -> net.minecraft.world.entity.EquipmentSlot.FEET;
+            //? if >=1.21 {
+            case "slot.armor.body" -> net.minecraft.world.entity.EquipmentSlot.BODY;
+            //?}
             default -> null;
         };
     }
@@ -4602,9 +4675,9 @@ public class AddonEntity extends PathfinderMob
      * the ground, so an entity whose pack asked for it raises its own while it is climbing.
      */
     private void beatTheAir() {
-        if (!declares("minecraft:game_event_movement_tracking") || onGround()) return;
+        if (!declaresNow("minecraft:game_event_movement_tracking") || onGround()) return;
         if (tickCount % FLAP_INTERVAL != 0 || getDeltaMovement().y <= 0) return;
-        if (!Goals.flag(componentBody("minecraft:game_event_movement_tracking"), "emit_flap", false)) {
+        if (!Goals.flag(liveComponent("minecraft:game_event_movement_tracking"), "emit_flap", false)) {
             return;
         }
 
@@ -4757,9 +4830,15 @@ public class AddonEntity extends PathfinderMob
      * Every other event, and every entity whose pack declared no tracking, passes through.
      */
     private boolean raisesMovement(String switched) {
-        if (switched == null || !declares("minecraft:game_event_movement_tracking")) return true;
+        com.google.gson.JsonObject tracking = switched == null
+            ? null : liveComponent("minecraft:game_event_movement_tracking");
+        if (tracking == null) return true;
 
-        return Goals.flag(componentBody("minecraft:game_event_movement_tracking"), switched, true);
+        return switch (switched) {
+            case "emit_swim" -> Goals.flag(tracking, "emit_swim", true);
+            case "emit_move" -> Goals.flag(tracking, "emit_move", true);
+            default -> Goals.flag(tracking, "emit_flap", false);
+        };
     }
 
     /**
@@ -5227,6 +5306,7 @@ public class AddonEntity extends PathfinderMob
         if (attacker == null) return;
 
         disturbance = attacker.blockPosition();
+        suspectedAt = tickCount;
         damageTaken.merge(attacker.getUUID(), lost, Float::sum);
         if (damageTaken.size() <= ATTACKERS_KEPT) return;
 
@@ -5242,7 +5322,7 @@ public class AddonEntity extends PathfinderMob
      * `minecraft:anger_level` splits a provocation by whether it arrived from a distance, which is
      * the difference between being shot at and being hit, so the reach decides which it was.
      */
-    private void annoy(net.minecraft.world.entity.Entity nuisance) {
+    void annoy(net.minecraft.world.entity.Entity nuisance) {
         if (anger == null || nuisance == null) return;
         if (!anger.annoyedBy(new Filter.Context(this, nuisance, nuisance, ServerHooks.state()))) {
             return;
@@ -5251,6 +5331,7 @@ public class AddonEntity extends PathfinderMob
         anger.provoke(distanceTo(nuisance) > getBbWidth() + 3);
         setValue("anger_level", (double) anger.level());
         setValue("is_angry", anger.angry());
+        makeNoise(anger.soundFor(this));
     }
 
     /** Runs the event a component names, against whoever brought it about. */
@@ -5512,16 +5593,24 @@ public class AddonEntity extends PathfinderMob
      * pack's zombie behaves like the game's beside it.
      */
     private void burnInDaylight() {
-        if (!declares("minecraft:burns_in_daylight") || isInWaterOrRain()) return;
+        if (!declaresNow("minecraft:burns_in_daylight") || isInWaterOrRain()) return;
         if (Platform.dayTime(level()) % 24000L >= 12000L) return;
         if (!level().canSeeSkyFromBelowWater(blockPosition())) return;
-        if (!getItemBySlot(net.minecraft.world.entity.EquipmentSlot.HEAD).isEmpty()) return;
+        if (!getItemBySlot(protectionSlot()).isEmpty()) return;
 
         //? if >=1.21 {
         igniteForSeconds(8);
         //?} else {
         /*setSecondsOnFire(8);
         *///?}
+    }
+
+    /** The slot whose item keeps the sun off, which is the head unless `protection_slot` names another. */
+    public net.minecraft.world.entity.EquipmentSlot protectionSlot() {
+        com.google.gson.JsonObject burning = liveComponent("minecraft:burns_in_daylight");
+        net.minecraft.world.entity.EquipmentSlot named = burning != null && burning.has("protection_slot")
+            ? equipmentSlot(Goals.text(burning, "protection_slot")) : null;
+        return named == null ? net.minecraft.world.entity.EquipmentSlot.HEAD : named;
     }
 
     /**

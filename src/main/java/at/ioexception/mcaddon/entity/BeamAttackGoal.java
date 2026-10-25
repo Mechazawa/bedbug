@@ -40,13 +40,16 @@ public final class BeamAttackGoal extends Goal {
     private final float pitchTurn;
     private final SoundEvent windUpSound;
     private final SoundEvent hitSound;
+    private final String windUpMoment;
+    private final String hitMoment;
     private int held;
     private int readyAt;
 
     private BeamAttackGoal(AddonEntity mob, JsonObject component, int windUpTicks, int durationTicks,
         int cooldownTicks, double damage, double extraOnHard, boolean addsAttackDamage,
         double minDistance, double reachHorizontal, double reachVertical, double knockbackFlat,
-        double knockbackRise, double knockbackCap, SoundEvent windUpSound, SoundEvent hitSound) {
+        double knockbackRise, double knockbackCap, SoundEvent windUpSound, SoundEvent hitSound,
+        String windUpMoment, String hitMoment) {
         this.mob = mob;
         this.windUpTicks = windUpTicks;
         this.durationTicks = durationTicks;
@@ -64,6 +67,8 @@ public final class BeamAttackGoal extends Goal {
         this.pitchTurn = (float) Goals.number(component, "x_max_rotation", 30);
         this.windUpSound = windUpSound;
         this.hitSound = hitSound;
+        this.windUpMoment = windUpMoment;
+        this.hitMoment = hitMoment;
         setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
     }
 
@@ -80,10 +85,15 @@ public final class BeamAttackGoal extends Goal {
             Goals.number(component, "magic_damage", 2),
             Goals.number(component, "hard_mode_extra_magic_damage", 2), true,
             Goals.number(component, "min_distance", 3), 16, 16, 0, 0, 0,
-            SoundEvents.GUARDIAN_ATTACK, SoundEvents.GUARDIAN_HURT);
+            SoundEvents.GUARDIAN_ATTACK, SoundEvents.GUARDIAN_HURT, null, null);
     }
 
-    /** `minecraft:behavior.sonic_boom`, which throws what it hits as well as damaging it. */
+    /**
+     * `minecraft:behavior.sonic_boom`, which throws what it hits as well as damaging it.
+     *
+     * `charge_sound` and `attack_sound` default to nothing and name a moment of the entity's own
+     * `sounds.json`, so a boom with neither is silent.
+     */
     public static BeamAttackGoal sonicBoom(AddonEntity mob, JsonObject component) {
         return new BeamAttackGoal(mob, component,
             Goals.ticks(component, "duration_until_attack_sound", 1.7),
@@ -94,7 +104,7 @@ public final class BeamAttackGoal extends Goal {
             Goals.number(component, "knockback_horizontal_strength", 2.5),
             Goals.number(component, "knockback_vertical_strength", 0.5),
             Goals.number(component, "knockback_height_cap", 0.5),
-            SoundEvents.WARDEN_SONIC_CHARGE, SoundEvents.WARDEN_SONIC_BOOM);
+            null, null, Goals.text(component, "charge_sound"), Goals.text(component, "attack_sound"));
     }
 
     @Override
@@ -120,7 +130,7 @@ public final class BeamAttackGoal extends Goal {
         held = 0;
         mob.getNavigation().stop();
         mob.setValue("is_charging", true);
-        mob.playSound(windUpSound, 1f, 1f);
+        announce(windUpSound, windUpMoment);
     }
 
     @Override
@@ -138,8 +148,13 @@ public final class BeamAttackGoal extends Goal {
         mob.setDeltaMovement(mob.getDeltaMovement().multiply(0, 1, 0));
         if (held++ != windUpTicks) return;
 
-        mob.playSound(hitSound, 1f, 1f);
+        announce(hitSound, hitMoment);
         hit(target);
+    }
+
+    private void announce(SoundEvent sound, String moment) {
+        if (sound != null) mob.playSound(sound, 1f, 1f);
+        mob.makeNoise(moment);
     }
 
     private void hit(LivingEntity target) {

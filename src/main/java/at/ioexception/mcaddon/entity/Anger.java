@@ -2,7 +2,12 @@ package at.ioexception.mcaddon.entity;
 
 import at.ioexception.mcaddon.bedrock.behaviour.Filter;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
+import at.ioexception.mcaddon.util.Json;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * How cross an entity is, and with whom it has stopped being patient.
@@ -20,6 +25,9 @@ public final class Anger {
     private final int projectileAnnoyingness;
     private final int maxAnger;
     private final Filter nuisances;
+    private final boolean removesTargets;
+    private final List<Sound> sounds = new ArrayList<>();
+    private boolean crossedDown;
     private int level;
     private int sinceDecrement;
 
@@ -32,6 +40,40 @@ public final class Anger {
             (int) Goals.number(component, "default_projectile_annoyingness", 0);
         this.maxAnger = (int) Goals.number(component, "max_anger", 100);
         this.nuisances = Goals.filter(component, "nuisance_filter");
+        this.removesTargets = Goals.flag(component, "remove_targets_below_angry_threshold", true);
+        for (JsonElement element : Json.list(component, "on_increase_sounds")) {
+            if (!element.isJsonObject()) continue;
+
+            JsonObject entry = element.getAsJsonObject();
+            sounds.add(new Sound(Goals.text(entry, "condition"), Goals.text(entry, "sound")));
+        }
+    }
+
+    /** One entry of `on_increase_sounds`: the Molang condition, and the moment it makes. */
+    private record Sound(String condition, String moment) {
+    }
+
+    /**
+     * The sound moment of the first entry whose condition holds for the entity now, or null.
+     *
+     * An entry stating no condition always holds.
+     */
+    public String soundFor(AddonEntity mob) {
+        return sounds.stream()
+            .filter(entry -> entry.condition() == null || mob.holds(entry.condition()))
+            .map(Sound::moment)
+            .findFirst()
+            .orElse(null);
+    }
+
+    /** Whether a target is let go of when the level falls under the threshold. */
+    public boolean removesTargets() {
+        return removesTargets;
+    }
+
+    /** Whether the last decay took the level from the threshold to just under it. */
+    public boolean crossedDown() {
+        return crossedDown;
     }
 
     /** Null for an entity whose pack never said it keeps track of being annoyed. */
@@ -68,6 +110,7 @@ public final class Anger {
 
     /** Lets time take one off, and says whether the level moved so the entity can publish it. */
     public boolean decay(int ticks) {
+        crossedDown = false;
         if (level <= 0 || decrementInterval <= 0) return false;
 
         sinceDecrement += ticks;
@@ -75,6 +118,7 @@ public final class Anger {
 
         sinceDecrement = 0;
         level--;
+        crossedDown = level == angryThreshold - 1;
         return true;
     }
 }

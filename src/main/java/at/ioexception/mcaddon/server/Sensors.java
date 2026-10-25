@@ -197,24 +197,26 @@ public final class Sensors {
     }
 
     /**
-     * `minecraft:drying_out_timer` counts how long an entity has been out of water.
+     * `minecraft:drying_out_timer` counts how long an entity has been out of water and rain.
      *
-     * The count goes back to nothing the moment the entity is in water again, and which event that
+     * The count goes back to nothing the moment the entity is wet again, and which event that
      * raises depends on whether the drying had finished: one event for interrupting it, another for
-     * recovering from having dried out.
+     * recovering from having dried out. The count is the entity's own, so a splash water bottle
+     * can take time off it too.
      */
     private static void dryingOut(AddonEntity entity, AddonState state) {
         JsonObject component = entity.liveComponent("minecraft:drying_out_timer");
         if (component == null) return;
 
-        int total = (int) (number(component, "total_time", 300) * 20);
-        if (entity.isInWater()) {
+        int total = (int) (number(component, "total_time", 0) * 20);
+        if (entity.isInWaterOrRain()) {
             if (entity.dryTicks() <= 0) return;
 
             String event = entity.dryTicks() >= total
-                ? "recover_after_dried_out_event" : "stopped_drying_out_event";
+                ? eventName(component, "recover_after_dried_out_event")
+                : eventName(component, "stopped_drying_out_event");
             entity.setDryTicks(0);
-            raise(entity, eventName(component, event), null, state);
+            raise(entity, event, null, state);
             return;
         }
 
