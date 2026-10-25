@@ -14,6 +14,10 @@
         "tp:placed": {
           "type": "bool",
           "default": false
+        },
+        "tp:laid": {
+          "type": "bool",
+          "default": false
         }
       }
     },
@@ -75,6 +79,56 @@
             "target": "self"
           }
         }
+      },
+      "tp:keeper_laying_from_below": {
+        "minecraft:behavior.lay_egg": {
+          "priority": 0,
+          "search_range": 2,
+          "search_height": 2,
+          "lay_seconds": 1,
+          "goal_radius": 1.2,
+          "target_blocks": [
+            "minecraft:gold_block"
+          ],
+          "on_lay": {
+            "event": "tp:keeper_laid",
+            "target": "self"
+          },
+          "allow_laying_from_below": true
+        }
+      },
+      "tp:keeper_laying_quietly": {
+        "minecraft:behavior.lay_egg": {
+          "priority": 0,
+          "search_range": 2,
+          "search_height": 2,
+          "lay_seconds": 3,
+          "goal_radius": 0.5,
+          "target_blocks": [
+            "minecraft:gold_block"
+          ],
+          "on_lay": {
+            "event": "tp:keeper_laid",
+            "target": "self"
+          },
+          "use_default_animation": false
+        }
+      },
+      "tp:keeper_laying": {
+        "minecraft:behavior.lay_egg": {
+          "priority": 0,
+          "search_range": 2,
+          "search_height": 2,
+          "lay_seconds": 3,
+          "goal_radius": 0.5,
+          "target_blocks": [
+            "minecraft:gold_block"
+          ],
+          "on_lay": {
+            "event": "tp:keeper_laid",
+            "target": "self"
+          }
+        }
       }
     },
     "components": {
@@ -123,6 +177,32 @@
       "tp:keeper_placed": {
         "set_property": {
           "tp:placed": true
+        }
+      },
+      "tp:keeper_make_laying_from_below": {
+        "add": {
+          "component_groups": [
+            "tp:keeper_laying_from_below"
+          ]
+        }
+      },
+      "tp:keeper_make_laying_quietly": {
+        "add": {
+          "component_groups": [
+            "tp:keeper_laying_quietly"
+          ]
+        }
+      },
+      "tp:keeper_make_laying": {
+        "add": {
+          "component_groups": [
+            "tp:keeper_laying"
+          ]
+        }
+      },
+      "tp:keeper_laid": {
+        "set_property": {
+          "tp:laid": true
         }
       }
     }

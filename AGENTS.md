@@ -2786,6 +2786,12 @@ recipe lookup goes through) by them, so only recipes that already match are reor
   none it places the carried block, limited by `placeable_carried_blocks`. Mojang's copper golem
   turns into its statue this way. A filter's `block` subject is not answered, so an entry filter is
   asked of the entity alone.
+- `minecraft:behavior.lay_egg`: Mojang publishes no rule for what "the default lay-egg animation"
+  is, and the turtle's own clip reads `q.is_laying_egg` from the pack. Here it is Java's turtle
+  digging: every five ticks while laying, the ground under the entity breaks into its particles
+  and sound and the entity raises `ENTITY_ACTION`, which a sculk sensor hears. With
+  `allow_laying_from_below` the entity also counts as arrived within the goal radius of the target
+  block's middle, and walks to the target block itself where the spot above it cannot be reached.
 
 ## Releasing
 

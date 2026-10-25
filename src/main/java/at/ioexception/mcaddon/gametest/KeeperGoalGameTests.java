@@ -10,7 +10,9 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.RotatedPillarBlock;
+import net.minecraft.world.level.block.SculkSensorBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.SculkSensorPhase;
 
 /**
  * The goals that carry and place blocks, lay eggs, work at a station and hand items over, each read
@@ -88,6 +90,68 @@ public final class KeeperGoalGameTests {
 
     /** Ticks a goal checked every second tick has to place a block it is allowed to. */
     private static final int REFUSED_TICKS = 30;
+
+    /**
+     * `allow_laying_from_below` lays an egg on a gold block from underneath it. The keeper cannot
+     * move, so the spot over the gold is out of its reach and only the rule lets it lay.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 100)
+    public void aLayEggGoalAllowedFromBelowLaysFromUnderneathItsNest(GameTestHelper helper) {
+        BlockPos nest = STAND.above();
+        helper.setBlock(nest, Blocks.GOLD_BLOCK);
+        AddonEntity keeper = keeper(helper, "tp:keeper_make_laying_from_below");
+        if (keeper == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.succeedWhen(() -> {
+            helper.assertBlockPresent(Blocks.TURTLE_EGG, nest.above());
+            helper.assertTrue(Boolean.TRUE.equals(keeper.value("tp:laid")), KEEPER + " laid and never raised on_lay.");
+        });
+    }
+
+    /**
+     * `use_default_animation` is Java's turtle digging while it lays, which a sculk sensor beside the
+     * nest hears as a vibration; with it off the same laying is silent until the egg is down. The
+     * padding keeps every other test's footsteps out of the sensor's reach.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 120, padding = SENSOR_PADDING)
+    public void aLayEggGoalDigsOnlyWithItsDefaultAnimation(GameTestHelper helper) {
+        layingHeard(helper, "tp:keeper_make_laying", true);
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 120, padding = SENSOR_PADDING)
+    public void aLayEggGoalWithoutItsDefaultAnimationLaysSilently(GameTestHelper helper) {
+        layingHeard(helper, "tp:keeper_make_laying_quietly", false);
+    }
+
+    /** Further than a sculk sensor hears, from the edge of a test to the next one. */
+    private static final int SENSOR_PADDING = 16;
+
+    private static void layingHeard(GameTestHelper helper, String event, boolean heard) {
+        helper.setBlock(STAND.below(), Blocks.GOLD_BLOCK);
+        BlockPos sensor = STAND.east(3);
+        helper.setBlock(sensor, Blocks.SCULK_SENSOR);
+        AddonEntity keeper = keeper(helper, event);
+        if (keeper == null) {
+            helper.succeed();
+            return;
+        }
+
+        boolean[] stirred = {false};
+        helper.onEachTick(() -> {
+            if (helper.getBlockState(STAND).is(Blocks.TURTLE_EGG)) return;
+            BlockState state = helper.getBlockState(sensor);
+            stirred[0] |= state.is(Blocks.SCULK_SENSOR) && SculkSensorBlock.getPhase(state) != SculkSensorPhase.INACTIVE;
+        });
+        helper.succeedWhen(() -> {
+            helper.assertBlockPresent(Blocks.TURTLE_EGG, STAND);
+            helper.assertTrue(stirred[0] == heard, KEEPER + (heard
+                ? " laid with its default animation and the sensor beside it heard no digging."
+                : " laid without its default animation and the sensor beside it heard digging."));
+        });
+    }
 
     private static AddonEntity keeper(GameTestHelper helper, String event) {
         AddonEntity keeper = BehaviourGameTests.spawn(helper, KEEPER, STAND);
