@@ -343,11 +343,19 @@ public final class Projectiles {
 
             double share = target == direct ? 1 : 1 - distance / range;
             for (net.minecraft.world.effect.MobEffectInstance effect : potion.getEffects()) {
+                //? if >=26.2 {
                 if (effect.getEffect().value().isInstantaneous()) {
                     effect.getEffect().value().applyInstantaneousEffect(level, mob, shooter, target,
                         effect.getAmplifier(), share);
                     continue;
                 }
+                //?} else {
+                /*if (effect.getEffect().value().isInstantenous()) {
+                    effect.getEffect().value().applyInstantenousEffect(level, mob, shooter, target,
+                        effect.getAmplifier(), share);
+                    continue;
+                }
+                *///?}
                 int duration = (int) (share * effect.getDuration() + 0.5);
                 if (duration > 20) {
                     target.addEffect(new net.minecraft.world.effect.MobEffectInstance(effect.getEffect(),
