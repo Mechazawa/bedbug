@@ -20,9 +20,11 @@ import java.util.Set;
  * Bedrock splits worldgen the same way Java does, under other names. A feature says what to build
  * and a feature rule says where, which is Java's configured feature and its placed feature. The
  * split is not in the same place, though: six of Bedrock's twenty-eight feature types state a
- * position rather than a thing, and Java states each of those on the placed feature instead. Such a
- * type is read here as a wrapper, so `minecraft:scatter_feature` around an ore becomes one Java
- * configured feature with the scatter written into the placement beside it.
+ * position rather than a thing, and Java states most of those on the placed feature instead. Such a
+ * type is read here as a wrapper, so `minecraft:snap_to_surface_feature` around an ore becomes the
+ * ore's configured feature with a heightmap written into the placement beside it. A scatter places
+ * whatever it wraps any number of times from one position, which no placed feature can, so it is a
+ * feature type of this mod's own.
  *
  * Three more are carvers. Java keeps carvers in a registry of their own, outside the eleven
  * decoration steps a feature is placed in, and a data pack cannot add one to a dimension that is
@@ -113,8 +115,8 @@ public record FeatureDefinition(String identifier, String type, JsonObject body)
      * The types this mod builds something out of, which is where the taxonomy stops being a plan.
      *
      * Three state a thing to build and have a Java feature that takes the same fields and builds the
-     * same thing; three state a position and have a Java placement modifier that asks the same
-     * question. Everything else is named against the pack.
+     * same thing; the scatter is a feature of this mod's own; two state a position and have a Java
+     * placement modifier that asks the same question. Everything else is named against the pack.
      */
     public static final Set<String> CONVERTED = Set.of(
         "minecraft:ore_feature", "minecraft:single_block_feature",

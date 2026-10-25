@@ -28,12 +28,20 @@ checked first. 35 of the 70 engine names have a different Java name and are mapp
 ## Features and feature rules
 
 - `ore_feature` becomes `minecraft:ore`.
-- `single_block_feature` becomes `minecraft:simple_block`.
 - `weighted_random_feature` becomes `minecraft:random_selector`.
-- `scatter_feature`, `snap_to_surface_feature` and `surface_relative_threshold_feature` become
-  placement modifiers on the feature they wrap.
+- `single_block_feature` becomes `minecraft:simple_block`.
+- `scatter_feature` and a feature rule's `distribution` read every field: `iterations`,
+  `scatter_chance`, `coordinate_eval_order`, and per axis a value, a Molang expression or a
+  distribution (`uniform`, `gaussian`, `inverse_gaussian`, `triangle`, `fixed_grid`,
+  `jittered_grid`) with `extent`, `step_size` and `grid_offset`. Expressions can use
+  `variable.worldx`, `worldy` and `worldz`, `query.heightmap`, `query.above_top_solid` and
+  `query.noise`. A scatter can place another scatter.
+- `snap_to_surface_feature` and `surface_relative_threshold_feature` become placement modifiers on
+  the feature they wrap.
 - A feature rule becomes a placed feature at its generation step. At world load it is added to each
-  biome its filter accepts.
+  biome its filter accepts. Its heights are world heights, as in Bedrock. The filter is checked
+  against the surface biome at the corner of each chunk.
+- A feature that names a feature which is not converted is left out, with what it names reported.
 
 ## Spawn rules
 

@@ -86,7 +86,10 @@ public final class PackFeatureClientGameTest implements FabricClientGameTest {
             + " and found some at " + astray + ".");
     }
 
-    /** A forest holds the pack's torchflowers, each standing in a forest. */
+    /**
+     * A forest holds the pack's torchflowers, each in a chunk whose corner is forest at the surface,
+     * which is where a rule's biome filter is asked.
+     */
     private static void blooms(ClientGameTestContext context, TestServerContext server) {
         BlockPos forest = server.computeOnServer(minecraft -> forestNear(minecraft.overworld()));
         Assert.that(forest != null, "No forest as wide as the chunks counted lies within " + SEARCH_RADIUS
@@ -105,8 +108,10 @@ public final class PackFeatureClientGameTest implements FabricClientGameTest {
             + ", whose surface holds " + server.computeOnServer(minecraft -> surface(minecraft.overworld(), forest))
             + ".");
         List<BlockPos> astray = server.computeOnServer(minecraft -> found.stream()
-            .filter(at -> !ruled(minecraft.overworld().getBiome(at))).toList());
-        Assert.that(astray.isEmpty(), "Expected the pack's torchflowers only in forests and found some at " + astray);
+            .filter(at -> !ruled(minecraft.overworld().getBiome(surfaceAt(minecraft.overworld(),
+                at.getX() & ~15, at.getZ() & ~15)))).toList());
+        Assert.that(astray.isEmpty(), "Expected the pack's torchflowers only in forest chunks and found some at "
+            + astray);
     }
 
     /**
