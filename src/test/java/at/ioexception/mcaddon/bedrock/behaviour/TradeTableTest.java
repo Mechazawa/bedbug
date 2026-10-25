@@ -90,6 +90,17 @@ class TradeTableTest {
     }
 
     @Test
+    void aTradeStatingNoUsesOrExperienceTakesTheSchemasDefaults() throws IOException {
+        TradeTable.Offer offer = read("""
+            {"tiers": [{"total_exp_required": 0, "trades": [
+              {"wants": [{"item": "minecraft:emerald"}], "gives": [{"item": "probe:token"}]}]}]}
+            """).offers().get(0);
+
+        assertEquals(7, offer.maxUses());
+        assertEquals(1, offer.experience());
+    }
+
+    @Test
     void aProfessionTableThePackLacksBorrowsJavasVillagerUnderEitherPath() throws IOException {
         var pack = BehaviourPackFixture.holding(root, "trading/probe.json", "{}");
         TradeTable economy = TradeTable.read(pack, "trading/economy_trades/stone_mason_trades.json");

@@ -405,8 +405,9 @@ public record TradeTable(List<Offer> offers, List<Integer> tierExperience, Borro
         TradeItem result = only(gives.get(0));
         if (costs.isEmpty() || result == null || result.item() == null) return List.of();
 
-        int maxUses = (int) Json.number(trade, "max_uses", 12);
-        int experience = (int) Json.number(trade, "trader_exp", 0);
+        // The defaults are the ones Mojang's Trade schema states.
+        int maxUses = (int) Json.number(trade, "max_uses", 7);
+        int experience = (int) Json.number(trade, "trader_exp", 1);
         boolean reward = Json.bool(trade, "reward_exp", true);
         float multiplier = (float) Json.number(stated(wants.get(0)), "price_multiplier", 0);
 
