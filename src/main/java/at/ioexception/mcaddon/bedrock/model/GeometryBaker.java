@@ -326,6 +326,19 @@ public final class GeometryBaker {
         return new Vector3f(bedrock.x, MODEL_ORIGIN_HEIGHT - bedrock.y, bedrock.z);
     }
 
+    /** A point of a baked model, in pixels, back in the space the pack wrote its geometry in. */
+    public static Vector3f toBedrockSpace(Vector3f model) {
+        return new Vector3f(model.x, MODEL_ORIGIN_HEIGHT - model.y, model.z);
+    }
+
+    /** A turn of a baked model, in radians, back in the degrees and the sense the pack writes. */
+    public static Vector3f toBedrockRotation(Vector3f radians) {
+        return new Vector3f(
+            (float) Math.toDegrees(radians.x),
+            (float) Math.toDegrees(-radians.y),
+            (float) Math.toDegrees(radians.z));
+    }
+
     /**
      * Bedrock states rotations in degrees with the opposite sign convention to Java. Combined with
      * the flipped Y axis, X and Z come through unchanged and only Y turns the other way.

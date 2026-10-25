@@ -432,6 +432,12 @@ public final class AddonModels {
         return widest;
     }
 
+    /** The geometry a definition's bone queries answer from, null where it names none the pack has. */
+    public BakedGeometry queryable(ClientEntityDefinition definition) {
+        String identifier = definition.queryableGeometry();
+        return identifier == null ? null : bake(identifier, definition);
+    }
+
     /**
      * A geometry baked for one definition, because a texture mesh names its texture the way that
      * definition's own `textures` map does.

@@ -39,6 +39,11 @@ public record MolangValue(double number, String text, Map<String, MolangValue> m
         return new MolangValue(0, text);
     }
 
+    /** The shape of every struct Bedrock hands out for a point, a turn or a size. */
+    public static MolangValue xyz(double x, double y, double z) {
+        return struct(Map.of("x", of(x), "y", of(y), "z", of(z)));
+    }
+
     public boolean isStruct() {
         return members != null;
     }

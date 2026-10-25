@@ -3,10 +3,10 @@ package at.ioexception.mcaddon.bedrock.entity;
 import at.ioexception.mcaddon.convert.BedrockItemTags;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.animation.AnimationPlayer;
-import at.ioexception.mcaddon.bedrock.animation.BonePose;
 import at.ioexception.mcaddon.bedrock.behaviour.BedrockVillager;
 import at.ioexception.mcaddon.bedrock.behaviour.Families;
 import at.ioexception.mcaddon.bedrock.model.BedrockBone;
+import at.ioexception.mcaddon.bedrock.model.BoneOrientation;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.pack.PackManifest;
@@ -108,9 +108,9 @@ public final class EntityQueries implements MolangEnvironment.Queries {
             return null;
         }
 
-        /** Where that bone has been posed for this frame. */
-        default BonePose poseOf(String name) {
-            return null;
+        /** Where that bone stands in the queryable geometry once every bone above it is posed. */
+        default BoneOrientation orientationOf(String name) {
+            return BoneOrientation.IDENTITY;
         }
 
         default Vector3f locator(String name) {
@@ -486,9 +486,9 @@ public final class EntityQueries implements MolangEnvironment.Queries {
                 : entity.getVehicle().getYRot());
 
             case "get_animation_frame" -> MolangValue.of(environment.animTime());
-            case "bone_orientation_trs" -> boneOrigin(arguments);
-            case "bone_origin" -> xyz(restingBone(arguments, BedrockBone::pivot));
-            case "bone_rotation" -> xyz(restingBone(arguments, BedrockBone::rotation));
+            case "bone_orientation_trs" -> drawn.orientationOf(text(arguments, 0)).asStruct();
+            case "bone_origin" -> restingBone(arguments, BedrockBone::pivot);
+            case "bone_rotation" -> restingBone(arguments, BedrockBone::rotation);
             case "bone_aabb" -> boneBox(arguments);
             case "get_default_bone_pivot" -> MolangValue.of(bonePivot(arguments));
             case "get_locator_offset" ->
@@ -973,20 +973,11 @@ public final class EntityQueries implements MolangEnvironment.Queries {
         return null;
     }
 
-    /**
-     * Where one of the model's bones currently sits, in the space the model is built in.
-     *
-     * A pack asks this to hang one thing off another, and the axis it wants is the second argument.
-     */
-    private MolangValue boneOrigin(List<MolangValue> arguments) {
-        BonePose pose = drawn.poseOf(text(arguments, 0));
-        return pose == null ? MolangValue.ZERO : MolangValue.of(alongAxis(pose.position, arguments));
-    }
-
     /** A field of one bone of the model as the pack modelled it, nowhere for a bone it has not got. */
-    private Vector3f restingBone(List<MolangValue> arguments, Function<BedrockBone, Vector3f> field) {
+    private MolangValue restingBone(List<MolangValue> arguments, Function<BedrockBone, Vector3f> field) {
         BedrockBone bone = drawn.bone(text(arguments, 0));
-        return bone == null ? NOWHERE : field.apply(bone);
+        Vector3f value = bone == null ? NOWHERE : field.apply(bone);
+        return MolangValue.xyz(value.x, value.y, value.z);
     }
 
     /**
@@ -1007,16 +998,13 @@ public final class EntityQueries implements MolangEnvironment.Queries {
                 largest.max(new Vector3f(cube.origin()).add(cube.size()).add(grown, grown, grown));
             });
         }
-        return MolangValue.struct(Map.of("min", xyz(smallest), "max", xyz(largest)));
+        return MolangValue.struct(Map.of(
+            "min", MolangValue.xyz(smallest.x, smallest.y, smallest.z),
+            "max", MolangValue.xyz(largest.x, largest.y, largest.z)));
     }
 
     /** What a bone query answers with for a bone the model does not have. */
     private static final Vector3f NOWHERE = new Vector3f();
-
-    private static MolangValue xyz(Vector3f vector) {
-        return MolangValue.struct(Map.of(
-            "x", MolangValue.of(vector.x()), "y", MolangValue.of(vector.y()), "z", MolangValue.of(vector.z())));
-    }
 
     private static MolangValue colour(double red, double green, double blue, double alpha) {
         return MolangValue.struct(Map.of("r", MolangValue.of(red), "g", MolangValue.of(green),

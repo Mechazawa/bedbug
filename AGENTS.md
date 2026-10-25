@@ -2294,6 +2294,17 @@ answers a struct whole; the parser reads the member a pack names after the name 
 off it, so `v.c = q.spellcolor; return v.c.r;` works. Entity references are not values here, so the
 documentation's `v.cowcow.friend->v.test` examples have no answer.
 
+`query.bone_orientation_trs(bone)` answers `BoneOrientation.ofDrawn` of the bone's matrix in the
+queryable geometry, posed by `BedrockModelRenderer.anchorOf` the way the frame draws it, read back
+into the pack's own frame: `.t` is the posed pivot in pixels from the feet, `.r` the whole turn in
+degrees as `rotationZYX` decomposes it, `.s` the scales multiplied down the chain. Mojang publishes
+the member names and nothing on how the matrix is composed, so `.t` is the pivot rather than the
+translation column of a pivot-about matrix; Villager News reads it as a place in the model, dividing
+by sixteen and turning it by the body's yaw. A bone the geometry lacks, and every bone on a server,
+answers the identity, as documented. `bone_orientation_matrix` stays reported: no member names for
+the matrix are published. `AnimationClientGameTest.orientation` reads `tp:gaze`'s `v.head_pose` and
+`BoneOrientationTest` the frame arithmetic.
+
 
 `bedrock/ui/` reads a resource pack's `ui/` files and lays out what packs do with them to a server's
 forms and to the heads-up display's title and action bar; `client/screen/PackUi` holds the active

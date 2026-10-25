@@ -88,6 +88,14 @@ public record ClientEntityDefinition(
         return effectsRunOffscreen || bonesRunOffscreen;
     }
 
+    /**
+     * The geometry the bone queries answer from, before any render controller has picked one: the
+     * one named `default`, else the first.
+     */
+    public String queryableGeometry() {
+        return geometry.getOrDefault("default", geometry.values().stream().findFirst().orElse(null));
+    }
+
     public String resolveAnimation(String shortName) {
         return animations.getOrDefault(shortName, animationControllers.getOrDefault(shortName, shortName));
     }
