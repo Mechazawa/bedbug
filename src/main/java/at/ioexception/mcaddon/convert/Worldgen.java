@@ -6,10 +6,10 @@ import at.ioexception.mcaddon.bedrock.behaviour.DataValues;
 import at.ioexception.mcaddon.bedrock.behaviour.DimensionDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.FeatureDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.FeatureRuleDefinition;
-import at.ioexception.mcaddon.bedrock.behaviour.Scatter;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.util.Json;
+import at.ioexception.mcaddon.worldgen.BedrockFeatures;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -87,27 +87,112 @@ public final class Worldgen {
         }
 
         Map<String, FeatureDefinition> byIdentifier = new LinkedHashMap<>();
-        features.forEach(feature -> byIdentifier.put(feature.identifier(), feature));
+        features.forEach(feature -> byIdentifier.put(featureId(feature.identifier(), namespace), feature));
 
-        Set<String> built = new LinkedHashSet<>();
-        for (FeatureDefinition feature : features) {
-            JsonObject configured = configured(feature, namespace);
-            if (configured == null) continue;
+        Map<String, JsonObject> leaves = new LinkedHashMap<>();
+        byIdentifier.forEach((id, feature) -> {
+            JsonObject leaf = leaf(feature);
+            if (leaf != null) leaves.put(id, leaf);
+        });
+        Set<String> placeable = placeable(byIdentifier, leaves.keySet(), namespace);
 
-            Names.Identifier id = Names.split(feature.identifier(), namespace);
-            write(fresh, path(root, id, Platform.featureDirectory()), configured);
-            write(fresh, path(root, id, "worldgen/placed_feature"),
-                placed(id.namespace() + ":" + id.path(), new JsonArray()));
-            built.add(feature.identifier());
+        for (String id : placeable) {
+            FeatureDefinition feature = byIdentifier.get(id);
+            JsonObject configured = leaves.containsKey(id) ? leaves.get(id) : composite(feature, namespace);
+            Names.Identifier at = Names.split(id, namespace);
+            if (configured != null) {
+                write(fresh, path(root, at, Platform.featureDirectory()), configured);
+                write(fresh, path(root, at, "worldgen/placed_feature"), placed(id, new JsonArray()));
+            } else {
+                JsonArray placement = new JsonArray();
+                String inner = unwrap(id, byIdentifier, placement, namespace);
+                write(fresh, path(root, at, "worldgen/placed_feature"), placed(inner, placement));
+            }
         }
 
         for (FeatureRuleDefinition rule : rules) {
-            JsonObject placement = rulePlacement(rule, byIdentifier, built, namespace);
-            if (placement == null) continue;
+            String named = featureId(rule.placesFeature(), namespace);
+            if (!placeable.contains(named)) continue;
+
+            // The biome is asked once, at the surface over the chunk's corner, before the scatter
+            // moves anywhere: a rule's heights are often below the surface, where Java may answer
+            // with a cave biome the pack's filter never named.
+            JsonArray placement = new JsonArray();
+            JsonObject surface = new JsonObject();
+            surface.addProperty("type", "minecraft:heightmap");
+            surface.addProperty("heightmap", "WORLD_SURFACE_WG");
+            placement.add(surface);
+            placement.add(marker("minecraft:biome"));
+            JsonObject scatter = new JsonObject();
+            scatter.addProperty("type", BedrockFeatures.SCATTER);
+            scatter.add("distribution", rule.scatter().body());
+            placement.add(scatter);
+            String inner = unwrap(named, byIdentifier, placement, namespace);
 
             write(fresh, path(root, Names.split(rule.identifier(), namespace), "worldgen/placed_feature"),
-                placement);
+                placed(inner, placement));
         }
+    }
+
+    /**
+     * The features that end in something Java can place, each of which gets a placed feature under its
+     * own name for others to refer to.
+     *
+     * A feature naming others is placeable once everything it names is, so a feature naming one that
+     * no type here builds, one no pack declares, or itself through a loop is left out. An entry whose
+     * reference the game cannot resolve stops the whole data pack loading.
+     */
+    private static Set<String> placeable(Map<String, FeatureDefinition> features, Set<String> leaves,
+        String namespace) {
+        Set<String> placeable = new LinkedHashSet<>(leaves);
+        boolean grew = true;
+        while (grew) {
+            grew = false;
+            for (Map.Entry<String, FeatureDefinition> feature : features.entrySet()) {
+                if (placeable.contains(feature.getKey())) continue;
+
+                List<String> named = references(feature.getValue(), namespace);
+                if (named.isEmpty() || !placeable.containsAll(named)) continue;
+                placeable.add(feature.getKey());
+                grew = true;
+            }
+        }
+        return placeable;
+    }
+
+    private static List<String> references(FeatureDefinition feature, String namespace) {
+        JsonElement listed = feature.body().get("features");
+        if (feature.type().equals("minecraft:weighted_random_feature")
+            || feature.type().equals("minecraft:aggregate_feature")) {
+            return listed == null || !listed.isJsonArray() ? List.of() : listed.getAsJsonArray().asList()
+                .stream().map(entry -> featureOf(entry, namespace)).toList();
+        }
+        String wrapped = feature.wraps();
+        return wrapped == null ? List.of() : List.of(featureId(wrapped, namespace));
+    }
+
+    /**
+     * Follows features that state a position Java states as placement modifiers, adding each one's
+     * modifiers, to the feature they wrap.
+     */
+    private static String unwrap(String id, Map<String, FeatureDefinition> features, JsonArray placement,
+        String namespace) {
+        String named = id;
+        for (int step = 0; step < WRAPPER_LIMIT; step++) {
+            FeatureDefinition feature = features.get(named);
+            if (feature == null || !FeatureDefinition.PLACEMENT.contains(feature.type())
+                || feature.type().equals("minecraft:scatter_feature")) {
+                break;
+            }
+            wrapperPlacement(feature, placement);
+            named = featureId(feature.wraps(), namespace);
+        }
+        return named;
+    }
+
+    private static String featureId(String identifier, String namespace) {
+        Names.Identifier id = Names.split(identifier, namespace);
+        return id.namespace() + ":" + id.path();
     }
 
     /**
@@ -175,22 +260,51 @@ public final class Worldgen {
     }
 
     /**
-     * One feature as the Java configured feature it builds, or nothing where Java has no such form.
+     * A feature that builds blocks itself, as the configured feature it becomes, or nothing where no
+     * type here builds it.
      *
-     * Three of Bedrock's thirteen building types have a Java feature that takes the same fields and
-     * builds the same thing. The rest name a Java feature whose configuration is a different model
-     * of the same idea, and a converted entry would be a guess at what the pack meant rather than
-     * what it wrote, so each is named against the pack instead.
+     * An ore vein has a Java feature that takes the same fields and builds the same thing. A single
+     * block has Java's `simple_block`, which always asks whether the block can stay where it lands and
+     * has nothing for the neighbours a pack may ask for, so it takes a type of this mod's own. The
+     * rest name a Java feature whose configuration is a different model of the same idea, and a
+     * converted entry would be a guess at what the pack meant rather than what it wrote, so each is
+     * named against the pack instead.
      */
-    private static JsonObject configured(FeatureDefinition feature, String namespace) {
+    private static JsonObject leaf(FeatureDefinition feature) {
         return switch (feature.type()) {
             case "minecraft:ore_feature" -> typed("minecraft:ore", ore(feature.body()));
-            case "minecraft:single_block_feature" ->
-                typed("minecraft:simple_block", singleBlock(feature.body()));
-            case "minecraft:weighted_random_feature" ->
-                typed("minecraft:random_selector", weighted(feature.body(), namespace));
+            case "minecraft:single_block_feature" -> typed(BedrockFeatures.SINGLE_BLOCK, singleBlock(feature.body()));
             default -> null;
         };
+    }
+
+    /**
+     * A feature that places other features, as the configured feature it becomes, or nothing for one
+     * Java states as placement modifiers instead.
+     */
+    private static JsonObject composite(FeatureDefinition feature, String namespace) {
+        return switch (feature.type()) {
+            case "minecraft:weighted_random_feature" ->
+                typed("minecraft:random_selector", weighted(feature.body(), namespace));
+            case "minecraft:aggregate_feature" -> typed(BedrockFeatures.AGGREGATE, aggregate(feature, namespace));
+            case "minecraft:scatter_feature" -> {
+                JsonObject config = new JsonObject();
+                config.add("distribution", feature.scatter().body());
+                config.addProperty("places_feature", featureId(feature.wraps(), namespace));
+                yield typed(BedrockFeatures.SCATTER, config);
+            }
+            default -> null;
+        };
+    }
+
+    private static JsonObject aggregate(FeatureDefinition feature, String namespace) {
+        JsonArray named = new JsonArray();
+        references(feature, namespace).forEach(named::add);
+
+        JsonObject config = new JsonObject();
+        config.add("features", named);
+        config.addProperty("early_out", Json.text(feature.body(), "early_out", "none"));
+        return config;
     }
 
     private static JsonObject typed(String type, JsonObject config) {
@@ -264,50 +378,89 @@ public final class Worldgen {
     }
 
     /**
-     * A single block, which Java places through a provider rather than by naming the block.
+     * A single block, as the configuration of this mod's own single block feature.
      *
-     * Bedrock writes one block or a list of weighted ones, and Java has a provider for each of those
-     * two shapes.
+     * Bedrock names the faces a neighbour is asked about as `top`, `bottom`, the four directions,
+     * `sides` for all four of those and `all` for all six, and the configuration names each face by
+     * its Java direction.
      */
     private static JsonObject singleBlock(JsonObject body) {
-        AddonEntities.unsupportedFields("feature minecraft:single_block_feature", body,
-            List.of("may_attach_to", "may_not_attach_to", "randomize_rotation",
-                "enforce_placement_rules", "enforce_survivability_rules"));
-
         JsonElement places = body.get("places_block");
         if (places == null) return null;
 
-        JsonObject provider;
-        if (places.isJsonArray()) {
-            JsonArray entries = new JsonArray();
-            places.getAsJsonArray().forEach(one -> {
-                if (!one.isJsonObject()) return;
-                JsonObject weighted = one.getAsJsonObject();
-                BlockReference state = block(weighted.get("block"));
-                if (state == null) return;
+        JsonArray choices = new JsonArray();
+        List<JsonElement> listed = places.isJsonArray() ? places.getAsJsonArray().asList() : List.of(places);
+        listed.forEach(one -> {
+            boolean weighted = places.isJsonArray() && one.isJsonObject() && one.getAsJsonObject().has("block");
+            BlockReference state = block(weighted ? one.getAsJsonObject().get("block") : one);
+            if (state == null) return;
 
-                JsonObject entry = new JsonObject();
-                entry.add("data", state.json());
-                entry.addProperty("weight", Math.max(1, (int) Json.number(weighted, "weight", 1)));
-                entries.add(entry);
-            });
-            if (entries.isEmpty()) return null;
-
-            provider = new JsonObject();
-            provider.addProperty("type", Platform.stateProvider("weighted"));
-            provider.add("entries", entries);
-        } else {
-            BlockReference state = block(places);
-            if (state == null) return null;
-
-            provider = new JsonObject();
-            provider.addProperty("type", Platform.stateProvider("simple"));
-            provider.add("state", state.json());
-        }
+            JsonObject choice = new JsonObject();
+            choice.add("state", state.json());
+            choice.addProperty("weight",
+                weighted ? Math.max(1, (int) Json.number(one.getAsJsonObject(), "weight", 1)) : 1);
+            choices.add(choice);
+        });
+        if (choices.isEmpty()) return null;
 
         JsonObject config = new JsonObject();
-        config.add("to_place", provider);
+        config.add("places", choices);
+        JsonElement replaceable = body.get("may_replace");
+        if (replaceable != null) config.add("may_replace", matches(replaceable));
+
+        JsonElement attach = body.get("may_attach_to");
+        if (attach != null && attach.isJsonObject()) {
+            JsonObject attachment = new JsonObject();
+            attachment.add("faces", faces(attach.getAsJsonObject()));
+            attachment.addProperty("min_sides_must_attach",
+                (int) Json.number(attach.getAsJsonObject(), "min_sides_must_attach", 1));
+            attachment.addProperty("auto_rotate", Json.bool(attach.getAsJsonObject(), "auto_rotate", true));
+            config.add("may_attach_to", attachment);
+        }
+        JsonElement shunned = body.get("may_not_attach_to");
+        if (shunned != null && shunned.isJsonObject()) {
+            config.add("may_not_attach_to", faces(shunned.getAsJsonObject()));
+        }
+
+        config.addProperty("enforce_rules", Json.bool(body, "enforce_survivability_rules", false)
+            || Json.bool(body, "enforce_placement_rules", false));
+        config.addProperty("randomize_rotation", Json.bool(body, "randomize_rotation", false));
         return config;
+    }
+
+    /** Bedrock's face names, each as the Java directions it stands for. */
+    private static final Map<String, List<String>> FACES = Map.of(
+        "top", List.of("up"), "bottom", List.of("down"),
+        "north", List.of("north"), "east", List.of("east"), "south", List.of("south"), "west", List.of("west"),
+        "sides", List.of("north", "east", "south", "west"),
+        "all", List.of("up", "down", "north", "east", "south", "west"));
+
+    private static JsonObject faces(JsonObject bedrock) {
+        JsonObject faces = new JsonObject();
+        bedrock.entrySet().forEach(face -> FACES.getOrDefault(face.getKey(), List.of()).forEach(direction -> {
+            JsonArray listed = faces.has(direction) ? faces.getAsJsonArray(direction) : new JsonArray();
+            listed.addAll(matches(face.getValue()));
+            faces.add(direction, listed);
+        }));
+        return faces;
+    }
+
+    /** One block reference or a list of them, as the blocks and named states a neighbour is matched by. */
+    private static JsonArray matches(JsonElement declared) {
+        JsonArray matches = new JsonArray();
+        List<JsonElement> listed = declared.isJsonArray() ? declared.getAsJsonArray().asList() : List.of(declared);
+        listed.forEach(one -> {
+            BlockReference reference = block(one);
+            if (reference == null) return;
+
+            JsonObject match = new JsonObject();
+            match.addProperty("block", reference.id());
+            JsonObject properties = new JsonObject();
+            reference.properties().forEach(properties::addProperty);
+            match.add("properties", properties);
+            matches.add(match);
+        });
+        return matches;
     }
 
     /**
@@ -361,60 +514,19 @@ public final class Worldgen {
     private static String featureOf(JsonElement entry, String namespace) {
         JsonElement named = entry.isJsonArray() && !entry.getAsJsonArray().isEmpty()
             ? entry.getAsJsonArray().get(0) : entry;
-        if (!named.isJsonPrimitive()) return null;
-
-        Names.Identifier id = Names.split(named.getAsString(), namespace);
-        return id.namespace() + ":" + id.path();
-    }
-
-    /**
-     * Where a rule puts its feature, as the placed feature Java reads it from.
-     *
-     * The rule's own scatter is the outer part of the placement. What it names may be a feature that
-     * states a position of its own rather than a thing to build, and each of those adds a modifier
-     * and hands on the feature it wraps, so a scatter around a search around an ore comes out as one
-     * placed feature naming the ore.
-     */
-    private static JsonObject rulePlacement(FeatureRuleDefinition rule,
-        Map<String, FeatureDefinition> features, Set<String> built, String namespace) {
-        rule.scatter().report();
-
-        JsonArray placement = scatterPlacement(rule.scatter(), rule.decorationStep(), true);
-        String named = rule.placesFeature();
-
-        for (int step = 0; step < WRAPPER_LIMIT && !built.contains(named); step++) {
-            FeatureDefinition feature = features.get(named);
-            if (feature == null || !FeatureDefinition.PLACEMENT.contains(feature.type())) break;
-
-            wrapperPlacement(feature, placement);
-            String inner = feature.wraps();
-            if (inner == null) return null;
-            named = inner;
-        }
-        if (!built.contains(named)) return null;
-
-        placement.add(marker("minecraft:biome"));
-        Names.Identifier id = Names.split(named, namespace);
-        return placed(id.namespace() + ":" + id.path(), placement);
+        return named.isJsonPrimitive() ? featureId(named.getAsString(), namespace) : null;
     }
 
     /**
      * The modifiers one feature that states a position adds to the placement around it.
      *
-     * Three of the six have a Java placement modifier that asks the same question. The other three
+     * Two of the five have a Java placement modifier that asks the same question. The other three
      * search for a spot where the feature they wrap would succeed, which Java decides inside the
      * feature rather than before it, so each is named against the pack and the rest of the chain
      * still places.
      */
     private static void wrapperPlacement(FeatureDefinition feature, JsonArray placement) {
         switch (feature.type()) {
-            case "minecraft:scatter_feature" -> {
-                Scatter scatter = feature.scatter();
-                scatter.report();
-                AddonEntities.unsupported(
-                    "feature minecraft:scatter_feature spread inside another scatter");
-                scatterPlacement(scatter, null, false).forEach(placement::add);
-            }
             case "minecraft:surface_relative_threshold_feature" -> {
                 JsonObject filter = new JsonObject();
                 filter.addProperty("type", "minecraft:surface_relative_threshold_filter");
@@ -441,68 +553,6 @@ public final class Worldgen {
             // places what it wraps.
             default -> { }
         }
-    }
-
-    /**
-     * A scatter as the placement modifiers Java spreads a feature with.
-     *
-     * A step is given only for the outermost scatter, because it decides the heightmap a feature
-     * with no height of its own lands on: what a pack scatters in the vegetation pass belongs on top
-     * of whatever is already there, and everything else belongs on the terrain.
-     *
-     * `spreads` is true for that outermost scatter alone. `in_square` moves a position by up to
-     * fifteen blocks on each axis, so a second one can carry the feature into a neighbouring chunk,
-     * and `biome_filter` then asks `WorldGenRegion` for a chunk it refuses to answer for and takes
-     * the whole generating chunk with it. It would also throw away the column the heightmap
-     * between the two scatters had just settled on.
-     */
-    private static JsonArray scatterPlacement(Scatter scatter, String step, boolean spreads) {
-        JsonArray placement = new JsonArray();
-
-        int rarity = scatter.rarity();
-        if (rarity > 1) {
-            JsonObject filter = new JsonObject();
-            filter.addProperty("type", "minecraft:rarity_filter");
-            filter.addProperty("chance", rarity);
-            placement.add(filter);
-        }
-
-        int iterations = scatter.iterations();
-        if (iterations > 1) {
-            JsonObject count = new JsonObject();
-            count.addProperty("type", "minecraft:count");
-            count.addProperty("count", iterations);
-            placement.add(count);
-        }
-        if (spreads) placement.add(marker("minecraft:in_square"));
-
-        int[] heights = scatter.heights();
-        if (heights != null) {
-            JsonObject range = new JsonObject();
-            range.addProperty("type", "minecraft:height_range");
-            range.add("height", uniform(heights[0], heights[1], scatter.trapezoid()));
-            placement.add(range);
-        } else if (step != null || scatter.surface()) {
-            JsonObject heightmap = new JsonObject();
-            heightmap.addProperty("type", "minecraft:heightmap");
-            heightmap.addProperty("heightmap", step == null || step.equals("VEGETAL_DECORATION")
-                ? "MOTION_BLOCKING" : "WORLD_SURFACE_WG");
-            placement.add(heightmap);
-        }
-        return placement;
-    }
-
-    private static JsonObject uniform(int low, int high, boolean trapezoid) {
-        JsonObject minimum = new JsonObject();
-        minimum.addProperty("absolute", low);
-        JsonObject maximum = new JsonObject();
-        maximum.addProperty("absolute", high);
-
-        JsonObject height = new JsonObject();
-        height.addProperty("type", trapezoid ? "minecraft:trapezoid" : "minecraft:uniform");
-        height.add("min_inclusive", minimum);
-        height.add("max_inclusive", maximum);
-        return height;
     }
 
     private static JsonObject marker(String type) {

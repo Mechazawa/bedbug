@@ -57,6 +57,8 @@ public final class McAddon implements ModInitializer {
         // this function type, and the game looks both names up as it parses the table.
         at.ioexception.mcaddon.bedrock.behaviour.BedrockCondition.register();
         at.ioexception.mcaddon.bedrock.behaviour.BedrockFunction.register();
+        // Before the packs are read, for the same reason: a converted feature names these types.
+        at.ioexception.mcaddon.worldgen.BedrockFeatures.register();
         // Before the packs are read, because a pack may name Bedrock's border block anywhere it
         // names a block or an item.
         at.ioexception.mcaddon.block.BorderBlock.register();

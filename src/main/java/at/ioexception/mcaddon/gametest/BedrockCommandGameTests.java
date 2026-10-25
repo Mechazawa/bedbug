@@ -777,7 +777,7 @@ public final class BedrockCommandGameTests {
     }
 
     /** What the console hears back from `/bedrock <line>`, typed as an operator would type it. */
-    private static List<String> typed(GameTestHelper helper, String line) {
+    static List<String> typed(GameTestHelper helper, String line) {
         return typed(helper.getLevel().getServer().createCommandSourceStack(), "bedrock " + line);
     }
 

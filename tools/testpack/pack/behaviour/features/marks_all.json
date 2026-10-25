@@ -1,0 +1,9 @@
+{
+  "format_version": "1.21.40",
+  "minecraft:aggregate_feature": {
+    "description": {
+      "identifier": "tp:marks_all"
+    },
+    "features": ["tp:mark_east_one", "tp:rooted_bloom", "tp:mark_east_two"]
+  }
+}

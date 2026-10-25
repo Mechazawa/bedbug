@@ -1,0 +1,21 @@
+{
+  "format_version": "1.13.0",
+  "minecraft:scatter_feature": {
+    "description": {
+      "identifier": "tp:mark_spread"
+    },
+    "places_feature": "tp:mark",
+    "distribution": {
+      "iterations": 24,
+      "x": {
+        "distribution": "uniform",
+        "extent": [2, 5]
+      },
+      "y": "math.mod(math.abs(variable.worldx), 2)",
+      "z": {
+        "distribution": "uniform",
+        "extent": [2, 5]
+      }
+    }
+  }
+}

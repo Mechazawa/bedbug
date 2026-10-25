@@ -1372,7 +1372,7 @@ public final class EntityQueries implements MolangEnvironment.Queries {
      * depends on the exact field, only on it being smooth and repeatable, so this is value noise
      * over the arguments with the same shape.
      */
-    private static double noise(List<MolangValue> arguments) {
+    public static double noise(List<MolangValue> arguments) {
         double along = 0;
         for (int axis = 0; axis < arguments.size(); axis++) {
             along += arguments.get(axis).number() * NOISE_AXES[axis % NOISE_AXES.length];

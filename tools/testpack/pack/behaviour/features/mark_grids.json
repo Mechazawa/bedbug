@@ -1,0 +1,19 @@
+{
+  "format_version": "1.13.0",
+  "minecraft:scatter_feature": {
+    "description": {
+      "identifier": "tp:mark_grids"
+    },
+    "places_feature": "tp:mark_grid",
+    "distribution": {
+      "iterations": 2,
+      "x": {
+        "distribution": "fixed_grid",
+        "extent": [0, 4],
+        "step_size": 4
+      },
+      "y": 0,
+      "z": 0
+    }
+  }
+}

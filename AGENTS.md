@@ -845,8 +845,12 @@ These are the checks it runs, and what each one catches:
   named rather than generated. The two nether biomes, `tp:cinder_wastes` and `tp:soot_fields`, are
   added to the list the nether searches and are the ones a player can stand in. The end biome,
   `tp:hush`, is added to the end's highlands. The features cover
-  the three kinds that convert and one of the six with nothing behind them, and one of them wraps
-  another in a scatter, which is what makes the placement chain more than one link. One rule hangs
+  every kind that converts, and one of them wraps another in a scatter, which is what makes the
+  placement chain more than one link. The `mark*` features and `tp:turned_pumpkin` are placed by
+  `FeatureGameTests` with `place feature` and read back block by block: a grid walked in the order
+  `coordinate_eval_order` names, a uniform spread whose height reads the x it chose, a scatter of
+  that grid, three aggregates with each `early_out`, and a single block against each of its
+  neighbour rules. One rule hangs
   an ore on every overworld biome and the other hangs flowers on the forests, so a fresh chunk holds
   blocks that can be counted. **The ore places `tp:lamp`, which is the pack's own block**: a run
   where the block registry and the worldgen registry disagree leaves nothing in the ground. The
@@ -854,7 +858,8 @@ These are the checks it runs, and what each one catches:
   wrapping them states its height as `query.heightmap(variable.worldx, variable.worldz)`, the
   surface query nearly every pack scattering something over the ground writes.
   `PackFeatureClientGameTest` counts the lamps in the chunks round a normal world's spawn, every one
-  between the rule's heights, and the torchflowers in a forest, every one standing in a forest.
+  between the rule's heights, and the torchflowers in a forest, every one in a chunk whose corner
+  is forest at the surface.
 
   The resource pack paints the glade and the cinder wastes, once in each of the two shapes Bedrock
   allows. One has a `biomes/*.client_biome.json` naming a fog of its own; the other is an entry in
@@ -2343,6 +2348,45 @@ definition naming none, or naming a key it lacks, answers from `default`, else f
 `tp:gaze` names `geometry.tp.gaze_tall`, a geometry it never draws whose head pivots four pixels
 higher, so `AnimationClientGameTest.orientation` reads a pivot the drawn model has not got.
 
+## Bedrock features
+
+A pack's `features/` become configured features and its `feature_rules/` placed features, in
+`convert/Worldgen`. Where Java has no type with the same fields, the feature is one of this mod's
+own, in `worldgen/`: `mcaddon:scatter`, `mcaddon:aggregate` and `mcaddon:single_block`, and the
+placement modifier `mcaddon:scatter` that a feature rule's `distribution` becomes. From 26.3 each
+record is a Java `Feature`; before, it is the configuration of `BedrockFeatures.Placing`. Every
+feature gets a placed feature under its own name, so another can name it, and one naming a feature
+that does not convert, or itself through a loop, is left out: an unresolved reference would stop
+the whole data pack loading.
+
+`bedrock.behaviour.Scatter` is both scatters. Mojang publishes the fields and not the arithmetic,
+so these are decided here, from the Bedrock wiki's feature page where it says anything:
+
+- A coordinate is an offset from the position the feature is given, and a feature rule is given
+  its chunk's corner at height 0, so a rule's heights are world heights. Java gives a placed
+  feature the bottom of the world, which `ScatterPlacement` moves to 0.
+- A rule's biome filter is asked once per chunk, of the biome at the surface over the chunk's
+  corner, before the scatter. Asked at each position the scatter reaches, a rule placed from height
+  0, as the test pack's bloom rule is, met Java's cave biomes under a forest and placed nothing.
+- `uniform`, `gaussian`, `inverse_gaussian` and `triangle` leave the upper bound out; the grids
+  include it (the wiki says both). `gaussian` is a normal spread a sixth of the range wide about
+  the middle, kept inside the range; `inverse_gaussian` folds that onto the two ends; `triangle`
+  is the mean of two uniform draws.
+- A grid steps one cell per iteration. The first grid axis in `coordinate_eval_order` steps every
+  iteration and each later one when the earlier have come round (the wiki's example).
+- `scatter_chance` written as a number or an expression is a percentage.
+- `query.heightmap` reads Java's `MOTION_BLOCKING_NO_LEAVES`, as the entity query does, and
+  `query.above_top_solid` reads `OCEAN_FLOOR`.
+
+`SingleBlockFeature` decides these where nothing is published: no `may_replace` replaces anything
+(Mojang's documentation says the block can be placed anywhere); `min_sides_must_attach` defaults to
+1 and counts only the four sides, capped at how many are listed, while `top` and `bottom` must
+always match; `auto_rotate` defaults to true and then tries the side lists in all four turns; and
+both `enforce_*` flags ask `canSurvive`, because Java folds a block's placement and survival rules
+into that one call. An aggregate places its list in order, as the wiki says, though Mojang's page
+promises no order.
+
+## JSON UI
 
 `bedrock/ui/` reads a resource pack's `ui/` files and lays out what packs do with them to a server's
 forms and to the heads-up display's title and action bar; `client/screen/PackUi` holds the active
@@ -2895,6 +2939,7 @@ src/main/java/at/ioexception/mcaddon/
                              and BedrockUnits, where a Bedrock quantity crosses into a Java one
   script/                    GraalJS host, the bridge, pack-declared commands, coverage
   structure/                 Bedrock `.mcstructure` reading, whose NBT is little endian
+  worldgen/                  The feature types and the placement modifier Java has none of
   entity/                    The one mob class every add-on entity uses
   block/                     The block class that carries a pack's own states
   server/                    Server lifecycle, `/bedrock` and the tree it reads a line against,

@@ -28,12 +28,25 @@ checked first. 35 of the 70 engine names have a different Java name and are mapp
 ## Features and feature rules
 
 - `ore_feature` becomes `minecraft:ore`.
-- `single_block_feature` becomes `minecraft:simple_block`.
 - `weighted_random_feature` becomes `minecraft:random_selector`.
-- `scatter_feature`, `snap_to_surface_feature` and `surface_relative_threshold_feature` become
-  placement modifiers on the feature they wrap.
+- `single_block_feature` places its block only where `may_replace`, `may_attach_to` and
+  `may_not_attach_to` allow, and `randomize_rotation` turns it. Either `enforce_survivability_rules`
+  or `enforce_placement_rules` keeps the block off a spot where it cannot stay. With neither, the
+  block is placed anyway, as Bedrock does.
+- `aggregate_feature` places each feature it lists at the same spot, in order. `early_out` stops it
+  at the first failure (`first_failure`) or the first success (`first_success`).
+- `scatter_feature` and a feature rule's `distribution` read every field: `iterations`,
+  `scatter_chance`, `coordinate_eval_order`, and per axis a value, a Molang expression or a
+  distribution (`uniform`, `gaussian`, `inverse_gaussian`, `triangle`, `fixed_grid`,
+  `jittered_grid`) with `extent`, `step_size` and `grid_offset`. Expressions can use
+  `variable.worldx`, `worldy` and `worldz`, `query.heightmap`, `query.above_top_solid` and
+  `query.noise`. A scatter can place another scatter.
+- `snap_to_surface_feature` and `surface_relative_threshold_feature` become placement modifiers on
+  the feature they wrap.
 - A feature rule becomes a placed feature at its generation step. At world load it is added to each
-  biome its filter accepts.
+  biome its filter accepts. Its heights are world heights, as in Bedrock. The filter is checked
+  against the surface biome at the corner of each chunk.
+- A feature that names a feature which is not converted is left out too.
 
 ## Spawn rules
 
@@ -71,9 +84,9 @@ overworld.
 - **Overworld biomes do not generate.** Java's overworld has no biome list to add to. To add one, a
   pack must replace the whole overworld generator. That changes amplified and large biome worlds and
   breaks terrain made before the pack.
-- **Most feature types.** 22 of 28 are reported. Six have nothing behind them in Java
-  (`aggregate_feature`, `conditional_list`, `beards_and_shavers`, `rect_layout`,
-  `multi_block_feature`, `horizontal_tree_decoration_feature`). Three are carvers. Thirteen map to a
+- **Most feature types.** 21 of 28 are reported. Five have nothing behind them in Java
+  (`conditional_list`, `beards_and_shavers`, `rect_layout`, `multi_block_feature`,
+  `horizontal_tree_decoration_feature`). Three are carvers. Thirteen map to a
   Java feature with a different model, trees and geodes among them.
 - **Biome fields with no Java place**: surface builders, overworld height, overworld generation
   rules, `minecraft:mountain_parameters`, `minecraft:village_type`, `minecraft:humidity`,
