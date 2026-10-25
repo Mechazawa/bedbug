@@ -24,7 +24,6 @@ import net.minecraft.world.entity.ai.goal.FleeSunGoal;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.ai.goal.FollowMobGoal;
 import net.minecraft.world.entity.ai.goal.MoveBackToVillageGoal;
-import net.minecraft.world.entity.ai.goal.MoveThroughVillageGoal;
 import net.minecraft.world.entity.ai.goal.MoveTowardsRestrictionGoal;
 import net.minecraft.world.entity.ai.goal.MoveTowardsTargetGoal;
 import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
@@ -3195,12 +3194,7 @@ public class AddonEntity extends PathfinderMob
 
             case "minecraft:behavior.move_to_village" ->
                 goals.add(priority, new MoveBackToVillageGoal(this, 0.6, false));
-            // Java's goal asks separately whether the route may run at night and whether the mob
-            // can get through a door. Bedrock states neither, so the walk is allowed at any
-            // hour and doors are left to the navigator.
-            case "minecraft:behavior.move_through_village" ->
-                goals.add(priority,
-                    new MoveThroughVillageGoal(this, 0.6, false, 4, () -> false));
+            case "minecraft:behavior.move_through_village" -> goals.add(priority, new VillagePatrolGoal(this, goal));
             case "minecraft:behavior.mingle" ->
                 goals.add(priority, new StrollThroughVillageGoal(this, 60));
             // `within_radius` is how near the target has to be for the walk towards it, as Java's

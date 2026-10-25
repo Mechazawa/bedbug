@@ -9,6 +9,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.PoiTypeTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.block.Blocks;
@@ -71,6 +72,41 @@ public final class RoamGoalGameTests {
 
     /** Less than any step a walk takes. */
     private static final double STILL = 0.5;
+
+    /**
+     * `minecraft:behavior.move_through_village` with `only_at_night` rests while the sky is bright,
+     * while a roamer without it walks the same village. The village is a bell a villager has claimed.
+     */
+    @GameTest(structure = EMPTY, maxTicks = WALK_TICKS * 2)
+    public void aVillagePatrolKeptToTheNightRestsByDay(GameTestHelper helper) {
+        floor(helper);
+        BlockPos bell = new BlockPos(4, 1, 4);
+        helper.setBlock(bell, Blocks.BELL);
+        setDay(helper);
+        helper.getLevel().getPoiManager().take(type -> type.is(PoiTypeTags.VILLAGE), (type, at) -> true,
+            helper.absolutePos(bell), 1);
+        AddonEntity night = roamer(helper, "tp:roamer_night_patrol", new BlockPos(1, 1, 1));
+        AddonEntity day = roamer(helper, "tp:roamer_day_patrol", new BlockPos(6, 1, 6));
+        if (night == null || day == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.onEachTick(() -> helper.assertFalse(Platform.dayTime(helper.getLevel()) % DAY_TICKS < NIGHT_FROM
+                && runs(night, "VillagePatrolGoal"),
+            ROAMER + " walks the village only at night and walked it by day."));
+        helper.succeedWhen(() -> helper.assertTrue(runs(day, "VillagePatrolGoal"),
+            ROAMER + " walks the village at any hour and never set off."));
+    }
+
+    private static final long DAY_TICKS = 24000L;
+    private static final long NIGHT_FROM = 12000L;
+
+    /** The game test world is dark until a test asks for the day, as the shelter tests do. */
+    private static void setDay(GameTestHelper helper) {
+        net.minecraft.server.MinecraftServer server = helper.getLevel().getServer();
+        server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), "time set day");
+    }
 
     /**
      * `minecraft:behavior.move_to_water` looks at `search_count` blocks picked at random each tick.

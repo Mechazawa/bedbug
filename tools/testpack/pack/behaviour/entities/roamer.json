@@ -15,6 +15,20 @@
           "within_radius": 4
         }
       },
+      "tp:roamer_night_patrol": {
+        "minecraft:behavior.move_through_village": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "only_at_night": true
+        }
+      },
+      "tp:roamer_day_patrol": {
+        "minecraft:behavior.move_through_village": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "only_at_night": false
+        }
+      },
       "tp:roamer_sampling": {
         "minecraft:behavior.move_to_water": {
           "priority": 0,
@@ -103,6 +117,20 @@
         "add": {
           "component_groups": [
             "tp:roamer_toward"
+          ]
+        }
+      },
+      "tp:roamer_night_patrol": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_night_patrol"
+          ]
+        }
+      },
+      "tp:roamer_day_patrol": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_day_patrol"
           ]
         }
       },
