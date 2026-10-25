@@ -1,0 +1,130 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:keeper",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false,
+      "properties": {
+        "tp:took": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:placed": {
+          "type": "bool",
+          "default": false
+        }
+      }
+    },
+    "component_groups": {
+      "tp:keeper_taking": {
+        "minecraft:behavior.take_block": {
+          "priority": 0,
+          "chance": 1,
+          "affected_by_griefing_rule": false,
+          "xz_range": {
+            "min": -1,
+            "max": 1
+          },
+          "y_range": {
+            "min": 0,
+            "max": 0
+          },
+          "blocks": [
+            "minecraft:gold_block"
+          ],
+          "on_take": {
+            "event": "tp:keeper_took",
+            "target": "self"
+          }
+        }
+      },
+      "tp:keeper_placing": {
+        "minecraft:behavior.place_block": {
+          "priority": 0,
+          "chance": 1,
+          "affected_by_griefing_rule": false,
+          "xz_range": 0,
+          "y_range": 0,
+          "randomly_placeable_blocks": [
+            {
+              "block": "minecraft:gold_block",
+              "filter": {
+                "test": "has_tag",
+                "value": "tp_never"
+              },
+              "weight": 100
+            },
+            {
+              "block": {
+                "name": "minecraft:oak_log",
+                "states": {
+                  "pillar_axis": "x"
+                }
+              },
+              "weight": 3
+            }
+          ],
+          "can_place": {
+            "test": "has_tag",
+            "value": "tp_may_place"
+          },
+          "on_place": {
+            "event": "tp:keeper_placed",
+            "target": "self"
+          }
+        }
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": [
+          "tp_keeper",
+          "mob"
+        ]
+      },
+      "minecraft:collision_box": {
+        "width": 0.6,
+        "height": 0.9
+      },
+      "minecraft:health": {
+        "value": 20,
+        "max": 20
+      },
+      "minecraft:movement": {
+        "value": 0.25
+      },
+      "minecraft:physics": {},
+      "minecraft:movement.basic": {},
+      "minecraft:navigation.walk": {},
+      "minecraft:jump.static": {}
+    },
+    "events": {
+      "tp:keeper_take": {
+        "add": {
+          "component_groups": [
+            "tp:keeper_taking"
+          ]
+        }
+      },
+      "tp:keeper_place": {
+        "add": {
+          "component_groups": [
+            "tp:keeper_placing"
+          ]
+        }
+      },
+      "tp:keeper_took": {
+        "set_property": {
+          "tp:took": true
+        }
+      },
+      "tp:keeper_placed": {
+        "set_property": {
+          "tp:placed": true
+        }
+      }
+    }
+  }
+}

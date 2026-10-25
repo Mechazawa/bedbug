@@ -2777,6 +2777,16 @@ lower number wins and a missing one is 0. The converter writes the non-zero ones
 set, and `RecipePriorityMixin` stable-sorts `RecipeMap.getRecipesFor` (the one call every version's
 recipe lookup goes through) by them, so only recipes that already match are reordered.
 
+## Carrying blocks, laying, working and giving
+
+`tp:keeper` carries one goal per group and `KeeperGoalGameTests` reads each back off the world.
+
+- `minecraft:behavior.place_block` with `randomly_placeable_blocks` places a weighted draw among the
+  entries whose `filter` the entity passes, in the entry's states, and needs nothing carried; with
+  none it places the carried block, limited by `placeable_carried_blocks`. Mojang's copper golem
+  turns into its statue this way. A filter's `block` subject is not answered, so an entry filter is
+  asked of the entity alone.
+
 ## Releasing
 
 A pushed `v*` tag runs `.github/workflows/release.yml`, which builds the jars, makes the GitHub release and then runs `tools/release/modrinth.py` to publish each jar to Modrinth.
