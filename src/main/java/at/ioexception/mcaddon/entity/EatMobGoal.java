@@ -27,6 +27,7 @@ public final class EatMobGoal extends Goal {
     private final double pullInForce;
     private final int eatTime;
     private final String lootTable;
+    private final String eatSound;
     private int eaten;
     private LivingEntity meal;
 
@@ -37,6 +38,7 @@ public final class EatMobGoal extends Goal {
         this.pullInForce = Goals.number(component, "pull_in_force", 1);
         this.eatTime = Goals.ticks(component, "eat_animation_time", 1);
         this.lootTable = Goals.text(component, "loot_table");
+        this.eatSound = Goals.text(component, "eat_mob_sound");
         setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
     }
 
@@ -84,6 +86,7 @@ public final class EatMobGoal extends Goal {
 
         if (++eaten < eatTime || !(mob.level() instanceof ServerLevel level)) return;
 
+        mob.makeNoise(eatSound);
         mob.setKilled(meal);
         Platform.kill(meal, level);
         dropMeal(level);

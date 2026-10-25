@@ -2759,6 +2759,48 @@ clock milliseconds), a capture of one `StatEvent2` a tick under its header, and 
 that stops on the marked line of the test pack's `scripts/weigh.js` and reads the stack. Bedrock's command metadata lists no `watchdog` form, so
 there is no `exportstats` to answer.
 
+## Sentinel: spells, sounds, anger, suspicion and drying
+
+`tp:sentinel` (and `tp:sentinel_stoic`, whose `anger_level` keeps its targets) carries one component
+group per field in `tools/testpack/pack/behaviour/entities/sentinel.json`. `SentinelGameTests` reads
+the world side and `SentinelSoundClientGameTest` hears the sounds. Where Mojang publishes nothing, this
+is what was decided:
+
+- **A sound a goal or a component names is a moment of the entity's own `sounds.json` entry**, played
+  through `AddonEntity.makeNoise`. `sonic_boom`'s `charge_sound` and `attack_sound` default to nothing,
+  so a boom naming neither is silent. `eat_mob_sound` plays as the mob is swallowed. `aggro_sound` plays
+  as a defence starts and then about once every three seconds while it lasts ("occasionally" has no
+  number).
+- **`anger_level`**: the first `on_increase_sounds` entry whose Molang `condition` holds plays after a
+  provocation is counted, and an entry with no condition always holds. When the count falls from the
+  threshold to just under it and `remove_targets_below_angry_threshold` is true (the default), the
+  entity drops its target.
+- **A spell lasts `cast_duration`** (or until its last step is due when it states none) and a step
+  later than that is never cast. `send_event` sends its event to the target, not to the caster. A
+  `summon_entity` step places `num_entities_spawned` entities one `delay_per_summon` apart, on a
+  circle of radius `size` or a line of length `size` towards the target. `summon_cap` counts entities of
+  that type within `summon_cap_radius` of the caster, a radius of nothing counting 128 blocks.
+  `entity_lifespan` ends a summoned entity through `AddonEntity.expire`. A spell's `weight` defaults to 0
+  and `min_activation_range` to 1, as the schema says.
+- **`behavior.sniff`** raises the anger count for every player inside `suspicion_radius_horizontal`
+  and `suspicion_radius_vertical` when the sniff ends. **`behavior.dig`** delays its start while a
+  vibration (`vibration_is_disturbance`) or a newly suspicious place (`suspicion_is_disturbance`)
+  lies within `idle_time`.
+- **`game_event_movement_tracking`** reads `emit_move` and `emit_swim` (default true) and `emit_flap`
+  (default false) from the live component.
+- **`annotation.break_door`** gives `break_time` (default 12 seconds) and `min_difficulty` (default
+  `hard`) to the break door goal beside it in the same group or at the top. Java's own goal never takes
+  under 240 ticks, so `DoorBreakingGoal` asks for the time itself.
+- **`drying_out_timer`** counts out of water and rain, `total_time` defaults to 0, and a splash water
+  bottle landing within Java's splash reach (`ProjectileMixin`) takes `water_bottle_refill_time` off
+  the count. `recover_after_dried_out_event` fires on a refill or on rejoining water after the entity
+  had dried out.
+- **`burns_in_daylight`** is protected by an item in `protection_slot` (default `slot.armor.head`).
+  `slot.armor.body` is Java's body slot from 1.21.
+- Server game tests cannot hear sounds. A daylight burn is not asserted in a game test because the
+  clock is shared with `anEntityUnderTheSkyWalksInUnderARoofOnlyAtNightOrInRain`; the test reads
+  which slot protects instead.
+
 ## Connection rule sides
 
 `enabled_directions` names the side of the block a fence, wall or pane reaches it on (Mojang does

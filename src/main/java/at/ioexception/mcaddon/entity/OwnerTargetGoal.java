@@ -25,6 +25,7 @@ public final class OwnerTargetGoal extends Goal {
     private final double withinRadius;
     private final boolean mustSee;
     private final String startEvent;
+    private final String aggroSound;
     private final Filter allowed;
     private LivingEntity found;
 
@@ -42,6 +43,7 @@ public final class OwnerTargetGoal extends Goal {
         this.withinRadius = defending ? Goals.number(component, "within_radius", 0) : 0;
         this.mustSee = defending && Goals.flag(component, "must_see", false);
         this.startEvent = defending ? Goals.event(component, "on_defend_start") : null;
+        this.aggroSound = defending ? Goals.text(component, "aggro_sound") : null;
         this.allowed = Filter.entityTypes(component.get("entity_types"));
         setFlags(EnumSet.of(Goal.Flag.TARGET));
     }
@@ -85,10 +87,25 @@ public final class OwnerTargetGoal extends Goal {
     @Override
     public void start() {
         mob.setTarget(found);
+        mob.makeNoise(aggroSound);
         if (startEvent != null) {
             EntityEvents.trigger(mob, startEvent, found, ServerHooks.state());
         }
     }
+
+    /** The selector ticks a running goal every second tick unless it asks for each one. */
+    @Override
+    public boolean requiresUpdateEveryTick() {
+        return true;
+    }
+
+    /** Growls now and then while the fight goes on, about once every three seconds. */
+    @Override
+    public void tick() {
+        if (aggroSound != null && mob.getRandom().nextInt(AGGRO_ODDS) == 0) mob.makeNoise(aggroSound);
+    }
+
+    private static final int AGGRO_ODDS = 60;
 
     @Override
     public boolean canContinueToUse() {

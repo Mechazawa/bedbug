@@ -1,0 +1,61 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:sentinel_stoic",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false,
+      "properties": {
+        "tp:marked": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:dried": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:recovered": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:stopped": {
+          "type": "bool",
+          "default": false
+        }
+      }
+    },
+    "component_groups": {},
+    "components": {
+      "minecraft:type_family": {
+        "family": [
+          "tp_sentinel",
+          "mob"
+        ]
+      },
+      "minecraft:collision_box": {
+        "width": 0.6,
+        "height": 1.0
+      },
+      "minecraft:health": {
+        "value": 20,
+        "max": 20
+      },
+      "minecraft:movement": {
+        "value": 0.25
+      },
+      "minecraft:physics": {},
+      "minecraft:movement.basic": {},
+      "minecraft:jump.static": {},
+      "minecraft:anger_level": {
+        "angry_threshold": 5,
+        "angry_boost": 0,
+        "default_annoyingness": 5,
+        "max_anger": 10,
+        "anger_decrement_interval": 1.5,
+        "remove_targets_below_angry_threshold": false
+      }
+    },
+    "events": {}
+  }
+}

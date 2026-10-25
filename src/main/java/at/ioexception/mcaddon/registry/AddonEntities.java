@@ -424,7 +424,6 @@ public final class AddonEntities {
     private static final Map<String, Set<String>> UNREAD_FIELDS = Map.of(
         "minecraft:block_movement_slowdown_immunity", Set.of("tags"),
         "minecraft:spawn_entity", Set.of("spawn_method"),
-        "minecraft:drying_out_timer", Set.of("water_bottle_refill_time"),
         "minecraft:damage_sensor", Set.of("damage_modifier", "damage_multiplier",
             "on_damage_sound_event"),
         "minecraft:rail_sensor", Set.of("tick_command_block_on_activate", "tick_command_block_on_deactivate"),

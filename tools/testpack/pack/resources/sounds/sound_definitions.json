@@ -1,6 +1,83 @@
 {
   "format_version": "1.14.0",
   "sound_definitions": {
+    "tp:sentinel.charge": {
+      "category": "neutral",
+      "sounds": [
+        {
+          "name": "sounds/tp/chime",
+          "volume": 0.6,
+          "pitch": 1.0,
+          "weight": 1
+        }
+      ]
+    },
+    "tp:sentinel.boom": {
+      "category": "neutral",
+      "sounds": [
+        {
+          "name": "sounds/tp/chime",
+          "volume": 0.6,
+          "pitch": 1.0,
+          "weight": 1
+        }
+      ]
+    },
+    "tp:sentinel.gulp": {
+      "category": "neutral",
+      "sounds": [
+        {
+          "name": "sounds/tp/chime",
+          "volume": 0.6,
+          "pitch": 1.0,
+          "weight": 1
+        }
+      ]
+    },
+    "tp:sentinel.growl": {
+      "category": "neutral",
+      "sounds": [
+        {
+          "name": "sounds/tp/chime",
+          "volume": 0.6,
+          "pitch": 1.0,
+          "weight": 1
+        }
+      ]
+    },
+    "tp:sentinel.provoked": {
+      "category": "neutral",
+      "sounds": [
+        {
+          "name": "sounds/tp/chime",
+          "volume": 0.6,
+          "pitch": 1.0,
+          "weight": 1
+        }
+      ]
+    },
+    "tp:sentinel.cast": {
+      "category": "neutral",
+      "sounds": [
+        {
+          "name": "sounds/tp/chime",
+          "volume": 0.6,
+          "pitch": 1.0,
+          "weight": 1
+        }
+      ]
+    },
+    "tp:sentinel.prepare": {
+      "category": "neutral",
+      "sounds": [
+        {
+          "name": "sounds/tp/chime",
+          "volume": 0.6,
+          "pitch": 1.0,
+          "weight": 1
+        }
+      ]
+    },
     "tp:sprite.chime": {
       "category": "neutral",
       "subtitle": "subtitles.tp.sprite.chime",

@@ -1,0 +1,389 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:sentinel",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false,
+      "properties": {
+        "tp:marked": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:dried": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:recovered": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:stopped": {
+          "type": "bool",
+          "default": false
+        }
+      }
+    },
+    "component_groups": {
+      "tp:sentinel_quiet": {
+        "minecraft:game_event_movement_tracking": {
+          "emit_move": false,
+          "emit_swim": false
+        }
+      },
+      "tp:sentinel_sniffing": {
+        "minecraft:behavior.sniff": {
+          "priority": 0,
+          "duration": 1,
+          "cooldown_range": {
+            "min": 100,
+            "max": 100
+          },
+          "sniffing_radius": 5,
+          "suspicion_radius_horizontal": 3,
+          "suspicion_radius_vertical": 2
+        }
+      },
+      "tp:sentinel_digging_calm": {
+        "minecraft:vibration_listener": {},
+        "minecraft:suspect_tracking": {},
+        "minecraft:behavior.dig": {
+          "priority": 0,
+          "duration": 2,
+          "idle_time": 1
+        }
+      },
+      "tp:sentinel_digging_vibes": {
+        "minecraft:vibration_listener": {},
+        "minecraft:behavior.dig": {
+          "priority": 0,
+          "duration": 2,
+          "idle_time": 1,
+          "vibration_is_disturbance": true
+        }
+      },
+      "tp:sentinel_digging_suspicious": {
+        "minecraft:suspect_tracking": {},
+        "minecraft:behavior.dig": {
+          "priority": 0,
+          "duration": 2,
+          "idle_time": 1,
+          "suspicion_is_disturbance": true
+        }
+      },
+      "tp:sentinel_summoning": {
+        "minecraft:behavior.summon_entity": {
+          "priority": 0,
+          "summon_choices": [
+            {
+              "weight": 1,
+              "min_activation_range": 0,
+              "max_activation_range": 16,
+              "cooldown_time": 100,
+              "cast_duration": 3,
+              "start_sound_event": "cast",
+              "sequence": [
+                {
+                  "base_delay": 0.25,
+                  "entity_type": "minecraft:chicken",
+                  "num_entities_spawned": 4,
+                  "shape": "circle",
+                  "size": 2,
+                  "delay_per_summon": 0.25,
+                  "entity_lifespan": 3,
+                  "sound_event": "prepare",
+                  "target": "self"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "tp:sentinel_summoning_capped": {
+        "minecraft:behavior.summon_entity": {
+          "priority": 0,
+          "summon_choices": [
+            {
+              "weight": 1,
+              "min_activation_range": 0,
+              "max_activation_range": 16,
+              "cooldown_time": 100,
+              "cast_duration": 2,
+              "sequence": [
+                {
+                  "base_delay": 0.25,
+                  "entity_type": "minecraft:chicken",
+                  "num_entities_spawned": 4,
+                  "shape": "line",
+                  "size": 3,
+                  "summon_cap": 2,
+                  "summon_cap_radius": 8,
+                  "target": "self"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "tp:sentinel_sending": {
+        "minecraft:behavior.send_event": {
+          "priority": 0,
+          "event_choices": [
+            {
+              "weight": 1,
+              "min_activation_range": 0,
+              "max_activation_range": 16,
+              "cooldown_time": 100,
+              "cast_duration": 1,
+              "start_sound_event": "cast",
+              "sequence": [
+                {
+                  "base_delay": 0.25,
+                  "event": "tp:sentinel_mark",
+                  "sound_event": "prepare"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "tp:sentinel_booming": {
+        "minecraft:behavior.sonic_boom": {
+          "priority": 0,
+          "duration": 1,
+          "duration_until_attack_sound": 0.5,
+          "attack_cooldown": 100,
+          "attack_damage": 1,
+          "attack_range_horizontal": 12,
+          "attack_range_vertical": 12,
+          "charge_sound": "sonic_charge",
+          "attack_sound": "sonic_boom"
+        }
+      },
+      "tp:sentinel_eating": {
+        "minecraft:behavior.eat_mob": {
+          "priority": 0,
+          "reach_mob_distance": 3,
+          "eat_animation_time": 0.25,
+          "eat_mob_sound": "gulp",
+          "pull_in_force": 0
+        }
+      },
+      "tp:sentinel_defending": {
+        "minecraft:behavior.defend_trusted_target": {
+          "priority": 0,
+          "within_radius": 16,
+          "aggro_sound": "growl"
+        }
+      },
+      "tp:sentinel_sunburnt": {
+        "minecraft:burns_in_daylight": {
+          "protection_slot": "slot.armor.chest"
+        }
+      },
+      "tp:sentinel_sunburnt_plain": {
+        "minecraft:burns_in_daylight": {}
+      },
+      "tp:sentinel_drying": {
+        "minecraft:drying_out_timer": {
+          "total_time": 1,
+          "water_bottle_refill_time": 2,
+          "dried_out_event": "tp:sentinel_dried",
+          "recover_after_dried_out_event": "tp:sentinel_recovered",
+          "stopped_drying_out_event": "tp:sentinel_stopped"
+        }
+      },
+      "tp:sentinel_door_breaking": {
+        "minecraft:annotation.break_door": {
+          "break_time": 1,
+          "min_difficulty": "peaceful"
+        },
+        "minecraft:behavior.break_door": {
+          "priority": 0
+        }
+      },
+      "tp:sentinel_door_breaking_hard": {
+        "minecraft:annotation.break_door": {
+          "break_time": 1,
+          "min_difficulty": "hard"
+        },
+        "minecraft:behavior.break_door": {
+          "priority": 0
+        }
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": [
+          "tp_sentinel",
+          "mob"
+        ]
+      },
+      "minecraft:collision_box": {
+        "width": 0.6,
+        "height": 1.0
+      },
+      "minecraft:health": {
+        "value": 20,
+        "max": 20
+      },
+      "minecraft:movement": {
+        "value": 0.25
+      },
+      "minecraft:physics": {},
+      "minecraft:movement.basic": {},
+      "minecraft:jump.static": {},
+      "minecraft:navigation.walk": {
+        "can_break_doors": true
+      },
+      "minecraft:anger_level": {
+        "angry_threshold": 5,
+        "angry_boost": 0,
+        "default_annoyingness": 5,
+        "max_anger": 10,
+        "anger_decrement_interval": 1.5,
+        "on_increase_sounds": [
+          {
+            "condition": "1",
+            "sound": "provoked"
+          }
+        ]
+      }
+    },
+    "events": {
+      "tp:sentinel_make_quiet": {
+        "add": {
+          "component_groups": [
+            "tp:sentinel_quiet"
+          ]
+        }
+      },
+      "tp:sentinel_make_sniffing": {
+        "add": {
+          "component_groups": [
+            "tp:sentinel_sniffing"
+          ]
+        }
+      },
+      "tp:sentinel_make_digging_calm": {
+        "add": {
+          "component_groups": [
+            "tp:sentinel_digging_calm"
+          ]
+        }
+      },
+      "tp:sentinel_make_digging_vibes": {
+        "add": {
+          "component_groups": [
+            "tp:sentinel_digging_vibes"
+          ]
+        }
+      },
+      "tp:sentinel_make_digging_suspicious": {
+        "add": {
+          "component_groups": [
+            "tp:sentinel_digging_suspicious"
+          ]
+        }
+      },
+      "tp:sentinel_make_summoning": {
+        "add": {
+          "component_groups": [
+            "tp:sentinel_summoning"
+          ]
+        }
+      },
+      "tp:sentinel_make_summoning_capped": {
+        "add": {
+          "component_groups": [
+            "tp:sentinel_summoning_capped"
+          ]
+        }
+      },
+      "tp:sentinel_make_sending": {
+        "add": {
+          "component_groups": [
+            "tp:sentinel_sending"
+          ]
+        }
+      },
+      "tp:sentinel_make_booming": {
+        "add": {
+          "component_groups": [
+            "tp:sentinel_booming"
+          ]
+        }
+      },
+      "tp:sentinel_make_eating": {
+        "add": {
+          "component_groups": [
+            "tp:sentinel_eating"
+          ]
+        }
+      },
+      "tp:sentinel_make_defending": {
+        "add": {
+          "component_groups": [
+            "tp:sentinel_defending"
+          ]
+        }
+      },
+      "tp:sentinel_make_sunburnt": {
+        "add": {
+          "component_groups": [
+            "tp:sentinel_sunburnt"
+          ]
+        }
+      },
+      "tp:sentinel_make_sunburnt_plain": {
+        "add": {
+          "component_groups": [
+            "tp:sentinel_sunburnt_plain"
+          ]
+        }
+      },
+      "tp:sentinel_make_drying": {
+        "add": {
+          "component_groups": [
+            "tp:sentinel_drying"
+          ]
+        }
+      },
+      "tp:sentinel_make_door_breaking": {
+        "add": {
+          "component_groups": [
+            "tp:sentinel_door_breaking"
+          ]
+        }
+      },
+      "tp:sentinel_make_door_breaking_hard": {
+        "add": {
+          "component_groups": [
+            "tp:sentinel_door_breaking_hard"
+          ]
+        }
+      },
+      "tp:sentinel_mark": {
+        "set_property": {
+          "tp:marked": true
+        }
+      },
+      "tp:sentinel_dried": {
+        "set_property": {
+          "tp:dried": true
+        }
+      },
+      "tp:sentinel_recovered": {
+        "set_property": {
+          "tp:recovered": true
+        }
+      },
+      "tp:sentinel_stopped": {
+        "set_property": {
+          "tp:stopped": true
+        }
+      }
+    }
+  }
+}

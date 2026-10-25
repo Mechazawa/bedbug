@@ -1,6 +1,17 @@
 {
   "entity_sounds": {
     "entities": {
+      "tp:sentinel": {
+        "events": {
+          "sonic_charge": "tp:sentinel.charge",
+          "sonic_boom": "tp:sentinel.boom",
+          "gulp": "tp:sentinel.gulp",
+          "growl": "tp:sentinel.growl",
+          "provoked": "tp:sentinel.provoked",
+          "cast": "tp:sentinel.cast",
+          "prepare": "tp:sentinel.prepare"
+        }
+      },
       "tp:ember": {
         "volume": 0.8,
         "events": {

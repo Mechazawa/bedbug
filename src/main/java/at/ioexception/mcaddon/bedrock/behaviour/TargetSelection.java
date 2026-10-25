@@ -37,12 +37,17 @@ public record TargetSelection(Class<? extends LivingEntity> kind, double maxDist
      */
     public static TargetSelection from(JsonObject goal, Class<? extends LivingEntity> fallbackKind,
         double fallbackDistance) {
-        if (goal == null) return new TargetSelection(fallbackKind, fallbackDistance, List.of());
+        return fromEntries(goal == null ? List.of()
+            : at.ioexception.mcaddon.util.Json.list(goal, "entity_types"), fallbackKind, fallbackDistance);
+    }
 
+    /** The same for an `entity_types` list a goal has already taken out of its component. */
+    public static TargetSelection fromEntries(List<JsonElement> listed, Class<? extends LivingEntity> fallbackKind,
+        double fallbackDistance) {
         List<Class<? extends LivingEntity>> kinds = new ArrayList<>();
         List<Entry> entries = new ArrayList<>();
         double distance = 0;
-        for (JsonElement element : at.ioexception.mcaddon.util.Json.list(goal, "entity_types")) {
+        for (JsonElement element : listed) {
             if (!element.isJsonObject()) continue;
             JsonObject entry = element.getAsJsonObject();
 
