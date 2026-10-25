@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.convert;
 
 import at.ioexception.mcaddon.platform.Platform;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 
 import java.util.List;
 import java.util.Map;
@@ -105,6 +106,27 @@ public final class BedrockSoundNames {
         Names.Identifier own = Names.soundEvent(bedrock, namespace);
         String id = own.namespace() + ":" + own.path();
         return defined.contains(id) ? id : java(bedrock);
+    }
+
+    /**
+     * The sound event a script's name plays: the id as written when the game has it, else the
+     * definition the add-on running the script ships under that name, else the Java sound Bedrock's
+     * name stands for, else the name as written.
+     *
+     * @param namespace the add-on whose script runs, null where several add-ons ship a script
+     */
+    public static Identifier played(String sound, String namespace) {
+        Identifier written = sound == null ? null : Identifier.tryParse(sound);
+        if (written == null || BuiltInRegistries.SOUND_EVENT.containsKey(written)) return written;
+
+        if (namespace != null) {
+            Names.Identifier own = Names.soundEvent(sound, namespace);
+            Identifier packs = Identifier.tryParse(own.namespace() + ":" + own.path());
+            if (packs != null && BuiltInRegistries.SOUND_EVENT.containsKey(packs)) return packs;
+        }
+
+        String java = java(sound);
+        return java == null ? written : Identifier.tryParse(java);
     }
 
     /** The Java id for one of Bedrock's own sounds, or null where this version has no such event. */
