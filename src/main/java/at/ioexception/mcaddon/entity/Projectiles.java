@@ -45,6 +45,7 @@ public final class Projectiles {
     private final JsonObject body;
     private final JsonObject onHit;
     private final Set<String> ignored = new LinkedHashSet<>();
+    private final CloudOnHit cloud;
 
     /** What the projectile has already hit, which it passes through from then on. */
     private final Set<Entity> struck = new java.util.HashSet<>();
@@ -59,6 +60,7 @@ public final class Projectiles {
         this.body = body;
         JsonElement hits = body.get("on_hit");
         this.onHit = hits != null && hits.isJsonObject() ? hits.getAsJsonObject() : new JsonObject();
+        this.cloud = CloudOnHit.tryFrom(onHit);
         for (JsonElement element : Json.list(body, "ignored_entities")) {
             if (element.isJsonPrimitive()) ignored.add(element.getAsString());
         }
@@ -231,6 +233,10 @@ public final class Projectiles {
             hitBlock(on);
         }
         scatterParticles(level, hit, hit instanceof EntityHitResult);
+        splash(level, hit);
+        if (cloud != null) {
+            cloud.spawn(level, hit.getLocation(), shooter, (int) Json.number(body, "potion_effect", -1));
+        }
         grantExperience(level, hit.getLocation());
         fireEvent(hit);
         if (onHit.has("remove_on_hit")) mob.discard();
@@ -313,6 +319,53 @@ public final class Projectiles {
         Platform.addEffect(struck, id, (int) Json.number(effect, "durationnormal", 0),
             (int) Json.number(effect, "amplifier", 0), false, true);
     }
+
+    /**
+     * `potion_effect` makes the projectile a thrown potion: whoever stands within `splash_range`
+     * of the impact takes the potion's effects, less the further out they stand.
+     *
+     * That is Java's splash rule with the pack's radius in place of four blocks: the share an entity
+     * takes is one less its distance over the range, whoever was hit directly takes all of it, and
+     * a lasting effect's duration is scaled by the share while an instant one is applied at it.
+     */
+    private void splash(ServerLevel level, HitResult hit) {
+        net.minecraft.world.item.alchemy.Potion potion = at.ioexception.mcaddon.bedrock.behaviour
+            .BedrockPotions.numbered((int) Json.number(body, "potion_effect", -1)).orElse(null);
+        if (potion == null) return;
+
+        double range = Json.number(body, "splash_range", DEFAULT_SPLASH_RANGE);
+        Vec3 at = hit.getLocation();
+        Entity direct = hit instanceof EntityHitResult on ? on.getEntity() : null;
+        for (LivingEntity target : level.getEntitiesOfClass(LivingEntity.class,
+            new net.minecraft.world.phys.AABB(at, at).inflate(range, range / 2, range))) {
+            double distance = Math.sqrt(target.distanceToSqr(at));
+            if (!target.isAffectedByPotions() || distance >= range && target != direct) continue;
+
+            double share = target == direct ? 1 : 1 - distance / range;
+            for (net.minecraft.world.effect.MobEffectInstance effect : potion.getEffects()) {
+                //? if >=26.2 {
+                if (effect.getEffect().value().isInstantaneous()) {
+                    effect.getEffect().value().applyInstantaneousEffect(level, mob, shooter, target,
+                        effect.getAmplifier(), share);
+                    continue;
+                }
+                //?} else {
+                /*if (effect.getEffect().value().isInstantenous()) {
+                    effect.getEffect().value().applyInstantenousEffect(level, mob, shooter, target,
+                        effect.getAmplifier(), share);
+                    continue;
+                }
+                *///?}
+                int duration = (int) (share * effect.getDuration() + 0.5);
+                if (duration > 20) {
+                    target.addEffect(new net.minecraft.world.effect.MobEffectInstance(effect.getEffect(),
+                        duration, effect.getAmplifier(), effect.isAmbient(), effect.isVisible()), mob);
+                }
+            }
+        }
+    }
+
+    private static final double DEFAULT_SPLASH_RANGE = 4;
 
     private void hitBlock(BlockHitResult where) {
         play(Json.text(body, "hit_ground_sound", Json.text(body, "hit_sound", null)));

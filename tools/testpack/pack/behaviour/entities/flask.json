@@ -1,0 +1,39 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:flask",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": ["tp_flask"]
+      },
+      "minecraft:collision_box": {
+        "width": 0.25,
+        "height": 0.25
+      },
+      "minecraft:physics": {},
+      "minecraft:projectile": {
+        "power": 0.5,
+        "gravity": 0,
+        "inertia": 1,
+        "potion_effect": 28,
+        "splash_range": 3,
+        "on_hit": {
+          "spawn_aoe_cloud": {
+            "radius": 1.5,
+            "radius_on_use": -0.25,
+            "duration": 10,
+            "reapplication_delay": 7,
+            "potion": 25,
+            "particle": "dragonbreath",
+            "affect_owner": false
+          }
+        }
+      }
+    }
+  }
+}

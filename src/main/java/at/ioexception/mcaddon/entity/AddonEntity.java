@@ -2034,6 +2034,11 @@ public class AddonEntity extends PathfinderMob
         }
     }
 
+    private static final double DEFAULT_MILK_COOLDOWN_SECONDS = 5;
+
+    /** The tick the goal may drink milk again, which `cooldown_seconds` holds back after each drink. */
+    private int milkReadyAt;
+
     /**
      * Drinking milk, which clears what is harming the entity, and drinking a potion, which
      * `minecraft:behavior.drink_potion` picks.
@@ -2045,7 +2050,10 @@ public class AddonEntity extends PathfinderMob
     private void drink() {
         Filter.Context context = new Filter.Context(this, this, getTarget(), ServerHooks.state());
         com.google.gson.JsonObject milk = liveComponent("minecraft:behavior.drink_milk");
-        if (milk != null && !getActiveEffects().isEmpty() && Goals.filter(milk, "filters").matches(context)) {
+        if (milk != null && !getActiveEffects().isEmpty() && tickCount >= milkReadyAt
+            && Goals.filter(milk, "filters").matches(context)) {
+            milkReadyAt = tickCount + (int) (Goals.number(milk, "cooldown_seconds", DEFAULT_MILK_COOLDOWN_SECONDS)
+                * Goals.TICKS_PER_SECOND);
             getActiveEffects().stream()
                 .filter(effect -> !Platform.beneficial(effect))
                 .toList()
@@ -5489,27 +5497,35 @@ public class AddonEntity extends PathfinderMob
      * `minecraft:custom_hit_test` widens what a melee swing and an arrow may land on.
      *
      * Bedrock lists boxes that take hits and leaves the collision box to
-     * `minecraft:collision_box`. Java asks an entity the same question once,
-     * `Entity.getPickRadius`, which `ProjectileUtil.getEntityHitResult` inflates the entity's box
-     * by before the ray is tested, and that is the ray a player's reach and a fired arrow both use.
-     * The answer is therefore how far past the collision box the widest declared hitbox reaches,
-     * so a model hit where it looks hit still walks through a gap its collision box fits.
+     * `minecraft:collision_box`. Each box is `width` wide and `height` tall and centred on its
+     * `pivot`, measured from the entity's feet, and a pivot's X and Z are taken from the middle of
+     * the entity. Java asks an entity the same question once, `Entity.getPickRadius`, which
+     * `ProjectileUtil.getEntityHitResult` inflates the entity's box by in every direction before
+     * the ray is tested, and that is the ray a player's reach and a fired arrow both use. The answer
+     * is therefore how far past the collision box any declared hitbox reaches in any direction.
      */
     @Override
     public float getPickRadius() {
         if (definition == null || !declares("minecraft:custom_hit_test")) return super.getPickRadius();
 
-        double widest = 0;
+        double reach = 0;
         for (com.google.gson.JsonElement element
             : at.ioexception.mcaddon.util.Json.list(componentBody("minecraft:custom_hit_test"),
                 "hitboxes")) {
             if (!element.isJsonObject()) continue;
 
             com.google.gson.JsonObject box = element.getAsJsonObject();
-            widest = Math.max(widest, at.ioexception.mcaddon.util.Json.number(box, "width", 0) / 2
-                - getBbWidth() / 2);
+            java.util.List<com.google.gson.JsonElement> pivot = at.ioexception.mcaddon.util.Json.list(box, "pivot");
+            double[] centre = {0, 1, 0};
+            for (int i = 0; i < Math.min(3, pivot.size()); i++) centre[i] = pivot.get(i).getAsDouble();
+
+            double half = at.ioexception.mcaddon.util.Json.number(box, "width", 1) / 2;
+            double height = at.ioexception.mcaddon.util.Json.number(box, "height", 1);
+            reach = Math.max(reach, Math.max(
+                Math.max(Math.abs(centre[0]), Math.abs(centre[2])) + half - getBbWidth() / 2,
+                Math.max(centre[1] + height / 2 - getBbHeight(), -(centre[1] - height / 2))));
         }
-        return (float) Math.max(widest, super.getPickRadius());
+        return (float) Math.max(reach, super.getPickRadius());
     }
 
     /**

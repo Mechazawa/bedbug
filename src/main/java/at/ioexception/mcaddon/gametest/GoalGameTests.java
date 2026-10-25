@@ -1140,6 +1140,76 @@ public final class GoalGameTests {
     private static final int DART_TICKS = 30;
 
     /**
+     * A projectile with a `potion_effect` splashes it within `splash_range` of the impact, and
+     * `spawn_aoe_cloud` leaves a cloud of its own potion and radius that spares its owner under
+     * `affect_owner` false.
+     *
+     * The flask splashes regeneration over three blocks and leaves a poison cloud of one and a half.
+     * It hits one pig; the owner stands beside the impact, one pig two blocks off and one three and
+     * a bit. The splash reaches the first two, the cloud only what stands inside its radius, and the
+     * owner takes the splash and not the cloud.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void aFlaskSplashesAndLeavesACloud(GameTestHelper helper) {
+        if (BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("tp", "flask")).isEmpty()) {
+            helper.succeed();
+            return;
+        }
+
+        Mob target = pig(helper, STAND.east(2), BLOWS_TO_KILL);
+        Mob owner = pig(helper, STAND.east(2).north(), BLOWS_TO_KILL);
+        Mob near = pig(helper, STAND.east(2).south(2), BLOWS_TO_KILL);
+        Mob edge = pig(helper, STAND.east(2).south(3), BLOWS_TO_KILL);
+        ServerLevel level = helper.getLevel();
+        AddonEntity flask = (AddonEntity) Platform.createMob(
+            BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("tp", "flask")).orElseThrow(), level);
+        BlockPos at = helper.absolutePos(STAND);
+        Platform.placeAt(flask, at.getX() + 0.5, at.getY() + PIG_MIDDLE, at.getZ() + 0.5, 0f, 0f);
+        level.addFreshEntity(flask);
+        flask.launchAsProjectile(owner, new Vec3(1, 0, 0));
+        helper.runAfterDelay(DART_TICKS, () -> {
+            var regeneration = net.minecraft.world.effect.MobEffects.REGENERATION;
+            var poison = net.minecraft.world.effect.MobEffects.POISON;
+            helper.assertTrue(target.hasEffect(regeneration) && near.hasEffect(regeneration),
+                "tp:flask splashes regeneration over its splash range and left a pig inside it bare.");
+            helper.assertFalse(edge.hasEffect(regeneration),
+                "tp:flask splashes three blocks and reached a pig a little further out.");
+            helper.assertTrue(owner.hasEffect(regeneration), "tp:flask's splash spared its own shooter.");
+            helper.assertTrue(target.hasEffect(poison), "tp:flask's cloud left the pig inside it unpoisoned.");
+            helper.assertFalse(near.hasEffect(poison), "tp:flask's cloud reached past its radius.");
+            helper.assertFalse(owner.hasEffect(poison),
+                "tp:flask's cloud poisoned its owner under affect_owner false.");
+            helper.succeed();
+        });
+    }
+
+    /**
+     * `minecraft:behavior.drink_milk` waits `cooldown_seconds` after each drink: a burning brute
+     * clears its weakness at once and keeps a second weakness through the three seconds' wait.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
+    public void anEntityDrinksMilkOnlyOnceEachCooldown(GameTestHelper helper) {
+        AddonEntity brute = withGroup(helper, "tp:brute_make_milky_slow");
+        if (brute == null) {
+            helper.succeed();
+            return;
+        }
+
+        var weakness = net.minecraft.world.effect.MobEffects.WEAKNESS;
+        brute.addEffect(new net.minecraft.world.effect.MobEffectInstance(weakness, WEAK_TICKS));
+        brute.setRemainingFireTicks(WEAK_TICKS);
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertFalse(brute.hasEffect(weakness),
+                BRUTE + " burns and never drank its milk."))
+            .thenExecute(() -> brute.addEffect(new net.minecraft.world.effect.MobEffectInstance(weakness, WEAK_TICKS)))
+            .thenExecuteAfter(MILK_WAIT / 2, () -> helper.assertTrue(brute.hasEffect(weakness),
+                BRUTE + " drank again inside its three second cooldown."))
+            .thenWaitUntil(() -> helper.assertFalse(brute.hasEffect(weakness),
+                BRUTE + " never drank again once its cooldown was over."))
+            .thenSucceed();
+    }
+
+    /**
      * A knockback roar throws back what `knockback_filters` accepts within `knockback_range` and
      * hurts what `damage_filters` accepts by `knockback_damage`, `attack_time` into a roar lasting
      * `duration`, and raises `on_roar_end` as it ends.

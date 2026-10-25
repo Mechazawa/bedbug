@@ -16,6 +16,7 @@
     "SettingsAccessor",
     "LivingEntityMixin",
     "JumpingAccessor",
+    "AreaEffectCloudAccessor",
     "JigsawStructureAccessor",
     "PassengerInvoker",
     "EntityTravelMixin",
