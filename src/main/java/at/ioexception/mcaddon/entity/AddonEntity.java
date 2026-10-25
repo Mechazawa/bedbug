@@ -3306,7 +3306,7 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.move_to_lava" -> goals.add(priority,
                 MoveToMatchingBlockGoal.lava(this, goal));
             case "minecraft:behavior.move_to_random_block" -> goals.add(priority,
-                MoveToMatchingBlockGoal.anywhere(this, goal));
+                new MoveToRandomBlockGoal(this, goal));
 
             case "minecraft:behavior.equip_item" -> goals.add(priority,
                 new EquipItemGoal(this));

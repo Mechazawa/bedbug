@@ -227,11 +227,6 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
             state -> state.getFluidState().is(FluidTags.WATER), null).sampling(component);
     }
 
-    /** `minecraft:behavior.move_to_random_block`, which wants somewhere to stand and nothing more. */
-    public static MoveToMatchingBlockGoal anywhere(PathfinderMob mob, JsonObject component) {
-        return new MoveToMatchingBlockGoal(mob, component, state -> !state.isAir(), null);
-    }
-
     /**
      * `minecraft:behavior.move_to_liquid`, which takes an entity on land into the liquid its
      * `material_type` names: water, lava or either.

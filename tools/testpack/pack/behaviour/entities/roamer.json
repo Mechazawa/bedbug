@@ -103,6 +103,22 @@
             "minecraft:gold_block"
           ]
         }
+      },
+      "tp:roamer_wandering": {
+        "minecraft:behavior.move_to_random_block": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "block_distance": 5,
+          "within_radius": 0
+        }
+      },
+      "tp:roamer_content": {
+        "minecraft:behavior.move_to_random_block": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "block_distance": 5,
+          "within_radius": 8
+        }
       }
     },
     "components": {
@@ -196,6 +212,20 @@
         "add": {
           "component_groups": [
             "tp:roamer_fickle"
+          ]
+        }
+      },
+      "tp:roamer_wandering": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_wandering"
+          ]
+        }
+      },
+      "tp:roamer_content": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_content"
           ]
         }
       }

@@ -310,6 +310,40 @@ public final class RoamGoalGameTests {
     /** Enough that all of them picking the near block by chance is one run in two hundred and fifty. */
     private static final int CHOOSERS = 8;
 
+    /**
+     * `minecraft:behavior.move_to_random_block` walks to blocks up to `block_distance` blocks off,
+     * five here, and is done once within `within_radius` of one: a roamer counting eight blocks as
+     * there never sets off at all.
+     */
+    @GameTest(structure = EMPTY, maxTicks = WALK_TICKS)
+    public void aRandomWalkReachesAsFarAsItsDistanceAndEndsWithinItsRadius(GameTestHelper helper) {
+        floor(helper);
+        AddonEntity wandering = roamer(helper, "tp:roamer_wandering", new BlockPos(3, 1, 3));
+        AddonEntity content = roamer(helper, "tp:roamer_content", new BlockPos(4, 1, 5));
+        if (wandering == null || content == null) {
+            helper.succeed();
+            return;
+        }
+
+        Vec3 from = wandering.position();
+        Vec3 stays = content.position();
+        double[] furthest = {0};
+        helper.onEachTick(() -> {
+            furthest[0] = Math.max(furthest[0], wandering.position().distanceTo(from));
+            helper.assertTrue(furthest[0] <= WANDER_REACH,
+                ROAMER + " picks blocks five blocks off and wandered " + furthest[0] + " blocks.");
+            helper.assertTrue(content.position().distanceTo(stays) < STILL,
+                ROAMER + " counts eight blocks as there and set off for a block five blocks off.");
+        });
+        helper.runAfterDelay(WALK_TICKS - 10, () -> {
+            helper.assertTrue(furthest[0] > 1, ROAMER + " never wandered off to a block.");
+            helper.succeed();
+        });
+    }
+
+    /** The group's five blocks and the block and a half a walk may end beyond its spot. */
+    private static final double WANDER_REACH = 6.5;
+
     /** A roamer with one group on and its goals running. */
     private static AddonEntity roamer(GameTestHelper helper, String event, BlockPos where) {
         AddonEntity roamer = BehaviourGameTests.spawn(helper, ROAMER, where);
