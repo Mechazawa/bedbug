@@ -18,8 +18,8 @@ import java.util.List;
 /**
  * Carries what the entity is holding to somebody else and puts it down in front of them.
  *
- * Four of Bedrock's behaviours are this same walk and drop, differing only in who is walked to and
- * why. Sharing and transporting go to another of the entity's own kind, dropping goes to whoever
+ * Three of Bedrock's behaviours are this same walk and drop, differing only in who is walked to and
+ * why. Sharing goes to another of the entity's own kind, dropping goes to whoever
  * the pack's filter picks out, and offering a flower goes to whoever is nearest. Java writes each
  * of these into the mob that does it, so none of them is reachable from a data-driven entity.
  */
@@ -50,11 +50,6 @@ public final class ShareItemsGoal extends Goal {
     /** `minecraft:behavior.share_items`, which hands a spare to another of the entity's own kind. */
     public static ShareItemsGoal sharing(AddonEntity mob, JsonObject component) {
         return new ShareItemsGoal(mob, component, true, 3);
-    }
-
-    /** `minecraft:behavior.transport_items`, which carries what was gathered back to the others. */
-    public static ShareItemsGoal transporting(AddonEntity mob, JsonObject component) {
-        return new ShareItemsGoal(mob, component, true, 16);
     }
 
     /** `minecraft:behavior.drop_item_for`, which leaves what it is carrying at somebody's feet. */
