@@ -12,6 +12,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.PoiTypeTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.Pose;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.Vec3;
@@ -152,6 +154,34 @@ public final class RoamGoalGameTests {
     private static boolean hidden(GameTestHelper helper, AddonEntity roamer) {
         return !helper.getLevel().canSeeSky(roamer.blockPosition());
     }
+
+    /**
+     * `minecraft:behavior.pet_sleep_with_owner` lies down once it is within `goal_radius` of its
+     * sleeping owner, three blocks here, rather than walking up to the owner's side.
+     */
+    @GameTest(structure = EMPTY, maxTicks = WALK_TICKS)
+    public void aPetLiesDownWithinItsGoalRadiusOfItsSleepingOwner(GameTestHelper helper) {
+        floor(helper);
+        AddonEntity pet = roamer(helper, "tp:roamer_curled", new BlockPos(1, 1, 4));
+        if (pet == null) {
+            helper.succeed();
+            return;
+        }
+
+        Player owner = helper.makeMockServerPlayerInLevel();
+        BlockPos bed = helper.absolutePos(new BlockPos(7, 1, 4));
+        Platform.placeAt(owner, bed.getX() + 0.5, bed.getY(), bed.getZ() + 0.5, 0f, 0f);
+        owner.startSleeping(bed);
+        pet.setOwner(owner);
+        helper.succeedWhen(() -> {
+            helper.assertTrue(pet.getPose() == Pose.SLEEPING, ROAMER + " never lay down beside its owner.");
+            helper.assertTrue(pet.distanceTo(owner) > LYING_OFF,
+                ROAMER + " lies down three blocks from its owner and walked up to " + pet.distanceTo(owner) + ".");
+        });
+    }
+
+    /** Well past the block and a half Java's walk to an owner closes to. */
+    private static final double LYING_OFF = 2.2;
 
     /**
      * `minecraft:behavior.move_to_water` looks at `search_count` blocks picked at random each tick.

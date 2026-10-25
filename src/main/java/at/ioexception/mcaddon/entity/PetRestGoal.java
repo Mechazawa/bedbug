@@ -22,6 +22,7 @@ public final class PetRestGoal extends Goal {
     private final double speed;
     private final double searchRange;
     private final double searchHeight;
+    private final double radius;
     private boolean sleptBeside;
 
     private PetRestGoal(AddonEntity mob, JsonObject component, boolean besideOwner) {
@@ -30,6 +31,7 @@ public final class PetRestGoal extends Goal {
         this.speed = Goals.number(component, "speed_multiplier", 1);
         this.searchRange = Goals.number(component, "search_range", 4);
         this.searchHeight = Goals.number(component, "search_height", 1);
+        this.radius = Goals.number(component, "goal_radius", 0.5);
         setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.JUMP));
     }
 
@@ -69,7 +71,7 @@ public final class PetRestGoal extends Goal {
         LivingEntity owner = mob.getOwner();
         if (owner == null) return;
 
-        if (mob.distanceTo(owner) > 1.5) {
+        if (mob.distanceTo(owner) > radius) {
             mob.getNavigation().moveTo(owner, speed);
             return;
         }

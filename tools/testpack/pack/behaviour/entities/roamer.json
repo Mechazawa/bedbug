@@ -36,6 +36,15 @@
           "cooldown_time": 3
         }
       },
+      "tp:roamer_curled": {
+        "minecraft:behavior.pet_sleep_with_owner": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "search_range": 10,
+          "search_height": 2,
+          "goal_radius": 3
+        }
+      },
       "tp:roamer_sampling": {
         "minecraft:behavior.move_to_water": {
           "priority": 0,
@@ -145,6 +154,13 @@
         "add": {
           "component_groups": [
             "tp:roamer_shy"
+          ]
+        }
+      },
+      "tp:roamer_curled": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_curled"
           ]
         }
       },
