@@ -1275,6 +1275,16 @@ These are the checks it runs, and what each one catches:
   - `SplineCameraClientGameTest`: `play_spline tp:sweep` seen on its first leg and held at its end,
     `tp:camera_spline`'s Catmull-Rom curve through four points, and a missing spline and a third
     person camera refused.
+**Fog media are drawn from the fog file on the client.** Java has no environment attribute for lava
+or powder snow fog, so `FogRendererMixin` (26 and later) asks `PlayerFog.paint` after `setupFog`.
+`paint` takes the pushed `/fog`, else the camera biome's fog (`AddonFogs.forBiome`, built from each
+client biome's `fog_identifier`), and applies `lava` (`lava_resistance` while the camera entity has
+fire resistance, `lava` when that block is absent), `powder_snow`, or, in open air under
+precipitation with sky above the camera, `weather` mixed over the fog the game or a pushed air fog
+drew by `ClientLevel.getRainLevel`. Mojang publishes no blend rule for weather, so the rain level is
+the weight. `FogClientGameTest.media` reads each back off the frame's `FogData`. Biome `air` and
+`water` still travel as environment attributes at conversion.
+
 - **`tools/testpack/build_modules.py`** builds a second add-on, whose script imports every
   `@minecraft/*` module the mod provides and calls one thing from each. Its sources are a manifest
   and one script under `tools/testpack/modules/`.

@@ -2,7 +2,9 @@ package at.ioexception.mcaddon.registry;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.fog.FogDefinition;
+import at.ioexception.mcaddon.bedrock.ClientBiomeDefinition;
 import at.ioexception.mcaddon.convert.ConvertedPack;
+import at.ioexception.mcaddon.convert.Names;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -17,14 +19,26 @@ import java.util.Map;
 public final class AddonFogs {
     private static final Map<String, FogDefinition> DEFINITIONS = new LinkedHashMap<>();
 
+    private static final Map<String, FogDefinition> BY_BIOME = new LinkedHashMap<>();
+
     private AddonFogs() {
     }
 
     public static void register(List<ConvertedPack> packs) {
         DEFINITIONS.clear();
+        BY_BIOME.clear();
 
         for (ConvertedPack pack : packs) {
             FogDefinition.readAll(pack.pack()).forEach(DEFINITIONS::putIfAbsent);
+        }
+        for (ConvertedPack pack : packs) {
+            ClientBiomeDefinition.fogNames(pack.pack()).forEach((biome, fogId) -> {
+                FogDefinition fog = DEFINITIONS.get(fogId);
+                if (fog == null) return;
+
+                Names.Identifier id = Names.split(biome, pack.namespace());
+                BY_BIOME.putIfAbsent(id.namespace() + ":" + id.path(), fog);
+            });
         }
         if (!DEFINITIONS.isEmpty()) {
             McAddon.LOGGER.info("Read {} fog settings from add-ons.", DEFINITIONS.size());
@@ -34,6 +48,11 @@ public final class AddonFogs {
     /** Null when no pack describes a fog under that identifier. */
     public static FogDefinition definitionOf(String identifier) {
         return DEFINITIONS.get(identifier);
+    }
+
+    /** Null when the biome, named as Java registers it, paints no fog file. */
+    public static FogDefinition forBiome(String registeredName) {
+        return BY_BIOME.get(registeredName);
     }
 
     public static Map<String, FogDefinition> all() {
