@@ -1,11 +1,16 @@
 package at.ioexception.mcaddon.gametest;
 
 import at.ioexception.mcaddon.entity.AddonEntity;
+import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.Vec3;
@@ -27,6 +32,42 @@ public final class RoamGoalGameTests {
 
     /** Long enough for a walk across the structure and Java's second between goal checks. */
     private static final int WALK_TICKS = 160;
+
+    /**
+     * `minecraft:behavior.move_towards_target` walks towards a target only while it is within
+     * `within_radius`, which is four blocks here, so a pig three blocks off is walked towards.
+     */
+    @GameTest(structure = EMPTY, maxTicks = WALK_TICKS)
+    public void aWalkTowardsATargetWithinItsRadiusSetsOff(GameTestHelper helper) {
+        floor(helper);
+        AddonEntity roamer = roamer(helper, "tp:roamer_toward", new BlockPos(1, 1, 4));
+        if (roamer == null) {
+            helper.succeed();
+            return;
+        }
+
+        roamer.setTarget(standing(helper, "pig", new BlockPos(4, 1, 4)));
+        Vec3 from = roamer.position();
+        helper.succeedWhen(() -> helper.assertTrue(roamer.position().distanceTo(from) > 1,
+            ROAMER + " never walked towards a target three blocks off."));
+    }
+
+    /** The same walk stays put while its target stands six blocks off, past its four. */
+    @GameTest(structure = EMPTY, maxTicks = WALK_TICKS)
+    public void aWalkTowardsATargetPastItsRadiusStaysPut(GameTestHelper helper) {
+        floor(helper);
+        AddonEntity roamer = roamer(helper, "tp:roamer_toward", new BlockPos(1, 1, 4));
+        if (roamer == null) {
+            helper.succeed();
+            return;
+        }
+
+        roamer.setTarget(standing(helper, "pig", new BlockPos(7, 1, 4)));
+        Vec3 from = roamer.position();
+        helper.onEachTick(() -> helper.assertTrue(roamer.position().distanceTo(from) < STILL,
+            ROAMER + " walks towards a target within four blocks and set off towards one six blocks off."));
+        helper.runAfterDelay(WALK_TICKS - 10, helper::succeed);
+    }
 
     /** Less than any step a walk takes. */
     private static final double STILL = 0.5;
@@ -186,5 +227,20 @@ public final class RoamGoalGameTests {
     private static void raisedFloor(GameTestHelper helper) {
         BlockPos.betweenClosed(new BlockPos(0, RAISED, 0), new BlockPos(7, RAISED, 7))
             .forEach(at -> helper.setBlock(at, Blocks.STONE));
+    }
+
+    /** One of the game's own mobs, with no goals of its own, where the test puts it. */
+    private static Mob standing(GameTestHelper helper, String kind, BlockPos where) {
+        ServerLevel level = helper.getLevel();
+        Entity created = Platform.createMob(
+            BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("minecraft", kind)).orElseThrow(), level);
+        helper.assertTrue(created instanceof Mob, "A " + kind + " could not be made.");
+
+        Mob mob = (Mob) created;
+        BlockPos at = helper.absolutePos(where);
+        Platform.placeAt(mob, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        mob.setNoAi(true);
+        level.addFreshEntity(mob);
+        return mob;
     }
 }

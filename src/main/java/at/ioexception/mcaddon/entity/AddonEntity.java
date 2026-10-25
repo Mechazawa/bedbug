@@ -3203,8 +3203,11 @@ public class AddonEntity extends PathfinderMob
                     new MoveThroughVillageGoal(this, 0.6, false, 4, () -> false));
             case "minecraft:behavior.mingle" ->
                 goals.add(priority, new StrollThroughVillageGoal(this, 60));
+            // `within_radius` is how near the target has to be for the walk towards it, as Java's
+            // golem states the same 32 Mojang's iron golem does.
             case "minecraft:behavior.move_towards_target" ->
-                goals.add(priority, new MoveTowardsTargetGoal(this, 0.9, 32f));
+                goals.add(priority, new MoveTowardsTargetGoal(this, speed,
+                    (float) Goals.number(goal, "within_radius", 0)));
 
             case "minecraft:behavior.random_fly", "minecraft:behavior.random_hover",
                  "minecraft:behavior.hover" -> goals.add(priority, StrollGoal.flying(this, goal));

@@ -8,6 +8,13 @@
       "is_experimental": false
     },
     "component_groups": {
+      "tp:roamer_toward": {
+        "minecraft:behavior.move_towards_target": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "within_radius": 4
+        }
+      },
       "tp:roamer_sampling": {
         "minecraft:behavior.move_to_water": {
           "priority": 0,
@@ -92,6 +99,13 @@
       "minecraft:jump.static": {}
     },
     "events": {
+      "tp:roamer_toward": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_toward"
+          ]
+        }
+      },
       "tp:roamer_sampling": {
         "add": {
           "component_groups": [
