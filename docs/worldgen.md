@@ -46,7 +46,7 @@ checked first. 35 of the 70 engine names have a different Java name and are mapp
 - A feature rule becomes a placed feature at its generation step. At world load it is added to each
   biome its filter accepts. Its heights are world heights, as in Bedrock. The filter is checked
   against the surface biome at the corner of each chunk.
-- A feature that names a feature which is not converted is left out, with what it names reported.
+- A feature that names a feature which is not converted is left out too.
 
 ## Spawn rules
 

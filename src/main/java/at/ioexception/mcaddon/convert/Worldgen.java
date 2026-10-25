@@ -139,8 +139,8 @@ public final class Worldgen {
      * own name for others to refer to.
      *
      * A feature naming others is placeable once everything it names is, so a feature naming one that
-     * no type here builds, one no pack declares, or itself through a loop is left out rather than
-     * written as an entry whose reference the game cannot resolve.
+     * no type here builds, one no pack declares, or itself through a loop is left out. An entry whose
+     * reference the game cannot resolve stops the whole data pack loading.
      */
     private static Set<String> placeable(Map<String, FeatureDefinition> features, Set<String> leaves,
         String namespace) {
