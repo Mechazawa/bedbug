@@ -2748,7 +2748,7 @@ The repository secret `MODRINTH_TOKEN` must hold a Modrinth token with the read-
 - `weather_at_position` reads `Level.precipitationAt`, which needs sky above the entity. A game test places its entity above the test box, whose ceiling shelters everything inside it.
 - A `sounds.json` moment states its own `volume` and `pitch` (`EntitySounds.momentVolume`, `momentPitch`). An empty `sound` silences the moment for add-on entities too.
 - Bedrock effect ids differ from Java's in `BedrockEffectNames`; `Platform.addEffect`, `hasEffect` and `removeEffect` translate, and a script sees Bedrock's id.
-- A script's `playSound` resolves a name through the id as written, then the pack's own definitions, then `BedrockSoundNames` (`mob.x.y` falls back to `entity.x.y`).
+- A script's `playSound` resolves a name through `BedrockSoundNames.played`: the id as written, then the pack's own definitions, then Bedrock's name (`mob.x.y` falls back to `entity.x.y`). While several add-ons ship a script the bridge has no namespace, so the pack's own definitions are skipped.
 - The census scripts need `scratchpad/bedrock` in the worktree and run without `python -I`, because they import each other.
 
 ## Conventions

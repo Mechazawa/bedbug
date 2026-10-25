@@ -24,4 +24,12 @@ class BedrockSoundNamesTest {
     void mapsAMobSoundToTheEntitySound(String bedrock, String java) {
         assertEquals(java, BedrockSoundNames.java(bedrock));
     }
+
+    /** No add-on namespace is what a script has while several add-ons ship one. */
+    @ParameterizedTest
+    @CsvSource(value = {"tp", "null"}, nullValues = "null")
+    void aScriptPlaysABedrockSoundNameWithOrWithoutItsAddOn(String namespace) {
+        assertEquals("minecraft:entity.horse.step_wood",
+            BedrockSoundNames.played("mob.horse.wood", namespace).toString());
+    }
 }

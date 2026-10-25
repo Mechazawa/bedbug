@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.script;
 
 import at.ioexception.mcaddon.convert.BedrockItemTags;
+import at.ioexception.mcaddon.convert.BedrockSoundNames;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.behaviour.BedrockVillager;
 import at.ioexception.mcaddon.bedrock.behaviour.DamageCause;
@@ -1041,7 +1042,7 @@ public final class ScriptBridge {
      */
     @HostAccess.Export
     public void playSoundTo(String id, String sound, double volume, double pitch) {
-        Identifier parsed = soundId(sound);
+        Identifier parsed = BedrockSoundNames.played(sound, namespace);
         if (parsed == null || !(entity(id) instanceof ServerPlayer player)) return;
 
         BuiltInRegistries.SOUND_EVENT.getOptional(parsed).ifPresentOrElse(
@@ -1052,31 +1053,11 @@ public final class ScriptBridge {
             () -> coverage.missingSound(parsed.toString()));
     }
 
-    /**
-     * The sound event a script's name stands for: the id as written when the game has it, else the
-     * pack's own definition under that name where one add-on alone ships a script, else the Java sound
-     * Bedrock's name stands for.
-     */
-    private Identifier soundId(String sound) {
-        Identifier written = sound == null ? null : Identifier.tryParse(sound);
-        if (written == null || BuiltInRegistries.SOUND_EVENT.containsKey(written)) return written;
-
-        if (namespace != null) {
-            at.ioexception.mcaddon.convert.Names.Identifier own =
-                at.ioexception.mcaddon.convert.Names.soundEvent(sound, namespace);
-            Identifier packs = Identifier.tryParse(own.namespace() + ":" + own.path());
-            if (packs != null && BuiltInRegistries.SOUND_EVENT.containsKey(packs)) return packs;
-        }
-
-        String java = at.ioexception.mcaddon.convert.BedrockSoundNames.java(sound);
-        return java == null ? written : Identifier.tryParse(java);
-    }
-
     @HostAccess.Export
     public void playSoundAtLocation(String dimension, String sound, double x, double y, double z,
         double volume, double pitch) {
         ServerLevel level = level(dimension);
-        Identifier parsed = soundId(sound);
+        Identifier parsed = BedrockSoundNames.played(sound, namespace);
         if (level == null || parsed == null) return;
 
         BuiltInRegistries.SOUND_EVENT.getOptional(parsed).ifPresentOrElse(
