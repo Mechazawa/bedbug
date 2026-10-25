@@ -15,7 +15,20 @@ import at.ioexception.mcaddon.registry.AddonParticles;
 import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
+//? if >=26.2 {
+import net.minecraft.advancements.triggers.CriteriaTriggers;
+//?} else {
+/*import net.minecraft.advancements.CriteriaTriggers;
+*///?}
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.CraftingInput;
+import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -556,6 +569,50 @@ public final class PackGameTests {
         helper.getLevel().setBlockAndUpdate(at, block.defaultBlockState().setValue(lit, false));
         helper.succeedWhen(() -> helper.assertTrue(helper.getBlockState(STAND).getValue(lit),
             BLOCK + " never ran the event its clock schedules."));
+    }
+
+    /**
+     * Of the recipes matching one grid, the one with the lowest priority number crafts.
+     *
+     * Two planks recipes of the pack share the grid with the game's crafting table recipe, whose
+     * priority is 0. The pack's is the one stating -1 and the other states 1, so the first of the
+     * three in load order is not the answer.
+     */
+    @GameTest()
+    public void theLowestRecipePriorityCrafts(GameTestHelper helper) {
+        if (BuiltInRegistries.ITEM.getOptional(Platform.id("tp", "dust")).isEmpty()) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        CraftingInput grid = CraftingInput.of(2, 2, List.of(new ItemStack(Items.OAK_PLANKS),
+            new ItemStack(Items.OAK_PLANKS), new ItemStack(Items.OAK_PLANKS), new ItemStack(Items.OAK_PLANKS)));
+        var crafted = level.getServer().getRecipeManager().getRecipeFor(RecipeType.CRAFTING, grid, level);
+        helper.assertTrue(crafted.isPresent(), "Four planks crafted nothing.");
+        String id = Platform.idOf(crafted.get().id()).toString();
+        helper.assertTrue(id.equals("tp:dust_from_planks_first"), "Four planks crafted " + id + ".");
+        helper.succeed();
+    }
+
+    /**
+     * A recipe unlocked by the `AlwaysUnlocked` context is in every player's book from the start.
+     *
+     * The converted advancement waits on the tick trigger, so one tick of a player is all it takes.
+     */
+    @GameTest()
+    public void anAlwaysUnlockedRecipeIsKnownToEveryPlayer(GameTestHelper helper) {
+        if (BuiltInRegistries.ITEM.getOptional(Platform.id("tp", "dust")).isEmpty()) {
+            helper.succeed();
+            return;
+        }
+
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ResourceKey<Recipe<?>> recipe = ResourceKey.create(Registries.RECIPE, Platform.id("tp", "shard_cut"));
+        helper.assertFalse(player.getRecipeBook().contains(recipe), "A new player already knew the recipe.");
+        CriteriaTriggers.TICK.trigger(player);
+        helper.assertTrue(player.getRecipeBook().contains(recipe), "The recipe stayed locked after a tick.");
+        helper.succeed();
     }
 
     /**

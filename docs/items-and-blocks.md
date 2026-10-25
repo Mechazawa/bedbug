@@ -79,7 +79,9 @@ Shaped, shapeless, furnace, smithing transform, smithing trim and brewing.
 - A shapeless recipe tagged for the stonecutter becomes a stonecutting recipe.
 - A tag ingredient stays a tag. `group` is kept.
 - The unlock condition becomes the advancement that unlocks the recipe, so it reaches the recipe
-  book.
+  book. The `AlwaysUnlocked` context gives the recipe to every player on their first tick.
+- When several recipes match one crafting grid, the one with the lowest `priority` number crafts. A
+  recipe that states none has 0, the same as the game's own recipes.
 - Brewing: a mix (one potion to another over a reagent) and a container recipe (one bottle to
   another) work at an ordinary brewing stand. A pack's own bottle is a valid container. On 26.3,
   where brewing is a recipe type, a mix reaches the game's three bottles and the bottles its own
@@ -144,9 +146,9 @@ colours. Forty families are mapped. This works for `set_data`, `random_aux_value
 - A data value with no family keeps the id and is reported. A family member this version has no item
   for empties that one loot entry.
 - `minecraft:stacked_by_data` changes nothing. Java stacks by id already.
-- A recipe's `priority` and `assume_symmetry` are reported. Java offers every matching recipe and
-  always mirrors shaped patterns.
-- An unlock that names a game event (standing in water, a full inventory) is reported.
+- A recipe's `assume_symmetry` is reported. Java always mirrors shaped patterns.
+- An unlock that names a game event other than `AlwaysUnlocked` (standing in water, a full
+  inventory) is reported.
 - `recipe_material_reduction` (Education Edition material reducer).
 - A smithing trim works only with a template named `<pattern>_armor_trim_smithing_template`, so only
   Java's existing patterns apply. Other templates are reported.

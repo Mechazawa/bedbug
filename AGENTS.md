@@ -2624,6 +2624,15 @@ redirects the neighbour's `isFaceSturdy(side)` call inside a pane's `getStateFor
 `updateShape`, the only place a pane knows the side. `tp:pillar` carries the rule and
 `aConnectionRuleNamesTheSidesNeighboursReach` reads fence, bars and wall back.
 
+## Recipe unlock context and priority
+
+`AlwaysUnlocked` adds a `minecraft:tick` criterion to the recipe's unlock advancement, which grants
+the recipe on a player's first tick. Mojang publishes nothing on `priority`: the rule used is that a
+lower number wins and a missing one is 0. The converter writes the non-zero ones to
+`mcaddon_recipe_priorities.json` in the converted root, `RecipePriorities` reads those of the active
+set, and `RecipePriorityMixin` stable-sorts `RecipeMap.getRecipesFor` (the one call every version's
+recipe lookup goes through) by them, so only recipes that already match are reordered.
+
 ## Releasing
 
 A pushed `v*` tag runs `.github/workflows/release.yml`, which builds the jars, makes the GitHub release and then runs `tools/release/modrinth.py` to publish each jar to Modrinth.

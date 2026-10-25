@@ -1,0 +1,23 @@
+{
+  "format_version": "1.20.0",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "tp:dust_from_planks_first"
+    },
+    "tags": ["crafting_table"],
+    "priority": -1,
+    "pattern": [
+      "PP",
+      "PP"
+    ],
+    "key": {
+      "P": {
+        "tag": "minecraft:planks"
+      }
+    },
+    "result": {
+      "item": "tp:dust",
+      "count": 8
+    }
+  }
+}
