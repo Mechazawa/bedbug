@@ -4645,7 +4645,7 @@ public class AddonEntity extends PathfinderMob
      * per hop than one ambling. Bedrock's own default height is a tenth of a block, so a pack's
      * number is read against that and a hop is scaled by what it asked for.
      */
-    void hop(double speed) {
+    final void hop(double speed) {
         com.google.gson.JsonObject dynamic = declares("minecraft:jump.dynamic")
             ? componentBody("minecraft:jump.dynamic") : null;
         if (dynamic == null) {
@@ -4653,8 +4653,8 @@ public class AddonEntity extends PathfinderMob
             return;
         }
 
-        com.google.gson.JsonObject data = dynamic.getAsJsonObject(
-            speed > 1 ? "fast_skip_data" : "regular_skip_data");
+        com.google.gson.JsonObject data = speed > 1
+            ? dynamic.getAsJsonObject("fast_skip_data") : dynamic.getAsJsonObject("regular_skip_data");
         Goals.hop(this, speed * Goals.number(data, "distance_scale", 1),
             Goals.HOP_HEIGHT * Goals.number(data, "height", BEDROCK_HOP_HEIGHT) / BEDROCK_HOP_HEIGHT);
     }
