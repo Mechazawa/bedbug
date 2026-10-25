@@ -175,6 +175,11 @@ public final class SentinelGameTests {
     }
 
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200)
+    public void aDiggerIgnoresSuspicionUnlessItCountsIt(GameTestHelper helper) {
+        dig(helper, "digging_unsuspicious", true);
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200)
     public void aDiggerCountingSuspicionAsADisturbanceNeverDigsAmongIt(GameTestHelper helper) {
         dig(helper, "digging_suspicious", false);
     }

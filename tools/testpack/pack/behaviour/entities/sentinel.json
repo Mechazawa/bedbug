@@ -211,6 +211,14 @@
         "minecraft:behavior.break_door": {
           "priority": 0
         }
+      },
+      "tp:sentinel_digging_unsuspicious": {
+        "minecraft:suspect_tracking": {},
+        "minecraft:behavior.dig": {
+          "priority": 0,
+          "duration": 2,
+          "idle_time": 1
+        }
       }
     },
     "components": {
@@ -382,6 +390,13 @@
       "tp:sentinel_stopped": {
         "set_property": {
           "tp:stopped": true
+        }
+      },
+      "tp:sentinel_make_digging_unsuspicious": {
+        "add": {
+          "component_groups": [
+            "tp:sentinel_digging_unsuspicious"
+          ]
         }
       }
     }
