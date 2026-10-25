@@ -216,6 +216,10 @@ REASONS = {
     },
     "minecraft:behavior.share_items": {"*": "Java's stroll goal has no arrival radius of its own."},
     "minecraft:behavior.sleep": {
+        "speed_multiplier": "The entity has no bed to walk to, so there is no walk for a speed to apply "
+                            "to; it lies down where it stands.",
+        "timeout_cooldown": "Documented as the wait after a failed or timed out attempt to reach the bed, "
+                            "and there is no bed to fail to reach.",
         "sleep_collider_width": SLEEPING_BOX,
         "sleep_collider_height": SLEEPING_BOX,
         "sleep_y_offset": SLEEPING_BOX,
@@ -239,6 +243,10 @@ REASONS = {
         "speed_modifier": "The potion's effects arrive the moment it is chosen, so there is no time spent "
                           "drinking for the entity to be slowed through.",
 
+        "priority": "Drinking runs beside the entity's goals on the sensor pass rather than as one of "
+                    "them, so it has no place among them to take.",
+    },
+    "minecraft:behavior.drink_milk": {
         "priority": "Drinking runs beside the entity's goals on the sensor pass rather than as one of "
                     "them, so it has no place among them to take.",
     },

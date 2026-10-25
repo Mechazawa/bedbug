@@ -13,7 +13,9 @@ import java.util.EnumSet;
  * `minecraft:behavior.random_look_around_and_sit` makes a number of looks, each held for a number of
  * ticks and each aimed inside a window of angles measured from where the entity faced when it began.
  * Nothing else starts it for `random_look_around_cooldown` seconds afterwards. A leash ends it
- * unless `continue_if_leashed` says it may go on.
+ * unless `continue_if_leashed` says it may go on. While it sits the entity carries `is_looking_and_sitting`
+ * in its stored values, and with `continue_sitting_on_reload` the goal picks the sitting up again when
+ * the entity is read back, where without it the entity stands.
  */
 public final class LookAroundAndSitGoal extends Goal {
     private static final double LOOK_DISTANCE = 8;
@@ -28,6 +30,7 @@ public final class LookAroundAndSitGoal extends Goal {
     private final double angleHigh;
     private final int cooldown;
     private final boolean continuesLeashed;
+    private final boolean continuesOnReload;
     private long readyAt;
     private float facing;
     private int looksLeft;
@@ -45,11 +48,19 @@ public final class LookAroundAndSitGoal extends Goal {
         this.angleHigh = Goals.number(component, "max_angle_of_view_horizontal", 180);
         this.cooldown = Goals.ticks(component, "random_look_around_cooldown", 0);
         this.continuesLeashed = Goals.flag(component, "continue_if_leashed", false);
+        this.continuesOnReload = Goals.flag(component, "continue_sitting_on_reload", false);
         setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
     }
 
+    private static final String SITTING = "is_looking_and_sitting";
+
     @Override
     public boolean canUse() {
+        if (Boolean.TRUE.equals(mob.value(SITTING))) {
+            if (continuesOnReload) return true;
+
+            mob.setValue(SITTING, false);
+        }
         return mob.getTarget() == null && mob.onGround() && mob.level().getGameTime() >= readyAt
             && mob.getRandom().nextDouble() < probability;
     }
@@ -67,6 +78,7 @@ public final class LookAroundAndSitGoal extends Goal {
         lookUntil = 0;
         mob.getNavigation().stop();
         mob.setPose(Pose.SITTING);
+        mob.setValue(SITTING, true);
     }
 
     @Override
@@ -87,6 +99,7 @@ public final class LookAroundAndSitGoal extends Goal {
         looksLeft = 0;
         lookUntil = 0;
         mob.setPose(Pose.STANDING);
+        mob.setValue(SITTING, false);
         readyAt = mob.level().getGameTime() + cooldown;
     }
 }

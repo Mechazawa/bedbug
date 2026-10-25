@@ -1,0 +1,193 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:napper",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false,
+      "properties": {}
+    },
+    "component_groups": {
+      "tp:napper_sleeping_first": {
+        "minecraft:behavior.sleep": {
+          "priority": 3
+        }
+      },
+      "tp:napper_sleeping_last": {
+        "minecraft:behavior.sleep": {
+          "priority": 5
+        }
+      },
+      "tp:napper_sleeping_riding": {
+        "minecraft:behavior.sleep": {
+          "priority": 3,
+          "can_sleep_while_riding": true
+        }
+      },
+      "tp:napper_sleeping_rested": {
+        "minecraft:behavior.sleep": {
+          "priority": 3,
+          "cooldown_time": 30
+        }
+      },
+      "tp:napper_sitting": {
+        "minecraft:behavior.random_look_around_and_sit": {
+          "min_look_count": 1000,
+          "max_look_count": 1000,
+          "min_look_time": 20,
+          "max_look_time": 40,
+          "priority": 4,
+          "probability": 1
+        }
+      },
+      "tp:napper_sitting_kept": {
+        "minecraft:behavior.random_look_around_and_sit": {
+          "min_look_count": 1000,
+          "max_look_count": 1000,
+          "min_look_time": 20,
+          "max_look_time": 40,
+          "priority": 4,
+          "probability": 0,
+          "continue_sitting_on_reload": true
+        }
+      },
+      "tp:napper_sitting_dropped": {
+        "minecraft:behavior.random_look_around_and_sit": {
+          "min_look_count": 1000,
+          "max_look_count": 1000,
+          "min_look_time": 20,
+          "max_look_time": 40,
+          "priority": 4,
+          "probability": 0
+        }
+      },
+      "tp:napper_mingling": {
+        "minecraft:behavior.mingle": {
+          "priority": 4,
+          "mingle_partner_type": "minecraft:pig",
+          "mingle_distance": 3,
+          "duration": 2,
+          "cooldown_time": 5,
+          "speed_multiplier": 1
+        }
+      },
+      "tp:napper_avoiding_random": {
+        "minecraft:behavior.avoid_block": {
+          "priority": 4,
+          "target_blocks": [
+            "minecraft:gold_block"
+          ],
+          "search_range": 6,
+          "search_height": 2,
+          "target_selection_method": "random"
+        }
+      },
+      "tp:napper_avoiding_nearest": {
+        "minecraft:behavior.avoid_block": {
+          "priority": 4,
+          "target_blocks": [
+            "minecraft:gold_block"
+          ],
+          "search_range": 6,
+          "search_height": 2
+        }
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": [
+          "tp_napper",
+          "mob"
+        ]
+      },
+      "minecraft:collision_box": {
+        "width": 0.6,
+        "height": 1.0
+      },
+      "minecraft:health": {
+        "value": 20,
+        "max": 20
+      },
+      "minecraft:movement": {
+        "value": 0.25
+      },
+      "minecraft:physics": {},
+      "minecraft:movement.basic": {},
+      "minecraft:navigation.walk": {},
+      "minecraft:jump.static": {}
+    },
+    "events": {
+      "tp:napper_make_sleeping_first": {
+        "add": {
+          "component_groups": [
+            "tp:napper_sleeping_first"
+          ]
+        }
+      },
+      "tp:napper_make_sleeping_last": {
+        "add": {
+          "component_groups": [
+            "tp:napper_sleeping_last"
+          ]
+        }
+      },
+      "tp:napper_make_sleeping_riding": {
+        "add": {
+          "component_groups": [
+            "tp:napper_sleeping_riding"
+          ]
+        }
+      },
+      "tp:napper_make_sleeping_rested": {
+        "add": {
+          "component_groups": [
+            "tp:napper_sleeping_rested"
+          ]
+        }
+      },
+      "tp:napper_make_sitting": {
+        "add": {
+          "component_groups": [
+            "tp:napper_sitting"
+          ]
+        }
+      },
+      "tp:napper_make_sitting_kept": {
+        "add": {
+          "component_groups": [
+            "tp:napper_sitting_kept"
+          ]
+        }
+      },
+      "tp:napper_make_sitting_dropped": {
+        "add": {
+          "component_groups": [
+            "tp:napper_sitting_dropped"
+          ]
+        }
+      },
+      "tp:napper_make_mingling": {
+        "add": {
+          "component_groups": [
+            "tp:napper_mingling"
+          ]
+        }
+      },
+      "tp:napper_make_avoiding_random": {
+        "add": {
+          "component_groups": [
+            "tp:napper_avoiding_random"
+          ]
+        }
+      },
+      "tp:napper_make_avoiding_nearest": {
+        "add": {
+          "component_groups": [
+            "tp:napper_avoiding_nearest"
+          ]
+        }
+      }
+    }
+  }
+}
