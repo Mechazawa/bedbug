@@ -1,0 +1,233 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:porter",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false
+    },
+    "component_groups": {
+      "tp:porter_carrying": {
+        "minecraft:behavior.transport_items": {
+          "priority": 0,
+          "source_container_types": [
+            {
+              "name": "minecraft:barrel"
+            }
+          ],
+          "destination_container_types": [
+            {
+              "name": "minecraft:chest"
+            }
+          ],
+          "search_strategy": "nearest",
+          "search_distance": [
+            6,
+            3
+          ],
+          "max_stack_size": 5
+        }
+      },
+      "tp:porter_choosy": {
+        "minecraft:behavior.transport_items": {
+          "priority": 0,
+          "source_container_types": [
+            {
+              "name": "minecraft:barrel"
+            }
+          ],
+          "destination_container_types": [
+            {
+              "name": "minecraft:chest"
+            }
+          ],
+          "search_strategy": "nearest",
+          "search_distance": [
+            6,
+            3
+          ],
+          "place_strategy": "with_matching"
+        }
+      },
+      "tp:porter_nearest": {
+        "minecraft:behavior.transport_items": {
+          "priority": 0,
+          "source_container_types": [
+            {
+              "name": "minecraft:barrel"
+            }
+          ],
+          "destination_container_types": [
+            {
+              "name": "minecraft:chest"
+            }
+          ],
+          "search_strategy": "nearest",
+          "search_distance": [
+            6,
+            3
+          ]
+        }
+      },
+      "tp:porter_short": {
+        "minecraft:behavior.transport_items": {
+          "priority": 0,
+          "source_container_types": [
+            {
+              "name": "minecraft:barrel"
+            }
+          ],
+          "destination_container_types": [
+            {
+              "name": "minecraft:chest"
+            }
+          ],
+          "search_strategy": "nearest",
+          "search_distance": [
+            2,
+            2
+          ]
+        }
+      },
+      "tp:porter_forgetful": {
+        "minecraft:behavior.transport_items": {
+          "priority": 0,
+          "source_container_types": [
+            {
+              "name": "minecraft:barrel"
+            }
+          ],
+          "destination_container_types": [
+            {
+              "name": "minecraft:chest"
+            }
+          ],
+          "search_strategy": "nearest",
+          "search_distance": [
+            6,
+            3
+          ],
+          "max_visited_containers": 2,
+          "idle_cooldown": 30
+        }
+      },
+      "tp:porter_restless": {
+        "minecraft:behavior.transport_items": {
+          "priority": 0,
+          "source_container_types": [
+            {
+              "name": "minecraft:barrel"
+            }
+          ],
+          "destination_container_types": [
+            {
+              "name": "minecraft:chest"
+            }
+          ],
+          "search_strategy": "nearest",
+          "search_distance": [
+            6,
+            3
+          ],
+          "idle_cooldown": 1
+        }
+      },
+      "tp:porter_late": {
+        "minecraft:behavior.transport_items": {
+          "priority": 0,
+          "source_container_types": [
+            {
+              "name": "minecraft:barrel"
+            }
+          ],
+          "destination_container_types": [
+            {
+              "name": "minecraft:chest"
+            }
+          ],
+          "search_strategy": "nearest",
+          "search_distance": [
+            6,
+            3
+          ],
+          "initial_cooldown": 3
+        }
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": [
+          "tp_porter",
+          "mob"
+        ]
+      },
+      "minecraft:collision_box": {
+        "width": 0.6,
+        "height": 1.0
+      },
+      "minecraft:health": {
+        "value": 20,
+        "max": 20
+      },
+      "minecraft:movement": {
+        "value": 0.25
+      },
+      "minecraft:physics": {},
+      "minecraft:movement.basic": {},
+      "minecraft:navigation.walk": {},
+      "minecraft:jump.static": {}
+    },
+    "events": {
+      "tp:porter_make_carrying": {
+        "add": {
+          "component_groups": [
+            "tp:porter_carrying"
+          ]
+        }
+      },
+      "tp:porter_make_choosy": {
+        "add": {
+          "component_groups": [
+            "tp:porter_choosy"
+          ]
+        }
+      },
+      "tp:porter_make_nearest": {
+        "add": {
+          "component_groups": [
+            "tp:porter_nearest"
+          ]
+        }
+      },
+      "tp:porter_make_short": {
+        "add": {
+          "component_groups": [
+            "tp:porter_short"
+          ]
+        }
+      },
+      "tp:porter_make_forgetful": {
+        "add": {
+          "component_groups": [
+            "tp:porter_forgetful"
+          ]
+        }
+      },
+      "tp:porter_make_restless": {
+        "add": {
+          "component_groups": [
+            "tp:porter_restless"
+          ]
+        }
+      },
+      "tp:porter_make_late": {
+        "add": {
+          "component_groups": [
+            "tp:porter_late"
+          ]
+        }
+      }
+    }
+  }
+}
