@@ -30,7 +30,6 @@ import net.minecraft.world.entity.ai.goal.MoveTowardsTargetGoal;
 import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.RestrictSunGoal;
-import net.minecraft.world.entity.ai.goal.StrollThroughVillageGoal;
 //? if <26.3 {
 import net.minecraft.world.entity.ai.goal.TryFindWaterGoal;
 //?}
@@ -1965,31 +1964,6 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
-     * Lying down at night, which is what `minecraft:behavior.sleep` describes.
-     *
-     * Java writes sleeping into the villager alone, tied to a bed it has claimed. A pack's entity
-     * has no bed, so what carries across is the part a player sees: it stops where it is until the
-     * sun is up again.
-     */
-    /** The span of the day Bedrock lets a bed be slept in, in ticks. */
-    private static final long BED_OPENS = 12542L;
-    private static final long BED_CLOSES = 23460L;
-
-    private void rest() {
-        if (!declaresNow("minecraft:behavior.sleep")) return;
-        if (!(level() instanceof net.minecraft.server.level.ServerLevel level)) return;
-
-        long time = Platform.dayTime(level) % 24000L;
-        boolean night = time >= BED_OPENS && time < BED_CLOSES;
-        setPose(night ? net.minecraft.world.entity.Pose.SLEEPING : net.minecraft.world.entity.Pose.STANDING);
-        if (night) {
-            getNavigation().stop();
-            setDeltaMovement(0, getDeltaMovement().y, 0);
-            lastRestedDay = Platform.dayTime(level) / 24000L;
-        }
-    }
-
-    /**
      * Java's distance rule never removes the entity, because Bedrock removes one only through
      * `minecraft:despawn`, which {@link #despawn} answers. Java's default rule discards a mob the
      * moment the nearest player is more than 128 blocks away.
@@ -3204,8 +3178,8 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.move_through_village" ->
                 goals.add(priority,
                     new MoveThroughVillageGoal(this, 0.6, false, 4, () -> false));
-            case "minecraft:behavior.mingle" ->
-                goals.add(priority, new StrollThroughVillageGoal(this, 60));
+            case "minecraft:behavior.mingle" -> goals.add(priority, new MingleGoal(this, goal));
+            case "minecraft:behavior.sleep" -> goals.add(priority, new SleepGoal(this, goal));
             case "minecraft:behavior.move_towards_target" ->
                 goals.add(priority, new MoveTowardsTargetGoal(this, 0.9, 32f));
 
@@ -3721,7 +3695,6 @@ public class AddonEntity extends PathfinderMob
             rememberSomethingNearby();
             resupply();
             teleportAbout();
-            rest();
             drink();
             leashChanged(isLeashed());
             noticeRaidWon();
@@ -3997,6 +3970,10 @@ public class AddonEntity extends PathfinderMob
 
     /** The day the entity last lay down, counted the way the world counts its own. */
     private long lastRestedDay = -1;
+
+    void restedOn(long day) {
+        lastRestedDay = day;
+    }
 
     /** One chance in this many, per sensor tick of a sleepless night, of another phantom. */
     private static final int PHANTOM_CHANCE = 400;
