@@ -2,8 +2,12 @@ package at.ioexception.mcaddon.entity;
 
 import at.ioexception.mcaddon.bedrock.behaviour.Filter;
 import at.ioexception.mcaddon.platform.Platform;
+import at.ioexception.mcaddon.registry.AddonBlocks;
+import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.ServerHooks;
+import at.ioexception.mcaddon.util.Json;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -15,7 +19,9 @@ import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -40,10 +46,11 @@ public final class CarryBlockGoal extends Goal {
     private final Set<Block> allowed;
     private final Filter conditions;
     private final String doneEvent;
+    private final List<RandomBlock> randomBlocks;
     private final boolean obeysGriefing;
 
-    private CarryBlockGoal(AddonEntity mob, JsonObject component, boolean taking,
-        String blockKey, String filterKey, String eventKey) {
+    private CarryBlockGoal(AddonEntity mob, JsonObject component, boolean taking, Set<Block> allowed,
+        Filter conditions, String doneEvent, List<RandomBlock> randomBlocks) {
         this.mob = mob;
         this.taking = taking;
         this.chance = Goals.number(component, "chance", 1);
@@ -51,32 +58,42 @@ public final class CarryBlockGoal extends Goal {
         this.xzHigh = (int) Goals.high(component, "xz_range", 2);
         this.yLow = (int) Goals.low(component, "y_range", 0);
         this.yHigh = (int) Goals.high(component, "y_range", 3);
-        this.allowed = blockKey == null ? Set.of() : Goals.blocks(component, blockKey);
-        this.conditions = filterKey == null ? Filter.parse(null) : Goals.filter(component, filterKey);
-        this.doneEvent = eventKey == null ? null : Goals.event(component, eventKey);
+        this.allowed = allowed;
+        this.conditions = conditions;
+        this.doneEvent = doneEvent;
+        this.randomBlocks = randomBlocks;
         this.obeysGriefing = Goals.flag(component, "affected_by_griefing_rule", true);
         setFlags(EnumSet.of(Goal.Flag.MOVE));
     }
 
     /** `minecraft:behavior.take_block`, which lifts one of the blocks the pack listed. */
     public static CarryBlockGoal taking(AddonEntity mob, JsonObject component) {
-        return new CarryBlockGoal(mob, component, true, "blocks", "can_take", "on_take");
+        return new CarryBlockGoal(mob, component, true, Goals.blocks(component, "blocks"),
+            Goals.filter(component, "can_take"), Goals.event(component, "on_take"), List.of());
     }
 
-    /** `minecraft:behavior.place_block`, which puts down whatever the entity is carrying. */
+    /**
+     * `minecraft:behavior.place_block`, which puts down one of `randomly_placeable_blocks` where the
+     * pack lists any, and whatever the entity is carrying where it lists none.
+     */
     public static CarryBlockGoal placing(AddonEntity mob, JsonObject component) {
-        return new CarryBlockGoal(mob, component, false, "randomly_placeable_blocks",
-            "can_place", "on_place");
+        return new CarryBlockGoal(mob, component, false, Goals.blocks(component, "placeable_carried_blocks"),
+            Goals.filter(component, "can_place"), Goals.event(component, "on_place"),
+            Json.list(component, "randomly_placeable_blocks").stream()
+                .filter(JsonElement::isJsonObject)
+                .map(entry -> RandomBlock.tryFrom(entry.getAsJsonObject()))
+                .filter(java.util.Objects::nonNull)
+                .toList());
     }
 
     /** `minecraft:behavior.enderman_take_block`, the same lifting with an enderman's own reach. */
     public static CarryBlockGoal endermanTaking(AddonEntity mob, JsonObject component) {
-        return new CarryBlockGoal(mob, component, true, null, null, null);
+        return new CarryBlockGoal(mob, component, true, Set.of(), Filter.parse(null), null, List.of());
     }
 
     /** `minecraft:behavior.enderman_leave_block`, which sets down what the enderman carried. */
     public static CarryBlockGoal endermanLeaving(AddonEntity mob, JsonObject component) {
-        return new CarryBlockGoal(mob, component, false, null, null, null);
+        return new CarryBlockGoal(mob, component, false, Set.of(), Filter.parse(null), null, List.of());
     }
 
     @Override
@@ -84,7 +101,7 @@ public final class CarryBlockGoal extends Goal {
         if (mob.getRandom().nextDouble() > chance) return false;
         if (!(mob.level() instanceof ServerLevel level)) return false;
         if (obeysGriefing && !Platform.mobGriefing(level)) return false;
-        if (taking == carrying()) return false;
+        if (taking ? carrying() : randomBlocks.isEmpty() && !carrying()) return false;
 
         return conditions.matches(new Filter.Context(mob, mob, mob.getTarget(), ServerHooks.state()));
     }
@@ -119,18 +136,24 @@ public final class CarryBlockGoal extends Goal {
     }
 
     private void place(ServerLevel level) {
-        Block held = carried();
-        if (held == null) return;
+        BlockState placed = randomBlocks.isEmpty() ? carriedState() : RandomBlock.pick(randomBlocks, mob);
+        if (placed == null) return;
 
         for (BlockPos at : shuffled()) {
             if (!level.getBlockState(at).canBeReplaced()) continue;
             if (level.getBlockState(at.below()).isAir()) continue;
 
-            level.setBlockAndUpdate(at, held.defaultBlockState());
-            mob.setValue(CARRIED, null);
+            level.setBlockAndUpdate(at, placed);
+            if (randomBlocks.isEmpty()) mob.setValue(CARRIED, null);
             raise(at);
             return;
         }
+    }
+
+    /** The carried block, where the pack's `placeable_carried_blocks` lets it be put down. */
+    private BlockState carriedState() {
+        Block held = carried();
+        return held == null || !allowed.isEmpty() && !allowed.contains(held) ? null : held.defaultBlockState();
     }
 
     /** The places the pack's two ranges cover, in no order, so a run does not always pick the same. */
@@ -166,5 +189,40 @@ public final class CarryBlockGoal extends Goal {
         mob.setValue("block_y", (double) at.getY());
         mob.setValue("block_z", (double) at.getZ());
         EntityEvents.trigger(mob, doneEvent, mob.getTarget(), ServerHooks.state());
+    }
+
+    /** One entry of `randomly_placeable_blocks`: a block in its states, offered while its filter holds. */
+    private record RandomBlock(BlockState state, Filter filter, int weight) {
+        static RandomBlock tryFrom(JsonObject entry) {
+            JsonElement block = entry.get("block");
+            JsonObject descriptor = block != null && block.isJsonObject() ? block.getAsJsonObject() : null;
+            String name = descriptor != null ? Json.text(descriptor, "name", null)
+                : block != null && block.isJsonPrimitive() ? block.getAsString() : null;
+            if (name == null) return null;
+
+            Map<String, String> states = new LinkedHashMap<>();
+            JsonObject stated = descriptor == null ? null : Goals.object(descriptor, "states");
+            if (stated != null) {
+                stated.entrySet().forEach(state -> states.put(state.getKey(), state.getValue().getAsString()));
+            }
+            BlockState state = AddonBlocks.stateOf(name, states, AddonEntities::unsupported);
+            int weight = (int) Goals.number(entry, "weight", 1);
+            return state == null || weight <= 0 ? null : new RandomBlock(state, Goals.filter(entry, "filter"), weight);
+        }
+
+        /** A weighted draw among the entries whose filter the entity passes, or null where none does. */
+        static BlockState pick(List<RandomBlock> entries, AddonEntity mob) {
+            Filter.Context context = new Filter.Context(mob, mob, mob.getTarget(), ServerHooks.state());
+            List<RandomBlock> open = entries.stream().filter(entry -> entry.filter.matches(context)).toList();
+            int total = open.stream().mapToInt(RandomBlock::weight).sum();
+            if (total <= 0) return null;
+
+            int drawn = mob.getRandom().nextInt(total);
+            for (RandomBlock entry : open) {
+                drawn -= entry.weight;
+                if (drawn < 0) return entry.state;
+            }
+            return null;
+        }
     }
 }

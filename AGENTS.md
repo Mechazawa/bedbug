@@ -2777,6 +2777,39 @@ lower number wins and a missing one is 0. The converter writes the non-zero ones
 set, and `RecipePriorityMixin` stable-sorts `RecipeMap.getRecipesFor` (the one call every version's
 recipe lookup goes through) by them, so only recipes that already match are reordered.
 
+## Carrying blocks, laying, working and giving
+
+`tp:keeper` carries one goal per group and `KeeperGoalGameTests` reads each back off the world.
+
+- `minecraft:behavior.place_block` with `randomly_placeable_blocks` places a weighted draw among the
+  entries whose `filter` the entity passes, in the entry's states, and needs nothing carried; with
+  none it places the carried block, limited by `placeable_carried_blocks`. Mojang's copper golem
+  turns into its statue this way. A filter's `block` subject is not answered, so an entry filter is
+  asked of the entity alone.
+- `minecraft:behavior.lay_egg`: Mojang publishes no rule for what "the default lay-egg animation"
+  is, and the turtle's own clip reads `q.is_laying_egg` from the pack. Here it is Java's turtle
+  digging: every five ticks while laying, the ground under the entity breaks into its particles
+  and sound and the entity raises `ENTITY_ACTION`, which a sculk sensor hears. With
+  `allow_laying_from_below` the entity also counts as arrived within the goal radius of the target
+  block's middle, and walks to the target block itself where the spot above it cannot be reached.
+- `minecraft:behavior.work` and `work_composter` count `active_time` and `goal_cooldown` in ticks,
+  as Mojang's schema says (the villager's 250 is a twelve second shift). A shift of no ticks still
+  arrives and raises `on_arrival`. Rain counts where it falls on the station. A worker that may not
+  work in rain does not start while it falls there, and stops once it does unless no more of its
+  shift is left than `work_in_rain_tolerance`. The cooldown starts as the goal stops and runs
+  alongside the goal's own wait between station searches. The rain tests run in the mod's own
+  `mcaddon:gametest/clear_sky` test environment, which puts them in a batch of their own, so the
+  rain they set reaches no other test.
+- A worker makes the work sound of Java's villager whose profession takes the station as its job
+  site, every `sound_delay_min` to `sound_delay_max` ticks while it stands at the station. Mojang's
+  villager files name no work sound, so this sound is decided here, and a `sound_delay_max` of
+  nothing, the default, makes none.
+- `throw_sound` on the two giving goals is a moment of the entity's `sounds.json` entry, `charge`
+  where the pack names none, made as the item leaves the entity's hand.
+- The sound tests hear through a player of their own, joined over a connection whose far end is a
+  queue, and count only the sounds made within two blocks of their keeper, because the tests of a
+  batch stand side by side.
+
 ## Releasing
 
 A pushed `v*` tag runs `.github/workflows/release.yml`, which builds the jars, makes the GitHub release and then runs `tools/release/modrinth.py` to publish each jar to Modrinth.

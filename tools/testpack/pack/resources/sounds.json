@@ -21,6 +21,11 @@
           "lay": "tp:brute.lay"
         }
       },
+      "tp:keeper": {
+        "events": {
+          "item_thrown": "tp:keeper.thrown"
+        }
+      },
       "villager_v2": {
         "events": {
           "ambient": { "volume": 0 },

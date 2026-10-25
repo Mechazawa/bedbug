@@ -30,6 +30,7 @@ public final class GiveItemsToOwnerGoal extends Goal {
     private final double reachDistance;
     private final double throwForce;
     private final double verticalMultiplier;
+    private final String throwSound;
     private final List<String> thrownEvents = new ArrayList<>();
 
     public GiveItemsToOwnerGoal(AddonEntity mob, JsonObject component) {
@@ -38,6 +39,8 @@ public final class GiveItemsToOwnerGoal extends Goal {
         this.reachDistance = Goals.number(component, "reach_mob_distance", 3);
         this.throwForce = Goals.number(component, "throw_force", 0.2);
         this.verticalMultiplier = Goals.number(component, "vertical_throw_mul", 1.5);
+        String sound = Goals.text(component, "throw_sound");
+        this.throwSound = sound == null ? "charge" : sound;
         for (JsonElement element : Json.list(component, "on_item_throw")) {
             String event = element.isJsonPrimitive() ? element.getAsString()
                 : element.isJsonObject() ? Json.text(element.getAsJsonObject(), "event", null) : null;
@@ -85,6 +88,7 @@ public final class GiveItemsToOwnerGoal extends Goal {
         dropped.setDeltaMovement(towards.x * throwForce,
             towards.y * throwForce + throwForce * verticalMultiplier, towards.z * throwForce);
         level.addFreshEntity(dropped);
+        mob.makeNoise(throwSound);
 
         thrownEvents.forEach(event -> EntityEvents.trigger(mob, event, owner, ServerHooks.state()));
     }
