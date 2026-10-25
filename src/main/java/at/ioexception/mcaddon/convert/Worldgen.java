@@ -263,16 +263,17 @@ public final class Worldgen {
      * A feature that builds blocks itself, as the configured feature it becomes, or nothing where no
      * type here builds it.
      *
-     * An ore vein and a single block each have a Java feature that takes the same fields and builds
-     * the same thing. The rest name a Java feature whose configuration is a different model of the same idea, and a
+     * An ore vein has a Java feature that takes the same fields and builds the same thing. A single
+     * block has Java's `simple_block`, which always asks whether the block can stay where it lands and
+     * has nothing for the neighbours a pack may ask for, so it takes a type of this mod's own. The
+     * rest name a Java feature whose configuration is a different model of the same idea, and a
      * converted entry would be a guess at what the pack meant rather than what it wrote, so each is
      * named against the pack instead.
      */
     private static JsonObject leaf(FeatureDefinition feature) {
         return switch (feature.type()) {
             case "minecraft:ore_feature" -> typed("minecraft:ore", ore(feature.body()));
-            case "minecraft:single_block_feature" ->
-                typed("minecraft:simple_block", singleBlock(feature.body()));
+            case "minecraft:single_block_feature" -> typed(BedrockFeatures.SINGLE_BLOCK, singleBlock(feature.body()));
             default -> null;
         };
     }
@@ -377,50 +378,89 @@ public final class Worldgen {
     }
 
     /**
-     * A single block, which Java places through a provider rather than by naming the block.
+     * A single block, as the configuration of this mod's own single block feature.
      *
-     * Bedrock writes one block or a list of weighted ones, and Java has a provider for each of those
-     * two shapes.
+     * Bedrock names the faces a neighbour is asked about as `top`, `bottom`, the four directions,
+     * `sides` for all four of those and `all` for all six, and the configuration names each face by
+     * its Java direction.
      */
     private static JsonObject singleBlock(JsonObject body) {
-        AddonEntities.unsupportedFields("feature minecraft:single_block_feature", body,
-            List.of("may_attach_to", "may_not_attach_to", "randomize_rotation",
-                "enforce_placement_rules", "enforce_survivability_rules"));
-
         JsonElement places = body.get("places_block");
         if (places == null) return null;
 
-        JsonObject provider;
-        if (places.isJsonArray()) {
-            JsonArray entries = new JsonArray();
-            places.getAsJsonArray().forEach(one -> {
-                if (!one.isJsonObject()) return;
-                JsonObject weighted = one.getAsJsonObject();
-                BlockReference state = block(weighted.get("block"));
-                if (state == null) return;
+        JsonArray choices = new JsonArray();
+        List<JsonElement> listed = places.isJsonArray() ? places.getAsJsonArray().asList() : List.of(places);
+        listed.forEach(one -> {
+            boolean weighted = places.isJsonArray() && one.isJsonObject() && one.getAsJsonObject().has("block");
+            BlockReference state = block(weighted ? one.getAsJsonObject().get("block") : one);
+            if (state == null) return;
 
-                JsonObject entry = new JsonObject();
-                entry.add("data", state.json());
-                entry.addProperty("weight", Math.max(1, (int) Json.number(weighted, "weight", 1)));
-                entries.add(entry);
-            });
-            if (entries.isEmpty()) return null;
-
-            provider = new JsonObject();
-            provider.addProperty("type", Platform.stateProvider("weighted"));
-            provider.add("entries", entries);
-        } else {
-            BlockReference state = block(places);
-            if (state == null) return null;
-
-            provider = new JsonObject();
-            provider.addProperty("type", Platform.stateProvider("simple"));
-            provider.add("state", state.json());
-        }
+            JsonObject choice = new JsonObject();
+            choice.add("state", state.json());
+            choice.addProperty("weight",
+                weighted ? Math.max(1, (int) Json.number(one.getAsJsonObject(), "weight", 1)) : 1);
+            choices.add(choice);
+        });
+        if (choices.isEmpty()) return null;
 
         JsonObject config = new JsonObject();
-        config.add("to_place", provider);
+        config.add("places", choices);
+        JsonElement replaceable = body.get("may_replace");
+        if (replaceable != null) config.add("may_replace", matches(replaceable));
+
+        JsonElement attach = body.get("may_attach_to");
+        if (attach != null && attach.isJsonObject()) {
+            JsonObject attachment = new JsonObject();
+            attachment.add("faces", faces(attach.getAsJsonObject()));
+            attachment.addProperty("min_sides_must_attach",
+                (int) Json.number(attach.getAsJsonObject(), "min_sides_must_attach", 1));
+            attachment.addProperty("auto_rotate", Json.bool(attach.getAsJsonObject(), "auto_rotate", true));
+            config.add("may_attach_to", attachment);
+        }
+        JsonElement shunned = body.get("may_not_attach_to");
+        if (shunned != null && shunned.isJsonObject()) {
+            config.add("may_not_attach_to", faces(shunned.getAsJsonObject()));
+        }
+
+        config.addProperty("enforce_rules", Json.bool(body, "enforce_survivability_rules", false)
+            || Json.bool(body, "enforce_placement_rules", false));
+        config.addProperty("randomize_rotation", Json.bool(body, "randomize_rotation", false));
         return config;
+    }
+
+    /** Bedrock's face names, each as the Java directions it stands for. */
+    private static final Map<String, List<String>> FACES = Map.of(
+        "top", List.of("up"), "bottom", List.of("down"),
+        "north", List.of("north"), "east", List.of("east"), "south", List.of("south"), "west", List.of("west"),
+        "sides", List.of("north", "east", "south", "west"),
+        "all", List.of("up", "down", "north", "east", "south", "west"));
+
+    private static JsonObject faces(JsonObject bedrock) {
+        JsonObject faces = new JsonObject();
+        bedrock.entrySet().forEach(face -> FACES.getOrDefault(face.getKey(), List.of()).forEach(direction -> {
+            JsonArray listed = faces.has(direction) ? faces.getAsJsonArray(direction) : new JsonArray();
+            listed.addAll(matches(face.getValue()));
+            faces.add(direction, listed);
+        }));
+        return faces;
+    }
+
+    /** One block reference or a list of them, as the blocks and named states a neighbour is matched by. */
+    private static JsonArray matches(JsonElement declared) {
+        JsonArray matches = new JsonArray();
+        List<JsonElement> listed = declared.isJsonArray() ? declared.getAsJsonArray().asList() : List.of(declared);
+        listed.forEach(one -> {
+            BlockReference reference = block(one);
+            if (reference == null) return;
+
+            JsonObject match = new JsonObject();
+            match.addProperty("block", reference.id());
+            JsonObject properties = new JsonObject();
+            reference.properties().forEach(properties::addProperty);
+            match.add("properties", properties);
+            matches.add(match);
+        });
+        return matches;
     }
 
     /**

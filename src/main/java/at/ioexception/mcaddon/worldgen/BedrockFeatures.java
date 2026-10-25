@@ -19,6 +19,7 @@ import net.minecraft.world.level.chunk.ChunkGenerator;
 public final class BedrockFeatures {
     public static final String SCATTER = McAddon.MOD_ID + ":scatter";
     public static final String AGGREGATE = McAddon.MOD_ID + ":aggregate";
+    public static final String SINGLE_BLOCK = McAddon.MOD_ID + ":single_block";
 
     private BedrockFeatures() {
     }
@@ -27,12 +28,15 @@ public final class BedrockFeatures {
         //? if >=26.3 {
         /*Registry.register(BuiltInRegistries.FEATURE_TYPE, McAddon.id("scatter"), ScatterFeature.CODEC);
         Registry.register(BuiltInRegistries.FEATURE_TYPE, McAddon.id("aggregate"), AggregateFeature.CODEC);
+        Registry.register(BuiltInRegistries.FEATURE_TYPE, McAddon.id("single_block"), SingleBlockFeature.CODEC);
         Registry.register(BuiltInRegistries.PLACEMENT_MODIFIER_TYPE, McAddon.id("scatter"), ScatterPlacement.CODEC);
         *///?} else {
         Registry.register(BuiltInRegistries.FEATURE, McAddon.id("scatter"),
             new Placing<>(ScatterFeature.CODEC.codec()));
         Registry.register(BuiltInRegistries.FEATURE, McAddon.id("aggregate"),
             new Placing<>(AggregateFeature.CODEC.codec()));
+        Registry.register(BuiltInRegistries.FEATURE, McAddon.id("single_block"),
+            new Placing<>(SingleBlockFeature.CODEC.codec()));
         Registry.register(BuiltInRegistries.PLACEMENT_MODIFIER_TYPE, McAddon.id("scatter"), ScatterPlacement.TYPE);
         //?}
     }

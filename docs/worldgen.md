@@ -29,7 +29,10 @@ checked first. 35 of the 70 engine names have a different Java name and are mapp
 
 - `ore_feature` becomes `minecraft:ore`.
 - `weighted_random_feature` becomes `minecraft:random_selector`.
-- `single_block_feature` becomes `minecraft:simple_block`.
+- `single_block_feature` places its block only where `may_replace`, `may_attach_to` and
+  `may_not_attach_to` allow, and `randomize_rotation` turns it. Either `enforce_survivability_rules`
+  or `enforce_placement_rules` keeps the block off a spot where it cannot stay. With neither, the
+  block is placed anyway, as Bedrock does.
 - `aggregate_feature` places each feature it lists at the same spot, in order. `early_out` stops it
   at the first failure (`first_failure`) or the first success (`first_success`).
 - `scatter_feature` and a feature rule's `distribution` read every field: `iterations`,

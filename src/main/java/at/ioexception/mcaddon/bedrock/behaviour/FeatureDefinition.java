@@ -114,10 +114,9 @@ public record FeatureDefinition(String identifier, String type, JsonObject body)
     /**
      * The types this mod builds something out of, which is where the taxonomy stops being a plan.
      *
-     * Four state a thing to build, three through a Java feature that takes the same fields and the
-     * aggregate through one of this mod's own; the scatter is a feature of this mod's own as well;
-     * two state a position and have a Java placement modifier that asks the same question.
-     * Everything else is named against the pack.
+     * Four state a thing to build, through a Java feature that takes the same fields or one of this
+     * mod's own; the scatter is a feature of this mod's own as well; two state a position and have a
+     * Java placement modifier that asks the same question. Everything else is named against the pack.
      */
     public static final Set<String> CONVERTED = Set.of(
         "minecraft:ore_feature", "minecraft:single_block_feature", "minecraft:aggregate_feature",
