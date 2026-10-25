@@ -53,14 +53,17 @@ public final class SentinelSoundClientGameTest implements FabricClientGameTest {
                 sentinels(server).getFirst().setOwner(owner);
                 owner.setLastHurtByMob(pigs(server).getFirst());
             });
-            hear(context, "tp:sentinel.growl", "An entity defending its owner names an aggro sound and it was never heard.");
+            hear(context, "tp:sentinel.growl",
+                "An entity defending its owner names an aggro sound and it was never heard.");
             clear(world);
 
             world.getServer().runCommand("execute as @p at @s run summon tp:sentinel ~3 ~ ~");
             world.getServer().runCommand("execute as @p at @s run summon minecraft:pig ~6 ~ ~ {NoAI:1b}");
             context.waitTicks(5);
-            world.getServer().runCommand("damage @e[type=tp:sentinel,limit=1] 1 minecraft:mob_attack by @e[type=minecraft:pig,limit=1]");
-            hear(context, "tp:sentinel.provoked", "An entity being provoked names a sound for it and it was never heard.");
+            world.getServer().runCommand(
+                "damage @e[type=tp:sentinel,limit=1] 1 minecraft:mob_attack by @e[type=minecraft:pig,limit=1]");
+            hear(context, "tp:sentinel.provoked",
+                "An entity being provoked names a sound for it and it was never heard.");
             clear(world);
 
             world.getServer().runCommand("execute as @p at @s run summon tp:sentinel ~3 ~ ~");
