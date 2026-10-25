@@ -153,7 +153,10 @@ public final class DigGoalGameTests {
     /** The goal's first look, past the tick the group goes on and the selector's second-tick cadence. */
     private static final int FIRST_LOOK = 4;
 
-    /** A dig that ends waits its `cooldown_range` of three seconds before it searches again. */
+    /**
+     * A dig that ends, whether it found its item or lost its ground on the way, waits its
+     * `cooldown_range` of three seconds before it searches again.
+     */
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200)
     public void aDigWaitsItsCooldownBeforeSearchingAgain(GameTestHelper helper) {
         floor(helper, Blocks.GOLD_BLOCK);
@@ -164,22 +167,27 @@ public final class DigGoalGameTests {
         }
 
         long begun = helper.getLevel().getGameTime();
-        long[] succeededAt = {-1};
+        long[] endedAt = {-1};
         long[] againAt = {-1};
-        boolean[] searching = {false};
         helper.onEachTick(() -> {
             long now = helper.getLevel().getGameTime() - begun;
-            boolean nowSearching = on(digger, "is_searching");
-            if (succeededAt[0] < 0 && on(digger, "tp:succeeded")) succeededAt[0] = now;
-            if (succeededAt[0] >= 0 && againAt[0] < 0 && nowSearching && !searching[0]) againAt[0] = now;
-            searching[0] = nowSearching;
+            if (endedAt[0] >= 0 && againAt[0] < 0 && on(digger, "tp:searched")) againAt[0] = now;
+            if (endedAt[0] < 0 && ended(digger)) {
+                endedAt[0] = now;
+                digger.setValue("tp:searched", false);
+            }
         });
         helper.succeedWhen(() -> {
-            helper.assertTrue(againAt[0] >= 0, DIGGER + " has not searched again.");
-            helper.assertTrue(againAt[0] - succeededAt[0] >= THREE_SECONDS - SLACK,
+            helper.assertTrue(endedAt[0] >= 0, DIGGER + " has not ended a dig.");
+            helper.assertTrue(againAt[0] >= 0, DIGGER + " has not searched again since tick " + endedAt[0] + ".");
+            helper.assertTrue(againAt[0] - endedAt[0] >= THREE_SECONDS - SLACK,
                 DIGGER + " waits three seconds after a dig and searched again after "
-                    + (againAt[0] - succeededAt[0]) + " ticks.");
+                    + (againAt[0] - endedAt[0]) + " ticks.");
         });
+    }
+
+    private static boolean ended(AddonEntity digger) {
+        return on(digger, "tp:succeeded") || on(digger, "tp:search_failed") || on(digger, "tp:dig_failed");
     }
 
     private static final int THREE_SECONDS = 60;
