@@ -427,11 +427,10 @@ public final class AddonEntities {
         "minecraft:drying_out_timer", Set.of("water_bottle_refill_time"),
         "minecraft:damage_sensor", Set.of("damage_modifier", "damage_multiplier",
             "on_damage_sound_event"),
-        "minecraft:custom_hit_test", Set.of("height", "pivot"),
         "minecraft:rail_sensor", Set.of("tick_command_block_on_activate", "tick_command_block_on_deactivate"),
         "minecraft:projectile", Set.of("arrow_effect", "douse_fire", "hurt_owner",
-            "hit_nearest_passenger", "is_dangerous", "lightning", "potion_effect",
-            "spawn_aoe_cloud", "spawn_chance", "splash_range", "teleport_owner",
+            "hit_nearest_passenger", "is_dangerous", "lightning",
+            "spawn_chance", "teleport_owner",
             "thrown_potion_effect", "wind_burst_on_hit"));
 
     private static boolean carries(com.google.gson.JsonElement json, String field) {

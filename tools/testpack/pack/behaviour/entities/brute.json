@@ -721,6 +721,17 @@
           }
         }
       },
+      "tp:brute_milky_slow": {
+        "minecraft:behavior.drink_milk": {
+          "priority": 0,
+          "cooldown_seconds": 3,
+          "filters": {
+            "test": "on_fire",
+            "subject": "self",
+            "value": true
+          }
+        }
+      },
       "tp:brute_thirsty": {
         "minecraft:behavior.drink_potion": {
           "priority": 0,
@@ -1678,6 +1689,13 @@
         "add": {
           "component_groups": [
             "tp:brute_milky"
+          ]
+        }
+      },
+      "tp:brute_make_milky_slow": {
+        "add": {
+          "component_groups": [
+            "tp:brute_milky_slow"
           ]
         }
       },

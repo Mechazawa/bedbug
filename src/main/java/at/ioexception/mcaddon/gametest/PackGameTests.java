@@ -313,6 +313,10 @@ public final class PackGameTests {
         Entity shot = Platform.createMob(type, helper.getLevel());
         helper.assertTrue(shot.getPickRadius() > 0,
             PROJECTILE + " declares hitboxes wider than its collision box and answers none of them.");
+        // The hitbox is one tall and centred half a block up, so its top reaches 0.75 above the
+        // quarter block collision box, which is further than the 0.625 its width alone gives.
+        helper.assertTrue(shot.getPickRadius() >= 0.75f,
+            PROJECTILE + " declares a hitbox one block tall and answers a reach of " + shot.getPickRadius() + ".");
         helper.assertTrue(shot.getBbWidth() < 1,
             PROJECTILE + " widened its collision box, which the component does not describe.");
         helper.succeed();

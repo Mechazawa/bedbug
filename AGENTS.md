@@ -2283,6 +2283,14 @@ offers with their uses, trade experience, spent `single_use` keys and inventory 
 from `restoreGroups`. `minecraft:spawn_entity` `should_leash` leashes the spawned mob to the producer.
 `tp:hawker` in the test pack names the vanilla path; `BehaviourGameTests` covers all three.
 
+## Projectile and hit box details
+
+- `spawn_aoe_cloud` (`entity/CloudOnHit`) spawns Java's `AreaEffectCloud`. Mojang's schema gives `duration` in seconds and `reapplication_delay` in ticks, a `potion` of -1 meaning the projectile's own `potion_effect`, and defaults of 0 for radius and `reapplication_delay`. Its `radius_on_use` default is documented as -1 meaning "unchanged", which contradicts vanilla's -0.5 as a shrink, so the value is the radius change per application and an absent one is 0. The cloud starts at once (wait time 0) and shrinks to nothing over its duration as Java's lingering cloud does. `AreaEffectCloudAccessor` sets the reapplication delay and, for `affect_owner` false, parks the owner in the cloud's `victims` map with a tick that never comes.
+- `potion_effect` with `splash_range` (default 4) splashes the potion at the impact with Java's splash share: 1 less distance over range, whole for the entity hit directly.
+- `custom_hit_test` boxes are centred on `pivot` (default `[0, 1, 0]`, X and Z from the entity's middle) with `width` and `height` defaulting to 1; Mojang publishes no schema for it, the defaults and the centre are read from the vanilla entities (a 1.75 tall box with pivot y 1). Java has one uniform `getPickRadius`, so the radius is the furthest any box reaches past the collision box in any direction.
+- `minecraft:behavior.drink_milk` waits `cooldown_seconds` (default 5) after each drink.
+- `rail_sensor` `tick_command_block_on_activate` and `_on_deactivate` stay reported. In Bedrock they only mean something on `minecraft:command_block_minecart`, whose command lives in the entity's own data and cannot be written by a pack; Java's `MinecartCommandBlock` runs its command on a powered rail by itself.
+
 ## JSON UI
 
 `bedrock/ui/` reads a resource pack's `ui/` files and lays out what packs do with them to a server's

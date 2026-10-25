@@ -36,6 +36,7 @@ public final class BedrockParticles {
         Map.entry("huge_explosion_lab_misc", "explosion_emitter"),
         Map.entry("large_explosion", "explosion"),
         Map.entry("critical_hit", "crit"),
+        Map.entry("dragonbreath", "dragon_breath"),
         Map.entry("enchanting_table", "enchant"),
         Map.entry("mob_portal", "portal"),
         Map.entry("dragon_breath_fire", "dragon_breath"),
