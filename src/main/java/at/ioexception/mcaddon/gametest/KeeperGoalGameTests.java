@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.gametest;
 
 import at.ioexception.mcaddon.entity.AddonEntity;
+import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
@@ -153,8 +154,118 @@ public final class KeeperGoalGameTests {
         });
     }
 
+    /**
+     * `minecraft:behavior.work` with `work_in_rain_tolerance` keeps working through rain that comes
+     * when no more of its `active_time` ticks are left than the tolerance, and a worker stating
+     * neither `can_work_in_rain` nor a tolerance stops at the first drop. The batch's own weather
+     * environment keeps the rain away from every other test.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200, skyAccess = true,
+        environment = CLEAR_SKY)
+    public void aWorkerKeepsWorkingInRainOnlyWithinItsTolerance(GameTestHelper helper) {
+        workingInRain(helper, "working", Blocks.LECTERN);
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200, skyAccess = true,
+        environment = CLEAR_SKY)
+    public void aCompostingWorkerKeepsWorkingInRainOnlyWithinItsTolerance(GameTestHelper helper) {
+        workingInRain(helper, "composting", Blocks.COMPOSTER);
+    }
+
+    /** A test environment of clear weather, the mod's own so that its batch runs apart. */
+    private static final String CLEAR_SKY = "mcaddon:gametest/clear_sky";
+
+    /**
+     * Into the tolerant worker's 200 tick shift, which with the second or so the rain takes to set
+     * in leaves it fewer than its 150.
+     */
+    private static final int RAIN_AFTER = 60;
+
+    private static void workingInRain(GameTestHelper helper, String goal, net.minecraft.world.level.block.Block station) {
+        BlockPos tolerantAt = new BlockPos(1, 0, 1);
+        BlockPos strictAt = new BlockPos(1, 0, 4);
+        helper.setBlock(tolerantAt.east(), station);
+        helper.setBlock(strictAt.east(), station);
+        AddonEntity tolerant = keeper(helper, "tp:keeper_make_" + goal + "_tolerant", tolerantAt);
+        AddonEntity strict = keeper(helper, "tp:keeper_make_" + goal + "_strict", strictAt);
+        if (tolerant == null || strict == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.startSequence()
+            .thenWaitUntil(() -> {
+                helper.assertTrue(Boolean.TRUE.equals(tolerant.value("tp:arrived")), KEEPER + " never reached its station.");
+                helper.assertTrue(Boolean.TRUE.equals(strict.value("tp:arrived")), KEEPER + " never reached its station.");
+            })
+            .thenExecuteAfter(RAIN_AFTER, () -> {
+                helper.assertTrue(working(tolerant) && working(strict), KEEPER + " stopped working under a clear sky.");
+                Platform.setWeather(helper.getLevel(), true, false, RAIN_TICKS);
+            })
+            .thenWaitUntil(() -> helper.assertTrue(
+                helper.getLevel().isRainingAt(helper.absolutePos(tolerantAt.east().above())),
+                "No rain falls on the station."))
+            .thenExecuteAfter(RAIN_NOTICED, () -> {
+                helper.assertTrue(working(tolerant),
+                    KEEPER + " stopped in rain with fewer ticks of its shift left than its tolerance.");
+                helper.assertFalse(working(strict), KEEPER + " that may not work in rain kept working in it.");
+            })
+            .thenExecute(() -> Platform.setWeather(helper.getLevel(), false, false, RAIN_TICKS))
+            .thenSucceed();
+    }
+
+    private static final int RAIN_TICKS = 6000;
+
+    /** Past the tick a goal is next asked whether it may go on, once the rain has set in. */
+    private static final int RAIN_NOTICED = 6;
+
+    private static boolean working(AddonEntity keeper) {
+        return keeper.runningGoals().stream().anyMatch(goal -> goal.startsWith("WorkGoal"));
+    }
+
+    /**
+     * `goal_cooldown` holds a worker away from its station for that many ticks after a shift ends.
+     * Without it the worker comes back as soon as the goal next looks for a station, about ten
+     * seconds on.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 700)
+    public void aWorkerRestsItsGoalCooldownBetweenShifts(GameTestHelper helper) {
+        workingAgain(helper, "working", Blocks.LECTERN);
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 700)
+    public void aCompostingWorkerRestsItsGoalCooldownBetweenShifts(GameTestHelper helper) {
+        workingAgain(helper, "composting", Blocks.COMPOSTER);
+    }
+
+    /** Past the station search's ten seconds after a 20 tick shift, inside the 400 tick cooldown. */
+    private static final int STILL_RESTING = 300;
+
+    private static void workingAgain(GameTestHelper helper, String goal, net.minecraft.world.level.block.Block station) {
+        helper.setBlock(STAND.east(), station);
+        AddonEntity keeper = keeper(helper, "tp:keeper_make_" + goal + "_cooling");
+        if (keeper == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(Boolean.TRUE.equals(keeper.value("tp:arrived")),
+                KEEPER + " never reached its station."))
+            .thenExecute(() -> keeper.setValue("tp:arrived", false))
+            .thenExecuteAfter(STILL_RESTING, () -> helper.assertFalse(Boolean.TRUE.equals(keeper.value("tp:arrived")),
+                KEEPER + " came back to work inside its goal cooldown."))
+            .thenWaitUntil(() -> helper.assertTrue(Boolean.TRUE.equals(keeper.value("tp:arrived")),
+                KEEPER + " never came back to work after its goal cooldown."))
+            .thenSucceed();
+    }
+
     private static AddonEntity keeper(GameTestHelper helper, String event) {
-        AddonEntity keeper = BehaviourGameTests.spawn(helper, KEEPER, STAND);
+        return keeper(helper, event, STAND);
+    }
+
+    private static AddonEntity keeper(GameTestHelper helper, String event, BlockPos at) {
+        AddonEntity keeper = BehaviourGameTests.spawn(helper, KEEPER, at);
         if (keeper == null) return null;
 
         keeper.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(0);

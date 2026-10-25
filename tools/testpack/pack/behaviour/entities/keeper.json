@@ -18,6 +18,10 @@
         "tp:laid": {
           "type": "bool",
           "default": false
+        },
+        "tp:arrived": {
+          "type": "bool",
+          "default": false
         }
       }
     },
@@ -129,6 +133,74 @@
             "target": "self"
           }
         }
+      },
+      "tp:keeper_working_tolerant": {
+        "minecraft:behavior.work": {
+          "priority": 0,
+          "active_time": 200,
+          "can_work_in_rain": false,
+          "work_in_rain_tolerance": 150,
+          "on_arrival": {
+            "event": "tp:keeper_arrived",
+            "target": "self"
+          }
+        }
+      },
+      "tp:keeper_working_strict": {
+        "minecraft:behavior.work": {
+          "priority": 0,
+          "active_time": 200,
+          "on_arrival": {
+            "event": "tp:keeper_arrived",
+            "target": "self"
+          }
+        }
+      },
+      "tp:keeper_working_cooling": {
+        "minecraft:behavior.work": {
+          "priority": 0,
+          "active_time": 20,
+          "can_work_in_rain": true,
+          "goal_cooldown": 400,
+          "on_arrival": {
+            "event": "tp:keeper_arrived",
+            "target": "self"
+          }
+        }
+      },
+      "tp:keeper_composting_tolerant": {
+        "minecraft:behavior.work_composter": {
+          "priority": 0,
+          "active_time": 200,
+          "can_work_in_rain": false,
+          "work_in_rain_tolerance": 150,
+          "on_arrival": {
+            "event": "tp:keeper_arrived",
+            "target": "self"
+          }
+        }
+      },
+      "tp:keeper_composting_strict": {
+        "minecraft:behavior.work_composter": {
+          "priority": 0,
+          "active_time": 200,
+          "on_arrival": {
+            "event": "tp:keeper_arrived",
+            "target": "self"
+          }
+        }
+      },
+      "tp:keeper_composting_cooling": {
+        "minecraft:behavior.work_composter": {
+          "priority": 0,
+          "active_time": 20,
+          "can_work_in_rain": true,
+          "goal_cooldown": 400,
+          "on_arrival": {
+            "event": "tp:keeper_arrived",
+            "target": "self"
+          }
+        }
       }
     },
     "components": {
@@ -203,6 +275,53 @@
       "tp:keeper_laid": {
         "set_property": {
           "tp:laid": true
+        }
+      },
+      "tp:keeper_make_working_tolerant": {
+        "add": {
+          "component_groups": [
+            "tp:keeper_working_tolerant"
+          ]
+        }
+      },
+      "tp:keeper_make_working_strict": {
+        "add": {
+          "component_groups": [
+            "tp:keeper_working_strict"
+          ]
+        }
+      },
+      "tp:keeper_make_working_cooling": {
+        "add": {
+          "component_groups": [
+            "tp:keeper_working_cooling"
+          ]
+        }
+      },
+      "tp:keeper_make_composting_tolerant": {
+        "add": {
+          "component_groups": [
+            "tp:keeper_composting_tolerant"
+          ]
+        }
+      },
+      "tp:keeper_make_composting_strict": {
+        "add": {
+          "component_groups": [
+            "tp:keeper_composting_strict"
+          ]
+        }
+      },
+      "tp:keeper_make_composting_cooling": {
+        "add": {
+          "component_groups": [
+            "tp:keeper_composting_cooling"
+          ]
+        }
+      },
+      "tp:keeper_arrived": {
+        "set_property": {
+          "tp:arrived": true
         }
       }
     }
