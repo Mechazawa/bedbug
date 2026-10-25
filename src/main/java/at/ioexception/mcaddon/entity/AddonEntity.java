@@ -3464,7 +3464,7 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.transport_items" -> goals.add(priority,
                 new TransportItemsGoal(this, goal));
             case "minecraft:behavior.drop_item_for" -> goals.add(priority,
-                ShareItemsGoal.dropping(this, goal));
+                new DropItemForGoal(this, goal));
             case "minecraft:behavior.offer_flower" -> goals.add(priority,
                 ShareItemsGoal.offering(this, goal));
             case "minecraft:behavior.inspect_bookshelf" -> goals.add(priority,

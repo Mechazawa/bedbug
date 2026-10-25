@@ -2794,8 +2794,10 @@ The repository secret `MODRINTH_TOKEN` must hold a Modrinth token with the read-
 
 ## Carrying and dropping items
 
-`minecraft:behavior.transport_items` is `entity/TransportItemsGoal`. `ItemGoalGameTests` reads
-every field back through `tp:porter`, which carries out of barrels into chests.
+`minecraft:behavior.transport_items` is `entity/TransportItemsGoal` and
+`minecraft:behavior.drop_item_for` is `entity/DropItemForGoal`. `ItemGoalGameTests` reads every
+field back through `tp:porter`, which carries out of barrels into chests, and `tp:offerer`, which
+leaves `loot_tables/entities/gift.json` for a pig.
 
 Java's copper golem runs `TransportItemsBetweenContainers`, a brain behaviour with the copper
 golem's numbers fixed in it (16 a stack, 10 containers, 7 seconds of rest, nearest only), so the
@@ -2807,7 +2809,20 @@ visited `max_visited_containers` or finds nothing left to look at; a stack is ta
 empty slots in slot order; `initial_cooldown` counts from the goal's first check. The 3 second
 `interaction_time` is not waited out. The goal starts only on the ground, because Java plans no path
 from the air and the first container would read as out of reach. A path ends a block short of the
-spot beside the container, so the last of the way is stepped straight.
+spot beside the container, so the last of the way is stepped straight in both goals.
+
+For `drop_item_for`: `time_of_day_range` is on the schema's own clock, where noon is 0 and dawn
+0.75 (the cat's 0.75 to 0.8 is its morning), and a range whose low end is above its high end runs
+through noon. `target_range` is a box round the entity, and a goal with no `entity_types` leaves
+nothing for anybody. The spot is the standing place within
+`search_range` across and `search_height` up or down of the target whose distance across the
+ground is nearest `offering_distance`, the one nearer the entity on a tie, and the target's own
+column counts. A spot further than `minimum_teleport_distance` is teleported to, at
+`teleport_offset` over it, once per run, so an offset larger than the distance cannot loop. On arrival
+`on_drop_attempt` is raised, the drop rolled at `drop_item_chance`, and the gift thrown along the
+look at the target, whose height is capped at `max_head_look_at_height` over the entity's feet. A
+goal naming no `loot_table` drops what the entity holds. `search_count` is not read: every block
+is checked in one tick, which is its default.
 
 ## Conventions
 

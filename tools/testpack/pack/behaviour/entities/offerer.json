@@ -1,0 +1,337 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:offerer",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false,
+      "properties": {
+        "tp:attempted": {
+          "type": "bool",
+          "default": false
+        }
+      }
+    },
+    "component_groups": {
+      "tp:offerer_gifting": {
+        "minecraft:behavior.drop_item_for": {
+          "priority": 0,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              }
+            }
+          ],
+          "target_range": [
+            6,
+            6,
+            6
+          ],
+          "search_range": 1,
+          "search_height": 1,
+          "loot_table": "loot_tables/entities/gift.json",
+          "cooldown": 10,
+          "seconds_before_pickup": 5
+        }
+      },
+      "tp:offerer_reluctant": {
+        "minecraft:behavior.drop_item_for": {
+          "priority": 0,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              }
+            }
+          ],
+          "target_range": [
+            6,
+            6,
+            6
+          ],
+          "search_range": 1,
+          "search_height": 1,
+          "loot_table": "loot_tables/entities/gift.json",
+          "cooldown": 10,
+          "drop_item_chance": 0,
+          "on_drop_attempt": {
+            "event": "tp:offerer_attempted",
+            "target": "self"
+          }
+        }
+      },
+      "tp:offerer_patient": {
+        "minecraft:behavior.drop_item_for": {
+          "priority": 0,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              }
+            }
+          ],
+          "target_range": [
+            6,
+            6,
+            6
+          ],
+          "search_range": 1,
+          "search_height": 1,
+          "loot_table": "loot_tables/entities/gift.json",
+          "cooldown": 4
+        }
+      },
+      "tp:offerer_afternoon": {
+        "minecraft:behavior.drop_item_for": {
+          "priority": 0,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              }
+            }
+          ],
+          "target_range": [
+            6,
+            6,
+            6
+          ],
+          "search_range": 1,
+          "search_height": 1,
+          "loot_table": "loot_tables/entities/gift.json",
+          "cooldown": 10,
+          "time_of_day_range": {
+            "min": 0.1,
+            "max": 0.2
+          }
+        }
+      },
+      "tp:offerer_apart": {
+        "minecraft:behavior.drop_item_for": {
+          "priority": 0,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              }
+            }
+          ],
+          "target_range": [
+            6,
+            6,
+            6
+          ],
+          "search_range": 4,
+          "search_height": 1,
+          "loot_table": "loot_tables/entities/gift.json",
+          "cooldown": 10,
+          "offering_distance": 4
+        }
+      },
+      "tp:offerer_reaching": {
+        "minecraft:behavior.drop_item_for": {
+          "priority": 0,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              }
+            }
+          ],
+          "target_range": [
+            6,
+            6,
+            6
+          ],
+          "search_range": 1,
+          "search_height": 3,
+          "loot_table": "loot_tables/entities/gift.json",
+          "cooldown": 10
+        }
+      },
+      "tp:offerer_downcast": {
+        "minecraft:behavior.drop_item_for": {
+          "priority": 0,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              }
+            }
+          ],
+          "target_range": [
+            6,
+            6,
+            6
+          ],
+          "search_range": 1,
+          "search_height": 6,
+          "loot_table": "loot_tables/entities/gift.json",
+          "cooldown": 10,
+          "max_head_look_at_height": 0
+        }
+      },
+      "tp:offerer_leaping": {
+        "minecraft:behavior.drop_item_for": {
+          "priority": 0,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              }
+            }
+          ],
+          "target_range": [
+            6,
+            6,
+            6
+          ],
+          "search_range": 1,
+          "search_height": 1,
+          "loot_table": "loot_tables/entities/gift.json",
+          "cooldown": 10,
+          "teleport_offset": [
+            0,
+            3,
+            0
+          ]
+        }
+      },
+      "tp:offerer_grounded": {
+        "minecraft:behavior.drop_item_for": {
+          "priority": 0,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              }
+            }
+          ],
+          "target_range": [
+            6,
+            6,
+            6
+          ],
+          "search_range": 1,
+          "search_height": 1,
+          "loot_table": "loot_tables/entities/gift.json",
+          "cooldown": 10,
+          "minimum_teleport_distance": 20
+        }
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": [
+          "tp_offerer",
+          "mob"
+        ]
+      },
+      "minecraft:collision_box": {
+        "width": 0.6,
+        "height": 1.0
+      },
+      "minecraft:health": {
+        "value": 20,
+        "max": 20
+      },
+      "minecraft:movement": {
+        "value": 0.25
+      },
+      "minecraft:physics": {},
+      "minecraft:movement.basic": {},
+      "minecraft:navigation.walk": {},
+      "minecraft:jump.static": {}
+    },
+    "events": {
+      "tp:offerer_make_gifting": {
+        "add": {
+          "component_groups": [
+            "tp:offerer_gifting"
+          ]
+        }
+      },
+      "tp:offerer_make_reluctant": {
+        "add": {
+          "component_groups": [
+            "tp:offerer_reluctant"
+          ]
+        }
+      },
+      "tp:offerer_make_patient": {
+        "add": {
+          "component_groups": [
+            "tp:offerer_patient"
+          ]
+        }
+      },
+      "tp:offerer_make_afternoon": {
+        "add": {
+          "component_groups": [
+            "tp:offerer_afternoon"
+          ]
+        }
+      },
+      "tp:offerer_make_apart": {
+        "add": {
+          "component_groups": [
+            "tp:offerer_apart"
+          ]
+        }
+      },
+      "tp:offerer_make_reaching": {
+        "add": {
+          "component_groups": [
+            "tp:offerer_reaching"
+          ]
+        }
+      },
+      "tp:offerer_make_downcast": {
+        "add": {
+          "component_groups": [
+            "tp:offerer_downcast"
+          ]
+        }
+      },
+      "tp:offerer_make_leaping": {
+        "add": {
+          "component_groups": [
+            "tp:offerer_leaping"
+          ]
+        }
+      },
+      "tp:offerer_make_grounded": {
+        "add": {
+          "component_groups": [
+            "tp:offerer_grounded"
+          ]
+        }
+      },
+      "tp:offerer_attempted": {
+        "set_property": {
+          "tp:attempted": true
+        }
+      }
+    }
+  }
+}

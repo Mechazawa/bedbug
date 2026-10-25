@@ -1,12 +1,19 @@
 package at.ioexception.mcaddon.gametest;
 
 import at.ioexception.mcaddon.entity.AddonEntity;
+import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -14,17 +21,22 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 
 /**
- * The goals that carry items between containers.
+ * The goals that carry items between containers and leave them for somebody.
  *
  * `tp:porter` carries out of barrels into chests, one group per field of
  * `minecraft:behavior.transport_items`, each searching six blocks across so a neighbouring test's
- * containers stay out of reach.
+ * containers stay out of reach. `tp:offerer` leaves `tp:gift`'s three feathers for a pig, one group
+ * per field of `minecraft:behavior.drop_item_for`.
  */
 public final class ItemGoalGameTests {
     private static final String PORTER = "tp:porter";
+    private static final String OFFERER = "tp:offerer";
 
     private static final BlockPos CORNER = new BlockPos(1, 0, 1);
 
@@ -159,8 +171,198 @@ public final class ItemGoalGameTests {
             .thenSucceed();
     }
 
+    /**
+     * The offerer finds a pig three blocks off inside its `target_range` and leaves it the gift
+     * table's feathers, which cannot be picked up for `seconds_before_pickup`.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 100)
+    public void anOffererLeavesItsTablesGiftThatWaitsBeforePickup(GameTestHelper helper) {
+        pig(helper, new BlockPos(4, 0, 4));
+        if (offerer(helper, "tp:offerer_make_gifting", new BlockPos(1, 0, 4)) == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.succeedWhen(() -> {
+            List<ItemEntity> gifts = feathers(helper);
+            helper.assertFalse(gifts.isEmpty(), OFFERER + " has left no feathers.");
+            helper.assertTrue(gifts.get(0).getItem().getCount() == 3,
+                OFFERER + " left " + gifts.get(0).getItem() + " where its table gives three feathers.");
+            helper.assertTrue(gifts.get(0).hasPickUpDelay(), OFFERER + "'s gift can be picked up at once.");
+        });
+    }
+
+    /** At a drop chance of nothing the attempt is raised and nothing is left. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 100)
+    public void anOffererThatNeverDropsStillRaisesItsAttempt(GameTestHelper helper) {
+        pig(helper, new BlockPos(4, 0, 4));
+        AddonEntity offerer = offerer(helper, "tp:offerer_make_reluctant", new BlockPos(2, 0, 4));
+        if (offerer == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(Boolean.TRUE.equals(offerer.value("tp:attempted")),
+                OFFERER + " never raised on_drop_attempt."))
+            .thenExecuteAfter(5, () -> helper.assertTrue(feathers(helper).isEmpty(),
+                OFFERER + " dropped a gift at a drop chance of nothing."))
+            .thenSucceed();
+    }
+
+    /** A four second cooldown leaves one gift in three seconds beside a pig that stays. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 100)
+    public void anOffererWaitsItsCooldownBetweenGifts(GameTestHelper helper) {
+        pig(helper, new BlockPos(4, 0, 4));
+        if (offerer(helper, "tp:offerer_make_patient", new BlockPos(3, 0, 4)) == null) {
+            helper.succeed();
+            return;
+        }
+
+        Set<UUID> seen = new HashSet<>();
+        helper.onEachTick(() -> feathers(helper).forEach(gift -> seen.add(gift.getUUID())));
+        helper.runAfterDelay(60, () -> {
+            helper.assertTrue(seen.size() == 1, OFFERER + " left " + seen.size() + " gifts in three seconds.");
+            helper.succeed();
+        });
+    }
+
+    /**
+     * An offerer kept to the afternoon leaves nothing at any time a test here sets: dawn, the
+     * morning after it and midnight.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 100)
+    public void anOffererLeavesNothingOutsideItsTimeOfDay(GameTestHelper helper) {
+        pig(helper, new BlockPos(4, 0, 4));
+        AddonEntity offerer = offerer(helper, "tp:offerer_make_afternoon", new BlockPos(3, 0, 4));
+        if (offerer == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.runAfterDelay(60, () -> {
+            long sinceDawn = Math.floorMod(Platform.dayTime(helper.getLevel()), 24000L);
+            helper.assertTrue(sinceDawn < AFTERNOON_FROM || sinceDawn > AFTERNOON_TO,
+                "The clock stands in the offerer's afternoon at " + sinceDawn + ".");
+            helper.assertTrue(feathers(helper).isEmpty() && !Boolean.TRUE.equals(offerer.value("tp:attempted")),
+                OFFERER + " left a gift outside its time of day.");
+            helper.succeed();
+        });
+    }
+
+    /** Noon is 0 on the goal's clock and 6000 on Java's, so 0.1 to 0.2 is 8400 to 10800. */
+    private static final long AFTERNOON_FROM = 8400;
+    private static final long AFTERNOON_TO = 10800;
+
+    /**
+     * Searching four blocks round the pig for the spot four blocks from it, the offerer leaves its
+     * gift from there rather than at the pig's feet.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 120)
+    public void anOffererStandsItsOfferingDistanceFromThePig(GameTestHelper helper) {
+        Mob pig = pig(helper, new BlockPos(4, 0, 4));
+        AddonEntity offerer = offerer(helper, "tp:offerer_make_apart", new BlockPos(2, 0, 4));
+        if (offerer == null) {
+            helper.succeed();
+            return;
+        }
+
+        double[] apart = {-1};
+        helper.onEachTick(() -> {
+            if (apart[0] < 0 && !feathers(helper).isEmpty()) {
+                apart[0] = Math.hypot(offerer.getX() - pig.getX(), offerer.getZ() - pig.getZ());
+            }
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(apart[0] >= 0, OFFERER + " has left no gift.");
+            helper.assertTrue(apart[0] >= 3, OFFERER + " left its gift " + apart[0] + " blocks from the pig.");
+        });
+    }
+
+    /** A pig floating three blocks up has ground to stand on only within a search height of three. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 100)
+    public void anOffererSearchesItsHeightForGroundBelowThePig(GameTestHelper helper) {
+        pig(helper, new BlockPos(4, 3, 4)).setNoGravity(true);
+        if (offerer(helper, "tp:offerer_make_reaching", new BlockPos(2, 0, 4)) == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.succeedWhen(() -> helper.assertFalse(feathers(helper).isEmpty(),
+            OFFERER + " found nowhere to stand below the pig."));
+    }
+
+    /**
+     * Looking no higher than its own feet, the offerer throws its gift no higher than a level throw
+     * goes, though the pig floats five blocks up.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 100)
+    public void anOffererLooksNoHigherThanItsMaximumHeadHeight(GameTestHelper helper) {
+        pig(helper, new BlockPos(4, 5, 4)).setNoGravity(true);
+        if (offerer(helper, "tp:offerer_make_downcast", new BlockPos(2, 0, 4)) == null) {
+            helper.succeed();
+            return;
+        }
+
+        double[] rise = {Double.NaN};
+        helper.onEachTick(() -> feathers(helper).stream().findFirst()
+            .filter(gift -> Double.isNaN(rise[0])).ifPresent(gift -> rise[0] = gift.getDeltaMovement().y));
+        helper.succeedWhen(() -> {
+            helper.assertFalse(Double.isNaN(rise[0]), OFFERER + " has left no gift.");
+            helper.assertTrue(rise[0] < LEVEL_THROW,
+                OFFERER + " threw its gift up at " + rise[0] + " towards the pig.");
+        });
+    }
+
+    /** The rise of a gift thrown straight across, which a throw up at the pig exceeds. */
+    private static final double LEVEL_THROW = 0.25;
+
+    /** A teleport lands three blocks over the spot, which the offerer then falls from. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 100)
+    public void anOffererTeleportsToItsSpotAtItsOffset(GameTestHelper helper) {
+        pig(helper, new BlockPos(5, 0, 4));
+        AddonEntity offerer = offerer(helper, "tp:offerer_make_leaping", new BlockPos(1, 0, 4));
+        if (offerer == null) {
+            helper.succeed();
+            return;
+        }
+
+        double floor = offerer.getY();
+        double[] highest = {floor};
+        helper.onEachTick(() -> highest[0] = Math.max(highest[0], offerer.getY()));
+        helper.succeedWhen(() -> {
+            helper.assertTrue(highest[0] - floor > 2.5,
+                OFFERER + " rose " + (highest[0] - floor) + " blocks where its teleport offset is three.");
+            helper.assertFalse(feathers(helper).isEmpty(), OFFERER + " has left no gift after landing.");
+        });
+    }
+
+    /** An offerer that cannot walk and may teleport only twenty blocks off stays where it is. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 100)
+    public void anOffererTeleportsOnlyPastItsMinimumDistance(GameTestHelper helper) {
+        pig(helper, new BlockPos(5, 0, 4));
+        AddonEntity offerer = offerer(helper, "tp:offerer_make_grounded", new BlockPos(1, 0, 4));
+        if (offerer == null) {
+            helper.succeed();
+            return;
+        }
+
+        offerer.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(0);
+        double startX = offerer.getX();
+        helper.runAfterDelay(60, () -> {
+            helper.assertTrue(Math.abs(offerer.getX() - startX) < 0.5,
+                OFFERER + " moved " + (offerer.getX() - startX) + " blocks.");
+            helper.assertTrue(feathers(helper).isEmpty(), OFFERER + " left a gift from three blocks off.");
+            helper.succeed();
+        });
+    }
+
     private static AddonEntity porter(GameTestHelper helper, String event, BlockPos where) {
         return withGroup(helper, PORTER, event, where);
+    }
+
+    private static AddonEntity offerer(GameTestHelper helper, String event, BlockPos where) {
+        return withGroup(helper, OFFERER, event, where);
     }
 
     private static AddonEntity withGroup(GameTestHelper helper, String identifier, String event, BlockPos where) {
@@ -186,4 +388,21 @@ public final class ItemGoalGameTests {
         return total;
     }
 
+    private static List<ItemEntity> feathers(GameTestHelper helper) {
+        return helper.getLevel().getEntitiesOfClass(ItemEntity.class, helper.getBounds().inflate(2),
+            item -> item.getItem().is(Items.FEATHER));
+    }
+
+    /** A pig with no goals of its own where the test puts it. */
+    private static Mob pig(GameTestHelper helper, BlockPos where) {
+        ServerLevel level = helper.getLevel();
+        Entity created = Platform.createMob(
+            BuiltInRegistries.ENTITY_TYPE.getOptional(Platform.id("minecraft", "pig")).orElseThrow(), level);
+        Mob pig = (Mob) created;
+        BlockPos at = helper.absolutePos(where);
+        Platform.placeAt(pig, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        pig.setNoAi(true);
+        level.addFreshEntity(pig);
+        return pig;
+    }
 }
