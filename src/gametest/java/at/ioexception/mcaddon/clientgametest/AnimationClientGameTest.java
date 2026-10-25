@@ -131,11 +131,12 @@ public final class AnimationClientGameTest implements FabricClientGameTest {
     }
 
     /**
-     * The gaze's `pre_animation` keeps `q.bone_orientation_trs('head')` in `v.head_pose`. Its body
-     * leans 45 degrees forward and its head is turned 30 degrees in the entity's frame, so the head's
-     * pivot, eight pixels up the body, is carried forward and down to `8 * sqrt(0.5)` pixels on both
-     * axes, and its turn reads 30 degrees about Y and none about X. The first frame poses the bones
-     * and the second reads them.
+     * The gaze's `pre_animation` keeps `q.bone_orientation_trs('head')` in `v.head_pose`. Its
+     * `queryable_geometry` names `geometry.tp.gaze_tall`, which it never draws, whose head pivots
+     * twelve pixels up the body where the drawn one pivots at eight. The body leans 45 degrees
+     * forward and the head is turned 30 degrees in the entity's frame, so the head's pivot is carried
+     * forward and down to `12 * sqrt(0.5)` pixels on both axes, and its turn reads 30 degrees about Y
+     * and none about X. The first frame poses the bones and the second reads them.
      */
     private static void orientation(ClientGameTestContext context, TestSingleplayerContext world) {
         Entities.discardAll(context, world.getServer(), "tp:gaze");
@@ -148,7 +149,7 @@ public final class AnimationClientGameTest implements FabricClientGameTest {
             return new float[] {clock.variable("head_pose.t.y"), clock.variable("head_pose.t.z"),
                 clock.variable("head_pose.r.x"), clock.variable("head_pose.r.y"), clock.variable("head_pose.s.y")};
         });
-        float carried = 8 * (float) Math.sqrt(0.5);
+        float carried = 12 * (float) Math.sqrt(0.5);
         Assert.near(read[0], carried, TOLERANCE, "v.head_pose.t.y, the height of the gaze's head pivot carried"
             + " by its leaning body, in pixels");
         Assert.near(read[1], -carried, TOLERANCE, "v.head_pose.t.z, how far forward the leaning body carries"

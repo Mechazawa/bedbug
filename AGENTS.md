@@ -2305,6 +2305,13 @@ answers the identity, as documented. `bone_orientation_matrix` stays reported: n
 the matrix are published. `AnimationClientGameTest.orientation` reads `tp:gaze`'s `v.head_pose` and
 `BoneOrientationTest` the frame arithmetic.
 
+**`queryable_geometry`** names the `geometry` key every bone query answers from
+(`ClientEntityDefinition.queryableGeometry`), whatever the render controllers draw. Mojang publishes
+the field in no schema and no document beyond the phrase "the queryable geometry of the mob", so a
+definition naming none, or naming a key it lacks, answers from `default`, else from the first entry.
+`tp:gaze` names `geometry.tp.gaze_tall`, a geometry it never draws whose head pivots four pixels
+higher, so `AnimationClientGameTest.orientation` reads a pivot the drawn model has not got.
+
 
 `bedrock/ui/` reads a resource pack's `ui/` files and lays out what packs do with them to a server's
 forms and to the heads-up display's title and action bar; `client/screen/PackUi` holds the active

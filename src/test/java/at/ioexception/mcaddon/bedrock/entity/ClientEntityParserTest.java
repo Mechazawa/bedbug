@@ -39,6 +39,20 @@ class ClientEntityParserTest {
             List.copyOf(definition.animationControllers().values()));
     }
 
+    /** A pack drawing several geometries names the one its bone queries are answered from. */
+    @Test
+    void answersBoneQueriesFromTheGeometryThePackNames() {
+        String geometries = """
+            "geometry": {"default": "geometry.thing", "posed": "geometry.thing.posed", "spare": "geometry.spare"}
+            """;
+
+        assertEquals("geometry.thing.posed",
+            read("{" + geometries + ", \"queryable_geometry\": \"posed\"}").queryableGeometry());
+        assertEquals("geometry.thing", read("{" + geometries + "}").queryableGeometry());
+        assertEquals("geometry.thing",
+            read("{" + geometries + ", \"queryable_geometry\": \"missing\"}").queryableGeometry());
+    }
+
     /** A short name is looked up in both maps, because either may be the one that declared it. */
     @Test
     void resolvesAShortNameFromEitherMap() {

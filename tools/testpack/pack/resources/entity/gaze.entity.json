@@ -10,8 +10,10 @@
         "default": "textures/entity/ember"
       },
       "geometry": {
-        "default": "geometry.tp.gaze"
+        "default": "geometry.tp.gaze",
+        "tall": "geometry.tp.gaze_tall"
       },
+      "queryable_geometry": "tall",
       "animations": {
         "lean": "animation.tp.gaze.lean",
         "stir": "animation.tp.gaze.stir",
