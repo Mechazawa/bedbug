@@ -205,7 +205,6 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
     private static Connections connections(JsonObject components) {
         if (!components.has("minecraft:connection_rule")) return Connections.ALL;
 
-        JsonObject rule = object(components, "minecraft:connection_rule");
         Connections accepted =
             Connections.of(text(components, "minecraft:connection_rule", "accepts_connections_from"));
         if (accepted == Connections.ONLY_FENCES) {
