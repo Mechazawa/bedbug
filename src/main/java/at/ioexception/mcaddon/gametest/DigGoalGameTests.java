@@ -11,6 +11,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
@@ -236,9 +237,121 @@ public final class DigGoalGameTests {
         });
     }
 
+    /** A raider standing at its crop waits its `initial_eat_delay` of one second before eating it. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 80)
+    public void aRaiderWaitsItsInitialDelayBeforeEating(GameTestHelper helper) {
+        floor(helper, Blocks.STONE);
+        BlockPos carrot = crop(helper, 2, 2);
+        AddonEntity raider = digger(helper, "tp:digger_make_raiding_slow", carrot);
+        if (raider == null) {
+            helper.succeed();
+            return;
+        }
+
+        long begun = helper.getLevel().getGameTime();
+        long[] eatenAt = {-1};
+        helper.onEachTick(() -> {
+            if (eatenAt[0] < 0 && !standing(helper, carrot)) eatenAt[0] = helper.getLevel().getGameTime() - begun;
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(eatenAt[0] >= 0, DIGGER + " has not eaten the carrot it stands at.");
+            helper.assertTrue(eatenAt[0] >= ONE_SECOND,
+                DIGGER + " waits a second at a carrot and ate it at tick " + eatenAt[0] + ".");
+        });
+    }
+
+    /** A raider eats no more than its `max_to_eat` of two before it is full, with four carrots in a row. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = FULL_TICKS + 20)
+    public void aRaiderEatsNoMoreThanItsMaximum(GameTestHelper helper) {
+        floor(helper, Blocks.STONE);
+        List<BlockPos> carrots = List.of(crop(helper, 1, 2), crop(helper, 2, 2), crop(helper, 3, 2),
+            crop(helper, 4, 2));
+        if (digger(helper, "tp:digger_make_raiding_few", carrots.get(0)) == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.runAfterDelay(FULL_TICKS, () -> {
+            long eaten = carrots.stream().filter(at -> !standing(helper, at)).count();
+            helper.assertTrue(eaten == 2, DIGGER + " eats two carrots before it is full and ate " + eaten + ".");
+            helper.succeed();
+        });
+    }
+
+    /** Long enough for a raider with no wait between crops to have eaten all four. */
+    private static final int FULL_TICKS = 120;
+
+    /** A raider full after one carrot waits its `full_delay` of two seconds before it eats the next. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200)
+    public void aFullRaiderWaitsItsFullDelay(GameTestHelper helper) {
+        betweenBites(helper, "tp:digger_make_raiding_full", 2 * ONE_SECOND,
+            "is full after one carrot for two seconds");
+    }
+
+    /** A raider waits its `eat_delay` of five seconds after one carrot before it looks for the next. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 260)
+    public void aRaiderWaitsItsEatDelayBetweenCrops(GameTestHelper helper) {
+        betweenBites(helper, "tp:digger_make_raiding_paced", 5 * ONE_SECOND,
+            "waits five seconds between carrots");
+    }
+
+    private static void betweenBites(GameTestHelper helper, String event, int wait, String failure) {
+        floor(helper, Blocks.STONE);
+        BlockPos first = crop(helper, 1, 2);
+        BlockPos second = crop(helper, 3, 2);
+        if (digger(helper, event, first) == null) {
+            helper.succeed();
+            return;
+        }
+
+        long begun = helper.getLevel().getGameTime();
+        long[] eaten = {-1, -1};
+        helper.onEachTick(() -> {
+            long now = helper.getLevel().getGameTime() - begun;
+            if (eaten[0] < 0 && !standing(helper, first)) eaten[0] = now;
+            if (eaten[1] < 0 && !standing(helper, second)) eaten[1] = now;
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(eaten[0] >= 0 && eaten[1] >= 0, DIGGER + " has not eaten both carrots.");
+            helper.assertTrue(eaten[1] - eaten[0] >= wait - SLACK,
+                DIGGER + " " + failure + " and ate the second " + (eaten[1] - eaten[0]) + " ticks after the first.");
+        });
+    }
+
+    /**
+     * A walk to a block counts as there within the `goal_radius` its pack states. The far group says
+     * three, so a raider held two blocks from a carrot eats it where it stands.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 80)
+    public void aWalkToABlockArrivesWithinItsGoalRadius(GameTestHelper helper) {
+        floor(helper, Blocks.STONE);
+        BlockPos carrot = crop(helper, 3, 1);
+        AddonEntity raider = digger(helper, "tp:digger_make_raiding_far", new BlockPos(1, STAND_Y, 1));
+        if (raider == null) {
+            helper.succeed();
+            return;
+        }
+        raider.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(0);
+
+        helper.succeedWhen(() -> helper.assertFalse(standing(helper, carrot),
+            DIGGER + " counts three blocks as there and never ate the carrot two blocks off."));
+    }
+
     private static void floor(GameTestHelper helper, Block block) {
         BlockPos.betweenClosed(new BlockPos(0, FLOOR, 0), new BlockPos(7, FLOOR, 7))
             .forEach(at -> helper.setBlock(at, block));
+    }
+
+    /** A ripe carrot on farmland set into the floor, at the height a raider stands. */
+    private static BlockPos crop(GameTestHelper helper, int x, int z) {
+        helper.setBlock(new BlockPos(x, FLOOR, z), Blocks.FARMLAND);
+        BlockPos carrot = new BlockPos(x, STAND_Y, z);
+        helper.setBlock(carrot, Blocks.CARROTS.defaultBlockState().setValue(CropBlock.AGE, CropBlock.MAX_AGE));
+        return carrot;
+    }
+
+    private static boolean standing(GameTestHelper helper, BlockPos carrot) {
+        return helper.getBlockState(carrot).is(Blocks.CARROTS);
     }
 
     private static List<ItemEntity> emeralds(GameTestHelper helper) {

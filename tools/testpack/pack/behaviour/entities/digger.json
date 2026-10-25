@@ -177,6 +177,82 @@
             "target": "self"
           }
         }
+      },
+      "tp:digger_raiding_slow": {
+        "minecraft:behavior.raid_garden": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "blocks": [
+            "minecraft:carrots"
+          ],
+          "search_range": 5,
+          "search_height": 2,
+          "goal_radius": 0.8,
+          "initial_eat_delay": 1,
+          "eat_delay": 0,
+          "max_to_eat": 0
+        }
+      },
+      "tp:digger_raiding_few": {
+        "minecraft:behavior.raid_garden": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "blocks": [
+            "minecraft:carrots"
+          ],
+          "search_range": 5,
+          "search_height": 2,
+          "goal_radius": 0.8,
+          "initial_eat_delay": 0,
+          "eat_delay": 0,
+          "max_to_eat": 2
+        }
+      },
+      "tp:digger_raiding_full": {
+        "minecraft:behavior.raid_garden": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "blocks": [
+            "minecraft:carrots"
+          ],
+          "search_range": 5,
+          "search_height": 2,
+          "goal_radius": 0.8,
+          "initial_eat_delay": 0,
+          "eat_delay": 0,
+          "max_to_eat": 1,
+          "full_delay": 2
+        }
+      },
+      "tp:digger_raiding_paced": {
+        "minecraft:behavior.raid_garden": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "blocks": [
+            "minecraft:carrots"
+          ],
+          "search_range": 5,
+          "search_height": 2,
+          "goal_radius": 0.8,
+          "initial_eat_delay": 0,
+          "eat_delay": 5,
+          "max_to_eat": 0
+        }
+      },
+      "tp:digger_raiding_far": {
+        "minecraft:behavior.raid_garden": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "blocks": [
+            "minecraft:carrots"
+          ],
+          "search_range": 5,
+          "search_height": 2,
+          "goal_radius": 3,
+          "initial_eat_delay": 0,
+          "eat_delay": 0,
+          "max_to_eat": 0
+        }
       }
     },
     "components": {
@@ -221,6 +297,41 @@
         "add": {
           "component_groups": [
             "tp:digger_cooling"
+          ]
+        }
+      },
+      "tp:digger_make_raiding_slow": {
+        "add": {
+          "component_groups": [
+            "tp:digger_raiding_slow"
+          ]
+        }
+      },
+      "tp:digger_make_raiding_few": {
+        "add": {
+          "component_groups": [
+            "tp:digger_raiding_few"
+          ]
+        }
+      },
+      "tp:digger_make_raiding_full": {
+        "add": {
+          "component_groups": [
+            "tp:digger_raiding_full"
+          ]
+        }
+      },
+      "tp:digger_make_raiding_paced": {
+        "add": {
+          "component_groups": [
+            "tp:digger_raiding_paced"
+          ]
+        }
+      },
+      "tp:digger_make_raiding_far": {
+        "add": {
+          "component_groups": [
+            "tp:digger_raiding_far"
           ]
         }
       },

@@ -2796,7 +2796,14 @@ fields and one-line descriptions. The rest is decided here:
   `cooldown_range` starts when the goal ends, whatever the outcome.
 - `target_dig_position_offset` is not read: the spot itself is dug.
 
-`DigGoalGameTests` covers it with `tp:digger`, on a floor at height 12 that no other block
+`minecraft:behavior.raid_garden` eats one crop per visit, `initial_eat_delay` seconds after
+arriving. It looks for the next crop `eat_delay` seconds later. After `max_to_eat` crops (no limit
+when 0 or less) it waits `full_delay` seconds. It walks into the crop's own block, as Bedrock's rabbit
+does. Java's walk stops one block over the block it found, which for a crop is out of the goal
+radius. Java searches from `blockPosition()`, which on farmland is the farmland, so `tp:digger`'s raid
+groups state a `search_height` of 2 to see a crop at the feet.
+
+`DigGoalGameTests` covers both with `tp:digger`, on a floor at height 12 that no other block
 searching test reaches.
 
 ## Releasing

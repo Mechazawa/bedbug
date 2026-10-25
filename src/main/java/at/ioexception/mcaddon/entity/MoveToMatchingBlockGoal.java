@@ -51,6 +51,9 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
     private boolean announced;
     private int stayed;
 
+    /** The bites `minecraft:behavior.raid_garden` counts and waits between. */
+    private Raid raid;
+
     private MoveToMatchingBlockGoal(PathfinderMob mob, JsonObject component,
         Predicate<BlockState> wanted, BiConsumer<ServerLevel, BlockPos> arrival) {
         this(mob, component, wanted, arrival, null, null);
@@ -84,6 +87,7 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
     public void stop() {
         super.stop();
         publish(false);
+        if (raid != null) raid.left();
         if (settled != null) mob.setPose(Pose.STANDING);
     }
 
@@ -119,11 +123,15 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
 
     @Override
     protected int nextStartTick(PathfinderMob mob) {
+        if (raid != null) return 0;
+
         return visit == null ? super.nextStartTick(mob) : reducedTickDelay(Math.max(1, visit.interval()));
     }
 
     @Override
     public boolean canUse() {
+        if (raid != null && !raid.ready(mob.level().getGameTime())) return false;
+
         return super.canUse() && (visit == null || mob.getRandom().nextDouble() < visit.chance());
     }
 
@@ -132,8 +140,11 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
         return super.canContinueToUse() && (visit == null || visit.onStayed() == null || stayed < visit.stay());
     }
 
+    /** A raid walks into the crop itself, where Java's walk stops on top of the block it found. */
     @Override
     protected BlockPos getMoveToTarget() {
+        if (raid != null) return blockPos;
+
         return visit == null ? super.getMoveToTarget() : super.getMoveToTarget().offset(visit.offset());
     }
 
@@ -168,10 +179,59 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
                 || state.is(net.minecraft.world.level.block.Blocks.CHISELED_BOOKSHELF), null);
     }
 
-    /** `minecraft:behavior.raid_garden`, which eats the blocks a pack listed rather than leaving them. */
+    /**
+     * `minecraft:behavior.raid_garden`, which eats the blocks a pack listed rather than leaving them.
+     *
+     * It eats one crop a visit, `initial_eat_delay` seconds after it arrives, looks for the next one
+     * `eat_delay` seconds later, and once it has eaten `max_to_eat` waits `full_delay` seconds.
+     */
     public static MoveToMatchingBlockGoal raid(PathfinderMob mob, JsonObject component) {
-        return new MoveToMatchingBlockGoal(mob, component, among(component, "blocks"),
+        MoveToMatchingBlockGoal goal = new MoveToMatchingBlockGoal(mob, component, among(component, "blocks"),
             (level, at) -> level.destroyBlock(at, false, mob));
+        goal.raid = new Raid(Goals.ticks(component, "initial_eat_delay", 0), Goals.ticks(component, "eat_delay", 2),
+            Goals.ticks(component, "full_delay", 100), (int) number(component, "max_to_eat", 6));
+        return goal;
+    }
+
+    private static final class Raid {
+        private final int firstBite;
+        private final int betweenBites;
+        private final int whenFull;
+        private final int most;
+        private int eaten;
+        private long readyAt;
+        private long arrivedAt = -1;
+
+        Raid(int firstBite, int betweenBites, int whenFull, int most) {
+            this.firstBite = firstBite;
+            this.betweenBites = betweenBites;
+            this.whenFull = whenFull;
+            this.most = most;
+        }
+
+        boolean ready(long now) {
+            return now >= readyAt;
+        }
+
+        /** Whether the entity standing at its crop since `now` or earlier has waited long enough. */
+        boolean bites(long now) {
+            if (arrivedAt < 0) arrivedAt = now;
+            return now - arrivedAt >= firstBite;
+        }
+
+        void bitten(long now) {
+            arrivedAt = -1;
+            if (most > 0 && ++eaten >= most) {
+                eaten = 0;
+                readyAt = now + whenFull;
+            } else {
+                readyAt = now + betweenBites;
+            }
+        }
+
+        void left() {
+            arrivedAt = -1;
+        }
     }
 
     /**
@@ -236,8 +296,10 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
         if (settled != null) mob.setPose(settled);
         if (visit != null && mob instanceof AddonEntity addon) arrive(addon);
         if (arrival == null || !(mob.level() instanceof ServerLevel level)) return;
+        if (raid != null && (!isValidTarget(level, blockPos) || !raid.bites(level.getGameTime()))) return;
 
         arrival.accept(level, blockPos);
+        if (raid != null) raid.bitten(level.getGameTime());
     }
 
     private void arrive(AddonEntity addon) {
