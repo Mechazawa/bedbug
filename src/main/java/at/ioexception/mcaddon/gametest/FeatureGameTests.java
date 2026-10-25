@@ -74,6 +74,36 @@ public final class FeatureGameTests {
         helper.succeed();
     }
 
+    /**
+     * Three aggregates of a mark one block east, a flower that fails in the air and a mark two blocks
+     * east.
+     * With no early out both marks stand; stopping at the first failure leaves only the first; and
+     * stopping at the first success, after the failing one, leaves only the one block east.
+     */
+    @GameTest()
+    public void anAggregateStopsWhereItsEarlyOutSays(GameTestHelper helper) {
+        if (noPack()) {
+            helper.succeed();
+            return;
+        }
+
+        BlockPos all = helper.absolutePos(new BlockPos(0, 3, 0));
+        List<String> heard = place(helper, "tp:marks_all", all);
+        helper.assertTrue(gold(helper, all.east()) && gold(helper, all.east(2)),
+            "an aggregate with no early out skipped a feature: " + heard);
+
+        BlockPos failure = helper.absolutePos(new BlockPos(0, 3, 2));
+        place(helper, "tp:marks_until_failure", failure);
+        helper.assertTrue(gold(helper, failure.east()), "first_failure skipped the feature before the failure.");
+        helper.assertFalse(gold(helper, failure.east(2)), "first_failure placed the feature after the failure.");
+
+        BlockPos success = helper.absolutePos(new BlockPos(0, 3, 4));
+        place(helper, "tp:marks_until_success", success);
+        helper.assertTrue(gold(helper, success.east()), "first_success stopped at the failure.");
+        helper.assertFalse(gold(helper, success.east(2)), "first_success placed the feature after the success.");
+        helper.succeed();
+    }
+
     private static boolean noPack() {
         return AddonEntities.typeOf("tp:ember") == null || !Platform.convertsWorldgen();
     }

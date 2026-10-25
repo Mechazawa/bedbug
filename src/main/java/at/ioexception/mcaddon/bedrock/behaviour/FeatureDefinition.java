@@ -34,7 +34,8 @@ public record FeatureDefinition(String identifier, String type, JsonObject body)
 
     /** The types that state a thing to build, which is what a Java configured feature holds. */
     public static final Set<String> CONFIGURED = Set.of(
-        "minecraft:sequence_feature", "minecraft:fossil_feature", "minecraft:geode_feature",
+        "minecraft:aggregate_feature", "minecraft:sequence_feature", "minecraft:fossil_feature",
+        "minecraft:geode_feature",
         "minecraft:growing_plant_feature", "minecraft:multiface_feature", "minecraft:ore_feature",
         "minecraft:partially_exposed_blob_feature", "minecraft:sculk_patch_feature",
         "minecraft:single_block_feature", "minecraft:structure_template_feature",
@@ -54,9 +55,8 @@ public record FeatureDefinition(String identifier, String type, JsonObject body)
 
     /** The types with no Java configured feature, no placement and no carver behind them. */
     public static final Set<String> UNANSWERED = Set.of(
-        "minecraft:aggregate_feature", "minecraft:conditional_list",
-        "minecraft:beards_and_shavers", "minecraft:rect_layout", "minecraft:multi_block_feature",
-        "minecraft:horizontal_tree_decoration_feature");
+        "minecraft:conditional_list", "minecraft:beards_and_shavers", "minecraft:rect_layout",
+        "minecraft:multi_block_feature", "minecraft:horizontal_tree_decoration_feature");
 
     /** Which field of a placement type names the feature it wraps. */
     private static final Map<String, String> WRAPPED = Map.of(
@@ -114,12 +114,13 @@ public record FeatureDefinition(String identifier, String type, JsonObject body)
     /**
      * The types this mod builds something out of, which is where the taxonomy stops being a plan.
      *
-     * Three state a thing to build and have a Java feature that takes the same fields and builds the
-     * same thing; the scatter is a feature of this mod's own; two state a position and have a Java
-     * placement modifier that asks the same question. Everything else is named against the pack.
+     * Four state a thing to build, three through a Java feature that takes the same fields and the
+     * aggregate through one of this mod's own; the scatter is a feature of this mod's own as well;
+     * two state a position and have a Java placement modifier that asks the same question.
+     * Everything else is named against the pack.
      */
     public static final Set<String> CONVERTED = Set.of(
-        "minecraft:ore_feature", "minecraft:single_block_feature",
+        "minecraft:ore_feature", "minecraft:single_block_feature", "minecraft:aggregate_feature",
         "minecraft:weighted_random_feature", "minecraft:scatter_feature",
         "minecraft:snap_to_surface_feature", "minecraft:surface_relative_threshold_feature");
 

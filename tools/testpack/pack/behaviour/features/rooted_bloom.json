@@ -1,0 +1,10 @@
+{
+  "format_version": "1.21.40",
+  "minecraft:single_block_feature": {
+    "description": {
+      "identifier": "tp:rooted_bloom"
+    },
+    "places_block": "minecraft:dandelion",
+    "enforce_survivability_rules": true
+  }
+}

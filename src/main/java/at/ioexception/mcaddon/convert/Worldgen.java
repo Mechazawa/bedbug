@@ -162,7 +162,8 @@ public final class Worldgen {
 
     private static List<String> references(FeatureDefinition feature, String namespace) {
         JsonElement listed = feature.body().get("features");
-        if (feature.type().equals("minecraft:weighted_random_feature")) {
+        if (feature.type().equals("minecraft:weighted_random_feature")
+            || feature.type().equals("minecraft:aggregate_feature")) {
             return listed == null || !listed.isJsonArray() ? List.of() : listed.getAsJsonArray().asList()
                 .stream().map(entry -> featureOf(entry, namespace)).toList();
         }
@@ -284,6 +285,7 @@ public final class Worldgen {
         return switch (feature.type()) {
             case "minecraft:weighted_random_feature" ->
                 typed("minecraft:random_selector", weighted(feature.body(), namespace));
+            case "minecraft:aggregate_feature" -> typed(BedrockFeatures.AGGREGATE, aggregate(feature, namespace));
             case "minecraft:scatter_feature" -> {
                 JsonObject config = new JsonObject();
                 config.add("distribution", feature.scatter().body());
@@ -292,6 +294,16 @@ public final class Worldgen {
             }
             default -> null;
         };
+    }
+
+    private static JsonObject aggregate(FeatureDefinition feature, String namespace) {
+        JsonArray named = new JsonArray();
+        references(feature, namespace).forEach(named::add);
+
+        JsonObject config = new JsonObject();
+        config.add("features", named);
+        config.addProperty("early_out", Json.text(feature.body(), "early_out", "none"));
+        return config;
     }
 
     private static JsonObject typed(String type, JsonObject config) {

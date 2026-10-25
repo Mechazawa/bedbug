@@ -1,0 +1,10 @@
+{
+  "format_version": "1.21.40",
+  "minecraft:aggregate_feature": {
+    "description": {
+      "identifier": "tp:marks_until_success"
+    },
+    "features": ["tp:rooted_bloom", "tp:mark_east_one", "tp:mark_east_two"],
+    "early_out": "first_success"
+  }
+}

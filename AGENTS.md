@@ -848,7 +848,8 @@ These are the checks it runs, and what each one catches:
   every kind that converts, and one of them wraps another in a scatter, which is what makes the
   placement chain more than one link. The `mark*` features are placed by `FeatureGameTests` with
   `place feature` and read back block by block: a grid walked in the order `coordinate_eval_order`
-  names, a uniform spread whose height reads the x it chose, and a scatter of that grid. One rule hangs
+  names, a uniform spread whose height reads the x it chose, a scatter of that grid, and three
+  aggregates with each `early_out`. One rule hangs
   an ore on every overworld biome and the other hangs flowers on the forests, so a fresh chunk holds
   blocks that can be counted. **The ore places `tp:lamp`, which is the pack's own block**: a run
   where the block registry and the worldgen registry disagree leaves nothing in the ground. The
@@ -2290,7 +2291,7 @@ from `restoreGroups`. `minecraft:spawn_entity` `should_leash` leashes the spawne
 
 A pack's `features/` become configured features and its `feature_rules/` placed features, in
 `convert/Worldgen`. Where Java has no type with the same fields, the feature is one of this mod's
-own, in `worldgen/`: `mcaddon:scatter`, and the
+own, in `worldgen/`: `mcaddon:scatter` and `mcaddon:aggregate`, and the
 placement modifier `mcaddon:scatter` that a feature rule's `distribution` becomes. From 26.3 each
 record is a Java `Feature`; before, it is the configuration of `BedrockFeatures.Placing`. Every
 feature gets a placed feature under its own name, so another can name it, and one naming a feature
@@ -2315,6 +2316,8 @@ so these are decided here, from the Bedrock wiki's feature page where it says an
 - `scatter_chance` written as a number or an expression is a percentage.
 - `query.heightmap` reads Java's `MOTION_BLOCKING_NO_LEAVES`, as the entity query does, and
   `query.above_top_solid` reads `OCEAN_FLOOR`.
+
+An aggregate places its list in order, as the wiki says, though Mojang's page promises no order.
 
 ## JSON UI
 

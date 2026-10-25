@@ -30,6 +30,8 @@ checked first. 35 of the 70 engine names have a different Java name and are mapp
 - `ore_feature` becomes `minecraft:ore`.
 - `weighted_random_feature` becomes `minecraft:random_selector`.
 - `single_block_feature` becomes `minecraft:simple_block`.
+- `aggregate_feature` places each feature it lists at the same spot, in order. `early_out` stops it
+  at the first failure (`first_failure`) or the first success (`first_success`).
 - `scatter_feature` and a feature rule's `distribution` read every field: `iterations`,
   `scatter_chance`, `coordinate_eval_order`, and per axis a value, a Molang expression or a
   distribution (`uniform`, `gaussian`, `inverse_gaussian`, `triangle`, `fixed_grid`,
@@ -79,9 +81,9 @@ overworld.
 - **Overworld biomes do not generate.** Java's overworld has no biome list to add to. To add one, a
   pack must replace the whole overworld generator. That changes amplified and large biome worlds and
   breaks terrain made before the pack.
-- **Most feature types.** 22 of 28 are reported. Six have nothing behind them in Java
-  (`aggregate_feature`, `conditional_list`, `beards_and_shavers`, `rect_layout`,
-  `multi_block_feature`, `horizontal_tree_decoration_feature`). Three are carvers. Thirteen map to a
+- **Most feature types.** 21 of 28 are reported. Five have nothing behind them in Java
+  (`conditional_list`, `beards_and_shavers`, `rect_layout`, `multi_block_feature`,
+  `horizontal_tree_decoration_feature`). Three are carvers. Thirteen map to a
   Java feature with a different model, trees and geodes among them.
 - **Biome fields with no Java place**: surface builders, overworld height, overworld generation
   rules, `minecraft:mountain_parameters`, `minecraft:village_type`, `minecraft:humidity`,
