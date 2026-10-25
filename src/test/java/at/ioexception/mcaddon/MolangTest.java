@@ -162,6 +162,34 @@ class MolangTest {
         assertEquals(8, evaluate("{v.total = 0; loop(4, {v.total = v.total + 2;}); return v.total;}"), 1e-6);
     }
 
+    /** Mojang's own examples of `break` and `continue`, with the answers its syntax guide gives. */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+        "v.x = 1; v.y = 1; loop(10, {t.x = v.x + v.y; v.x = v.y; v.y = t.x; (v.y > 20) ? break;}); return v.y; | 21",
+        "v.x = 0; loop(10, {loop(10, {v.x = v.x + 1; (v.x > 5) ? break;});}); return v.x; | 15",
+        "v.x = 0; loop(10, {(v.x > 5) ? continue; v.x = v.x + 1;}); return v.x; | 6",
+    })
+    void leavesALoopEarly(String source, double expected) {
+        assertEquals(expected, evaluate(source), 1e-6, source);
+    }
+
+    @Test
+    void leavesAForEachEarly() {
+        List<Entity> pigs = List.of(new Entity("minecraft:pig"), new Entity("minecraft:pig"),
+            new Entity("minecraft:pig"));
+        environment.setVariable("pigs", MolangValue.of(pigs));
+        assertEquals(2, evaluate("v.n = 0; for_each(t.pig, v.pigs, {v.n = v.n + 1; (v.n >= 2) ? break;});"
+            + " return v.n;"), 1e-6);
+        assertEquals(3, evaluate("v.n = 0; for_each(t.pig, v.pigs, {v.n = v.n + 1; (v.n >= 1) ? continue;"
+            + " v.n = 10;}); return v.n;"), 1e-6);
+    }
+
+    /** Outside a loop there is nothing to leave, which Bedrock calls a content error and answers zero for. */
+    @Test
+    void answersZeroForABreakOutsideALoop() {
+        assertEquals(0, evaluate("v.n = 3; break; return v.n;"), 1e-6);
+    }
+
     /** A loop that never ends has to stop anyway, because a pack's frame cannot wait for it. */
     @Test
     void stopsARunawayLoop() {

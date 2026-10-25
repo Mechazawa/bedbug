@@ -2361,7 +2361,9 @@ evaluates `right` against `left`'s `scope()`, and answers zero without evaluatin
 refers to no entity or to one that is gone; an assignment on the right writes into that scope, which
 is what Mojang's `v.pigpig->v.test.a.b.c = 1.23` examples need. A reference to an entity that is gone
 is false and `??` falls through on it. `for_each(t.x, array, {...})` binds each entity that is still
-there in turn. `q.combine_entities` keeps each entity once, in order of first mention, and
+there in turn. `break` and `continue` end the pass of the innermost `loop` or `for_each`; outside
+one they leave the expression malformed, which answers zero, as Bedrock's content error does. A
+loop answers zero itself. `q.combine_entities` keeps each entity once, in order of first mention, and
 `q.count` counts an array as its elements and anything else as one.
 
 `bedrock.entity.EntityReference` is the reference to a Java entity, and the side reading it decides

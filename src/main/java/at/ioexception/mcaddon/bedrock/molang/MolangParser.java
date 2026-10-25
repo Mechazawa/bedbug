@@ -47,9 +47,26 @@ public final class MolangParser {
         }
     }
 
+    /**
+     * A `break` or a `continue`, which ends the pass of the innermost loop running it. Neither is
+     * parsed outside a loop, so one never escapes the expression.
+     */
+    private static final class Jump extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+        private static final Jump BREAK = new Jump();
+        private static final Jump CONTINUE = new Jump();
+
+        private Jump() {
+            super(null, null, false, false);
+        }
+    }
+
     private final String source;
     private int at;
     private boolean returnsFromBlock;
+
+    /** How many loops the parser is inside, which is where `break` and `continue` may stand. */
+    private int loops;
 
     private MolangParser(String source) {
         this.source = source;
@@ -363,6 +380,13 @@ public final class MolangParser {
 
         if (head.equals("loop")) return parseLoop();
         if (head.equals("for_each")) return parseForEach();
+        if (head.equals("break") || head.equals("continue")) {
+            if (loops == 0) throw new Malformed();
+            Jump jump = head.equals("break") ? Jump.BREAK : Jump.CONTINUE;
+            return environment -> {
+                throw jump;
+            };
+        }
 
         skipSpace();
         if (peek() != '.') throw new Malformed();
@@ -447,17 +471,30 @@ public final class MolangParser {
      * Bedrock caps the count so a pack cannot hang the game inside one expression, and so does this.
      */
     private MolangExpression parseLoop() {
+        loops += 1;
         List<MolangExpression> arguments = readArguments();
+        loops -= 1;
         if (arguments.size() < 2) throw new Malformed();
 
         MolangExpression count = arguments.get(0);
         MolangExpression body = arguments.get(1);
         return environment -> {
             int times = Math.min((int) count.evaluate(environment).number(), LOOP_LIMIT);
-            MolangValue result = MolangValue.ZERO;
-            for (int i = 0; i < times; i++) result = body.evaluate(environment);
-            return result;
+            for (int i = 0; i < times; i++) {
+                if (!pass(body, environment)) break;
+            }
+            return MolangValue.ZERO;
         };
+    }
+
+    /** Runs one pass of a loop's body, answering false once a `break` has ended the loop. */
+    private static boolean pass(MolangExpression body, MolangEnvironment environment) {
+        try {
+            body.evaluate(environment);
+            return true;
+        } catch (Jump jump) {
+            return jump == Jump.CONTINUE;
+        }
     }
 
     /**
@@ -470,18 +507,19 @@ public final class MolangParser {
         at += 1;
         Variable each = readVariable();
         MolangExpression array = nextArgument();
+        loops += 1;
         MolangExpression body = nextArgument();
+        loops -= 1;
         skipSpace();
         if (peek() != ')') throw new Malformed();
         at += 1;
 
         return environment -> {
-            MolangValue result = MolangValue.ZERO;
             for (MolangValue.Reference entity : array.evaluate(environment).references().toList()) {
                 each.assign(environment, MolangValue.of(entity));
-                result = body.evaluate(environment);
+                if (!pass(body, environment)) break;
             }
-            return result;
+            return MolangValue.ZERO;
         };
     }
 
