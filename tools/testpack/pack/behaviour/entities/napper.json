@@ -92,6 +92,42 @@
           "search_range": 6,
           "search_height": 2
         }
+      },
+      "tp:napper_sleeping_slow": {
+        "minecraft:behavior.sleep": {
+          "priority": 3,
+          "speed_multiplier": 0.6
+        }
+      },
+      "tp:napper_sleeping_fast": {
+        "minecraft:behavior.sleep": {
+          "priority": 3,
+          "speed_multiplier": 1.5
+        }
+      },
+      "tp:napper_sleeping_patient": {
+        "minecraft:behavior.sleep": {
+          "priority": 3,
+          "timeout_cooldown": 3
+        }
+      },
+      "tp:napper_milk_first": {
+        "minecraft:behavior.drink_milk": {
+          "priority": 3,
+          "control_flags": [
+            "move",
+            "look"
+          ]
+        }
+      },
+      "tp:napper_milk_last": {
+        "minecraft:behavior.drink_milk": {
+          "priority": 5,
+          "control_flags": [
+            "move",
+            "look"
+          ]
+        }
       }
     },
     "components": {
@@ -185,6 +221,41 @@
         "add": {
           "component_groups": [
             "tp:napper_avoiding_nearest"
+          ]
+        }
+      },
+      "tp:napper_make_sleeping_slow": {
+        "add": {
+          "component_groups": [
+            "tp:napper_sleeping_slow"
+          ]
+        }
+      },
+      "tp:napper_make_sleeping_fast": {
+        "add": {
+          "component_groups": [
+            "tp:napper_sleeping_fast"
+          ]
+        }
+      },
+      "tp:napper_make_sleeping_patient": {
+        "add": {
+          "component_groups": [
+            "tp:napper_sleeping_patient"
+          ]
+        }
+      },
+      "tp:napper_make_milk_first": {
+        "add": {
+          "component_groups": [
+            "tp:napper_milk_first"
+          ]
+        }
+      },
+      "tp:napper_make_milk_last": {
+        "add": {
+          "component_groups": [
+            "tp:napper_milk_last"
           ]
         }
       }
