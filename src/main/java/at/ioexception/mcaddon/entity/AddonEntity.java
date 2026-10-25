@@ -21,17 +21,11 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.BreathAirGoal;
 import net.minecraft.world.entity.ai.goal.FleeSunGoal;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
-import net.minecraft.world.entity.ai.goal.FollowMobGoal;
-import net.minecraft.world.entity.ai.goal.MoveBackToVillageGoal;
-import net.minecraft.world.entity.ai.goal.MoveThroughVillageGoal;
 import net.minecraft.world.entity.ai.goal.MoveTowardsRestrictionGoal;
 import net.minecraft.world.entity.ai.goal.MoveTowardsTargetGoal;
 import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.RestrictSunGoal;
-//? if <26.3 {
-import net.minecraft.world.entity.ai.goal.TryFindWaterGoal;
-//?}
 import net.minecraft.world.entity.ai.navigation.FlyingPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.ai.navigation.WallClimberNavigation;
@@ -758,6 +752,11 @@ public class AddonEntity extends PathfinderMob
         // The entity is built before it is put anywhere, and a centre taken then is the world's origin.
         if (!placed) return;
 
+        if (declaresNow("minecraft:home") && homePosition() == null) {
+            net.minecraft.core.BlockPos at = blockPosition();
+            setValue(HOME, new at.ioexception.mcaddon.state.PropertyVector(at.getX(), at.getY(), at.getZ()));
+        }
+
         String component = declaresNow("minecraft:home") ? "minecraft:home"
             : declaresNow("minecraft:dweller") ? "minecraft:dweller" : null;
         // `restriction_type` is `none` unless the pack says otherwise, which keeps a home without
@@ -776,6 +775,18 @@ public class AddonEntity extends PathfinderMob
 
         Platform.setHome(this, blockPosition(),
             Math.max(1, (int) liveNumber(component, "restriction_radius", 16)));
+    }
+
+    /** The value the home `minecraft:home` saves is kept under, which a chunk written out keeps. */
+    private static final String HOME = "home_position";
+
+    /**
+     * Where `minecraft:home` saved the entity's home: where it stood as the component arrived, which
+     * is where it was spawned when the component is there from the start. Null with no home saved.
+     */
+    public net.minecraft.core.BlockPos homePosition() {
+        return value(HOME) instanceof at.ioexception.mcaddon.state.PropertyVector at
+            ? net.minecraft.core.BlockPos.containing(at.x(), at.y(), at.z()) : null;
     }
 
     /**
@@ -3192,22 +3203,20 @@ public class AddonEntity extends PathfinderMob
             // Bedrock names the kind of wandering; Java has one stroll goal and a speed.
             case "minecraft:behavior.move_towards_dwelling_restriction",
                  "minecraft:behavior.move_towards_home_restriction",
-                 "minecraft:behavior.move_towards_restriction",
-                 "minecraft:behavior.go_home" ->
+                 "minecraft:behavior.move_towards_restriction" ->
                 goals.add(priority, new MoveTowardsRestrictionGoal(this, speed));
+            case "minecraft:behavior.go_home" -> goals.add(priority, new GoHomeGoal(this, goal));
 
             case "minecraft:behavior.move_to_village" ->
-                goals.add(priority, new MoveBackToVillageGoal(this, 0.6, false));
-            // Java's goal asks separately whether the route may run at night and whether the mob
-            // can get through a door. Bedrock states neither, so the walk is allowed at any
-            // hour and doors are left to the navigator.
-            case "minecraft:behavior.move_through_village" ->
-                goals.add(priority,
-                    new MoveThroughVillageGoal(this, 0.6, false, 4, () -> false));
+                goals.add(priority, StrollTowardsVillageGoal.intoVillage(this, goal));
+            case "minecraft:behavior.move_through_village" -> goals.add(priority, new VillagePatrolGoal(this, goal));
             case "minecraft:behavior.mingle" -> goals.add(priority, new MingleGoal(this, goal));
             case "minecraft:behavior.sleep" -> goals.add(priority, new SleepGoal(this, goal));
+            // `within_radius` is how near the target has to be for the walk towards it, as Java's
+            // golem states the same 32 Mojang's iron golem does.
             case "minecraft:behavior.move_towards_target" ->
-                goals.add(priority, new MoveTowardsTargetGoal(this, 0.9, 32f));
+                goals.add(priority, new MoveTowardsTargetGoal(this, speed,
+                    (float) Goals.number(goal, "within_radius", 0)));
 
             case "minecraft:behavior.random_fly", "minecraft:behavior.random_hover",
                  "minecraft:behavior.hover" -> goals.add(priority, StrollGoal.flying(this, goal));
@@ -3215,20 +3224,15 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.random_swim" -> goals.add(priority, StrollGoal.swimming(this, goal));
             case "minecraft:behavior.swim_wander" -> goals.add(priority, StrollGoal.wandering(this, goal));
             case "minecraft:behavior.move_to_water" -> goals.add(priority, MoveToMatchingBlockGoal.water(this, goal));
-            //? if >=26.3 {
-            /*case "minecraft:behavior.move_to_liquid" -> goals.add(priority,
-                new net.minecraft.world.entity.ai.goal.TryFindLiquidGoal(this, net.minecraft.tags.FluidTags.WATER));
-            *///?} else {
-            case "minecraft:behavior.move_to_liquid" -> goals.add(priority, new TryFindWaterGoal(this));
-            //?}
+            case "minecraft:behavior.move_to_liquid" -> goals.add(priority, MoveToMatchingBlockGoal.liquid(this, goal));
             case "minecraft:behavior.swim_up_for_breath" ->
                 goals.add(priority, new BreathAirGoal(this));
 
             case "minecraft:behavior.eat_block" ->
                 goals.add(priority, new GrazeGoal(this, goal));
             // Bedrock's find_cover and flee_sun both end with the mob standing out of the light.
-            case "minecraft:behavior.flee_sun", "minecraft:behavior.find_cover" ->
-                goals.add(priority, new FleeSunGoal(this, 1.0));
+            case "minecraft:behavior.flee_sun" -> goals.add(priority, new FleeSunGoal(this, 1.0));
+            case "minecraft:behavior.find_cover" -> goals.add(priority, new FindCoverGoal(this, goal));
             case "minecraft:behavior.restrict_sun" ->
                 goals.add(priority, new RestrictSunGoal(this));
             case "minecraft:behavior.break_door" -> goals.add(priority, new DoorBreakingGoal(this,
@@ -3240,9 +3244,7 @@ public class AddonEntity extends PathfinderMob
                     goals.add(priority, new DoorBreakingGoal(this, goal));
                 }
             }
-            case "minecraft:behavior.follow_mob" ->
-                goals.add(priority, new FollowMobGoal(this, Goals.number(goal, "speed_multiplier", 1),
-                    (float) Goals.number(goal, "stop_distance", 2), (float) Goals.number(goal, "search_range", 0)));
+            case "minecraft:behavior.follow_mob" -> goals.add(priority, new FollowAnyMobGoal(this, goal));
             case "minecraft:behavior.leap_at_target" -> goals.add(priority, new LeapGoal(this, goal));
             case "minecraft:behavior.stalk_and_pounce_on_target" -> goals.add(priority, new PounceGoal(this, goal));
             case "minecraft:behavior.play" -> goals.add(priority, new PlayGoal(this, goal));
@@ -3322,7 +3324,7 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.move_to_lava" -> goals.add(priority,
                 MoveToMatchingBlockGoal.lava(this, goal));
             case "minecraft:behavior.move_to_random_block" -> goals.add(priority,
-                MoveToMatchingBlockGoal.anywhere(this, goal));
+                new MoveToRandomBlockGoal(this, goal));
 
             case "minecraft:behavior.equip_item" -> goals.add(priority,
                 new EquipItemGoal(this));

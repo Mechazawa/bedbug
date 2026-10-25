@@ -808,6 +808,7 @@
           "priority": 0,
           "search_range": 8,
           "search_height": 2,
+          "search_count": 0,
           "goal_radius": 0.5
         }
       },

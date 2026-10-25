@@ -2819,6 +2819,42 @@ lower number wins and a missing one is 0. The converter writes the non-zero ones
 set, and `RecipePriorityMixin` stable-sorts `RecipeMap.getRecipesFor` (the one call every version's
 recipe lookup goes through) by them, so only recipes that already match are reordered.
 
+## Walking goals
+
+`tp:roamer` carries one group per walking field and `RoamGoalGameTests` reads each back. What Mojang
+publishes nothing on, decided here:
+
+- `move_towards_target` `within_radius` is how near the target must be for the walk to start, as in
+  Java's goal: Mojang's iron golem states 32, the number Java's golem passes.
+- `search_count` on `move_to_water`, `move_to_land` and `move_to_liquid` is that many random blocks
+  of the search box for every tick since the last look (at most two), the first match taken. A count
+  of nothing scans the whole box for the nearest, on Java's own interval; `tp:brute_parched` states
+  it so its test is not left to chance. `move_to_liquid` starts only on the ground and out of every
+  liquid, and its `material_type` is `any`, `water` or `lava` in any case.
+- A walk to a block stops once inside its `goal_radius`. `target_selection_method` `random` picks
+  evenly among every match in range. `target_block_filters` and `go_home`'s trigger filters ask about
+  a block through the subject `block` (`Filter.Context.aboutBlock`), where `is_block` and
+  `is_waterlogged` are answered.
+- `move_to_random_block` picks a block evenly in a disc of `block_distance` at the entity's height and
+  walks a 10 block leg at a time towards one further off. `move_to_village` walks to a bed, bell or job
+  site picked evenly among those within 32 blocks of the nearest.
+- `go_home` walks to `AddonEntity.homePosition`, which `minecraft:home` saves as the `home_position`
+  value where the entity stands as the component arrives. It starts at one in `interval` per goal
+  check, plans again within `calculate_new_path_radius` of a path that falls short and raises
+  `on_failed` when the new path ends where the last did. A trigger aimed at the block is reported.
+- `move_around_target` puts "behind" on the way the target faces, evenly within the spread, and stays
+  put inside the band.
+- `follow_mob` with no `filters` leaves out players, squid, fish, tadpoles, dolphins and its own
+  kind, picks evenly among the `preferred_actor_type` in range where there is one, and under
+  `use_home_position_restriction` leaves out anything outside Java's home radius.
+- `find_cover` starts for any entity under the open sky by day, burning or not, and takes any spot
+  it can stand on that the sky cannot see; Java's walk out of the sun asks for fire and for a monster's
+  liking of the dark, which an add-on entity has none of. It and `move_through_village`'s
+  `only_at_night` tell day from night by the clock, as the shelter goals do.
+
+**The game test world is dark.** `isBrightOutside` answered false there at a clock of 25020, so a test
+about the day runs `time set day` and a goal asks the clock.
+
 ## Releasing
 
 A pushed `v*` tag runs `.github/workflows/release.yml`, which builds the jars, makes the GitHub release and then runs `tools/release/modrinth.py` to publish each jar to Modrinth.

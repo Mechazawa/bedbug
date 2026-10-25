@@ -1,0 +1,20 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "tp:roamer",
+      "materials": {
+        "default": "entity_alphatest"
+      },
+      "textures": {
+        "default": "textures/entity/ember"
+      },
+      "geometry": {
+        "default": "geometry.tp.ember"
+      },
+      "render_controllers": [
+        "controller.render.tp.sprite"
+      ]
+    }
+  }
+}

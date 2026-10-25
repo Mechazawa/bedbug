@@ -50,12 +50,23 @@ public sealed interface Filter {
 
     /**
      * Everything a test can be asked about: who is being tested, who is doing the testing, and the
-     * damage a damage sensor is deciding about, with how much of it there is before armour.
+     * damage a damage sensor is deciding about, with how much of it there is before armour, and the
+     * block a goal is asking about, which a test names as the subject `block`.
      */
     record Context(Entity self, Entity other, Entity target, AddonState state, DamageSource damage,
-        float amount) {
+        float amount, BlockPos block) {
         public Context(Entity self, Entity other, Entity target, AddonState state) {
             this(self, other, target, state, null, 0f);
+        }
+
+        public Context(Entity self, Entity other, Entity target, AddonState state, DamageSource damage,
+            float amount) {
+            this(self, other, target, state, damage, amount, null);
+        }
+
+        /** What `self` asks about one block, as a goal choosing where to walk does. */
+        public static Context aboutBlock(Entity self, AddonState state, BlockPos block) {
+            return new Context(self, null, null, state, null, 0f, block);
         }
 
         public Entity subject(String name) {
@@ -129,12 +140,23 @@ public sealed interface Filter {
             Entity entity = context.subject(subject);
             if (entity == null) return false;
 
-            Boolean outcome = evaluate(entity, context);
+            Boolean outcome = "block".equals(subject) && context.block() != null
+                ? answerForBlock(entity.level().getBlockState(context.block()))
+                : evaluate(entity, context);
             if (outcome == null) {
                 AddonEntities.unsupported("filter " + name);
                 return false;
             }
             return negated() != outcome;
+        }
+
+        /** The tests Mojang asks of a block subject, or null for one not implemented on a block. */
+        private Boolean answerForBlock(net.minecraft.world.level.block.state.BlockState state) {
+            return switch (name) {
+                case "is_block" -> AddonBlocks.identifierOf(state).equals(AddonBlocks.identifierOf(text()));
+                case "is_waterlogged" -> flag(waterlogged(state));
+                default -> null;
+            };
         }
 
         /** Null when the test is not implemented, which is different from a test that came out false. */
@@ -385,8 +407,10 @@ public sealed interface Filter {
 
         /** Whether the block the entity is standing in holds water as well as itself. */
         private static boolean waterlogged(Entity entity) {
-            net.minecraft.world.level.block.state.BlockState state =
-                entity.level().getBlockState(entity.blockPosition());
+            return waterlogged(entity.level().getBlockState(entity.blockPosition()));
+        }
+
+        private static boolean waterlogged(net.minecraft.world.level.block.state.BlockState state) {
             return state.hasProperty(net.minecraft.world.level.block.state.properties
                 .BlockStateProperties.WATERLOGGED)
                 && state.getValue(net.minecraft.world.level.block.state.properties

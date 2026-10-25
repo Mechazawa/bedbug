@@ -6,12 +6,15 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.PoiTypeTags;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.village.poi.PoiManager;
+import net.minecraft.world.entity.ai.village.poi.PoiRecord;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.EnumSet;
+import java.util.List;
 
 /**
- * `minecraft:behavior.stroll_towards_village`, which takes a Bedrock fox to the nearest village.
+ * `minecraft:behavior.stroll_towards_village`, which takes a Bedrock fox to the nearest village, and
+ * `minecraft:behavior.move_to_village`, which takes an illager to a place picked at random inside it.
  *
  * A village is where Java keeps its beds, job sites and bells, so the walk is to the nearest of
  * them inside `search_range`. Java holds those places for loaded chunks alone, so a range of nothing,
@@ -20,12 +23,20 @@ import java.util.EnumSet;
 public final class StrollTowardsVillageGoal extends Goal {
     private static final int UNBOUNDED = 128;
 
+    /**
+     * How far from the nearest of its places a village reaches. Bedrock sizes a village by the beds,
+     * bells and job sites it holds and publishes no figure, so this is how near another place has to
+     * be to count as the same village.
+     */
+    private static final int VILLAGE_REACH = 32;
+
     private final AddonEntity mob;
     private final double speed;
     private final double arrived;
     private final int range;
     private final int cooldown;
     private final double chance;
+    private boolean anywhereInside;
     private BlockPos village;
     private int readyAt;
 
@@ -41,6 +52,12 @@ public final class StrollTowardsVillageGoal extends Goal {
         setFlags(EnumSet.of(Goal.Flag.MOVE));
     }
 
+    public static StrollTowardsVillageGoal intoVillage(AddonEntity mob, JsonObject goal) {
+        StrollTowardsVillageGoal walk = new StrollTowardsVillageGoal(mob, goal);
+        walk.anywhereInside = true;
+        return walk;
+    }
+
     @Override
     public boolean canUse() {
         if (mob.tickCount < readyAt || mob.getRandom().nextDouble() >= chance) return false;
@@ -48,6 +65,11 @@ public final class StrollTowardsVillageGoal extends Goal {
 
         village = level.getPoiManager().findClosest(type -> type.is(PoiTypeTags.VILLAGE), mob.blockPosition(),
             range, PoiManager.Occupancy.ANY).orElse(null);
+        if (village != null && anywhereInside) {
+            List<BlockPos> places = level.getPoiManager().getInRange(type -> type.is(PoiTypeTags.VILLAGE), village,
+                VILLAGE_REACH, PoiManager.Occupancy.ANY).map(PoiRecord::getPos).toList();
+            village = places.get(mob.getRandom().nextInt(places.size()));
+        }
         return village != null && !reached();
     }
 

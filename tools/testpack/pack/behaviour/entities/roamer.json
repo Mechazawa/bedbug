@@ -1,0 +1,418 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:roamer",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false,
+      "properties": {
+        "tp:home_reached": {
+          "type": "bool",
+          "default": false
+        },
+        "tp:home_lost": {
+          "type": "bool",
+          "default": false
+        }
+      }
+    },
+    "component_groups": {
+      "tp:roamer_toward": {
+        "minecraft:behavior.move_towards_target": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "within_radius": 4
+        }
+      },
+      "tp:roamer_night_patrol": {
+        "minecraft:behavior.move_through_village": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "only_at_night": true
+        }
+      },
+      "tp:roamer_day_patrol": {
+        "minecraft:behavior.move_through_village": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "only_at_night": false
+        }
+      },
+      "tp:roamer_shy": {
+        "minecraft:behavior.find_cover": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "cooldown_time": 3
+        }
+      },
+      "tp:roamer_curled": {
+        "minecraft:behavior.pet_sleep_with_owner": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "search_range": 10,
+          "search_height": 2,
+          "goal_radius": 3
+        }
+      },
+      "tp:roamer_sampling": {
+        "minecraft:behavior.move_to_water": {
+          "priority": 0,
+          "search_range": 16,
+          "search_height": 8,
+          "search_count": 1,
+          "goal_radius": 0.5
+        }
+      },
+      "tp:roamer_scanning": {
+        "minecraft:behavior.move_to_water": {
+          "priority": 0,
+          "search_range": 16,
+          "search_height": 8,
+          "search_count": 0,
+          "goal_radius": 0.5
+        }
+      },
+      "tp:roamer_wading": {
+        "minecraft:behavior.move_to_liquid": {
+          "priority": 0,
+          "search_range": 8,
+          "search_height": 2,
+          "search_count": 0,
+          "goal_radius": 2.5,
+          "material_type": "Water"
+        }
+      },
+      "tp:roamer_choosy": {
+        "minecraft:behavior.move_to_block": {
+          "priority": 0,
+          "search_range": 8,
+          "search_height": 2,
+          "tick_interval": 1,
+          "goal_radius": 1,
+          "target_blocks": [
+            "minecraft:oak_slab"
+          ],
+          "target_block_filters": {
+            "test": "is_waterlogged",
+            "subject": "block",
+            "operator": "==",
+            "value": false
+          }
+        }
+      },
+      "tp:roamer_fickle": {
+        "minecraft:behavior.move_to_block": {
+          "priority": 0,
+          "search_range": 8,
+          "search_height": 2,
+          "tick_interval": 1,
+          "goal_radius": 1,
+          "target_selection_method": "random",
+          "target_blocks": [
+            "minecraft:gold_block"
+          ]
+        }
+      },
+      "tp:roamer_wandering": {
+        "minecraft:behavior.move_to_random_block": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "block_distance": 5,
+          "within_radius": 0
+        }
+      },
+      "tp:roamer_content": {
+        "minecraft:behavior.move_to_random_block": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "block_distance": 5,
+          "within_radius": 8
+        }
+      },
+      "tp:roamer_visiting": {
+        "minecraft:behavior.move_to_village": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "goal_radius": 4,
+          "cooldown_time": 0
+        }
+      },
+      "tp:roamer_homing": {
+        "minecraft:home": {},
+        "minecraft:behavior.go_home": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "interval": 1,
+          "goal_radius": 2,
+          "on_home": [
+            {
+              "event": "tp:roamer_got_home",
+              "target": "self"
+            }
+          ]
+        }
+      },
+      "tp:roamer_lost": {
+        "minecraft:home": {},
+        "minecraft:behavior.go_home": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "interval": 1,
+          "goal_radius": 0.5,
+          "on_failed": [
+            {
+              "event": "tp:roamer_gave_up",
+              "target": "self"
+            }
+          ]
+        }
+      },
+      "tp:roamer_homebody": {
+        "minecraft:home": {},
+        "minecraft:behavior.go_home": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "interval": 100000,
+          "goal_radius": 2
+        }
+      },
+      "tp:roamer_circling": {
+        "minecraft:behavior.move_around_target": {
+          "priority": 0,
+          "movement_speed": 1,
+          "destination_position_range": {
+            "min": 3,
+            "max": 5
+          },
+          "destination_pos_spread_degrees": 0,
+          "height_difference_limit": 2
+        }
+      },
+      "tp:roamer_level": {
+        "minecraft:behavior.move_around_target": {
+          "priority": 0,
+          "movement_speed": 1,
+          "destination_position_range": {
+            "min": 3,
+            "max": 5
+          },
+          "height_difference_limit": 0
+        }
+      },
+      "tp:roamer_herding": {
+        "minecraft:behavior.follow_mob": {
+          "priority": 0,
+          "search_range": 10,
+          "stop_distance": 1.5,
+          "preferred_actor_type": "cow"
+        }
+      },
+      "tp:roamer_homebound": {
+        "minecraft:home": {
+          "restriction_radius": 3,
+          "restriction_type": "random_movement"
+        },
+        "minecraft:behavior.follow_mob": {
+          "priority": 0,
+          "search_range": 10,
+          "stop_distance": 1.5
+        }
+      },
+      "tp:roamer_straying": {
+        "minecraft:home": {
+          "restriction_radius": 3,
+          "restriction_type": "random_movement"
+        },
+        "minecraft:behavior.follow_mob": {
+          "priority": 0,
+          "search_range": 10,
+          "stop_distance": 1.5,
+          "use_home_position_restriction": false
+        }
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": [
+          "tp_roamer",
+          "mob"
+        ]
+      },
+      "minecraft:collision_box": {
+        "width": 0.6,
+        "height": 1.0
+      },
+      "minecraft:health": {
+        "value": 100,
+        "max": 100
+      },
+      "minecraft:movement": {
+        "value": 0.25
+      },
+      "minecraft:physics": {},
+      "minecraft:movement.basic": {},
+      "minecraft:navigation.walk": {},
+      "minecraft:jump.static": {}
+    },
+    "events": {
+      "tp:roamer_toward": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_toward"
+          ]
+        }
+      },
+      "tp:roamer_night_patrol": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_night_patrol"
+          ]
+        }
+      },
+      "tp:roamer_day_patrol": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_day_patrol"
+          ]
+        }
+      },
+      "tp:roamer_shy": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_shy"
+          ]
+        }
+      },
+      "tp:roamer_curled": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_curled"
+          ]
+        }
+      },
+      "tp:roamer_sampling": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_sampling"
+          ]
+        }
+      },
+      "tp:roamer_scanning": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_scanning"
+          ]
+        }
+      },
+      "tp:roamer_wading": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_wading"
+          ]
+        }
+      },
+      "tp:roamer_choosy": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_choosy"
+          ]
+        }
+      },
+      "tp:roamer_fickle": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_fickle"
+          ]
+        }
+      },
+      "tp:roamer_wandering": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_wandering"
+          ]
+        }
+      },
+      "tp:roamer_content": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_content"
+          ]
+        }
+      },
+      "tp:roamer_visiting": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_visiting"
+          ]
+        }
+      },
+      "tp:roamer_homing": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_homing"
+          ]
+        }
+      },
+      "tp:roamer_lost": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_lost"
+          ]
+        }
+      },
+      "tp:roamer_homebody": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_homebody"
+          ]
+        }
+      },
+      "tp:roamer_circling": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_circling"
+          ]
+        }
+      },
+      "tp:roamer_level": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_level"
+          ]
+        }
+      },
+      "tp:roamer_herding": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_herding"
+          ]
+        }
+      },
+      "tp:roamer_homebound": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_homebound"
+          ]
+        }
+      },
+      "tp:roamer_straying": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_straying"
+          ]
+        }
+      },
+      "tp:roamer_got_home": {
+        "set_property": {
+          "tp:home_reached": true
+        }
+      },
+      "tp:roamer_gave_up": {
+        "set_property": {
+          "tp:home_lost": true
+        }
+      }
+    }
+  }
+}
