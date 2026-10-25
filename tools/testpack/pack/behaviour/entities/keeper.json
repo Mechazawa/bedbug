@@ -201,6 +201,28 @@
             "target": "self"
           }
         }
+      },
+      "tp:keeper_giving": {
+        "minecraft:behavior.go_and_give_items_to_owner": {
+          "priority": 0,
+          "throw_sound": "item_thrown"
+        }
+      },
+      "tp:keeper_delivering": {
+        "minecraft:behavior.go_and_give_items_to_noteblock": {
+          "priority": 0,
+          "run_speed": 2.5,
+          "throw_sound": "item_thrown"
+        }
+      },
+      "tp:keeper_working_aloud": {
+        "minecraft:behavior.work": {
+          "priority": 0,
+          "active_time": 100,
+          "can_work_in_rain": true,
+          "sound_delay_min": 8,
+          "sound_delay_max": 12
+        }
       }
     },
     "components": {
@@ -322,6 +344,27 @@
       "tp:keeper_arrived": {
         "set_property": {
           "tp:arrived": true
+        }
+      },
+      "tp:keeper_make_giving": {
+        "add": {
+          "component_groups": [
+            "tp:keeper_giving"
+          ]
+        }
+      },
+      "tp:keeper_make_delivering": {
+        "add": {
+          "component_groups": [
+            "tp:keeper_delivering"
+          ]
+        }
+      },
+      "tp:keeper_make_working_aloud": {
+        "add": {
+          "component_groups": [
+            "tp:keeper_working_aloud"
+          ]
         }
       }
     }

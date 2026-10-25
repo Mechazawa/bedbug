@@ -4,16 +4,37 @@ import at.ioexception.mcaddon.entity.AddonEntity;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.ServerHooks;
+import com.mojang.authlib.GameProfile;
+import io.netty.channel.embedded.EmbeddedChannel;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.Connection;
+import net.minecraft.network.protocol.PacketFlow;
+import net.minecraft.network.protocol.game.ClientboundSoundPacket;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ClientInformation;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.network.CommonListenerCookie;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.RotatedPillarBlock;
 import net.minecraft.world.level.block.SculkSensorBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SculkSensorPhase;
+import net.minecraft.world.phys.Vec3;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * The goals that carry and place blocks, lay eggs, work at a station and hand items over, each read
@@ -258,6 +279,151 @@ public final class KeeperGoalGameTests {
             .thenWaitUntil(() -> helper.assertTrue(Boolean.TRUE.equals(keeper.value("tp:arrived")),
                 KEEPER + " never came back to work after its goal cooldown."))
             .thenSucceed();
+    }
+
+    /**
+     * `sound_delay_min` and `sound_delay_max` space the sounds a worker makes at its station, which
+     * at a lectern are the sounds of Java's librarian at work.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200)
+    public void aWorkerMakesItsWorkSoundAtTheIntervalItStates(GameTestHelper helper) {
+        helper.setBlock(STAND.east(), Blocks.LECTERN);
+        Listener listener = Listener.join(helper, STAND.west(2));
+        AddonEntity keeper = keeper(helper, "tp:keeper_make_working_aloud");
+        if (keeper == null) {
+            listener.leave();
+            helper.succeed();
+            return;
+        }
+
+        helper.succeedWhen(() -> {
+            List<Long> heard = listener.heard("minecraft:entity.villager.work_librarian", keeper);
+            helper.assertTrue(heard.size() >= WORK_SOUNDS,
+                KEEPER + " works for 100 ticks with a sound every 8 to 12 and made " + heard.size() + ".");
+            for (int i = 1; i < heard.size(); i++) {
+                long gap = heard.get(i) - heard.get(i - 1);
+                helper.assertTrue(gap >= 8 && gap <= 12,
+                    KEEPER + " makes its work sound every 8 to 12 ticks and left " + gap + " between two.");
+            }
+            listener.leave();
+        });
+    }
+
+    /** The sounds a 100 tick shift with a sound every 8 to 12 ticks makes at the least. */
+    private static final int WORK_SOUNDS = 7;
+
+    /** `minecraft:behavior.go_and_give_items_to_owner` makes its `throw_sound` as it throws. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 100)
+    public void anEntityGivingItsOwnerAnItemMakesItsThrowSound(GameTestHelper helper) {
+        Listener owner = Listener.join(helper, STAND.west(2));
+        AddonEntity keeper = keeper(helper, "tp:keeper_make_giving");
+        if (keeper == null) {
+            owner.leave();
+            helper.succeed();
+            return;
+        }
+
+        keeper.setOwner(owner.player);
+        keeper.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.APPLE));
+        thrownAloud(helper, keeper, owner);
+    }
+
+    /** `minecraft:behavior.go_and_give_items_to_noteblock` makes its `throw_sound` as it throws. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 100)
+    public void anEntityGivingANoteBlockAnItemMakesItsThrowSound(GameTestHelper helper) {
+        helper.setBlock(STAND.east(2), Blocks.NOTE_BLOCK);
+        Listener listener = Listener.join(helper, STAND.west(2));
+        AddonEntity keeper = keeper(helper, "tp:keeper_make_delivering");
+        if (keeper == null) {
+            listener.leave();
+            helper.succeed();
+            return;
+        }
+
+        keeper.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.APPLE));
+        thrownAloud(helper, keeper, listener);
+    }
+
+    private static void thrownAloud(GameTestHelper helper, AddonEntity keeper, Listener listener) {
+        helper.succeedWhen(() -> {
+            helper.assertTrue(keeper.getMainHandItem().isEmpty(), KEEPER + " still holds its apple.");
+            helper.assertFalse(listener.heard("tp:keeper.thrown", keeper).isEmpty(),
+                KEEPER + " threw its apple without its item_thrown sound.");
+            listener.leave();
+        });
+    }
+
+    /** `minecraft:behavior.go_and_give_items_to_noteblock` runs to the note block at its `run_speed`. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 100)
+    public void anEntityRunsToANoteBlockAtItsRunSpeed(GameTestHelper helper) {
+        helper.setBlock(STAND.east(8), Blocks.NOTE_BLOCK);
+        AddonEntity keeper = keeper(helper, "tp:keeper_make_delivering");
+        if (keeper == null) {
+            helper.succeed();
+            return;
+        }
+
+        keeper.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.APPLE));
+        helper.succeedWhen(() -> {
+            helper.assertTrue(keeper.runningGoals().stream().anyMatch(goal -> goal.startsWith("NoteblockGoal")),
+                KEEPER + " never set off for the note block.");
+            helper.assertTrue(keeper.getMoveControl().getSpeedModifier() == RUN_SPEED,
+                KEEPER + " runs to the note block at " + RUN_SPEED + " and runs at "
+                    + keeper.getMoveControl().getSpeedModifier() + ".");
+        });
+    }
+
+    private static final double RUN_SPEED = 2.5;
+
+    /**
+     * A player with no client, joined through a connection whose far end is a queue, which hears
+     * every sound the server sends near it.
+     */
+    private record Listener(ServerPlayer player, EmbeddedChannel channel, Map<String, List<Heard>> sounds) {
+        static Listener join(GameTestHelper helper, BlockPos at) {
+            MinecraftServer server = helper.getLevel().getServer();
+            GameProfile profile = new GameProfile(UUID.randomUUID(), "Listener");
+            ServerPlayer player = new ServerPlayer(server, helper.getLevel(), profile, ClientInformation.createDefault());
+            Connection connection = new Connection(PacketFlow.SERVERBOUND);
+            EmbeddedChannel channel = new EmbeddedChannel(connection);
+            server.getPlayerList().placeNewPlayer(connection, player, CommonListenerCookie.createInitial(profile, false));
+            BlockPos spot = helper.absolutePos(at);
+            Platform.placeAt(player, spot.getX() + 0.5, spot.getY(), spot.getZ() + 0.5, 0f, 0f);
+            player.setGameMode(GameType.SPECTATOR);
+            Listener listener = new Listener(player, channel, new HashMap<>());
+            helper.onEachTick(() -> listener.drain(helper.getLevel().getGameTime()));
+            return listener;
+        }
+
+        private static final double NEAR = 2;
+
+        private record Heard(long when, Vec3 at) {
+        }
+
+        /**
+         * The game times at which the server sent this player a sound made by the entity, oldest
+         * first. Tests run side by side, so a sound from further off is another test's.
+         */
+        List<Long> heard(String sound, Entity maker) {
+            return sounds.getOrDefault(sound, List.of()).stream()
+                .filter(heard -> heard.at.distanceTo(maker.position()) < NEAR)
+                .map(Heard::when)
+                .toList();
+        }
+
+        void leave() {
+            player.level().getServer().getPlayerList().remove(player);
+        }
+
+        private void drain(long now) {
+            Object packet;
+            while ((packet = channel.readOutbound()) != null) {
+                if (packet instanceof ClientboundSoundPacket sound) {
+                    sounds.computeIfAbsent(sound.getSound().value().location().toString(), key -> new ArrayList<>())
+                        .add(new Heard(now, new Vec3(sound.getX(), sound.getY(), sound.getZ())));
+                }
+            }
+        }
     }
 
     private static AddonEntity keeper(GameTestHelper helper, String event) {

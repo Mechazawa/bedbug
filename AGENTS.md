@@ -2800,6 +2800,15 @@ recipe lookup goes through) by them, so only recipes that already match are reor
   alongside the goal's own wait between station searches. The rain tests run in the mod's own
   `mcaddon:gametest/clear_sky` test environment, which puts them in a batch of their own, so the
   rain they set reaches no other test.
+- A worker makes the work sound of Java's villager whose profession takes the station as its job
+  site, every `sound_delay_min` to `sound_delay_max` ticks while it stands at the station. Mojang's
+  villager files name no work sound, so this sound is decided here, and a `sound_delay_max` of
+  nothing, the default, makes none.
+- `throw_sound` on the two giving goals is a moment of the entity's `sounds.json` entry, `charge`
+  where the pack names none, made as the item leaves the entity's hand.
+- The sound tests hear through a player of their own, joined over a connection whose far end is a
+  queue, and count only the sounds made within two blocks of their keeper, because the tests of a
+  batch stand side by side.
 
 ## Releasing
 
