@@ -1,7 +1,9 @@
 package at.ioexception.mcaddon.entity;
 
+import at.ioexception.mcaddon.bedrock.behaviour.Filter;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonBlocks;
+import at.ioexception.mcaddon.server.ServerHooks;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -19,6 +21,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -46,6 +49,16 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
     private final double radius;
     private boolean reached;
 
+    /** How far round and how far above and below the entity a search looks. */
+    private final int range;
+    private final int height;
+
+    /** Whether the search takes any matching block in range rather than the nearest. */
+    private boolean anyInRange;
+
+    /** What a block has to pass besides being one of the blocks looked for, asked of the block itself. */
+    private Filter blockFilter;
+
     /** Bedrock's own timing and arrival, which only `minecraft:behavior.move_to_block` states. */
     private Visit visit;
     private boolean announced;
@@ -66,6 +79,8 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
         Pose settled) {
         super(mob, speed(component), range(component), height(component));
         this.radius = number(component, "goal_radius", 0.5);
+        this.range = range(component);
+        this.height = height(component);
         this.wanted = wanted;
         this.arrival = arrival;
         this.flag = flag;
@@ -102,6 +117,8 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
         MoveToMatchingBlockGoal goal =
             new MoveToMatchingBlockGoal(mob, component, among(component, "target_blocks"), null);
         goal.visit = Visit.of(component);
+        goal.anyInRange = "random".equals(Json.text(component, "target_selection_method", "nearest"));
+        goal.blockFilter = Goals.filter(component, "target_block_filters");
         return goal;
     }
 
@@ -120,6 +137,23 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
     @Override
     protected int nextStartTick(PathfinderMob mob) {
         return visit == null ? super.nextStartTick(mob) : reducedTickDelay(Math.max(1, visit.interval()));
+    }
+
+    /** With `target_selection_method` `random`, any matching block in range rather than the nearest. */
+    @Override
+    protected boolean findNearestBlock() {
+        if (!anyInRange) return super.findNearestBlock();
+
+        BlockPos from = mob.blockPosition();
+        List<BlockPos> found = new ArrayList<>();
+        for (BlockPos at : BlockPos.betweenClosed(from.offset(-range, -height, -range),
+            from.offset(range, height, range))) {
+            if (Platform.withinHome(mob, at) && isValidTarget(mob.level(), at)) found.add(at.immutable());
+        }
+        if (found.isEmpty()) return false;
+
+        blockPos = found.get(mob.getRandom().nextInt(found.size()));
+        return true;
     }
 
     @Override
@@ -274,7 +308,8 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
 
     @Override
     protected boolean isValidTarget(LevelReader level, BlockPos at) {
-        return wanted.test(level.getBlockState(at));
+        return wanted.test(level.getBlockState(at)) && (blockFilter == null
+            || blockFilter.matches(Filter.Context.aboutBlock(mob, ServerHooks.state(), at.immutable())));
     }
 
     /** A crop that bone meal would no longer change is one that has finished growing. */
