@@ -2803,7 +2803,10 @@ does. Java's walk stops one block over the block it found, which for a crop is o
 radius. Java searches from `blockPosition()`, which on farmland is the farmland, so `tp:digger`'s raid
 groups state a `search_height` of 2 to see a crop at the feet.
 
-`DigGoalGameTests` covers both with `tp:digger`, on a floor at height 12 that no other block
+`minecraft:behavior.inspect_bookshelf` looks at `search_count` places a tick (every place when 0) in
+the order Java's `MoveToBlockGoal` tries them, and carries on from where it stopped on the next tick.
+
+`DigGoalGameTests` covers all three with `tp:digger`, on a floor at height 12 that no other block
 searching test reaches.
 
 ## Releasing

@@ -253,6 +253,16 @@
           "eat_delay": 0,
           "max_to_eat": 0
         }
+      },
+      "tp:digger_reading": {
+        "minecraft:behavior.inspect_bookshelf": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "search_range": 4,
+          "search_height": 1,
+          "search_count": 1,
+          "goal_radius": 0.8
+        }
       }
     },
     "components": {
@@ -332,6 +342,13 @@
         "add": {
           "component_groups": [
             "tp:digger_raiding_far"
+          ]
+        }
+      },
+      "tp:digger_make_reading": {
+        "add": {
+          "component_groups": [
+            "tp:digger_reading"
           ]
         }
       },

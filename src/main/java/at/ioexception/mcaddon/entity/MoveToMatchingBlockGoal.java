@@ -54,6 +54,9 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
     /** The bites `minecraft:behavior.raid_garden` counts and waits between. */
     private Raid raid;
 
+    /** The search `minecraft:behavior.inspect_bookshelf` spreads over ticks by its `search_count`. */
+    private Scan scan;
+
     private MoveToMatchingBlockGoal(PathfinderMob mob, JsonObject component,
         Predicate<BlockState> wanted, BiConsumer<ServerLevel, BlockPos> arrival) {
         this(mob, component, wanted, arrival, null, null);
@@ -131,6 +134,7 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
     @Override
     public boolean canUse() {
         if (raid != null && !raid.ready(mob.level().getGameTime())) return false;
+        if (scan != null) return scan.found();
 
         return super.canUse() && (visit == null || mob.getRandom().nextDouble() < visit.chance());
     }
@@ -172,11 +176,19 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
         return new MoveToMatchingBlockGoal(mob, component, state -> !state.isAir(), null);
     }
 
-    /** `minecraft:behavior.inspect_bookshelf`, which is a walk over to a shelf and a look at it. */
+    /**
+     * `minecraft:behavior.inspect_bookshelf`, which is a walk over to a shelf and a look at it.
+     *
+     * It looks at `search_count` places a tick, every place in range when that is 0, in the order
+     * Java's own search tries them, and carries on from where it stopped.
+     */
     public static MoveToMatchingBlockGoal bookshelf(PathfinderMob mob, JsonObject component) {
-        return new MoveToMatchingBlockGoal(mob, component,
+        MoveToMatchingBlockGoal goal = new MoveToMatchingBlockGoal(mob, component,
             state -> state.is(net.minecraft.world.level.block.Blocks.BOOKSHELF)
                 || state.is(net.minecraft.world.level.block.Blocks.CHISELED_BOOKSHELF), null);
+        goal.scan = goal.new Scan((int) number(component, "search_count", 10),
+            order(range(component), height(component), goal.verticalSearchStart));
+        return goal;
     }
 
     /**
@@ -232,6 +244,52 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
         void left() {
             arrivedAt = -1;
         }
+    }
+
+    private final class Scan {
+        private final int perTick;
+        private final List<Vec3i> order;
+        private int cursor;
+        private long scannedAt = -1;
+
+        Scan(int perTick, List<Vec3i> order) {
+            this.perTick = perTick;
+            this.order = order;
+        }
+
+        /** Looks on from the cursor for as many places as the ticks since the last look allow. */
+        boolean found() {
+            long now = mob.level().getGameTime();
+            long ticks = scannedAt < 0 ? 1 : Math.max(1, now - scannedAt);
+            scannedAt = now;
+            long looks = perTick <= 0 ? order.size() : Math.min(order.size(), perTick * ticks);
+            BlockPos from = mob.blockPosition();
+            for (long i = 0; i < looks; i++) {
+                BlockPos at = from.offset(order.get(cursor));
+                cursor = (cursor + 1) % order.size();
+                if (Platform.withinHome(mob, at) && isValidTarget(mob.level(), at)) {
+                    blockPos = at;
+                    cursor = 0;
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
+    /** Rings outwards from the feet, nearest first, at each height in the order Java's goal tries them. */
+    private static List<Vec3i> order(int range, int height, int start) {
+        List<Vec3i> order = new java.util.ArrayList<>();
+        for (int dy = start; dy <= height; dy = dy > 0 ? -dy : 1 - dy) {
+            for (int ring = 0; ring < range; ring++) {
+                for (int dx = 0; dx <= ring; dx = dx > 0 ? -dx : 1 - dx) {
+                    for (int dz = dx < ring && dx > -ring ? ring : 0; dz <= ring; dz = dz > 0 ? -dz : 1 - dz) {
+                        order.add(new Vec3i(dx, dy - 1, dz));
+                    }
+                }
+            }
+        }
+        return order.isEmpty() ? List.of(Vec3i.ZERO) : order;
     }
 
     /**

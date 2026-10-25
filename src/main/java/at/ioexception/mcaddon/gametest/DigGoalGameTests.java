@@ -337,6 +337,35 @@ public final class DigGoalGameTests {
             DIGGER + " counts three blocks as there and never ate the carrot two blocks off."));
     }
 
+    /**
+     * A shelf search looks at `search_count` places a tick. The reading group looks at one, so a shelf
+     * in the floor three rings out, past the first 25 places Java's order tries, is not found for 25
+     * ticks; a search of every place at once walks to it at once.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 160)
+    public void aShelfSearchLooksAtItsSearchCountOfPlacesATick(GameTestHelper helper) {
+        floor(helper, Blocks.STONE);
+        BlockPos shelf = new BlockPos(1, FLOOR, 1);
+        helper.setBlock(shelf, Blocks.BOOKSHELF);
+        AddonEntity reader = digger(helper, "tp:digger_make_reading", new BlockPos(4, STAND_Y, 4));
+        if (reader == null) {
+            helper.succeed();
+            return;
+        }
+
+        Vec3 start = reader.position();
+        helper.runAfterDelay(STILL_SEARCHING, () -> helper.assertTrue(
+            reader.position().distanceTo(start) < 0.2,
+            DIGGER + " looks at one place a tick and set off for a shelf 25 places away within "
+                + STILL_SEARCHING + " ticks."));
+        Vec3 over = Vec3.atBottomCenterOf(helper.absolutePos(shelf.above()));
+        helper.succeedWhen(() -> helper.assertTrue(
+            Math.hypot(reader.getX() - over.x, reader.getZ() - over.z) < 1,
+            DIGGER + " has not reached the shelf."));
+    }
+
+    private static final int STILL_SEARCHING = 18;
+
     private static void floor(GameTestHelper helper, Block block) {
         BlockPos.betweenClosed(new BlockPos(0, FLOOR, 0), new BlockPos(7, FLOOR, 7))
             .forEach(at -> helper.setBlock(at, block));
