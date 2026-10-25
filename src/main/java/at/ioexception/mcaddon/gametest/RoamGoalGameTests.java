@@ -344,6 +344,35 @@ public final class RoamGoalGameTests {
     /** The group's five blocks and the block and a half a walk may end beyond its spot. */
     private static final double WANDER_REACH = 6.5;
 
+    /**
+     * `minecraft:behavior.move_to_village` walks into the village and counts as there within its
+     * `goal_radius`, four blocks here, so it stops well short of the bell the village is made of.
+     */
+    @GameTest(structure = EMPTY, maxTicks = WALK_TICKS)
+    public void aWalkIntoAVillageEndsWithinItsGoalRadius(GameTestHelper helper) {
+        floor(helper);
+        BlockPos bell = new BlockPos(7, 1, 7);
+        helper.setBlock(bell, Blocks.BELL);
+        AddonEntity roamer = roamer(helper, "tp:roamer_visiting", new BlockPos(0, 1, 0));
+        if (roamer == null) {
+            helper.succeed();
+            return;
+        }
+
+        Vec3 place = Vec3.atBottomCenterOf(helper.absolutePos(bell));
+        double[] nearest = {Double.MAX_VALUE};
+        helper.onEachTick(() -> nearest[0] = Math.min(nearest[0], roamer.position().distanceTo(place)));
+        helper.runAfterDelay(WALK_TICKS - 10, () -> {
+            helper.assertTrue(nearest[0] <= VILLAGE_RADIUS + 0.5,
+                ROAMER + " walks into the village and came no nearer its bell than " + nearest[0] + ".");
+            helper.assertTrue(nearest[0] > VILLAGE_RADIUS - 1,
+                ROAMER + " counts four blocks from the bell as there and walked on to " + nearest[0] + ".");
+            helper.succeed();
+        });
+    }
+
+    private static final double VILLAGE_RADIUS = 4;
+
     /** A roamer with one group on and its goals running. */
     private static AddonEntity roamer(GameTestHelper helper, String event, BlockPos where) {
         AddonEntity roamer = BehaviourGameTests.spawn(helper, ROAMER, where);

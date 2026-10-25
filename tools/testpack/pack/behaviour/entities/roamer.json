@@ -119,6 +119,14 @@
           "block_distance": 5,
           "within_radius": 8
         }
+      },
+      "tp:roamer_visiting": {
+        "minecraft:behavior.move_to_village": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "goal_radius": 4,
+          "cooldown_time": 0
+        }
       }
     },
     "components": {
@@ -226,6 +234,13 @@
         "add": {
           "component_groups": [
             "tp:roamer_content"
+          ]
+        }
+      },
+      "tp:roamer_visiting": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_visiting"
           ]
         }
       }

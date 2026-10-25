@@ -23,7 +23,6 @@ import net.minecraft.world.entity.ai.goal.BreathAirGoal;
 import net.minecraft.world.entity.ai.goal.FleeSunGoal;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.ai.goal.FollowMobGoal;
-import net.minecraft.world.entity.ai.goal.MoveBackToVillageGoal;
 import net.minecraft.world.entity.ai.goal.MoveTowardsRestrictionGoal;
 import net.minecraft.world.entity.ai.goal.MoveTowardsTargetGoal;
 import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
@@ -3193,7 +3192,7 @@ public class AddonEntity extends PathfinderMob
                 goals.add(priority, new MoveTowardsRestrictionGoal(this, speed));
 
             case "minecraft:behavior.move_to_village" ->
-                goals.add(priority, new MoveBackToVillageGoal(this, 0.6, false));
+                goals.add(priority, StrollTowardsVillageGoal.intoVillage(this, goal));
             case "minecraft:behavior.move_through_village" -> goals.add(priority, new VillagePatrolGoal(this, goal));
             case "minecraft:behavior.mingle" ->
                 goals.add(priority, new StrollThroughVillageGoal(this, 60));
