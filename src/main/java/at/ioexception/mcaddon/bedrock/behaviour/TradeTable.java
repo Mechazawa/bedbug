@@ -332,14 +332,8 @@ public record TradeTable(List<Offer> offers, List<Integer> tierExperience, Borro
         List<Offer> offers = new ArrayList<>();
         List<Integer> required = new ArrayList<>();
 
-        // The stamp says which dialect the table is written in. Every published one writes the same
-        // tiers, groups and trades this reads, so a table carrying one is read the same way whatever
-        // it claims, and the version it claims is named rather than acted on.
-        if (root.has("format_version")) {
-            AddonEntities.unsupported("trade table format_version "
-                + Json.text(root, "format_version", ""));
-        }
-
+        // Mojang's tables are stamped 1.18.10, 1.21.30 and 1.26.10 and every one writes the same tiers,
+        // groups and trades, so `format_version` selects nothing.
         for (JsonElement element : Json.list(root, "tiers")) {
             if (!element.isJsonObject()) continue;
 

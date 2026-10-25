@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.bedrock.behaviour;
 
+import at.ioexception.mcaddon.registry.AddonEntities;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.Bootstrap;
 import org.junit.jupiter.api.BeforeAll;
@@ -99,6 +100,17 @@ class TradeTableTest {
         assertEquals(5, economy.tiers());
         assertEquals(2, economy.reached(10));
         assertEquals(3, economy.reached(149));
+    }
+
+    @Test
+    void readsAnyFormatVersionAlikeAndReportsNone() throws IOException {
+        TradeTable table = read("""
+            {"format_version": "1.21.30", "tiers": [{"total_exp_required": 0, "trades": [
+              {"wants": [{"item": "minecraft:emerald"}], "gives": [{"item": "probe:token"}]}]}]}
+            """);
+
+        assertEquals(1, table.offers().size());
+        assertTrue(AddonEntities.report().stream().noneMatch(line -> line.contains("format_version")));
     }
 
     private TradeTable read(String table) throws IOException {

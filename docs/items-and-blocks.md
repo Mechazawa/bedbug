@@ -156,7 +156,6 @@ colours. Forty families are mapped. This works for `set_data`, `random_aux_value
 - `recipe_material_reduction` (Education Edition material reducer).
 - A smithing trim works only with a template named `<pattern>_armor_trim_smithing_template`, so only
   Java's existing patterns apply. Other templates are reported.
-- A trade table's `format_version` is reported and changes nothing.
 - `enchant_book_for_trading` in a loot table: the book is enchanted and the four cost fields are
   reported.
 - `minecraft:support` stair shape, `minecraft:connection_rule` `only_fences` and
