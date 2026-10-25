@@ -2810,6 +2810,38 @@ recipe lookup goes through) by them, so only recipes that already match are reor
   queue, and count only the sounds made within two blocks of their keeper, because the tests of a
   batch stand side by side.
 
+## Searching, digging and garden raids
+
+`minecraft:behavior.random_search_and_dig` is `entity/SearchAndDigGoal`. Mojang publishes the
+fields and one-line descriptions. The rest is decided here:
+
+- A spot is a place to stand whose ground is a target block, with no collision where the entity
+  stands and a path that reaches it. It is drawn up to `find_valid_position_retries` times per look,
+  within `search_range_xz` blocks either way and `search_range_y` up or down. Java's sniffer searches
+  with `LandRandomPos.getPos(sniffer, 10, 7)`, the same numbers as Bedrock's defaults, so the ranges
+  are read the way Java reads those.
+- `on_searching_start` is raised when a spot is found and the walk begins. Arrival within
+  `goal_radius` starts the dig and raises `on_digging_start`. The item is rolled
+  `spawn_item_after_seconds` into the dig (no later than its end) and dropped `spawn_item_pos_offset`
+  blocks ahead along the body's yaw. `on_item_found` is raised only when the table handed out an item.
+- The search fails when the spot's ground stops being a target block or the path is lost. The dig
+  fails when its ground stops being a target block. Either also fails when another goal takes over.
+  `cooldown_range` starts when the goal ends, whatever the outcome.
+- `target_dig_position_offset` is not read: the spot itself is dug.
+
+`minecraft:behavior.raid_garden` eats one crop per visit, `initial_eat_delay` seconds after
+arriving. It looks for the next crop `eat_delay` seconds later. After `max_to_eat` crops (no limit
+when 0 or less) it waits `full_delay` seconds. It walks into the crop's own block, as Bedrock's rabbit
+does. Java's walk stops one block over the block it found, which for a crop is out of the goal
+radius. Java searches from `blockPosition()`, which on farmland is the farmland, so `tp:digger`'s raid
+groups state a `search_height` of 2 to see a crop at the feet.
+
+`minecraft:behavior.inspect_bookshelf` looks at `search_count` places a tick (every place when 0) in
+the order Java's `MoveToBlockGoal` tries them, and carries on from where it stopped on the next tick.
+
+`DigGoalGameTests` covers all three with `tp:digger`, on a floor at height 12 that no other block
+searching test reaches.
+
 ## Releasing
 
 A pushed `v*` tag runs `.github/workflows/release.yml`, which builds the jars, makes the GitHub release and then runs `tools/release/modrinth.py` to publish each jar to Modrinth.

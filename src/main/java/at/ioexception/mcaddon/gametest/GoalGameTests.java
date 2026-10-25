@@ -2749,25 +2749,6 @@ public final class GoalGameTests {
     }
 
     /**
-     * A walk to a block counts as there within the `goal_radius` its pack states. The digging group
-     * says three, so a brute held two blocks from the gold it digs for digs it where it stands.
-     */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = GOAL_TICKS)
-    public void aWalkToABlockArrivesWithinItsGoalRadius(GameTestHelper helper) {
-        raisedFloor(helper);
-        BlockPos gold = new BlockPos(3, RAISED, 1);
-        helper.setBlock(gold, Blocks.GOLD_BLOCK);
-        AddonEntity brute = heldInPlace(helper, "tp:brute_dig", new BlockPos(1, RAISED + 1, 1));
-        if (brute == null) {
-            helper.succeed();
-            return;
-        }
-
-        helper.succeedWhen(() -> helper.assertTrue(helper.getBlockState(gold).isAir(),
-            BRUTE + " counts three blocks as there and never dug the gold two blocks off."));
-    }
-
-    /**
      * Height of a stone floor built above the structure. Java's block search looks at every height
      * within its range, and the structures of neighbouring tests can stand right beside this one, so
      * a search test keeps its blocks out of reach of theirs.
