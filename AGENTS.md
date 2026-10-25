@@ -2337,7 +2337,13 @@ the member names and nothing on how the matrix is composed, so `.t` is the pivot
 translation column of a pivot-about matrix; Villager News reads it as a place in the model, dividing
 by sixteen and turning it by the body's yaw. A bone the geometry lacks, and every bone on a server,
 answers the identity, as documented. `bone_orientation_matrix` stays reported: no member names for
-the matrix are published. `AnimationClientGameTest.orientation` reads `tp:gaze`'s `v.head_pose` and
+the matrix are published. Searched for them: `metadata/doc_modules/molang.json`,
+`metadata/molang_modules/mojang-molang-queries.json` (return type `matrix`, the type `bone_aabb` and
+`bone_origin` also carry) and `documentation/Molang.html` in bedrock-samples; the query's page, its
+form in `MicrosoftDocs/minecraft-creator` and `Mojang/bedrock-schemas`, the 1.20.60 changelog and
+the Molang syntax guide on learn.microsoft.com; the Bedrock wiki's Molang pages; and a GitHub code
+search for the name, whose only other implementation leaves it out too. Each gives the description
+and nothing on the members. `AnimationClientGameTest.orientation` reads `tp:gaze`'s `v.head_pose` and
 `BoneOrientationTest` the frame arithmetic.
 
 **`queryable_geometry`** names the `geometry` key every bone query answers from
