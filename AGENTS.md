@@ -2792,6 +2792,14 @@ recipe lookup goes through) by them, so only recipes that already match are reor
   and sound and the entity raises `ENTITY_ACTION`, which a sculk sensor hears. With
   `allow_laying_from_below` the entity also counts as arrived within the goal radius of the target
   block's middle, and walks to the target block itself where the spot above it cannot be reached.
+- `minecraft:behavior.work` and `work_composter` count `active_time` and `goal_cooldown` in ticks,
+  as Mojang's schema says (the villager's 250 is a twelve second shift). A shift of no ticks still
+  arrives and raises `on_arrival`. Rain counts where it falls on the station. A worker that may not
+  work in rain does not start while it falls there, and stops once it does unless no more of its
+  shift is left than `work_in_rain_tolerance`. The cooldown starts as the goal stops and runs
+  alongside the goal's own wait between station searches. The rain tests run in the mod's own
+  `mcaddon:gametest/clear_sky` test environment, which puts them in a batch of their own, so the
+  rain they set reaches no other test.
 
 ## Releasing
 
