@@ -2276,12 +2276,19 @@ Mojang's geometry is not committed, so that list is the one place this knowledge
 
 **A trade table path naming one of Mojang's own tables, which no pack ships, borrows Java's offers.**
 `TradeTable.read` maps `trading/economy_trades/wandering_trader_trades.json` to the wandering trader
-and `AddonEntity.getOffers` copies the offers a Java mob of that type makes for itself, so no Mojang
-data is committed. Other vanilla tables (villager professions) are still read as empty. A trader's
+and every profession table, under `trading/economy_trades/` and the older `trading/`, to Java's
+villager of that profession (`TradeTable.PROFESSIONS`: `stone_mason` is Java's `mason`,
+`leather_worker` its `leatherworker`, `tool_smith` and `weapon_smith` its `toolsmith` and
+`weaponsmith`). `TradeTable.Borrowed.offers` makes a Java mob at one level and copies what it offers,
+so no Mojang data is committed. Such a table has Java's five levels as its tiers, at 0, 10, 70, 150
+and 250 experience, which is what Bedrock's economy tables state. The older tables count their tiers 0 to 4 or state
+nothing, and Mojang documents no experience for them, so they take the same five. `AddonEntity.lendTiers` adds a level's
+offers as the trader reaches it and keeps those already on the counter. A trader's
 offers with their uses, trade experience, spent `single_use` keys and inventory are filed in
 `AddonState.trading` under its uuid by `AddonEntity.saveTrading` and read back by `restoreTrading`
 from `restoreGroups`. `minecraft:spawn_entity` `should_leash` leashes the spawned mob to the producer.
-`tp:hawker` in the test pack names the vanilla path; `BehaviourGameTests` covers all three.
+`tp:hawker` in the test pack names the wandering trader's path, and its `tp:hawker_mason` group the
+mason's; `BehaviourGameTests` covers them.
 
 ## JSON UI
 

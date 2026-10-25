@@ -1,5 +1,8 @@
 package at.ioexception.mcaddon.bedrock.behaviour;
 
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -19,6 +22,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TradeTableTest {
     @TempDir
     Path root;
+
+    @BeforeAll
+    static void bootstrap() {
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
+    }
 
     @Test
     void makesOneOfferPerItemAChoiceAcceptsAsPayment() throws IOException {
@@ -77,6 +86,19 @@ class TradeTableTest {
         assertEquals(7, offer.experience());
         assertTrue(offer.priceMultiplier() > 0.19f);
         assertEquals(false, offer.rewardExperience());
+    }
+
+    @Test
+    void aProfessionTableThePackLacksBorrowsJavasVillagerUnderEitherPath() throws IOException {
+        var pack = BehaviourPackFixture.holding(root, "trading/probe.json", "{}");
+        TradeTable economy = TradeTable.read(pack, "trading/economy_trades/stone_mason_trades.json");
+        TradeTable legacy = TradeTable.read(pack, "trading/leather_worker_trades.json");
+
+        assertEquals("mason", economy.borrowed().profession());
+        assertEquals("leatherworker", legacy.borrowed().profession());
+        assertEquals(5, economy.tiers());
+        assertEquals(2, economy.reached(10));
+        assertEquals(3, economy.reached(149));
     }
 
     private TradeTable read(String table) throws IOException {

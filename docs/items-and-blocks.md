@@ -114,6 +114,10 @@ Shaped, shapeless, furnace, smithing transform, smithing trim and brewing.
   read.
 - A script can move the trader inside its dimension without closing the trade. A move to another
   dimension closes it.
+- A pack that names one of Mojang's villager trade tables without shipping it, such as
+  `trading/economy_trades/librarian_trades.json` or `trading/librarian_trades.json`, gets the trades
+  of Java's villager of that profession. A new level of trades opens at 10, 70, 150 and 250
+  experience, as in Bedrock. `wandering_trader_trades.json` gets the wandering trader's trades.
 - `query.trade_tier` counts from 0, for pack traders and Java villagers (novice 0, master 4).
 
 ## Bedrock ids and data values

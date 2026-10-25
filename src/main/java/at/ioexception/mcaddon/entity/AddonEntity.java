@@ -6302,25 +6302,34 @@ public class AddonEntity extends PathfinderMob
             return offers;
         }
 
-        offered = trades;
-        offeredTiers = reached;
-        offers = new MerchantOffers();
-        shown = new java.util.ArrayList<>();
-        if (trades != null && trades.borrowedFrom() != null) {
-            borrowOffers(trades.borrowedFrom());
-        } else if (trades != null) {
-            trades.offers().stream().filter(offer -> offer.tier() < reached).forEach(this::add);
+        if (trades != null && trades.borrowed() != null) {
+            lendTiers(trades, reached);
+        } else {
+            offered = trades;
+            offeredTiers = reached;
+            offers = new MerchantOffers();
+            shown = new java.util.ArrayList<>();
+            if (trades != null) trades.offers().stream().filter(offer -> offer.tier() < reached).forEach(this::add);
         }
         saveTrading();
         return offers;
     }
 
-    private void borrowOffers(net.minecraft.world.entity.EntityType<?> kind) {
-        if (!(Platform.createMob(kind, (net.minecraft.server.level.ServerLevel) level())
-            instanceof Merchant lender)) {
-            return;
+    /**
+     * Adds what Java's own mob offers at each tier reached since the offers were last built, so a
+     * tier already on the counter keeps the trades and the uses it had.
+     */
+    private void lendTiers(TradeTable trades, int reached) {
+        if (offers == null || trades != offered) {
+            offers = new MerchantOffers();
+            shown = new java.util.ArrayList<>();
+            offeredTiers = 0;
         }
-        lender.getOffers().forEach(offer -> offers.add(offer.copy()));
+        for (int tier = offeredTiers + 1; tier <= reached; tier++) {
+            offers.addAll(trades.borrowed().offers((net.minecraft.server.level.ServerLevel) level(), tier));
+        }
+        offered = trades;
+        offeredTiers = reached;
     }
 
     /**

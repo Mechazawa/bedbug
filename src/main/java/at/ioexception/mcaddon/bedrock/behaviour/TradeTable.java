@@ -9,17 +9,23 @@ import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.trading.Merchant;
+import net.minecraft.world.item.trading.MerchantOffer;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -30,23 +36,71 @@ import java.util.concurrent.ThreadLocalRandom;
  * no tiers of its own, so each offer remembers the tier it came from and a trader shows the offers
  * of every tier its earned experience has reached.
  */
-public record TradeTable(List<Offer> offers, List<Integer> tierExperience,
-    EntityType<?> borrowedFrom) {
+public record TradeTable(List<Offer> offers, List<Integer> tierExperience, Borrowed borrowed) {
 
     public TradeTable(List<Offer> offers, List<Integer> tierExperience) {
         this(offers, tierExperience, null);
     }
 
     /**
-     * Mojang's own trade tables are not shipped, so a path naming one the pack lacks borrows the
-     * offers Java's mob of the same kind makes for itself.
+     * The experience each of a Java villager's five levels asks for, which is what every one of
+     * Bedrock's economy tables states for its five tiers.
      */
-    private static final java.util.Map<String, EntityType<?>> VANILLA = java.util.Map.of(
+    private static final List<Integer> VILLAGER_LEVELS = List.of(0, 10, 70, 150, 250);
+
+    /** Bedrock's name for each villager profession, against the name Java registers it under. */
+    private static final Map<String, String> PROFESSIONS = Map.ofEntries(
+        Map.entry("armorer", "armorer"), Map.entry("butcher", "butcher"),
+        Map.entry("cartographer", "cartographer"), Map.entry("cleric", "cleric"),
+        Map.entry("farmer", "farmer"), Map.entry("fisherman", "fisherman"),
+        Map.entry("fletcher", "fletcher"), Map.entry("leather_worker", "leatherworker"),
+        Map.entry("librarian", "librarian"), Map.entry("shepherd", "shepherd"),
+        Map.entry("stone_mason", "mason"), Map.entry("tool_smith", "toolsmith"),
+        Map.entry("weapon_smith", "weaponsmith"));
+
+    /**
+     * Mojang's own trade tables are not shipped, so a path naming one the pack lacks borrows the
+     * offers Java's mob of the same kind makes for itself. A profession's table is named both under
+     * `trading/economy_trades/` and, for the villager before the economy, under `trading/`.
+     */
+    private static final Map<String, TradeTable> VANILLA = vanillaTables();
+
+    private static Map<String, TradeTable> vanillaTables() {
+        Map<String, TradeTable> tables = new HashMap<>();
         //? if >=26.2 {
-        "trading/economy_trades/wandering_trader_trades.json", net.minecraft.world.entity.EntityTypes.WANDERING_TRADER);
+        EntityType<?> villager = net.minecraft.world.entity.EntityTypes.VILLAGER;
+        EntityType<?> wanderer = net.minecraft.world.entity.EntityTypes.WANDERING_TRADER;
         //?} else {
-        /*"trading/economy_trades/wandering_trader_trades.json", EntityType.WANDERING_TRADER);
+        /*EntityType<?> villager = EntityType.VILLAGER;
+        EntityType<?> wanderer = EntityType.WANDERING_TRADER;
         *///?}
+        tables.put("trading/economy_trades/wandering_trader_trades.json",
+            new TradeTable(List.of(), List.of(0), new Borrowed(wanderer, null)));
+        PROFESSIONS.forEach((bedrock, java) -> {
+            TradeTable table = new TradeTable(List.of(), VILLAGER_LEVELS, new Borrowed(villager, java));
+            tables.put("trading/" + bedrock + "_trades.json", table);
+            tables.put("trading/economy_trades/" + bedrock + "_trades.json", table);
+        });
+        return Map.copyOf(tables);
+    }
+
+    /** The Java mob whose own offers stand in for one of Mojang's tables, and its profession if a villager. */
+    public record Borrowed(EntityType<?> kind, String profession) {
+
+        /**
+         * What Java's mob offers at one tier, counted from one. A villager made at that level
+         * draws the offers of that level alone, which is how Java's own villager grows its shop.
+         */
+        public List<MerchantOffer> offers(ServerLevel level, int tier) {
+            Entity lender = Platform.createMob(kind, level);
+            if (profession != null && lender instanceof Villager villager) {
+                villager.setVillagerData(Platform.villagerData(villager.getVillagerData(),
+                    level.registryAccess(), profession, tier));
+            }
+            return lender instanceof Merchant merchant
+                ? merchant.getOffers().stream().map(MerchantOffer::copy).toList() : List.of();
+        }
+    }
 
     /** One trade: what it takes, what it gives back, and how often it can be used. */
     public record Offer(TradeItem cost, TradeItem secondCost, TradeItem result, int maxUses,
@@ -230,8 +284,8 @@ public record TradeTable(List<Offer> offers, List<Integer> tierExperience,
     public static TradeTable read(BedrockPack pack, String path) {
         Path file = pack.file(path);
         if (!Files.isRegularFile(file)) {
-            EntityType<?> borrowed = VANILLA.get(path);
-            if (borrowed != null) return new TradeTable(List.of(), List.of(), borrowed);
+            TradeTable borrowed = VANILLA.get(path);
+            if (borrowed != null) return borrowed;
             McAddon.LOGGER.warn("{} names a trade table it does not ship: {}", pack.displayName(), path);
             return new TradeTable(List.of(), List.of());
         }
@@ -245,12 +299,11 @@ public record TradeTable(List<Offer> offers, List<Integer> tierExperience,
     }
 
     public int tiers() {
-        return borrowedFrom != null ? 1 : tierExperience.size();
+        return tierExperience.size();
     }
 
     /** How many tiers a trader holding this much experience has reached, and so may offer. */
     public int reached(int experience) {
-        if (borrowedFrom != null) return 1;
         int count = 0;
         for (Integer required : tierExperience) {
             if (experience >= required) count++;

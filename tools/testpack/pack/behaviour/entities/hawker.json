@@ -7,6 +7,19 @@
       "is_summonable": true,
       "is_experimental": false
     },
+    "component_groups": {
+      "tp:hawker_mason": {
+        "minecraft:trade_table": {
+          "display_name": "Mason",
+          "table": "trading/economy_trades/stone_mason_trades.json"
+        }
+      }
+    },
+    "events": {
+      "tp:hawker_mason": {
+        "add": { "component_groups": ["tp:hawker_mason"] }
+      }
+    },
     "components": {
       "minecraft:type_family": {
         "family": ["tp_hawker", "mob"]

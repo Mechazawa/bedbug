@@ -2461,6 +2461,49 @@ public final class BehaviourGameTests {
         helper.succeed();
     }
 
+    /**
+     * A path naming one of Mojang's profession tables offers what Java's villager of that profession
+     * offers, a level at a time, at the experience Bedrock's economy tiers ask for.
+     */
+    @GameTest()
+    public void aVanillaProfessionTableOffersJavasVillagerTierByTier(GameTestHelper helper) {
+        AddonEntity hawker = spawn(helper, "tp:hawker");
+        if (hawker == null) {
+            helper.succeed();
+            return;
+        }
+
+        Villager mason = (Villager) Platform.createMob(BuiltInRegistries.ENTITY_TYPE
+            .getOptional(Platform.id("minecraft", "villager")).orElseThrow(), helper.getLevel());
+        mason.setVillagerData(Platform.villagerData(mason.getVillagerData(),
+            helper.getLevel().registryAccess(), "mason", 1));
+        List<String> javas = sold(mason.getOffers()).stream().sorted().toList();
+
+        EntityEvents.trigger(hawker, "tp:hawker_mason", null, ServerHooks.state());
+        List<String> novice = sold(hawker.getOffers());
+        helper.assertTrue(!novice.isEmpty() && novice.stream().sorted().toList().equals(javas),
+            "tp:hawker names stone_mason_trades.json and sells " + novice + " where a novice mason sells "
+                + javas + ".");
+
+        for (int trade = 0; trade < APPRENTICE_EXPERIENCE && hawker.getVillagerXp() < APPRENTICE_EXPERIENCE; trade++) {
+            hawker.notifyTrade(hawker.getOffers().get(0));
+        }
+        List<String> apprentice = sold(hawker.getOffers());
+        helper.assertTrue(apprentice.size() > novice.size()
+                && apprentice.subList(0, novice.size()).equals(novice),
+            "tp:hawker earned " + hawker.getVillagerXp() + " experience and sells " + apprentice
+                + ", which does not add the apprentice mason's trades to " + novice + ".");
+        helper.succeed();
+    }
+
+    /** The experience Bedrock's economy tables and Java's villager both ask for the second tier. */
+    private static final int APPRENTICE_EXPERIENCE = 10;
+
+    private static List<String> sold(List<net.minecraft.world.item.trading.MerchantOffer> offers) {
+        return offers.stream().map(offer -> BuiltInRegistries.ITEM.getKey(offer.getResult().getItem()).toString())
+            .toList();
+    }
+
     /** What a trader earned and spent, and what it carries, is read back by an entity of the same uuid. */
     @GameTest()
     public void aTradersStockUsesAndInventorySurviveBeingReadBack(GameTestHelper helper) {

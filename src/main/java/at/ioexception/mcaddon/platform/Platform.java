@@ -2096,6 +2096,19 @@ public final class Platform {
         *///?}
     }
 
+    /** The same villager given the profession registered under that name, at that level. */
+    public static VillagerData villagerData(VillagerData data, net.minecraft.core.RegistryAccess registries,
+        String profession, int level) {
+        //? if >=1.21.5 {
+        return data.withProfession(registries, ResourceKey.create(
+            net.minecraft.core.registries.Registries.VILLAGER_PROFESSION,
+            Identifier.withDefaultNamespace(profession))).withLevel(level);
+        //?} else {
+        /*return data.setProfession(BuiltInRegistries.VILLAGER_PROFESSION.get(
+            Identifier.withDefaultNamespace(profession))).setLevel(level);
+        *///?}
+    }
+
     /** The biome a villager comes from, by the name its type is registered under. */
     public static String villagerType(VillagerData data) {
         //? if >=1.21.5 {
