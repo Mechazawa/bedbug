@@ -176,6 +176,29 @@
           "interval": 100000,
           "goal_radius": 2
         }
+      },
+      "tp:roamer_circling": {
+        "minecraft:behavior.move_around_target": {
+          "priority": 0,
+          "movement_speed": 1,
+          "destination_position_range": {
+            "min": 3,
+            "max": 5
+          },
+          "destination_pos_spread_degrees": 0,
+          "height_difference_limit": 2
+        }
+      },
+      "tp:roamer_level": {
+        "minecraft:behavior.move_around_target": {
+          "priority": 0,
+          "movement_speed": 1,
+          "destination_position_range": {
+            "min": 3,
+            "max": 5
+          },
+          "height_difference_limit": 0
+        }
       }
     },
     "components": {
@@ -311,6 +334,20 @@
         "add": {
           "component_groups": [
             "tp:roamer_homebody"
+          ]
+        }
+      },
+      "tp:roamer_circling": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_circling"
+          ]
+        }
+      },
+      "tp:roamer_level": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_level"
           ]
         }
       },

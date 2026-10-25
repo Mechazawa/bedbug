@@ -431,6 +431,67 @@ public final class RoamGoalGameTests {
             ROAMER + " cannot reach its walled-in home and never raised on_failed."));
     }
 
+    /**
+     * `minecraft:behavior.move_around_target` walks to a spot behind the way its target faces,
+     * between three and five blocks from it under a spread of nothing, and then stays there.
+     */
+    @GameTest(structure = EMPTY, maxTicks = WALK_TICKS)
+    public void aMobMovingAroundItsTargetSettlesBehindIt(GameTestHelper helper) {
+        floor(helper);
+        Mob pig = standing(helper, "pig", new BlockPos(1, 1, 1));
+        AddonEntity roamer = roamer(helper, "tp:roamer_circling", new BlockPos(7, 1, 1));
+        if (roamer == null) {
+            helper.succeed();
+            return;
+        }
+
+        pig.setYHeadRot(NORTH);
+        pig.setYRot(NORTH);
+        roamer.setTarget(pig);
+        Vec3[] last = {roamer.position()};
+        int[] still = {0};
+        helper.onEachTick(() -> {
+            still[0] = roamer.position().distanceTo(last[0]) < 0.01 ? still[0] + 1 : 0;
+            last[0] = roamer.position();
+        });
+        helper.succeedWhen(() -> {
+            double away = roamer.distanceTo(pig);
+            helper.assertTrue(away >= 2.5 && away <= 5.5, ROAMER + " stands " + away + " from its target.");
+            helper.assertTrue(roamer.getZ() > pig.getZ() + 2 && Math.abs(roamer.getX() - pig.getX()) < 1.5,
+                ROAMER + " walks straight behind its target, which faces north, and stands at "
+                    + roamer.position().subtract(pig.position()) + " from it.");
+            helper.assertTrue(still[0] >= SETTLED, ROAMER + " keeps moving once inside its band.");
+        });
+    }
+
+    /** The yaw of an entity facing north, away from the floor's south half where its back is. */
+    private static final float NORTH = 180;
+
+    /** Ticks a settled walker stands still for. */
+    private static final int SETTLED = 20;
+
+    /**
+     * `minecraft:behavior.move_around_target` backs away from a target that is too close only while
+     * the target is less than `height_difference_limit` above or below, and a limit of nothing turns
+     * the backing away off.
+     */
+    @GameTest(structure = EMPTY, maxTicks = WALK_TICKS)
+    public void aMobWithNoHeightLimitNeverBacksAwayFromItsTarget(GameTestHelper helper) {
+        floor(helper);
+        Mob pig = standing(helper, "pig", new BlockPos(4, 1, 4));
+        AddonEntity roamer = roamer(helper, "tp:roamer_level", new BlockPos(4, 1, 2));
+        if (roamer == null) {
+            helper.succeed();
+            return;
+        }
+
+        roamer.setTarget(pig);
+        Vec3 from = roamer.position();
+        helper.onEachTick(() -> helper.assertTrue(roamer.position().distanceTo(from) < STILL,
+            ROAMER + " backs away from nothing with a height limit of nothing and moved."));
+        helper.runAfterDelay(WALK_TICKS / 2, helper::succeed);
+    }
+
     /** A roamer with one group on and its goals running. */
     private static AddonEntity roamer(GameTestHelper helper, String event, BlockPos where) {
         AddonEntity roamer = BehaviourGameTests.spawn(helper, ROAMER, where);
