@@ -16,13 +16,20 @@ import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
+import net.minecraft.world.level.block.state.properties.EnumProperty;
+import net.minecraft.world.level.block.state.properties.WallSide;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.block.state.properties.Property;
 
@@ -31,6 +38,8 @@ import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
 
 /**
  * What an add-on does once it is loaded into a world.
@@ -50,6 +59,13 @@ public final class PackGameTests {
     private static final String HURT_ENTITY = "tp:wisp";
     private static final String BLOCK = "tp:lamp";
     private static final String FOG = "tp:dusk";
+
+    private static final Map<Direction, BooleanProperty> ARMS = Map.of(Direction.NORTH, BlockStateProperties.NORTH,
+        Direction.SOUTH, BlockStateProperties.SOUTH, Direction.EAST, BlockStateProperties.EAST,
+        Direction.WEST, BlockStateProperties.WEST);
+    private static final Map<Direction, EnumProperty<WallSide>> WALL_SIDES = Map.of(
+        Direction.NORTH, BlockStateProperties.NORTH_WALL, Direction.SOUTH, BlockStateProperties.SOUTH_WALL,
+        Direction.EAST, BlockStateProperties.EAST_WALL, Direction.WEST, BlockStateProperties.WEST_WALL);
 
     /** The two the pack declares for the components a plain mob has no occasion to use. */
     private static final String PROJECTILE = "tp:spark";
@@ -540,6 +556,46 @@ public final class PackGameTests {
         helper.getLevel().setBlockAndUpdate(at, block.defaultBlockState().setValue(lit, false));
         helper.succeedWhen(() -> helper.assertTrue(helper.getBlockState(STAND).getValue(lit),
             BLOCK + " never ran the event its clock schedules."));
+    }
+
+    /**
+     * A fence, a bar and a wall reach a block only on the sides its connection rule enables.
+     *
+     * The pillar enables north and south, so a neighbour on either of those joins it and one to the
+     * east or the west keeps its arm on that side down.
+     */
+    @GameTest()
+    public void aConnectionRuleNamesTheSidesNeighboursReach(GameTestHelper helper) {
+        Block pillar = BuiltInRegistries.BLOCK.getOptional(Platform.id("tp", "pillar")).orElse(null);
+        if (pillar == null) {
+            helper.succeed();
+            return;
+        }
+
+        ServerLevel level = helper.getLevel();
+        BlockPos middle = helper.absolutePos(STAND);
+        for (Block reaching : List.of(Blocks.OAK_FENCE, Blocks.IRON_BARS, Blocks.COBBLESTONE_WALL)) {
+            for (Direction side : Direction.Plane.HORIZONTAL) {
+                level.setBlockAndUpdate(middle.relative(side), reaching.defaultBlockState());
+            }
+            level.setBlockAndUpdate(middle, pillar.defaultBlockState());
+
+            for (Direction side : Direction.Plane.HORIZONTAL) {
+                BlockState neighbour = level.getBlockState(middle.relative(side));
+                boolean reached = reaching == Blocks.COBBLESTONE_WALL
+                    ? neighbour.getValue(WALL_SIDES.get(side.getOpposite())) != WallSide.NONE
+                    : neighbour.getValue(ARMS.get(side.getOpposite()));
+                helper.assertTrue(reached == (side.getAxis() == Direction.Axis.Z),
+                    "A " + reaching.getName().getString() + " to the " + side.getName()
+                        + (reached ? " joined" : " stayed away from") + " tp:pillar.");
+            }
+
+            for (Direction side : Direction.Plane.HORIZONTAL) {
+                level.setBlockAndUpdate(middle.relative(side), Blocks.AIR.defaultBlockState());
+            }
+            level.setBlockAndUpdate(middle, Blocks.AIR.defaultBlockState());
+        }
+        helper.succeed();
     }
 
     /**

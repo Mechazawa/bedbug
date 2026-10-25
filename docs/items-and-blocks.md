@@ -154,7 +154,6 @@ colours. Forty families are mapped. This works for `set_data`, `random_aux_value
   nothing.
 - `enchant_book_for_trading` in a loot table: the book is enchanted and the four cost fields are
   reported.
-- `minecraft:support` stair shape, `minecraft:connection_rule` `only_fences` and
-  `enabled_directions`, and `snowlogging` are reported. The rest of each component works.
+- `minecraft:support` stair shape, `minecraft:connection_rule` `only_fences`, and `snowlogging` are reported. The rest of each component works.
 - `item_display_transforms`: the `embedded` context, rotation and scale pivots and `fit_to_frame`
   are reported.

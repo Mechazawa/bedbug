@@ -32,6 +32,8 @@
     "PrimaryLevelDataMixin",
     "ChestBlockMixin",
     "BlockConnectionMixin",
+    "FenceConnectionMixin",
+    "BarsConnectionMixin",
     "ItemStackMixin",
     "SlotMixin",
     "PlayerActionMixin",

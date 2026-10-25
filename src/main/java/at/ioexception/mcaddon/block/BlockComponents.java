@@ -28,8 +28,10 @@ import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * What a pack's block components become on the Java side.
@@ -55,6 +57,7 @@ import java.util.Map;
  * @param chestObstruction what a chest opening in the space below this block is allowed to do
  * @param support        the shape other blocks rest on, or null for the one the collision box gives
  * @param connections    which of the blocks that reach sideways may reach this one
+ * @param connectionSides the horizontal sides of the block those blocks may reach it on
  * @param occlusion      the shape neighbouring faces are culled against, or null for Java's own
  * @param permutations   what the permutations make of each state, or null where they change nothing
  *                       a state is asked
@@ -65,7 +68,7 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
     List<Placement> placement, BlockEvents events,
     at.ioexception.mcaddon.bedrock.behaviour.CustomComponents scripted,
     boolean dynamicProperties, ChestObstruction chestObstruction, VoxelShape support,
-    Connections connections, VoxelShape occlusion, Permutations permutations,
+    Connections connections, Set<Direction> connectionSides, VoxelShape occlusion, Permutations permutations,
     PlacementTraits traits) {
 
     /** The explosion resistance Java gives bedrock, which no blast reaches. */
@@ -166,7 +169,7 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
             at.ioexception.mcaddon.bedrock.behaviour.CustomComponents.of(components),
             flag(components, "minecraft:block_entity", "dynamic_properties"),
             ChestObstruction.of(text(components, "minecraft:chest_obstruction", "obstruction_rule")),
-            support(components), connections(components),
+            support(components), connections(components), connectionSides(components),
             shapes.named(cullingShape(components)), Permutations.of(definition, properties),
             PlacementTraits.of(definition, properties));
     }
@@ -196,24 +199,35 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
     /**
      * Which blocks `minecraft:connection_rule` lets reach across to this one.
      *
-     * `only_fences` and the directions the rule may be narrowed to are separate questions per
-     * asker, and the one Java asks a pane or a bar carries neither the asker nor the direction, so
-     * both are reported and the rest of the rule still decides.
+     * `only_fences` is a separate question per asker, and the one Java asks a pane or a bar
+     * carries no asker, so it is reported and the rest of the rule still decides.
      */
     private static Connections connections(JsonObject components) {
         if (!components.has("minecraft:connection_rule")) return Connections.ALL;
 
         JsonObject rule = object(components, "minecraft:connection_rule");
-        if (rule.has("enabled_directions")) {
-            AddonEntities.unsupported("minecraft:connection_rule enabled_directions");
-        }
-
         Connections accepted =
             Connections.of(text(components, "minecraft:connection_rule", "accepts_connections_from"));
         if (accepted == Connections.ONLY_FENCES) {
             AddonEntities.unsupported("minecraft:connection_rule only_fences");
         }
         return accepted;
+    }
+
+    /**
+     * The horizontal sides `minecraft:connection_rule` lets a fence, a wall or a pane reach this
+     * block on, all four when the rule names none. A direction names the side of this block the
+     * neighbour stands on, which Mojang's documentation does not spell out.
+     */
+    private static Set<Direction> connectionSides(JsonObject components) {
+        Set<Direction> sides = EnumSet.of(Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST);
+        if (!components.has("minecraft:connection_rule")) return sides;
+
+        JsonObject rule = object(components, "minecraft:connection_rule");
+        if (!rule.has("enabled_directions")) return sides;
+
+        sides.retainAll(directions(rule.get("enabled_directions")));
+        return sides;
     }
 
     /**
