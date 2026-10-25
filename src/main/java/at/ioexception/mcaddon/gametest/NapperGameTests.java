@@ -183,7 +183,7 @@ public final class NapperGameTests {
         helper.succeed();
     }
 
-    /** How often a fresh goal picked the block west of the entity and the one east of it, which are the near block and the far one. */
+    /** How often a fresh goal picked the block west of the entity (the near one) and east of it (the far one). */
     private static int[] flights(AddonEntity avoider, String method) {
         JsonObject body = new JsonObject();
         com.google.gson.JsonArray blocks = new com.google.gson.JsonArray();
