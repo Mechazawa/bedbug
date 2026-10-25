@@ -28,6 +28,82 @@ public final class RoamGoalGameTests {
     /** Long enough for a walk across the structure and Java's second between goal checks. */
     private static final int WALK_TICKS = 160;
 
+    /** Less than any step a walk takes. */
+    private static final double STILL = 0.5;
+
+    /**
+     * `minecraft:behavior.move_to_water` looks at `search_count` blocks picked at random each tick.
+     * One block a tick over a search box of eighteen thousand finds a single water block five blocks
+     * off about once in five hundred runs within two seconds, while a count of nothing looks at the
+     * whole box at once and walks straight to it. The floor stands high, so the box holds no water of
+     * the tests beside this one.
+     */
+    @GameTest(structure = EMPTY, maxTicks = WALK_TICKS)
+    public void aWaterSearchLooksAtItsCountOfBlocksEachTick(GameTestHelper helper) {
+        BlockPos.betweenClosed(new BlockPos(0, HIGH, 0), new BlockPos(7, HIGH, 7))
+            .forEach(at -> helper.setBlock(at, Blocks.STONE));
+        BlockPos pool = new BlockPos(6, HIGH, 2);
+        helper.setBlock(pool.below(), Blocks.STONE);
+        helper.setBlock(pool, Blocks.WATER);
+        AddonEntity sampling = roamer(helper, "tp:roamer_sampling", new BlockPos(1, HIGH + 1, 7));
+        AddonEntity scanning = roamer(helper, "tp:roamer_scanning", new BlockPos(1, HIGH + 1, 1));
+        if (sampling == null || scanning == null) {
+            helper.succeed();
+            return;
+        }
+
+        Vec3 from = sampling.position();
+        Vec3 water = Vec3.atBottomCenterOf(helper.absolutePos(pool));
+        long begun = helper.getLevel().getGameTime();
+        helper.onEachTick(() -> helper.assertTrue(helper.getLevel().getGameTime() - begun > SAMPLED_FOR
+                || sampling.position().distanceTo(from) < STILL,
+            ROAMER + " looks at one block a tick and set off for the water at once."));
+        helper.succeedWhen(() -> {
+            helper.assertTrue(helper.getLevel().getGameTime() - begun > SAMPLED_FOR, "Still sampling.");
+            helper.assertTrue(Math.hypot(scanning.getX() - water.x, scanning.getZ() - water.z) < AT_THE_POOL,
+                ROAMER + " looks at every block at once and never reached the water.");
+        });
+    }
+
+    /** Further above the structure than any search of the tests beside it reaches down. */
+    private static final int HIGH = 20;
+
+    /** How long the one block a tick search is watched for. */
+    private static final int SAMPLED_FOR = 40;
+
+    /** Beside the pool, where a mob that walks to water stops. */
+    private static final double AT_THE_POOL = 1.5;
+
+    /**
+     * `minecraft:behavior.move_to_liquid` walks to the liquid its `material_type` names, here water
+     * past a nearer pool of lava, and counts as there within its `goal_radius` of two and a half
+     * blocks, so it never steps in.
+     */
+    @GameTest(structure = EMPTY, maxTicks = WALK_TICKS)
+    public void aWalkToALiquidTakesItsMaterialAndStopsWithinItsRadius(GameTestHelper helper) {
+        raisedFloor(helper);
+        BlockPos lava = new BlockPos(5, RAISED, 1);
+        BlockPos water = new BlockPos(0, RAISED, 1);
+        helper.setBlock(lava.below(), Blocks.STONE);
+        helper.setBlock(water.below(), Blocks.STONE);
+        helper.setBlock(lava, Blocks.LAVA);
+        helper.setBlock(water, Blocks.WATER);
+        AddonEntity roamer = roamer(helper, "tp:roamer_wading", new BlockPos(6, RAISED + 1, 6));
+        if (roamer == null) {
+            helper.succeed();
+            return;
+        }
+
+        Vec3 pool = Vec3.atBottomCenterOf(helper.absolutePos(water));
+        helper.onEachTick(() -> helper.assertFalse(roamer.isInWater() || roamer.isInLava(),
+            ROAMER + " counts two and a half blocks off as there and stepped into a liquid."));
+        helper.succeedWhen(() -> helper.assertTrue(roamer.position().distanceTo(pool) <= WADE_RADIUS,
+            ROAMER + " walks to water and stands " + roamer.position().distanceTo(pool) + " from it."));
+    }
+
+    /** The wading group's goal radius and the half block the walk may stop short by. */
+    private static final double WADE_RADIUS = 3;
+
     /**
      * `minecraft:behavior.move_to_block` passes over a block its `target_block_filters` refuse: the
      * nearer slab holds water, and the filter asks for one that does not.
@@ -90,6 +166,10 @@ public final class RoamGoalGameTests {
         EntityEvents.trigger(roamer, event, null, ServerHooks.state());
         roamer.setNoAi(false);
         return roamer;
+    }
+
+    private static boolean runs(AddonEntity roamer, String goal) {
+        return roamer.runningGoals().stream().anyMatch(running -> running.startsWith(goal));
     }
 
     /** A stone floor over the whole structure, which the entities stand on at a height of one. */

@@ -31,9 +31,6 @@ import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.RestrictSunGoal;
 import net.minecraft.world.entity.ai.goal.StrollThroughVillageGoal;
-//? if <26.3 {
-import net.minecraft.world.entity.ai.goal.TryFindWaterGoal;
-//?}
 import net.minecraft.world.entity.ai.navigation.FlyingPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.ai.navigation.WallClimberNavigation;
@@ -3215,12 +3212,7 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.random_swim" -> goals.add(priority, StrollGoal.swimming(this, goal));
             case "minecraft:behavior.swim_wander" -> goals.add(priority, StrollGoal.wandering(this, goal));
             case "minecraft:behavior.move_to_water" -> goals.add(priority, MoveToMatchingBlockGoal.water(this, goal));
-            //? if >=26.3 {
-            /*case "minecraft:behavior.move_to_liquid" -> goals.add(priority,
-                new net.minecraft.world.entity.ai.goal.TryFindLiquidGoal(this, net.minecraft.tags.FluidTags.WATER));
-            *///?} else {
-            case "minecraft:behavior.move_to_liquid" -> goals.add(priority, new TryFindWaterGoal(this));
-            //?}
+            case "minecraft:behavior.move_to_liquid" -> goals.add(priority, MoveToMatchingBlockGoal.liquid(this, goal));
             case "minecraft:behavior.swim_up_for_breath" ->
                 goals.add(priority, new BreathAirGoal(this));
 

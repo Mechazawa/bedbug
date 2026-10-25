@@ -8,6 +8,34 @@
       "is_experimental": false
     },
     "component_groups": {
+      "tp:roamer_sampling": {
+        "minecraft:behavior.move_to_water": {
+          "priority": 0,
+          "search_range": 16,
+          "search_height": 8,
+          "search_count": 1,
+          "goal_radius": 0.5
+        }
+      },
+      "tp:roamer_scanning": {
+        "minecraft:behavior.move_to_water": {
+          "priority": 0,
+          "search_range": 16,
+          "search_height": 8,
+          "search_count": 0,
+          "goal_radius": 0.5
+        }
+      },
+      "tp:roamer_wading": {
+        "minecraft:behavior.move_to_liquid": {
+          "priority": 0,
+          "search_range": 8,
+          "search_height": 2,
+          "search_count": 0,
+          "goal_radius": 2.5,
+          "material_type": "Water"
+        }
+      },
       "tp:roamer_choosy": {
         "minecraft:behavior.move_to_block": {
           "priority": 0,
@@ -64,6 +92,27 @@
       "minecraft:jump.static": {}
     },
     "events": {
+      "tp:roamer_sampling": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_sampling"
+          ]
+        }
+      },
+      "tp:roamer_scanning": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_scanning"
+          ]
+        }
+      },
+      "tp:roamer_wading": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_wading"
+          ]
+        }
+      },
       "tp:roamer_choosy": {
         "add": {
           "component_groups": [

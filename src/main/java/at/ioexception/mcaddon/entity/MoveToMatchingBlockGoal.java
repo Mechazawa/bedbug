@@ -10,6 +10,7 @@ import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.ai.goal.MoveToBlockGoal;
@@ -52,6 +53,13 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
     /** How far round and how far above and below the entity a search looks. */
     private final int range;
     private final int height;
+
+    /**
+     * How many blocks picked at random a search looks at each tick, or nothing where it looks at every
+     * block in range at once. Only the walks to water, land and a liquid state it.
+     */
+    private int samples;
+    private int searchedAt;
 
     /** Whether the search takes any matching block in range rather than the nearest. */
     private boolean anyInRange;
@@ -136,12 +144,19 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
 
     @Override
     protected int nextStartTick(PathfinderMob mob) {
+        if (samples > 0) return 0;
+
         return visit == null ? super.nextStartTick(mob) : reducedTickDelay(Math.max(1, visit.interval()));
     }
 
-    /** With `target_selection_method` `random`, any matching block in range rather than the nearest. */
+    /**
+     * `search_count` blocks picked at random for every tick since the last look, the first that
+     * matches taken. With `target_selection_method` `random`, any matching block in range rather than
+     * the nearest. Otherwise Java's own search for the nearest.
+     */
     @Override
     protected boolean findNearestBlock() {
+        if (samples > 0) return sample();
         if (!anyInRange) return super.findNearestBlock();
 
         BlockPos from = mob.blockPosition();
@@ -156,8 +171,30 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
         return true;
     }
 
+    private boolean sample() {
+        int ticks = Math.max(1, Math.min(mob.tickCount - searchedAt, MOST_TICKS_SAMPLED));
+        searchedAt = mob.tickCount;
+        BlockPos from = mob.blockPosition();
+        BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
+        for (int i = 0; i < samples * ticks; i++) {
+            at.setWithOffset(from, mob.getRandom().nextIntBetweenInclusive(-range, range),
+                mob.getRandom().nextIntBetweenInclusive(-height, height),
+                mob.getRandom().nextIntBetweenInclusive(-range, range));
+            if (!Platform.withinHome(mob, at) || !isValidTarget(mob.level(), at)) continue;
+
+            blockPos = at.immutable();
+            return true;
+        }
+        return false;
+    }
+
+    /** The ticks a search catches up on at most, so a goal held off for long does not look all at once. */
+    private static final int MOST_TICKS_SAMPLED = 2;
+
     @Override
     public boolean canUse() {
+        if (onLandOnly && (mob.isInLiquid() || !mob.onGround())) return false;
+
         return super.canUse() && (visit == null || mob.getRandom().nextDouble() < visit.chance());
     }
 
@@ -174,7 +211,7 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
     /** `minecraft:behavior.move_to_land`, which is any ground that is not under a liquid. */
     public static MoveToMatchingBlockGoal land(PathfinderMob mob, JsonObject component) {
         return new MoveToMatchingBlockGoal(mob, component,
-            state -> state.getFluidState().isEmpty() && !state.isAir(), null);
+            state -> state.getFluidState().isEmpty() && !state.isAir(), null).sampling(component);
     }
 
     /** `minecraft:behavior.move_to_lava`, which a pack gives to something that lives in it. */
@@ -187,13 +224,41 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
     /** `minecraft:behavior.move_to_water`, which looks as far for water as its pack says. */
     public static MoveToMatchingBlockGoal water(PathfinderMob mob, JsonObject component) {
         return new MoveToMatchingBlockGoal(mob, component,
-            state -> state.getFluidState().is(Fluids.WATER) || state.getFluidState().is(Fluids.FLOWING_WATER), null);
+            state -> state.getFluidState().is(FluidTags.WATER), null).sampling(component);
     }
 
     /** `minecraft:behavior.move_to_random_block`, which wants somewhere to stand and nothing more. */
     public static MoveToMatchingBlockGoal anywhere(PathfinderMob mob, JsonObject component) {
         return new MoveToMatchingBlockGoal(mob, component, state -> !state.isAir(), null);
     }
+
+    /**
+     * `minecraft:behavior.move_to_liquid`, which takes an entity on land into the liquid its
+     * `material_type` names: water, lava or either.
+     */
+    public static MoveToMatchingBlockGoal liquid(PathfinderMob mob, JsonObject component) {
+        String material = Json.text(component, "material_type", "any").toLowerCase(java.util.Locale.ROOT);
+        Predicate<BlockState> wanted = switch (material) {
+            case "water" -> state -> state.getFluidState().is(FluidTags.WATER);
+            case "lava" -> state -> state.getFluidState().is(FluidTags.LAVA);
+            default -> state -> !state.getFluidState().isEmpty();
+        };
+        MoveToMatchingBlockGoal goal = new MoveToMatchingBlockGoal(mob, component, wanted, null)
+            .sampling(component);
+        goal.onLandOnly = true;
+        return goal;
+    }
+
+    /** Whether the walk starts only from land, the way a walk into a liquid does. */
+    private boolean onLandOnly;
+
+    private MoveToMatchingBlockGoal sampling(JsonObject component) {
+        samples = Math.max(0, (int) number(component, "search_count", DEFAULT_SAMPLES));
+        return this;
+    }
+
+    /** Mojang's `search_count` where a pack states none. */
+    private static final int DEFAULT_SAMPLES = 10;
 
     /**
      * `minecraft:behavior.random_search_and_dig`, which turns over the ground it walked to.
@@ -278,6 +343,7 @@ public final class MoveToMatchingBlockGoal extends MoveToBlockGoal {
             walk(target);
         }
         if (!reached) return;
+        mob.getNavigation().stop();
         if (settled != null) mob.setPose(settled);
         if (visit != null && mob instanceof AddonEntity addon) arrive(addon);
         if (arrival == null || !(mob.level() instanceof ServerLevel level)) return;
