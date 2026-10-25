@@ -37,6 +37,8 @@ final class TemptedGoal extends Goal {
     private final boolean whileRidden;
     private final String startEvent;
     private final String endEvent;
+    /** Whether the entity steers straight at the player rather than following a path. */
+    private final boolean pointToPoint;
     private Player player;
     private double seenX;
     private double seenY;
@@ -46,7 +48,12 @@ final class TemptedGoal extends Goal {
     private int calmDown;
 
     TemptedGoal(AddonEntity mob, JsonObject goal, Set<String> items) {
+        this(mob, goal, items, false);
+    }
+
+    private TemptedGoal(AddonEntity mob, JsonObject goal, Set<String> items, boolean pointToPoint) {
         this.mob = mob;
+        this.pointToPoint = pointToPoint;
         this.items = items;
         this.speed = Goals.number(goal, "speed_multiplier", 1);
         double stated = Goals.number(goal, "within_radius", 0);
@@ -58,6 +65,15 @@ final class TemptedGoal extends Goal {
         this.startEvent = Goals.event(goal, "on_tempt_start");
         this.endEvent = Goals.event(goal, "on_tempt_end");
         setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
+    }
+
+    /**
+     * `minecraft:behavior.float_tempt`, which Bedrock describes as point to point movement for a
+     * floating entity. It steers at a random point between itself and the player's eyes, which is
+     * how Java's own happy ghast follows a snowball.
+     */
+    static TemptedGoal floating(AddonEntity mob, JsonObject goal, Set<String> items) {
+        return new TemptedGoal(mob, goal, items, true);
     }
 
     @Override
@@ -131,18 +147,36 @@ final class TemptedGoal extends Goal {
     @Override
     public void stop() {
         player = null;
-        mob.getNavigation().stop();
+        halt();
         calmDown = CALM_DOWN_TICKS;
         if (endEvent != null) mob.raiseEvent(endEvent);
+    }
+
+    /** Steering point to point gives the move control somewhere to go each tick, or it stops. */
+    @Override
+    public boolean requiresUpdateEveryTick() {
+        return pointToPoint;
     }
 
     @Override
     public void tick() {
         mob.getLookControl().setLookAt(player, mob.getMaxHeadYRot() + 20, mob.getMaxHeadXRot());
         if (mob.distanceTo(player) < stopDistance) {
-            mob.getNavigation().stop();
+            halt();
+        } else if (pointToPoint) {
+            var towards = player.getEyePosition().subtract(mob.position()).scale(mob.getRandom().nextDouble())
+                .add(mob.position());
+            mob.getMoveControl().setWantedPosition(towards.x, towards.y, towards.z, speed);
         } else {
             mob.getNavigation().moveTo(player, speed);
+        }
+    }
+
+    private void halt() {
+        if (pointToPoint) {
+            mob.getMoveControl().setWait();
+        } else {
+            mob.getNavigation().stop();
         }
     }
 }

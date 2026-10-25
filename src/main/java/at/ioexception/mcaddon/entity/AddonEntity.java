@@ -1031,7 +1031,8 @@ public class AddonEntity extends PathfinderMob
     /** Which way of getting about the entity's `minecraft:movement.*` names at this moment. */
     private String moverKind() {
         if (carriesNow("minecraft:movement.hover")) return "hover";
-        if (carriesNow("minecraft:movement.fly") || carriesNow("minecraft:movement.glide")) return "fly";
+        if (carriesNow("minecraft:movement.glide")) return "glide";
+        if (carriesNow("minecraft:movement.fly")) return "fly";
         // Swimming that banks into its turns, which is what Bedrock's dolphin and its sway both are.
         if (carriesNow("minecraft:movement.dolphin") || carriesNow("minecraft:movement.sway")) return "swim";
         if (carriesNow("minecraft:movement.jump") || carriesNow("minecraft:movement.skip")) return "hop";
@@ -1064,6 +1065,7 @@ public class AddonEntity extends PathfinderMob
         moveControl = switch (asked) {
             case "hover" -> new net.minecraft.world.entity.ai.control.FlyingMoveControl(this, 20, true);
             case "fly" -> new net.minecraft.world.entity.ai.control.FlyingMoveControl(this, 20, false);
+            case "glide" -> new GlideMoveControl(this, liveComponent("minecraft:movement.glide"));
             case "swim" -> new net.minecraft.world.entity.ai.control.SmoothSwimmingMoveControl(
                 this, 85, 10, 0.02f, 0.1f, true);
             case "hop" -> new HopMoveControl(this);
@@ -3218,9 +3220,10 @@ public class AddonEntity extends PathfinderMob
                 goals.add(priority, new MoveTowardsTargetGoal(this, speed,
                     (float) Goals.number(goal, "within_radius", 0)));
 
-            case "minecraft:behavior.random_fly", "minecraft:behavior.random_hover",
-                 "minecraft:behavior.hover" -> goals.add(priority, StrollGoal.flying(this, goal));
-            case "minecraft:behavior.float_wander" -> goals.add(priority, StrollGoal.floating(this, goal));
+            case "minecraft:behavior.random_hover", "minecraft:behavior.hover" ->
+                goals.add(priority, StrollGoal.flying(this, goal));
+            case "minecraft:behavior.random_fly" -> goals.add(priority, StrollGoal.flyingAbout(this, goal));
+            case "minecraft:behavior.float_wander" -> goals.add(priority, new FloatWanderGoal(this, goal));
             case "minecraft:behavior.random_swim" -> goals.add(priority, StrollGoal.swimming(this, goal));
             case "minecraft:behavior.swim_wander" -> goals.add(priority, StrollGoal.wandering(this, goal));
             case "minecraft:behavior.move_to_water" -> goals.add(priority, MoveToMatchingBlockGoal.water(this, goal));
@@ -3277,7 +3280,7 @@ public class AddonEntity extends PathfinderMob
 
             case "minecraft:behavior.tempt" -> goals.add(priority, new TemptedGoal(this, goal, tempting(goal)));
             case "minecraft:behavior.float_tempt" ->
-                goals.add(priority, Platform.temptGoal(this, speed, tempting(goal)));
+                goals.add(priority, TemptedGoal.floating(this, goal, tempting(goal)));
             case "minecraft:behavior.open_door", "minecraft:annotation.open_door" ->
                 goals.add(priority,
                     new OpenDoorGoal(this, Goals.flag(goal, "close_door_after", true)));
@@ -3398,7 +3401,7 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.find_underwater_treasure" -> goals.add(priority,
                 DolphinGoal.seekingTreasure(this, goal));
             case "minecraft:behavior.swim_with_entity" -> goals.add(priority,
-                DolphinGoal.escorting(this, goal));
+                new SwimWithEntityGoal(this, goal));
 
             case "minecraft:behavior.play_dead" -> goals.add(priority,
                 new PlayDeadGoal(this, goal));
@@ -4697,7 +4700,7 @@ public class AddonEntity extends PathfinderMob
      * per hop than one ambling. Bedrock's own default height is a tenth of a block, so a pack's
      * number is read against that and a hop is scaled by what it asked for.
      */
-    void hop(double speed) {
+    final void hop(double speed) {
         com.google.gson.JsonObject dynamic = declares("minecraft:jump.dynamic")
             ? componentBody("minecraft:jump.dynamic") : null;
         if (dynamic == null) {
@@ -4705,8 +4708,8 @@ public class AddonEntity extends PathfinderMob
             return;
         }
 
-        com.google.gson.JsonObject data = dynamic.getAsJsonObject(
-            speed > 1 ? "fast_skip_data" : "regular_skip_data");
+        com.google.gson.JsonObject data = speed > 1
+            ? dynamic.getAsJsonObject("fast_skip_data") : dynamic.getAsJsonObject("regular_skip_data");
         Goals.hop(this, speed * Goals.number(data, "distance_scale", 1),
             Goals.HOP_HEIGHT * Goals.number(data, "height", BEDROCK_HOP_HEIGHT) / BEDROCK_HOP_HEIGHT);
     }
@@ -5524,7 +5527,15 @@ public class AddonEntity extends PathfinderMob
     protected net.minecraft.world.entity.EntityDimensions getDefaultDimensions(
         net.minecraft.world.entity.Pose pose) {
         net.minecraft.world.entity.EntityDimensions declared = declaredBox();
-        return declared == null ? super.getDefaultDimensions(pose) : declared.scale(getAgeScale());
+        net.minecraft.world.entity.EntityDimensions box =
+            declared == null ? super.getDefaultDimensions(pose) : declared.scale(getAgeScale());
+        return pose == net.minecraft.world.entity.Pose.LONG_JUMPING ? box.scale(jumpingScale()) : box;
+    }
+
+    /** `minecraft:behavior.jump_to_block` shrinks the box by its `scale_factor` while the entity leaps. */
+    private float jumpingScale() {
+        return definition == null ? 1f
+            : (float) number(liveComponent("minecraft:behavior.jump_to_block"), "scale_factor", 0.7);
     }
     //?} else {
     /*@Override

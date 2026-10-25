@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.entity;
 
 import com.google.gson.JsonObject;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.phys.Vec3;
 
@@ -11,7 +12,9 @@ import java.util.EnumSet;
  *
  * `minecraft:behavior.circle_around_anchor` is a phantom's flight. Java writes that as three goals
  * inside its own phantom; here it is one, because the pack states the whole of it: how far out, how
- * high, how often each of those is allowed to change, and by how much.
+ * high, how often each of those is allowed to change, and by how much. While the entity has a target
+ * the anchor is over it, `height_above_target_range` higher, picked each time the target changes, the
+ * way Java's phantom sets its anchor over the player it is after.
  */
 public final class CircleAroundAnchorGoal extends Goal {
     private final AddonEntity mob;
@@ -25,7 +28,10 @@ public final class CircleAroundAnchorGoal extends Goal {
     private final double heightLow;
     private final double heightHigh;
     private final double heightChangeChance;
+    private final double aboveTargetLow;
+    private final double aboveTargetHigh;
     private Vec3 anchor;
+    private LivingEntity anchoredOver;
     private double angle;
     private double radius;
     private double height;
@@ -42,6 +48,8 @@ public final class CircleAroundAnchorGoal extends Goal {
         this.heightLow = Goals.low(component, "height_offset_range", 0);
         this.heightHigh = Goals.high(component, "height_offset_range", 0);
         this.heightChangeChance = Goals.number(component, "height_adjustment_chance", 0.00286);
+        this.aboveTargetLow = Goals.low(component, "height_above_target_range", 0);
+        this.aboveTargetHigh = Goals.high(component, "height_above_target_range", 0);
         setFlags(EnumSet.of(Goal.Flag.MOVE));
     }
 
@@ -53,6 +61,7 @@ public final class CircleAroundAnchorGoal extends Goal {
     @Override
     public void start() {
         anchor = mob.position();
+        anchoredOver = null;
         angle = mob.getRandom().nextDouble() * Math.PI * 2;
         radius = radiusLow;
         height = heightLow;
@@ -61,6 +70,13 @@ public final class CircleAroundAnchorGoal extends Goal {
     @Override
     public void tick() {
         if (anchor == null) return;
+
+        LivingEntity target = mob.getTarget();
+        if (target != null && target != anchoredOver) {
+            anchoredOver = target;
+            anchor = target.position().add(0,
+                aboveTargetLow + mob.getRandom().nextDouble() * Math.max(0, aboveTargetHigh - aboveTargetLow), 0);
+        }
 
         if (mob.getRandom().nextDouble() < radiusChangeChance) {
             radius = Math.min(radiusHigh, radius + radiusChange);

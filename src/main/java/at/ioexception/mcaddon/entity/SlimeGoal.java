@@ -27,8 +27,8 @@ public final class SlimeGoal extends Goal {
     private final AddonEntity mob;
     private final Kind kind;
     private final double speed;
-    private final int turnLow;
-    private final int turnHigh;
+    private final int turnAfter;
+    private final int turnSpread;
     private final float turnRange;
     private final double jumpChance;
     private int untilTurn;
@@ -40,9 +40,9 @@ public final class SlimeGoal extends Goal {
         this.mob = mob;
         this.kind = kind;
         this.speed = Goals.number(component, "speed_multiplier", 1);
-        this.turnLow = Goals.ticksLow(component, "min_change_direction_time", 2);
-        this.turnHigh = Goals.ticksHigh(component, "max_change_direction_time", 5);
-        this.turnRange = (float) Goals.number(component, "turn_range", 1) * 360f;
+        this.turnAfter = Goals.ticks(component, "min_change_direction_time", 2);
+        this.turnSpread = (int) Goals.number(component, "add_random_time_range", 3);
+        this.turnRange = (float) Goals.number(component, "turn_range", 360);
         // Bedrock states the chance out of a hundred; a slime in a liquid hops most ticks.
         this.jumpChance = Goals.number(component, "jump_chance_percentage", 80) / 100d;
         // Only the kinds that decide where the entity faces take the look flag, so turning and
@@ -55,7 +55,10 @@ public final class SlimeGoal extends Goal {
         });
     }
 
-    /** `minecraft:behavior.slime_random_direction`, which turns to a new heading every few seconds. */
+    /**
+     * `minecraft:behavior.slime_random_direction`, which turns up to `turn_range` degrees after
+     * `min_change_direction_time` and a random whole number of seconds up to `add_random_time_range`.
+     */
     public static SlimeGoal turning(AddonEntity mob, JsonObject component) {
         return new SlimeGoal(mob, Kind.RANDOM_DIRECTION, component);
     }
@@ -116,7 +119,7 @@ public final class SlimeGoal extends Goal {
     private void turn() {
         if (--untilTurn > 0) return;
 
-        untilTurn = Goals.between(mob.getRandom(), turnLow, turnHigh);
+        untilTurn = turnAfter + mob.getRandom().nextInt(Math.max(0, turnSpread) + 1) * Goals.TICKS_PER_SECOND;
         mob.setYRot(mob.getYRot() + (mob.getRandom().nextFloat() - 0.5f) * turnRange);
         mob.yBodyRot = mob.getYRot();
         mob.yHeadRot = mob.getYRot();

@@ -2420,44 +2420,11 @@ public final class Platform {
         *///?}
     }
 
-    /**
-     * A goal that follows whoever is holding what the pack named.
-     *
-     * Bedrock names the items in the component and Java asks a different question in each version:
-     * an ingredient until 1.21.2 and a test on the stack after. A pack naming nothing is tempted by
-     * anything edible, which is what such a list amounts to.
-     */
-    public static net.minecraft.world.entity.ai.goal.Goal temptGoal(
-        net.minecraft.world.entity.PathfinderMob mob, double speed, Set<String> items) {
-        //? if >=1.21.2 {
-        return new net.minecraft.world.entity.ai.goal.TemptGoal(mob, speed,
-            stack -> items.isEmpty()
-                ? stack.has(net.minecraft.core.component.DataComponents.FOOD)
-                : tempts(items, stack), false);
-        //?} else {
-        /*return new net.minecraft.world.entity.ai.goal.TemptGoal(mob, speed,
-            ingredient(items), false);
-        *///?}
-    }
-
     /** Whether a stack is one of the items a pack's goal named, in either edition's spelling. */
     public static boolean tempts(Set<String> items, net.minecraft.world.item.ItemStack stack) {
         net.minecraft.world.item.Item held = stack.getItem();
         return items.stream().anyMatch(name -> at.ioexception.mcaddon.registry.AddonItems.named(name) == held);
     }
-
-    //? if <1.21.2 {
-    /*private static net.minecraft.world.item.crafting.Ingredient ingredient(Set<String> items) {
-        net.minecraft.world.item.ItemStack[] stacks = items.stream()
-            .map(at.ioexception.mcaddon.registry.AddonItems::named)
-            .filter(java.util.Objects::nonNull)
-            .map(net.minecraft.world.item.ItemStack::new)
-            .toArray(net.minecraft.world.item.ItemStack[]::new);
-        return stacks.length == 0
-            ? net.minecraft.world.item.crafting.Ingredient.of(net.minecraft.world.item.Items.WHEAT)
-            : net.minecraft.world.item.crafting.Ingredient.of(stacks);
-    }
-    *///?}
 
     /**
      * Ties a mob to a place it will not wander far from.
@@ -2533,6 +2500,21 @@ public final class Platform {
             net.minecraft.world.level.pathfinder.BlockPathTypes.DANGER_FIRE,
             net.minecraft.world.level.pathfinder.BlockPathTypes.DAMAGE_OTHER,
             net.minecraft.world.level.pathfinder.BlockPathTypes.DANGER_OTHER);
+        *///?}
+    }
+
+    /** Whether standing at a place hurts: in or over fire, lava or a block that hurts, or beside one. */
+    public static boolean hurtsAt(net.minecraft.world.entity.Mob mob, net.minecraft.core.BlockPos at) {
+        //? if >=26 {
+        return switch (net.minecraft.world.level.pathfinder.WalkNodeEvaluator.getPathTypeStatic(mob, at)) {
+            case FIRE, FIRE_IN_NEIGHBOR, DAMAGING, DAMAGING_IN_NEIGHBOR, LAVA -> true;
+            default -> false;
+        };
+        //?} else {
+        /*return switch (net.minecraft.world.level.pathfinder.WalkNodeEvaluator.getPathTypeStatic(mob, at)) {
+            case DAMAGE_FIRE, DANGER_FIRE, DAMAGE_OTHER, DANGER_OTHER, LAVA -> true;
+            default -> false;
+        };
         *///?}
     }
 

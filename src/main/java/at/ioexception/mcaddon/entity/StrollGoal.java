@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.entity;
 
+import at.ioexception.mcaddon.platform.Platform;
 import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
@@ -27,6 +28,13 @@ final class StrollGoal extends RandomStrollGoal {
     /** How far below a spot in the air the ground a hover keeps its height over is looked for. */
     private static final int GROUND_SEARCH = 64;
 
+    /** How many spots a stroll avoiding damaging blocks looks at before it gives up for this chance. */
+    private static final int SAFE_ATTEMPTS = 10;
+
+    /** How far a flight looks for a tree to land on, which is Java's parrot's search. */
+    private static final int TREE_ACROSS = 3;
+    private static final int TREE_UP_DOWN = 6;
+
     private final int across;
     private final int upDown;
     private final double offset;
@@ -40,6 +48,9 @@ final class StrollGoal extends RandomStrollGoal {
     private final boolean reselects;
     /** Whether a spot in the top layer of the water is taken one block lower. */
     private final boolean belowTheSurface;
+    /** Whether a spot over a block that hurts, or beside one, is passed over. */
+    private final boolean avoidsDamage;
+    private boolean landsOnTrees;
     private int wandered;
     private int wanderFor;
 
@@ -56,6 +67,7 @@ final class StrollGoal extends RandomStrollGoal {
         this.longestWander = longest;
         this.reselects = Goals.flag(goal, "random_reselect", false);
         this.belowTheSurface = belowTheSurface;
+        this.avoidsDamage = Goals.flag(goal, "avoid_damage_blocks", false);
     }
 
     /** `minecraft:behavior.random_stroll`: somewhere on dry land where there is any. */
@@ -81,22 +93,21 @@ final class StrollGoal extends RandomStrollGoal {
     }
 
     /**
-     * `minecraft:behavior.random_fly`, `random_hover` and `hover`: somewhere in the air ahead, the way
-     * Java's own flying stroll looks. A hover keeps the spot within `hover_height` of the ground under it.
+     * `minecraft:behavior.random_hover` and `hover`: somewhere in the air ahead, the way Java's own
+     * flying stroll looks, within `hover_height` of the ground under it.
      */
     static StrollGoal flying(PathfinderMob mob, JsonObject goal) {
         return new StrollGoal(mob, goal, oneIn(goal), Medium.AIR, Integer.MAX_VALUE, Integer.MAX_VALUE, false);
     }
 
     /**
-     * `minecraft:behavior.float_wander`, which names no interval and floats off again at every chance,
-     * as Java's ghast does. A float lasts as long as `float_duration` says, where it says anything.
+     * `minecraft:behavior.random_fly`, which flies the same way and, under `can_land_on_trees`, lands
+     * on a tree where there is one to land on.
      */
-    static StrollGoal floating(PathfinderMob mob, JsonObject goal) {
-        int longest = Goals.ticksHigh(goal, "float_duration", 0);
-        return longest <= 0
-            ? new StrollGoal(mob, goal, 1, Medium.AIR, Integer.MAX_VALUE, Integer.MAX_VALUE, false)
-            : new StrollGoal(mob, goal, 1, Medium.AIR, Goals.ticksLow(goal, "float_duration", 0), longest, false);
+    static StrollGoal flyingAbout(PathfinderMob mob, JsonObject goal) {
+        StrollGoal flight = flying(mob, goal);
+        flight.landsOnTrees = Goals.flag(goal, "can_land_on_trees", true);
+        return flight;
     }
 
     private static int oneIn(JsonObject goal) {
@@ -105,6 +116,15 @@ final class StrollGoal extends RandomStrollGoal {
 
     @Override
     protected Vec3 getPosition() {
+        for (int attempt = 0; attempt < SAFE_ATTEMPTS; attempt++) {
+            Vec3 picked = landsOnTrees ? treeTop() : null;
+            if (picked == null) picked = pick();
+            if (picked == null || !avoidsDamage || !Platform.hurtsAt(mob, BlockPos.containing(picked))) return picked;
+        }
+        return null;
+    }
+
+    private Vec3 pick() {
         Vec3 picked = switch (medium) {
             case WATER -> {
                 Vec3 swim = BehaviorUtils.getRandomSwimmablePos(mob, across, upDown);
@@ -123,6 +143,26 @@ final class StrollGoal extends RandomStrollGoal {
             }
         };
         return picked == null ? null : overTheGround(picked.add(0, offset, 0));
+    }
+
+    /**
+     * Room to stand on a log or on leaves nearby, which is where Java's parrot lands. Bedrock publishes
+     * no box for the search, so it is the parrot's: three blocks across and six up or down.
+     */
+    private Vec3 treeTop() {
+        BlockPos at = mob.blockPosition();
+        for (BlockPos spot : BlockPos.betweenClosed(at.offset(-TREE_ACROSS, -TREE_UP_DOWN, -TREE_ACROSS),
+            at.offset(TREE_ACROSS, TREE_UP_DOWN, TREE_ACROSS))) {
+            if (spot.equals(at)) continue;
+
+            var below = mob.level().getBlockState(spot.below());
+            boolean perch = below.getBlock() instanceof net.minecraft.world.level.block.LeavesBlock
+                || below.is(net.minecraft.tags.BlockTags.LOGS);
+            if (perch && mob.level().isEmptyBlock(spot) && mob.level().isEmptyBlock(spot.above())) {
+                return Vec3.atBottomCenterOf(spot);
+            }
+        }
+        return null;
     }
 
     private boolean atTheSurface(BlockPos spot) {
