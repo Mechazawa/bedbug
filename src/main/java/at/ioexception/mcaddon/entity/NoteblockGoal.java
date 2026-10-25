@@ -55,7 +55,7 @@ public final class NoteblockGoal extends Goal {
         this.delivers = delivers;
         this.searchRange = searchRange;
         this.reach = reach;
-        this.speed = Goals.number(component, delivers ? "run_speed" : "speed", 1);
+        this.speed = delivers ? Goals.number(component, "run_speed", 1) : Goals.number(component, "speed", 1);
         this.listenTicks = (int) Goals.number(component, "listen_time", 600);
         this.throwForce = Goals.number(component, "throw_force", 0.2);
         this.throwRise = Goals.number(component, "vertical_throw_mul", 1.5);
