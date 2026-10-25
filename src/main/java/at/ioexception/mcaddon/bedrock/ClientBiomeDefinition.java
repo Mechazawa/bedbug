@@ -79,6 +79,47 @@ public record ClientBiomeDefinition(int water, int sky, int grass, int foliage, 
         return found;
     }
 
+    /**
+     * The fog file each painted biome names, by biome identifier, read without reporting anything.
+     *
+     * The client draws a biome's lava, powder snow and weather fog from that file, so it needs the
+     * name after the conversion that already reported what it dropped.
+     */
+    public static Map<String, String> fogNames(BedrockPack pack) {
+        Map<String, String> names = new LinkedHashMap<>();
+
+        try {
+            if (pack.has("biomes_client.json")) {
+                JsonObject biomes = Json.parseObject(pack.file("biomes_client.json"))
+                    .getAsJsonObject("biomes");
+                if (biomes != null) {
+                    biomes.entrySet().stream().filter(entry -> entry.getValue().isJsonObject())
+                        .forEach(entry -> remember(names, entry.getKey(),
+                            Json.text(entry.getValue().getAsJsonObject(), "fog_identifier", null)));
+                }
+            }
+
+            for (Path file : pack.list("biomes", ".json")) {
+                JsonObject body = Json.parseObject(file).getAsJsonObject("minecraft:client_biome");
+                JsonObject description = body == null ? null : body.getAsJsonObject("description");
+                JsonObject components = body == null ? null : body.getAsJsonObject("components");
+                JsonObject appearance = components == null ? null
+                    : components.getAsJsonObject("minecraft:fog_appearance");
+                if (description == null || appearance == null) continue;
+
+                remember(names, Json.text(description, "identifier", null),
+                    Json.text(appearance, "fog_identifier", null));
+            }
+        } catch (IOException | RuntimeException error) {
+            McAddon.LOGGER.warn("Could not read the fogs of the client biomes: {}", error.toString());
+        }
+        return names;
+    }
+
+    private static void remember(Map<String, String> names, String biome, String fog) {
+        if (biome != null && fog != null) names.put(biome, fog);
+    }
+
     /** The same colours with the behaviour pack's own tints where it states them. */
     public ClientBiomeDefinition tinted(int grassTint, int foliageTint) {
         return new ClientBiomeDefinition(water, sky, grassTint >= 0 ? grassTint : grass,

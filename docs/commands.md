@@ -293,8 +293,8 @@ WebSocket server, such as Code Builder or a tool built on `mcpews` or `socket-be
 - `project`, `editor-allowlist` (Bedrock Editor) and `sendshowstoreoffer` (marketplace) are dropped
   and reported. The other lines of the function still run.
 - `/hud` touch controls and tooltips (button prompts) are dropped and reported.
-- `/fog` uses only the `air` part of a fog. Java draws its own fog for water, lava and powder snow,
-  and has no volumetric fog.
+- `/fog` uses the `air`, `lava`, `lava_resistance`, `powder_snow` and `weather` parts of a fog. Java
+  draws its own fog for water, and has no volumetric fog.
 - Camera presets: `player_effects` and `extend_player_rendering` are reported. Java always draws
   player effects and every loaded entity.
 - An orbit camera circles the middle of the entity's box and is not pulled in by a wall.

@@ -85,8 +85,10 @@ overworld.
   the filter. `biome_has_tag` for it is false.
 - **Dimensions**: a generator other than `void` is reported. A `minecraft:default_biome` naming the
   pack's own biome is reported and the dimension is void, because a client cannot load it.
-- **Fog**: a distance as a fraction of the render distance, `volumetric`, `transition_fog`, and the
-  lava, weather and powder snow parts. A fog id no pack defines (Bedrock's `minecraft:fog_*`) keeps
+- **Fog**: a distance as a fraction of the render distance, `transition_fog`, and
+  `volumetric`. The lava, lava resistance, powder snow and weather parts are drawn by the client
+  while the camera is in that medium or it rains or snows at the camera, in biomes the pack paints.
+  A fog id no pack defines (Bedrock's `minecraft:fog_*`) keeps
   Java's fog.
 - **Sky**: the lightning `flash`, `emissive.desaturation`, and the scattering fields of
   `atmospherics` (`rayleigh_strength`, the `mie` strengths, `sun_glare_shape`,

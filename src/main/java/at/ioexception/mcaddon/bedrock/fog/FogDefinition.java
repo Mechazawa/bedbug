@@ -17,15 +17,89 @@ import java.util.Map;
  *
  * Bedrock describes fog for each medium the camera can be in and, in a second block, a volumetric
  * fog with its own scattering. Java has one fog: a colour and the two distances it fades between.
- * What is read here is the `air` block, which is the one a `/fog` in a function is written for; the
- * water, lava and powder snow blocks stay with the medium Java already fogs its own way.
+ * The `air` block is the fog drawn in the open. `lava`, `lava_resistance`, `powder_snow` and `weather`
+ * replace it while the camera is in that medium or while precipitation falls at it. The `water`
+ * block stays with the water fog a biome carries, which Java already draws through its own
+ * attributes.
  *
  * `render_distance_type` says whether the two distances are blocks or a multiple of the render
  * distance. The render distance belongs to the client, so the multiple travels and the client
  * resolves it.
  */
 public record FogDefinition(String identifier, float red, float green, float blue, float start,
-    float end, boolean scaledToRenderDistance) {
+    float end, boolean scaledToRenderDistance, Medium lava, Medium lavaResistance,
+    Medium powderSnow, Medium weather) {
+
+    private static final String[] MEDIA = {"lava", "lava_resistance", "powder_snow", "weather"};
+
+    /**
+     * One fog block: a colour and the two distances it fades between.
+     *
+     * A distance is blocks, or a multiple of the render distance until {@link #inBlocks} resolves it.
+     */
+    public record Medium(float red, float green, float blue, float start, float end,
+        boolean scaledToRenderDistance) {
+
+        static Medium tryFrom(JsonObject block) {
+            if (block == null) return null;
+
+            float[] colour = colour(block.get("fog_color"));
+            return new Medium(colour[0], colour[1], colour[2], number(block, "fog_start", 0f),
+                number(block, "fog_end", 1f),
+                !Json.text(block, "render_distance_type", "render").equals("fixed"));
+        }
+
+        public Medium inBlocks(float renderDistanceBlocks) {
+            return scaledToRenderDistance
+                ? new Medium(red, green, blue, start * renderDistanceBlocks, end * renderDistanceBlocks,
+                    false)
+                : this;
+        }
+
+        /** Both must already be in blocks. A weight of one is `other`. */
+        public Medium mix(Medium other, float weight) {
+            return new Medium(lerp(red, other.red, weight), lerp(green, other.green, weight),
+                lerp(blue, other.blue, weight), lerp(start, other.start, weight),
+                lerp(end, other.end, weight), false);
+        }
+
+        JsonObject encode() {
+            JsonObject json = new JsonObject();
+            json.addProperty("red", red);
+            json.addProperty("green", green);
+            json.addProperty("blue", blue);
+            json.addProperty("start", start);
+            json.addProperty("end", end);
+            json.addProperty("scaled", scaledToRenderDistance);
+            return json;
+        }
+
+        static Medium decode(JsonObject json) {
+            if (json == null) return null;
+
+            return new Medium(number(json, "red", 1f), number(json, "green", 1f),
+                number(json, "blue", 1f), number(json, "start", 0f), number(json, "end", 1f),
+                json.has("scaled") && json.get("scaled").getAsBoolean());
+        }
+
+        private static float lerp(float from, float to, float weight) {
+            return from + (to - from) * weight;
+        }
+    }
+
+    public FogDefinition(String identifier, float red, float green, float blue, float start,
+        float end, boolean scaledToRenderDistance) {
+        this(identifier, red, green, blue, start, end, scaledToRenderDistance, null, null, null, null);
+    }
+
+    public Medium air() {
+        return new Medium(red, green, blue, start, end, scaledToRenderDistance);
+    }
+
+    /** The lava block, or the one for fire resistance while the camera entity has it. */
+    public Medium lava(boolean fireResistant) {
+        return fireResistant && lavaResistance != null ? lavaResistance : lava;
+    }
 
     /** Null when the file names no fog for air, which leaves nothing Java can be told to draw. */
     public static FogDefinition tryFrom(Path file) {
@@ -39,10 +113,13 @@ public record FogDefinition(String identifier, float red, float green, float blu
             JsonObject air = distance == null ? null : distance.getAsJsonObject("air");
             if (identifier == null || air == null) return null;
 
-            float[] colour = colour(air.get("fog_color"));
-            return new FogDefinition(identifier, colour[0], colour[1], colour[2],
-                number(air, "fog_start", 0f), number(air, "fog_end", 1f),
-                !Json.text(air, "render_distance_type", "render").equals("fixed"));
+            Medium open = Medium.tryFrom(air);
+            return new FogDefinition(identifier, open.red, open.green, open.blue, open.start,
+                open.end, open.scaledToRenderDistance,
+                Medium.tryFrom(distance.getAsJsonObject(MEDIA[0])),
+                Medium.tryFrom(distance.getAsJsonObject(MEDIA[1])),
+                Medium.tryFrom(distance.getAsJsonObject(MEDIA[2])),
+                Medium.tryFrom(distance.getAsJsonObject(MEDIA[3])));
         } catch (IOException | RuntimeException error) {
             McAddon.LOGGER.warn("Could not read {}: {}", file.getFileName(), error.toString());
             return null;
@@ -60,11 +137,11 @@ public record FogDefinition(String identifier, float red, float green, float blu
     }
 
     public float startAt(float renderDistanceBlocks) {
-        return scaledToRenderDistance ? start * renderDistanceBlocks : start;
+        return air().inBlocks(renderDistanceBlocks).start;
     }
 
     public float endAt(float renderDistanceBlocks) {
-        return scaledToRenderDistance ? end * renderDistanceBlocks : end;
+        return air().inBlocks(renderDistanceBlocks).end;
     }
 
     public String encode() {
@@ -76,6 +153,10 @@ public record FogDefinition(String identifier, float red, float green, float blu
         json.addProperty("start", start);
         json.addProperty("end", end);
         json.addProperty("scaled", scaledToRenderDistance);
+        Medium[] media = {lava, lavaResistance, powderSnow, weather};
+        for (int i = 0; i < media.length; i++) {
+            if (media[i] != null) json.add(MEDIA[i], media[i].encode());
+        }
         return json.toString();
     }
 
@@ -89,7 +170,9 @@ public record FogDefinition(String identifier, float red, float green, float blu
         JsonObject json = parsed.getAsJsonObject();
         return new FogDefinition(Json.text(json, "id", ""), number(json, "red", 1f),
             number(json, "green", 1f), number(json, "blue", 1f), number(json, "start", 0f),
-            number(json, "end", 1f), json.has("scaled") && json.get("scaled").getAsBoolean());
+            number(json, "end", 1f), json.has("scaled") && json.get("scaled").getAsBoolean(),
+            Medium.decode(json.getAsJsonObject(MEDIA[0])), Medium.decode(json.getAsJsonObject(MEDIA[1])),
+            Medium.decode(json.getAsJsonObject(MEDIA[2])), Medium.decode(json.getAsJsonObject(MEDIA[3])));
     }
 
     /**

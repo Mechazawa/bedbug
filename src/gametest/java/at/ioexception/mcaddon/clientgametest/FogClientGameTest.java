@@ -34,6 +34,7 @@ public final class FogClientGameTest implements FabricClientGameTest {
             Worlds.waitForChunks(world);
             stack(context, world);
             biome(context, world);
+            media(context, world);
         }
     }
 
@@ -76,6 +77,48 @@ public final class FogClientGameTest implements FabricClientGameTest {
             client.level.environmentAttributes().getValue(EnvironmentAttributes.WATER_FOG_END_DISTANCE, standing));
         Assert.near(waterEnd, GLADE_WATER_END, DISTANCE_TOLERANCE,
             "where tp:glade's water fog ends, the eighteen blocks tp:fog_glade states for water");
+    }
+
+    /**
+     * `tp:fog_glade` states lava, lava resistance, powder snow and weather beside its air. Standing
+     * in `tp:glade` the camera takes each in turn, and the frame's fog reads back the numbers.
+     */
+    private static void media(ClientGameTestContext context, TestSingleplayerContext world) {
+        world.getServer().runCommand("gamemode creative @a");
+        world.getServer().runCommand("execute as @p at @s run fillbiome ~-16 ~-4 ~-16 ~16 ~16 ~16 tp:glade");
+        float distance = context.computeOnClient(client -> PlayerFog.renderDistanceBlocks());
+
+        world.getServer().runCommand("execute as @p at @s run setblock ~ ~1.62 ~ lava");
+        waitForFog(context, 0xB32400, 0f, 4f, "the camera is in lava and the frame never took tp:fog_glade's lava fog");
+        world.getServer().runCommand("effect give @a fire_resistance 100 0 true");
+        waitForFog(context, 0xFFAA00, 0.1f, 12f,
+            "the camera entity resists fire and the frame never took tp:fog_glade's lava resistance fog");
+        world.getServer().runCommand("effect clear @a");
+        world.getServer().runCommand("execute as @p at @s run setblock ~ ~1.62 ~ powder_snow");
+        waitForFog(context, 0xE0F0FF, 0f, 0.5f * distance,
+            "the camera is in powder snow and the frame never took tp:fog_glade's powder snow fog");
+        world.getServer().runCommand("execute as @p at @s run setblock ~ ~1.62 ~ air");
+
+        world.getServer().runCommand("weather rain 100000");
+        waitForFog(context, 0x5A5A5A, 0.2f * distance, 0.6f * distance,
+            "it rains on the camera and the frame never took tp:fog_glade's weather fog", PATIENCE * 4);
+        world.getServer().runCommand("weather clear");
+        Worlds.waitForClient(context, client -> !matches(Worlds.fog(client), 0x5A5A5A), PATIENCE * 4,
+            () -> "the rain stopped and the frame kept the weather fog.");
+    }
+
+    private static void waitForFog(ClientGameTestContext context, int colour, float start, float end,
+        String failure) {
+        waitForFog(context, colour, start, end, failure, PATIENCE);
+    }
+
+    private static void waitForFog(ClientGameTestContext context, int colour, float start, float end,
+        String failure, int patience) {
+        Worlds.waitForClient(context, client -> matches(Worlds.fog(client), colour), patience,
+            () -> failure + " It is " + Worlds.fog(Minecraft.getInstance()).color + ".");
+        FogData fog = context.computeOnClient(Worlds::fog);
+        Assert.near(fog.environmentalStart, start, DISTANCE_TOLERANCE, "where the fog starts: " + failure);
+        Assert.near(fog.environmentalEnd, end, DISTANCE_TOLERANCE, "where the fog ends: " + failure);
     }
 
     /** The fog colour the biome states at a place, which 26.3 keeps as a vector of three channels. */

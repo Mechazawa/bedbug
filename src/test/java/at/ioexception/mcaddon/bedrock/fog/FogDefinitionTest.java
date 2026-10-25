@@ -106,6 +106,45 @@ class FogDefinitionTest {
             + ", \"fog_color\": \"#102030\", \"render_distance_type\": \"" + type + "\"}}}}";
     }
 
+    @Test
+    void readsTheOtherMediaAndSurvivesTheNetwork() throws IOException {
+        FogDefinition fog = read("""
+            {
+              "minecraft:fog_settings": {
+                "description": {"identifier": "test:media"},
+                "distance": {
+                  "air": {"fog_start": 0.2, "fog_end": 0.8, "fog_color": "#FF8000"},
+                  "lava": {"fog_start": 0, "fog_end": 4, "fog_color": "#991a00", "render_distance_type": "fixed"},
+                  "lava_resistance": {"fog_start": 1, "fog_end": 12, "fog_color": "#ffaa00",
+                    "render_distance_type": "fixed"},
+                  "powder_snow": {"fog_start": 0, "fog_end": 0.5, "fog_color": "#e0f0ff"},
+                  "weather": {"fog_start": 0.1, "fog_end": 0.5, "fog_color": "#5a5a5a"}
+                }
+              }
+            }
+            """);
+
+        FogDefinition sent = FogDefinition.decode(fog.encode());
+        assertEquals(4f, sent.lava(false).end(), TOLERANCE);
+        assertEquals(12f, sent.lava(true).end(), TOLERANCE);
+        assertEquals(64f, sent.powderSnow().inBlocks(128f).end(), TOLERANCE);
+        assertEquals(0.5f * 128f, sent.weather().inBlocks(128f).end(), TOLERANCE);
+        assertNull(read(file("test:plain", "0", "1", "fixed")).weather());
+        assertNull(read(file("test:plain", "0", "1", "fixed")).lava(true));
+    }
+
+    @Test
+    void mixesTwoFogsByWeight() {
+        FogDefinition.Medium dry = new FogDefinition.Medium(1f, 0f, 0f, 0f, 100f, false);
+        FogDefinition.Medium wet = new FogDefinition.Medium(0f, 0f, 1f, 20f, 60f, false);
+        FogDefinition.Medium half = dry.mix(wet, 0.5f);
+
+        assertEquals(0.5f, half.red(), TOLERANCE);
+        assertEquals(0.5f, half.blue(), TOLERANCE);
+        assertEquals(10f, half.start(), TOLERANCE);
+        assertEquals(80f, half.end(), TOLERANCE);
+    }
+
     private FogDefinition read(String source) throws IOException {
         Path file = directory.resolve("fog.json");
         Files.writeString(file, source);

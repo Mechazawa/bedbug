@@ -18,7 +18,9 @@ import java.util.Set;
  *
  * Bedrock states a fog per camera location: the `air` a player stands in, the `water` they swim in,
  * and four more for weather, lava and powder snow. Java carries one fog colour and one water fog
- * colour on a biome, so those two locations land and the other four are named against the pack.
+ * colour on a biome, so those two locations land here. The other four are not biome data in Java:
+ * the client reads them from the pack's fog file while the camera is in that medium
+ * (`bedrock.fog.FogDefinition`), so they are read and not reported here.
  *
  * A distance is either a count of blocks or a fraction of the render distance, which is what
  * `render_distance_type` says. Java states its own in blocks, so a fraction has no value to write
@@ -31,6 +33,10 @@ public record FogDefinition(Location air, Location water) {
 
     /** The camera locations a Java biome has a field for. */
     private static final Set<String> READ = Set.of("air", "water");
+
+    /** The locations the client draws from the fog file itself. */
+    private static final List<String> CLIENT_DRAWN =
+        List.of("lava", "lava_resistance", "powder_snow", "weather");
 
     /** What a fog states beside its distances, which is the deferred renderer's half. */
     private static final List<String> DROPPED = List.of("volumetric");
@@ -80,8 +86,11 @@ public record FogDefinition(Location air, Location water) {
         if (identifier == null || distance == null) return;
 
         AddonEntities.unsupportedFields("fog", body, DROPPED);
-        distance.keySet().stream().filter(name -> !READ.contains(name))
+        distance.keySet().stream().filter(name -> !READ.contains(name) && !CLIENT_DRAWN.contains(name))
             .forEach(name -> AddonEntities.unsupported("fog distance " + name));
+        CLIENT_DRAWN.stream().filter(distance::has).forEach(name ->
+            AddonEntities.unsupportedFields("fog " + name, distance.getAsJsonObject(name),
+                LOCATION_DROPPED));
 
         into.put(identifier,
             new FogDefinition(location(distance, "air"), location(distance, "water")));

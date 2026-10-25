@@ -12,6 +12,8 @@ import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.fog.FogData;
 import net.minecraft.client.renderer.fog.FogRenderer;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.LivingEntity;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 //?} else {
 /*import com.mojang.blaze3d.systems.RenderSystem;
@@ -22,9 +24,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /**
  * Paints the fog a pack's `/fog` pushed onto this player's stack.
  *
- * Only the air fog is overwritten. Java draws water, lava and powder snow its own way, which is what
- * the other blocks of a Bedrock fog describe, so a pushed fog replaces the one the player is looking
- * through in the open and leaves the rest alone.
+ * A pushed fog replaces the air fog. The lava, lava resistance, powder snow and weather blocks of
+ * the pushed fog, or of the camera biome's fog file, replace what Java draws in that medium. The
+ * water block is the biome's water fog attributes.
  *
  * 26 gathers a frame's fog into one object and hands it back, so the colour and both distances are
  * written on the way out of the one call. Before that the fog lived in three static setters on the
@@ -36,16 +38,21 @@ public abstract class FogRendererMixin {
     @Inject(method = "setupFog", at = @At("RETURN"))
     private void mcaddon$paintAddonFog(Camera camera, int renderDistance, DeltaTracker delta,
         float skyDarken, ClientLevel level, CallbackInfoReturnable<FogData> info) {
-        FogDefinition fog = PlayerFog.active();
-        if (fog == null) return;
-
-        float distance = PlayerFog.renderDistanceBlocks();
         FogData data = info.getReturnValue();
-        data.environmentalStart = fog.startAt(distance);
-        data.environmentalEnd = fog.endAt(distance);
+        FogDefinition.Medium drawn = new FogDefinition.Medium(data.color.x(), data.color.y(),
+            data.color.z(), data.environmentalStart, data.environmentalEnd, false);
+        boolean fireResistant = camera.entity() instanceof LivingEntity living
+            && living.hasEffect(MobEffects.FIRE_RESISTANCE);
+        FogDefinition.Medium paint = PlayerFog.paint(camera.getFluidInCamera(), level,
+            camera.blockPosition(), fireResistant, level.getRainLevel(delta.getGameTimeDeltaPartialTick(false)),
+            drawn);
+        if (paint == null) return;
+
+        data.environmentalStart = paint.start();
+        data.environmentalEnd = paint.end();
         data.renderDistanceStart = data.environmentalStart;
         data.renderDistanceEnd = data.environmentalEnd;
-        data.color.set(fog.red(), fog.green(), fog.blue(), 1f);
+        data.color.set(paint.red(), paint.green(), paint.blue(), 1f);
     }
     //?} else {
     /*@Inject(method = "setupFog", at = @At("RETURN"))
